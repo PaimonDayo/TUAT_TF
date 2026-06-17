@@ -1,0 +1,84 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+
+const MAX = 200;
+
+/** つぶやきフォーム。tweet を渡すと編集モード */
+export function TweetForm({
+  tweet,
+  onDone,
+}: {
+  tweet?: { id: string; content: string };
+  onDone: () => void;
+}) {
+  const router = useRouter();
+  const editing = !!tweet;
+  const [content, setContent] = useState(tweet?.content ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    const text = content.trim();
+    if (!text) return;
+    setSaving(true);
+    setError(null);
+
+    const supabase = createClient();
+
+    let error;
+    if (editing) {
+      ({ error } = await supabase.from("tweets").update({ content: text }).eq("id", tweet!.id));
+    } else {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setError("ログイン情報を確認できませんでした");
+        setSaving(false);
+        return;
+      }
+      ({ error } = await supabase.from("tweets").insert({ user_id: user.id, content: text }));
+    }
+
+    if (error) {
+      setError("投稿に失敗しました");
+      setSaving(false);
+      return;
+    }
+    setContent("");
+    router.refresh();
+    onDone();
+  }
+
+  return (
+    <div className="space-y-3 pb-4">
+      <Textarea
+        autoFocus
+        rows={4}
+        maxLength={MAX}
+        placeholder="いまどうしてる？"
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+      />
+      <div className="flex items-center justify-between">
+        <span className="text-caption tabular-nums">
+          {content.length} / {MAX}
+        </span>
+        {error && <span className="text-caption text-danger">{error}</span>}
+        <Button
+          size="sm"
+          onClick={submit}
+          disabled={saving || !content.trim()}
+          className="px-5"
+        >
+          {saving ? "保存中…" : editing ? "更新" : "投稿"}
+        </Button>
+      </div>
+    </div>
+  );
+}

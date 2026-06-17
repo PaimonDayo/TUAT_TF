@@ -1,0 +1,184 @@
+// ─────────────────────────────────────────────
+// 全型定義
+// ─────────────────────────────────────────────
+
+export type Block = "middle_long" | "short" | "jump" | "throw";
+export type Role = "admin" | "menu_staff" | "member";
+export type ProfileStatus = "active" | "graduated";
+export type Condition = "great" | "normal" | "bad";
+export type Intensity = "low" | "mid" | "high" | "speed";
+export type ScheduleType = "practice" | "meet" | "event" | "time_trial";
+export type NoticeCategory = "fee" | "entry" | "info" | "rule";
+export type TargetType = "record" | "tweet";
+export type AttendanceStatus = "present" | "absent";
+
+export interface Profile {
+  id: string;
+  email: string;
+  display_name: string;
+  avatar_url: string | null;
+  blocks: Block[];
+  grade: string | null;
+  role: Role;
+  status: ProfileStatus;
+  created_at: string;
+}
+
+/** 投稿カードに埋め込む投稿者の最小情報 */
+export type AuthorMini = Pick<
+  Profile,
+  "id" | "display_name" | "avatar_url" | "blocks" | "grade"
+>;
+
+export interface PracticeRecord {
+  id: string;
+  user_id: string;
+  recorded_date: string;
+  dist_low: number;
+  dist_mid: number;
+  dist_high: number;
+  dist_speed: number;
+  strides: number;
+  result_text: string | null;
+  strength_text: string | null;
+  memo: string | null;
+  condition: Condition | null;
+  likes_count: number;
+  created_at: string;
+}
+
+/** 投稿者情報を join した練習記録 */
+export interface RecordWithAuthor extends PracticeRecord {
+  author: AuthorMini;
+  liked_by_me?: boolean;
+  comments_count?: number;
+}
+
+export interface Tweet {
+  id: string;
+  user_id: string;
+  content: string;
+  likes_count: number;
+  created_at: string;
+}
+
+export interface TweetWithAuthor extends Tweet {
+  author: AuthorMini;
+  liked_by_me?: boolean;
+  comments_count?: number;
+}
+
+export interface Like {
+  id: string;
+  user_id: string;
+  target_type: TargetType;
+  target_id: string;
+  created_at: string;
+}
+
+export interface Comment {
+  id: string;
+  user_id: string;
+  target_type: TargetType;
+  target_id: string;
+  content: string;
+  created_at: string;
+}
+
+export interface CommentWithAuthor extends Comment {
+  author: Pick<Profile, "id" | "display_name" | "avatar_url">;
+}
+
+export interface PracticeSchedule {
+  id: string;
+  schedule_date: string;
+  schedule_type: ScheduleType;
+  meeting_time: string | null;
+  location: string | null;
+  venue_name: string | null;
+  venue_access: string | null;
+  venue_fee: string | null;
+  title: string | null;
+  end_date: string | null;
+  entry_start: string | null;
+  entry_end: string | null;
+  venue_url: string | null;
+  note: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+export type AttendanceStatusOrNone = AttendanceStatus | "none";
+
+export interface Attendance {
+  id: string;
+  schedule_id: string;
+  user_id: string;
+  status: AttendanceStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+/** 出席者の表示用 */
+export interface Attendee {
+  user_id: string;
+  status: AttendanceStatus;
+  profile: AuthorMini;
+}
+
+export interface ScheduleWithMenus extends PracticeSchedule {
+  menus: PracticeMenu[];
+}
+
+export interface PracticeMenu {
+  id: string;
+  schedule_id: string;
+  author_id: string;
+  group_name: string | null;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  author?: { display_name: string } | null;
+}
+
+export interface Notice {
+  id: string;
+  author_id: string;
+  category: NoticeCategory;
+  title: string;
+  content: string;
+  deadline: string | null;
+  pin_home: boolean;
+  created_at: string;
+}
+
+export interface PbRecord {
+  id: string;
+  user_id: string;
+  event_name: string;
+  record: string;
+  meet_name: string | null;
+  recorded_on: string | null;
+  is_pb: boolean;
+  created_at: string;
+}
+
+export interface WeeklyRankingRow {
+  id: string;
+  display_name: string;
+  grade: string | null;
+  blocks: Block[];
+  avatar_url: string | null;
+  km_low: number;
+  km_mid: number;
+  km_high: number;
+  km_speed: number;
+  total_km: number;
+  period_start: string;
+  period_end: string;
+}
+
+/** フィード（タイムライン）用の合成型 */
+export type FeedItem =
+  | ({ kind: "record" } & RecordWithAuthor)
+  | ({ kind: "tweet" } & TweetWithAuthor);

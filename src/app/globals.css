@@ -1,26 +1,129 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ─────────────────────────────────────────────
+   陸上部ログ — iOS 風デザインシステム (Tailwind v4)
+   ───────────────────────────────────────────── */
+@theme {
+  /* ベースカラー */
+  --color-bg: #f2f2f7;
+  --color-card: #ffffff;
+  --color-separator: #e5e5ea;
+  --color-accent: #007aff;
+  --color-success: #34c759;
+  --color-warning: #ff9500;
+  --color-danger: #ff3b30;
+  --color-ink: #000000;
+  --color-muted: #8e8e93;
+  --color-muted2: #6c6c70;
+  --color-faint: #aaaaaa;
+
+  /* ブロック別カラー（前景 / 背景） */
+  --color-block-ml: #34c759;
+  --color-block-ml-bg: #e5f7f0;
+  --color-block-short: #ff9500;
+  --color-block-short-bg: #fff4e5;
+  --color-block-jump: #af52de;
+  --color-block-jump-bg: #f2eeff;
+  --color-block-throw: #ff3b30;
+  --color-block-throw-bg: #ffe5e5;
+
+  /* 強度別カラー */
+  --color-int-low: #007aff;
+  --color-int-mid: #34c759;
+  --color-int-high: #ff9500;
+  --color-int-speed: #ff3b30;
+
+  /* 角丸 */
+  --radius-card: 16px;
+
+  /* フォント */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+    "Yu Gothic", "Noto Sans JP", "Segoe UI", Meiryo, sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* セクションラベル（uppercase + tracking） */
+.section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-muted2);
+}
+
+/* iOS 風タイポグラフィ ヘルパー */
+.text-large-title {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+.text-title {
+  font-size: 17px;
+  font-weight: 700;
+}
+.text-headline {
+  font-size: 15px;
+  font-weight: 600;
+}
+.text-body {
+  font-size: 13px;
+  font-weight: 400;
+}
+.text-caption {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--color-muted);
+}
+.text-micro {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--color-faint);
+}
+
+/* スクロールバーを控えめに */
+::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* ボトムシート アニメーション */
+@keyframes sheet-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes sheet-slide {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.sheet-overlay[data-state="open"] {
+  animation: sheet-fade 0.2s ease-out;
+}
+.sheet-content[data-state="open"] {
+  animation: sheet-slide 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* ボタン押下フィードバック */
+.transition-active {
+  transition: transform 0.08s ease-out, opacity 0.15s ease-out;
+}
+
+/* フェードイン（タブ切替などの差し替え時） */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-in {
+  animation: fade-in 0.18s ease-out;
 }
