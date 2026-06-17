@@ -119,7 +119,7 @@ function ScheduleForm({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <div className="space-y-4 pb-4 max-h-[72vh] overflow-y-auto">
+    <div className="space-y-4 pb-4 max-h-[72vh] overflow-y-auto overflow-x-hidden">
       <SegmentedControl
         items={SCHEDULE_TYPE_OPTIONS}
         value={type}
@@ -130,7 +130,12 @@ function ScheduleForm({ onDone }: { onDone: () => void }) {
       <div>
         <p className="section-label mb-1.5">日付（複数まとめて追加できます）</p>
         <div className="flex gap-2">
-          <Input type="date" value={dateInput} onChange={(e) => setDateInput(e.target.value)} />
+          <Input
+            type="date"
+            value={dateInput}
+            onChange={(e) => setDateInput(e.target.value)}
+            className="flex-1 min-w-0"
+          />
           <Button size="md" variant="outline" onClick={addDate} className="px-4 shrink-0">
             追加
           </Button>
@@ -230,11 +235,11 @@ function ScheduleForm({ onDone }: { onDone: () => void }) {
             </button>
             {useEntry && (
               <div className="grid grid-cols-2 gap-2 mt-2">
-                <div>
+                <div className="min-w-0">
                   <p className="text-micro mb-1">開始</p>
                   <Input type="date" value={entryStart} onChange={(e) => setEntryStart(e.target.value)} />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-micro mb-1">締切</p>
                   <Input type="date" value={entryEnd} onChange={(e) => setEntryEnd(e.target.value)} />
                 </div>
