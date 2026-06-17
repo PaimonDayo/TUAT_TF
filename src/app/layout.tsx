@@ -4,6 +4,12 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "陸上部ログ",
   description: "陸上競技部の練習記録・予定・ランキング共有アプリ",
+  applicationName: "陸上部ログ",
+  appleWebApp: {
+    capable: true,
+    title: "陸上部ログ",
+    statusBarStyle: "default",
+  },
 };
 
 export const viewport: Viewport = {
