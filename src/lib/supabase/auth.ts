@@ -5,12 +5,17 @@ import type { Profile } from "@/types";
 /**
  * 現在ログイン中のユーザーのプロフィールを取得する。
  * 未ログインなら /login へリダイレクト。
+ *
+ * セッション検証・トークン更新は proxy.ts（毎リクエストの getUser）で行うため、
+ * ここではネットワークを使わない getSession でユーザーIDだけ取り出す。
+ * データ自体のアクセス制御は Supabase の RLS が担保する。
  */
 export async function getCurrentProfile(): Promise<Profile> {
   const supabase = await createClient();
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user;
 
   if (!user) redirect("/login");
 
