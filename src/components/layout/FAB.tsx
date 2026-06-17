@@ -35,7 +35,7 @@ export function FAB({ profile }: { profile: Pick<Profile, "id" | "blocks" | "rol
       <button
         onClick={openMenu}
         aria-label="投稿する"
-        className="fixed z-40 right-5 bottom-[74px] h-14 w-14 rounded-full bg-accent text-white shadow-lg shadow-accent/30 flex items-center justify-center active:scale-95 transition-active"
+        className="fixed z-40 right-5 bottom-[calc(74px+env(safe-area-inset-bottom))] h-14 w-14 rounded-full bg-accent text-white shadow-lg shadow-accent/30 flex items-center justify-center active:scale-95 transition-active"
       >
         <Plus size={28} strokeWidth={2.5} />
       </button>

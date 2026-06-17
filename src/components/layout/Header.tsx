@@ -12,7 +12,7 @@ export function Header({
   right?: React.ReactNode;
 }) {
   return (
-    <header className="sticky top-0 z-30 bg-bg/80 backdrop-blur-xl">
+    <header className="sticky top-0 z-30 bg-bg/80 backdrop-blur-xl pt-[env(safe-area-inset-top)]">
       <div className="h-12 px-4 flex items-center justify-between">
         <h1 className={large ? "text-large-title" : "text-title"}>{title}</h1>
         <div className="flex items-center gap-1">

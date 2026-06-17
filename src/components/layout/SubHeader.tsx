@@ -14,7 +14,7 @@ export function SubHeader({
   right?: React.ReactNode;
 }) {
   return (
-    <header className="sticky top-0 z-30 bg-bg/80 backdrop-blur-xl">
+    <header className="sticky top-0 z-30 bg-bg/80 backdrop-blur-xl pt-[env(safe-area-inset-top)]">
       <div className="h-12 px-2 grid grid-cols-[1fr_auto_1fr] items-center">
         <Link
           href={backHref}
