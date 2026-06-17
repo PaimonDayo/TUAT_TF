@@ -63,28 +63,28 @@ export function PostActions({
 
   return (
     <>
-      <div className="flex items-center gap-4 pt-1">
+      <div className="flex items-center gap-5 pt-1">
         <button
           onClick={toggleLike}
           className={cn(
-            "flex items-center gap-1 text-[13px] active:opacity-50 transition-active",
+            "flex items-center gap-1.5 text-[13px] active:opacity-50 transition-active",
             liked ? "text-danger" : "text-muted",
           )}
         >
           <Heart size={18} fill={liked ? "#ff3b30" : "none"} strokeWidth={2} />
-          <span className="tabular-nums">{likes > 0 ? likes : ""}</span>
+          <span className="tabular-nums text-left min-w-[12px]">{likes > 0 ? likes : ""}</span>
         </button>
         <button
           onClick={() => setOpenComments(true)}
-          className="flex items-center gap-1 text-[13px] text-muted active:opacity-50"
+          className="flex items-center gap-1.5 text-[13px] text-muted active:opacity-50"
         >
           <MessageCircle size={18} strokeWidth={2} />
-          <span className="tabular-nums">{commentCount > 0 ? commentCount : ""}</span>
+          <span className="tabular-nums text-left min-w-[12px]">{commentCount > 0 ? commentCount : ""}</span>
         </button>
       </div>
 
       <Sheet open={openComments} onOpenChange={setOpenComments}>
-        <SheetContent title="コメント">
+        <SheetContent title="コメント" autoFocus={false}>
           <CommentList
             targetType={targetType}
             targetId={targetId}

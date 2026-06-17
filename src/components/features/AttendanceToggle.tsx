@@ -72,7 +72,7 @@ export function AttendanceToggle({
     <button
       onClick={toggle}
       className={cn(
-        "inline-flex items-center gap-1 h-8 px-3 rounded-full border text-[13px] font-semibold transition-active active:scale-95 shrink-0",
+        "inline-flex items-center justify-center gap-1 h-8 px-3 min-w-[104px] rounded-full border text-[13px] font-semibold transition-active active:scale-95 shrink-0",
         s.cls,
       )}
     >

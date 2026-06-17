@@ -119,18 +119,19 @@ export default async function HomePage() {
                           {s.title ?? meta.label}
                         </span>
                       </div>
-                      <div className="flex flex-wrap gap-x-3 text-[12px] text-muted2 mt-0.5">
+                      <div className="flex items-center gap-x-3 text-[12px] text-muted2 mt-0.5 min-w-0">
                         {s.meeting_time && (
-                          <span className="flex items-center gap-1">
+                          <span className="flex items-center gap-1 shrink-0">
                             <Clock size={12} /> {s.meeting_time.slice(0, 5)}
                           </span>
                         )}
                         {s.venue_name && (
-                          <span className="flex items-center gap-1">
-                            <MapPin size={12} /> {s.venue_name}
+                          <span className="flex items-center gap-1 min-w-0">
+                            <MapPin size={12} className="shrink-0" />
+                            <span className="truncate">{s.venue_name}</span>
                           </span>
                         )}
-                        <span>参加 {presentCount.get(s.id) ?? 0}</span>
+                        <span className="shrink-0 tabular-nums">参加 {presentCount.get(s.id) ?? 0}</span>
                       </div>
                     </div>
                     <AttendanceToggle
