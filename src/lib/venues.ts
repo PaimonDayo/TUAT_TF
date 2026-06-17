@@ -82,3 +82,9 @@ export function findVenue(name: string | null): Venue | undefined {
   if (!name) return undefined;
   return VENUES.find((v) => v.name === name || v.key === name);
 }
+
+/** 会場の略称（農部・工部など）。マスタに無ければ入力値そのまま */
+export function venueShort(name: string | null): string | null {
+  if (!name) return null;
+  return findVenue(name)?.key ?? name;
+}

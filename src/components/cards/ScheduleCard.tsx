@@ -15,6 +15,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SCHEDULE_TYPES, ATTENDANCE_TYPES } from "@/lib/constants";
+import { venueShort } from "@/lib/venues";
 import { cn } from "@/lib/utils";
 import { MenuForm } from "@/components/post/MenuForm";
 import { AttendanceToggle } from "@/components/features/AttendanceToggle";
@@ -66,7 +67,9 @@ export function ScheduleCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
             <Badge style={{ backgroundColor: meta.color + "1a", color: meta.color }}>{meta.label}</Badge>
-            <span className="text-headline truncate">{schedule.title ?? meta.label}</span>
+            <span className="text-headline truncate">
+              {schedule.title ?? venueShort(schedule.venue_name ?? schedule.location) ?? meta.label}
+            </span>
           </div>
           <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[12px] text-muted2">
             {schedule.end_date && schedule.end_date !== schedule.schedule_date && (
@@ -81,9 +84,10 @@ export function ScheduleCard({
                 <Clock size={13} /> {schedule.meeting_time.slice(0, 5)}
               </span>
             )}
-            {(schedule.venue_name || schedule.location) && (
+            {/* タイトルがある予定（大会等）は場所も補足表示。練習はタイトル位置が場所なので省略 */}
+            {schedule.title && (schedule.venue_name || schedule.location) && (
               <span className="flex items-center gap-1">
-                <MapPin size={13} /> {schedule.venue_name ?? schedule.location}
+                <MapPin size={13} /> {venueShort(schedule.venue_name ?? schedule.location)}
               </span>
             )}
           </div>

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { format, subDays } from "date-fns";
 import { ja } from "date-fns/locale";
-import { MapPin, Clock, ChevronRight } from "lucide-react";
+import { Clock, ChevronRight } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,7 @@ import {
   getAttendancesForSchedules,
 } from "@/lib/queries";
 import { SCHEDULE_TYPES } from "@/lib/constants";
+import { venueShort } from "@/lib/venues";
 import type {
   PracticeRecord,
   PracticeSchedule,
@@ -111,24 +112,18 @@ export default async function HomePage() {
                       </span>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 min-w-0">
                         <Badge style={{ backgroundColor: meta.color + "1a", color: meta.color }}>
                           {meta.label}
                         </Badge>
                         <span className="text-[14px] font-semibold truncate">
-                          {s.title ?? meta.label}
+                          {s.title ?? venueShort(s.venue_name) ?? meta.label}
                         </span>
                       </div>
                       <div className="flex items-center gap-x-3 text-[12px] text-muted2 mt-0.5 min-w-0">
                         {s.meeting_time && (
                           <span className="flex items-center gap-1 shrink-0">
                             <Clock size={12} /> {s.meeting_time.slice(0, 5)}
-                          </span>
-                        )}
-                        {s.venue_name && (
-                          <span className="flex items-center gap-1 min-w-0">
-                            <MapPin size={12} className="shrink-0" />
-                            <span className="truncate">{s.venue_name}</span>
                           </span>
                         )}
                         <span className="shrink-0 tabular-nums">参加 {presentCount.get(s.id) ?? 0}</span>
