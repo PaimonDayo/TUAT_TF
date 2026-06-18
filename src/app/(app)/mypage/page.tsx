@@ -8,6 +8,7 @@ import { BlockPills } from "@/components/common/BlockPill";
 import { RecordCard } from "@/components/cards/RecordCard";
 import { TweetCard } from "@/components/cards/TweetCard";
 import { WeeklyBarChart } from "@/components/features/WeeklyBarChart";
+import { TrainingHistory } from "@/components/features/TrainingHistory";
 import { EditProfileButton, SignOutButton } from "@/components/features/MyPageActions";
 import { GoalEditor } from "@/components/features/GoalEditor";
 import { getCurrentProfile } from "@/lib/supabase/auth";
@@ -86,6 +87,9 @@ export default async function MyPage({
 
         {/* 直近7日間グラフ */}
         <WeeklyBarChart records={records} />
+
+        {/* 練習量の推移（週/月） */}
+        <TrainingHistory records={records} />
 
         {/* リンク */}
         <div className="space-y-2">
