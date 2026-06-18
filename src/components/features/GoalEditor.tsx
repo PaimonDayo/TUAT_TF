@@ -56,14 +56,9 @@ export function GoalEditor({
     <>
       <button onClick={openSheet} className="w-full text-left">
         <Card className="p-4 flex items-center gap-3 active:bg-bg">
-          <Target size={20} className="text-accent shrink-0" />
-          <span className="flex-1 min-w-0">
-            <span className="block text-headline">目標</span>
-            <span className="block text-caption truncate">
-              {goal || "タップして設定（何に向けて頑張っているか）"}
-            </span>
-          </span>
-          <ChevronRight size={18} className="text-muted shrink-0" />
+          <Target size={20} className="text-accent" />
+          <span className="flex-1 text-headline">目標</span>
+          <ChevronRight size={18} className="text-muted" />
         </Card>
       </button>
 
@@ -73,6 +68,7 @@ export function GoalEditor({
             <div>
               <p className="section-label mb-1.5">目標（自由入力）</p>
               <Textarea
+                autoFocus
                 rows={3}
                 placeholder="例: 関カレ出場 / 5000m 14分台 / 自己ベスト更新"
                 value={draft}

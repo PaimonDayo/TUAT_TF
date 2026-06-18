@@ -18,6 +18,9 @@ export const viewport: Viewport = {
   maximumScale: 1,
   viewportFit: "cover",
   themeColor: "#f2f2f7",
+  // キーボード表示時にビューポートを縮め、下からせり上がる入力欄が
+  // キーボードの上に来るようにする（入力中の文字が隠れない）。
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Trophy, ChevronRight, Shield, Bell, CalendarPlus, Users } from "lucide-react";
+import { Trophy, ChevronRight, Shield, Bell, CalendarPlus, Users, Target } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/common/Avatar";
@@ -75,6 +75,12 @@ export default async function MyPage({
                   </span>
                 ))}
               </div>
+            )}
+            {profile.goal && (
+              <p className="text-caption mt-1.5 flex items-start gap-1">
+                <Target size={12} className="text-accent mt-[2px] shrink-0" />
+                <span className="text-ink whitespace-pre-wrap">{profile.goal}</span>
+              </p>
             )}
           </div>
         </Card>
