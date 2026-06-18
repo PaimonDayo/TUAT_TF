@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, Trophy } from "lucide-react";
+import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { ResultsList } from "@/components/features/ResultsList";
 import type { PbRecord } from "@/types";
 
 export function PbManager({
@@ -31,49 +31,7 @@ export function PbManager({
   return (
     <>
       <div className="space-y-3">
-        {items.length === 0 ? (
-          <Card className="p-6 flex flex-col items-center gap-2">
-            <Trophy size={28} className="text-warning" />
-            <p className="text-caption text-center">
-              まだ大会・記録会の結果がありません
-            </p>
-          </Card>
-        ) : (
-          <Card className="divide-y divide-separator">
-            {items.map((pb) => (
-              <div key={pb.id} className="p-3.5 flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-headline flex items-center gap-1.5 flex-wrap">
-                    {pb.event_name}
-                    {pb.is_pb && (
-                      <span className="text-[10px] font-bold text-warning border border-warning rounded px-1 leading-tight">
-                        PB
-                      </span>
-                    )}
-                    {pb.is_ub && (
-                      <span className="text-[10px] font-bold text-accent border border-accent rounded px-1 leading-tight">
-                        UB
-                      </span>
-                    )}
-                  </p>
-                  {(pb.meet_name || pb.recorded_on) && (
-                    <p className="text-caption">
-                      {[pb.meet_name, pb.recorded_on].filter(Boolean).join(" ・ ")}
-                    </p>
-                  )}
-                </div>
-                <span className="text-title tabular-nums">{pb.record}</span>
-                <button
-                  onClick={() => remove(pb.id)}
-                  aria-label="削除"
-                  className="text-muted active:text-danger"
-                >
-                  <Trash2 size={18} />
-                </button>
-              </div>
-            ))}
-          </Card>
-        )}
+        <ResultsList results={items} onDelete={remove} />
 
         <Button variant="outline" size="lg" onClick={() => setOpen(true)} className="gap-2">
           <Plus size={18} /> 結果を追加

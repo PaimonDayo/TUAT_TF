@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/common/Avatar";
 import { BlockPills } from "@/components/common/BlockPill";
 import { RecordCard } from "@/components/cards/RecordCard";
+import { ResultsList } from "@/components/features/ResultsList";
 import { WeeklyBarChart } from "@/components/features/WeeklyBarChart";
 import { getProfileById, getUserRecords, getPbRecords } from "@/lib/queries";
 import { gradeShort } from "@/lib/constants";
@@ -66,33 +67,7 @@ export default async function MemberPage({
         {pbs.length > 0 && (
           <section className="space-y-2">
             <p className="section-label">大会・記録会の結果</p>
-            <Card className="divide-y divide-separator">
-              {pbs.map((pb) => (
-                <div key={pb.id} className="p-3 flex items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[14px] font-semibold flex items-center gap-1.5 flex-wrap">
-                      {pb.event_name}
-                      {pb.is_pb && (
-                        <span className="text-[10px] font-bold text-warning border border-warning rounded px-1 leading-tight">
-                          PB
-                        </span>
-                      )}
-                      {pb.is_ub && (
-                        <span className="text-[10px] font-bold text-accent border border-accent rounded px-1 leading-tight">
-                          UB
-                        </span>
-                      )}
-                    </p>
-                    {(pb.meet_name || pb.recorded_on) && (
-                      <p className="text-caption">
-                        {[pb.meet_name, pb.recorded_on].filter(Boolean).join(" ・ ")}
-                      </p>
-                    )}
-                  </div>
-                  <span className="text-headline tabular-nums">{pb.record}</span>
-                </div>
-              ))}
-            </Card>
+            <ResultsList results={pbs} />
           </section>
         )}
 
