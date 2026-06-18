@@ -1,5 +1,6 @@
 import { BottomNav } from "@/components/layout/BottomNav";
 import { FAB } from "@/components/layout/FAB";
+import { SessionKeepAlive } from "@/components/layout/SessionKeepAlive";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 
 export default async function AppLayout({
@@ -11,6 +12,7 @@ export default async function AppLayout({
 
   return (
     <div className="mx-auto w-full max-w-md min-h-dvh bg-bg pb-[calc(52px+env(safe-area-inset-bottom))]">
+      <SessionKeepAlive />
       {children}
       <FAB profile={{ id: profile.id, blocks: profile.blocks, role: profile.role }} />
       <BottomNav />
