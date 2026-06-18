@@ -35,7 +35,7 @@ export default async function MemberPage({
 
   return (
     <>
-      <SubHeader title={profile.display_name || "部員"} backHref="/ranking" />
+      <SubHeader title={profile.display_name || "部員"} />
 
       <div className="px-4 space-y-5 pt-1">
         <Card className="p-4 flex items-center gap-4">

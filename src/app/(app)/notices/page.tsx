@@ -27,7 +27,7 @@ export default async function NoticesPage({
         {notices.length === 0 ? (
           <p className="text-caption text-center py-16">お知らせはありません。</p>
         ) : (
-          notices.map((n) => <NoticeCard key={n.id} notice={n} />)
+          notices.map((n) => <NoticeCard key={n.id} notice={n} canManage={canCreateNotice} />)
         )}
       </div>
     </>

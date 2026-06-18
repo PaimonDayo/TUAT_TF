@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { NOTICE_CATEGORIES } from "@/lib/constants";
-import type { NoticeCategory } from "@/types";
+import type { Notice, NoticeCategory } from "@/types";
 
 export function NoticeComposer({ autoOpen = false }: { autoOpen?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -35,13 +35,20 @@ export function NoticeComposer({ autoOpen = false }: { autoOpen?: boolean }) {
   );
 }
 
-export function NoticeForm({ onDone }: { onDone: () => void }) {
+export function NoticeForm({
+  initial,
+  onDone,
+}: {
+  initial?: Notice;
+  onDone: () => void;
+}) {
   const router = useRouter();
-  const [category, setCategory] = useState<NoticeCategory>("info");
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [deadline, setDeadline] = useState("");
-  const [pinHome, setPinHome] = useState(false);
+  const editing = !!initial;
+  const [category, setCategory] = useState<NoticeCategory>(initial?.category ?? "info");
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [content, setContent] = useState(initial?.content ?? "");
+  const [deadline, setDeadline] = useState(initial?.deadline ?? "");
+  const [pinHome, setPinHome] = useState(initial?.pin_home ?? false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,6 +60,28 @@ export function NoticeForm({ onDone }: { onDone: () => void }) {
     setSaving(true);
     setError(null);
     const supabase = createClient();
+
+    if (editing) {
+      const { error } = await supabase
+        .from("notices")
+        .update({
+          category,
+          title: title.trim(),
+          content: content.trim(),
+          deadline: deadline || null,
+          pin_home: pinHome,
+        })
+        .eq("id", initial!.id);
+      if (error) {
+        setError("保存に失敗しました");
+        setSaving(false);
+        return;
+      }
+      router.refresh();
+      onDone();
+      return;
+    }
+
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -131,7 +160,7 @@ export function NoticeForm({ onDone }: { onDone: () => void }) {
       </button>
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <Button size="lg" onClick={submit} disabled={saving}>
-        {saving ? "投稿中…" : "投稿する"}
+        {saving ? "保存中…" : editing ? "更新する" : "投稿する"}
       </Button>
     </div>
   );

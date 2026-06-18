@@ -4,9 +4,16 @@ import { CalendarClock } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { NOTICE_CATEGORIES } from "@/lib/constants";
+import { NoticeActions } from "@/components/cards/NoticeActions";
 import type { Notice } from "@/types";
 
-export function NoticeCard({ notice }: { notice: Notice }) {
+export function NoticeCard({
+  notice,
+  canManage = false,
+}: {
+  notice: Notice;
+  canManage?: boolean;
+}) {
   const meta = NOTICE_CATEGORIES[notice.category];
   const deadline = notice.deadline ? new Date(notice.deadline + "T23:59:59") : null;
   const overdue = deadline ? isPast(deadline) : false;
@@ -18,6 +25,7 @@ export function NoticeCard({ notice }: { notice: Notice }) {
         <span className="text-micro ml-auto">
           {format(new Date(notice.created_at), "M月d日", { locale: ja })}
         </span>
+        {canManage && <NoticeActions notice={notice} />}
       </div>
       <h3 className="text-headline">{notice.title}</h3>
       <p className="text-[14px] whitespace-pre-wrap break-words text-muted2">{notice.content}</p>
