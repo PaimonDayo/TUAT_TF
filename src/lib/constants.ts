@@ -13,6 +13,25 @@ export const BLOCKS: Record<
 
 export const BLOCK_ORDER: Block[] = ["middle_long", "short", "jump", "throw"];
 
+/** 簡素化したブロック絞り込み（中長 / 短。跳躍・投擲は「短」に含める） */
+export const SIMPLE_BLOCK_ITEMS: { key: string; label: string }[] = [
+  { key: "all", label: "すべて" },
+  { key: "middle_long", label: "中長" },
+  { key: "short", label: "短" },
+];
+
+/** プロフィールの所属ブロックが、簡素化フィルタ（all/middle_long/short）に合致するか */
+export function matchSimpleBlock(
+  blocks: Block[] | undefined | null,
+  filter: string,
+): boolean {
+  if (filter === "all") return true;
+  if (filter === "middle_long") return (blocks ?? []).includes("middle_long");
+  if (filter === "short")
+    return (blocks ?? []).some((b) => b === "short" || b === "jump" || b === "throw");
+  return true;
+}
+
 /** ロール定義 */
 export const ROLES: Record<Role, { label: string }> = {
   admin: { label: "管理者" },

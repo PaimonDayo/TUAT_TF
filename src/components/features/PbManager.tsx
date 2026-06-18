@@ -85,7 +85,21 @@ export function PbManager({
           <PbForm
             userId={userId}
             onDone={(created) => {
-              if (created) setItems((arr) => [created, ...arr]);
+              if (created) {
+                setItems((arr) => [
+                  created,
+                  // 同種目の古い PB/UB バッジはローカル表示からも外す
+                  ...arr.map((x) =>
+                    x.event_name === created.event_name
+                      ? {
+                          ...x,
+                          is_pb: created.is_pb ? false : x.is_pb,
+                          is_ub: created.is_ub ? false : x.is_ub,
+                        }
+                      : x,
+                  ),
+                ]);
+              }
               setOpen(false);
             }}
           />
@@ -119,12 +133,32 @@ function PbForm({
     }
     setSaving(true);
     setError(null);
+    const name = eventName.trim();
     const supabase = createClient();
+
+    // 同じ種目の既存 PB/UB の印を外す（最新の1件だけに付くように）
+    if (isPb) {
+      await supabase
+        .from("pb_records")
+        .update({ is_pb: false })
+        .eq("user_id", userId)
+        .eq("event_name", name)
+        .eq("is_pb", true);
+    }
+    if (isUb) {
+      await supabase
+        .from("pb_records")
+        .update({ is_ub: false })
+        .eq("user_id", userId)
+        .eq("event_name", name)
+        .eq("is_ub", true);
+    }
+
     const { data, error } = await supabase
       .from("pb_records")
       .insert({
         user_id: userId,
-        event_name: eventName.trim(),
+        event_name: name,
         record: record.trim(),
         meet_name: meetName.trim() || null,
         recorded_on: recordedOn || null,

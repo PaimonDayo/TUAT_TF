@@ -90,6 +90,7 @@ export default async function MyPage({
 
         {/* リンク */}
         <div className="space-y-2">
+          <LinkCard href="/members" icon={<Users size={20} className="text-accent" />} label="メンバー一覧" />
           <LinkCard href="/mypage/pb" icon={<Trophy size={20} className="text-warning" />} label="大会・記録会の結果" />
           <GoalEditor userId={profile.id} goal={profile.goal} />
         </div>

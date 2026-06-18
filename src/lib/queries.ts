@@ -7,6 +7,7 @@ import type {
   WeeklyRankingRow,
   Block,
   AppRole,
+  AuthorMini,
 } from "@/types";
 
 const AUTHOR_SELECT = "author:profiles!user_id(id, display_name, avatar_url, blocks, grade)";
@@ -206,6 +207,17 @@ export async function getAllProfiles() {
     rows.map((p) => p.id as string),
   );
   return rows.map((p) => ({ ...p, roles: rolesMap.get(p.id as string) ?? [] }));
+}
+
+/** メンバー一覧（在籍中の部員。名簿表示用） */
+export async function getMembersList(): Promise<AuthorMini[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, display_name, avatar_url, blocks, grade")
+    .eq("status", "active")
+    .order("display_name", { ascending: true });
+  return (data ?? []) as unknown as AuthorMini[];
 }
 
 /** 全ロール定義を取得（管理画面用） */
