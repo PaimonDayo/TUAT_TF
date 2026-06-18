@@ -133,3 +133,23 @@ body {
 .fade-in {
   animation: fade-in 0.18s ease-out;
 }
+
+/* iOS の日付/時刻入力は内容ぶんの最小幅を持ち width:100% を無視してはみ出す。
+   ネイティブ装飾を外し、枠内に収まるよう矯正する。 */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+}
+/* 余白を作る内部スピナー等を抑制 */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  margin-left: auto;
+}
