@@ -3,8 +3,28 @@
 // ─────────────────────────────────────────────
 
 export type Block = "middle_long" | "short" | "jump" | "throw";
+/** 旧・単一ロール（profiles.role 列。互換目的で残置） */
 export type Role = "admin" | "menu_staff" | "member";
 export type ProfileStatus = "active" | "graduated";
+
+/** 権限の種類 */
+export type Permission =
+  | "manage_members" // 部員・ロール管理
+  | "create_schedule" // 練習予定の作成
+  | "create_menu" // 練習メニューの作成
+  | "create_notice"; // お知らせの作成
+
+/** カスタムロール（roles テーブル） */
+export interface AppRole {
+  id: string;
+  name: string;
+  can_manage_members: boolean;
+  can_create_schedule: boolean;
+  can_create_menu: boolean;
+  can_create_notice: boolean;
+  is_system: boolean;
+  created_at: string;
+}
 export type Condition = "great" | "normal" | "bad";
 export type Intensity = "low" | "mid" | "high" | "speed";
 export type ScheduleType = "practice" | "meet" | "event" | "time_trial";
@@ -20,6 +40,8 @@ export interface Profile {
   blocks: Block[];
   grade: string | null;
   role: Role;
+  /** 付与されているロール一覧（複数可） */
+  roles: AppRole[];
   status: ProfileStatus;
   created_at: string;
 }

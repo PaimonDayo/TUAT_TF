@@ -42,7 +42,7 @@ export function ScheduleComposer({ autoOpen = false }: { autoOpen?: boolean }) {
   );
 }
 
-function ScheduleForm({ onDone }: { onDone: () => void }) {
+export function ScheduleForm({ onDone }: { onDone: () => void }) {
   const router = useRouter();
   const [type, setType] = useState<ScheduleType>("practice");
   const [dates, setDates] = useState<string[]>([]);

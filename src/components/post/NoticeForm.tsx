@@ -35,7 +35,7 @@ export function NoticeComposer({ autoOpen = false }: { autoOpen?: boolean }) {
   );
 }
 
-function NoticeForm({ onDone }: { onDone: () => void }) {
+export function NoticeForm({ onDone }: { onDone: () => void }) {
   const router = useRouter();
   const [category, setCategory] = useState<NoticeCategory>("info");
   const [title, setTitle] = useState("");

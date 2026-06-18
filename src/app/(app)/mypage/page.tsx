@@ -10,7 +10,8 @@ import { WeeklyBarChart } from "@/components/features/WeeklyBarChart";
 import { EditProfileButton, SignOutButton } from "@/components/features/MyPageActions";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getUserRecords, getUserActivity } from "@/lib/queries";
-import { ROLES, gradeShort } from "@/lib/constants";
+import { gradeShort } from "@/lib/constants";
+import { permissionsOf } from "@/lib/permissions";
 import type { PracticeRecord } from "@/types";
 
 export default async function MyPage({
@@ -25,8 +26,8 @@ export default async function MyPage({
     getUserActivity(profile.id, profile.id),
   ]);
 
-  const isStaff = profile.role === "admin" || profile.role === "menu_staff";
-  const isAdmin = profile.role === "admin";
+  const perms = permissionsOf(profile.roles);
+  const showAdminMenu = perms.manageMembers || perms.createSchedule || perms.createNotice;
 
   return (
     <>
@@ -61,14 +62,19 @@ export default async function MyPage({
               <h2 className="text-title truncate">{profile.display_name || "名前未設定"}</h2>
               <BlockPills blocks={profile.blocks} full />
             </div>
-            <p className="text-caption mt-0.5">
-              {gradeShort(profile.grade) ?? "学年未設定"}
-              {profile.role !== "member" && (
-                <span className="ml-2 inline-flex items-center gap-0.5 text-accent">
-                  <Shield size={11} /> {ROLES[profile.role].label}
-                </span>
-              )}
-            </p>
+            <p className="text-caption mt-0.5">{gradeShort(profile.grade) ?? "学年未設定"}</p>
+            {profile.roles.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {profile.roles.map((r) => (
+                  <span
+                    key={r.id}
+                    className="inline-flex items-center gap-0.5 text-micro text-accent bg-accent/10 rounded-full px-2 py-0.5"
+                  >
+                    <Shield size={10} /> {r.name}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </Card>
 
@@ -80,17 +86,19 @@ export default async function MyPage({
           <LinkCard href="/mypage/pb" icon={<Trophy size={20} className="text-warning" />} label="大会・記録会の結果" />
         </div>
 
-        {/* 管理者・担当者メニュー */}
-        {isStaff && (
+        {/* 管理メニュー（権限に応じて表示） */}
+        {showAdminMenu && (
           <section className="space-y-2">
-            <p className="section-label">{isAdmin ? "管理者メニュー" : "担当者メニュー"}</p>
+            <p className="section-label">管理メニュー</p>
             <div className="space-y-2">
-              <LinkCard href="/schedule?compose=1" icon={<CalendarPlus size={20} className="text-accent" />} label="練習予定を作成" />
-              {isAdmin && (
+              {perms.createSchedule && (
+                <LinkCard href="/schedule?compose=1" icon={<CalendarPlus size={20} className="text-accent" />} label="練習予定を作成" />
+              )}
+              {perms.createNotice && (
                 <LinkCard href="/notices?compose=1" icon={<Bell size={20} className="text-warning" />} label="お知らせを投稿" />
               )}
-              {isAdmin && (
-                <LinkCard href="/admin" icon={<Users size={20} className="text-accent" />} label="部員管理（ロール変更）" />
+              {perms.manageMembers && (
+                <LinkCard href="/admin" icon={<Users size={20} className="text-accent" />} label="部員・ロール管理" />
               )}
             </div>
           </section>

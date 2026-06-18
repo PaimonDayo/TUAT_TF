@@ -6,7 +6,7 @@ import { BlockPills } from "@/components/common/BlockPill";
 import { RecordCard } from "@/components/cards/RecordCard";
 import { WeeklyBarChart } from "@/components/features/WeeklyBarChart";
 import { getProfileById, getUserRecords, getPbRecords } from "@/lib/queries";
-import { ROLES, gradeShort } from "@/lib/constants";
+import { gradeShort } from "@/lib/constants";
 import type { PbRecord, PracticeRecord, Profile, RecordWithAuthor } from "@/types";
 
 export default async function MemberPage({
@@ -47,8 +47,10 @@ export default async function MemberPage({
             </div>
             <p className="text-caption mt-0.5">
               {gradeShort(profile.grade) ?? "学年未設定"}
-              {profile.role !== "member" && (
-                <span className="ml-2 text-accent">{ROLES[profile.role].label}</span>
+              {profile.roles?.length > 0 && (
+                <span className="ml-2 text-accent">
+                  {profile.roles.map((r) => r.name).join("・")}
+                </span>
               )}
             </p>
           </div>

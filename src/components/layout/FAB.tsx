@@ -1,16 +1,32 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Activity, MessageCircle } from "lucide-react";
+import { Plus, Activity, MessageCircle, CalendarPlus, ClipboardList, Bell } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { RecordForm } from "@/components/post/RecordForm";
 import { TweetForm } from "@/components/post/TweetForm";
-import type { Profile } from "@/types";
+import { ScheduleForm } from "@/components/post/ScheduleForm";
+import { NoticeForm } from "@/components/post/NoticeForm";
+import { MenuComposerForm } from "@/components/post/MenuForm";
 
-type Mode = "menu" | "record" | "tweet";
+type Mode = "menu" | "record" | "tweet" | "schedule" | "pmenu" | "notice";
 
-/** 右下のフローティング投稿ボタン。種別を選んでフォームを開く */
-export function FAB({ profile }: { profile: Pick<Profile, "id" | "blocks" | "role"> }) {
+export type FabPermissions = {
+  createSchedule: boolean;
+  createMenu: boolean;
+  createNotice: boolean;
+};
+
+/** 右下のフローティング投稿ボタン。権限に応じて作成できる種別を出し分ける */
+export function FAB({
+  userId,
+  isMiddleLong,
+  can,
+}: {
+  userId: string;
+  isMiddleLong: boolean;
+  can: FabPermissions;
+}) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("menu");
 
@@ -28,6 +44,9 @@ export function FAB({ profile }: { profile: Pick<Profile, "id" | "blocks" | "rol
     menu: undefined,
     record: "練習記録",
     tweet: "つぶやき",
+    schedule: "予定を作成",
+    pmenu: "練習メニューを追加",
+    notice: "お知らせを投稿",
   };
 
   return (
@@ -58,16 +77,42 @@ export function FAB({ profile }: { profile: Pick<Profile, "id" | "blocks" | "rol
                 desc="ひとことシェア（200字まで）"
                 onClick={() => setMode("tweet")}
               />
+              {can.createSchedule && (
+                <PostOption
+                  icon={<CalendarPlus size={22} />}
+                  color="#ff9500"
+                  title="練習予定"
+                  desc="練習・大会などの予定を作成"
+                  onClick={() => setMode("schedule")}
+                />
+              )}
+              {can.createMenu && (
+                <PostOption
+                  icon={<ClipboardList size={22} />}
+                  color="#af52de"
+                  title="練習メニュー"
+                  desc="予定にメニューを追加"
+                  onClick={() => setMode("pmenu")}
+                />
+              )}
+              {can.createNotice && (
+                <PostOption
+                  icon={<Bell size={22} />}
+                  color="#ff3b30"
+                  title="お知らせ"
+                  desc="部内へのお知らせを投稿"
+                  onClick={() => setMode("notice")}
+                />
+              )}
             </div>
           )}
           {mode === "record" && (
-            <RecordForm
-              userId={profile.id}
-              isMiddleLong={profile.blocks?.includes("middle_long") ?? false}
-              onDone={close}
-            />
+            <RecordForm userId={userId} isMiddleLong={isMiddleLong} onDone={close} />
           )}
           {mode === "tweet" && <TweetForm onDone={close} />}
+          {mode === "schedule" && <ScheduleForm onDone={close} />}
+          {mode === "pmenu" && <MenuComposerForm onDone={close} />}
+          {mode === "notice" && <NoticeForm onDone={close} />}
         </SheetContent>
       </Sheet>
     </>

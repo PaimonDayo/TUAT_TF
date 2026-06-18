@@ -21,7 +21,7 @@ export async function getCurrentProfile(): Promise<Profile> {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("*")
+    .select("*, role_links:profile_roles(role:roles(*))")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -35,10 +35,25 @@ export async function getCurrentProfile(): Promise<Profile> {
       blocks: [],
       grade: null,
       role: "member",
+      roles: [],
       status: "active",
       created_at: new Date().toISOString(),
     };
   }
 
-  return profile as Profile;
+  return normalizeProfileRoles(profile) as Profile;
+}
+
+/**
+ * profile_roles の join 結果（{ role_links: [{ role: {...} }] }）を
+ * profile.roles: AppRole[] に正規化する。
+ */
+export function normalizeProfileRoles<
+  T extends { role_links?: { role: import("@/types").AppRole | null }[] | null },
+>(profile: T): Omit<T, "role_links"> & { roles: import("@/types").AppRole[] } {
+  const { role_links, ...rest } = profile;
+  const roles = (role_links ?? [])
+    .map((l) => l.role)
+    .filter((r): r is import("@/types").AppRole => r !== null);
+  return { ...rest, roles };
 }

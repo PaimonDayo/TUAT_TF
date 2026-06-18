@@ -5,6 +5,7 @@ import { ScheduleCard } from "@/components/cards/ScheduleCard";
 import { ScheduleComposer } from "@/components/post/ScheduleForm";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getUpcomingSchedules, getAttendancesForSchedules } from "@/lib/queries";
+import { permissionsOf } from "@/lib/permissions";
 import { ATTENDANCE_TYPES } from "@/lib/constants";
 import type { ScheduleWithMenus, Attendee, AttendanceStatusOrNone } from "@/types";
 
@@ -15,7 +16,7 @@ export default async function SchedulePage({
 }) {
   const { type, compose } = await searchParams;
   const profile = await getCurrentProfile();
-  const isStaff = profile.role === "admin" || profile.role === "menu_staff";
+  const perms = permissionsOf(profile.roles);
   const schedules = (await getUpcomingSchedules(type)) as unknown as ScheduleWithMenus[];
 
   // 出欠対象の予定 ID をまとめて取得
@@ -37,7 +38,7 @@ export default async function SchedulePage({
       <Header
         title="練習予定"
         large
-        right={isStaff ? <ScheduleComposer autoOpen={compose === "1"} /> : undefined}
+        right={perms.createSchedule ? <ScheduleComposer autoOpen={compose === "1"} /> : undefined}
       />
       <Suspense>
         <ScheduleTabs />
@@ -51,7 +52,7 @@ export default async function SchedulePage({
             <ScheduleCard
               key={s.id}
               schedule={s}
-              canEditMenu={isStaff}
+              canEditMenu={perms.createMenu}
               userId={profile.id}
               myStatus={myStatus.get(s.id) ?? "none"}
               attendees={bySchedule.get(s.id) ?? []}

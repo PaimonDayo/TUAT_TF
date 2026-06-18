@@ -1,10 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
+import { normalizeProfileRoles } from "@/lib/supabase/auth";
 import type {
   FeedItem,
   RecordWithAuthor,
   TweetWithAuthor,
   WeeklyRankingRow,
   Block,
+  AppRole,
 } from "@/types";
 
 const AUTHOR_SELECT = "author:profiles!user_id(id, display_name, avatar_url, blocks, grade)";
@@ -182,21 +184,36 @@ export async function getPbRecords(userId: string) {
   return data ?? [];
 }
 
-/** プロフィール単体取得（他部員ページ用） */
+/** プロフィール単体取得（他部員ページ用。ロール込み） */
 export async function getProfileById(id: string) {
   const supabase = await createClient();
-  const { data } = await supabase.from("profiles").select("*").eq("id", id).maybeSingle();
-  return data;
+  const { data } = await supabase
+    .from("profiles")
+    .select("*, role_links:profile_roles(role:roles(*))")
+    .eq("id", id)
+    .maybeSingle();
+  return data ? normalizeProfileRoles(data) : null;
 }
 
-/** 全部員一覧（管理者画面用） */
+/** 全部員一覧（管理者画面用。ロール込み） */
 export async function getAllProfiles() {
   const supabase = await createClient();
   const { data } = await supabase
     .from("profiles")
-    .select("*")
+    .select("*, role_links:profile_roles(role:roles(*))")
     .order("created_at", { ascending: true });
-  return data ?? [];
+  return (data ?? []).map(normalizeProfileRoles);
+}
+
+/** 全ロール定義を取得（管理画面用） */
+export async function getAllRoles(): Promise<AppRole[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("roles")
+    .select("*")
+    .order("is_system", { ascending: false })
+    .order("created_at", { ascending: true });
+  return (data ?? []) as AppRole[];
 }
 
 /** あるユーザーの投稿（練習記録 + つぶやき）をマージして返す（マイページ用） */
