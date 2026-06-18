@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import type { Profile } from "@/types";
+import type { AppRole, Profile } from "@/types";
+
+type SupabaseServer = Awaited<ReturnType<typeof createClient>>;
 
 /**
  * 現在ログイン中のユーザーのプロフィールを取得する。
@@ -19,9 +21,11 @@ export async function getCurrentProfile(): Promise<Profile> {
 
   if (!user) redirect("/login");
 
+  // ロール取得とは切り離してプロフィール本体を取得する。
+  // （roles テーブル未適用などでロール取得に失敗しても、名前等は表示できるように）
   const { data: profile } = await supabase
     .from("profiles")
-    .select("*, role_links:profile_roles(role:roles(*))")
+    .select("*")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -42,19 +46,33 @@ export async function getCurrentProfile(): Promise<Profile> {
     };
   }
 
-  return normalizeProfileRoles(profile) as Profile;
+  const rolesMap = await fetchRolesByProfileIds(supabase, [user.id]);
+  return { ...profile, roles: rolesMap.get(user.id) ?? [] } as Profile;
 }
 
 /**
- * profile_roles の join 結果（{ role_links: [{ role: {...} }] }）を
- * profile.roles: AppRole[] に正規化する。
+ * 指定プロフィール群のロールをまとめて取得する。
+ * roles / profile_roles 未適用やエラー時は空マップを返す（プロフィール表示は壊さない）。
  */
-export function normalizeProfileRoles<
-  T extends { role_links?: { role: import("@/types").AppRole | null }[] | null },
->(profile: T): Omit<T, "role_links"> & { roles: import("@/types").AppRole[] } {
-  const { role_links, ...rest } = profile;
-  const roles = (role_links ?? [])
-    .map((l) => l.role)
-    .filter((r): r is import("@/types").AppRole => r !== null);
-  return { ...rest, roles };
+export async function fetchRolesByProfileIds(
+  supabase: SupabaseServer,
+  ids: string[],
+): Promise<Map<string, AppRole[]>> {
+  const map = new Map<string, AppRole[]>();
+  if (ids.length === 0) return map;
+
+  const { data, error } = await supabase
+    .from("profile_roles")
+    .select("profile_id, role:roles(*)")
+    .in("profile_id", ids);
+
+  if (error || !data) return map;
+
+  for (const row of data as unknown as { profile_id: string; role: AppRole | null }[]) {
+    if (!row.role) continue;
+    const arr = map.get(row.profile_id) ?? [];
+    arr.push(row.role);
+    map.set(row.profile_id, arr);
+  }
+  return map;
 }

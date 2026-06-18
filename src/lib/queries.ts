@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { normalizeProfileRoles } from "@/lib/supabase/auth";
+import { fetchRolesByProfileIds } from "@/lib/supabase/auth";
 import type {
   FeedItem,
   RecordWithAuthor,
@@ -187,12 +187,10 @@ export async function getPbRecords(userId: string) {
 /** プロフィール単体取得（他部員ページ用。ロール込み） */
 export async function getProfileById(id: string) {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("profiles")
-    .select("*, role_links:profile_roles(role:roles(*))")
-    .eq("id", id)
-    .maybeSingle();
-  return data ? normalizeProfileRoles(data) : null;
+  const { data } = await supabase.from("profiles").select("*").eq("id", id).maybeSingle();
+  if (!data) return null;
+  const rolesMap = await fetchRolesByProfileIds(supabase, [id]);
+  return { ...data, roles: rolesMap.get(id) ?? [] };
 }
 
 /** 全部員一覧（管理者画面用。ロール込み） */
@@ -200,9 +198,14 @@ export async function getAllProfiles() {
   const supabase = await createClient();
   const { data } = await supabase
     .from("profiles")
-    .select("*, role_links:profile_roles(role:roles(*))")
+    .select("*")
     .order("created_at", { ascending: true });
-  return (data ?? []).map(normalizeProfileRoles);
+  const rows = data ?? [];
+  const rolesMap = await fetchRolesByProfileIds(
+    supabase,
+    rows.map((p) => p.id as string),
+  );
+  return rows.map((p) => ({ ...p, roles: rolesMap.get(p.id as string) ?? [] }));
 }
 
 /** 全ロール定義を取得（管理画面用） */
