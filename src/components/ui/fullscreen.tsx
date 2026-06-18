@@ -27,6 +27,7 @@ export function FullScreenContent({
       <Dialog.Overlay className="sheet-overlay fixed inset-0 z-50 bg-black/30" />
       <Dialog.Content
         onOpenAutoFocus={autoFocus ? undefined : (e) => e.preventDefault()}
+        onCloseAutoFocus={(e) => e.preventDefault()}
         className={cn(
           "sheet-content fixed inset-0 z-50 mx-auto w-full max-w-md bg-bg flex flex-col outline-none",
           className,
