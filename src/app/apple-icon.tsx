@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
+import { APP_MONO } from "@/lib/app";
 
-// iOS のホーム画面アイコン（フォント不要の図形のみで描画）
+// iOS のホーム画面アイコン（モノグラム文字ロゴ）
 export const size = { width: 180, height: 180 };
 export const contentType = "image/png";
 
@@ -15,16 +16,13 @@ export default function AppleIcon() {
           alignItems: "center",
           justifyContent: "center",
           background: "#007aff",
+          color: "#ffffff",
+          fontSize: 62,
+          fontWeight: 700,
+          letterSpacing: -2,
         }}
       >
-        <div
-          style={{
-            width: 108,
-            height: 64,
-            border: "16px solid #ffffff",
-            borderRadius: 9999,
-          }}
-        />
+        {APP_MONO}
       </div>
     ),
     { ...size },

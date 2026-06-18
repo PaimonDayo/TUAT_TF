@@ -1,13 +1,14 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { APP_NAME, APP_DESCRIPTION } from "@/lib/app";
 
 export const metadata: Metadata = {
-  title: "陸上部ログ",
-  description: "陸上競技部の練習記録・予定・ランキング共有アプリ",
-  applicationName: "陸上部ログ",
+  title: APP_NAME,
+  description: APP_DESCRIPTION,
+  applicationName: APP_NAME,
   appleWebApp: {
     capable: true,
-    title: "陸上部ログ",
+    title: APP_NAME,
     statusBarStyle: "default",
   },
 };

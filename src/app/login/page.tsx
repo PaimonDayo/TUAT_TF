@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { APP_NAME, APP_MONO } from "@/lib/app";
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
@@ -33,10 +34,10 @@ export default function LoginPage() {
     <main className="min-h-dvh flex flex-col items-center justify-center px-8 max-w-md mx-auto">
       {/* ロゴ */}
       <div className="flex flex-col items-center gap-3 mb-12">
-        <div className="h-20 w-20 rounded-[22px] bg-accent flex items-center justify-center text-white text-4xl shadow-lg shadow-accent/20">
-          🏃
+        <div className="h-20 w-20 rounded-[22px] bg-accent flex items-center justify-center shadow-lg shadow-accent/20">
+          <span className="text-white text-[26px] font-extrabold tracking-tight">{APP_MONO}</span>
         </div>
-        <h1 className="text-large-title">陸上部ログ</h1>
+        <h1 className="text-large-title">{APP_NAME}</h1>
         <p className="text-body text-muted text-center">
           練習記録・予定・ランキングを
           <br />

@@ -1,10 +1,11 @@
 import type { MetadataRoute } from "next";
+import { APP_NAME, APP_DESCRIPTION } from "@/lib/app";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "陸上部ログ",
-    short_name: "陸上部ログ",
-    description: "陸上競技部の練習記録・予定・ランキング共有アプリ",
+    name: APP_NAME,
+    short_name: APP_NAME,
+    description: APP_DESCRIPTION,
     start_url: "/home",
     display: "standalone",
     background_color: "#f2f2f7",
