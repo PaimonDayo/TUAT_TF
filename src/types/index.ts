@@ -185,6 +185,7 @@ export interface PbRecord {
   recorded_on: string | null;
   is_pb: boolean;
   is_ub: boolean;
+  is_official: boolean;
   created_at: string;
 }
 

@@ -31,6 +31,10 @@ export function ResultsList({
     );
   }
 
+  // PB/UB は「種目ごとに記録日が最新のもの」だけにバッジを付ける（入力順ではなく日付で判定）
+  const pbWinners = computeWinners(results, "is_pb");
+  const ubWinners = computeWinners(results, "is_ub");
+
   const shown = expanded ? results : results.slice(0, PREVIEW);
   const groups = groupByYear(shown);
 
@@ -41,7 +45,13 @@ export function ResultsList({
           <p className="section-label">{year}</p>
           <Card className="divide-y divide-separator">
             {rows.map((pb) => (
-              <ResultRow key={pb.id} pb={pb} onDelete={onDelete} />
+              <ResultRow
+                key={pb.id}
+                pb={pb}
+                showPb={pbWinners.has(pb.id)}
+                showUb={ubWinners.has(pb.id)}
+                onDelete={onDelete}
+              />
             ))}
           </Card>
         </div>
@@ -69,9 +79,13 @@ export function ResultsList({
 
 function ResultRow({
   pb,
+  showPb,
+  showUb,
   onDelete,
 }: {
   pb: PbRecord;
+  showPb: boolean;
+  showUb: boolean;
   onDelete?: (id: string) => void;
 }) {
   return (
@@ -79,14 +93,19 @@ function ResultRow({
       <div className="flex-1 min-w-0">
         <p className="text-headline flex items-center gap-1.5 flex-wrap">
           {pb.event_name}
-          {pb.is_pb && (
+          {showPb && (
             <span className="text-[10px] font-bold text-warning border border-warning rounded px-1 leading-tight">
               PB
             </span>
           )}
-          {pb.is_ub && (
+          {showUb && (
             <span className="text-[10px] font-bold text-accent border border-accent rounded px-1 leading-tight">
               UB
+            </span>
+          )}
+          {pb.is_official && (
+            <span className="text-[10px] font-bold text-success border border-success rounded px-1 leading-tight">
+              公認
             </span>
           )}
         </p>
@@ -108,6 +127,24 @@ function ResultRow({
       )}
     </div>
   );
+}
+
+/** a の記録日が b より新しいか（日付ありは日付なしより新しい扱い） */
+function isNewer(a: string | null, b: string | null): boolean {
+  if (a && b) return a > b;
+  if (a && !b) return true;
+  return false;
+}
+
+/** 種目ごとに、フラグ(is_pb/is_ub)が立っている中で記録日が最新の1件の id を集める */
+function computeWinners(rows: PbRecord[], key: "is_pb" | "is_ub"): Set<string> {
+  const best = new Map<string, PbRecord>();
+  for (const r of rows) {
+    if (!r[key]) continue;
+    const cur = best.get(r.event_name);
+    if (!cur || isNewer(r.recorded_on, cur.recorded_on)) best.set(r.event_name, r);
+  }
+  return new Set([...best.values()].map((r) => r.id));
 }
 
 /** recorded_on の年でグループ化（新しい年が先。日付なしは最後） */

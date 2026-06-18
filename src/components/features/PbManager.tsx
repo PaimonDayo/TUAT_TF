@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, Check } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { ResultsList } from "@/components/features/ResultsList";
+import { cn } from "@/lib/utils";
 import type { PbRecord } from "@/types";
 
 export function PbManager({
@@ -43,21 +44,8 @@ export function PbManager({
           <PbForm
             userId={userId}
             onDone={(created) => {
-              if (created) {
-                setItems((arr) => [
-                  created,
-                  // 同種目の古い PB/UB バッジはローカル表示からも外す
-                  ...arr.map((x) =>
-                    x.event_name === created.event_name
-                      ? {
-                          ...x,
-                          is_pb: created.is_pb ? false : x.is_pb,
-                          is_ub: created.is_ub ? false : x.is_ub,
-                        }
-                      : x,
-                  ),
-                ]);
-              }
+              // PB/UB の最新判定は表示側(ResultsList)が記録日で行うため、追加するだけでよい
+              if (created) setItems((arr) => [created, ...arr]);
               setOpen(false);
             }}
           />
@@ -81,6 +69,7 @@ function PbForm({
   const [recordedOn, setRecordedOn] = useState("");
   const [isPb, setIsPb] = useState(true);
   const [isUb, setIsUb] = useState(false);
+  const [isOfficial, setIsOfficial] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -94,24 +83,8 @@ function PbForm({
     const name = eventName.trim();
     const supabase = createClient();
 
-    // 同じ種目の既存 PB/UB の印を外す（最新の1件だけに付くように）
-    if (isPb) {
-      await supabase
-        .from("pb_records")
-        .update({ is_pb: false })
-        .eq("user_id", userId)
-        .eq("event_name", name)
-        .eq("is_pb", true);
-    }
-    if (isUb) {
-      await supabase
-        .from("pb_records")
-        .update({ is_ub: false })
-        .eq("user_id", userId)
-        .eq("event_name", name)
-        .eq("is_ub", true);
-    }
-
+    // PB/UB のバッジ表示は「種目ごと記録日が最新のもの」を表示時に判定するため、
+    // ここでは入力された印をそのまま保存するだけでよい。
     const { data, error } = await supabase
       .from("pb_records")
       .insert({
@@ -122,6 +95,7 @@ function PbForm({
         recorded_on: recordedOn || null,
         is_pb: isPb,
         is_ub: isUb,
+        is_official: isOfficial,
       })
       .select()
       .single();
@@ -153,36 +127,42 @@ function PbForm({
         <p className="section-label mb-1.5">記録日（任意）</p>
         <Input type="date" value={recordedOn} onChange={(e) => setRecordedOn(e.target.value)} />
       </div>
-      <button
-        type="button"
-        onClick={() => setIsPb((v) => !v)}
-        className="w-full flex items-center justify-between rounded-xl bg-card border border-separator p-3.5 active:bg-bg"
-      >
-        <span className="text-[14px]">PB（自己ベスト）として記録</span>
-        <span
-          className="h-6 w-10 rounded-full p-0.5 transition-colors flex"
-          style={{ backgroundColor: isPb ? "#34c759" : "#e5e5ea", justifyContent: isPb ? "flex-end" : "flex-start" }}
-        >
-          <span className="h-5 w-5 rounded-full bg-white shadow" />
-        </span>
-      </button>
-      <button
-        type="button"
-        onClick={() => setIsUb((v) => !v)}
-        className="w-full flex items-center justify-between rounded-xl bg-card border border-separator p-3.5 active:bg-bg"
-      >
-        <span className="text-[14px]">UB として記録</span>
-        <span
-          className="h-6 w-10 rounded-full p-0.5 transition-colors flex"
-          style={{ backgroundColor: isUb ? "#34c759" : "#e5e5ea", justifyContent: isUb ? "flex-end" : "flex-start" }}
-        >
-          <span className="h-5 w-5 rounded-full bg-white shadow" />
-        </span>
-      </button>
+      <div>
+        <p className="section-label mb-1.5">区分（複数選択可）</p>
+        <div className="flex gap-2">
+          <TagChip label="PB" active={isPb} onClick={() => setIsPb((v) => !v)} />
+          <TagChip label="UB" active={isUb} onClick={() => setIsUb((v) => !v)} />
+          <TagChip label="公認" active={isOfficial} onClick={() => setIsOfficial((v) => !v)} />
+        </div>
+      </div>
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <Button size="lg" onClick={submit} disabled={saving}>
         {saving ? "保存中…" : "追加する"}
       </Button>
     </div>
+  );
+}
+
+function TagChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "h-9 px-4 rounded-full border text-[14px] font-semibold inline-flex items-center gap-1 transition-active active:scale-95",
+        active ? "bg-accent text-white border-accent" : "bg-card border-separator text-muted2",
+      )}
+    >
+      {active && <Check size={15} />}
+      {label}
+    </button>
   );
 }
