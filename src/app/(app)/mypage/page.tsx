@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Trophy, ChevronRight, Shield, Bell, CalendarPlus, Users, Target } from "lucide-react";
+import { Trophy, ChevronRight, Shield, Bell, CalendarPlus, Users } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/common/Avatar";
@@ -8,6 +8,7 @@ import { RecordCard } from "@/components/cards/RecordCard";
 import { TweetCard } from "@/components/cards/TweetCard";
 import { WeeklyBarChart } from "@/components/features/WeeklyBarChart";
 import { EditProfileButton, SignOutButton } from "@/components/features/MyPageActions";
+import { GoalEditor } from "@/components/features/GoalEditor";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getUserRecords, getUserActivity } from "@/lib/queries";
 import { gradeShort } from "@/lib/constants";
@@ -42,7 +43,6 @@ export default async function MyPage({
               blocks: profile.blocks,
               grade: profile.grade,
               avatar_url: profile.avatar_url,
-              goal: profile.goal,
             }}
             autoOpen={setup === "1"}
           />
@@ -76,12 +76,6 @@ export default async function MyPage({
                 ))}
               </div>
             )}
-            {profile.goal && (
-              <p className="text-caption mt-1.5 flex items-start gap-1">
-                <Target size={12} className="text-accent mt-[2px] shrink-0" />
-                <span className="text-ink whitespace-pre-wrap">{profile.goal}</span>
-              </p>
-            )}
           </div>
         </Card>
 
@@ -91,6 +85,7 @@ export default async function MyPage({
         {/* リンク */}
         <div className="space-y-2">
           <LinkCard href="/mypage/pb" icon={<Trophy size={20} className="text-warning" />} label="大会・記録会の結果" />
+          <GoalEditor userId={profile.id} goal={profile.goal} />
         </div>
 
         {/* 管理メニュー（権限に応じて表示） */}
