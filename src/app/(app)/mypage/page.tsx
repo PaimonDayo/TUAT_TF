@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { Trophy, ChevronRight, Shield, Bell, CalendarPlus, Users, Target } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
@@ -22,10 +23,8 @@ export default async function MyPage({
 }) {
   const { setup } = await searchParams;
   const profile = await getCurrentProfile();
-  const [records, activity] = await Promise.all([
-    getUserRecords(profile.id) as Promise<PracticeRecord[]>,
-    getUserActivity(profile.id, profile.id),
-  ]);
+  // グラフ用の記録だけ先に取得し、重い「これまでの投稿」は下で Suspense ストリーミング。
+  const records = (await getUserRecords(profile.id)) as PracticeRecord[];
 
   const perms = permissionsOf(profile.roles);
   const showAdminMenu = perms.manageMembers || perms.createSchedule || perms.createNotice;
@@ -113,24 +112,12 @@ export default async function MyPage({
           </section>
         )}
 
-        {/* 自分の投稿（記録・つぶやき） */}
+        {/* 自分の投稿（記録・つぶやき）— 重いので後から流し込む */}
         <section className="space-y-2">
           <p className="section-label">これまでの投稿</p>
-          {activity.length === 0 ? (
-            <Card className="p-4">
-              <p className="text-caption">まだ投稿がありません</p>
-            </Card>
-          ) : (
-            <div className="space-y-3">
-              {activity.map((item) =>
-                item.kind === "record" ? (
-                  <RecordCard key={`r-${item.id}`} record={item} currentUserId={profile.id} />
-                ) : (
-                  <TweetCard key={`t-${item.id}`} tweet={item} currentUserId={profile.id} />
-                ),
-              )}
-            </div>
-          )}
+          <Suspense fallback={<ActivitySkeleton />}>
+            <MyActivity userId={profile.id} />
+          </Suspense>
         </section>
 
         <SignOutButton />
@@ -139,9 +126,51 @@ export default async function MyPage({
   );
 }
 
+/** 自分の投稿一覧（記録＋つぶやき）。Suspense で遅延読み込み */
+async function MyActivity({ userId }: { userId: string }) {
+  const activity = await getUserActivity(userId, userId);
+  if (activity.length === 0) {
+    return (
+      <Card className="p-4">
+        <p className="text-caption">まだ投稿がありません</p>
+      </Card>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      {activity.map((item) =>
+        item.kind === "record" ? (
+          <RecordCard key={`r-${item.id}`} record={item} currentUserId={userId} />
+        ) : (
+          <TweetCard key={`t-${item.id}`} tweet={item} currentUserId={userId} />
+        ),
+      )}
+    </div>
+  );
+}
+
+function ActivitySkeleton() {
+  return (
+    <div className="space-y-3 animate-pulse">
+      {[0, 1].map((i) => (
+        <div key={i} className="rounded-[16px] bg-card border border-separator p-4 space-y-3">
+          <div className="flex items-center gap-2.5">
+            <div className="h-10 w-10 rounded-full bg-separator" />
+            <div className="flex-1 space-y-1.5">
+              <div className="h-3.5 w-28 rounded bg-separator" />
+              <div className="h-2.5 w-20 rounded bg-bg" />
+            </div>
+          </div>
+          <div className="h-2.5 w-full rounded-full bg-separator" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function LinkCard({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
   return (
-    <Link href={href}>
+    <Link href={href} prefetch>
       <Card className="p-4 flex items-center gap-3 active:bg-bg">
         {icon}
         <span className="flex-1 text-headline">{label}</span>
