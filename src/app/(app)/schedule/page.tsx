@@ -1,7 +1,5 @@
-import { Suspense } from "react";
 import { Header } from "@/components/layout/Header";
-import { ScheduleTabs } from "@/components/features/ScheduleTabs";
-import { ScheduleCard } from "@/components/cards/ScheduleCard";
+import { ScheduleView } from "@/components/features/ScheduleView";
 import { ScheduleComposer } from "@/components/post/ScheduleForm";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getUpcomingSchedules, getAttendancesForSchedules } from "@/lib/queries";
@@ -12,12 +10,13 @@ import type { ScheduleWithMenus, Attendee, AttendanceStatusOrNone } from "@/type
 export default async function SchedulePage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; compose?: string }>;
+  searchParams: Promise<{ compose?: string }>;
 }) {
-  const { type, compose } = await searchParams;
+  const { compose } = await searchParams;
   const profile = await getCurrentProfile();
   const perms = permissionsOf(profile.roles);
-  const schedules = (await getUpcomingSchedules(type)) as unknown as ScheduleWithMenus[];
+  // 種別の絞り込みはクライアント側で行うため、今後の予定を全件取得する。
+  const schedules = (await getUpcomingSchedules()) as unknown as ScheduleWithMenus[];
 
   // 出欠対象の予定 ID をまとめて取得
   const attIds = schedules
@@ -25,12 +24,15 @@ export default async function SchedulePage({
     .map((s) => s.id);
   const attRows = await getAttendancesForSchedules(attIds);
 
-  const bySchedule = new Map<string, Attendee[]>();
-  const myStatus = new Map<string, AttendanceStatusOrNone>();
+  const attendeesBySchedule: Record<string, Attendee[]> = {};
+  const myStatusBySchedule: Record<string, AttendanceStatusOrNone> = {};
   for (const r of attRows) {
-    if (!bySchedule.has(r.schedule_id)) bySchedule.set(r.schedule_id, []);
-    bySchedule.get(r.schedule_id)!.push({ user_id: r.user_id, status: r.status, profile: r.profile });
-    if (r.user_id === profile.id) myStatus.set(r.schedule_id, r.status);
+    (attendeesBySchedule[r.schedule_id] ??= []).push({
+      user_id: r.user_id,
+      status: r.status,
+      profile: r.profile,
+    });
+    if (r.user_id === profile.id) myStatusBySchedule[r.schedule_id] = r.status;
   }
 
   return (
@@ -40,26 +42,13 @@ export default async function SchedulePage({
         large
         right={perms.createSchedule ? <ScheduleComposer autoOpen={compose === "1"} /> : undefined}
       />
-      <Suspense>
-        <ScheduleTabs />
-      </Suspense>
-
-      <div className="px-4 pt-1 space-y-3">
-        {schedules.length === 0 ? (
-          <p className="text-caption text-center py-16">今後の予定はまだ登録されていません。</p>
-        ) : (
-          schedules.map((s) => (
-            <ScheduleCard
-              key={s.id}
-              schedule={s}
-              canEditMenu={perms.createMenu}
-              userId={profile.id}
-              myStatus={myStatus.get(s.id) ?? "none"}
-              attendees={bySchedule.get(s.id) ?? []}
-            />
-          ))
-        )}
-      </div>
+      <ScheduleView
+        schedules={schedules}
+        userId={profile.id}
+        canEditMenu={perms.createMenu}
+        attendeesBySchedule={attendeesBySchedule}
+        myStatusBySchedule={myStatusBySchedule}
+      />
     </>
   );
 }

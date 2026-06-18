@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Trophy, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { Trophy, Trash2, Pencil, ChevronDown, ChevronUp } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import type { PbRecord } from "@/types";
 
@@ -15,9 +15,11 @@ const PREVIEW = 5;
  */
 export function ResultsList({
   results,
+  onEdit,
   onDelete,
 }: {
   results: PbRecord[];
+  onEdit?: (pb: PbRecord) => void;
   onDelete?: (id: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -50,6 +52,7 @@ export function ResultsList({
                 pb={pb}
                 showPb={pbWinners.has(pb.id)}
                 showUb={ubWinners.has(pb.id)}
+                onEdit={onEdit}
                 onDelete={onDelete}
               />
             ))}
@@ -81,11 +84,13 @@ function ResultRow({
   pb,
   showPb,
   showUb,
+  onEdit,
   onDelete,
 }: {
   pb: PbRecord;
   showPb: boolean;
   showUb: boolean;
+  onEdit?: (pb: PbRecord) => void;
   onDelete?: (id: string) => void;
 }) {
   return (
@@ -116,6 +121,15 @@ function ResultRow({
         )}
       </div>
       <span className="text-title tabular-nums">{pb.record}</span>
+      {onEdit && (
+        <button
+          onClick={() => onEdit(pb)}
+          aria-label="編集"
+          className="text-muted active:text-accent"
+        >
+          <Pencil size={17} />
+        </button>
+      )}
       {onDelete && (
         <button
           onClick={() => onDelete(pb.id)}

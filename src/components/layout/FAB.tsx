@@ -1,15 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Activity, MessageCircle, CalendarPlus, ClipboardList, Bell } from "lucide-react";
+import { Plus, Activity, MessageCircle, CalendarPlus, ClipboardList, Bell, Trophy } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { RecordForm } from "@/components/post/RecordForm";
 import { TweetForm } from "@/components/post/TweetForm";
 import { ScheduleForm } from "@/components/post/ScheduleForm";
 import { NoticeForm } from "@/components/post/NoticeForm";
 import { MenuComposerForm } from "@/components/post/MenuForm";
+import { ResultForm } from "@/components/post/ResultForm";
 
-type Mode = "menu" | "record" | "tweet" | "schedule" | "pmenu" | "notice";
+type Mode = "menu" | "record" | "tweet" | "result" | "schedule" | "pmenu" | "notice";
 
 export type FabPermissions = {
   createSchedule: boolean;
@@ -44,6 +45,7 @@ export function FAB({
     menu: undefined,
     record: "練習記録",
     tweet: "つぶやき",
+    result: "大会・記録会の結果",
     schedule: "予定を作成",
     pmenu: "練習メニューを追加",
     notice: "お知らせを投稿",
@@ -76,6 +78,13 @@ export function FAB({
                 title="つぶやき"
                 desc="ひとことシェア（200字まで）"
                 onClick={() => setMode("tweet")}
+              />
+              <PostOption
+                icon={<Trophy size={22} />}
+                color="#ff9500"
+                title="大会・記録会の結果"
+                desc="PB・記録を登録"
+                onClick={() => setMode("result")}
               />
               {can.createSchedule && (
                 <PostOption
@@ -110,6 +119,7 @@ export function FAB({
             <RecordForm userId={userId} isMiddleLong={isMiddleLong} onDone={close} />
           )}
           {mode === "tweet" && <TweetForm onDone={close} />}
+          {mode === "result" && <ResultForm userId={userId} onDone={() => close()} />}
           {mode === "schedule" && <ScheduleForm onDone={close} />}
           {mode === "pmenu" && <MenuComposerForm onDone={close} />}
           {mode === "notice" && <NoticeForm onDone={close} />}
