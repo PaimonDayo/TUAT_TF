@@ -63,12 +63,11 @@ export function GoalEditor({
       </button>
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent title="目標を設定">
+        <SheetContent title="目標を設定" autoFocus={false}>
           <div className="space-y-4 pb-4">
             <div>
               <p className="section-label mb-1.5">目標（自由入力）</p>
               <Textarea
-                autoFocus
                 rows={3}
                 placeholder="例: 関カレ出場 / 5000m 14分台 / 自己ベスト更新"
                 value={draft}

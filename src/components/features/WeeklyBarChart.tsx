@@ -48,36 +48,51 @@ export function WeeklyBarChart({ records }: { records: PracticeRecord[] }) {
         ))}
       </div>
 
-      <div className="flex items-end justify-between gap-2" style={{ height: `${BAR_AREA + 28}px` }}>
+      {/* 棒グラフ（棒の高さ＝量。上を丸く。空の枠は描かない） */}
+      <div className="flex items-end justify-between gap-2" style={{ height: `${BAR_AREA}px` }}>
+        {dayData.map((d, i) => {
+          const barH = d.total > 0 ? Math.max((d.total / max) * BAR_AREA, 6) : 0;
+          return (
+            <div key={i} className="flex-1 flex flex-col items-center justify-end h-full">
+              <span className="text-micro tabular-nums mb-1">{d.total > 0 ? d.total : ""}</span>
+              {barH > 0 ? (
+                <div
+                  className="w-full max-w-7 flex flex-col-reverse rounded-t-full overflow-hidden"
+                  style={{ height: `${barH}px` }}
+                >
+                  {INTENSITY_ORDER.map((k) =>
+                    d.byIntensity[k] > 0 ? (
+                      <div
+                        key={k}
+                        style={{
+                          height: `${(d.byIntensity[k] / d.total) * 100}%`,
+                          backgroundColor: INTENSITY_LABELS[k].color,
+                        }}
+                      />
+                    ) : null,
+                  )}
+                </div>
+              ) : (
+                <div className="w-full max-w-7 h-[3px] rounded-full bg-separator" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 曜日・日付ラベル */}
+      <div className="flex justify-between gap-2 mt-1.5">
         {dayData.map((d, i) => {
           const today_ = isSameDay(d.date, new Date());
           return (
-            <div key={i} className="flex-1 flex flex-col items-center gap-1">
-              <span className="text-micro tabular-nums">{d.total > 0 ? d.total : ""}</span>
-              <div
-                className="w-full max-w-7 flex flex-col-reverse rounded-t-md overflow-hidden"
-                style={{ height: `${BAR_AREA}px`, justifyContent: "flex-start" }}
-              >
-                {/* 下から low→mid→high→speed の順で積む */}
-                {INTENSITY_ORDER.map((k) =>
-                  d.byIntensity[k] > 0 ? (
-                    <div
-                      key={k}
-                      style={{
-                        height: `${(d.byIntensity[k] / max) * BAR_AREA}px`,
-                        backgroundColor: INTENSITY_LABELS[k].color,
-                      }}
-                    />
-                  ) : null,
-                )}
-              </div>
+            <div key={i} className="flex-1 flex flex-col items-center leading-none gap-0.5">
               <span
-                className="text-[11px] leading-none"
+                className="text-[11px]"
                 style={{ color: today_ ? "#007aff" : "#8e8e93", fontWeight: today_ ? 700 : 400 }}
               >
                 {format(d.date, "E", { locale: ja })}
               </span>
-              <span className="text-micro leading-none">{format(d.date, "d")}</span>
+              <span className="text-micro">{format(d.date, "d")}</span>
             </div>
           );
         })}
