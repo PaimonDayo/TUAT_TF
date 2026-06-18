@@ -39,6 +39,8 @@ export interface Profile {
   avatar_url: string | null;
   blocks: Block[];
   grade: string | null;
+  /** 目標（自由入力。マイページから設定） */
+  goal: string | null;
   role: Role;
   /** 付与されているロール一覧（複数可） */
   roles: AppRole[];
@@ -182,6 +184,7 @@ export interface PbRecord {
   meet_name: string | null;
   recorded_on: string | null;
   is_pb: boolean;
+  is_ub: boolean;
   created_at: string;
 }
 

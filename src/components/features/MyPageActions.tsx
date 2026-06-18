@@ -12,7 +12,7 @@ export function EditProfileButton({
   profile,
   autoOpen = false,
 }: {
-  profile: Pick<Profile, "id" | "display_name" | "blocks" | "grade" | "avatar_url">;
+  profile: Pick<Profile, "id" | "display_name" | "blocks" | "grade" | "avatar_url" | "goal">;
   autoOpen?: boolean;
 }) {
   const [open, setOpen] = useState(false);

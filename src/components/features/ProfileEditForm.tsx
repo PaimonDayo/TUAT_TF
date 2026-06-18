@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/common/Avatar";
 import { BLOCK_ORDER, BLOCKS, GRADE_OPTIONS } from "@/lib/constants";
@@ -16,7 +17,7 @@ export function ProfileEditForm({
   onDone,
   isSetup = false,
 }: {
-  profile: Pick<Profile, "id" | "display_name" | "blocks" | "grade" | "avatar_url">;
+  profile: Pick<Profile, "id" | "display_name" | "blocks" | "grade" | "avatar_url" | "goal">;
   onDone: () => void;
   isSetup?: boolean;
 }) {
@@ -25,6 +26,7 @@ export function ProfileEditForm({
   const [blocks, setBlocks] = useState<Block[]>(profile.blocks ?? []);
   const [grade, setGrade] = useState<string | null>(profile.grade);
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url ?? "");
+  const [goal, setGoal] = useState(profile.goal ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,7 +46,13 @@ export function ProfileEditForm({
     const supabase = createClient();
     const { error } = await supabase
       .from("profiles")
-      .update({ display_name: name.trim(), blocks, grade, avatar_url: avatarUrl.trim() || null })
+      .update({
+        display_name: name.trim(),
+        blocks,
+        grade,
+        avatar_url: avatarUrl.trim() || null,
+        goal: goal.trim() || null,
+      })
       .eq("id", profile.id);
 
     if (error) {
@@ -137,6 +145,18 @@ export function ProfileEditForm({
             );
           })}
         </div>
+      </div>
+
+      <div>
+        <p className="section-label mb-1.5">目標（任意）</p>
+        <Textarea
+          rows={2}
+          placeholder="例: 関カレ出場 / 5000m 14分台 / 自己ベスト更新"
+          value={goal}
+          onChange={(e) => setGoal(e.target.value)}
+          maxLength={100}
+        />
+        <p className="text-micro mt-1">プロフィールに表示され、何に向けて頑張っているか共有できます。</p>
       </div>
 
       {error && <p className="text-caption text-danger text-center">{error}</p>}

@@ -43,11 +43,16 @@ export function PbManager({
             {items.map((pb) => (
               <div key={pb.id} className="p-3.5 flex items-center gap-3">
                 <div className="flex-1 min-w-0">
-                  <p className="text-headline flex items-center gap-1.5">
+                  <p className="text-headline flex items-center gap-1.5 flex-wrap">
                     {pb.event_name}
                     {pb.is_pb && (
                       <span className="text-[10px] font-bold text-warning border border-warning rounded px-1 leading-tight">
                         PB
+                      </span>
+                    )}
+                    {pb.is_ub && (
+                      <span className="text-[10px] font-bold text-accent border border-accent rounded px-1 leading-tight">
+                        UB
                       </span>
                     )}
                   </p>
@@ -103,6 +108,7 @@ function PbForm({
   const [meetName, setMeetName] = useState("");
   const [recordedOn, setRecordedOn] = useState("");
   const [isPb, setIsPb] = useState(true);
+  const [isUb, setIsUb] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -123,6 +129,7 @@ function PbForm({
         meet_name: meetName.trim() || null,
         recorded_on: recordedOn || null,
         is_pb: isPb,
+        is_ub: isUb,
       })
       .select()
       .single();
@@ -159,10 +166,23 @@ function PbForm({
         onClick={() => setIsPb((v) => !v)}
         className="w-full flex items-center justify-between rounded-xl bg-card border border-separator p-3.5 active:bg-bg"
       >
-        <span className="text-[14px]">自己ベスト(PB)としてプロフィールに表示</span>
+        <span className="text-[14px]">PB（自己ベスト）として記録</span>
         <span
           className="h-6 w-10 rounded-full p-0.5 transition-colors flex"
           style={{ backgroundColor: isPb ? "#34c759" : "#e5e5ea", justifyContent: isPb ? "flex-end" : "flex-start" }}
+        >
+          <span className="h-5 w-5 rounded-full bg-white shadow" />
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={() => setIsUb((v) => !v)}
+        className="w-full flex items-center justify-between rounded-xl bg-card border border-separator p-3.5 active:bg-bg"
+      >
+        <span className="text-[14px]">UB として記録</span>
+        <span
+          className="h-6 w-10 rounded-full p-0.5 transition-colors flex"
+          style={{ backgroundColor: isUb ? "#34c759" : "#e5e5ea", justifyContent: isUb ? "flex-end" : "flex-start" }}
         >
           <span className="h-5 w-5 rounded-full bg-white shadow" />
         </span>
