@@ -4,12 +4,15 @@
 --   - profile_roles: 部員 ⇔ ロール の多対多（1人に複数ロール可）
 --   - 権限は所属ロールの論理和（OR）で判定
 -- 既存の単一 role（admin / menu_staff / member）からデータ移行する。
+--
+-- ※ 何度実行しても安全（再実行可）なように IF NOT EXISTS / DROP POLICY IF EXISTS
+--   などで冪等にしてある。
 -- ═══════════════════════════════════════════════════════════════
 
 -- ─────────────────────────────
 -- 1. ROLES（ロール定義）
 -- ─────────────────────────────
-CREATE TABLE roles (
+CREATE TABLE IF NOT EXISTS roles (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name                TEXT NOT NULL,
   can_manage_members  BOOLEAN NOT NULL DEFAULT FALSE,  -- 部員・ロール管理（管理者相当）
@@ -23,21 +26,24 @@ CREATE TABLE roles (
 -- ─────────────────────────────
 -- 2. PROFILE_ROLES（部員⇔ロール）
 -- ─────────────────────────────
-CREATE TABLE profile_roles (
+CREATE TABLE IF NOT EXISTS profile_roles (
   profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   role_id    UUID NOT NULL REFERENCES roles(id)    ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (profile_id, role_id)
 );
-CREATE INDEX idx_profile_roles_profile ON profile_roles(profile_id);
+CREATE INDEX IF NOT EXISTS idx_profile_roles_profile ON profile_roles(profile_id);
 
 -- ─────────────────────────────
--- 3. 組込ロールを投入
+-- 3. 組込ロールを投入（無いときだけ）
 -- ─────────────────────────────
 INSERT INTO roles (name, can_manage_members, can_create_schedule, can_create_menu, can_create_notice, is_system)
-VALUES
-  ('管理者',       TRUE,  TRUE,  TRUE,  TRUE,  TRUE),
-  ('メニュー担当', FALSE, TRUE,  TRUE,  FALSE, TRUE);
+SELECT '管理者', TRUE, TRUE, TRUE, TRUE, TRUE
+WHERE NOT EXISTS (SELECT 1 FROM roles WHERE name = '管理者' AND is_system);
+
+INSERT INTO roles (name, can_manage_members, can_create_schedule, can_create_menu, can_create_notice, is_system)
+SELECT 'メニュー担当', FALSE, TRUE, TRUE, FALSE, TRUE
+WHERE NOT EXISTS (SELECT 1 FROM roles WHERE name = 'メニュー担当' AND is_system);
 
 -- ─────────────────────────────
 -- 4. 権限判定ヘルパー（RLS 無限再帰を避けるため SECURITY DEFINER）
@@ -86,12 +92,12 @@ $$;
 -- ─────────────────────────────
 INSERT INTO profile_roles (profile_id, role_id)
 SELECT p.id, r.id FROM profiles p CROSS JOIN roles r
-WHERE p.role = 'admin' AND r.name = '管理者'
+WHERE p.role = 'admin' AND r.name = '管理者' AND r.is_system
 ON CONFLICT DO NOTHING;
 
 INSERT INTO profile_roles (profile_id, role_id)
 SELECT p.id, r.id FROM profiles p CROSS JOIN roles r
-WHERE p.role = 'menu_staff' AND r.name = 'メニュー担当'
+WHERE p.role = 'menu_staff' AND r.name = 'メニュー担当' AND r.is_system
 ON CONFLICT DO NOTHING;
 
 -- ─────────────────────────────
@@ -100,13 +106,19 @@ ON CONFLICT DO NOTHING;
 ALTER TABLE roles         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profile_roles ENABLE ROW LEVEL SECURITY;
 
--- 全員が閲覧可（FAB やプロフィール表示で必要）
+DROP POLICY IF EXISTS "roles_select" ON roles;
+DROP POLICY IF EXISTS "roles_insert" ON roles;
+DROP POLICY IF EXISTS "roles_update" ON roles;
+DROP POLICY IF EXISTS "roles_delete" ON roles;
 CREATE POLICY "roles_select" ON roles FOR SELECT USING (TRUE);
 CREATE POLICY "roles_insert" ON roles FOR INSERT WITH CHECK (public.can_manage_members());
 CREATE POLICY "roles_update" ON roles FOR UPDATE USING (public.can_manage_members());
 -- 組込ロールは削除不可
 CREATE POLICY "roles_delete" ON roles FOR DELETE USING (public.can_manage_members() AND NOT is_system);
 
+DROP POLICY IF EXISTS "profile_roles_select" ON profile_roles;
+DROP POLICY IF EXISTS "profile_roles_insert" ON profile_roles;
+DROP POLICY IF EXISTS "profile_roles_delete" ON profile_roles;
 CREATE POLICY "profile_roles_select" ON profile_roles FOR SELECT USING (TRUE);
 CREATE POLICY "profile_roles_insert" ON profile_roles FOR INSERT WITH CHECK (public.can_manage_members());
 CREATE POLICY "profile_roles_delete" ON profile_roles FOR DELETE USING (public.can_manage_members());
@@ -136,9 +148,10 @@ CREATE POLICY "notices_update" ON notices FOR UPDATE USING (public.can_create_no
 CREATE POLICY "notices_delete" ON notices FOR DELETE USING (public.can_create_notice());
 
 -- ═══════════════════════════════════════════════════════════════
--- 補足：万一すべての管理者がいなくなった場合は、下記でメール指定して付与できる。
--- INSERT INTO profile_roles (profile_id, role_id)
--- SELECT p.id, r.id FROM profiles p CROSS JOIN roles r
--- WHERE p.email = 'your-email@st.your-univ.ac.jp' AND r.name = '管理者'
--- ON CONFLICT DO NOTHING;
+-- 8. 自分を管理者にする（メールアドレスを自分のログイン用に変えて実行）
+--    ※ 既に profiles.role='admin' だった人は 5. で自動付与済み。
 -- ═══════════════════════════════════════════════════════════════
+INSERT INTO profile_roles (profile_id, role_id)
+SELECT p.id, r.id FROM profiles p CROSS JOIN roles r
+WHERE p.email = 'rainbowrdayo@gmail.com' AND r.name = '管理者' AND r.is_system
+ON CONFLICT DO NOTHING;
