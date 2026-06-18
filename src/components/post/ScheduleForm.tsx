@@ -2,16 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, Pencil, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { FullScreen, FullScreenContent } from "@/components/ui/fullscreen";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
-import { VENUES } from "@/lib/venues";
+import { VENUES, findVenue } from "@/lib/venues";
 import { ENTRY_PERIOD_TYPES, SCHEDULE_TYPE_OPTIONS } from "@/lib/constants";
-import type { ScheduleType } from "@/types";
+import type { PracticeSchedule, ScheduleType } from "@/types";
 
 const OTHER = "__other__";
 
@@ -41,19 +41,32 @@ export function ScheduleComposer({ autoOpen = false }: { autoOpen?: boolean }) {
   );
 }
 
-export function ScheduleForm({ onDone }: { onDone: () => void }) {
+export function ScheduleForm({
+  schedule,
+  onDone,
+}: {
+  schedule?: PracticeSchedule;
+  onDone: () => void;
+}) {
   const router = useRouter();
-  const [type, setType] = useState<ScheduleType>("practice");
-  const [date, setDate] = useState("");
-  const [meetingTime, setMeetingTime] = useState("");
-  const [venueKey, setVenueKey] = useState<string>("");
-  const [otherVenue, setOtherVenue] = useState("");
-  const [title, setTitle] = useState("");
-  const [useEndDate, setUseEndDate] = useState(false);
-  const [endDate, setEndDate] = useState("");
-  const [useEntry, setUseEntry] = useState(false);
-  const [entryStart, setEntryStart] = useState("");
-  const [entryEnd, setEntryEnd] = useState("");
+  const editing = !!schedule;
+  const initVenue = schedule?.venue_name ? findVenue(schedule.venue_name) : undefined;
+
+  const [type, setType] = useState<ScheduleType>(schedule?.schedule_type ?? "practice");
+  const [date, setDate] = useState(schedule?.schedule_date ?? "");
+  const [meetingTime, setMeetingTime] = useState(schedule?.meeting_time?.slice(0, 5) ?? "");
+  const [venueKey, setVenueKey] = useState<string>(
+    initVenue ? initVenue.key : schedule?.venue_name ? OTHER : "",
+  );
+  const [otherVenue, setOtherVenue] = useState(
+    initVenue ? "" : (schedule?.venue_name ?? ""),
+  );
+  const [title, setTitle] = useState(schedule?.title ?? "");
+  const [useEndDate, setUseEndDate] = useState(!!schedule?.end_date);
+  const [endDate, setEndDate] = useState(schedule?.end_date ?? "");
+  const [useEntry, setUseEntry] = useState(!!(schedule?.entry_start || schedule?.entry_end));
+  const [entryStart, setEntryStart] = useState(schedule?.entry_start ?? "");
+  const [entryEnd, setEntryEnd] = useState(schedule?.entry_end ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -83,7 +96,7 @@ export function ScheduleForm({ onDone }: { onDone: () => void }) {
     const venue = venueKey && venueKey !== OTHER ? VENUES.find((v) => v.key === venueKey) : undefined;
     const venueName = venue ? venue.name : venueKey === OTHER ? otherVenue.trim() || null : null;
 
-    const { error } = await supabase.from("practice_schedules").insert({
+    const payload = {
       schedule_date: date,
       schedule_type: type,
       meeting_time: meetingTime || null,
@@ -95,11 +108,14 @@ export function ScheduleForm({ onDone }: { onDone: () => void }) {
       end_date: !isPractice && useEndDate && endDate ? endDate : null,
       entry_start: canEntry && useEntry && entryStart ? entryStart : null,
       entry_end: canEntry && useEntry && entryEnd ? entryEnd : null,
-      created_by: user.id,
-    });
+    };
+
+    const { error } = editing
+      ? await supabase.from("practice_schedules").update(payload).eq("id", schedule!.id)
+      : await supabase.from("practice_schedules").insert({ ...payload, created_by: user.id });
 
     if (error) {
-      setError("作成に失敗しました");
+      setError(editing ? "更新に失敗しました" : "作成に失敗しました");
       setSaving(false);
       return;
     }
@@ -211,8 +227,40 @@ export function ScheduleForm({ onDone }: { onDone: () => void }) {
 
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <Button size="lg" onClick={submit} disabled={saving}>
-        {saving ? "作成中…" : "作成する"}
+        {saving ? "保存中…" : editing ? "更新する" : "作成する"}
       </Button>
+    </div>
+  );
+}
+
+/** 予定の編集・削除（権限保持者向け）。予定カード内に表示 */
+export function ScheduleManageActions({ schedule }: { schedule: PracticeSchedule }) {
+  const router = useRouter();
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  async function del() {
+    if (!confirm("この予定を削除しますか？")) return;
+    setDeleting(true);
+    const supabase = createClient();
+    await supabase.from("practice_schedules").delete().eq("id", schedule.id);
+    router.refresh();
+  }
+
+  return (
+    <div className="flex gap-2 pt-1">
+      <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} className="gap-1">
+        <Pencil size={15} /> 編集
+      </Button>
+      <Button variant="ghost" size="sm" onClick={del} disabled={deleting} className="gap-1 text-danger">
+        <Trash2 size={15} /> {deleting ? "削除中…" : "削除"}
+      </Button>
+
+      <FullScreen open={editOpen} onOpenChange={setEditOpen}>
+        <FullScreenContent title="予定を編集">
+          <ScheduleForm schedule={schedule} onDone={() => setEditOpen(false)} />
+        </FullScreenContent>
+      </FullScreen>
     </div>
   );
 }

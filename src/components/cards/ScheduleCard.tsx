@@ -18,6 +18,7 @@ import { SCHEDULE_TYPES, ATTENDANCE_TYPES } from "@/lib/constants";
 import { venueShort } from "@/lib/venues";
 import { cn } from "@/lib/utils";
 import { MenuForm } from "@/components/post/MenuForm";
+import { ScheduleManageActions } from "@/components/post/ScheduleForm";
 import { AttendanceToggle } from "@/components/features/AttendanceToggle";
 import { AttendeesButton } from "@/components/features/AttendeesButton";
 import type { ScheduleWithMenus, Attendee, AttendanceStatusOrNone } from "@/types";
@@ -26,12 +27,14 @@ import type { ScheduleWithMenus, Attendee, AttendanceStatusOrNone } from "@/type
 export function ScheduleCard({
   schedule,
   canEditMenu = false,
+  canManage = false,
   userId,
   myStatus = "none",
   attendees = [],
 }: {
   schedule: ScheduleWithMenus;
   canEditMenu?: boolean;
+  canManage?: boolean;
   userId?: string;
   myStatus?: AttendanceStatusOrNone;
   attendees?: Attendee[];
@@ -48,7 +51,8 @@ export function ScheduleCard({
     schedule.venue_url ||
     hasEntry ||
     hasMenus ||
-    canEditMenu;
+    canEditMenu ||
+    canManage;
 
   return (
     <Card className="overflow-hidden">
@@ -158,6 +162,8 @@ export function ScheduleCard({
               {canEditMenu && <MenuForm scheduleId={schedule.id} />}
             </div>
           )}
+
+          {canManage && <ScheduleManageActions schedule={schedule} />}
         </div>
       )}
     </Card>

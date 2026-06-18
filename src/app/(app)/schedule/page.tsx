@@ -46,6 +46,7 @@ export default async function SchedulePage({
         schedules={schedules}
         userId={profile.id}
         canEditMenu={perms.createMenu}
+        canManage={perms.createSchedule}
         attendeesBySchedule={attendeesBySchedule}
         myStatusBySchedule={myStatusBySchedule}
       />
