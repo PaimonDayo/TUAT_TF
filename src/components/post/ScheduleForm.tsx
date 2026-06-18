@@ -194,13 +194,13 @@ export function ScheduleForm({ onDone }: { onDone: () => void }) {
               onChange={() => setUseEntry((v) => !v)}
             />
             {useEntry && (
-              <div className="grid grid-cols-2 gap-3 mt-2">
-                <div className="min-w-0">
-                  <p className="text-micro mb-1">開始</p>
+              <div className="space-y-2 mt-2">
+                <div>
+                  <p className="text-micro mb-1">エントリー開始</p>
                   <Input type="date" value={entryStart} onChange={(e) => setEntryStart(e.target.value)} />
                 </div>
-                <div className="min-w-0">
-                  <p className="text-micro mb-1">締切</p>
+                <div>
+                  <p className="text-micro mb-1">エントリー締切</p>
                   <Input type="date" value={entryEnd} onChange={(e) => setEntryEnd(e.target.value)} />
                 </div>
               </div>

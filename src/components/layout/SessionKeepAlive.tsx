@@ -39,15 +39,17 @@ export function SessionKeepAlive() {
     };
     document.addEventListener("visibilitychange", onVisibility);
 
-    // トークン更新・サインイン/アウトをサーバーコンポーネントへ反映する。
+    // サインイン/アウトのときだけサーバーコンポーネントへ反映する。
+    // TOKEN_REFRESHED は裏で静かにトークンが更新されるだけで表示は変わらないため、
+    // ここで router.refresh() すると操作中に全ページ再取得が挟まり、タブ切替や
+    // 出欠ボタンが「何度か押さないと反応しない」原因になる。更新後のトークンは
+    // クッキーに書かれ、次のナビゲーションでサーバーが読むので refresh は不要。
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
-      if (
-        event === "TOKEN_REFRESHED" ||
-        event === "SIGNED_IN" ||
-        event === "SIGNED_OUT"
-      ) {
+      // ログアウト時だけ反映（→ proxy が /login へ誘導）。
+      // SIGNED_IN はフォーカス時などに再発火しうるので refresh しない。
+      if (event === "SIGNED_OUT") {
         router.refresh();
       }
     });
