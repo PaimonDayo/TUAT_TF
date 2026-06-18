@@ -58,6 +58,17 @@ body {
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
+  /* 日本語の禁則処理：長音符「ー」や小書き仮名・句読点が行頭/行末に
+     はじき出されないようにする。「エントリ＋ー」のような不自然な改行を防ぐ。 */
+  line-break: strict;
+  /* 長いURL等ははみ出さず折り返す（通常の日本語折り返しには影響しない） */
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+/* 見出し・本文の折り返しを賢く（末尾1文字だけ落ちる等を抑制） */
+h1, h2, h3, p {
+  text-wrap: pretty;
 }
 
 /* セクションラベル（uppercase + tracking） */

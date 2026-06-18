@@ -14,7 +14,7 @@ export default async function AppLayout({
   const perms = permissionsOf(profile.roles);
 
   return (
-    <div className="mx-auto w-full max-w-md min-h-dvh bg-bg pb-[calc(52px+env(safe-area-inset-bottom))]">
+    <div className="mx-auto w-full max-w-md min-h-dvh bg-bg overflow-x-hidden pb-[calc(52px+env(safe-area-inset-bottom))]">
       <SessionKeepAlive />
       {children}
       <FAB
