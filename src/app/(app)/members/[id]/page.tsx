@@ -7,7 +7,9 @@ import { BlockPills } from "@/components/common/BlockPill";
 import { RecordCard } from "@/components/cards/RecordCard";
 import { ResultsList } from "@/components/features/ResultsList";
 import { WeeklyBarChart } from "@/components/features/WeeklyBarChart";
-import { getProfileById, getUserRecords, getPbRecords } from "@/lib/queries";
+import { FavoriteButton } from "@/components/features/FavoriteButton";
+import { getCurrentProfile } from "@/lib/supabase/auth";
+import { getProfileById, getUserRecords, getPbRecords, isFavorite } from "@/lib/queries";
 import { gradeShort } from "@/lib/constants";
 import type { PbRecord, PracticeRecord, Profile, RecordWithAuthor } from "@/types";
 
@@ -20,9 +22,13 @@ export default async function MemberPage({
   const profile = (await getProfileById(id)) as Profile | null;
   if (!profile) notFound();
 
-  const [records, pbs] = await Promise.all([
+  const viewer = await getCurrentProfile();
+  const isSelf = viewer.id === id;
+
+  const [records, pbs, favorited] = await Promise.all([
     getUserRecords(id) as Promise<PracticeRecord[]>,
     getPbRecords(id) as Promise<PbRecord[]>,
+    isSelf ? Promise.resolve(false) : isFavorite(viewer.id, id),
   ]);
 
   const authorMini = {
@@ -35,7 +41,10 @@ export default async function MemberPage({
 
   return (
     <>
-      <SubHeader title={profile.display_name || "部員"} />
+      <SubHeader
+        title={profile.display_name || "部員"}
+        right={!isSelf ? <FavoriteButton targetId={id} initial={favorited} /> : undefined}
+      />
 
       <div className="px-4 space-y-5 pt-1">
         <Card className="p-4 flex items-center gap-4">

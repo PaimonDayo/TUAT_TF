@@ -2,21 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { format } from "date-fns";
-import { ja } from "date-fns/locale";
-import { Plus, X } from "lucide-react";
+import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { FullScreen, FullScreenContent } from "@/components/ui/fullscreen";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Toggle } from "@/components/ui/toggle";
 import { VENUES } from "@/lib/venues";
 import { ENTRY_PERIOD_TYPES, SCHEDULE_TYPE_OPTIONS } from "@/lib/constants";
 import type { ScheduleType } from "@/types";
 
 const OTHER = "__other__";
 
-/** ヘッダー右の「＋作成」ボタン。?compose=1 で自動オープン */
+/** ヘッダー右の「＋作成」ボタン。?compose=1 で自動オープン（全画面モーダル） */
 export function ScheduleComposer({ autoOpen = false }: { autoOpen?: boolean }) {
   const [open, setOpen] = useState(false);
   useEffect(() => {
@@ -33,11 +32,11 @@ export function ScheduleComposer({ autoOpen = false }: { autoOpen?: boolean }) {
         <Plus size={20} />
         作成
       </button>
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent title="予定を作成">
+      <FullScreen open={open} onOpenChange={setOpen}>
+        <FullScreenContent title="予定を作成">
           <ScheduleForm onDone={() => setOpen(false)} />
-        </SheetContent>
-      </Sheet>
+        </FullScreenContent>
+      </FullScreen>
     </>
   );
 }
@@ -45,12 +44,12 @@ export function ScheduleComposer({ autoOpen = false }: { autoOpen?: boolean }) {
 export function ScheduleForm({ onDone }: { onDone: () => void }) {
   const router = useRouter();
   const [type, setType] = useState<ScheduleType>("practice");
-  const [dates, setDates] = useState<string[]>([]);
-  const [dateInput, setDateInput] = useState("");
+  const [date, setDate] = useState("");
   const [meetingTime, setMeetingTime] = useState("");
   const [venueKey, setVenueKey] = useState<string>("");
   const [otherVenue, setOtherVenue] = useState("");
   const [title, setTitle] = useState("");
+  const [useEndDate, setUseEndDate] = useState(false);
   const [endDate, setEndDate] = useState("");
   const [useEntry, setUseEntry] = useState(false);
   const [entryStart, setEntryStart] = useState("");
@@ -61,16 +60,9 @@ export function ScheduleForm({ onDone }: { onDone: () => void }) {
   const isPractice = type === "practice";
   const canEntry = ENTRY_PERIOD_TYPES.includes(type);
 
-  function addDate() {
-    if (dateInput && !dates.includes(dateInput)) {
-      setDates((d) => [...d, dateInput].sort());
-      setDateInput("");
-    }
-  }
-
   async function submit() {
-    if (dates.length === 0) {
-      setError("日付を1つ以上追加してください");
+    if (!date) {
+      setError("日付を選択してください");
       return;
     }
     if (!isPractice && !title.trim()) {
@@ -91,7 +83,8 @@ export function ScheduleForm({ onDone }: { onDone: () => void }) {
     const venue = venueKey && venueKey !== OTHER ? VENUES.find((v) => v.key === venueKey) : undefined;
     const venueName = venue ? venue.name : venueKey === OTHER ? otherVenue.trim() || null : null;
 
-    const base = {
+    const { error } = await supabase.from("practice_schedules").insert({
+      schedule_date: date,
       schedule_type: type,
       meeting_time: meetingTime || null,
       venue_name: venueName,
@@ -99,15 +92,11 @@ export function ScheduleForm({ onDone }: { onDone: () => void }) {
       venue_fee: venue ? venue.fee : null,
       venue_url: venue ? venue.url : null,
       title: !isPractice ? title.trim() || null : null,
-      end_date: !isPractice && endDate ? endDate : null,
+      end_date: !isPractice && useEndDate && endDate ? endDate : null,
       entry_start: canEntry && useEntry && entryStart ? entryStart : null,
       entry_end: canEntry && useEntry && entryEnd ? entryEnd : null,
       created_by: user.id,
-    };
-
-    // 複数日をまとめて作成
-    const rows = dates.map((d) => ({ ...base, schedule_date: d }));
-    const { error } = await supabase.from("practice_schedules").insert(rows);
+    });
 
     if (error) {
       setError("作成に失敗しました");
@@ -119,49 +108,20 @@ export function ScheduleForm({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <div className="space-y-4 pb-4 max-h-[72vh] overflow-y-auto overflow-x-hidden">
+    <div className="space-y-4 pb-4">
       <SegmentedControl
         items={SCHEDULE_TYPE_OPTIONS}
         value={type}
         onChange={(k) => setType(k as ScheduleType)}
       />
 
-      {/* 日付（複数まとめて）— 共通 */}
+      {/* 日付（選ぶだけで設定。追加ボタン不要） */}
       <div>
-        <p className="section-label mb-1.5">日付（複数まとめて追加できます）</p>
-        <div className="flex gap-2">
-          <Input
-            type="date"
-            value={dateInput}
-            onChange={(e) => setDateInput(e.target.value)}
-            className="flex-1 min-w-0"
-          />
-          <Button size="md" variant="outline" onClick={addDate} className="px-4 shrink-0">
-            追加
-          </Button>
-        </div>
-        {dates.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {dates.map((d) => (
-              <span
-                key={d}
-                className="inline-flex items-center gap-1 h-7 pl-2.5 pr-1 rounded-full bg-accent/10 text-accent text-[12px] font-semibold"
-              >
-                {format(new Date(d + "T00:00:00"), "M/d(E)", { locale: ja })}
-                <button
-                  type="button"
-                  onClick={() => setDates((arr) => arr.filter((x) => x !== d))}
-                  className="h-5 w-5 flex items-center justify-center"
-                >
-                  <X size={13} />
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
+        <p className="section-label mb-1.5">日付</p>
+        <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
       </div>
 
-      {/* 場所（選択式）— 共通 */}
+      {/* 場所（選択式） */}
       <div>
         <p className="section-label mb-1.5">場所</p>
         <select
@@ -190,8 +150,8 @@ export function ScheduleForm({ onDone }: { onDone: () => void }) {
         )}
       </div>
 
-      {/* 種別ごとの項目（切替時にフェード・高さを確保してガクつき防止） */}
-      <div key={type} className="space-y-4 fade-in min-h-[150px]">
+      {/* 種別ごとの項目（全画面モーダルなので高さが変わってもガクつかない） */}
+      <div key={type} className="space-y-4 fade-in">
         {isPractice ? (
           <div>
             <p className="section-label mb-1.5">集合時間</p>
@@ -207,9 +167,20 @@ export function ScheduleForm({ onDone }: { onDone: () => void }) {
                 onChange={(e) => setTitle(e.target.value)}
               />
             </div>
+
+            {/* 終了日：複数日開催のときだけオン */}
             <div>
-              <p className="section-label mb-1.5">終了日（任意・複数日開催）</p>
-              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              <Toggle
+                label="複数日開催（終了日を設定）"
+                checked={useEndDate}
+                onChange={() => setUseEndDate((v) => !v)}
+              />
+              {useEndDate && (
+                <div className="mt-2">
+                  <p className="text-micro mb-1">終了日</p>
+                  <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                </div>
+              )}
             </div>
           </>
         )}
@@ -217,24 +188,13 @@ export function ScheduleForm({ onDone }: { onDone: () => void }) {
         {/* エントリー期間（大会・記録会） */}
         {canEntry && (
           <div>
-            <button
-              type="button"
-              onClick={() => setUseEntry((v) => !v)}
-              className="w-full flex items-center justify-between rounded-xl bg-card border border-separator p-3.5 active:bg-bg"
-            >
-              <span className="text-[14px]">エントリー期間を設定する</span>
-              <span
-                className="h-6 w-10 rounded-full p-0.5 transition-colors flex"
-                style={{
-                  backgroundColor: useEntry ? "#34c759" : "#e5e5ea",
-                  justifyContent: useEntry ? "flex-end" : "flex-start",
-                }}
-              >
-                <span className="h-5 w-5 rounded-full bg-white shadow" />
-              </span>
-            </button>
+            <Toggle
+              label="エントリー期間を設定する"
+              checked={useEntry}
+              onChange={() => setUseEntry((v) => !v)}
+            />
             {useEntry && (
-              <div className="grid grid-cols-2 gap-2 mt-2">
+              <div className="grid grid-cols-2 gap-3 mt-2">
                 <div className="min-w-0">
                   <p className="text-micro mb-1">開始</p>
                   <Input type="date" value={entryStart} onChange={(e) => setEntryStart(e.target.value)} />
@@ -251,7 +211,7 @@ export function ScheduleForm({ onDone }: { onDone: () => void }) {
 
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <Button size="lg" onClick={submit} disabled={saving}>
-        {saving ? "作成中…" : dates.length > 1 ? `${dates.length}件まとめて作成` : "作成する"}
+        {saving ? "作成中…" : "作成する"}
       </Button>
     </div>
   );

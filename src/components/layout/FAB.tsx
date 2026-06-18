@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Plus, Activity, MessageCircle, Trophy, CalendarPlus, ClipboardList, Bell } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { FullScreen, FullScreenContent } from "@/components/ui/fullscreen";
 import { RecordForm } from "@/components/post/RecordForm";
 import { TweetForm } from "@/components/post/TweetForm";
 import { ScheduleForm } from "@/components/post/ScheduleForm";
@@ -10,7 +11,7 @@ import { NoticeForm } from "@/components/post/NoticeForm";
 import { MenuComposerForm } from "@/components/post/MenuForm";
 import { ResultForm } from "@/components/post/ResultForm";
 
-type Mode = "menu" | "record" | "tweet" | "result" | "schedule" | "pmenu" | "notice";
+type Mode = "menu" | "record" | "tweet" | "result" | "pmenu" | "notice";
 
 export type FabPermissions = {
   createSchedule: boolean;
@@ -30,6 +31,7 @@ export function FAB({
 }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("menu");
+  const [scheduleOpen, setScheduleOpen] = useState(false);
 
   function openMenu() {
     setMode("menu");
@@ -46,7 +48,6 @@ export function FAB({
     record: "練習記録",
     tweet: "つぶやき",
     result: "大会・記録会の結果",
-    schedule: "予定を作成",
     pmenu: "練習メニューを追加",
     notice: "お知らせを投稿",
   };
@@ -90,9 +91,13 @@ export function FAB({
                 <PostOption
                   icon={<CalendarPlus size={22} />}
                   color="#ff9500"
-                  title="練習予定"
-                  desc="練習・大会などの予定を作成"
-                  onClick={() => setMode("schedule")}
+                  title="予定"
+                  desc="練習・大会・記録会などの予定を作成"
+                  onClick={() => {
+                    setOpen(false);
+                    setMode("menu");
+                    setScheduleOpen(true);
+                  }}
                 />
               )}
               {can.createMenu && (
@@ -120,11 +125,17 @@ export function FAB({
           )}
           {mode === "tweet" && <TweetForm onDone={close} />}
           {mode === "result" && <ResultForm userId={userId} onDone={() => close()} />}
-          {mode === "schedule" && <ScheduleForm onDone={close} />}
           {mode === "pmenu" && <MenuComposerForm onDone={close} />}
           {mode === "notice" && <NoticeForm onDone={close} />}
         </SheetContent>
       </Sheet>
+
+      {/* 予定作成だけは全画面モーダル（種別切替でガクつかないように） */}
+      <FullScreen open={scheduleOpen} onOpenChange={setScheduleOpen}>
+        <FullScreenContent title="予定を作成">
+          <ScheduleForm onDone={() => setScheduleOpen(false)} />
+        </FullScreenContent>
+      </FullScreen>
     </>
   );
 }

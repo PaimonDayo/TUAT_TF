@@ -1,6 +1,7 @@
 import { BottomNav } from "@/components/layout/BottomNav";
 import { FAB } from "@/components/layout/FAB";
 import { SessionKeepAlive } from "@/components/layout/SessionKeepAlive";
+import { VersionWatcher } from "@/components/features/VersionWatcher";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { permissionsOf } from "@/lib/permissions";
 
@@ -26,6 +27,7 @@ export default async function AppLayout({
         }}
       />
       <BottomNav />
+      <VersionWatcher />
     </div>
   );
 }

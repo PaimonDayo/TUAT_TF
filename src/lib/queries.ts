@@ -346,3 +346,25 @@ export async function getWeeklyRanking(): Promise<WeeklyRankingRow[]> {
     .order("total_km", { ascending: false });
   return (data ?? []) as unknown as WeeklyRankingRow[];
 }
+
+/** 自分がお気に入り登録している部員IDの一覧 */
+export async function getMyFavoriteIds(userId: string): Promise<string[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("favorites")
+    .select("favorite_user_id")
+    .eq("user_id", userId);
+  return (data ?? []).map((f) => f.favorite_user_id as string);
+}
+
+/** 自分が対象ユーザーをお気に入り登録しているか */
+export async function isFavorite(userId: string, targetId: string): Promise<boolean> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("favorites")
+    .select("favorite_user_id")
+    .eq("user_id", userId)
+    .eq("favorite_user_id", targetId)
+    .maybeSingle();
+  return !!data;
+}
