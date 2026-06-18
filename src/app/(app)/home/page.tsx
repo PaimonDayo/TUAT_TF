@@ -41,9 +41,11 @@ export default async function HomePage() {
   const attRows = await getAttendancesForSchedules(schedules.map((s) => s.id));
   const myStatus = new Map<string, AttendanceStatusOrNone>();
   const presentCount = new Map<string, number>();
+  const absentCount = new Map<string, number>();
   for (const r of attRows) {
     if (r.user_id === profile.id) myStatus.set(r.schedule_id, r.status);
     if (r.status === "present") presentCount.set(r.schedule_id, (presentCount.get(r.schedule_id) ?? 0) + 1);
+    if (r.status === "absent") absentCount.set(r.schedule_id, (absentCount.get(r.schedule_id) ?? 0) + 1);
   }
 
   const weekKm = (weekRecords as PracticeRecord[]).reduce(
@@ -126,7 +128,10 @@ export default async function HomePage() {
                             <Clock size={12} /> {s.meeting_time.slice(0, 5)}
                           </span>
                         )}
-                        <span className="shrink-0 tabular-nums">参加 {presentCount.get(s.id) ?? 0}</span>
+                        <span className="shrink-0 tabular-nums text-success">参加 {presentCount.get(s.id) ?? 0}</span>
+                        {(absentCount.get(s.id) ?? 0) > 0 && (
+                          <span className="shrink-0 tabular-nums text-danger">欠席 {absentCount.get(s.id)}</span>
+                        )}
                       </div>
                     </div>
                     <AttendanceToggle

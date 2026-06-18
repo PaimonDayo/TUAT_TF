@@ -21,10 +21,11 @@ export function AttendeesButton({ attendees }: { attendees: Attendee[] }) {
           e.stopPropagation();
           setOpen(true);
         }}
-        className="inline-flex items-center gap-1 h-8 px-3 rounded-full bg-bg border border-separator text-[13px] font-semibold text-muted2 active:opacity-60 shrink-0"
+        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-bg border border-separator text-[13px] font-semibold text-muted2 active:opacity-60 shrink-0"
       >
         <Users size={15} />
-        参加 {present.length}
+        <span className="text-success">参加 {present.length}</span>
+        {absent.length > 0 && <span className="text-danger">欠席 {absent.length}</span>}
       </button>
 
       <Sheet open={open} onOpenChange={setOpen}>
