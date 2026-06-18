@@ -153,5 +153,5 @@ CREATE POLICY "notices_delete" ON notices FOR DELETE USING (public.can_create_no
 -- ═══════════════════════════════════════════════════════════════
 INSERT INTO profile_roles (profile_id, role_id)
 SELECT p.id, r.id FROM profiles p CROSS JOIN roles r
-WHERE p.email = 'rainbowrdayo@gmail.com' AND r.name = '管理者' AND r.is_system
+WHERE p.email = 's253013u@st.go.tuat.ac.jp' AND r.name = '管理者' AND r.is_system
 ON CONFLICT DO NOTHING;
