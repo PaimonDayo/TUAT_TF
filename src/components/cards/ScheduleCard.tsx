@@ -21,6 +21,7 @@ import { MenuForm } from "@/components/post/MenuForm";
 import { ScheduleManageActions } from "@/components/post/ScheduleForm";
 import { AttendanceToggle } from "@/components/features/AttendanceToggle";
 import { AttendeesButton } from "@/components/features/AttendeesButton";
+import { Linkify } from "@/components/common/Linkify";
 import type { ScheduleWithMenus, Attendee, AttendanceStatusOrNone } from "@/types";
 
 /** 展開式の練習予定カード */
@@ -155,7 +156,9 @@ export function ScheduleCard({
                         担当: {m.author.display_name}
                       </p>
                     )}
-                    <p className="text-[14px] whitespace-pre-wrap">{m.content}</p>
+                    <p className="text-[14px] whitespace-pre-wrap">
+                      <Linkify text={m.content} />
+                    </p>
                   </div>
                 ))}
               </div>
@@ -189,7 +192,9 @@ function Detail({
       <p className="section-label mb-0.5 flex items-center gap-1">
         {icon} {label}
       </p>
-      <p className="text-[14px] whitespace-pre-wrap">{value}</p>
+      <p className="text-[14px] whitespace-pre-wrap">
+        <Linkify text={value} />
+      </p>
     </div>
   );
 }

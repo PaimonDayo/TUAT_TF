@@ -5,6 +5,7 @@ import { Avatar } from "@/components/common/Avatar";
 import { BlockPills } from "@/components/common/BlockPill";
 import { Card } from "@/components/ui/card";
 import { PostActions } from "@/components/cards/PostActions";
+import { Linkify } from "@/components/common/Linkify";
 import { TweetOwnerMenu } from "@/components/cards/PostOwnerMenu";
 import type { TweetWithAuthor } from "@/types";
 
@@ -39,7 +40,9 @@ export function TweetCard({
         {isOwner && <TweetOwnerMenu tweet={{ id: tweet.id, content: tweet.content }} />}
       </div>
 
-      <p className="text-[15px] whitespace-pre-wrap break-words">{tweet.content}</p>
+      <p className="text-[15px] whitespace-pre-wrap break-words">
+        <Linkify text={tweet.content} />
+      </p>
 
       <PostActions
         targetType="tweet"

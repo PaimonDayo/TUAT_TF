@@ -5,6 +5,7 @@ import { Heart, MessageCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Avatar } from "@/components/common/Avatar";
+import { Linkify } from "@/components/common/Linkify";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -162,7 +163,9 @@ function CommentList({
               <Avatar name={c.author.display_name} avatarUrl={c.author.avatar_url} size="sm" />
               <div className="flex-1">
                 <p className="text-[13px] font-semibold">{c.author.display_name}</p>
-                <p className="text-[14px] whitespace-pre-wrap break-words">{c.content}</p>
+                <p className="text-[14px] whitespace-pre-wrap break-words">
+                  <Linkify text={c.content} />
+                </p>
               </div>
             </div>
           ))

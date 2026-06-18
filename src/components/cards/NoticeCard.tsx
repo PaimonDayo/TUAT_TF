@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { NOTICE_CATEGORIES } from "@/lib/constants";
 import { NoticeActions } from "@/components/cards/NoticeActions";
+import { Linkify } from "@/components/common/Linkify";
 import type { Notice } from "@/types";
 
 export function NoticeCard({
@@ -28,7 +29,9 @@ export function NoticeCard({
         {canManage && <NoticeActions notice={notice} />}
       </div>
       <h3 className="text-headline">{notice.title}</h3>
-      <p className="text-[14px] whitespace-pre-wrap break-words text-muted2">{notice.content}</p>
+      <p className="text-[14px] whitespace-pre-wrap break-words text-muted2">
+        <Linkify text={notice.content} />
+      </p>
       {deadline && (
         <p
           className="text-[12px] flex items-center gap-1 font-medium"

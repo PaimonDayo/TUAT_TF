@@ -6,6 +6,7 @@ import { BlockPills } from "@/components/common/BlockPill";
 import { Card } from "@/components/ui/card";
 import { IntensityBar } from "@/components/features/IntensityBar";
 import { PostActions } from "@/components/cards/PostActions";
+import { Linkify } from "@/components/common/Linkify";
 import { RecordOwnerMenu } from "@/components/cards/PostOwnerMenu";
 import { CONDITIONS, gradeShort } from "@/lib/constants";
 import type { RecordWithAuthor } from "@/types";
@@ -87,7 +88,9 @@ function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <p className="section-label mb-0.5">{label}</p>
-      <p className="text-[14px] whitespace-pre-wrap break-words">{value}</p>
+      <p className="text-[14px] whitespace-pre-wrap break-words">
+        <Linkify text={value} />
+      </p>
     </div>
   );
 }

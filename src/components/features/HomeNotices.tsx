@@ -8,6 +8,7 @@ import { ja } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Linkify } from "@/components/common/Linkify";
 import { NOTICE_CATEGORIES } from "@/lib/constants";
 import type { Notice } from "@/types";
 
@@ -42,7 +43,9 @@ export function HomeNotices({ notices, userId }: { notices: Notice[]; userId: st
                     <Badge style={{ backgroundColor: meta.bg, color: meta.color }}>{meta.label}</Badge>
                     <span className="text-headline">{n.title}</span>
                   </div>
-                  <p className="text-[13px] text-muted2 whitespace-pre-wrap break-words">{n.content}</p>
+                  <p className="text-[13px] text-muted2 whitespace-pre-wrap break-words">
+                    <Linkify text={n.content} />
+                  </p>
                   {deadline && (
                     <p
                       className="text-[12px] flex items-center gap-1 font-medium mt-1"
