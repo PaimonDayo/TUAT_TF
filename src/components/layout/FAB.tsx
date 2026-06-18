@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { usePathname } from "next/navigation";
 import { Plus, Activity, MessageCircle, Trophy, CalendarPlus, ClipboardList, Bell } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { RecordForm } from "@/components/post/RecordForm";
@@ -11,7 +10,7 @@ import { NoticeForm } from "@/components/post/NoticeForm";
 import { MenuComposerForm } from "@/components/post/MenuForm";
 import { ResultForm } from "@/components/post/ResultForm";
 
-type ActionKey = "record" | "tweet" | "result" | "schedule" | "pmenu" | "notice";
+type Mode = "menu" | "record" | "tweet" | "result" | "schedule" | "pmenu" | "notice";
 
 export type FabPermissions = {
   createSchedule: boolean;
@@ -19,23 +18,7 @@ export type FabPermissions = {
   createNotice: boolean;
 };
 
-const META: Record<ActionKey, { icon: React.ReactNode; color: string; title: string }> = {
-  record: { icon: <Activity size={20} />, color: "#007aff", title: "練習記録" },
-  tweet: { icon: <MessageCircle size={20} />, color: "#34c759", title: "つぶやき" },
-  result: { icon: <Trophy size={20} />, color: "#ff9500", title: "大会・記録会の結果" },
-  schedule: { icon: <CalendarPlus size={20} />, color: "#ff9500", title: "予定を作成" },
-  pmenu: { icon: <ClipboardList size={20} />, color: "#af52de", title: "練習メニュー" },
-  notice: { icon: <Bell size={20} />, color: "#ff3b30", title: "お知らせ" },
-};
-
-/**
- * 右下のフローティング投稿ボタン。
- * 現在のページに応じて入力項目を出し分け、+ が回転しながら上にメニューが
- * せり上がる（スピードダイヤル）。
- * - 練習予定ページ: 予定 / メニュー（権限に応じて）
- * - お知らせページ: お知らせ（権限に応じて）
- * - それ以外: 練習記録 / つぶやき / 大会・記録会の結果
- */
+/** 右下のフローティング投稿ボタン。権限に応じて作成できる種別を出し分ける */
 export function FAB({
   userId,
   isMiddleLong,
@@ -45,104 +28,135 @@ export function FAB({
   isMiddleLong: boolean;
   can: FabPermissions;
 }) {
-  const pathname = usePathname();
-  const [dialOpen, setDialOpen] = useState(false);
-  const [sheet, setSheet] = useState<ActionKey | null>(null);
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<Mode>("menu");
 
-  // ページ文脈に応じたアクション
-  let keys: ActionKey[];
-  if (pathname.startsWith("/schedule")) {
-    keys = [];
-    if (can.createSchedule) keys.push("schedule");
-    if (can.createMenu) keys.push("pmenu");
-  } else if (pathname.startsWith("/notices")) {
-    keys = can.createNotice ? ["notice"] : [];
-  } else {
-    keys = ["record", "tweet", "result"];
-  }
-
-  if (keys.length === 0) return null;
-
-  function openSheet(key: ActionKey) {
-    setDialOpen(false);
-    setSheet(key);
+  function openMenu() {
+    setMode("menu");
+    setOpen(true);
   }
   function close() {
-    setSheet(null);
+    setOpen(false);
+    // アニメーション後にメニューへ戻す
+    setTimeout(() => setMode("menu"), 250);
   }
-  function onFabClick() {
-    // アクションが1つだけならダイヤルを開かず直接フォームへ
-    if (keys.length === 1) openSheet(keys[0]);
-    else setDialOpen((v) => !v);
-  }
+
+  const titles: Record<Mode, string | undefined> = {
+    menu: undefined,
+    record: "練習記録",
+    tweet: "つぶやき",
+    result: "大会・記録会の結果",
+    schedule: "予定を作成",
+    pmenu: "練習メニューを追加",
+    notice: "お知らせを投稿",
+  };
 
   return (
     <>
-      {/* ダイヤル展開中の背景タップで閉じる */}
-      {dialOpen && (
-        <div className="fixed inset-0 z-30" onClick={() => setDialOpen(false)} aria-hidden />
-      )}
+      <button
+        onClick={openMenu}
+        aria-label="投稿する"
+        className="fixed z-40 right-5 bottom-[calc(74px+env(safe-area-inset-bottom))] h-14 w-14 rounded-full bg-accent text-white shadow-lg shadow-accent/30 flex items-center justify-center active:scale-95 transition-active"
+      >
+        <Plus size={28} strokeWidth={2.5} />
+      </button>
 
-      <div className="fixed z-40 right-5 bottom-[calc(74px+env(safe-area-inset-bottom))]">
-        {/* せり上がるアクション群（FAB の上に絶対配置） */}
-        <div className="absolute bottom-full right-0 mb-3 flex flex-col items-end gap-3">
-          {keys.map((key, i) => {
-            const m = META[key];
-            // 下にあるものから順に出る（FAB に近い方が先）
-            const order = keys.length - 1 - i;
-            return (
-              <button
-                key={key}
-                onClick={() => openSheet(key)}
-                className="flex items-center gap-2.5"
-                style={{
-                  transform: dialOpen ? "translateY(0) scale(1)" : "translateY(14px) scale(0.85)",
-                  opacity: dialOpen ? 1 : 0,
-                  pointerEvents: dialOpen ? "auto" : "none",
-                  transition: "transform 0.2s cubic-bezier(0.32,0.72,0,1), opacity 0.18s ease-out",
-                  transitionDelay: dialOpen ? `${order * 40}ms` : "0ms",
-                }}
-              >
-                <span className="rounded-lg bg-card shadow-sm border border-separator px-2.5 py-1 text-[13px] font-semibold text-ink">
-                  {m.title}
-                </span>
-                <span
-                  className="h-11 w-11 rounded-full flex items-center justify-center text-white shadow-md shrink-0"
-                  style={{ backgroundColor: m.color }}
-                >
-                  {m.icon}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* メインの + ボタン（開くと45°回転して × に） */}
-        <button
-          onClick={onFabClick}
-          aria-label="投稿する"
-          className="h-14 w-14 rounded-full bg-accent text-white shadow-lg shadow-accent/30 flex items-center justify-center active:scale-95"
-          style={{
-            transform: dialOpen ? "rotate(45deg)" : "rotate(0deg)",
-            transition: "transform 0.25s cubic-bezier(0.32,0.72,0,1)",
-          }}
-        >
-          <Plus size={28} strokeWidth={2.5} />
-        </button>
-      </div>
-
-      <Sheet open={sheet !== null} onOpenChange={(o) => (o ? null : close())}>
-        <SheetContent title={sheet ? META[sheet].title : undefined}>
-          {sheet === "record" && (
+      <Sheet open={open} onOpenChange={(o) => (o ? setOpen(true) : close())}>
+        <SheetContent title={titles[mode]}>
+          {mode === "menu" && (
+            <div className="space-y-2 pb-4">
+              <PostOption
+                icon={<Activity size={22} />}
+                color="#007aff"
+                title="練習記録"
+                desc="距離・タイム・補強を記録"
+                onClick={() => setMode("record")}
+              />
+              <PostOption
+                icon={<MessageCircle size={22} />}
+                color="#34c759"
+                title="つぶやき"
+                desc="ひとことシェア（200字まで）"
+                onClick={() => setMode("tweet")}
+              />
+              <PostOption
+                icon={<Trophy size={22} />}
+                color="#ff9500"
+                title="大会・記録会の結果"
+                desc="PB・記録を登録"
+                onClick={() => setMode("result")}
+              />
+              {can.createSchedule && (
+                <PostOption
+                  icon={<CalendarPlus size={22} />}
+                  color="#ff9500"
+                  title="練習予定"
+                  desc="練習・大会などの予定を作成"
+                  onClick={() => setMode("schedule")}
+                />
+              )}
+              {can.createMenu && (
+                <PostOption
+                  icon={<ClipboardList size={22} />}
+                  color="#af52de"
+                  title="練習メニュー"
+                  desc="予定にメニューを追加"
+                  onClick={() => setMode("pmenu")}
+                />
+              )}
+              {can.createNotice && (
+                <PostOption
+                  icon={<Bell size={22} />}
+                  color="#ff3b30"
+                  title="お知らせ"
+                  desc="部内へのお知らせを投稿"
+                  onClick={() => setMode("notice")}
+                />
+              )}
+            </div>
+          )}
+          {mode === "record" && (
             <RecordForm userId={userId} isMiddleLong={isMiddleLong} onDone={close} />
           )}
-          {sheet === "tweet" && <TweetForm onDone={close} />}
-          {sheet === "result" && <ResultForm userId={userId} onDone={() => close()} />}
-          {sheet === "schedule" && <ScheduleForm onDone={close} />}
-          {sheet === "pmenu" && <MenuComposerForm onDone={close} />}
-          {sheet === "notice" && <NoticeForm onDone={close} />}
+          {mode === "tweet" && <TweetForm onDone={close} />}
+          {mode === "result" && <ResultForm userId={userId} onDone={() => close()} />}
+          {mode === "schedule" && <ScheduleForm onDone={close} />}
+          {mode === "pmenu" && <MenuComposerForm onDone={close} />}
+          {mode === "notice" && <NoticeForm onDone={close} />}
         </SheetContent>
       </Sheet>
     </>
+  );
+}
+
+function PostOption({
+  icon,
+  color,
+  title,
+  desc,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  color: string;
+  title: string;
+  desc: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full flex items-center gap-3 rounded-xl bg-card border border-separator p-3 active:bg-bg transition-active"
+    >
+      <span
+        className="h-11 w-11 rounded-full flex items-center justify-center text-white shrink-0"
+        style={{ backgroundColor: color }}
+      >
+        {icon}
+      </span>
+      <span className="text-left">
+        <span className="block text-headline">{title}</span>
+        <span className="block text-caption">{desc}</span>
+      </span>
+    </button>
   );
 }
