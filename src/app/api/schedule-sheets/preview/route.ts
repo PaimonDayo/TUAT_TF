@@ -208,10 +208,6 @@ export async function POST(request: Request) {
     const venue = venueText
       ? venues.find((item) => item.name === venueText || item.short === venueText)
       : undefined;
-    if (venueText && !venue) {
-      preview.errors.push({ rowNumber, message: `未登録の場所です: ${venueText}` });
-      return;
-    }
 
     const title =
       sheet.kind === "practice"
@@ -275,7 +271,7 @@ export async function POST(request: Request) {
       end_date: endDate,
       schedule_type: sheet.kind,
       meeting_time: meetingTime,
-      venue_name: venue?.name ?? null,
+      venue_name: venue?.name ?? (venueText || null),
       venue_access: venue?.access ?? null,
       venue_fee: venue?.fee ?? null,
       venue_url: venue?.url ?? null,
