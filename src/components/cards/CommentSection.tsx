@@ -165,8 +165,8 @@ export function CommentSection({
   }
 
   return (
-    <div className="mt-3 border-t border-separator/70 pt-3">
-      <div className="max-h-[40vh] overflow-y-auto space-y-3 pr-0.5">
+    <div className="mt-3 min-w-0 max-w-full overflow-hidden border-t border-separator/70 pt-3">
+      <div className="max-h-[40vh] max-w-full touch-pan-y overflow-x-hidden overflow-y-auto overscroll-x-none space-y-3 pr-0.5">
         {loading ? (
           <p className="text-caption text-center py-5">読み込み中…</p>
         ) : comments.length === 0 ? (
@@ -207,6 +207,7 @@ export function CommentSection({
                         maxLength={200}
                         value={editText}
                         onChange={(event) => setEditText(event.target.value)}
+                        className="max-w-full"
                         autoFocus
                       />
                       <div className="flex justify-end gap-2">
@@ -250,14 +251,14 @@ export function CommentSection({
 
       {error && <p className="mt-2 text-[12px] text-danger">{error}</p>}
 
-      <div className="mt-3 flex items-end gap-2">
+      <div className="mt-3 flex min-w-0 items-end gap-2">
         <Textarea
           rows={1}
           maxLength={200}
           placeholder="コメントを追加…"
           value={text}
           onChange={(event) => setText(event.target.value)}
-          className="min-h-11 py-2.5"
+          className="min-h-11 min-w-0 flex-1 py-2.5"
         />
         <Button
           type="button"
