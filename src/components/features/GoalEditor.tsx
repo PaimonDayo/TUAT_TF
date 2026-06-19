@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Target, ChevronRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { FormModal } from "@/components/ui/form-modal";
@@ -54,12 +53,13 @@ export function GoalEditor({
 
   return (
     <>
-      <button onClick={openSheet} className="block w-full text-left">
-        <Card className="p-4 flex items-center gap-3 active:bg-bg">
-          <Target size={20} className="text-accent" />
-          <span className="flex-1 text-headline">目標</span>
-          <ChevronRight size={18} className="text-muted" />
-        </Card>
+      <button
+        onClick={openSheet}
+        className="flex w-full items-center gap-3 p-4 text-left active:bg-bg"
+      >
+        <Target size={20} className="text-accent" />
+        <span className="flex-1 text-headline">目標</span>
+        <ChevronRight size={18} className="text-muted" />
       </button>
 
       <FormModal open={open} onOpenChange={setOpen} title="目標を設定" autoFocus={false}>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -26,9 +27,17 @@ export function ProfileEditForm({
   const [grade, setGrade] = useState<string | null>(profile.grade);
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url ?? "");
   const [saving, setSaving] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const valid = name.trim() && blocks.length > 0 && grade;
+
+  async function signOut() {
+    setSigningOut(true);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+  }
 
   function toggleBlock(b: Block) {
     setBlocks((cur) => (cur.includes(b) ? cur.filter((x) => x !== b) : [...cur, b]));
@@ -148,6 +157,17 @@ export function ProfileEditForm({
       <Button size="lg" onClick={save} disabled={saving || !valid}>
         {saving ? "保存中…" : isSetup ? "はじめる" : "保存"}
       </Button>
+
+      {!isSetup && (
+        <button
+          onClick={signOut}
+          disabled={signingOut}
+          className="mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-separator text-[15px] font-semibold text-danger active:bg-bg"
+        >
+          <LogOut size={18} />
+          {signingOut ? "ログアウト中…" : "ログアウト"}
+        </button>
+      )}
     </div>
   );
 }

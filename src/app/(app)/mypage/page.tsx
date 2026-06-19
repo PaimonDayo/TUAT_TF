@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { BookOpen, Trophy, ChevronRight, Shield, Bell, CalendarPlus, Users, Target, MapPin, Settings } from "lucide-react";
+import { BookOpen, Trophy, ChevronRight, Shield, Bell, CalendarPlus, Users, Target, MapPin } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/common/Avatar";
@@ -8,7 +8,7 @@ import { BlockPills } from "@/components/common/BlockPill";
 import { RecordCard } from "@/components/cards/RecordCard";
 import { TweetCard } from "@/components/cards/TweetCard";
 import { TrainingChart } from "@/components/features/TrainingChart";
-import { EditProfileButton, SignOutButton } from "@/components/features/MyPageActions";
+import { EditProfileButton } from "@/components/features/MyPageActions";
 import { GoalEditor } from "@/components/features/GoalEditor";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getUserRecords, getUserActivity } from "@/lib/queries";
@@ -88,46 +88,33 @@ export default async function MyPage({
         {/* 練習量の推移（日/週/月・横スライド） */}
         <TrainingChart records={records} />
 
-        {/* リンク */}
-        <div className="space-y-2">
-          <LinkCard href="/notes?mine=1" icon={<BookOpen size={20} className="text-accent" />} label="自分のノート" />
+        {/* リンク（1枚にまとめた区切り線リスト） */}
+        <Card className="divide-y divide-separator/70 overflow-hidden">
+          <RowLink href="/notes?mine=1" icon={<BookOpen size={20} className="text-accent" />} label="自分のノート" />
           <GoalEditor userId={profile.id} goal={profile.goal} />
-          <LinkCard href="/mypage/pb" icon={<Trophy size={20} className="text-warning" />} label="大会・記録会の結果" />
-          <LinkCard href="/members" icon={<Users size={20} className="text-accent" />} label="メンバー一覧" />
-          <LinkCard href="/ranking" icon={<Trophy size={20} className="text-muted2" />} label="ランキング" />
-        </div>
+          <RowLink href="/mypage/pb" icon={<Trophy size={20} className="text-warning" />} label="大会・記録会の結果" />
+          <RowLink href="/members" icon={<Users size={20} className="text-accent" />} label="メンバー一覧" />
+          <RowLink href="/ranking" icon={<Trophy size={20} className="text-muted2" />} label="ランキング" />
+        </Card>
 
         {/* 管理メニュー（権限に応じて表示） */}
         {showAdminMenu && (
           <section className="space-y-2">
             <p className="section-label">管理メニュー</p>
-            <div className="space-y-2">
+            <Card className="divide-y divide-separator/70 overflow-hidden">
               {perms.createSchedule && (
-                <LinkCard href="/schedule?compose=1" icon={<CalendarPlus size={20} className="text-accent" />} label="予定を作成" />
+                <RowLink href="/schedule?compose=1" icon={<CalendarPlus size={20} className="text-accent" />} label="予定を作成" />
               )}
               {perms.createNotice && (
-                <LinkCard href="/notices?compose=1" icon={<Bell size={20} className="text-warning" />} label="お知らせを作成" />
+                <RowLink href="/notices?compose=1" icon={<Bell size={20} className="text-warning" />} label="お知らせを作成" />
               )}
-              {(perms.manageMembers || perms.createSchedule) && (
-                <Card className="overflow-hidden">
-                  <details>
-                    <summary className="flex cursor-pointer list-none items-center gap-3 p-4 active:bg-bg">
-                      <Settings size={20} className="text-muted2" />
-                      <span className="flex-1 text-headline">その他</span>
-                      <ChevronRight size={18} className="text-muted" />
-                    </summary>
-                    <div className="border-t border-separator px-4">
-                      {perms.manageMembers && (
-                        <AdminSubLink href="/admin" icon={<Users size={18} />} label="ロール管理" />
-                      )}
-                      {perms.createSchedule && (
-                        <AdminSubLink href="/venues" icon={<MapPin size={18} />} label="練習場所" />
-                      )}
-                    </div>
-                  </details>
-                </Card>
+              {perms.manageMembers && (
+                <RowLink href="/admin" icon={<Users size={20} className="text-muted2" />} label="ロール管理" />
               )}
-            </div>
+              {perms.createSchedule && (
+                <RowLink href="/venues" icon={<MapPin size={20} className="text-muted2" />} label="練習場所" />
+              )}
+            </Card>
           </section>
         )}
 
@@ -145,32 +132,8 @@ export default async function MyPage({
             />
           </Suspense>
         </section>
-
-        <SignOutButton />
       </div>
     </>
-  );
-}
-
-function AdminSubLink({
-  href,
-  icon,
-  label,
-}: {
-  href: string;
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <Link
-      href={href}
-      prefetch
-      className="flex min-h-12 items-center gap-3 border-b border-separator last:border-b-0 active:opacity-60"
-    >
-      <span className="text-accent">{icon}</span>
-      <span className="flex-1 text-[14px] font-semibold">{label}</span>
-      <ChevronRight size={16} className="text-muted" />
-    </Link>
   );
 }
 
@@ -222,14 +185,13 @@ function ActivitySkeleton() {
   );
 }
 
-function LinkCard({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
+/** 区切り線リスト内の1行リンク（カード枠は親のCardが持つ） */
+function RowLink({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
   return (
-    <Link href={href} prefetch className="block">
-      <Card className="p-4 flex items-center gap-3 active:bg-bg">
-        {icon}
-        <span className="flex-1 text-headline">{label}</span>
-        <ChevronRight size={18} className="text-muted" />
-      </Card>
+    <Link href={href} prefetch className="flex items-center gap-3 p-4 active:bg-bg">
+      {icon}
+      <span className="flex-1 text-headline">{label}</span>
+      <ChevronRight size={18} className="text-muted" />
     </Link>
   );
 }
