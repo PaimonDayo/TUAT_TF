@@ -172,7 +172,18 @@ export async function getUpcomingSchedules(
   const today = new Date().toISOString().slice(0, 10);
   let q = supabase
     .from("practice_schedules")
-    .select("*, menus:practice_menus(*, author:profiles!author_id(display_name))")
+    .select(`
+      *,
+      menus:practice_menus(
+        *,
+        author:profiles!author_id(id, display_name),
+        targets:practice_menu_targets(
+          menu_id,
+          user_id,
+          profile:profiles!user_id(id, display_name, avatar_url, blocks, grade)
+        )
+      )
+    `)
     .gte("schedule_date", today)
     .order("schedule_date", { ascending: true });
   if (type && type !== "all") q = q.eq("schedule_type", type);

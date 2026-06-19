@@ -177,9 +177,26 @@ export interface PracticeMenu {
   author_id: string;
   group_name: string | null;
   content: string;
+  target_block: Block | null;
+  status: "draft" | "published";
   created_at: string;
   updated_at: string;
-  author?: { display_name: string } | null;
+  author?: { id?: string; display_name: string } | null;
+  targets?: PracticeMenuTarget[];
+}
+
+export interface PracticeMenuTarget {
+  menu_id: string;
+  user_id: string;
+  profile?: Pick<Profile, "id" | "display_name" | "avatar_url" | "blocks" | "grade"> | null;
+}
+
+export interface MenuTargetPreset {
+  id: string;
+  author_id: string;
+  name: string;
+  user_ids: string[];
+  created_at: string;
 }
 
 export interface Notice {
