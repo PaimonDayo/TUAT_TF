@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Newspaper, CalendarDays, Trophy, User } from "lucide-react";
+import { Home, Newspaper, CalendarDays, NotebookTabs, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ITEMS = [
   { href: "/home", label: "ホーム", icon: Home },
-  { href: "/timeline", label: "タイムライン", icon: Newspaper },
   { href: "/schedule", label: "予定", icon: CalendarDays },
-  { href: "/ranking", label: "ランキング", icon: Trophy },
+  { href: "/timeline", label: "タイムライン", icon: Newspaper },
+  { href: "/notes", label: "ノート", icon: NotebookTabs },
   { href: "/mypage", label: "マイページ", icon: User },
 ];
 

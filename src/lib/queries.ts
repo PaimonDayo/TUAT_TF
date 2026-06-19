@@ -8,6 +8,8 @@ import type {
   Block,
   AppRole,
   AuthorMini,
+  NoteTheme,
+  NoteWithRelations,
 } from "@/types";
 
 const AUTHOR_SELECT = "author:profiles!user_id(id, display_name, avatar_url, blocks, grade)";
@@ -408,4 +410,63 @@ export async function isFavorite(userId: string, targetId: string): Promise<bool
     .eq("favorite_user_id", targetId)
     .maybeSingle();
   return !!data;
+}
+
+const NOTE_SELECT = `
+  *,
+  author:profiles!author_id(id, display_name, avatar_url, blocks, grade),
+  theme:note_themes(*),
+  editors:note_editors(
+    user_id,
+    profile:profiles!user_id(id, display_name, avatar_url, blocks, grade)
+  )
+`;
+
+/** RLSで閲覧可能なノートと全テーマを取得 */
+export async function getNotesData(): Promise<{
+  themes: NoteTheme[];
+  notes: NoteWithRelations[];
+}> {
+  const supabase = await createClient();
+  const [{ data: themes }, { data: notes }] = await Promise.all([
+    supabase
+      .from("note_themes")
+      .select("*")
+      .order("sort", { ascending: true })
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("notes")
+      .select(NOTE_SELECT)
+      .order("updated_at", { ascending: false }),
+  ]);
+  return {
+    themes: (themes ?? []) as NoteTheme[],
+    notes: (notes ?? []) as unknown as NoteWithRelations[],
+  };
+}
+
+/** ノート詳細。RLSにより閲覧不可なら null */
+export async function getNoteById(id: string): Promise<NoteWithRelations | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("notes")
+    .select(NOTE_SELECT)
+    .eq("id", id)
+    .maybeSingle();
+  return (data as unknown as NoteWithRelations | null) ?? null;
+}
+
+/** プロフィールに表示する公開個人ノート */
+export async function getPublishedPersonalNotes(
+  authorId: string,
+): Promise<NoteWithRelations[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("notes")
+    .select(NOTE_SELECT)
+    .eq("author_id", authorId)
+    .eq("scope", "personal")
+    .eq("status", "published")
+    .order("updated_at", { ascending: false });
+  return (data ?? []) as unknown as NoteWithRelations[];
 }

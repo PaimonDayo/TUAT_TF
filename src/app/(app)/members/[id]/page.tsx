@@ -8,8 +8,9 @@ import { RecordCard } from "@/components/cards/RecordCard";
 import { ResultsList } from "@/components/features/ResultsList";
 import { TrainingChart } from "@/components/features/TrainingChart";
 import { FavoriteButton } from "@/components/features/FavoriteButton";
+import { NoteList } from "@/components/features/NotesView";
 import { getCurrentProfile } from "@/lib/supabase/auth";
-import { getProfileById, getUserRecords, getPbRecords, isFavorite } from "@/lib/queries";
+import { getProfileById, getUserRecords, getPbRecords, getPublishedPersonalNotes, isFavorite } from "@/lib/queries";
 import { gradeShort } from "@/lib/constants";
 import type { PbRecord, PracticeRecord, Profile, RecordWithAuthor } from "@/types";
 
@@ -25,9 +26,10 @@ export default async function MemberPage({
   const viewer = await getCurrentProfile();
   const isSelf = viewer.id === id;
 
-  const [records, pbs, favorited] = await Promise.all([
+  const [records, pbs, notes, favorited] = await Promise.all([
     getUserRecords(id) as Promise<PracticeRecord[]>,
     getPbRecords(id) as Promise<PbRecord[]>,
+    getPublishedPersonalNotes(id),
     isSelf ? Promise.resolve(false) : isFavorite(viewer.id, id),
   ]);
 
@@ -83,6 +85,11 @@ export default async function MemberPage({
         </Card>
 
         <TrainingChart records={records} />
+
+        <section className="space-y-2">
+          <p className="section-label">{profile.display_name || "部員"}のノート</p>
+          <NoteList notes={notes} currentUserId={viewer.id} />
+        </section>
 
         {pbs.length > 0 && (
           <section className="space-y-2">

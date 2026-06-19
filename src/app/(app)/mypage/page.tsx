@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { Trophy, ChevronRight, Shield, Bell, CalendarPlus, Users, Target, MapPin, Settings } from "lucide-react";
+import { BookOpen, Trophy, ChevronRight, Shield, Bell, CalendarPlus, Users, Target, MapPin, Settings } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/common/Avatar";
@@ -90,9 +90,11 @@ export default async function MyPage({
 
         {/* リンク */}
         <div className="space-y-2">
-          <LinkCard href="/members" icon={<Users size={20} className="text-accent" />} label="メンバー一覧" />
-          <LinkCard href="/mypage/pb" icon={<Trophy size={20} className="text-warning" />} label="大会・記録会の結果" />
+          <LinkCard href="/notes?mine=1" icon={<BookOpen size={20} className="text-accent" />} label="自分のノート" />
           <GoalEditor userId={profile.id} goal={profile.goal} />
+          <LinkCard href="/mypage/pb" icon={<Trophy size={20} className="text-warning" />} label="大会・記録会の結果" />
+          <LinkCard href="/members" icon={<Users size={20} className="text-accent" />} label="メンバー一覧" />
+          <LinkCard href="/ranking" icon={<Trophy size={20} className="text-muted2" />} label="ランキング" />
         </div>
 
         {/* 管理メニュー（権限に応じて表示） */}

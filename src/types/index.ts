@@ -33,6 +33,9 @@ export type ScheduleType = "practice" | "meet" | "event" | "time_trial";
 export type NoticeCategory = "fee" | "entry" | "info" | "rule";
 export type TargetType = "record" | "tweet";
 export type AttendanceStatus = "present" | "absent";
+export type NoteScope = "shared" | "personal";
+export type NoteStatus = "draft" | "published";
+export type NoteEditPolicy = "everyone" | "specified" | "author";
 
 export interface Profile {
   id: string;
@@ -237,6 +240,34 @@ export interface WeeklyRankingRow {
   total_km: number;
   period_start: string;
   period_end: string;
+}
+
+export interface NoteTheme {
+  id: string;
+  name: string;
+  description: string | null;
+  sort: number;
+  created_by: string;
+  created_at: string;
+}
+
+export interface NoteRow {
+  id: string;
+  author_id: string;
+  scope: NoteScope;
+  theme_id: string | null;
+  title: string;
+  body: string;
+  status: NoteStatus;
+  edit_policy: NoteEditPolicy;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NoteWithRelations extends NoteRow {
+  author: AuthorMini;
+  theme: NoteTheme | null;
+  editors?: { user_id: string; profile?: AuthorMini | null }[];
 }
 
 /** フィード（タイムライン）用の合成型 */
