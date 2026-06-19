@@ -11,6 +11,7 @@ import {
   Coins,
   CalendarRange,
   ExternalLink,
+  Info,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +42,7 @@ export function ScheduleCard({
   attendees?: Attendee[];
 }) {
   const [open, setOpen] = useState(false);
+  const [accessOpen, setAccessOpen] = useState(false);
   const meta = SCHEDULE_TYPES[schedule.schedule_type];
   const date = new Date(schedule.schedule_date + "T00:00:00");
   const hasMenus = schedule.menus && schedule.menus.length > 0;
@@ -50,6 +52,7 @@ export function ScheduleCard({
     schedule.venue_access ||
     schedule.venue_fee ||
     schedule.venue_url ||
+    schedule.note ||
     hasEntry ||
     hasMenus ||
     canEditMenu ||
@@ -129,10 +132,27 @@ export function ScheduleCard({
             />
           )}
           {schedule.venue_access && (
-            <Detail icon={<Train size={14} />} label="アクセス" value={schedule.venue_access} />
+            <div>
+              <button
+                onClick={() => setAccessOpen((v) => !v)}
+                className="section-label flex items-center gap-1 active:opacity-50"
+              >
+                <Train size={14} /> アクセス
+                <ChevronDown
+                  size={14}
+                  className={cn("transition-transform", accessOpen && "rotate-180")}
+                />
+              </button>
+              {accessOpen && (
+                <p className="text-[14px] whitespace-pre-wrap mt-0.5">{schedule.venue_access}</p>
+              )}
+            </div>
           )}
           {schedule.venue_fee && (
             <Detail icon={<Coins size={14} />} label="参加費" value={schedule.venue_fee} />
+          )}
+          {schedule.note && (
+            <Detail icon={<Info size={14} />} label="詳細情報" value={schedule.note} />
           )}
           {schedule.venue_url && (
             <a

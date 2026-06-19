@@ -12,6 +12,7 @@ import {
   format,
 } from "date-fns";
 import { ja } from "date-fns/locale";
+import { ChevronDown } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { INTENSITY_ORDER, INTENSITY_LABELS, CONDITIONS } from "@/lib/constants";
@@ -213,14 +214,18 @@ export function TrainingChart({ records }: { records: PracticeRecord[] }) {
               )}
             </div>
 
-            {/* 詳細ボタン行（記録が無くても高さを確保） */}
-            <div className="h-6 flex items-center">
+            {/* 詳細トグル（▾のみ）。記録が無くても高さを確保 */}
+            <div className="h-6 flex items-center justify-center">
               {hasText && (
                 <button
                   onClick={() => setShowDetail((v) => !v)}
-                  className="text-[12px] text-accent font-medium active:opacity-50"
+                  aria-label={showDetail ? "詳細を閉じる" : "詳細を開く"}
+                  className="text-accent active:opacity-50"
                 >
-                  {showDetail ? "詳細を閉じる" : "詳細（結果・補強・感想）"}
+                  <ChevronDown
+                    size={20}
+                    className={cn("transition-transform", showDetail && "rotate-180")}
+                  />
                 </button>
               )}
             </div>
