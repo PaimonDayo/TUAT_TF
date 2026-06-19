@@ -1,11 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { FormModal } from "@/components/ui/form-modal";
 import { ResultsList } from "@/components/features/ResultsList";
 import { ResultForm } from "@/components/post/ResultForm";
 import type { PbRecord } from "@/types";
@@ -17,7 +16,6 @@ export function PbManager({
   userId: string;
   initial: PbRecord[];
 }) {
-  const router = useRouter();
   const [items, setItems] = useState<PbRecord[]>(initial);
   const [open, setOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<PbRecord | null>(null);
@@ -32,10 +30,15 @@ export function PbManager({
   }
 
   async function remove(id: string) {
+    const previous = items;
     setItems((arr) => arr.filter((x) => x.id !== id));
     const supabase = createClient();
-    await supabase.from("pb_records").delete().eq("id", id);
-    router.refresh();
+    const { error } = await supabase.from("pb_records").delete().eq("id", id);
+    if (error) {
+      setItems(previous);
+      return false;
+    }
+    return true;
   }
 
   return (
@@ -48,8 +51,12 @@ export function PbManager({
         </Button>
       </div>
 
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent title={editTarget ? "結果を編集" : "大会・記録会の結果を追加"}>
+      {open && (
+        <FormModal
+          open
+          onOpenChange={setOpen}
+          title={editTarget ? "結果を編集" : "大会・記録会の結果を追加"}
+        >
           <ResultForm
             key={editTarget?.id ?? "new"}
             userId={userId}
@@ -65,8 +72,8 @@ export function PbManager({
               setOpen(false);
             }}
           />
-        </SheetContent>
-      </Sheet>
+        </FormModal>
+      )}
     </>
   );
 }

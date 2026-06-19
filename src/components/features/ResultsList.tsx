@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Trophy, Trash2, Pencil, ChevronDown, ChevronUp } from "lucide-react";
+import { Trophy, ChevronDown, ChevronUp } from "lucide-react";
+import { ActionMenu } from "@/components/ui/action-menu";
 import { Card } from "@/components/ui/card";
 import type { PbRecord } from "@/types";
 
@@ -20,7 +21,7 @@ export function ResultsList({
 }: {
   results: PbRecord[];
   onEdit?: (pb: PbRecord) => void;
-  onDelete?: (id: string) => void;
+  onDelete?: (id: string) => void | boolean | Promise<void | boolean>;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -91,7 +92,7 @@ function ResultRow({
   showPb: boolean;
   showUb: boolean;
   onEdit?: (pb: PbRecord) => void;
-  onDelete?: (id: string) => void;
+  onDelete?: (id: string) => void | boolean | Promise<void | boolean>;
 }) {
   return (
     <div className="p-3.5 flex items-center gap-3">
@@ -121,23 +122,14 @@ function ResultRow({
         )}
       </div>
       <span className="text-title tabular-nums">{pb.record}</span>
-      {onEdit && (
-        <button
-          onClick={() => onEdit(pb)}
-          aria-label="編集"
-          className="text-muted active:text-accent"
-        >
-          <Pencil size={17} />
-        </button>
-      )}
-      {onDelete && (
-        <button
-          onClick={() => onDelete(pb.id)}
-          aria-label="削除"
-          className="text-muted active:text-danger"
-        >
-          <Trash2 size={18} />
-        </button>
+      {(onEdit || onDelete) && (
+        <ActionMenu
+          onEdit={onEdit ? () => onEdit(pb) : undefined}
+          onDelete={onDelete ? () => onDelete(pb.id) : undefined}
+          deleteTitle={`${pb.event_name}の結果を削除しますか？`}
+          deleteDescription="削除した大会・記録会の結果は元に戻せません。"
+          triggerLabel={`${pb.event_name}のメニュー`}
+        />
       )}
     </div>
   );

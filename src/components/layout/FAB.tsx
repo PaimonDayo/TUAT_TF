@@ -11,7 +11,7 @@ import { NoticeForm } from "@/components/post/NoticeForm";
 import { MenuComposerForm } from "@/components/post/MenuForm";
 import { ResultForm } from "@/components/post/ResultForm";
 
-type Mode = "menu" | "result" | "pmenu";
+type Mode = "menu" | "pmenu";
 
 export type FabPermissions = {
   createSchedule: boolean;
@@ -35,6 +35,7 @@ export function FAB({
   const [tweetOpen, setTweetOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [noticeOpen, setNoticeOpen] = useState(false);
+  const [resultOpen, setResultOpen] = useState(false);
 
   function openMenu() {
     setMode("menu");
@@ -54,7 +55,6 @@ export function FAB({
 
   const titles: Record<Mode, string | undefined> = {
     menu: undefined,
-    result: "大会・記録会の結果",
     pmenu: "練習メニューを追加",
   };
 
@@ -91,7 +91,7 @@ export function FAB({
                 color="#ff9500"
                 title="大会・記録会の結果"
                 desc="PB・記録を登録"
-                onClick={() => setMode("result")}
+                onClick={() => openForm(setResultOpen)}
               />
               {can.createSchedule && (
                 <PostOption
@@ -122,7 +122,6 @@ export function FAB({
               )}
             </div>
           )}
-          {mode === "result" && <ResultForm userId={userId} onDone={() => close()} />}
           {mode === "pmenu" && <MenuComposerForm onDone={close} />}
         </SheetContent>
       </Sheet>
@@ -145,6 +144,14 @@ export function FAB({
 
       <FormModal open={noticeOpen} onOpenChange={setNoticeOpen} title="お知らせを投稿">
         <NoticeForm onDone={() => setNoticeOpen(false)} />
+      </FormModal>
+
+      <FormModal
+        open={resultOpen}
+        onOpenChange={setResultOpen}
+        title="大会・記録会の結果"
+      >
+        <ResultForm userId={userId} onDone={() => setResultOpen(false)} />
       </FormModal>
     </>
   );
