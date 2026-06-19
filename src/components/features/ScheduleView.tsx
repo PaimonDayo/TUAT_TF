@@ -15,6 +15,7 @@ export function ScheduleView({
   schedules,
   userId,
   canEditMenu,
+  canManageAllMenus = false,
   canManage = false,
   attendeesBySchedule,
   myStatusBySchedule,
@@ -22,6 +23,7 @@ export function ScheduleView({
   schedules: ScheduleWithMenus[];
   userId: string;
   canEditMenu: boolean;
+  canManageAllMenus?: boolean;
   canManage?: boolean;
   attendeesBySchedule: Record<string, Attendee[]>;
   myStatusBySchedule: Record<string, AttendanceStatusOrNone>;
@@ -59,6 +61,7 @@ export function ScheduleView({
               key={s.id}
               schedule={s}
               canEditMenu={canEditMenu}
+              canManageAllMenus={canManageAllMenus}
               canManage={canManage}
               userId={userId}
               myStatus={myStatusBySchedule[s.id] ?? "none"}

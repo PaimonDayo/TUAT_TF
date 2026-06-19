@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 import {
@@ -15,21 +16,29 @@ import {
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ActionMenu } from "@/components/ui/action-menu";
 import { SCHEDULE_TYPES, ATTENDANCE_TYPES } from "@/lib/constants";
 import { BLOCKS } from "@/lib/constants";
 import { venueShort } from "@/lib/venues";
 import { cn } from "@/lib/utils";
-import { MenuForm } from "@/components/post/MenuForm";
+import { MenuEditModal, MenuForm } from "@/components/post/MenuForm";
 import { ScheduleManageActions } from "@/components/post/ScheduleForm";
 import { AttendanceToggle } from "@/components/features/AttendanceToggle";
 import { AttendeesButton } from "@/components/features/AttendeesButton";
 import { Linkify } from "@/components/common/Linkify";
-import type { ScheduleWithMenus, Attendee, AttendanceStatusOrNone } from "@/types";
+import { createClient } from "@/lib/supabase/client";
+import type {
+  ScheduleWithMenus,
+  Attendee,
+  AttendanceStatusOrNone,
+  PracticeMenu,
+} from "@/types";
 
 /** 展開式の練習予定カード */
 export function ScheduleCard({
   schedule,
   canEditMenu = false,
+  canManageAllMenus = false,
   canManage = false,
   userId,
   myStatus = "none",
@@ -37,11 +46,13 @@ export function ScheduleCard({
 }: {
   schedule: ScheduleWithMenus;
   canEditMenu?: boolean;
+  canManageAllMenus?: boolean;
   canManage?: boolean;
   userId?: string;
   myStatus?: AttendanceStatusOrNone;
   attendees?: Attendee[];
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState(false);
   const meta = SCHEDULE_TYPES[schedule.schedule_type];
@@ -194,16 +205,15 @@ export function ScheduleCard({
               <p className="section-label mb-1.5">練習メニュー</p>
               <div className="space-y-2">
                 {schedule.menus?.map((m) => (
-                  <div key={m.id} className="rounded-xl bg-bg p-3">
-                    {m.author?.display_name && (
-                      <p className="text-[12px] font-semibold text-accent mb-1">
-                        担当: {m.author.display_name}
-                      </p>
-                    )}
-                    <p className="text-[14px] whitespace-pre-wrap">
-                      <Linkify text={m.content} />
-                    </p>
-                  </div>
+                  <MenuCard
+                    key={m.id}
+                    menu={m}
+                    scheduleId={schedule.id}
+                    canManage={
+                      canManageAllMenus || (!!userId && m.author?.id === userId)
+                    }
+                    onChanged={() => router.refresh()}
+                  />
                 ))}
               </div>
               {canEditMenu && <MenuForm scheduleId={schedule.id} />}
@@ -218,6 +228,85 @@ export function ScheduleCard({
         </div>
       )}
     </Card>
+  );
+}
+
+function MenuCard({
+  menu,
+  scheduleId,
+  canManage,
+  onChanged,
+}: {
+  menu: PracticeMenu;
+  scheduleId: string;
+  canManage: boolean;
+  onChanged: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const targetNames =
+    menu.targets?.map((target) => target.profile?.display_name).filter(Boolean) ?? [];
+
+  async function remove() {
+    const supabase = createClient();
+    const { error } = await supabase.from("practice_menus").delete().eq("id", menu.id);
+    if (error) return false;
+    onChanged();
+    return true;
+  }
+
+  return (
+    <div className="rounded-xl bg-bg p-3">
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {menu.status === "draft" && (
+              <span className="rounded border border-warning px-1.5 py-0.5 text-[10px] font-bold text-warning">
+                下書き
+              </span>
+            )}
+            {menu.target_block && (
+              <span
+                className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                style={{
+                  color: BLOCKS[menu.target_block].color,
+                  backgroundColor: BLOCKS[menu.target_block].bg,
+                }}
+              >
+                {BLOCKS[menu.target_block].label}
+              </span>
+            )}
+            {targetNames.length > 0 && (
+              <span className="text-[11px] text-muted2">
+                対象: {targetNames.join("、")}
+              </span>
+            )}
+          </div>
+          {menu.author?.display_name && (
+            <p className="mt-1 text-[12px] font-semibold text-accent">
+              担当: {menu.author.display_name}
+            </p>
+          )}
+        </div>
+        {canManage && (
+          <ActionMenu
+            onEdit={() => setEditing(true)}
+            onDelete={remove}
+            deleteTitle="練習メニューを削除しますか？"
+            deleteDescription="削除したメニューは元に戻せません。"
+            triggerLabel="練習メニューの操作"
+          />
+        )}
+      </div>
+      <p className="mt-1 text-[14px] whitespace-pre-wrap">
+        <Linkify text={menu.content} />
+      </p>
+      <MenuEditModal
+        menu={menu}
+        scheduleId={scheduleId}
+        open={editing}
+        onOpenChange={setEditing}
+      />
+    </div>
   );
 }
 
