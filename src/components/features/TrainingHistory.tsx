@@ -95,25 +95,30 @@ export function TrainingHistory({ records }: { records: PracticeRecord[] }) {
         </div>
       </div>
 
-      {/* 棒グラフ（固定枠＋丸い塗り。タップで内訳） */}
-      <div className="flex items-end justify-between gap-1" style={{ height: `${AREA}px` }}>
-        {buckets.map((b, i) => {
-          const barH = b.total > 0 ? Math.max((b.total / max) * AREA, 8) : 0;
-          const isSel = i === selected;
-          return (
-            <button
-              key={i}
-              onClick={() => setSelected(i)}
-              className="flex-1 h-full flex items-end justify-center"
-            >
-              <div
-                className={cn("relative w-full max-w-6 rounded-full bg-bg", isSel && "ring-2 ring-accent/40")}
-                style={{ height: `${AREA}px` }}
+      {/* 棒グラフ（棒の高さ＝量。薄い枠線＋小さな影、上を少し丸く。タップで内訳） */}
+      <div className="relative" style={{ height: `${AREA}px` }}>
+        <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="border-t border-separator/40" />
+          ))}
+        </div>
+        <div className="relative h-full flex items-end justify-between gap-1">
+          {buckets.map((b, i) => {
+            const barH = b.total > 0 ? Math.max((b.total / max) * AREA, 6) : 0;
+            const isSel = i === selected;
+            return (
+              <button
+                key={i}
+                onClick={() => setSelected(i)}
+                className="flex-1 h-full flex items-end justify-center"
               >
-                {barH > 0 && (
+                {barH > 0 ? (
                   <div
-                    className="absolute bottom-0 inset-x-0 rounded-full overflow-hidden flex flex-col-reverse"
-                    style={{ height: `${barH}px`, opacity: isSel ? 1 : 0.85 }}
+                    className={cn(
+                      "w-full max-w-6 rounded-t-[4px] overflow-hidden flex flex-col-reverse border border-separator/70 shadow-sm transition-all",
+                      isSel ? "ring-2 ring-accent/50" : "opacity-95",
+                    )}
+                    style={{ height: `${barH}px` }}
                   >
                     {INTENSITY_ORDER.map((k) =>
                       b.by[k] > 0 ? (
@@ -127,11 +132,13 @@ export function TrainingHistory({ records }: { records: PracticeRecord[] }) {
                       ) : null,
                     )}
                   </div>
+                ) : (
+                  <div className="w-full max-w-6 h-1 rounded-t-[3px] bg-separator/60" />
                 )}
-              </div>
-            </button>
-          );
-        })}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* ラベル（間引いて表示） */}

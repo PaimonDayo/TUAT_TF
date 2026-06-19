@@ -46,28 +46,30 @@ export function WeeklyBarChart({ records }: { records: PracticeRecord[] }) {
         </p>
       </div>
 
-      {/* 棒グラフ（固定枠の中に下から積む。塗りの上は丸く） */}
-      <div className="flex items-end justify-between gap-2" style={{ height: `${BAR_AREA}px` }}>
-        {dayData.map((d, i) => {
-          const barH = d.total > 0 ? Math.max((d.total / max) * BAR_AREA, 8) : 0;
-          const isSel = i === selected;
-          return (
-            <button
-              key={i}
-              onClick={() => setSelected(i)}
-              className="flex-1 h-full flex items-end justify-center"
-            >
-              <div
-                className={cn(
-                  "relative w-full max-w-7 rounded-full bg-bg transition-all",
-                  isSel && "ring-2 ring-accent/40",
-                )}
-                style={{ height: `${BAR_AREA}px` }}
+      {/* 棒グラフ（棒の高さ＝量。薄い枠線＋小さな影、上を少し丸く。背景に目盛り線） */}
+      <div className="relative" style={{ height: `${BAR_AREA}px` }}>
+        <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="border-t border-separator/40" />
+          ))}
+        </div>
+        <div className="relative h-full flex items-end justify-between gap-2">
+          {dayData.map((d, i) => {
+            const barH = d.total > 0 ? Math.max((d.total / max) * BAR_AREA, 6) : 0;
+            const isSel = i === selected;
+            return (
+              <button
+                key={i}
+                onClick={() => setSelected(i)}
+                className="flex-1 h-full flex items-end justify-center"
               >
-                {barH > 0 && (
+                {barH > 0 ? (
                   <div
-                    className="absolute bottom-0 inset-x-0 rounded-full overflow-hidden flex flex-col-reverse"
-                    style={{ height: `${barH}px`, opacity: isSel ? 1 : 0.85 }}
+                    className={cn(
+                      "w-full max-w-7 rounded-t-[4px] overflow-hidden flex flex-col-reverse border border-separator/70 shadow-sm transition-all",
+                      isSel ? "ring-2 ring-accent/50" : "opacity-95",
+                    )}
+                    style={{ height: `${barH}px` }}
                   >
                     {INTENSITY_ORDER.map((k) =>
                       d.by[k] > 0 ? (
@@ -81,11 +83,13 @@ export function WeeklyBarChart({ records }: { records: PracticeRecord[] }) {
                       ) : null,
                     )}
                   </div>
+                ) : (
+                  <div className="w-full max-w-7 h-1 rounded-t-[3px] bg-separator/60" />
                 )}
-              </div>
-            </button>
-          );
-        })}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* 曜日ラベル */}
