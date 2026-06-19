@@ -6,7 +6,7 @@ import { Avatar } from "@/components/common/Avatar";
 import { BlockPills } from "@/components/common/BlockPill";
 import { RecordCard } from "@/components/cards/RecordCard";
 import { ResultsList } from "@/components/features/ResultsList";
-import { WeeklyBarChart } from "@/components/features/WeeklyBarChart";
+import { TrainingChart } from "@/components/features/TrainingChart";
 import { FavoriteButton } from "@/components/features/FavoriteButton";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getProfileById, getUserRecords, getPbRecords, isFavorite } from "@/lib/queries";
@@ -71,7 +71,7 @@ export default async function MemberPage({
           </div>
         </Card>
 
-        <WeeklyBarChart records={records} />
+        <TrainingChart records={records} />
 
         {pbs.length > 0 && (
           <section className="space-y-2">
