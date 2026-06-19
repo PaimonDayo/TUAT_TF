@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Papa from "papaparse";
-import { Check, Download, Upload } from "lucide-react";
+import { Check, Download, Link2, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -37,6 +37,8 @@ export function ScheduleSheetsManager() {
   const [inputMode, setInputMode] = useState<"new" | "edit">("new");
   const [existing, setExisting] = useState<PracticeSchedule[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [source, setSource] = useState<"url" | "file">("url");
+  const [sheetUrl, setSheetUrl] = useState("");
   const [fileName, setFileName] = useState("");
   const [csv, setCsv] = useState("");
   const [sheetId, setSheetId] = useState<string | null>(null);
@@ -109,8 +111,12 @@ export function ScheduleSheetsManager() {
   }
 
   async function previewImport() {
-    if (!csv) {
-      setError("編集したCSVファイルを選択してください");
+    if (source === "url" && !sheetUrl.trim()) {
+      setError("Googleスプレッドシートの共有URLを入力してください");
+      return;
+    }
+    if (source === "file" && !csv) {
+      setError("CSVファイルを選択してください");
       return;
     }
     setLoading(true);
@@ -134,8 +140,11 @@ export function ScheduleSheetsManager() {
           target_month: kind === "practice" ? month : null,
           kind,
           target_block: block,
-          sheet_url: `csv-upload://${fileName || "schedule.csv"}`,
-          csv_url: null,
+          sheet_url:
+            source === "url"
+              ? sheetUrl.trim()
+              : `csv-upload://${fileName || "schedule.csv"}`,
+          csv_url: source === "url" ? sheetUrl.trim() : null,
         })
         .select("id")
         .single();
@@ -151,7 +160,10 @@ export function ScheduleSheetsManager() {
     const response = await fetch("/api/schedule-sheets/preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sheetId: targetSheetId, csv }),
+      body: JSON.stringify({
+        sheetId: targetSheetId,
+        csv: source === "file" ? csv : undefined,
+      }),
     });
     const result = await response.json();
     if (!response.ok) {
@@ -182,6 +194,7 @@ export function ScheduleSheetsManager() {
     setPreview(null);
     setCsv("");
     setFileName("");
+    setSheetUrl("");
     setSheetId(null);
     setApplying(false);
   }
@@ -333,21 +346,66 @@ export function ScheduleSheetsManager() {
       <section className="space-y-3">
         <div className="flex items-center gap-2">
           <Step number={3} />
-          <p className="text-headline">編集したCSVを選ぶ</p>
+          <p className="text-headline">入力した予定を読み込む</p>
         </div>
-        <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-separator bg-card px-4 active:bg-bg">
-          <Upload size={19} className="text-accent" />
-          <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">
-            {fileName || "CSVファイルを選択"}
-          </span>
-          <input
-            type="file"
-            accept=".csv,text/csv"
-            className="hidden"
-            onChange={(event) => void selectFile(event.target.files?.[0])}
-          />
-        </label>
-        <Button size="lg" disabled={!csv || loading} onClick={previewImport}>
+        <SegmentedControl
+          items={[
+            { key: "url", label: "スプレッドシートURL" },
+            { key: "file", label: "CSVファイル" },
+          ]}
+          value={source}
+          onChange={(value) => {
+            setSource(value);
+            setPreview(null);
+            setSheetId(null);
+            setError(null);
+          }}
+        />
+        {source === "url" ? (
+          <div className="space-y-2">
+            <div className="relative">
+              <Link2
+                size={18}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+              />
+              <Input
+                type="url"
+                value={sheetUrl}
+                onChange={(event) => {
+                  setSheetUrl(event.target.value);
+                  setSheetId(null);
+                  setPreview(null);
+                }}
+                placeholder="Googleスプレッドシートの共有URL"
+                className="pl-10"
+              />
+            </div>
+            <p className="text-micro">
+              共有設定を「リンクを知っている全員が閲覧可」にしてください。通常の編集画面URLをそのまま貼れます。
+            </p>
+          </div>
+        ) : (
+          <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-separator bg-card px-4 active:bg-bg">
+            <Upload size={19} className="text-accent" />
+            <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">
+              {fileName || "CSVファイルを選択"}
+            </span>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={(event) => void selectFile(event.target.files?.[0])}
+            />
+          </label>
+        )}
+        <Button
+          size="lg"
+          disabled={
+            loading ||
+            (source === "url" ? !sheetUrl.trim() : !csv)
+          }
+          onClick={previewImport}
+        >
           {loading ? "確認中..." : "内容を確認"}
         </Button>
       </section>

@@ -56,16 +56,19 @@ export async function POST(request: Request) {
   } else {
     let csvUrl: URL;
     try {
-      csvUrl = new URL(sheet.csv_url!);
+      csvUrl = googleSheetCsvUrl(sheet.csv_url!);
     } catch {
-      return NextResponse.json({ error: "公開CSV URLが不正です" }, { status: 400 });
+      return NextResponse.json(
+        { error: "GoogleスプレッドシートのURLが不正です" },
+        { status: 400 },
+      );
     }
     if (
       csvUrl.protocol !== "https:" ||
       !["docs.google.com", "docs.googleusercontent.com"].includes(csvUrl.hostname)
     ) {
       return NextResponse.json(
-        { error: "Googleスプレッドシートの公開CSV URLを指定してください" },
+        { error: "Googleスプレッドシートの共有URLを指定してください" },
         { status: 400 },
       );
     }
@@ -75,7 +78,7 @@ export async function POST(request: Request) {
       csv = await response.text();
     } catch {
       return NextResponse.json(
-        { error: "公開CSVを読み込めませんでした。公開設定とURLを確認してください" },
+        { error: "スプレッドシートを読み込めませんでした。共有設定を確認してください" },
         { status: 502 },
       );
     }
@@ -340,4 +343,22 @@ function parseTime(value: string | undefined): string | null {
   const second = Number(match[3] ?? 0);
   if (hour > 23 || minute > 59 || second > 59) return null;
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function googleSheetCsvUrl(value: string): URL {
+  const url = new URL(value);
+  if (!["docs.google.com", "docs.googleusercontent.com"].includes(url.hostname)) {
+    throw new Error("unsupported host");
+  }
+  if (url.searchParams.get("output") === "csv" || url.searchParams.get("format") === "csv") {
+    return url;
+  }
+
+  const match = url.pathname.match(/\/spreadsheets\/d\/([^/]+)/);
+  if (!match) throw new Error("sheet id not found");
+  const hashGid = url.hash.match(/gid=(\d+)/)?.[1];
+  const gid = url.searchParams.get("gid") ?? hashGid ?? "0";
+  return new URL(
+    `https://docs.google.com/spreadsheets/d/${match[1]}/export?format=csv&gid=${gid}`,
+  );
 }
