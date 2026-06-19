@@ -226,7 +226,7 @@ export async function getAllRoles(): Promise<AppRole[]> {
   const { data } = await supabase
     .from("roles")
     .select("*")
-    .order("is_system", { ascending: false })
+    .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
   return (data ?? []) as AppRole[];
 }

@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Plus, Trash2, Lock } from "lucide-react";
+import { ChevronDown, ChevronUp, Lock, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Card } from "@/components/ui/card";
+import { FormModal } from "@/components/ui/form-modal";
+import { Input } from "@/components/ui/input";
 import { PERMISSION_LIST } from "@/lib/permissions";
 import type { AppRole, Permission } from "@/types";
 
@@ -18,89 +18,175 @@ const PERM_COLUMN: Record<Permission, keyof AppRole> = {
   create_notice: "can_create_notice",
 };
 
-export function RoleManager({ roles }: { roles: AppRole[] }) {
+export function RoleManager({ roles: initialRoles }: { roles: AppRole[] }) {
+  const [roles, setRoles] = useState(initialRoles);
   const [creating, setCreating] = useState(false);
+  const [reordering, setReordering] = useState(false);
+
+  async function move(index: number, direction: -1 | 1) {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= roles.length || reordering) return;
+
+    const previous = roles;
+    const next = [...roles];
+    [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+    setRoles(next);
+    setReordering(true);
+
+    const supabase = createClient();
+    const { error } = await supabase.rpc("reorder_roles", {
+      role_ids: next.map((role) => role.id),
+    });
+    if (error) {
+      setRoles(previous);
+      alert("並び順を更新できませんでした");
+    }
+    setReordering(false);
+  }
 
   return (
     <div className="space-y-2">
-      {roles.map((role) => (
-        <RoleRow key={role.id} role={role} />
+      {roles.map((role, index) => (
+        <RoleRow
+          key={role.id}
+          role={role}
+          first={index === 0}
+          last={index === roles.length - 1}
+          reordering={reordering}
+          onMove={(direction) => move(index, direction)}
+          onUpdated={(updated) =>
+            setRoles((items) => items.map((item) => (item.id === updated.id ? updated : item)))
+          }
+          onDeleted={() => setRoles((items) => items.filter((item) => item.id !== role.id))}
+        />
       ))}
 
       <button
+        type="button"
         onClick={() => setCreating(true)}
-        className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-separator py-3 text-[14px] font-semibold text-accent active:bg-bg"
+        className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-separator py-3 text-[14px] font-semibold text-accent active:bg-bg"
       >
         <Plus size={18} /> 新しいロールを作成
       </button>
 
-      <RoleEditor open={creating} onClose={() => setCreating(false)} />
+      {creating && (
+        <RoleEditor
+          open
+          onClose={() => setCreating(false)}
+          sortOrder={roles.length + 1}
+          onSaved={(role) => {
+            setRoles((items) => [...items, role]);
+            setCreating(false);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function RoleRow({ role }: { role: AppRole }) {
-  const router = useRouter();
+function RoleRow({
+  role,
+  first,
+  last,
+  reordering,
+  onMove,
+  onUpdated,
+  onDeleted,
+}: {
+  role: AppRole;
+  first: boolean;
+  last: boolean;
+  reordering: boolean;
+  onMove: (direction: -1 | 1) => void;
+  onUpdated: (role: AppRole) => void;
+  onDeleted: () => void;
+}) {
   const [editing, setEditing] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  const perms = PERMISSION_LIST.filter((p) => role[PERM_COLUMN[p.key]]);
+  const perms = PERMISSION_LIST.filter((permission) => role[PERM_COLUMN[permission.key]]);
 
   async function remove() {
-    if (!confirm(`ロール「${role.name}」を削除しますか？`)) return;
-    setDeleting(true);
     const supabase = createClient();
-    const { error } = await supabase.from("roles").delete().eq("id", role.id);
-    if (error) {
-      alert("削除に失敗しました");
-      setDeleting(false);
-      return;
+    const { data, error } = await supabase.rpc("delete_custom_role", {
+      target_role_id: role.id,
+    });
+    if (error || !data) {
+      alert("ロールを削除できませんでした");
+      return false;
     }
-    router.refresh();
+    onDeleted();
+    return true;
   }
 
   return (
     <Card className="p-3">
-      <div className="flex items-center gap-2">
-        <span className="text-[15px] font-semibold flex items-center gap-1">
-          {role.name}
-          {role.is_system && (
-            <span className="inline-flex items-center gap-0.5 text-micro text-muted">
-              <Lock size={10} /> 組込
-            </span>
-          )}
-        </span>
-        <div className="ml-auto flex items-center gap-1">
+      <div className="flex items-start gap-2">
+        <div className="flex shrink-0 flex-col">
           <button
-            onClick={() => setEditing(true)}
-            className="h-8 px-3 rounded-lg border border-separator text-[13px] font-medium active:bg-bg"
+            type="button"
+            onClick={() => onMove(-1)}
+            disabled={first || reordering}
+            aria-label={`${role.name}を上へ移動`}
+            className="flex h-7 w-8 items-center justify-center text-muted disabled:opacity-20"
           >
-            編集
+            <ChevronUp size={17} />
           </button>
-          {!role.is_system && (
-            <button
-              onClick={remove}
-              disabled={deleting}
-              aria-label="削除"
-              className="h-8 w-8 rounded-lg border border-separator flex items-center justify-center text-danger active:bg-bg"
-            >
-              <Trash2 size={15} />
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => onMove(1)}
+            disabled={last || reordering}
+            aria-label={`${role.name}を下へ移動`}
+            className="flex h-7 w-8 items-center justify-center text-muted disabled:opacity-20"
+          >
+            <ChevronDown size={17} />
+          </button>
         </div>
+
+        <div className="min-w-0 flex-1 pt-1">
+          <span className="flex items-center gap-1 text-[15px] font-semibold">
+            <span className="break-words">{role.name}</span>
+            {role.is_system && (
+              <span className="inline-flex shrink-0 items-center gap-0.5 text-micro text-muted">
+                <Lock size={10} /> 組込
+              </span>
+            )}
+          </span>
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {perms.length === 0 ? (
+              <span className="text-micro">権限なし（肩書きのみ）</span>
+            ) : (
+              perms.map((permission) => (
+                <span
+                  key={permission.key}
+                  className="rounded-full bg-accent/10 px-2 py-0.5 text-micro text-accent"
+                >
+                  {permission.label}
+                </span>
+              ))
+            )}
+          </div>
+        </div>
+
+        <ActionMenu
+          onEdit={() => setEditing(true)}
+          onDelete={role.is_system ? undefined : remove}
+          deleteTitle={`ロール「${role.name}」を削除しますか？`}
+          deleteDescription="このロールの部員への割り当ても解除されます。"
+          triggerLabel={`${role.name}のメニュー`}
+        />
       </div>
-      <div className="mt-1.5 flex flex-wrap gap-1">
-        {perms.length === 0 ? (
-          <span className="text-micro">権限なし（肩書きのみ）</span>
-        ) : (
-          perms.map((p) => (
-            <span key={p.key} className="text-micro rounded-full bg-accent/10 text-accent px-2 py-0.5">
-              {p.label}
-            </span>
-          ))
-        )}
-      </div>
-      <RoleEditor open={editing} onClose={() => setEditing(false)} role={role} />
+
+      {editing && (
+        <RoleEditor
+          open
+          onClose={() => setEditing(false)}
+          role={role}
+          sortOrder={role.sort_order}
+          onSaved={(updated) => {
+            onUpdated(updated);
+            setEditing(false);
+          }}
+        />
+      )}
     </Card>
   );
 }
@@ -108,13 +194,16 @@ function RoleRow({ role }: { role: AppRole }) {
 function RoleEditor({
   open,
   onClose,
+  onSaved,
+  sortOrder,
   role,
 }: {
   open: boolean;
   onClose: () => void;
+  onSaved: (role: AppRole) => void;
+  sortOrder: number;
   role?: AppRole;
 }) {
-  const router = useRouter();
   const [name, setName] = useState(role?.name ?? "");
   const [flags, setFlags] = useState<Record<Permission, boolean>>({
     manage_members: role?.can_manage_members ?? false,
@@ -126,7 +215,7 @@ function RoleEditor({
   const [error, setError] = useState<string | null>(null);
 
   function toggle(key: Permission) {
-    setFlags((f) => ({ ...f, [key]: !f[key] }));
+    setFlags((current) => ({ ...current, [key]: !current[key] }));
   }
 
   async function save() {
@@ -143,66 +232,70 @@ function RoleEditor({
       can_create_schedule: flags.create_schedule,
       can_create_menu: flags.create_menu,
       can_create_notice: flags.create_notice,
+      sort_order: sortOrder,
     };
-    const { error } = role
-      ? await supabase.from("roles").update(payload).eq("id", role.id)
-      : await supabase.from("roles").insert(payload);
-    if (error) {
+    const query = role
+      ? supabase.from("roles").update(payload).eq("id", role.id)
+      : supabase.from("roles").insert(payload);
+    const { data, error: saveError } = await query.select("*").single();
+
+    if (saveError || !data) {
       setError("保存に失敗しました");
       setSaving(false);
       return;
     }
     setSaving(false);
-    onClose();
-    router.refresh();
+    onSaved(data as AppRole);
   }
 
   return (
-    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent title={role ? "ロールを編集" : "ロールを作成"}>
-        <div className="space-y-4 pb-4">
-          <div>
-            <p className="section-label mb-1.5">ロール名</p>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="例: 会計担当 / 主将"
-              maxLength={20}
-            />
-          </div>
-          <div>
-            <p className="section-label mb-1.5">権限</p>
-            <div className="space-y-2">
-              {PERMISSION_LIST.map((p) => (
-                <button
-                  key={p.key}
-                  type="button"
-                  onClick={() => toggle(p.key)}
-                  className="w-full flex items-center justify-between gap-3 rounded-xl bg-card border border-separator p-3 active:bg-bg text-left"
-                >
-                  <span className="min-w-0">
-                    <span className="block text-[14px] font-medium">{p.label}</span>
-                    <span className="block text-micro">{p.desc}</span>
-                  </span>
-                  <span
-                    className="h-6 w-10 rounded-full p-0.5 transition-colors flex shrink-0"
-                    style={{
-                      backgroundColor: flags[p.key] ? "#34c759" : "#e5e5ea",
-                      justifyContent: flags[p.key] ? "flex-end" : "flex-start",
-                    }}
-                  >
-                    <span className="h-5 w-5 rounded-full bg-white shadow" />
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-          {error && <p className="text-caption text-danger text-center">{error}</p>}
-          <Button size="lg" onClick={save} disabled={saving}>
-            {saving ? "保存中…" : role ? "保存する" : "作成する"}
-          </Button>
+    <FormModal
+      open={open}
+      onOpenChange={(nextOpen) => !nextOpen && onClose()}
+      title={role ? "ロールを編集" : "ロールを作成"}
+    >
+      <div className="space-y-4 pb-4">
+        <div>
+          <p className="section-label mb-1.5">ロール名</p>
+          <Input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="例: 会計担当 / 主将"
+            maxLength={20}
+          />
         </div>
-      </SheetContent>
-    </Sheet>
+        <div>
+          <p className="section-label mb-1.5">権限</p>
+          <div className="space-y-2">
+            {PERMISSION_LIST.map((permission) => (
+              <button
+                key={permission.key}
+                type="button"
+                onClick={() => toggle(permission.key)}
+                className="flex w-full items-center justify-between gap-3 rounded-xl border border-separator bg-card p-3 text-left active:bg-bg"
+              >
+                <span className="min-w-0">
+                  <span className="block text-[14px] font-medium">{permission.label}</span>
+                  <span className="block text-micro">{permission.desc}</span>
+                </span>
+                <span
+                  className="flex h-6 w-10 shrink-0 rounded-full p-0.5 transition-colors"
+                  style={{
+                    backgroundColor: flags[permission.key] ? "#34c759" : "#e5e5ea",
+                    justifyContent: flags[permission.key] ? "flex-end" : "flex-start",
+                  }}
+                >
+                  <span className="h-5 w-5 rounded-full bg-white shadow" />
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+        {error && <p className="text-center text-caption text-danger">{error}</p>}
+        <Button size="lg" onClick={save} disabled={saving}>
+          {saving ? "保存中…" : role ? "保存する" : "作成する"}
+        </Button>
+      </div>
+    </FormModal>
   );
 }

@@ -74,5 +74,8 @@ export async function fetchRolesByProfileIds(
     arr.push(row.role);
     map.set(row.profile_id, arr);
   }
+  for (const roles of map.values()) {
+    roles.sort((a, b) => a.sort_order - b.sort_order);
+  }
   return map;
 }

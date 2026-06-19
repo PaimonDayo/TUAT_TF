@@ -1,37 +1,65 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, MapPin } from "lucide-react";
+import { ChevronDown, ChevronUp, MapPin, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { ActionMenu } from "@/components/ui/action-menu";
 import { Card } from "@/components/ui/card";
+import { FormModal } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
 import type { VenueRow } from "@/types";
 
 /** 練習場所の管理（追加・編集・削除・選択リスト表示の切替） */
 export function VenueManager({ initial }: { initial: VenueRow[] }) {
-  const router = useRouter();
   const [items, setItems] = useState<VenueRow[]>(initial);
   const [editing, setEditing] = useState<VenueRow | null>(null);
   const [creating, setCreating] = useState(false);
+  const [reordering, setReordering] = useState(false);
 
   async function togglePinned(v: VenueRow) {
+    const previous = items;
     setItems((arr) => arr.map((x) => (x.id === v.id ? { ...x, pinned: !x.pinned } : x)));
     const supabase = createClient();
-    await supabase.from("venues").update({ pinned: !v.pinned }).eq("id", v.id);
-    router.refresh();
+    const { error } = await supabase.from("venues").update({ pinned: !v.pinned }).eq("id", v.id);
+    if (error) {
+      setItems(previous);
+      alert("リスト表示を更新できませんでした");
+    }
   }
 
   async function remove(v: VenueRow) {
-    if (!confirm(`「${v.name}」を削除しますか？`)) return;
-    setItems((arr) => arr.filter((x) => x.id !== v.id));
     const supabase = createClient();
-    await supabase.from("venues").delete().eq("id", v.id);
-    router.refresh();
+    const { error } = await supabase.from("venues").delete().eq("id", v.id);
+    if (error) {
+      alert("会場を削除できませんでした");
+      return false;
+    }
+    setItems((arr) => arr.filter((x) => x.id !== v.id));
+    return true;
+  }
+
+  async function move(index: number, direction: -1 | 1) {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= items.length || reordering) return;
+
+    const previous = items;
+    const next = [...items];
+    [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+    setItems(next);
+    setReordering(true);
+
+    const supabase = createClient();
+    const { error } = await supabase.rpc("reorder_venues", {
+      venue_ids: next.map((venue) => venue.id),
+    });
+    if (error) {
+      setItems(previous);
+      alert("並び順を更新できませんでした");
+    }
+    setReordering(false);
   }
 
   return (
@@ -41,9 +69,29 @@ export function VenueManager({ initial }: { initial: VenueRow[] }) {
       </p>
 
       <div className="space-y-2">
-        {items.map((v) => (
+        {items.map((v, index) => (
           <Card key={v.id} className="p-3">
-            <div className="flex items-center gap-3">
+            <div className="flex items-start gap-2">
+              <div className="flex shrink-0 flex-col">
+                <button
+                  type="button"
+                  onClick={() => move(index, -1)}
+                  disabled={index === 0 || reordering}
+                  aria-label={`${v.name}を上へ移動`}
+                  className="flex h-7 w-8 items-center justify-center text-muted disabled:opacity-20"
+                >
+                  <ChevronUp size={17} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => move(index, 1)}
+                  disabled={index === items.length - 1 || reordering}
+                  aria-label={`${v.name}を下へ移動`}
+                  className="flex h-7 w-8 items-center justify-center text-muted disabled:opacity-20"
+                >
+                  <ChevronDown size={17} />
+                </button>
+              </div>
               <div className="flex-1 min-w-0">
                 {v.short && (
                   <p className="mb-1">
@@ -57,14 +105,13 @@ export function VenueManager({ initial }: { initial: VenueRow[] }) {
                 {v.fee && <p className="text-caption">参加費：{v.fee}</p>}
               </div>
               <div className="flex flex-col items-end gap-2 shrink-0">
-                <div className="flex gap-1">
-                  <button onClick={() => setEditing(v)} aria-label="編集" className="h-8 w-8 flex items-center justify-center text-accent active:opacity-50">
-                    <Pencil size={16} />
-                  </button>
-                  <button onClick={() => remove(v)} aria-label="削除" className="h-8 w-8 flex items-center justify-center text-muted active:text-danger">
-                    <Trash2 size={16} />
-                  </button>
-                </div>
+                <ActionMenu
+                  onEdit={() => setEditing(v)}
+                  onDelete={() => remove(v)}
+                  deleteTitle={`「${v.name}」を削除しますか？`}
+                  deleteDescription="削除した会場は予定作成の候補からも消えます。"
+                  triggerLabel={`${v.name}のメニュー`}
+                />
                 <label className="flex items-center gap-1 text-[11px] text-muted2">
                   <input
                     type="checkbox"
@@ -84,36 +131,43 @@ export function VenueManager({ initial }: { initial: VenueRow[] }) {
         <Plus size={18} /> 会場を追加
       </Button>
 
-      <Sheet open={creating} onOpenChange={setCreating}>
-        <SheetContent title="会場を追加">
+      {creating && (
+        <FormModal open onOpenChange={setCreating} title="会場を追加">
           <VenueForm
+            sort={items.length + 1}
             onSaved={(v) => {
               setItems((arr) => [...arr, v]);
               setCreating(false);
             }}
           />
-        </SheetContent>
-      </Sheet>
+        </FormModal>
+      )}
 
-      <Sheet open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <SheetContent title="会場を編集">
-          {editing && (
-            <VenueForm
-              venue={editing}
-              onSaved={(v) => {
-                setItems((arr) => arr.map((x) => (x.id === v.id ? v : x)));
-                setEditing(null);
-              }}
-            />
-          )}
-        </SheetContent>
-      </Sheet>
+      {editing && (
+        <FormModal open onOpenChange={(open) => !open && setEditing(null)} title="会場を編集">
+          <VenueForm
+            venue={editing}
+            sort={editing.sort}
+            onSaved={(v) => {
+              setItems((arr) => arr.map((x) => (x.id === v.id ? v : x)));
+              setEditing(null);
+            }}
+          />
+        </FormModal>
+      )}
     </>
   );
 }
 
-function VenueForm({ venue, onSaved }: { venue?: VenueRow; onSaved: (v: VenueRow) => void }) {
-  const router = useRouter();
+function VenueForm({
+  venue,
+  sort,
+  onSaved,
+}: {
+  venue?: VenueRow;
+  sort: number;
+  onSaved: (v: VenueRow) => void;
+}) {
   const [name, setName] = useState(venue?.name ?? "");
   const [short, setShort] = useState(venue?.short ?? "");
   const [access, setAccess] = useState(venue?.access ?? "");
@@ -138,6 +192,7 @@ function VenueForm({ venue, onSaved }: { venue?: VenueRow; onSaved: (v: VenueRow
       fee: fee.trim() || null,
       url: url.trim() || null,
       pinned,
+      sort,
     };
     const { data, error } = venue
       ? await supabase.from("venues").update(payload).eq("id", venue.id).select().single()
@@ -148,7 +203,6 @@ function VenueForm({ venue, onSaved }: { venue?: VenueRow; onSaved: (v: VenueRow
       setSaving(false);
       return;
     }
-    router.refresh();
     onSaved(data as VenueRow);
   }
 
