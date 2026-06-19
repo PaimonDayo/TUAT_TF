@@ -17,10 +17,7 @@ const OTHER = "__other__";
 
 /** ヘッダー右の「＋作成」ボタン。?compose=1 で自動オープン（全画面モーダル） */
 export function ScheduleComposer({ autoOpen = false }: { autoOpen?: boolean }) {
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    if (autoOpen) setOpen(true);
-  }, [autoOpen]);
+  const [open, setOpen] = useState(autoOpen);
 
   return (
     <>

@@ -77,11 +77,15 @@ export function TrainingChart({ records }: { records: PracticeRecord[] }) {
 
   // 期間切替・初期表示で右端（最新）までスクロール
   useEffect(() => {
-    setSelected(null);
-    setShowDetail(false);
     const el = scrollRef.current;
     if (el) el.scrollLeft = el.scrollWidth;
   }, [period]);
+
+  function changePeriod(next: Period) {
+    setSelected(null);
+    setShowDetail(false);
+    setPeriod(next);
+  }
 
   function bucketLabel(b: Bucket, long = false): string {
     if (period === "day") return format(b.start, long ? "M月d日(E)" : "M/d", { locale: ja });
@@ -103,7 +107,7 @@ export function TrainingChart({ records }: { records: PracticeRecord[] }) {
               { key: "month", label: "月" },
             ]}
             value={period}
-            onChange={(k) => setPeriod(k as Period)}
+            onChange={(key) => changePeriod(key as Period)}
           />
         </div>
       </div>
