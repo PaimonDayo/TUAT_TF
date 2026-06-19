@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Papa from "papaparse";
-import { Download, Upload } from "lucide-react";
+import { Check, Download, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -16,6 +16,7 @@ import type {
   ScheduleImportRow,
   ScheduleSheetBlock,
   ScheduleSheetKind,
+  PracticeSchedule,
 } from "@/types";
 
 const BLOCK_OPTIONS: { value: ScheduleSheetBlock; label: string }[] = [
@@ -33,6 +34,9 @@ export function ScheduleSheetsManager() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [kind, setKind] = useState<ScheduleSheetKind>("practice");
   const [block, setBlock] = useState<ScheduleSheetBlock>("all");
+  const [inputMode, setInputMode] = useState<"new" | "edit">("new");
+  const [existing, setExisting] = useState<PracticeSchedule[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [fileName, setFileName] = useState("");
   const [csv, setCsv] = useState("");
   const [sheetId, setSheetId] = useState<string | null>(null);
@@ -41,8 +45,47 @@ export function ScheduleSheetsManager() {
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    let active = true;
+    const supabase = createClient();
+    let query = supabase
+      .from("practice_schedules")
+      .select("*")
+      .eq("schedule_type", kind)
+      .order("schedule_date", { ascending: true });
+    if (kind === "practice") {
+      const start = `${year}-${String(month).padStart(2, "0")}-01`;
+      const nextMonth =
+        month === 12
+          ? `${year + 1}-01-01`
+          : `${year}-${String(month + 1).padStart(2, "0")}-01`;
+      query = query.gte("schedule_date", start).lt("schedule_date", nextMonth);
+    } else {
+      query = query.gte("schedule_date", new Date().toISOString().slice(0, 10));
+    }
+    void query.then(({ data }) => {
+      if (!active) return;
+      const targetBlocks = block === "all" ? [] : [block];
+      setExisting(
+        ((data ?? []) as PracticeSchedule[]).filter(
+          (schedule) =>
+            [...(schedule.target_blocks ?? [])].sort().join(",") ===
+            [...targetBlocks].sort().join(","),
+        ),
+      );
+      setSelectedIds([]);
+    });
+    return () => {
+      active = false;
+    };
+  }, [block, kind, month, year]);
+
   function downloadTemplate() {
-    const rows = createTemplateRows(year, month, kind, block);
+    const selected = existing.filter((schedule) => selectedIds.includes(schedule.id));
+    const rows =
+      inputMode === "edit"
+        ? createExistingRows(selected, kind, block)
+        : createTemplateRows(year, month, kind, block);
     const content = `\uFEFF${Papa.unparse(rows)}`;
     const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -51,7 +94,7 @@ export function ScheduleSheetsManager() {
     anchor.download =
       kind === "practice"
         ? `${year}-${String(month).padStart(2, "0")}-practice-${block}.csv`
-        : `meets-${block}.csv`;
+        : `${kind}-${block}.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
   }
@@ -157,7 +200,8 @@ export function ScheduleSheetsManager() {
         <SegmentedControl
           items={[
             { key: "practice", label: "練習予定" },
-            { key: "meet", label: "記録会" },
+            { key: "meet", label: "大会" },
+            { key: "time_trial", label: "記録会" },
           ]}
           value={kind}
           onChange={(value) => {
@@ -209,6 +253,55 @@ export function ScheduleSheetsManager() {
             </option>
           ))}
         </select>
+        <SegmentedControl
+          items={[
+            { key: "new", label: "新しく入力" },
+            { key: "edit", label: "既存を編集" },
+          ]}
+          value={inputMode}
+          onChange={(value) => {
+            setInputMode(value);
+            setSelectedIds([]);
+          }}
+        />
+        {inputMode === "edit" && (
+          <div className="max-h-64 space-y-1 overflow-y-auto rounded-xl border border-separator bg-card p-1">
+            {existing.length === 0 ? (
+              <p className="p-3 text-caption">該当する予定がありません。</p>
+            ) : (
+              existing.map((schedule) => {
+                const active = selectedIds.includes(schedule.id);
+                return (
+                  <button
+                    key={schedule.id}
+                    type="button"
+                    onClick={() =>
+                      setSelectedIds((ids) =>
+                        ids.includes(schedule.id)
+                          ? ids.filter((id) => id !== schedule.id)
+                          : [...ids, schedule.id],
+                      )
+                    }
+                    className={`flex min-h-12 w-full items-center gap-3 rounded-lg px-3 text-left ${
+                      active ? "bg-accent/10" : "active:bg-bg"
+                    }`}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px] font-semibold">
+                        {schedule.title || schedule.venue_name || "練習予定"}
+                      </span>
+                      <span className="block text-micro">
+                        {schedule.schedule_date}
+                        {schedule.end_date ? ` - ${schedule.end_date}` : ""}
+                      </span>
+                    </span>
+                    {active && <Check size={18} className="shrink-0 text-accent" />}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        )}
       </section>
 
       <section className="space-y-3">
@@ -218,12 +311,22 @@ export function ScheduleSheetsManager() {
         </div>
         <p className="text-caption">
           {kind === "practice"
-            ? "選んだ月の日付と曜日が入力済みです。Googleスプレッドシートで予定を入力してください。"
-            : "記録会名・開始日・終了日・エントリー開始日・締切日を入力します。1日開催は終了日を空欄にします。"}
+            ? inputMode === "edit"
+              ? "選択した練習予定の内容入りCSVを出力します。編集後にアップロードすると更新されます。"
+              : "選んだ月の日付と曜日が入力済みです。Googleスプレッドシートで予定を入力してください。"
+            : inputMode === "edit"
+              ? "選択した予定の内容と予定ID入りCSVを出力します。日付や名称を変えても同じ予定を更新できます。"
+              : `${kind === "meet" ? "大会名" : "記録会名"}・開始日・終了日・エントリー開始日・締切日を入力します。`}
         </p>
-        <Button type="button" variant="outline" size="lg" onClick={downloadTemplate}>
+        <Button
+          type="button"
+          variant="outline"
+          size="lg"
+          disabled={inputMode === "edit" && selectedIds.length === 0}
+          onClick={downloadTemplate}
+        >
           <Download size={17} />
-          テンプレートCSV
+          {inputMode === "edit" ? "選択した予定をCSV出力" : "テンプレートCSV"}
         </Button>
       </section>
 
@@ -368,9 +471,9 @@ function createTemplateRows(
   const days = new Date(year, month, 0).getDate();
   const blockName = block === "all" ? "全体" : BLOCKS[block].label;
   const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
-  if (kind === "meet") {
+  if (kind !== "practice") {
     return Array.from({ length: 10 }, () => ({
-      "記録会名": "",
+      [kind === "meet" ? "大会名" : "記録会名"]: "",
       "開始日": "",
       "終了日": "",
       "エントリー開始日": "",
@@ -392,6 +495,35 @@ function createTemplateRows(
       "詳細": "",
     };
   });
+}
+
+function createExistingRows(
+  schedules: PracticeSchedule[],
+  kind: ScheduleSheetKind,
+  block: ScheduleSheetBlock,
+): Record<string, string>[] {
+  const blockName = block === "all" ? "全体" : BLOCKS[block].label;
+  if (kind === "practice") {
+    const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+    return schedules.map((schedule) => ({
+      "予定ID": schedule.id,
+      "日付": schedule.schedule_date,
+      "曜日": weekdays[new Date(`${schedule.schedule_date}T00:00:00`).getDay()],
+      "対象ブロック": blockName,
+      "時間": schedule.meeting_time?.slice(0, 5) ?? "",
+      "場所": schedule.venue_name ?? "",
+      "詳細": schedule.note ?? "",
+    }));
+  }
+  const titleKey = kind === "meet" ? "大会名" : "記録会名";
+  return schedules.map((schedule) => ({
+    "予定ID": schedule.id,
+    [titleKey]: schedule.title ?? "",
+    "開始日": schedule.schedule_date,
+    "終了日": schedule.end_date ?? "",
+    "エントリー開始日": schedule.entry_start ?? "",
+    "エントリー締切日": schedule.entry_end ?? "",
+  }));
 }
 
 function toRpcRow(row: ScheduleImportRow) {

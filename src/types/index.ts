@@ -154,7 +154,7 @@ export interface PracticeSchedule {
   created_at: string;
 }
 
-export type ScheduleSheetKind = "practice" | "meet";
+export type ScheduleSheetKind = "practice" | "meet" | "time_trial";
 export type ScheduleSheetBlock = "all" | Block;
 
 export interface ScheduleSheet {

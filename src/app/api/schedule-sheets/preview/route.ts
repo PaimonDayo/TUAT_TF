@@ -142,7 +142,10 @@ export async function POST(request: Request) {
       sheet.kind === "practice"
         ? [raw["時間"], raw["場所"], raw["詳細"]].some((value) => value?.trim())
         : [
+            raw["大会名"],
             raw["記録会名"],
+            raw["開始日"],
+            raw["終了日"],
             raw["場所"],
             raw["エントリー開始日"],
             raw["エントリー締切日"],
@@ -154,7 +157,7 @@ export async function POST(request: Request) {
     }
 
     const date = parseSheetDate(
-      sheet.kind === "meet" ? raw["開始日"] || raw["日付"] : raw["日付"],
+      sheet.kind !== "practice" ? raw["開始日"] || raw["日付"] : raw["日付"],
       sheet.target_year,
     );
     const outsidePracticeMonth =
@@ -175,8 +178,8 @@ export async function POST(request: Request) {
       return;
     }
     const endDate =
-      sheet.kind === "meet" ? parseOptionalDate(raw["終了日"], null) : null;
-    if (sheet.kind === "meet" && raw["終了日"]?.trim() && !endDate) {
+      sheet.kind !== "practice" ? parseOptionalDate(raw["終了日"], null) : null;
+    if (sheet.kind !== "practice" && raw["終了日"]?.trim() && !endDate) {
       preview.errors.push({
         rowNumber,
         message: "終了日は YYYY-MM-DD 形式で入力してください",
@@ -210,9 +213,18 @@ export async function POST(request: Request) {
       return;
     }
 
-    const title = sheet.kind === "meet" ? raw["記録会名"]?.trim() || "" : "";
-    if (sheet.kind === "meet" && !title) {
-      preview.errors.push({ rowNumber, message: "記録会名を入力してください" });
+    const title =
+      sheet.kind === "practice"
+        ? ""
+        : (sheet.kind === "meet" ? raw["大会名"] : raw["記録会名"])?.trim() ||
+          raw["大会名"]?.trim() ||
+          raw["記録会名"]?.trim() ||
+          "";
+    if (sheet.kind !== "practice" && !title) {
+      preview.errors.push({
+        rowNumber,
+        message: sheet.kind === "meet" ? "大会名を入力してください" : "記録会名を入力してください",
+      });
       return;
     }
 
@@ -224,15 +236,15 @@ export async function POST(request: Request) {
     }
 
     const entryStart =
-      sheet.kind === "meet"
+      sheet.kind !== "practice"
         ? parseOptionalDate(raw["エントリー開始日"], null)
         : null;
     const entryEnd =
-      sheet.kind === "meet"
+      sheet.kind !== "practice"
         ? parseOptionalDate(raw["エントリー締切日"], null)
         : null;
     if (
-      sheet.kind === "meet" &&
+      sheet.kind !== "practice" &&
       ((raw["エントリー開始日"]?.trim() && !entryStart) ||
         (raw["エントリー締切日"]?.trim() && !entryEnd))
     ) {
@@ -240,11 +252,21 @@ export async function POST(request: Request) {
       return;
     }
 
-    const matched = (byDate.get(date) ?? []).find(
-      (schedule) =>
-        !usedIds.has(schedule.id) &&
-        (sheet.kind === "practice" || schedule.title === title),
-    );
+    const explicitId = raw["予定ID"]?.trim();
+    const matched = explicitId
+      ? existing.find((schedule) => schedule.id === explicitId && !usedIds.has(schedule.id))
+      : (byDate.get(date) ?? []).find(
+          (schedule) =>
+            !usedIds.has(schedule.id) &&
+            (sheet.kind === "practice" || schedule.title === title),
+        );
+    if (explicitId && !matched) {
+      preview.errors.push({
+        rowNumber,
+        message: "選択した種類・ブロックの既存予定を確認できません",
+      });
+      return;
+    }
     if (matched) usedIds.add(matched.id);
     const item: ScheduleImportRow = {
       rowNumber,
