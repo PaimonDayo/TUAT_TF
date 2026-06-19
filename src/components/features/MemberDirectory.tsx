@@ -8,6 +8,7 @@ import { Avatar } from "@/components/common/Avatar";
 import { BlockPills } from "@/components/common/BlockPill";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { GradeFilter } from "@/components/features/GradeFilter";
+import { EmptyState } from "@/components/ui/empty-state";
 import { SIMPLE_BLOCK_ITEMS, matchSimpleBlock, gradeShort } from "@/lib/constants";
 import type { AuthorMini } from "@/types";
 
@@ -38,7 +39,7 @@ export function MemberDirectory({ members }: { members: AuthorMini[] }) {
 
       <div className="px-4 pt-1">
         {filtered.length === 0 ? (
-          <p className="text-caption text-center py-16">条件に合う部員がいません。</p>
+          <EmptyState title="条件に合う部員がいません" />
         ) : (
           <div className="space-y-2">
             {filtered.map((m) => (

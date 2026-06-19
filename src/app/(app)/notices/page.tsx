@@ -4,6 +4,7 @@ import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getNotices } from "@/lib/queries";
 import { permissionsOf } from "@/lib/permissions";
 import { NoticeComposer } from "@/components/post/NoticeForm";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { Notice } from "@/types";
 
 export default async function NoticesPage({
@@ -25,7 +26,7 @@ export default async function NoticesPage({
       />
       <div className="px-4 pt-1 space-y-3">
         {notices.length === 0 ? (
-          <p className="text-caption text-center py-16">お知らせはありません。</p>
+          <EmptyState title="お知らせはありません" />
         ) : (
           notices.map((n) => <NoticeCard key={n.id} notice={n} canManage={canCreateNotice} />)
         )}

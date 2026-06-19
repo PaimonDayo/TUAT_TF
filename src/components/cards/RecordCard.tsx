@@ -4,9 +4,9 @@ import { ja } from "date-fns/locale";
 import { Avatar } from "@/components/common/Avatar";
 import { BlockPills } from "@/components/common/BlockPill";
 import { Card } from "@/components/ui/card";
+import { KeyValue } from "@/components/ui/key-value";
 import { IntensityBar } from "@/components/features/IntensityBar";
 import { PostActions } from "@/components/cards/PostActions";
-import { Linkify } from "@/components/common/Linkify";
 import { RecordOwnerMenu } from "@/components/cards/PostOwnerMenu";
 import { CONDITIONS, gradeShort } from "@/lib/constants";
 import type { CommentAuthor, RecordWithAuthor } from "@/types";
@@ -69,9 +69,13 @@ export function RecordCard({
       )}
 
       {/* テキスト各種 */}
-      {record.result_text && <Field label="結果・タイム" value={record.result_text} />}
-      {record.strength_text && <Field label="補強" value={record.strength_text} />}
-      {record.memo && <Field label="感想" value={record.memo} />}
+      {(record.result_text || record.strength_text || record.memo) && (
+        <dl>
+          <KeyValue label="結果・タイム" value={record.result_text} />
+          <KeyValue label="補強" value={record.strength_text} />
+          <KeyValue label="感想" value={record.memo} />
+        </dl>
+      )}
 
       <PostActions
         targetType="record"
@@ -82,16 +86,5 @@ export function RecordCard({
         currentUser={currentUser}
       />
     </Card>
-  );
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="section-label mb-0.5">{label}</p>
-      <p className="text-[14px] whitespace-pre-wrap break-words">
-        <Linkify text={value} />
-      </p>
-    </div>
   );
 }

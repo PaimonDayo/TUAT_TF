@@ -7,6 +7,7 @@ import { TweetCard } from "@/components/cards/TweetCard";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { GradeFilter } from "@/components/features/GradeFilter";
+import { EmptyState } from "@/components/ui/empty-state";
 import { SIMPLE_BLOCK_ITEMS, matchSimpleBlock } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { loadFeed } from "@/app/(app)/timeline/actions";
@@ -61,25 +62,28 @@ export function TimelineView({
   return (
     <>
       <div className="px-4 pb-2">
-        <SegmentedControl items={SIMPLE_BLOCK_ITEMS} value={block} onChange={setBlock} />
-      </div>
-      <div className="px-4 pb-2 flex justify-end gap-2">
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <SegmentedControl items={SIMPLE_BLOCK_ITEMS} value={block} onChange={setBlock} />
+          </div>
+          <GradeFilter value={grade} onChange={setGrade} />
         <button
           onClick={() => setFavOnly((v) => !v)}
+          aria-label={favOnly ? "フォロー中のみを解除" : "フォロー中のみ表示"}
+          title="フォロー中"
           className={cn(
-            "h-8 px-3 rounded-full border text-[13px] font-semibold inline-flex items-center gap-1 shrink-0 active:opacity-60",
+              "h-8 w-8 rounded-full border inline-flex items-center justify-center shrink-0 active:opacity-60",
             favOnly ? "bg-accent text-white border-accent" : "bg-card border-separator text-muted2",
           )}
         >
           <UserCheck size={14} />
-          フォロー中
         </button>
-        <GradeFilter value={grade} onChange={setGrade} />
+        </div>
       </div>
 
       <div className="px-4 pt-1">
         {filtered.length === 0 ? (
-          <p className="text-caption text-center py-16">条件に合う投稿がありません。</p>
+          <EmptyState title="条件に合う投稿がありません" />
         ) : (
           <div className="space-y-3">
             {filtered.map((item) =>

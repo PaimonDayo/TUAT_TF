@@ -27,8 +27,8 @@ export function Avatar({
   const bg = primary ? BLOCKS[primary].bg : "#e5e5ea";
 
   if (avatarUrl) {
-    // eslint-disable-next-line @next/next/no-img-element
     return (
+      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={avatarUrl}
         alt={name}

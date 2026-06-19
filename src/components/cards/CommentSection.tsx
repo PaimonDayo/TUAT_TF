@@ -7,6 +7,8 @@ import { Linkify } from "@/components/common/Linkify";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { ActionMenu } from "@/components/ui/action-menu";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { CommentAuthor, CommentWithAuthor, TargetType } from "@/types";
 
 export function CommentSection({
@@ -156,9 +158,19 @@ export function CommentSection({
     <div className="mt-3 min-w-0 max-w-full overflow-hidden border-t border-separator/70 pt-3">
       <div className="max-h-[40vh] max-w-full touch-pan-y overflow-x-hidden overflow-y-auto overscroll-x-none space-y-3 pr-0.5">
         {loading ? (
-          <p className="text-caption text-center py-5">読み込み中…</p>
+          <div className="space-y-3 py-2">
+            {[0, 1].map((item) => (
+              <div key={item} className="flex items-center gap-2.5">
+                <Skeleton className="h-8 w-8 rounded-full" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-3.5 w-3/4" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : comments.length === 0 ? (
-          <p className="text-caption text-center py-5">まだコメントはありません</p>
+          <EmptyState title="まだコメントはありません" className="min-h-20 py-4" />
         ) : (
           comments.map((comment) => {
             const editing = editingId === comment.id;

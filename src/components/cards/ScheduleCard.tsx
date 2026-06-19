@@ -9,7 +9,6 @@ import {
   MapPin,
   ChevronDown,
   Train,
-  Coins,
   CalendarRange,
   ExternalLink,
   Info,
@@ -17,6 +16,8 @@ import {
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ActionMenu } from "@/components/ui/action-menu";
+import { Disclosure } from "@/components/ui/disclosure";
+import { KeyValue } from "@/components/ui/key-value";
 import { SCHEDULE_TYPES, ATTENDANCE_TYPES } from "@/lib/constants";
 import { BLOCKS } from "@/lib/constants";
 import { venueShort } from "@/lib/venues";
@@ -54,7 +55,6 @@ export function ScheduleCard({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [accessOpen, setAccessOpen] = useState(false);
   const meta = SCHEDULE_TYPES[schedule.schedule_type];
   const date = new Date(schedule.schedule_date + "T00:00:00");
   const hasMenus = schedule.menus && schedule.menus.length > 0;
@@ -161,30 +161,18 @@ export function ScheduleCard({
             />
           )}
           {(schedule.venue_access || schedule.venue_fee) && (
-            <div>
-              <button
-                onClick={() => setAccessOpen((v) => !v)}
-                className="section-label flex items-center gap-1 active:opacity-50"
-              >
-                <Train size={14} /> アクセス・参加費
-                <ChevronDown
-                  size={14}
-                  className={cn("transition-transform", accessOpen && "rotate-180")}
-                />
-              </button>
-              {accessOpen && (
-                <div className="mt-1 space-y-1.5">
-                  {schedule.venue_access && (
-                    <p className="text-[14px] whitespace-pre-wrap">{schedule.venue_access}</p>
-                  )}
-                  {schedule.venue_fee && (
-                    <p className="text-[13px] text-muted2 flex items-center gap-1">
-                      <Coins size={13} /> 参加費：{schedule.venue_fee}
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
+            <Disclosure
+              title={
+                <span className="flex items-center gap-1.5">
+                  <Train size={15} /> アクセス・参加費
+                </span>
+              }
+            >
+              <dl>
+                <KeyValue label="アクセス" value={schedule.venue_access} />
+                <KeyValue label="参加費" value={schedule.venue_fee} />
+              </dl>
+            </Disclosure>
           )}
           {schedule.note && (
             <Detail icon={<Info size={14} />} label="詳細情報" value={schedule.note} />

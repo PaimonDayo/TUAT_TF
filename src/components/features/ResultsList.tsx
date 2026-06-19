@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Trophy, ChevronDown, ChevronUp } from "lucide-react";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { PbRecord } from "@/types";
 
 const PREVIEW = 5;
@@ -27,9 +28,11 @@ export function ResultsList({
 
   if (results.length === 0) {
     return (
-      <Card className="p-6 flex flex-col items-center gap-2">
-        <Trophy size={28} className="text-warning" />
-        <p className="text-caption text-center">まだ大会・記録会の結果がありません</p>
+      <Card>
+        <EmptyState
+          title="まだ大会・記録会の結果がありません"
+          icon={<Trophy size={28} />}
+        />
       </Card>
     );
   }

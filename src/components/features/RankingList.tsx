@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Avatar } from "@/components/common/Avatar";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { formatKm } from "@/lib/utils";
 import { gradeShort, INTENSITY_LABELS } from "@/lib/constants";
 import type { WeeklyRankingRow } from "@/types";
@@ -24,9 +25,11 @@ export function RankingList({
 }) {
   if (rows.length === 0) {
     return (
-      <Card className="p-4 mx-4">
-        <p className="text-caption text-center">直近7日間はまだ記録がありません</p>
-      </Card>
+      <div className="px-4">
+        <Card>
+          <EmptyState title="直近7日間はまだ記録がありません" />
+        </Card>
+      </div>
     );
   }
 

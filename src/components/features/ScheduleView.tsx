@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { SegmentedControl } from "@/components/ui/segmented";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ScheduleCard } from "@/components/cards/ScheduleCard";
 import { SCHEDULE_TYPE_OPTIONS } from "@/lib/constants";
 import type { ScheduleWithMenus, Attendee, AttendanceStatusOrNone } from "@/types";
@@ -54,7 +55,7 @@ export function ScheduleView({
 
       <div className="px-4 pt-1 space-y-3">
         {filtered.length === 0 ? (
-          <p className="text-caption text-center py-16">今後の予定はまだ登録されていません。</p>
+          <EmptyState title="今後の予定はまだ登録されていません" />
         ) : (
           filtered.map((s) => (
             <ScheduleCard

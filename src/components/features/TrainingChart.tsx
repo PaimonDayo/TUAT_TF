@@ -12,8 +12,9 @@ import {
   format,
 } from "date-fns";
 import { ja } from "date-fns/locale";
-import { ChevronDown } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Disclosure } from "@/components/ui/disclosure";
+import { KeyValue } from "@/components/ui/key-value";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { INTENSITY_ORDER, INTENSITY_LABELS, CONDITIONS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -218,26 +219,14 @@ export function TrainingChart({ records }: { records: PracticeRecord[] }) {
               )}
             </div>
 
-            {/* 詳細トグル（▾のみ）。記録が無くても高さを確保 */}
-            <div className="h-6 flex items-center justify-center">
-              {hasText && (
-                <button
-                  onClick={() => setShowDetail((v) => !v)}
-                  aria-label={showDetail ? "詳細を閉じる" : "詳細を開く"}
-                  className="text-accent active:opacity-50"
-                >
-                  <ChevronDown
-                    size={20}
-                    className={cn("transition-transform", showDetail && "rotate-180")}
-                  />
-                </button>
-              )}
-            </div>
-
             {hasText && (
-              <>
-                {showDetail && (
-                  <div className="mt-1 space-y-2 border-t border-separator pt-2">
+              <Disclosure
+                title="詳細"
+                open={showDetail}
+                onOpenChange={setShowDetail}
+                className="mt-1"
+              >
+                  <div className="space-y-2">
                     {sel.records.map((r) => {
                       const cond = r.condition ? CONDITIONS[r.condition] : null;
                       return (
@@ -257,28 +246,20 @@ export function TrainingChart({ records }: { records: PracticeRecord[] }) {
                               {cond.symbol} {cond.label}
                             </p>
                           )}
-                          {r.result_text && <DetailLine label="結果" value={r.result_text} />}
-                          {r.strength_text && <DetailLine label="補強" value={r.strength_text} />}
-                          {r.memo && <DetailLine label="感想" value={r.memo} />}
+                          <dl>
+                            <KeyValue label="結果" value={r.result_text} />
+                            <KeyValue label="補強" value={r.strength_text} />
+                            <KeyValue label="感想" value={r.memo} />
+                          </dl>
                         </div>
                       );
                     })}
                   </div>
-                )}
-              </>
+              </Disclosure>
             )}
           </div>
         );
       })()}
     </Card>
-  );
-}
-
-function DetailLine({ label, value }: { label: string; value: string }) {
-  return (
-    <p className="text-muted2">
-      <span className="text-faint">{label}：</span>
-      <span className="whitespace-pre-wrap break-words">{value}</span>
-    </p>
   );
 }
