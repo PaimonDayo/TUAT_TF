@@ -69,7 +69,9 @@ export function TrainingChart({ records }: { records: PracticeRecord[] }) {
   }, [records, period]);
 
   const max = Math.max(...buckets.map((b) => b.total), 1);
-  const selIndex = selected ?? buckets.length - 1;
+  // 期間切替直後は前の選択番号が範囲外になりうるので必ず範囲内へ収める
+  const rawIndex = selected ?? buckets.length - 1;
+  const selIndex = rawIndex >= 0 && rawIndex < buckets.length ? rawIndex : buckets.length - 1;
   const sel = buckets[selIndex];
 
   // 期間切替・初期表示で右端（最新）までスクロール
