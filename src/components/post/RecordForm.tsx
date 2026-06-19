@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
 import { IntensityInput, type IntensityValues } from "@/components/features/IntensityInput";
-import { CalendarPicker } from "@/components/features/CalendarPicker";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -35,7 +34,6 @@ export function RecordForm({
   const editing = !!record;
 
   const [date, setDate] = useState(record?.recorded_date ?? format(new Date(), "yyyy-MM-dd"));
-  const [showCal, setShowCal] = useState(false);
   const [dist, setDist] = useState<IntensityValues>(
     record
       ? {
@@ -107,25 +105,7 @@ export function RecordForm({
       {/* 日付 */}
       <div>
         <p className="section-label mb-1.5">日付</p>
-        <button
-          type="button"
-          onClick={() => setShowCal((v) => !v)}
-          className="h-11 w-full rounded-xl bg-card border border-separator px-3 text-left text-[15px] flex items-center justify-between"
-        >
-          <span>{date}</span>
-          <span className="text-accent text-[13px]">{showCal ? "閉じる" : "変更"}</span>
-        </button>
-        {showCal && (
-          <div className="mt-2">
-            <CalendarPicker
-              value={date}
-              onChange={(d) => {
-                setDate(d);
-                setShowCal(false);
-              }}
-            />
-          </div>
-        )}
+        <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
       </div>
 
       {/* 強度別距離（中長距離のみ） */}
