@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
+import { format } from "date-fns";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ScheduleCard } from "@/components/cards/ScheduleCard";
@@ -53,22 +54,36 @@ export function ScheduleView({
         <SegmentedControl items={items} value={type} onChange={setType} />
       </div>
 
-      <div className="px-4 pt-1 space-y-3">
+      <div className="px-4 pt-1">
         {filtered.length === 0 ? (
           <EmptyState title="今後の予定はまだ登録されていません" />
         ) : (
-          filtered.map((s) => (
-            <ScheduleCard
-              key={s.id}
-              schedule={s}
-              canEditMenu={canEditMenu}
-              canManageAllMenus={canManageAllMenus}
-              canManage={canManage}
-              userId={userId}
-              myStatus={myStatusBySchedule[s.id] ?? "none"}
-              attendees={attendeesBySchedule[s.id] ?? []}
-            />
-          ))
+          filtered.map((s, index) => {
+            const monthKey = s.schedule_date.slice(0, 7);
+            const previousMonthKey = filtered[index - 1]?.schedule_date.slice(0, 7);
+            const startsMonth = monthKey !== previousMonthKey;
+
+            return (
+              <Fragment key={s.id}>
+                {startsMonth && (
+                  <h2 className={index === 0 ? "section-label mb-2" : "section-label mb-2 mt-7"}>
+                    {format(new Date(`${s.schedule_date}T00:00:00`), "yyyy年M月")}
+                  </h2>
+                )}
+                <div className="mb-3">
+                  <ScheduleCard
+                    schedule={s}
+                    canEditMenu={canEditMenu}
+                    canManageAllMenus={canManageAllMenus}
+                    canManage={canManage}
+                    userId={userId}
+                    myStatus={myStatusBySchedule[s.id] ?? "none"}
+                    attendees={attendeesBySchedule[s.id] ?? []}
+                  />
+                </div>
+              </Fragment>
+            );
+          })
         )}
       </div>
     </>

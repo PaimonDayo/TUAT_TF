@@ -36,7 +36,7 @@ export default async function HomePage() {
     getUserRecords(profile.id, sevenDaysAgo),
     getFeed(profile.id, "all", 3),
     getHomeNotices(profile.id),
-    getAttendanceSchedules(profile.blocks, perms.createSchedule, 8),
+    getAttendanceSchedules(profile.blocks, perms.createSchedule, 3),
   ]);
 
   const schedules = attSchedules as PracticeSchedule[];
