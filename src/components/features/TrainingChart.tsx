@@ -14,7 +14,7 @@ import {
 import { ja } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { SegmentedControl } from "@/components/ui/segmented";
-import { INTENSITY_ORDER, INTENSITY_LABELS } from "@/lib/constants";
+import { INTENSITY_ORDER, INTENSITY_LABELS, CONDITIONS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { PracticeRecord, Intensity } from "@/types";
 
@@ -27,6 +27,7 @@ interface Bucket {
   start: Date;
   by: Record<Intensity, number>;
   total: number;
+  records: PracticeRecord[];
 }
 
 function bucketStart(d: Date, period: Period): Date {
@@ -39,6 +40,7 @@ function bucketStart(d: Date, period: Period): Date {
 export function TrainingChart({ records }: { records: PracticeRecord[] }) {
   const [period, setPeriod] = useState<Period>("day");
   const [selected, setSelected] = useState<number | null>(null);
+  const [showDetail, setShowDetail] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const buckets = useMemo<Bucket[]>(() => {
@@ -48,7 +50,7 @@ export function TrainingChart({ records }: { records: PracticeRecord[] }) {
     for (let i = count - 1; i >= 0; i--) {
       const base =
         period === "day" ? subDays(now, i) : period === "week" ? subWeeks(now, i) : subMonths(now, i);
-      arr.push({ start: bucketStart(base, period), by: { low: 0, mid: 0, high: 0, speed: 0 }, total: 0 });
+      arr.push({ start: bucketStart(base, period), by: { low: 0, mid: 0, high: 0, speed: 0 }, total: 0, records: [] });
     }
     for (const r of records) {
       const start = bucketStart(new Date(r.recorded_date + "T00:00:00"), period);
@@ -58,6 +60,7 @@ export function TrainingChart({ records }: { records: PracticeRecord[] }) {
       b.by.mid += r.dist_mid;
       b.by.high += r.dist_high;
       b.by.speed += r.dist_speed;
+      b.records.push(r);
     }
     for (const b of arr) {
       b.total = Math.round((b.by.low + b.by.mid + b.by.high + b.by.speed) * 10) / 10;
@@ -72,6 +75,7 @@ export function TrainingChart({ records }: { records: PracticeRecord[] }) {
   // 期間切替・初期表示で右端（最新）までスクロール
   useEffect(() => {
     setSelected(null);
+    setShowDetail(false);
     const el = scrollRef.current;
     if (el) el.scrollLeft = el.scrollWidth;
   }, [period]);
@@ -122,7 +126,10 @@ export function TrainingChart({ records }: { records: PracticeRecord[] }) {
               return (
                 <button
                   key={i}
-                  onClick={() => setSelected(i)}
+                  onClick={() => {
+                    setSelected(i);
+                    setShowDetail(false);
+                  }}
                   className="shrink-0 w-6 h-full flex items-end justify-center"
                 >
                   {barH > 0 ? (
@@ -171,30 +178,87 @@ export function TrainingChart({ records }: { records: PracticeRecord[] }) {
         </div>
       </div>
 
-      {/* 選択した期間の内訳 */}
-      <div className="rounded-xl bg-bg p-3">
-        <div className="flex items-baseline justify-between mb-1.5">
-          <p className="text-[12px] font-semibold">{bucketLabel(sel, true)}</p>
-          <p className="text-[13px] font-bold tabular-nums">
-            {sel.total}
-            <span className="text-caption ml-0.5">km</span>
-          </p>
-        </div>
-        {sel.total > 0 ? (
-          <div className="flex flex-wrap gap-x-4 gap-y-1">
-            {INTENSITY_ORDER.map((k) =>
-              sel.by[k] > 0 ? (
-                <span key={k} className="flex items-center gap-1 text-[12px] text-muted2">
-                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: INTENSITY_LABELS[k].color }} />
-                  {INTENSITY_LABELS[k].label} {Math.round(sel.by[k] * 10) / 10}km
-                </span>
-              ) : null,
+      {/* 選択した期間の内訳（枠の高さは固定） */}
+      {(() => {
+        const hasText = sel.records.some(
+          (r) => r.result_text || r.strength_text || r.memo || r.condition,
+        );
+        return (
+          <div className="rounded-xl bg-bg p-3 min-h-[78px]">
+            <div className="flex items-baseline justify-between mb-1.5">
+              <p className="text-[12px] font-semibold">{bucketLabel(sel, true)}</p>
+              <p className="text-[13px] font-bold tabular-nums">
+                {sel.total}
+                <span className="text-caption ml-0.5">km</span>
+              </p>
+            </div>
+
+            {sel.total > 0 ? (
+              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                {INTENSITY_ORDER.map((k) =>
+                  sel.by[k] > 0 ? (
+                    <span key={k} className="flex items-center gap-1 text-[12px] text-muted2">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: INTENSITY_LABELS[k].color }} />
+                      {INTENSITY_LABELS[k].label} {Math.round(sel.by[k] * 10) / 10}km
+                    </span>
+                  ) : null,
+                )}
+              </div>
+            ) : (
+              !hasText && <p className="text-caption">この期間は記録がありません</p>
+            )}
+
+            {hasText && (
+              <>
+                <button
+                  onClick={() => setShowDetail((v) => !v)}
+                  className="mt-2 text-[12px] text-accent font-medium active:opacity-50"
+                >
+                  {showDetail ? "詳細を閉じる" : "詳細（結果・補強・感想）"}
+                </button>
+                {showDetail && (
+                  <div className="mt-2 space-y-2 border-t border-separator pt-2">
+                    {sel.records.map((r) => {
+                      const cond = r.condition ? CONDITIONS[r.condition] : null;
+                      return (
+                        <div key={r.id} className="text-[12px] space-y-0.5">
+                          {period !== "day" && (
+                            <p className="font-semibold flex items-center gap-1.5">
+                              {format(new Date(r.recorded_date + "T00:00:00"), "M/d(E)", { locale: ja })}
+                              {cond && (
+                                <span style={{ color: cond.color }}>
+                                  {cond.symbol} {cond.label}
+                                </span>
+                              )}
+                            </p>
+                          )}
+                          {period === "day" && cond && (
+                            <p className="font-semibold" style={{ color: cond.color }}>
+                              {cond.symbol} {cond.label}
+                            </p>
+                          )}
+                          {r.result_text && <DetailLine label="結果" value={r.result_text} />}
+                          {r.strength_text && <DetailLine label="補強" value={r.strength_text} />}
+                          {r.memo && <DetailLine label="感想" value={r.memo} />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </div>
-        ) : (
-          <p className="text-caption">この期間は記録がありません</p>
-        )}
-      </div>
+        );
+      })()}
     </Card>
+  );
+}
+
+function DetailLine({ label, value }: { label: string; value: string }) {
+  return (
+    <p className="text-muted2">
+      <span className="text-faint">{label}：</span>
+      <span className="whitespace-pre-wrap break-words">{value}</span>
+    </p>
   );
 }
