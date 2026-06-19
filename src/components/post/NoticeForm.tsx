@@ -12,7 +12,15 @@ import { NOTICE_CATEGORIES } from "@/lib/constants";
 import type { Notice, NoticeCategory } from "@/types";
 
 export function NoticeComposer({ autoOpen = false }: { autoOpen?: boolean }) {
+  const router = useRouter();
   const [open, setOpen] = useState(autoOpen);
+
+  // ?compose=1 で別画面（マイページ等）から開いた場合、閉じたら元の画面へ戻す。
+  function handleOpenChange(next: boolean) {
+    setOpen(next);
+    if (!next && autoOpen) router.back();
+  }
+
   return (
     <>
       <button
@@ -23,8 +31,8 @@ export function NoticeComposer({ autoOpen = false }: { autoOpen?: boolean }) {
         <Plus size={20} />
         投稿
       </button>
-      <FormModal open={open} onOpenChange={setOpen} title="お知らせを投稿">
-        <NoticeForm onDone={() => setOpen(false)} />
+      <FormModal open={open} onOpenChange={handleOpenChange} title="お知らせを投稿">
+        <NoticeForm onDone={() => handleOpenChange(false)} />
       </FormModal>
     </>
   );

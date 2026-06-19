@@ -25,7 +25,15 @@ const OTHER = "__other__";
 
 /** ヘッダー右の「＋作成」ボタン。?compose=1 で自動オープン（全画面モーダル） */
 export function ScheduleComposer({ autoOpen = false }: { autoOpen?: boolean }) {
+  const router = useRouter();
   const [open, setOpen] = useState(autoOpen);
+
+  // ?compose=1 で別画面（マイページ等）から開いた場合、閉じたら元の画面へ戻す。
+  // この画面のヘッダー「＋作成」から開いた場合はその場で閉じるだけ。
+  function handleOpenChange(next: boolean) {
+    setOpen(next);
+    if (!next && autoOpen) router.back();
+  }
 
   return (
     <>
@@ -37,8 +45,8 @@ export function ScheduleComposer({ autoOpen = false }: { autoOpen?: boolean }) {
         <Plus size={20} />
         作成
       </button>
-      <FormModal open={open} onOpenChange={setOpen} title="予定を作成">
-        <ScheduleCreatePanel onDone={() => setOpen(false)} />
+      <FormModal open={open} onOpenChange={handleOpenChange} title="予定を作成">
+        <ScheduleCreatePanel onDone={() => handleOpenChange(false)} />
       </FormModal>
     </>
   );
