@@ -105,15 +105,6 @@ export default async function MyPage({
               {perms.createNotice && (
                 <LinkCard href="/notices?compose=1" icon={<Bell size={20} className="text-warning" />} label="お知らせを投稿" />
               )}
-            </div>
-          </section>
-        )}
-
-        {/* その他（管理者・担当者向けの設定系） */}
-        {(perms.manageMembers || perms.createSchedule) && (
-          <section className="space-y-2">
-            <p className="section-label">その他</p>
-            <div className="space-y-2">
               {perms.manageMembers && (
                 <LinkCard href="/admin" icon={<Users size={20} className="text-accent" />} label="部員・ロール管理" />
               )}
