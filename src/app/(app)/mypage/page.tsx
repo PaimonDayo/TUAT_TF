@@ -105,11 +105,16 @@ export default async function MyPage({
               {perms.createNotice && (
                 <LinkCard href="/notices?compose=1" icon={<Bell size={20} className="text-warning" />} label="お知らせを投稿" />
               )}
-              {perms.manageMembers && (
-                <LinkCard href="/admin" icon={<Users size={20} className="text-accent" />} label="部員・ロール管理" />
-              )}
-              {perms.createSchedule && (
-                <LinkCard href="/venues" icon={<MapPin size={20} className="text-accent" />} label="練習場所の管理" />
+              {(perms.manageMembers || perms.createSchedule) && (
+                <div className="space-y-2 pt-2">
+                  <p className="section-label px-1">その他</p>
+                  {perms.manageMembers && (
+                    <LinkCard href="/admin" icon={<Users size={20} className="text-accent" />} label="部員・ロール管理" />
+                  )}
+                  {perms.createSchedule && (
+                    <LinkCard href="/venues" icon={<MapPin size={20} className="text-accent" />} label="練習場所の管理" />
+                  )}
+                </div>
               )}
             </div>
           </section>
