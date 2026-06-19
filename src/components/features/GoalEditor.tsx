@@ -54,7 +54,7 @@ export function GoalEditor({
 
   return (
     <>
-      <button onClick={openSheet} className="w-full text-left">
+      <button onClick={openSheet} className="block w-full text-left">
         <Card className="p-4 flex items-center gap-3 active:bg-bg">
           <Target size={20} className="text-accent" />
           <span className="flex-1 text-headline">目標</span>

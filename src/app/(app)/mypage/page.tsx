@@ -224,7 +224,7 @@ function ActivitySkeleton() {
 
 function LinkCard({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
   return (
-    <Link href={href} prefetch>
+    <Link href={href} prefetch className="block">
       <Card className="p-4 flex items-center gap-3 active:bg-bg">
         {icon}
         <span className="flex-1 text-headline">{label}</span>
