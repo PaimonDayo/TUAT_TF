@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Plus, Activity, MessageCircle, Trophy, CalendarPlus, ClipboardList, Bell } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { FullScreen, FullScreenContent } from "@/components/ui/fullscreen";
+import { FormModal } from "@/components/ui/form-modal";
 import { RecordForm } from "@/components/post/RecordForm";
 import { TweetForm } from "@/components/post/TweetForm";
 import { ScheduleForm } from "@/components/post/ScheduleForm";
@@ -11,7 +11,7 @@ import { NoticeForm } from "@/components/post/NoticeForm";
 import { MenuComposerForm } from "@/components/post/MenuForm";
 import { ResultForm } from "@/components/post/ResultForm";
 
-type Mode = "menu" | "record" | "tweet" | "result" | "pmenu" | "notice";
+type Mode = "menu" | "result" | "pmenu" | "notice";
 
 export type FabPermissions = {
   createSchedule: boolean;
@@ -31,6 +31,8 @@ export function FAB({
 }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("menu");
+  const [recordOpen, setRecordOpen] = useState(false);
+  const [tweetOpen, setTweetOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
 
   function openMenu() {
@@ -43,10 +45,14 @@ export function FAB({
     setTimeout(() => setMode("menu"), 250);
   }
 
+  function openForm(setFormOpen: (open: boolean) => void) {
+    setOpen(false);
+    setMode("menu");
+    setFormOpen(true);
+  }
+
   const titles: Record<Mode, string | undefined> = {
     menu: undefined,
-    record: "練習記録",
-    tweet: "つぶやき",
     result: "大会・記録会の結果",
     pmenu: "練習メニューを追加",
     notice: "お知らせを投稿",
@@ -71,14 +77,14 @@ export function FAB({
                 color="#007aff"
                 title="練習記録"
                 desc="距離・タイム・補強を記録"
-                onClick={() => setMode("record")}
+                onClick={() => openForm(setRecordOpen)}
               />
               <PostOption
                 icon={<MessageCircle size={22} />}
                 color="#34c759"
                 title="つぶやき"
                 desc="ひとことシェア（200字まで）"
-                onClick={() => setMode("tweet")}
+                onClick={() => openForm(setTweetOpen)}
               />
               <PostOption
                 icon={<Trophy size={22} />}
@@ -93,11 +99,7 @@ export function FAB({
                   color="#ff9500"
                   title="予定"
                   desc="練習・大会・記録会などの予定を作成"
-                  onClick={() => {
-                    setOpen(false);
-                    setMode("menu");
-                    setScheduleOpen(true);
-                  }}
+                  onClick={() => openForm(setScheduleOpen)}
                 />
               )}
               {can.createMenu && (
@@ -120,22 +122,27 @@ export function FAB({
               )}
             </div>
           )}
-          {mode === "record" && (
-            <RecordForm userId={userId} isMiddleLong={isMiddleLong} onDone={close} />
-          )}
-          {mode === "tweet" && <TweetForm onDone={close} />}
           {mode === "result" && <ResultForm userId={userId} onDone={() => close()} />}
           {mode === "pmenu" && <MenuComposerForm onDone={close} />}
           {mode === "notice" && <NoticeForm onDone={close} />}
         </SheetContent>
       </Sheet>
 
-      {/* 予定作成だけは全画面モーダル（種別切替でガクつかないように） */}
-      <FullScreen open={scheduleOpen} onOpenChange={setScheduleOpen}>
-        <FullScreenContent title="予定を作成">
-          <ScheduleForm onDone={() => setScheduleOpen(false)} />
-        </FullScreenContent>
-      </FullScreen>
+      <FormModal open={recordOpen} onOpenChange={setRecordOpen} title="練習記録">
+        <RecordForm
+          userId={userId}
+          isMiddleLong={isMiddleLong}
+          onDone={() => setRecordOpen(false)}
+        />
+      </FormModal>
+
+      <FormModal open={tweetOpen} onOpenChange={setTweetOpen} title="つぶやき">
+        <TweetForm onDone={() => setTweetOpen(false)} />
+      </FormModal>
+
+      <FormModal open={scheduleOpen} onOpenChange={setScheduleOpen} title="予定を作成">
+        <ScheduleForm onDone={() => setScheduleOpen(false)} />
+      </FormModal>
     </>
   );
 }
