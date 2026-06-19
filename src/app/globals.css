@@ -145,6 +145,15 @@ h1, h2, h3, p {
   animation: fade-in 0.18s ease-out;
 }
 
+@keyframes comment-pop {
+  from { opacity: 0; transform: translateY(-6px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.comment-pop {
+  transform-origin: top center;
+  animation: comment-pop 0.18s ease-out;
+}
+
 /* iOS の日付/時刻入力は内容ぶんの最小幅を持ち width:100% を無視してはみ出す。
    ネイティブ装飾を外し、枠内に収まるよう矯正する。 */
 input[type="date"],

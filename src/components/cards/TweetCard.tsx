@@ -7,18 +7,18 @@ import { Card } from "@/components/ui/card";
 import { PostActions } from "@/components/cards/PostActions";
 import { Linkify } from "@/components/common/Linkify";
 import { TweetOwnerMenu } from "@/components/cards/PostOwnerMenu";
-import type { TweetWithAuthor } from "@/types";
+import type { CommentAuthor, TweetWithAuthor } from "@/types";
 
 /** タイムライン用のつぶやきカード */
 export function TweetCard({
   tweet,
-  currentUserId,
+  currentUser,
 }: {
   tweet: TweetWithAuthor;
-  currentUserId?: string;
+  currentUser: CommentAuthor;
 }) {
   const { author } = tweet;
-  const isOwner = currentUserId === author.id;
+  const isOwner = currentUser.id === author.id;
 
   return (
     <Card className="p-4 space-y-2.5">
@@ -50,6 +50,7 @@ export function TweetCard({
         initialLikes={tweet.likes_count}
         initialLiked={tweet.liked_by_me ?? false}
         initialComments={tweet.comments_count ?? 0}
+        currentUser={currentUser}
       />
     </Card>
   );

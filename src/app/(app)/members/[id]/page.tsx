@@ -38,6 +38,11 @@ export default async function MemberPage({
     blocks: profile.blocks,
     grade: profile.grade,
   };
+  const currentUser = {
+    id: viewer.id,
+    display_name: viewer.display_name,
+    avatar_url: viewer.avatar_url,
+  };
 
   return (
     <>
@@ -89,7 +94,11 @@ export default async function MemberPage({
           ) : (
             <div className="space-y-3">
               {records.map((r) => (
-                <RecordCard key={r.id} record={{ ...r, author: authorMini } as RecordWithAuthor} />
+                <RecordCard
+                  key={r.id}
+                  record={{ ...r, author: authorMini } as RecordWithAuthor}
+                  currentUser={currentUser}
+                />
               ))}
             </div>
           )}

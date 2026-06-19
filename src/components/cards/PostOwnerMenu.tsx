@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { OwnerActionMenu } from "@/components/ui/owner-actions";
 import { RecordForm } from "@/components/post/RecordForm";
 import { TweetForm } from "@/components/post/TweetForm";
 import type { PracticeRecord } from "@/types";
@@ -20,36 +21,6 @@ function MenuButton({ onClick }: { onClick: () => void }) {
     >
       <MoreHorizontal size={20} />
     </button>
-  );
-}
-
-function DeleteAndEdit({
-  onEdit,
-  onDelete,
-  deleting,
-}: {
-  onEdit: () => void;
-  onDelete: () => void;
-  deleting: boolean;
-}) {
-  return (
-    <div className="space-y-2 pb-4">
-      <button
-        onClick={onEdit}
-        className="w-full flex items-center gap-3 rounded-xl bg-card border border-separator p-3.5 active:bg-bg"
-      >
-        <Pencil size={20} className="text-accent" />
-        <span className="text-headline">編集する</span>
-      </button>
-      <button
-        onClick={onDelete}
-        disabled={deleting}
-        className="w-full flex items-center gap-3 rounded-xl bg-card border border-separator p-3.5 active:bg-bg text-danger"
-      >
-        <Trash2 size={20} />
-        <span className="text-headline">{deleting ? "削除中…" : "削除する"}</span>
-      </button>
-    </div>
   );
 }
 
@@ -86,7 +57,7 @@ export function RecordOwnerMenu({
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent title={mode === "edit" ? "練習記録を編集" : undefined}>
           {mode === "menu" ? (
-            <DeleteAndEdit onEdit={() => setMode("edit")} onDelete={del} deleting={deleting} />
+            <OwnerActionMenu onEdit={() => setMode("edit")} onDelete={del} deleting={deleting} />
           ) : (
             <RecordForm
               userId={record.user_id}
@@ -128,7 +99,7 @@ export function TweetOwnerMenu({ tweet }: { tweet: { id: string; content: string
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent title={mode === "edit" ? "つぶやきを編集" : undefined}>
           {mode === "menu" ? (
-            <DeleteAndEdit onEdit={() => setMode("edit")} onDelete={del} deleting={deleting} />
+            <OwnerActionMenu onEdit={() => setMode("edit")} onDelete={del} deleting={deleting} />
           ) : (
             <TweetForm tweet={tweet} onDone={() => setOpen(false)} />
           )}
