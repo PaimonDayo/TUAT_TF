@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { FormModal } from "@/components/ui/form-modal";
 import { ProfileEditForm } from "@/components/features/ProfileEditForm";
 import type { Profile } from "@/types";
 
@@ -15,11 +15,7 @@ export function EditProfileButton({
   profile: Pick<Profile, "id" | "display_name" | "blocks" | "grade" | "avatar_url">;
   autoOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (autoOpen) setOpen(true);
-  }, [autoOpen]);
+  const [open, setOpen] = useState(autoOpen);
 
   return (
     <>
@@ -31,15 +27,13 @@ export function EditProfileButton({
         <Pencil size={18} />
         編集
       </button>
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent title="プロフィール">
-          <ProfileEditForm
-            profile={profile}
-            isSetup={autoOpen}
-            onDone={() => setOpen(false)}
-          />
-        </SheetContent>
-      </Sheet>
+      <FormModal open={open} onOpenChange={setOpen} title="プロフィール">
+        <ProfileEditForm
+          profile={profile}
+          isSetup={autoOpen}
+          onDone={() => setOpen(false)}
+        />
+      </FormModal>
     </>
   );
 }

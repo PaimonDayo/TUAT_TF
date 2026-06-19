@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { FormModal } from "@/components/ui/form-modal";
 
 /**
  * 目標（自由入力）の表示＆編集ボタン。
@@ -62,27 +62,25 @@ export function GoalEditor({
         </Card>
       </button>
 
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent title="目標を設定" autoFocus={false}>
-          <div className="space-y-4 pb-4">
-            <div>
-              <p className="section-label mb-1.5">目標（自由入力）</p>
-              <Textarea
-                rows={3}
-                placeholder="例: 関カレ出場 / 5000m 14分台 / 自己ベスト更新"
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                maxLength={100}
-              />
-              <p className="text-micro mt-1">プロフィールに表示され、何に向けて頑張っているか共有できます。</p>
-            </div>
-            {error && <p className="text-caption text-danger text-center">{error}</p>}
-            <Button size="lg" onClick={save} disabled={saving}>
-              {saving ? "保存中…" : "保存する"}
-            </Button>
+      <FormModal open={open} onOpenChange={setOpen} title="目標を設定" autoFocus={false}>
+        <div className="space-y-4 pb-4">
+          <div>
+            <p className="section-label mb-1.5">目標（自由入力）</p>
+            <Textarea
+              rows={3}
+              placeholder="例: 関カレ出場 / 5000m 14分台 / 自己ベスト更新"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              maxLength={100}
+            />
+            <p className="text-micro mt-1">プロフィールに表示され、何に向けて頑張っているか共有できます。</p>
           </div>
-        </SheetContent>
-      </Sheet>
+          {error && <p className="text-caption text-danger text-center">{error}</p>}
+          <Button size="lg" onClick={save} disabled={saving}>
+            {saving ? "保存中…" : "保存する"}
+          </Button>
+        </div>
+      </FormModal>
     </>
   );
 }
