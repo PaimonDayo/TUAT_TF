@@ -7,21 +7,24 @@ import { Card } from "@/components/ui/card";
 import { PostActions } from "@/components/cards/PostActions";
 import { Linkify } from "@/components/common/Linkify";
 import { TweetOwnerMenu } from "@/components/cards/PostOwnerMenu";
+import { cn } from "@/lib/utils";
 import type { CommentAuthor, TweetWithAuthor } from "@/types";
 
-/** タイムライン用のつぶやきカード */
+/** タイムライン用のつぶやきカード。compact=簡易表示（本文を2行に省略） */
 export function TweetCard({
   tweet,
   currentUser,
+  compact = false,
 }: {
   tweet: TweetWithAuthor;
   currentUser: CommentAuthor;
+  compact?: boolean;
 }) {
   const { author } = tweet;
   const isOwner = currentUser.id === author.id;
 
   return (
-    <Card className="p-4 space-y-2.5">
+    <Card className={cn("p-4 space-y-2.5", compact && "p-3 space-y-1.5")}>
       <div className="flex items-center gap-2.5">
         <Link href={`/members/${author.id}`}>
           <Avatar name={author.display_name} blocks={author.blocks} avatarUrl={author.avatar_url} size="sm" />
@@ -40,18 +43,20 @@ export function TweetCard({
         {isOwner && <TweetOwnerMenu tweet={{ id: tweet.id, content: tweet.content }} />}
       </div>
 
-      <p className="text-[15px] whitespace-pre-wrap break-words">
+      <p className={cn("text-[15px] break-words", compact ? "line-clamp-2" : "whitespace-pre-wrap")}>
         <Linkify text={tweet.content} />
       </p>
 
-      <PostActions
-        targetType="tweet"
-        targetId={tweet.id}
-        initialLikes={tweet.likes_count}
-        initialLiked={tweet.liked_by_me ?? false}
-        initialComments={tweet.comments_count ?? 0}
-        currentUser={currentUser}
-      />
+      {!compact && (
+        <PostActions
+          targetType="tweet"
+          targetId={tweet.id}
+          initialLikes={tweet.likes_count}
+          initialLiked={tweet.liked_by_me ?? false}
+          initialComments={tweet.comments_count ?? 0}
+          currentUser={currentUser}
+        />
+      )}
     </Card>
   );
 }

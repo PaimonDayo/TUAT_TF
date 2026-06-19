@@ -66,8 +66,7 @@ export default async function HomePage() {
 
       <div className="px-4 space-y-5 pt-1">
         <p className="text-body text-muted">
-          {format(new Date(), "M月d日 (E)", { locale: ja })} ・ こんにちは、
-          {profile.display_name || "部員"}さん
+          {format(new Date(), "M月d日 (E)", { locale: ja })}
         </p>
 
         {/* 重要なお知らせ */}

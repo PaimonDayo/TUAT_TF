@@ -9,23 +9,28 @@ import { IntensityBar } from "@/components/features/IntensityBar";
 import { PostActions } from "@/components/cards/PostActions";
 import { RecordOwnerMenu } from "@/components/cards/PostOwnerMenu";
 import { CONDITIONS, gradeShort } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 import type { CommentAuthor, RecordWithAuthor } from "@/types";
 
-/** タイムライン用の練習記録カード */
+/** タイムライン用の練習記録カード。compact=簡易表示（テキスト詳細を畳む） */
 export function RecordCard({
   record,
   currentUser,
+  compact = false,
 }: {
   record: RecordWithAuthor;
   currentUser: CommentAuthor;
+  compact?: boolean;
 }) {
   const { author } = record;
   const cond = record.condition ? CONDITIONS[record.condition] : null;
   const isOwner = currentUser.id === author.id;
   const gradeLabel = gradeShort(author.grade);
+  const totalDistance =
+    record.dist_low + record.dist_mid + record.dist_high + record.dist_speed;
 
   return (
-    <Card className="p-4 space-y-3">
+    <Card className={cn("space-y-3 p-4", compact && "space-y-2 p-3")}>
       {/* ヘッダー */}
       <div className="flex items-center gap-2.5">
         <Link href={`/members/${author.id}`}>
@@ -62,14 +67,22 @@ export function RecordCard({
         )}
       </div>
 
-      {/* 距離バー */}
-      <IntensityBar record={record} />
-      {record.strides > 0 && (
+      {/* 距離 */}
+      {compact ? (
+        totalDistance > 0 && (
+          <p className="text-[13px] font-semibold text-muted2 tabular-nums">
+            走行距離 {Math.round(totalDistance * 10) / 10}km
+          </p>
+        )
+      ) : (
+        <IntensityBar record={record} />
+      )}
+      {!compact && record.strides > 0 && (
         <p className="text-[12px] text-muted2">流し {record.strides}本</p>
       )}
 
-      {/* テキスト各種 */}
-      {(record.result_text || record.strength_text || record.memo) && (
+      {/* テキスト各種（簡易表示では畳む） */}
+      {!compact && (record.result_text || record.strength_text || record.memo) && (
         <dl>
           <KeyValue label="結果・タイム" value={record.result_text} />
           <KeyValue label="補強" value={record.strength_text} />
@@ -77,14 +90,16 @@ export function RecordCard({
         </dl>
       )}
 
-      <PostActions
-        targetType="record"
-        targetId={record.id}
-        initialLikes={record.likes_count}
-        initialLiked={record.liked_by_me ?? false}
-        initialComments={record.comments_count ?? 0}
-        currentUser={currentUser}
-      />
+      {!compact && (
+        <PostActions
+          targetType="record"
+          targetId={record.id}
+          initialLikes={record.likes_count}
+          initialLiked={record.liked_by_me ?? false}
+          initialComments={record.comments_count ?? 0}
+          currentUser={currentUser}
+        />
+      )}
     </Card>
   );
 }
