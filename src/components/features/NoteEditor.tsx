@@ -71,7 +71,7 @@ export function NoteEditorButton({
   );
 }
 
-function NoteEditor({
+export function NoteEditor({
   currentUser,
   members,
   themes: initialThemes,
@@ -92,7 +92,7 @@ function NoteEditor({
   const ownsNote = !note || note.author_id === currentUser.id;
   const canManagePermissions = ownsNote || isAdmin;
   const [scope, setScope] = useState<NoteScope>(note?.scope ?? initialScope);
-  const [themes, setThemes] = useState(initialThemes);
+  const [themes] = useState(initialThemes);
   const [themeId, setThemeId] = useState(note?.theme_id ?? initialThemes[0]?.id ?? "");
   const [title, setTitle] = useState(note?.title ?? "");
   const [body, setBody] = useState(note?.body ?? "");
@@ -103,33 +103,8 @@ function NoteEditor({
   const [editorIds, setEditorIds] = useState(
     note?.editors?.map((editor) => editor.user_id) ?? [],
   );
-  const [newTheme, setNewTheme] = useState("");
-  const [savingTheme, setSavingTheme] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  async function createTheme() {
-    const name = newTheme.trim();
-    if (!name || savingTheme) return;
-    setSavingTheme(true);
-    setError(null);
-    const supabase = createClient();
-    const { data, error: themeError } = await supabase
-      .from("note_themes")
-      .insert({ name, created_by: currentUser.id })
-      .select("*")
-      .single();
-    if (themeError || !data) {
-      console.error("Failed to create note theme", themeError);
-      setError("テーマを追加できませんでした");
-    } else {
-      const theme = data as NoteTheme;
-      setThemes((items) => [...items, theme]);
-      setThemeId(theme.id);
-      setNewTheme("");
-    }
-    setSavingTheme(false);
-  }
 
   function toggleEditor(userId: string) {
     setEditorIds((ids) =>
@@ -143,7 +118,7 @@ function NoteEditor({
       return;
     }
     if (scope === "shared" && !themeId) {
-      setError("共有ノートのテーマを選択してください");
+      setError("共有ノートのフォルダを選択してください");
       return;
     }
     if (
@@ -244,11 +219,11 @@ function NoteEditor({
       {scope === "shared" && canManagePermissions && (
         <>
           <div>
-            <p className="section-label mb-1.5">テーマ</p>
+            <p className="section-label mb-1.5">フォルダ</p>
             <p className="text-micro mb-2">
-              共有ノートを整理するフォルダです。例: 大会、怪我予防、短距離
+              共有ノートを整理する場所です。例: 大会、怪我予防、短距離
             </p>
-            {themes.length > 0 && (
+            {themes.length > 0 ? (
               <select
                 value={themeId}
                 onChange={(event) => setThemeId(event.target.value)}
@@ -260,24 +235,11 @@ function NoteEditor({
                   </option>
                 ))}
               </select>
+            ) : (
+              <p className="rounded-xl border border-separator bg-bg p-3 text-caption">
+                先に右下の作成メニューからフォルダを作成してください。
+              </p>
             )}
-            <div className="mt-2 flex gap-2">
-              <Input
-                value={newTheme}
-                onChange={(event) => setNewTheme(event.target.value)}
-                placeholder="新しいテーマ名"
-                maxLength={40}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                className="h-11 shrink-0 px-3"
-                disabled={!newTheme.trim() || savingTheme}
-                onClick={createTheme}
-              >
-                追加
-              </Button>
-            </div>
           </div>
 
           <div>

@@ -1,7 +1,7 @@
 import { Header } from "@/components/layout/Header";
 import { NotesView } from "@/components/features/NotesView";
 import { getCurrentProfile } from "@/lib/supabase/auth";
-import { getMembersList, getNotesData } from "@/lib/queries";
+import { getNotesData } from "@/lib/queries";
 import { permissionsOf } from "@/lib/permissions";
 
 export default async function NotesPage({
@@ -9,10 +9,9 @@ export default async function NotesPage({
 }: {
   searchParams: Promise<{ mine?: string }>;
 }) {
-  const [{ mine }, profile, members, data] = await Promise.all([
+  const [{ mine }, profile, data] = await Promise.all([
     searchParams,
     getCurrentProfile(),
-    getMembersList(),
     getNotesData(),
   ]);
   const permissions = permissionsOf(profile.roles);
@@ -28,7 +27,6 @@ export default async function NotesPage({
           blocks: profile.blocks,
           grade: profile.grade,
         }}
-        members={members}
         themes={data.themes}
         notes={data.notes}
         isAdmin={permissions.manageMembers}

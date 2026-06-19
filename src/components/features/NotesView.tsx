@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BookOpen, ChevronRight, FileText } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
-import { NoteEditorButton } from "@/components/features/NoteEditor";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,14 +26,12 @@ const UNASSIGNED_THEME = "__unassigned__";
 
 export function NotesView({
   currentUser,
-  members,
   themes,
   notes,
   isAdmin,
   mine = false,
 }: {
   currentUser: AuthorMini;
-  members: AuthorMini[];
   themes: NoteTheme[];
   notes: NoteWithRelations[];
   isAdmin: boolean;
@@ -43,7 +40,7 @@ export function NotesView({
   const router = useRouter();
   const [scope, setScope] = useState<NoteScope>("shared");
   const [themeId, setThemeId] = useState<string | null>(null);
-  const [themeForm, setThemeForm] = useState<NoteTheme | "new" | null>(null);
+  const [themeForm, setThemeForm] = useState<NoteTheme | null>(null);
   const visibleNotes = useMemo(
     () =>
       notes.filter((note) => {
@@ -75,27 +72,12 @@ export function NotesView({
         }}
       />
 
-      <div className="flex justify-end gap-2">
-        {scope === "shared" && !themeId && (
-          <Button type="button" variant="outline" onClick={() => setThemeForm("new")}>
-            テーマ追加
-          </Button>
-        )}
-        <NoteEditorButton
-          currentUser={currentUser}
-          members={members}
-          themes={themes}
-          isAdmin={isAdmin}
-          initialScope={scope}
-        />
-      </div>
-
       {scope === "shared" && !themeId && (
         <div className="space-y-2">
           {themes.length === 0 ? (
             <EmptyState
-              title="共有テーマがありません"
-              description="新しいノートの作成画面からテーマを追加できます。"
+              title="共有フォルダがありません"
+              description="右下の作成メニューからフォルダを作成できます。"
             />
           ) : (
             themes.map((theme) => {
@@ -133,8 +115,8 @@ export function NotesView({
                         router.refresh();
                         return true;
                       }}
-                      deleteTitle="テーマを削除しますか？"
-                      deleteDescription="記事は削除されず、テーマ未設定になります。"
+                      deleteTitle="フォルダを削除しますか？"
+                      deleteDescription="ノートは削除されず、フォルダ未設定になります。"
                     />
                   )}
                 </Card>
@@ -149,7 +131,7 @@ export function NotesView({
             >
               <Card className="flex items-center gap-3 p-4 active:bg-bg">
                 <BookOpen size={20} className="shrink-0 text-muted2" />
-                <p className="min-w-0 flex-1 text-headline">テーマ未設定</p>
+                <p className="min-w-0 flex-1 text-headline">フォルダ未設定</p>
                 <Badge>{unassignedNotes.length}件</Badge>
                 <ChevronRight size={18} className="text-muted" />
               </Card>
@@ -165,11 +147,11 @@ export function NotesView({
             onClick={() => setThemeId(null)}
             className="text-[13px] font-medium text-accent"
           >
-            共有テーマに戻る
+            共有フォルダに戻る
           </button>
           <h2 className="text-title">
             {themeId === UNASSIGNED_THEME
-              ? "テーマ未設定"
+              ? "フォルダ未設定"
               : selectedTheme?.name ?? "共有ノート"}
           </h2>
           <NoteList notes={themeNotes} currentUserId={currentUser.id} />
@@ -184,11 +166,11 @@ export function NotesView({
         <FormModal
           open
           onOpenChange={(open) => !open && setThemeForm(null)}
-          title={themeForm === "new" ? "テーマを追加" : "テーマを編集"}
+          title="フォルダを編集"
         >
-          <ThemeForm
+          <FolderForm
             currentUserId={currentUser.id}
-            theme={themeForm === "new" ? undefined : themeForm}
+            theme={themeForm}
             onDone={() => {
               setThemeForm(null);
               router.refresh();
@@ -200,7 +182,7 @@ export function NotesView({
   );
 }
 
-function ThemeForm({
+export function FolderForm({
   currentUserId,
   theme,
   onDone,
@@ -216,7 +198,7 @@ function ThemeForm({
 
   async function submit() {
     if (!name.trim()) {
-      setError("テーマ名を入力してください");
+      setError("フォルダ名を入力してください");
       return;
     }
     setSaving(true);
@@ -232,7 +214,7 @@ function ThemeForm({
           .from("note_themes")
           .insert({ ...payload, created_by: currentUserId });
     if (saveError) {
-      setError("テーマを保存できませんでした");
+      setError("フォルダを保存できませんでした");
       setSaving(false);
       return;
     }
@@ -242,7 +224,7 @@ function ThemeForm({
   return (
     <div className="space-y-4 pb-4">
       <div>
-        <p className="section-label mb-1.5">テーマ名</p>
+        <p className="section-label mb-1.5">フォルダ名</p>
         <Input value={name} onChange={(event) => setName(event.target.value)} maxLength={40} />
       </div>
       <div>

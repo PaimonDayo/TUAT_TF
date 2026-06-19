@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Activity, MessageCircle, Trophy, CalendarPlus, ClipboardList, Bell } from "lucide-react";
+import { Plus, Activity, MessageCircle, Trophy, CalendarPlus, ClipboardList, Bell, BookOpen, FolderPlus, ChevronLeft } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { FormModal } from "@/components/ui/form-modal";
 import { RecordForm } from "@/components/post/RecordForm";
@@ -10,22 +10,27 @@ import { ScheduleCreatePanel } from "@/components/post/ScheduleForm";
 import { NoticeForm } from "@/components/post/NoticeForm";
 import { MenuComposerForm } from "@/components/post/MenuForm";
 import { ResultForm } from "@/components/post/ResultForm";
+import { FolderComposer, NoteComposer } from "@/components/features/NoteComposer";
+import type { AuthorMini } from "@/types";
 
-type Mode = "menu";
+type Mode = "menu" | "note";
 
 export type FabPermissions = {
   createSchedule: boolean;
   createMenu: boolean;
   createNotice: boolean;
+  manageMembers: boolean;
 };
 
 /** 右下のフローティング投稿ボタン。権限に応じて作成できる種別を出し分ける */
 export function FAB({
   userId,
+  currentUser,
   isMiddleLong,
   can,
 }: {
   userId: string;
+  currentUser: AuthorMini;
   isMiddleLong: boolean;
   can: FabPermissions;
 }) {
@@ -37,6 +42,8 @@ export function FAB({
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [folderOpen, setFolderOpen] = useState(false);
 
   function openMenu() {
     setMode("menu");
@@ -56,6 +63,7 @@ export function FAB({
 
   const titles: Record<Mode, string | undefined> = {
     menu: undefined,
+    note: "ノート",
   };
 
   return (
@@ -78,6 +86,13 @@ export function FAB({
                 title="練習記録"
                 desc="距離・タイム・補強を記録"
                 onClick={() => openForm(setRecordOpen)}
+              />
+              <PostOption
+                icon={<BookOpen size={22} />}
+                color="#5856d6"
+                title="ノート"
+                desc="ノートや共有フォルダを作成"
+                onClick={() => setMode("note")}
               />
               <PostOption
                 icon={<MessageCircle size={22} />}
@@ -122,6 +137,32 @@ export function FAB({
               )}
             </div>
           )}
+          {mode === "note" && (
+            <div className="space-y-2 pb-4">
+              <button
+                type="button"
+                onClick={() => setMode("menu")}
+                className="mb-1 inline-flex h-9 items-center gap-1 text-[13px] font-medium text-accent"
+              >
+                <ChevronLeft size={17} />
+                作成メニュー
+              </button>
+              <PostOption
+                icon={<BookOpen size={22} />}
+                color="#5856d6"
+                title="ノートを作成"
+                desc="共有ノートまたは個人ノートを書く"
+                onClick={() => openForm(setNoteOpen)}
+              />
+              <PostOption
+                icon={<FolderPlus size={22} />}
+                color="#34c759"
+                title="フォルダを作成"
+                desc="共有ノートを分類するフォルダ"
+                onClick={() => openForm(setFolderOpen)}
+              />
+            </div>
+          )}
         </SheetContent>
       </Sheet>
 
@@ -155,6 +196,18 @@ export function FAB({
 
       <FormModal open={menuOpen} onOpenChange={setMenuOpen} title="練習メニューを追加">
         <MenuComposerForm onDone={() => setMenuOpen(false)} />
+      </FormModal>
+
+      <FormModal open={noteOpen} onOpenChange={setNoteOpen} title="ノートを作成">
+        <NoteComposer
+          currentUser={currentUser}
+          isAdmin={can.manageMembers}
+          onDone={() => setNoteOpen(false)}
+        />
+      </FormModal>
+
+      <FormModal open={folderOpen} onOpenChange={setFolderOpen} title="フォルダを作成">
+        <FolderComposer userId={userId} onDone={() => setFolderOpen(false)} />
       </FormModal>
     </>
   );

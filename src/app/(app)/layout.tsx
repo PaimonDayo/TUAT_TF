@@ -19,11 +19,19 @@ export default async function AppLayout({
       {children}
       <FAB
         userId={profile.id}
+        currentUser={{
+          id: profile.id,
+          display_name: profile.display_name,
+          avatar_url: profile.avatar_url,
+          blocks: profile.blocks,
+          grade: profile.grade,
+        }}
         isMiddleLong={profile.blocks?.includes("middle_long") ?? false}
         can={{
           createSchedule: perms.createSchedule,
           createMenu: perms.createMenu,
           createNotice: perms.createNotice,
+          manageMembers: perms.manageMembers,
         }}
       />
       <BottomNav />
