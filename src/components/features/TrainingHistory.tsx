@@ -13,6 +13,7 @@ import { ja } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { INTENSITY_ORDER, INTENSITY_LABELS } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 import type { PracticeRecord, Intensity } from "@/types";
 
 type Period = "week" | "month";
@@ -28,6 +29,7 @@ interface Bucket {
 /** Appleヘルスケア風：過去の練習量（週/月）の推移グラフ */
 export function TrainingHistory({ records }: { records: PracticeRecord[] }) {
   const [period, setPeriod] = useState<Period>("week");
+  const [selected, setSelected] = useState(COUNT - 1);
 
   const buckets = useMemo<Bucket[]>(() => {
     const now = new Date();
@@ -93,34 +95,41 @@ export function TrainingHistory({ records }: { records: PracticeRecord[] }) {
         </div>
       </div>
 
-      {/* 棒グラフ */}
+      {/* 棒グラフ（固定枠＋丸い塗り。タップで内訳） */}
       <div className="flex items-end justify-between gap-1" style={{ height: `${AREA}px` }}>
         {buckets.map((b, i) => {
-          const barH = b.total > 0 ? Math.max((b.total / max) * AREA, 5) : 0;
-          const isLast = i === buckets.length - 1;
+          const barH = b.total > 0 ? Math.max((b.total / max) * AREA, 8) : 0;
+          const isSel = i === selected;
           return (
-            <div key={i} className="flex-1 flex flex-col items-center justify-end h-full">
-              {barH > 0 ? (
-                <div
-                  className="w-full max-w-6 flex flex-col-reverse rounded-t-full overflow-hidden"
-                  style={{ height: `${barH}px`, opacity: isLast ? 1 : 0.92 }}
-                >
-                  {INTENSITY_ORDER.map((k) =>
-                    b.by[k] > 0 ? (
-                      <div
-                        key={k}
-                        style={{
-                          height: `${(b.by[k] / b.total) * 100}%`,
-                          backgroundColor: INTENSITY_LABELS[k].color,
-                        }}
-                      />
-                    ) : null,
-                  )}
-                </div>
-              ) : (
-                <div className="w-full max-w-6 h-[3px] rounded-full bg-separator" />
-              )}
-            </div>
+            <button
+              key={i}
+              onClick={() => setSelected(i)}
+              className="flex-1 h-full flex items-end justify-center"
+            >
+              <div
+                className={cn("relative w-full max-w-6 rounded-full bg-bg", isSel && "ring-2 ring-accent/40")}
+                style={{ height: `${AREA}px` }}
+              >
+                {barH > 0 && (
+                  <div
+                    className="absolute bottom-0 inset-x-0 rounded-full overflow-hidden flex flex-col-reverse"
+                    style={{ height: `${barH}px`, opacity: isSel ? 1 : 0.85 }}
+                  >
+                    {INTENSITY_ORDER.map((k) =>
+                      b.by[k] > 0 ? (
+                        <div
+                          key={k}
+                          style={{
+                            height: `${(b.by[k] / b.total) * 100}%`,
+                            backgroundColor: INTENSITY_LABELS[k].color,
+                          }}
+                        />
+                      ) : null,
+                    )}
+                  </div>
+                )}
+              </div>
+            </button>
           );
         })}
       </div>
@@ -132,7 +141,7 @@ export function TrainingHistory({ records }: { records: PracticeRecord[] }) {
           return (
             <div key={i} className="flex-1 text-center">
               {show && (
-                <span className="text-[9px] text-muted2">
+                <span className={cn("text-[9px]", i === selected ? "text-accent font-bold" : "text-muted2")}>
                   {period === "week"
                     ? format(b.start, "M/d", { locale: ja })
                     : format(b.start, "M月", { locale: ja })}
@@ -142,6 +151,40 @@ export function TrainingHistory({ records }: { records: PracticeRecord[] }) {
           );
         })}
       </div>
+
+      {/* 選択期間の内訳 */}
+      {(() => {
+        const b = buckets[selected];
+        const label =
+          period === "week"
+            ? `${format(b.start, "M/d", { locale: ja })}の週`
+            : format(b.start, "yyyy年M月", { locale: ja });
+        return (
+          <div className="rounded-xl bg-bg p-3">
+            <div className="flex items-baseline justify-between mb-1.5">
+              <p className="text-[12px] font-semibold">{label}</p>
+              <p className="text-[13px] font-bold tabular-nums">
+                {b.total}
+                <span className="text-caption ml-0.5">km</span>
+              </p>
+            </div>
+            {b.total > 0 ? (
+              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                {INTENSITY_ORDER.map((k) =>
+                  b.by[k] > 0 ? (
+                    <span key={k} className="flex items-center gap-1 text-[12px] text-muted2">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: INTENSITY_LABELS[k].color }} />
+                      {INTENSITY_LABELS[k].label} {Math.round(b.by[k] * 10) / 10}km
+                    </span>
+                  ) : null,
+                )}
+              </div>
+            ) : (
+              <p className="text-caption">この期間は記録がありません</p>
+            )}
+          </div>
+        );
+      })()}
     </Card>
   );
 }

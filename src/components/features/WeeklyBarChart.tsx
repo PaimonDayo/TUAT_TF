@@ -1,36 +1,44 @@
+"use client";
+
+import { useState } from "react";
 import { addDays, format, isSameDay, startOfDay } from "date-fns";
 import { ja } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { INTENSITY_ORDER, INTENSITY_LABELS } from "@/lib/constants";
-import type { PracticeRecord } from "@/types";
+import { cn } from "@/lib/utils";
+import type { PracticeRecord, Intensity } from "@/types";
 
-/** 直近7日間の日別走行距離を、強度別の色で積み上げ表示 */
+const BAR_AREA = 88;
+
+/** 直近7日間の日別走行距離。棒をタップで強度別の内訳を表示 */
 export function WeeklyBarChart({ records }: { records: PracticeRecord[] }) {
   const today = startOfDay(new Date());
-  // 古い順（左）→ 今日（右）
   const days = Array.from({ length: 7 }, (_, i) => addDays(today, -6 + i));
 
   const dayData = days.map((d) => {
     const dayRecords = records.filter((r) =>
       isSameDay(new Date(r.recorded_date + "T00:00:00"), d),
     );
-    const byIntensity = {
+    const by: Record<Intensity, number> = {
       low: sum(dayRecords, "dist_low"),
       mid: sum(dayRecords, "dist_mid"),
       high: sum(dayRecords, "dist_high"),
       speed: sum(dayRecords, "dist_speed"),
     };
-    const total = INTENSITY_ORDER.reduce((s, k) => s + byIntensity[k], 0);
-    return { date: d, byIntensity, total: Math.round(total * 10) / 10 };
+    const total = Math.round(INTENSITY_ORDER.reduce((s, k) => s + by[k], 0) * 10) / 10;
+    return { date: d, by, total };
   });
 
   const max = Math.max(...dayData.map((d) => d.total), 1);
   const grandTotal = Math.round(dayData.reduce((s, d) => s + d.total, 0) * 10) / 10;
-  const BAR_AREA = 80; // px
+
+  // 既定は今日を選択
+  const [selected, setSelected] = useState(6);
+  const sel = dayData[selected];
 
   return (
-    <Card className="p-4">
-      <div className="flex items-baseline justify-between mb-1">
+    <Card className="p-4 space-y-3">
+      <div className="flex items-baseline justify-between">
         <p className="section-label">直近7日間の走行距離</p>
         <p className="text-headline tabular-nums">
           {grandTotal}
@@ -38,64 +46,95 @@ export function WeeklyBarChart({ records }: { records: PracticeRecord[] }) {
         </p>
       </div>
 
-      {/* 凡例 */}
-      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mb-3">
-        {INTENSITY_ORDER.map((k) => (
-          <span key={k} className="flex items-center gap-1 text-[10px] text-muted2">
-            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: INTENSITY_LABELS[k].color }} />
-            {INTENSITY_LABELS[k].label}
-          </span>
-        ))}
-      </div>
-
-      {/* 棒グラフ（棒の高さ＝量。上を丸く。空の枠は描かない） */}
+      {/* 棒グラフ（固定枠の中に下から積む。塗りの上は丸く） */}
       <div className="flex items-end justify-between gap-2" style={{ height: `${BAR_AREA}px` }}>
         {dayData.map((d, i) => {
-          const barH = d.total > 0 ? Math.max((d.total / max) * BAR_AREA, 6) : 0;
+          const barH = d.total > 0 ? Math.max((d.total / max) * BAR_AREA, 8) : 0;
+          const isSel = i === selected;
           return (
-            <div key={i} className="flex-1 flex flex-col items-center justify-end h-full">
-              <span className="text-micro tabular-nums mb-1">{d.total > 0 ? d.total : ""}</span>
-              {barH > 0 ? (
-                <div
-                  className="w-full max-w-7 flex flex-col-reverse rounded-t-full overflow-hidden"
-                  style={{ height: `${barH}px` }}
-                >
-                  {INTENSITY_ORDER.map((k) =>
-                    d.byIntensity[k] > 0 ? (
-                      <div
-                        key={k}
-                        style={{
-                          height: `${(d.byIntensity[k] / d.total) * 100}%`,
-                          backgroundColor: INTENSITY_LABELS[k].color,
-                        }}
-                      />
-                    ) : null,
-                  )}
-                </div>
-              ) : (
-                <div className="w-full max-w-7 h-[3px] rounded-full bg-separator" />
-              )}
-            </div>
+            <button
+              key={i}
+              onClick={() => setSelected(i)}
+              className="flex-1 h-full flex items-end justify-center"
+            >
+              <div
+                className={cn(
+                  "relative w-full max-w-7 rounded-full bg-bg transition-all",
+                  isSel && "ring-2 ring-accent/40",
+                )}
+                style={{ height: `${BAR_AREA}px` }}
+              >
+                {barH > 0 && (
+                  <div
+                    className="absolute bottom-0 inset-x-0 rounded-full overflow-hidden flex flex-col-reverse"
+                    style={{ height: `${barH}px`, opacity: isSel ? 1 : 0.85 }}
+                  >
+                    {INTENSITY_ORDER.map((k) =>
+                      d.by[k] > 0 ? (
+                        <div
+                          key={k}
+                          style={{
+                            height: `${(d.by[k] / d.total) * 100}%`,
+                            backgroundColor: INTENSITY_LABELS[k].color,
+                          }}
+                        />
+                      ) : null,
+                    )}
+                  </div>
+                )}
+              </div>
+            </button>
           );
         })}
       </div>
 
-      {/* 曜日・日付ラベル */}
-      <div className="flex justify-between gap-2 mt-1.5">
+      {/* 曜日ラベル */}
+      <div className="flex justify-between gap-2">
         {dayData.map((d, i) => {
-          const today_ = isSameDay(d.date, new Date());
+          const isSel = i === selected;
           return (
-            <div key={i} className="flex-1 flex flex-col items-center leading-none gap-0.5">
+            <button
+              key={i}
+              onClick={() => setSelected(i)}
+              className="flex-1 flex flex-col items-center leading-none gap-0.5"
+            >
               <span
                 className="text-[11px]"
-                style={{ color: today_ ? "#007aff" : "#8e8e93", fontWeight: today_ ? 700 : 400 }}
+                style={{ color: isSel ? "#007aff" : "#8e8e93", fontWeight: isSel ? 700 : 400 }}
               >
                 {format(d.date, "E", { locale: ja })}
               </span>
               <span className="text-micro">{format(d.date, "d")}</span>
-            </div>
+            </button>
           );
         })}
+      </div>
+
+      {/* 選択日の内訳 */}
+      <div className="rounded-xl bg-bg p-3">
+        <div className="flex items-baseline justify-between mb-1.5">
+          <p className="text-[12px] font-semibold">
+            {format(sel.date, "M月d日(E)", { locale: ja })}
+          </p>
+          <p className="text-[13px] font-bold tabular-nums">
+            {sel.total}
+            <span className="text-caption ml-0.5">km</span>
+          </p>
+        </div>
+        {sel.total > 0 ? (
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {INTENSITY_ORDER.map((k) =>
+              sel.by[k] > 0 ? (
+                <span key={k} className="flex items-center gap-1 text-[12px] text-muted2">
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: INTENSITY_LABELS[k].color }} />
+                  {INTENSITY_LABELS[k].label} {Math.round(sel.by[k] * 10) / 10}km
+                </span>
+              ) : null,
+            )}
+          </div>
+        ) : (
+          <p className="text-caption">この日は記録がありません</p>
+        )}
       </div>
     </Card>
   );
