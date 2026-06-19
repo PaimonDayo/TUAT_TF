@@ -29,7 +29,10 @@ const BLOCK_LABELS: Record<string, "all" | Block> = {
 };
 
 export async function POST(request: Request) {
-  const { sheetId } = (await request.json()) as { sheetId?: string };
+  const { sheetId, csv: uploadedCsv } = (await request.json()) as {
+    sheetId?: string;
+    csv?: string;
+  };
   if (!sheetId) {
     return NextResponse.json({ error: "シートを指定してください" }, { status: 400 });
   }
@@ -43,36 +46,39 @@ export async function POST(request: Request) {
   if (!sheet) {
     return NextResponse.json({ error: "シートを参照できません" }, { status: 404 });
   }
-  if (!sheet.csv_url) {
+  if (!uploadedCsv && !sheet.csv_url) {
     return NextResponse.json({ error: "公開CSV URLを登録してください" }, { status: 400 });
   }
 
-  let csvUrl: URL;
-  try {
-    csvUrl = new URL(sheet.csv_url);
-  } catch {
-    return NextResponse.json({ error: "公開CSV URLが不正です" }, { status: 400 });
-  }
-  if (
-    csvUrl.protocol !== "https:" ||
-    !["docs.google.com", "docs.googleusercontent.com"].includes(csvUrl.hostname)
-  ) {
-    return NextResponse.json(
-      { error: "Googleスプレッドシートの公開CSV URLを指定してください" },
-      { status: 400 },
-    );
-  }
-
   let csv: string;
-  try {
-    const response = await fetch(csvUrl, { cache: "no-store" });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    csv = await response.text();
-  } catch {
-    return NextResponse.json(
-      { error: "公開CSVを読み込めませんでした。公開設定とURLを確認してください" },
-      { status: 502 },
-    );
+  if (uploadedCsv) {
+    csv = uploadedCsv;
+  } else {
+    let csvUrl: URL;
+    try {
+      csvUrl = new URL(sheet.csv_url!);
+    } catch {
+      return NextResponse.json({ error: "公開CSV URLが不正です" }, { status: 400 });
+    }
+    if (
+      csvUrl.protocol !== "https:" ||
+      !["docs.google.com", "docs.googleusercontent.com"].includes(csvUrl.hostname)
+    ) {
+      return NextResponse.json(
+        { error: "Googleスプレッドシートの公開CSV URLを指定してください" },
+        { status: 400 },
+      );
+    }
+    try {
+      const response = await fetch(csvUrl, { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      csv = await response.text();
+    } catch {
+      return NextResponse.json(
+        { error: "公開CSVを読み込めませんでした。公開設定とURLを確認してください" },
+        { status: 502 },
+      );
+    }
   }
 
   const parsed = Papa.parse<Record<string, string>>(csv, {
