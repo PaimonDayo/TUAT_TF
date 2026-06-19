@@ -134,6 +134,20 @@ export async function POST(request: Request) {
       preview.skips.push({ rowNumber, message: "空行" });
       return;
     }
+    const hasScheduleContent =
+      sheet.kind === "practice"
+        ? [raw["時間"], raw["場所"], raw["詳細"]].some((value) => value?.trim())
+        : [
+            raw["記録会名"],
+            raw["場所"],
+            raw["エントリー開始日"],
+            raw["エントリー締切日"],
+            raw["詳細"],
+          ].some((value) => value?.trim());
+    if (!hasScheduleContent) {
+      preview.skips.push({ rowNumber, message: "予定なし" });
+      return;
+    }
 
     const date = parseSheetDate(raw["日付"], sheet.target_year);
     if (!date || !date.startsWith(`${sheet.target_year}-${String(sheet.target_month).padStart(2, "0")}-`)) {
