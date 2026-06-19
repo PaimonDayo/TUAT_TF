@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { FormModal } from "@/components/ui/form-modal";
@@ -70,6 +70,7 @@ export function ScheduleForm({
   const [targetBlocks, setTargetBlocks] = useState<Block[]>(schedule?.target_blocks ?? []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const meetingTimeTouched = useRef(false);
 
   const isPractice = type === "practice";
   const canEntry = ENTRY_PERIOD_TYPES.includes(type);
@@ -79,15 +80,35 @@ export function ScheduleForm({
     let active = true;
     (async () => {
       const supabase = createClient();
-      const { data } = await supabase
-        .from("venues")
-        .select("*")
-        .eq("pinned", true)
-        .order("sort", { ascending: true })
-        .order("name", { ascending: true });
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const [venueResult, previousTimeResult] = await Promise.all([
+        supabase
+          .from("venues")
+          .select("*")
+          .eq("pinned", true)
+          .order("sort", { ascending: true })
+          .order("name", { ascending: true }),
+        !schedule && user
+          ? supabase
+              .from("practice_schedules")
+              .select("meeting_time")
+              .eq("created_by", user.id)
+              .eq("schedule_type", "practice")
+              .not("meeting_time", "is", null)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
+      ]);
       if (!active) return;
-      const list = (data ?? []) as VenueRow[];
+      const list = (venueResult.data ?? []) as VenueRow[];
       setVenues(list);
+      const previousTime = previousTimeResult.data?.meeting_time;
+      if (!schedule && previousTime && !meetingTimeTouched.current) {
+        setMeetingTime(previousTime.slice(0, 5));
+      }
       if (schedule?.venue_name) {
         const match = list.find((v) => v.name === schedule.venue_name);
         if (match) {
@@ -248,7 +269,29 @@ export function ScheduleForm({
         {isPractice ? (
           <div>
             <p className="section-label mb-1.5">集合時間</p>
-            <Input type="time" value={meetingTime} onChange={(e) => setMeetingTime(e.target.value)} />
+            <div className="flex items-center gap-2">
+              <Input
+                type="time"
+                value={meetingTime}
+                onChange={(event) => {
+                  meetingTimeTouched.current = true;
+                  setMeetingTime(event.target.value);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  meetingTimeTouched.current = true;
+                  setMeetingTime("");
+                }}
+                disabled={!meetingTime}
+                aria-label="集合時間をクリア"
+                title="集合時間をクリア"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-separator bg-card text-muted active:bg-bg disabled:opacity-30"
+              >
+                <X size={18} />
+              </button>
+            </div>
           </div>
         ) : (
           <>
