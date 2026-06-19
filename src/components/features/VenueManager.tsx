@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp, MapPin, Plus } from "lucide-react";
+import { MapPin, Plus, SlidersHorizontal } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Card } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
+import { ReorderList } from "@/components/ui/reorder-list";
 import type { VenueRow } from "@/types";
 
 /** 練習場所の管理（追加・編集・削除・選択リスト表示の切替） */
@@ -17,7 +18,7 @@ export function VenueManager({ initial }: { initial: VenueRow[] }) {
   const [items, setItems] = useState<VenueRow[]>(initial);
   const [editing, setEditing] = useState<VenueRow | null>(null);
   const [creating, setCreating] = useState(false);
-  const [reordering, setReordering] = useState(false);
+  const [reorderMode, setReorderMode] = useState(false);
 
   async function togglePinned(v: VenueRow) {
     const previous = items;
@@ -41,16 +42,9 @@ export function VenueManager({ initial }: { initial: VenueRow[] }) {
     return true;
   }
 
-  async function move(index: number, direction: -1 | 1) {
-    const targetIndex = index + direction;
-    if (targetIndex < 0 || targetIndex >= items.length || reordering) return;
-
+  async function reorder(next: VenueRow[]) {
     const previous = items;
-    const next = [...items];
-    [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
     setItems(next);
-    setReordering(true);
-
     const supabase = createClient();
     const { error } = await supabase.rpc("reorder_venues", {
       venue_ids: next.map((venue) => venue.id),
@@ -59,7 +53,6 @@ export function VenueManager({ initial }: { initial: VenueRow[] }) {
       setItems(previous);
       alert("並び順を更新できませんでした");
     }
-    setReordering(false);
   }
 
   return (
@@ -68,30 +61,25 @@ export function VenueManager({ initial }: { initial: VenueRow[] }) {
         チェックを入れた会場が、予定作成の「場所」リストに表示されます。
       </p>
 
-      <div className="space-y-2">
-        {items.map((v, index) => (
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          size="sm"
+          variant={reorderMode ? "primary" : "outline"}
+          onClick={() => setReorderMode((value) => !value)}
+        >
+          <SlidersHorizontal size={16} />
+          {reorderMode ? "完了" : "並べ替え"}
+        </Button>
+      </div>
+
+      <ReorderList
+        items={items}
+        enabled={reorderMode}
+        onReorder={(next) => void reorder(next)}
+        renderItem={(v) => (
           <Card key={v.id} className="p-3">
             <div className="flex items-start gap-2">
-              <div className="flex shrink-0 flex-col">
-                <button
-                  type="button"
-                  onClick={() => move(index, -1)}
-                  disabled={index === 0 || reordering}
-                  aria-label={`${v.name}を上へ移動`}
-                  className="flex h-7 w-8 items-center justify-center text-muted disabled:opacity-20"
-                >
-                  <ChevronUp size={17} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => move(index, 1)}
-                  disabled={index === items.length - 1 || reordering}
-                  aria-label={`${v.name}を下へ移動`}
-                  className="flex h-7 w-8 items-center justify-center text-muted disabled:opacity-20"
-                >
-                  <ChevronDown size={17} />
-                </button>
-              </div>
               <div className="flex-1 min-w-0">
                 {v.short && (
                   <p className="mb-1">
@@ -124,8 +112,8 @@ export function VenueManager({ initial }: { initial: VenueRow[] }) {
               </div>
             </div>
           </Card>
-        ))}
-      </div>
+        )}
+      />
 
       <Button variant="outline" size="lg" onClick={() => setCreating(true)} className="gap-2">
         <Plus size={18} /> 会場を追加

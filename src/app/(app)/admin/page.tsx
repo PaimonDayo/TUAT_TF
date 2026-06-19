@@ -26,7 +26,7 @@ export default async function AdminPage() {
           <p className="text-caption">
             ロールを作成し、権限（予定作成・メニュー作成・お知らせ作成・部員管理）を設定できます。1人に複数のロールを付与できます。
           </p>
-          <RoleManager roles={roles} />
+          <RoleManager roles={roles} members={members} />
         </section>
 
         <section className="space-y-2">

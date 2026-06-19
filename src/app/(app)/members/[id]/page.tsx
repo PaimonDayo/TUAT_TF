@@ -59,14 +59,20 @@ export default async function MemberPage({
               <h2 className="text-title truncate">{profile.display_name || "名無し"}</h2>
               <BlockPills blocks={profile.blocks} full />
             </div>
-            <p className="text-caption mt-0.5">
-              {gradeShort(profile.grade) ?? "学年未設定"}
-              {profile.roles?.length > 0 && (
-                <span className="ml-2 text-accent">
-                  {profile.roles.map((r) => r.name).join("・")}
-                </span>
-              )}
-            </p>
+            <p className="text-caption mt-0.5">{gradeShort(profile.grade) ?? "学年未設定"}</p>
+            {profile.roles?.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {profile.roles.map((role) => (
+                  <span
+                    key={role.id}
+                    className="rounded-full px-2 py-0.5 text-micro"
+                    style={{ color: role.color, backgroundColor: `${role.color}18` }}
+                  >
+                    {role.name}
+                  </span>
+                ))}
+              </div>
+            )}
             {profile.goal && (
               <p className="text-caption mt-1 flex items-start gap-1">
                 <Target size={12} className="text-accent mt-[2px] shrink-0" />

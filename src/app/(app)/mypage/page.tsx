@@ -68,7 +68,8 @@ export default async function MyPage({
                 {profile.roles.map((r) => (
                   <span
                     key={r.id}
-                    className="inline-flex items-center gap-0.5 text-micro text-accent bg-accent/10 rounded-full px-2 py-0.5"
+                    className="inline-flex items-center gap-0.5 text-micro rounded-full px-2 py-0.5"
+                    style={{ color: r.color, backgroundColor: `${r.color}18` }}
                   >
                     <Shield size={10} /> {r.name}
                   </span>

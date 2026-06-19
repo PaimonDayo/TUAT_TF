@@ -1,15 +1,29 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp, Lock, Plus } from "lucide-react";
+import { ChevronDown, ChevronUp, Lock, Plus, SlidersHorizontal } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FormModal } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
+import { ReorderList } from "@/components/ui/reorder-list";
+import { Avatar } from "@/components/common/Avatar";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PERMISSION_LIST } from "@/lib/permissions";
-import type { AppRole, Permission } from "@/types";
+import type { AppRole, Permission, Profile } from "@/types";
+
+const ROLE_COLORS = [
+  "#007aff",
+  "#34c759",
+  "#ff9500",
+  "#ff3b30",
+  "#af52de",
+  "#5ac8fa",
+  "#8e8e93",
+  "#5856d6",
+];
 
 const PERM_COLUMN: Record<Permission, keyof AppRole> = {
   manage_members: "can_manage_members",
@@ -18,21 +32,21 @@ const PERM_COLUMN: Record<Permission, keyof AppRole> = {
   create_notice: "can_create_notice",
 };
 
-export function RoleManager({ roles: initialRoles }: { roles: AppRole[] }) {
+export function RoleManager({
+  roles: initialRoles,
+  members,
+}: {
+  roles: AppRole[];
+  members: Profile[];
+}) {
   const [roles, setRoles] = useState(initialRoles);
   const [creating, setCreating] = useState(false);
-  const [reordering, setReordering] = useState(false);
+  const [reorderMode, setReorderMode] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
-  async function move(index: number, direction: -1 | 1) {
-    const targetIndex = index + direction;
-    if (targetIndex < 0 || targetIndex >= roles.length || reordering) return;
-
+  async function reorder(next: AppRole[]) {
     const previous = roles;
-    const next = [...roles];
-    [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
     setRoles(next);
-    setReordering(true);
-
     const supabase = createClient();
     const { error } = await supabase.rpc("reorder_roles", {
       role_ids: next.map((role) => role.id),
@@ -41,25 +55,55 @@ export function RoleManager({ roles: initialRoles }: { roles: AppRole[] }) {
       setRoles(previous);
       alert("並び順を更新できませんでした");
     }
-    setReordering(false);
   }
+
+  const visibleRoles = reorderMode || expanded ? roles : roles.slice(0, 3);
 
   return (
     <div className="space-y-2">
-      {roles.map((role, index) => (
-        <RoleRow
-          key={role.id}
-          role={role}
-          first={index === 0}
-          last={index === roles.length - 1}
-          reordering={reordering}
-          onMove={(direction) => move(index, direction)}
-          onUpdated={(updated) =>
-            setRoles((items) => items.map((item) => (item.id === updated.id ? updated : item)))
-          }
-          onDeleted={() => setRoles((items) => items.filter((item) => item.id !== role.id))}
-        />
-      ))}
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          size="sm"
+          variant={reorderMode ? "primary" : "outline"}
+          onClick={() => setReorderMode((value) => !value)}
+        >
+          <SlidersHorizontal size={16} />
+          {reorderMode ? "完了" : "並べ替え"}
+        </Button>
+      </div>
+
+      <ReorderList
+        items={visibleRoles}
+        enabled={reorderMode}
+        onReorder={(nextVisible) => {
+          if (visibleRoles.length === roles.length) void reorder(nextVisible);
+        }}
+        renderItem={(role) => (
+          <RoleRow
+            key={role.id}
+            role={role}
+            members={members.filter((member) =>
+              member.roles.some((assigned) => assigned.id === role.id),
+            )}
+            onUpdated={(updated) =>
+              setRoles((items) => items.map((item) => (item.id === updated.id ? updated : item)))
+            }
+            onDeleted={() => setRoles((items) => items.filter((item) => item.id !== role.id))}
+          />
+        )}
+      />
+
+      {!reorderMode && roles.length > 3 && (
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          className="flex h-10 w-full items-center justify-center gap-1 text-[13px] font-semibold text-accent active:opacity-60"
+        >
+          {expanded ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
+          {expanded ? "上位3件だけ表示" : `すべて表示（${roles.length}件）`}
+        </button>
+      )}
 
       <button
         type="button"
@@ -86,22 +130,17 @@ export function RoleManager({ roles: initialRoles }: { roles: AppRole[] }) {
 
 function RoleRow({
   role,
-  first,
-  last,
-  reordering,
-  onMove,
+  members,
   onUpdated,
   onDeleted,
 }: {
   role: AppRole;
-  first: boolean;
-  last: boolean;
-  reordering: boolean;
-  onMove: (direction: -1 | 1) => void;
+  members: Profile[];
   onUpdated: (role: AppRole) => void;
   onDeleted: () => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [viewingMembers, setViewingMembers] = useState(false);
   const perms = PERMISSION_LIST.filter((permission) => role[PERM_COLUMN[permission.key]]);
 
   async function remove() {
@@ -120,30 +159,16 @@ function RoleRow({
   return (
     <Card className="p-3">
       <div className="flex items-start gap-2">
-        <div className="flex shrink-0 flex-col">
-          <button
-            type="button"
-            onClick={() => onMove(-1)}
-            disabled={first || reordering}
-            aria-label={`${role.name}を上へ移動`}
-            className="flex h-7 w-8 items-center justify-center text-muted disabled:opacity-20"
-          >
-            <ChevronUp size={17} />
-          </button>
-          <button
-            type="button"
-            onClick={() => onMove(1)}
-            disabled={last || reordering}
-            aria-label={`${role.name}を下へ移動`}
-            className="flex h-7 w-8 items-center justify-center text-muted disabled:opacity-20"
-          >
-            <ChevronDown size={17} />
-          </button>
-        </div>
-
         <div className="min-w-0 flex-1 pt-1">
           <span className="flex items-center gap-1 text-[15px] font-semibold">
-            <span className="break-words">{role.name}</span>
+            <button
+              type="button"
+              onClick={() => setViewingMembers(true)}
+              className="inline-flex rounded-full px-2 py-0.5 text-[13px]"
+              style={{ color: role.color, backgroundColor: `${role.color}18` }}
+            >
+              {role.name}
+            </button>
             {role.is_system && (
               <span className="inline-flex shrink-0 items-center gap-0.5 text-micro text-muted">
                 <Lock size={10} /> 組込
@@ -187,6 +212,36 @@ function RoleRow({
           }}
         />
       )}
+      {viewingMembers && (
+        <FormModal
+          open
+          onOpenChange={(open) => !open && setViewingMembers(false)}
+          title={role.name}
+        >
+          {members.length === 0 ? (
+            <EmptyState title="このロールの部員はいません" />
+          ) : (
+            <div className="space-y-2 pb-4">
+              {members.map((member) => (
+                <Card key={member.id} className="flex items-center gap-3 p-3">
+                  <Avatar
+                    name={member.display_name || "?"}
+                    avatarUrl={member.avatar_url}
+                    blocks={member.blocks}
+                    size="sm"
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate text-[14px] font-semibold">
+                      {member.display_name || "名前未設定"}
+                    </p>
+                    <p className="truncate text-caption">{member.email}</p>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </FormModal>
+      )}
     </Card>
   );
 }
@@ -211,6 +266,7 @@ function RoleEditor({
     create_menu: role?.can_create_menu ?? false,
     create_notice: role?.can_create_notice ?? false,
   });
+  const [color, setColor] = useState(role?.color ?? ROLE_COLORS[0]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -232,6 +288,7 @@ function RoleEditor({
       can_create_schedule: flags.create_schedule,
       can_create_menu: flags.create_menu,
       can_create_notice: flags.create_notice,
+      color,
       sort_order: sortOrder,
     };
     const query = role
@@ -289,6 +346,34 @@ function RoleEditor({
                 </span>
               </button>
             ))}
+          </div>
+        </div>
+        <div>
+          <p className="section-label mb-1.5">ロールの色</p>
+          <div className="grid grid-cols-8 gap-2">
+            {ROLE_COLORS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setColor(option)}
+                aria-label={`色 ${option}`}
+                className="flex aspect-square items-center justify-center rounded-lg border"
+                style={{
+                  borderColor: color === option ? option : "#e5e5ea",
+                  backgroundColor: `${option}18`,
+                }}
+              >
+                <span className="h-5 w-5 rounded-full" style={{ backgroundColor: option }} />
+              </button>
+            ))}
+          </div>
+          <div className="mt-2">
+            <span
+              className="rounded-full px-2.5 py-1 text-[13px] font-semibold"
+              style={{ color, backgroundColor: `${color}18` }}
+            >
+              {name.trim() || "ロール名"}
+            </span>
           </div>
         </div>
         {error && <p className="text-center text-caption text-danger">{error}</p>}

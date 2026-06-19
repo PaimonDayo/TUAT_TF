@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check } from "lucide-react";
+import { Check, ChevronRight, Search } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/common/Avatar";
 import { BlockPills } from "@/components/common/BlockPill";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { FormModal } from "@/components/ui/form-modal";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { AppRole, Profile } from "@/types";
 
@@ -17,92 +20,182 @@ export function AdminMemberList({
   members: Profile[];
   roles: AppRole[];
 }) {
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<Profile | null>(null);
+  const filtered = useMemo(() => {
+    const keyword = query.trim().toLowerCase();
+    if (!keyword) return members;
+    return members.filter(
+      (member) =>
+        member.display_name.toLowerCase().includes(keyword) ||
+        member.email.toLowerCase().includes(keyword),
+    );
+  }, [members, query]);
+
   return (
     <div className="space-y-2">
-      {members.map((m) => (
-        <MemberRow key={m.id} member={m} roles={roles} />
+      <div className="relative">
+        <Search
+          size={17}
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+        />
+        <Input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="部員を検索"
+          className="pl-9"
+        />
+      </div>
+
+      {filtered.map((member) => (
+        <button
+          key={member.id}
+          type="button"
+          onClick={() => setSelected(member)}
+          className="w-full text-left"
+        >
+          <Card className="flex items-center gap-3 p-3 active:bg-bg">
+            <Avatar
+              name={member.display_name || "?"}
+              blocks={member.blocks}
+              avatarUrl={member.avatar_url}
+              size="sm"
+            />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span className="truncate text-[14px] font-semibold">
+                  {member.display_name || "名前未設定"}
+                </span>
+                <BlockPills blocks={member.blocks} />
+              </div>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {member.roles.length === 0 ? (
+                  <span className="text-micro">ロールなし</span>
+                ) : (
+                  member.roles.map((role) => (
+                    <span
+                      key={role.id}
+                      className="rounded-full px-2 py-0.5 text-micro"
+                      style={{
+                        color: role.color,
+                        backgroundColor: `${role.color}18`,
+                      }}
+                    >
+                      {role.name}
+                    </span>
+                  ))
+                )}
+              </div>
+            </div>
+            <ChevronRight size={18} className="shrink-0 text-muted" />
+          </Card>
+        </button>
       ))}
+
+      {selected && (
+        <MemberRoleEditor
+          member={selected}
+          roles={roles}
+          onClose={() => setSelected(null)}
+        />
+      )}
     </div>
   );
 }
 
-function MemberRow({ member, roles }: { member: Profile; roles: AppRole[] }) {
+function MemberRoleEditor({
+  member,
+  roles,
+  onClose,
+}: {
+  member: Profile;
+  roles: AppRole[];
+  onClose: () => void;
+}) {
   const router = useRouter();
-  const [assigned, setAssigned] = useState<Set<string>>(
-    new Set((member.roles ?? []).map((r) => r.id)),
+  const [selectedIds, setSelectedIds] = useState<string[]>(
+    member.roles.map((role) => role.id),
   );
-  const [busy, setBusy] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
-  async function toggle(roleId: string) {
-    const has = assigned.has(roleId);
-    // 楽観的更新
-    const next = new Set(assigned);
-    if (has) next.delete(roleId);
-    else next.add(roleId);
-    setAssigned(next);
-    setBusy(roleId);
+  function toggle(roleId: string) {
+    setSelectedIds((current) =>
+      current.includes(roleId)
+        ? current.filter((id) => id !== roleId)
+        : [...current, roleId],
+    );
+  }
 
+  async function save() {
+    setSaving(true);
+    setError("");
     const supabase = createClient();
-    const { error } = has
-      ? await supabase
-          .from("profile_roles")
-          .delete()
-          .eq("profile_id", member.id)
-          .eq("role_id", roleId)
-      : await supabase
-          .from("profile_roles")
-          .insert({ profile_id: member.id, role_id: roleId });
-
-    if (error) {
-      // 失敗したら戻す
-      setAssigned(new Set(assigned));
-      alert("更新に失敗しました");
+    const { error: saveError } = await supabase.rpc("set_profile_roles", {
+      target_profile_id: member.id,
+      target_role_ids: selectedIds,
+    });
+    if (saveError) {
+      setError("ロールを更新できませんでした");
+      setSaving(false);
+      return;
     }
-    setBusy(null);
     router.refresh();
+    onClose();
   }
 
   return (
-    <Card className="p-3 space-y-2.5">
-      <div className="flex items-center gap-3">
-        <Avatar
-          name={member.display_name || "?"}
-          blocks={member.blocks}
-          avatarUrl={member.avatar_url}
-          size="sm"
-        />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[14px] font-semibold truncate">
-              {member.display_name || "名前未設定"}
-            </span>
-            <BlockPills blocks={member.blocks} />
+    <FormModal open onOpenChange={(open) => !open && onClose()} title="ロールを設定">
+      <div className="space-y-4 pb-4">
+        <div className="flex items-center gap-3">
+          <Avatar
+            name={member.display_name || "?"}
+            blocks={member.blocks}
+            avatarUrl={member.avatar_url}
+            size="md"
+          />
+          <div className="min-w-0">
+            <p className="text-headline">{member.display_name || "名前未設定"}</p>
+            <p className="truncate text-caption">{member.email}</p>
           </div>
-          <span className="text-micro">{member.email}</span>
         </div>
-      </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        {roles.map((r) => {
-          const active = assigned.has(r.id);
-          return (
-            <button
-              key={r.id}
-              onClick={() => toggle(r.id)}
-              disabled={busy === r.id}
-              className={cn(
-                "h-8 px-3 rounded-full border text-[13px] font-semibold inline-flex items-center gap-1 active:opacity-60 disabled:opacity-40",
-                active
-                  ? "bg-accent text-white border-accent"
-                  : "bg-card border-separator text-muted2",
-              )}
-            >
-              {active && <Check size={14} />}
-              {r.name}
-            </button>
-          );
-        })}
+        <div className="space-y-2">
+          {roles.map((role) => {
+            const active = selectedIds.includes(role.id);
+            return (
+              <button
+                key={role.id}
+                type="button"
+                onClick={() => toggle(role.id)}
+                className={cn(
+                  "flex min-h-12 w-full items-center gap-3 rounded-xl border p-3 text-left",
+                  active ? "border-current" : "border-separator bg-card",
+                )}
+                style={
+                  active
+                    ? { color: role.color, backgroundColor: `${role.color}12` }
+                    : undefined
+                }
+              >
+                <span
+                  className="h-3 w-3 shrink-0 rounded-full"
+                  style={{ backgroundColor: role.color }}
+                />
+                <span className="min-w-0 flex-1 text-[14px] font-semibold">
+                  {role.name}
+                </span>
+                {active && <Check size={18} />}
+              </button>
+            );
+          })}
+        </div>
+
+        {error && <p className="text-center text-caption text-danger">{error}</p>}
+        <Button size="lg" onClick={save} disabled={saving}>
+          {saving ? "保存中..." : "保存する"}
+        </Button>
       </div>
-    </Card>
+    </FormModal>
   );
 }

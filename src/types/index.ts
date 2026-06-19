@@ -23,6 +23,7 @@ export interface AppRole {
   can_create_menu: boolean;
   can_create_notice: boolean;
   is_system: boolean;
+  color: string;
   sort_order: number;
   created_at: string;
 }
