@@ -6,7 +6,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { FormModal } from "@/components/ui/form-modal";
 import { RecordForm } from "@/components/post/RecordForm";
 import { TweetForm } from "@/components/post/TweetForm";
-import { ScheduleForm } from "@/components/post/ScheduleForm";
+import { ScheduleCreatePanel } from "@/components/post/ScheduleForm";
 import { NoticeForm } from "@/components/post/NoticeForm";
 import { MenuComposerForm } from "@/components/post/MenuForm";
 import { ResultForm } from "@/components/post/ResultForm";
@@ -138,7 +138,7 @@ export function FAB({
       </FormModal>
 
       <FormModal open={scheduleOpen} onOpenChange={setScheduleOpen} title="予定を作成">
-        <ScheduleForm onDone={() => setScheduleOpen(false)} />
+        <ScheduleCreatePanel onDone={() => setScheduleOpen(false)} />
       </FormModal>
 
       <FormModal open={noticeOpen} onOpenChange={setNoticeOpen} title="お知らせを投稿">

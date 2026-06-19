@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
+import { ScheduleSheetsManager } from "@/components/features/ScheduleSheetsManager";
 import {
   BLOCK_ORDER,
   BLOCKS,
@@ -37,9 +38,27 @@ export function ScheduleComposer({ autoOpen = false }: { autoOpen?: boolean }) {
         作成
       </button>
       <FormModal open={open} onOpenChange={setOpen} title="予定を作成">
-        <ScheduleForm onDone={() => setOpen(false)} />
+        <ScheduleCreatePanel onDone={() => setOpen(false)} />
       </FormModal>
     </>
+  );
+}
+
+export function ScheduleCreatePanel({ onDone }: { onDone: () => void }) {
+  const [mode, setMode] = useState<"normal" | "sheets">("normal");
+
+  return (
+    <div className="space-y-5">
+      <SegmentedControl
+        items={[
+          { key: "normal", label: "通常入力" },
+          { key: "sheets", label: "スプレッドシートから入力" },
+        ]}
+        value={mode}
+        onChange={setMode}
+      />
+      {mode === "normal" ? <ScheduleForm onDone={onDone} /> : <ScheduleSheetsManager />}
+    </div>
   );
 }
 

@@ -149,8 +149,51 @@ export interface PracticeSchedule {
   venue_url: string | null;
   note: string | null;
   target_blocks: Block[];
+  source_sheet_id?: string | null;
   created_by: string;
   created_at: string;
+}
+
+export type ScheduleSheetKind = "practice" | "meet";
+export type ScheduleSheetBlock = "all" | Block;
+
+export interface ScheduleSheet {
+  id: string;
+  author_id: string;
+  target_year: number;
+  target_month: number;
+  kind: ScheduleSheetKind;
+  target_block: ScheduleSheetBlock;
+  sheet_url: string;
+  csv_url: string | null;
+  last_imported_at: string | null;
+  status: "active" | "archived";
+  created_at: string;
+}
+
+export interface ScheduleImportRow {
+  rowNumber: number;
+  id?: string;
+  schedule_date: string;
+  schedule_type: ScheduleSheetKind;
+  meeting_time: string | null;
+  venue_name: string | null;
+  venue_access: string | null;
+  venue_fee: string | null;
+  venue_url: string | null;
+  title: string | null;
+  entry_start: string | null;
+  entry_end: string | null;
+  note: string | null;
+  target_blocks: Block[];
+}
+
+export interface ScheduleImportPreview {
+  additions: ScheduleImportRow[];
+  updates: ScheduleImportRow[];
+  deletions: PracticeSchedule[];
+  errors: { rowNumber: number; message: string }[];
+  skips: { rowNumber: number; message: string }[];
 }
 
 export type AttendanceStatusOrNone = AttendanceStatus | "none";
