@@ -6,7 +6,7 @@ import { RecordCard } from "@/components/cards/RecordCard";
 import { TweetCard } from "@/components/cards/TweetCard";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented";
-import { GradeChips } from "@/components/features/GradeChips";
+import { GradeMenu } from "@/components/features/GradeMenu";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SIMPLE_BLOCK_ITEMS, matchSimpleBlock } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -62,11 +62,12 @@ export function TimelineView({
 
   return (
     <>
-      <div className="px-4 pb-2 space-y-2">
+      <div className="px-4 pb-2">
         <div className="flex items-center gap-2">
           <div className="min-w-0 flex-1">
             <SegmentedControl items={SIMPLE_BLOCK_ITEMS} value={block} onChange={setBlock} />
           </div>
+          <GradeMenu value={grades} onChange={setGrades} />
           <button
             onClick={() => setFavOnly((v) => !v)}
             aria-label={favOnly ? "フォロー中のみを解除" : "フォロー中のみ表示"}
@@ -90,7 +91,6 @@ export function TimelineView({
             <List size={15} />
           </button>
         </div>
-        <GradeChips value={grades} onChange={setGrades} />
       </div>
 
       <div className="px-4 pt-1">
