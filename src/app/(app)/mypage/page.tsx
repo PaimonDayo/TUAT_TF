@@ -119,7 +119,7 @@ export default async function MyPage({
                         <AdminSubLink href="/admin" icon={<Users size={18} />} label="ロール管理" />
                       )}
                       {perms.createSchedule && (
-                        <AdminSubLink href="/venues" icon={<MapPin size={18} />} label="練習場所の管理" />
+                        <AdminSubLink href="/venues" icon={<MapPin size={18} />} label="練習場所" />
                       )}
                     </div>
                   </details>

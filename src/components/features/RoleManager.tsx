@@ -193,9 +193,9 @@ function RoleRow({
 
         <ActionMenu
           onEdit={() => setEditing(true)}
-          onDelete={role.is_system ? undefined : remove}
+          onDelete={remove}
           deleteTitle={`ロール「${role.name}」を削除しますか？`}
-          deleteDescription="このロールの部員への割り当ても解除されます。"
+          deleteDescription="このロールの部員への割り当ても解除されます。最後の管理権限ロールは削除できません。"
           triggerLabel={`${role.name}のメニュー`}
         />
       </div>

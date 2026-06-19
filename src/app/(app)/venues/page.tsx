@@ -13,7 +13,7 @@ export default async function VenuesPage() {
 
   return (
     <>
-      <SubHeader title="練習場所の管理" backHref="/mypage" backLabel="マイページ" />
+      <SubHeader title="練習場所" backHref="/mypage" backLabel="マイページ" />
       <div className="px-4 pt-2 space-y-3">
         <VenueManager initial={venues} />
       </div>

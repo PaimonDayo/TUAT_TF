@@ -58,7 +58,7 @@ export function VenueManager({ initial }: { initial: VenueRow[] }) {
   return (
     <>
       <p className="text-caption">
-        チェックを入れた会場が、予定作成の「場所」リストに表示されます。
+        オンにした会場が、予定作成の「場所」リストに表示されます。
       </p>
 
       <div className="flex justify-end">
@@ -92,7 +92,7 @@ export function VenueManager({ initial }: { initial: VenueRow[] }) {
                 {v.access && <p className="text-caption whitespace-pre-wrap mt-0.5">{v.access}</p>}
                 {v.fee && <p className="text-caption">参加費：{v.fee}</p>}
               </div>
-              <div className="flex flex-col items-end gap-2 shrink-0">
+              <div className="flex shrink-0 flex-col items-end gap-3">
                 <ActionMenu
                   onEdit={() => setEditing(v)}
                   onDelete={() => remove(v)}
@@ -100,17 +100,14 @@ export function VenueManager({ initial }: { initial: VenueRow[] }) {
                   deleteDescription="削除した会場は予定作成の候補からも消えます。"
                   triggerLabel={`${v.name}のメニュー`}
                 />
-                <label className="flex items-center gap-1 text-[11px] text-muted2">
-                  <input
-                    type="checkbox"
-                    checked={v.pinned}
-                    onChange={() => togglePinned(v)}
-                    className="h-4 w-4 accent-accent"
-                  />
-                  リスト表示
-                </label>
               </div>
             </div>
+            <Toggle
+              label="予定作成に表示"
+              checked={v.pinned}
+              onChange={() => togglePinned(v)}
+              className="mt-3 border-0 bg-transparent p-0"
+            />
           </Card>
         )}
       />
@@ -216,7 +213,7 @@ function VenueForm({
         <p className="section-label mb-1.5">地図URL（任意）</p>
         <Input placeholder="https://maps…" value={url} onChange={(e) => setUrl(e.target.value)} inputMode="url" />
       </div>
-      <Toggle label="予定作成のリストに表示する" checked={pinned} onChange={() => setPinned((v) => !v)} />
+      <Toggle label="予定作成に表示" checked={pinned} onChange={() => setPinned((v) => !v)} />
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <Button size="lg" onClick={submit} disabled={saving} className="gap-1">
         <MapPin size={16} /> {saving ? "保存中…" : venue ? "更新する" : "追加する"}
