@@ -116,6 +116,18 @@ export interface CommentWithAuthor extends Comment {
   author: CommentAuthor;
 }
 
+export interface VenueRow {
+  id: string;
+  name: string;
+  short: string | null;
+  access: string | null;
+  fee: string | null;
+  url: string | null;
+  pinned: boolean;
+  sort: number;
+  created_at: string;
+}
+
 export interface PracticeSchedule {
   id: string;
   schedule_date: string;

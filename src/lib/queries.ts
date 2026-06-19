@@ -347,6 +347,17 @@ export async function getWeeklyRanking(): Promise<WeeklyRankingRow[]> {
   return (data ?? []) as unknown as WeeklyRankingRow[];
 }
 
+/** 会場一覧（管理用：全件） */
+export async function getAllVenues() {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("venues")
+    .select("*")
+    .order("sort", { ascending: true })
+    .order("name", { ascending: true });
+  return (data ?? []) as import("@/types").VenueRow[];
+}
+
 /** 自分がお気に入り登録している部員IDの一覧 */
 export async function getMyFavoriteIds(userId: string): Promise<string[]> {
   const supabase = await createClient();

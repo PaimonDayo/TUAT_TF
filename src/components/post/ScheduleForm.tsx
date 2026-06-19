@@ -10,9 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
-import { VENUES, findVenue } from "@/lib/venues";
 import { ENTRY_PERIOD_TYPES, SCHEDULE_TYPE_OPTIONS } from "@/lib/constants";
-import type { PracticeSchedule, ScheduleType } from "@/types";
+import type { PracticeSchedule, ScheduleType, VenueRow } from "@/types";
 
 const OTHER = "__other__";
 
@@ -51,17 +50,13 @@ export function ScheduleForm({
 }) {
   const router = useRouter();
   const editing = !!schedule;
-  const initVenue = schedule?.venue_name ? findVenue(schedule.venue_name) : undefined;
 
+  const [venues, setVenues] = useState<VenueRow[]>([]);
   const [type, setType] = useState<ScheduleType>(schedule?.schedule_type ?? "practice");
   const [date, setDate] = useState(schedule?.schedule_date ?? "");
   const [meetingTime, setMeetingTime] = useState(schedule?.meeting_time?.slice(0, 5) ?? "");
-  const [venueKey, setVenueKey] = useState<string>(
-    initVenue ? initVenue.key : schedule?.venue_name ? OTHER : "",
-  );
-  const [otherVenue, setOtherVenue] = useState(
-    initVenue ? "" : (schedule?.venue_name ?? ""),
-  );
+  const [venueKey, setVenueKey] = useState<string>(schedule?.venue_name ? OTHER : "");
+  const [otherVenue, setOtherVenue] = useState(schedule?.venue_name ?? "");
   const [title, setTitle] = useState(schedule?.title ?? "");
   const [useEndDate, setUseEndDate] = useState(!!schedule?.end_date);
   const [endDate, setEndDate] = useState(schedule?.end_date ?? "");
@@ -75,6 +70,34 @@ export function ScheduleForm({
 
   const isPractice = type === "practice";
   const canEntry = ENTRY_PERIOD_TYPES.includes(type);
+
+  // 場所リスト（pinned）をDBから取得。編集時は保存済み会場名を選択状態に復元。
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("venues")
+        .select("*")
+        .eq("pinned", true)
+        .order("sort", { ascending: true })
+        .order("name", { ascending: true });
+      if (!active) return;
+      const list = (data ?? []) as VenueRow[];
+      setVenues(list);
+      if (schedule?.venue_name) {
+        const match = list.find((v) => v.name === schedule.venue_name);
+        if (match) {
+          setVenueKey(match.id);
+          setOtherVenue("");
+        }
+      }
+    })();
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function submit() {
     if (!date) {
@@ -96,7 +119,7 @@ export function ScheduleForm({
       return;
     }
 
-    const venue = venueKey && venueKey !== OTHER ? VENUES.find((v) => v.key === venueKey) : undefined;
+    const venue = venueKey && venueKey !== OTHER ? venues.find((v) => v.id === venueKey) : undefined;
     const venueName = venue ? venue.name : venueKey === OTHER ? otherVenue.trim() || null : null;
 
     const payload = {
@@ -104,7 +127,7 @@ export function ScheduleForm({
       schedule_type: type,
       meeting_time: meetingTime || null,
       venue_name: venueName,
-      venue_access: venue ? venue.access.join("\n") : null,
+      venue_access: venue ? venue.access : null,
       venue_fee: venue ? venue.fee : null,
       venue_url: venue ? venue.url : null,
       title: !isPractice ? title.trim() || null : null,
@@ -150,9 +173,9 @@ export function ScheduleForm({
           className="h-11 w-full rounded-xl bg-card border border-separator px-3 text-[15px] outline-none"
         >
           <option value="">選択しない</option>
-          {VENUES.map((v) => (
-            <option key={v.key} value={v.key}>
-              {v.key}：{v.name}
+          {venues.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.short ? `${v.short}：${v.name}` : v.name}
             </option>
           ))}
           <option value={OTHER}>その他（手入力）</option>

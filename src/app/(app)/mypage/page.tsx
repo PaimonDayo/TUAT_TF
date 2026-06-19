@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { Trophy, ChevronRight, Shield, Bell, CalendarPlus, Users, Target } from "lucide-react";
+import { Trophy, ChevronRight, Shield, Bell, CalendarPlus, Users, Target, MapPin } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/common/Avatar";
@@ -105,8 +105,20 @@ export default async function MyPage({
               {perms.createNotice && (
                 <LinkCard href="/notices?compose=1" icon={<Bell size={20} className="text-warning" />} label="お知らせを投稿" />
               )}
+            </div>
+          </section>
+        )}
+
+        {/* その他（管理者・担当者向けの設定系） */}
+        {(perms.manageMembers || perms.createSchedule) && (
+          <section className="space-y-2">
+            <p className="section-label">その他</p>
+            <div className="space-y-2">
               {perms.manageMembers && (
                 <LinkCard href="/admin" icon={<Users size={20} className="text-accent" />} label="部員・ロール管理" />
+              )}
+              {perms.createSchedule && (
+                <LinkCard href="/venues" icon={<MapPin size={20} className="text-accent" />} label="練習場所の管理" />
               )}
             </div>
           </section>
