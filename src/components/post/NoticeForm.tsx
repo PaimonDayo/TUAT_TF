@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { FormModal } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -12,10 +12,7 @@ import { NOTICE_CATEGORIES } from "@/lib/constants";
 import type { Notice, NoticeCategory } from "@/types";
 
 export function NoticeComposer({ autoOpen = false }: { autoOpen?: boolean }) {
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    if (autoOpen) setOpen(true);
-  }, [autoOpen]);
+  const [open, setOpen] = useState(autoOpen);
   return (
     <>
       <button
@@ -26,11 +23,9 @@ export function NoticeComposer({ autoOpen = false }: { autoOpen?: boolean }) {
         <Plus size={20} />
         投稿
       </button>
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent title="お知らせを投稿">
-          <NoticeForm onDone={() => setOpen(false)} />
-        </SheetContent>
-      </Sheet>
+      <FormModal open={open} onOpenChange={setOpen} title="お知らせを投稿">
+        <NoticeForm onDone={() => setOpen(false)} />
+      </FormModal>
     </>
   );
 }
