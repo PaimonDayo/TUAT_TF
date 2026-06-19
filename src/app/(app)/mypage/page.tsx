@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { Trophy, ChevronRight, Shield, Bell, CalendarPlus, Users, Target, MapPin } from "lucide-react";
+import { Trophy, ChevronRight, Shield, Bell, CalendarPlus, Users, Target, MapPin, Settings } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/common/Avatar";
@@ -100,21 +100,29 @@ export default async function MyPage({
             <p className="section-label">管理メニュー</p>
             <div className="space-y-2">
               {perms.createSchedule && (
-                <LinkCard href="/schedule?compose=1" icon={<CalendarPlus size={20} className="text-accent" />} label="練習予定を作成" />
+                <LinkCard href="/schedule?compose=1" icon={<CalendarPlus size={20} className="text-accent" />} label="予定を作成" />
               )}
               {perms.createNotice && (
-                <LinkCard href="/notices?compose=1" icon={<Bell size={20} className="text-warning" />} label="お知らせを投稿" />
+                <LinkCard href="/notices?compose=1" icon={<Bell size={20} className="text-warning" />} label="お知らせを作成" />
               )}
               {(perms.manageMembers || perms.createSchedule) && (
-                <div className="space-y-2 pt-2">
-                  <p className="section-label px-1">その他</p>
-                  {perms.manageMembers && (
-                    <LinkCard href="/admin" icon={<Users size={20} className="text-accent" />} label="部員・ロール管理" />
-                  )}
-                  {perms.createSchedule && (
-                    <LinkCard href="/venues" icon={<MapPin size={20} className="text-accent" />} label="練習場所の管理" />
-                  )}
-                </div>
+                <Card className="overflow-hidden">
+                  <details>
+                    <summary className="flex cursor-pointer list-none items-center gap-3 p-4 active:bg-bg">
+                      <Settings size={20} className="text-muted2" />
+                      <span className="flex-1 text-headline">その他</span>
+                      <ChevronRight size={18} className="text-muted" />
+                    </summary>
+                    <div className="border-t border-separator px-4">
+                      {perms.manageMembers && (
+                        <AdminSubLink href="/admin" icon={<Users size={18} />} label="ロール管理" />
+                      )}
+                      {perms.createSchedule && (
+                        <AdminSubLink href="/venues" icon={<MapPin size={18} />} label="練習場所の管理" />
+                      )}
+                    </div>
+                  </details>
+                </Card>
               )}
             </div>
           </section>
@@ -138,6 +146,28 @@ export default async function MyPage({
         <SignOutButton />
       </div>
     </>
+  );
+}
+
+function AdminSubLink({
+  href,
+  icon,
+  label,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <Link
+      href={href}
+      prefetch
+      className="flex min-h-12 items-center gap-3 border-b border-separator last:border-b-0 active:opacity-60"
+    >
+      <span className="text-accent">{icon}</span>
+      <span className="flex-1 text-[14px] font-semibold">{label}</span>
+      <ChevronRight size={16} className="text-muted" />
+    </Link>
   );
 }
 

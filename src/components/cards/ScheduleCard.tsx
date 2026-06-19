@@ -281,11 +281,6 @@ function MenuCard({
               </span>
             )}
           </div>
-          {menu.author?.display_name && (
-            <p className="mt-1 text-[12px] font-semibold text-accent">
-              担当: {menu.author.display_name}
-            </p>
-          )}
         </div>
         {canManage && (
           <ActionMenu
