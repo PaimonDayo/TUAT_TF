@@ -45,14 +45,14 @@ export function VenueManager({ initial }: { initial: VenueRow[] }) {
           <Card key={v.id} className="p-3">
             <div className="flex items-center gap-3">
               <div className="flex-1 min-w-0">
-                <p className="text-headline flex items-center gap-1.5">
-                  {v.short && (
-                    <span className="text-[11px] font-bold text-accent bg-accent/10 rounded px-1.5 py-0.5">
+                {v.short && (
+                  <p className="mb-1">
+                    <span className="inline-flex rounded border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[11px] font-bold text-accent">
                       {v.short}
                     </span>
-                  )}
-                  <span className="truncate">{v.name}</span>
-                </p>
+                  </p>
+                )}
+                <p className="text-headline break-words">{v.name}</p>
                 {v.access && <p className="text-caption whitespace-pre-wrap mt-0.5">{v.access}</p>}
                 {v.fee && <p className="text-caption">参加費：{v.fee}</p>}
               </div>
