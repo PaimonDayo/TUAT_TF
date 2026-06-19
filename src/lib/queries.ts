@@ -151,7 +151,23 @@ export async function getUserRecords(userId: string, fromDate?: string) {
 }
 
 /** 今日以降の練習予定（メニュー込み）を取得 */
-export async function getUpcomingSchedules(type?: string) {
+function filterSchedulesForViewer<T extends { target_blocks?: Block[] | null }>(
+  schedules: T[],
+  viewerBlocks: Block[],
+  canManage: boolean,
+): T[] {
+  if (canManage) return schedules;
+  return schedules.filter((schedule) => {
+    const targets = schedule.target_blocks ?? [];
+    return targets.length === 0 || targets.some((block) => viewerBlocks.includes(block));
+  });
+}
+
+export async function getUpcomingSchedules(
+  viewerBlocks: Block[],
+  canManage: boolean,
+  type?: string,
+) {
   const supabase = await createClient();
   const today = new Date().toISOString().slice(0, 10);
   let q = supabase
@@ -161,7 +177,7 @@ export async function getUpcomingSchedules(type?: string) {
     .order("schedule_date", { ascending: true });
   if (type && type !== "all") q = q.eq("schedule_type", type);
   const { data } = await q;
-  return data ?? [];
+  return filterSchedulesForViewer(data ?? [], viewerBlocks, canManage);
 }
 
 /** お知らせ一覧 */
@@ -308,7 +324,11 @@ export async function getHomeNotices(userId: string) {
 }
 
 /** 出欠対象の今後の予定（出欠は別途取得） */
-export async function getAttendanceSchedules(limit = 10) {
+export async function getAttendanceSchedules(
+  viewerBlocks: Block[],
+  canManage: boolean,
+  limit = 10,
+) {
   const supabase = await createClient();
   const today = new Date().toISOString().slice(0, 10);
   const { data } = await supabase
@@ -316,9 +336,8 @@ export async function getAttendanceSchedules(limit = 10) {
     .select("*")
     .gte("schedule_date", today)
     .in("schedule_type", ["practice", "meet", "event"])
-    .order("schedule_date", { ascending: true })
-    .limit(limit);
-  return data ?? [];
+    .order("schedule_date", { ascending: true });
+  return filterSchedulesForViewer(data ?? [], viewerBlocks, canManage).slice(0, limit);
 }
 
 /** 指定した予定群の出欠（profile 付き） */

@@ -16,6 +16,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SCHEDULE_TYPES, ATTENDANCE_TYPES } from "@/lib/constants";
+import { BLOCKS } from "@/lib/constants";
 import { venueShort } from "@/lib/venues";
 import { cn } from "@/lib/utils";
 import { MenuForm } from "@/components/post/MenuForm";
@@ -97,6 +98,23 @@ export function ScheduleCard({
               <span className="flex items-center gap-1">
                 <MapPin size={13} /> {venueShort(schedule.venue_name ?? schedule.location)}
               </span>
+            )}
+          </div>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {schedule.target_blocks.length === 0 ? (
+              <span className="text-micro rounded-full bg-separator/70 px-2 py-0.5 text-muted2">
+                全体
+              </span>
+            ) : (
+              schedule.target_blocks.map((block) => (
+                <span
+                  key={block}
+                  className="text-micro rounded-full px-2 py-0.5"
+                  style={{ color: BLOCKS[block].color, backgroundColor: BLOCKS[block].bg }}
+                >
+                  {BLOCKS[block].short}
+                </span>
+              ))
             )}
           </div>
         </div>
@@ -192,7 +210,11 @@ export function ScheduleCard({
             </div>
           )}
 
-          {canManage && <ScheduleManageActions schedule={schedule} />}
+          {canManage && (
+            <div className="flex justify-end">
+              <ScheduleManageActions schedule={schedule} />
+            </div>
+          )}
         </div>
       )}
     </Card>

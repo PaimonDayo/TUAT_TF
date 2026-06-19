@@ -16,7 +16,10 @@ export default async function SchedulePage({
   const profile = await getCurrentProfile();
   const perms = permissionsOf(profile.roles);
   // 種別の絞り込みはクライアント側で行うため、今後の予定を全件取得する。
-  const schedules = (await getUpcomingSchedules()) as unknown as ScheduleWithMenus[];
+  const schedules = (await getUpcomingSchedules(
+    profile.blocks,
+    perms.createSchedule,
+  )) as unknown as ScheduleWithMenus[];
 
   // 出欠対象の予定 ID をまとめて取得
   const attIds = schedules

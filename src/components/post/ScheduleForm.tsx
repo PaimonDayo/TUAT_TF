@@ -2,16 +2,23 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { FullScreen, FullScreenContent } from "@/components/ui/fullscreen";
+import { ActionMenu } from "@/components/ui/action-menu";
+import { FormModal } from "@/components/ui/form-modal";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
-import { ENTRY_PERIOD_TYPES, SCHEDULE_TYPE_OPTIONS } from "@/lib/constants";
-import type { PracticeSchedule, ScheduleType, VenueRow } from "@/types";
+import {
+  BLOCK_ORDER,
+  BLOCKS,
+  ENTRY_PERIOD_TYPES,
+  SCHEDULE_TYPE_OPTIONS,
+} from "@/lib/constants";
+import { cn } from "@/lib/utils";
+import type { Block, PracticeSchedule, ScheduleType, VenueRow } from "@/types";
 
 const OTHER = "__other__";
 
@@ -29,11 +36,9 @@ export function ScheduleComposer({ autoOpen = false }: { autoOpen?: boolean }) {
         <Plus size={20} />
         作成
       </button>
-      <FullScreen open={open} onOpenChange={setOpen}>
-        <FullScreenContent title="予定を作成">
-          <ScheduleForm onDone={() => setOpen(false)} />
-        </FullScreenContent>
-      </FullScreen>
+      <FormModal open={open} onOpenChange={setOpen} title="予定を作成">
+        <ScheduleForm onDone={() => setOpen(false)} />
+      </FormModal>
     </>
   );
 }
@@ -62,6 +67,7 @@ export function ScheduleForm({
   const [entryEnd, setEntryEnd] = useState(schedule?.entry_end ?? "");
   const [useDetail, setUseDetail] = useState(!!schedule?.note);
   const [detail, setDetail] = useState(schedule?.note ?? "");
+  const [targetBlocks, setTargetBlocks] = useState<Block[]>(schedule?.target_blocks ?? []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -132,6 +138,7 @@ export function ScheduleForm({
       entry_start: canEntry && useEntry && entryStart ? entryStart : null,
       entry_end: canEntry && useEntry && entryEnd ? entryEnd : null,
       note: useDetail && detail.trim() ? detail.trim() : null,
+      target_blocks: targetBlocks,
     };
 
     const { error } = editing
@@ -154,6 +161,52 @@ export function ScheduleForm({
         value={type}
         onChange={(k) => setType(k as ScheduleType)}
       />
+
+      <div>
+        <p className="section-label mb-1.5">対象ブロック</p>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setTargetBlocks([])}
+            className={cn(
+              "h-11 rounded-xl border text-[14px] font-semibold",
+              targetBlocks.length === 0
+                ? "border-accent bg-accent text-white"
+                : "border-separator bg-card text-muted2",
+            )}
+          >
+            全体
+          </button>
+          {BLOCK_ORDER.map((block) => {
+            const meta = BLOCKS[block];
+            const active = targetBlocks.includes(block);
+            return (
+              <button
+                key={block}
+                type="button"
+                onClick={() =>
+                  setTargetBlocks((current) =>
+                    current.includes(block)
+                      ? current.filter((item) => item !== block)
+                      : [...current, block],
+                  )
+                }
+                className="h-11 rounded-xl border text-[14px] font-semibold"
+                style={{
+                  borderColor: active ? meta.color : "#e5e5ea",
+                  backgroundColor: active ? meta.bg : "#fff",
+                  color: active ? meta.color : "#8e8e93",
+                }}
+              >
+                {meta.label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-micro mt-1.5">
+          全体は全員に表示されます。個別ブロックは複数選択できます。
+        </p>
+      </div>
 
       {/* 日付（選ぶだけで設定。追加ボタン不要） */}
       <div>
@@ -294,30 +347,29 @@ export function ScheduleForm({
 export function ScheduleManageActions({ schedule }: { schedule: PracticeSchedule }) {
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
-  async function del() {
-    if (!confirm("この予定を削除しますか？")) return;
-    setDeleting(true);
+  async function remove() {
     const supabase = createClient();
-    await supabase.from("practice_schedules").delete().eq("id", schedule.id);
+    const { error } = await supabase.from("practice_schedules").delete().eq("id", schedule.id);
+    if (error) return false;
     router.refresh();
+    return true;
   }
 
   return (
-    <div className="flex gap-2 pt-1">
-      <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} className="gap-1">
-        <Pencil size={15} /> 編集
-      </Button>
-      <Button variant="ghost" size="sm" onClick={del} disabled={deleting} className="gap-1 text-danger">
-        <Trash2 size={15} /> {deleting ? "削除中…" : "削除"}
-      </Button>
-
-      <FullScreen open={editOpen} onOpenChange={setEditOpen}>
-        <FullScreenContent title="予定を編集">
+    <>
+      <ActionMenu
+        onEdit={() => setEditOpen(true)}
+        onDelete={remove}
+        deleteTitle="予定を削除しますか？"
+        deleteDescription="予定に紐づく出欠と練習メニューも削除されます。"
+        triggerLabel="予定のメニュー"
+      />
+      {editOpen && (
+        <FormModal open onOpenChange={setEditOpen} title="予定を編集">
           <ScheduleForm schedule={schedule} onDone={() => setEditOpen(false)} />
-        </FullScreenContent>
-      </FullScreen>
-    </div>
+        </FormModal>
+      )}
+    </>
   );
 }

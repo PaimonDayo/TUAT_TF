@@ -144,6 +144,7 @@ export interface PracticeSchedule {
   entry_end: string | null;
   venue_url: string | null;
   note: string | null;
+  target_blocks: Block[];
   created_by: string;
   created_at: string;
 }

@@ -18,6 +18,7 @@ import {
   getAttendancesForSchedules,
 } from "@/lib/queries";
 import { SCHEDULE_TYPES } from "@/lib/constants";
+import { permissionsOf } from "@/lib/permissions";
 import { venueShort } from "@/lib/venues";
 import type {
   PracticeRecord,
@@ -28,13 +29,14 @@ import type {
 
 export default async function HomePage() {
   const profile = await getCurrentProfile();
+  const perms = permissionsOf(profile.roles);
   const sevenDaysAgo = format(subDays(new Date(), 6), "yyyy-MM-dd");
 
   const [weekRecords, feed, notices, attSchedules] = await Promise.all([
     getUserRecords(profile.id, sevenDaysAgo),
     getFeed(profile.id, "all", 3),
     getHomeNotices(profile.id),
-    getAttendanceSchedules(8),
+    getAttendanceSchedules(profile.blocks, perms.createSchedule, 8),
   ]);
 
   const schedules = attSchedules as PracticeSchedule[];
