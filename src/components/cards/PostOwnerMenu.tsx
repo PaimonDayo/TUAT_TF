@@ -2,27 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { MoreHorizontal } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { OwnerActionMenu } from "@/components/ui/owner-actions";
+import { ActionMenu } from "@/components/ui/action-menu";
+import { FormModal } from "@/components/ui/form-modal";
 import { RecordForm } from "@/components/post/RecordForm";
 import { TweetForm } from "@/components/post/TweetForm";
 import type { PracticeRecord } from "@/types";
-
-type Mode = "menu" | "edit";
-
-function MenuButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      aria-label="メニュー"
-      className="h-8 w-8 -mr-1 flex items-center justify-center text-muted active:opacity-50 shrink-0"
-    >
-      <MoreHorizontal size={20} />
-    </button>
-  );
-}
 
 /** 練習記録の編集・削除メニュー（本人のみ表示） */
 export function RecordOwnerMenu({
@@ -33,41 +18,34 @@ export function RecordOwnerMenu({
   isMiddleLong: boolean;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<Mode>("menu");
-  const [deleting, setDeleting] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
-  async function del() {
-    if (!confirm("この練習記録を削除しますか？")) return;
-    setDeleting(true);
+  async function remove() {
     const supabase = createClient();
-    await supabase.from("practice_records").delete().eq("id", record.id);
+    const { error } = await supabase.from("practice_records").delete().eq("id", record.id);
+    if (error) return false;
     router.refresh();
-    setOpen(false);
+    return true;
   }
 
   return (
     <>
-      <MenuButton
-        onClick={() => {
-          setMode("menu");
-          setOpen(true);
-        }}
+      <ActionMenu
+        onEdit={() => setEditOpen(true)}
+        onDelete={remove}
+        deleteTitle="練習記録を削除しますか？"
+        deleteDescription="削除した練習記録は元に戻せません。"
+        triggerLabel="練習記録のメニュー"
+        className="-mr-1"
       />
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent title={mode === "edit" ? "練習記録を編集" : undefined}>
-          {mode === "menu" ? (
-            <OwnerActionMenu onEdit={() => setMode("edit")} onDelete={del} deleting={deleting} />
-          ) : (
-            <RecordForm
-              userId={record.user_id}
-              isMiddleLong={isMiddleLong}
-              record={record}
-              onDone={() => setOpen(false)}
-            />
-          )}
-        </SheetContent>
-      </Sheet>
+      <FormModal open={editOpen} onOpenChange={setEditOpen} title="練習記録を編集">
+        <RecordForm
+          userId={record.user_id}
+          isMiddleLong={isMiddleLong}
+          record={record}
+          onDone={() => setEditOpen(false)}
+        />
+      </FormModal>
     </>
   );
 }
@@ -75,36 +53,29 @@ export function RecordOwnerMenu({
 /** つぶやきの編集・削除メニュー（本人のみ表示） */
 export function TweetOwnerMenu({ tweet }: { tweet: { id: string; content: string } }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<Mode>("menu");
-  const [deleting, setDeleting] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
-  async function del() {
-    if (!confirm("このつぶやきを削除しますか？")) return;
-    setDeleting(true);
+  async function remove() {
     const supabase = createClient();
-    await supabase.from("tweets").delete().eq("id", tweet.id);
+    const { error } = await supabase.from("tweets").delete().eq("id", tweet.id);
+    if (error) return false;
     router.refresh();
-    setOpen(false);
+    return true;
   }
 
   return (
     <>
-      <MenuButton
-        onClick={() => {
-          setMode("menu");
-          setOpen(true);
-        }}
+      <ActionMenu
+        onEdit={() => setEditOpen(true)}
+        onDelete={remove}
+        deleteTitle="つぶやきを削除しますか？"
+        deleteDescription="削除したつぶやきは元に戻せません。"
+        triggerLabel="つぶやきのメニュー"
+        className="-mr-1"
       />
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent title={mode === "edit" ? "つぶやきを編集" : undefined}>
-          {mode === "menu" ? (
-            <OwnerActionMenu onEdit={() => setMode("edit")} onDelete={del} deleting={deleting} />
-          ) : (
-            <TweetForm tweet={tweet} onDone={() => setOpen(false)} />
-          )}
-        </SheetContent>
-      </Sheet>
+      <FormModal open={editOpen} onOpenChange={setEditOpen} title="つぶやきを編集">
+        <TweetForm tweet={tweet} onDone={() => setEditOpen(false)} />
+      </FormModal>
     </>
   );
 }
