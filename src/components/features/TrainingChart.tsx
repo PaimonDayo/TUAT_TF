@@ -184,8 +184,8 @@ export function TrainingChart({ records }: { records: PracticeRecord[] }) {
           (r) => r.result_text || r.strength_text || r.memo || r.condition,
         );
         return (
-          <div className="rounded-xl bg-bg p-3 min-h-[78px]">
-            <div className="flex items-baseline justify-between mb-1.5">
+          <div className="rounded-xl bg-bg p-3">
+            <div className="flex items-baseline justify-between mb-1">
               <p className="text-[12px] font-semibold">{bucketLabel(sel, true)}</p>
               <p className="text-[13px] font-bold tabular-nums">
                 {sel.total}
@@ -193,31 +193,40 @@ export function TrainingChart({ records }: { records: PracticeRecord[] }) {
               </p>
             </div>
 
-            {sel.total > 0 ? (
-              <div className="flex flex-wrap gap-x-4 gap-y-1">
-                {INTENSITY_ORDER.map((k) =>
-                  sel.by[k] > 0 ? (
-                    <span key={k} className="flex items-center gap-1 text-[12px] text-muted2">
-                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: INTENSITY_LABELS[k].color }} />
-                      {INTENSITY_LABELS[k].label} {Math.round(sel.by[k] * 10) / 10}km
-                    </span>
-                  ) : null,
-                )}
-              </div>
-            ) : (
-              !hasText && <p className="text-caption">この期間は記録がありません</p>
-            )}
+            {/* 内訳エリア（高さ固定で日ごとにガタつかない） */}
+            <div className="h-9 overflow-hidden">
+              {sel.total > 0 ? (
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  {INTENSITY_ORDER.map((k) =>
+                    sel.by[k] > 0 ? (
+                      <span key={k} className="flex items-center gap-1 text-[12px] text-muted2">
+                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: INTENSITY_LABELS[k].color }} />
+                        {INTENSITY_LABELS[k].label} {Math.round(sel.by[k] * 10) / 10}km
+                      </span>
+                    ) : null,
+                  )}
+                </div>
+              ) : (
+                <p className="text-caption">この期間は記録がありません</p>
+              )}
+            </div>
 
-            {hasText && (
-              <>
+            {/* 詳細ボタン行（記録が無くても高さを確保） */}
+            <div className="h-6 flex items-center">
+              {hasText && (
                 <button
                   onClick={() => setShowDetail((v) => !v)}
-                  className="mt-2 text-[12px] text-accent font-medium active:opacity-50"
+                  className="text-[12px] text-accent font-medium active:opacity-50"
                 >
                   {showDetail ? "詳細を閉じる" : "詳細（結果・補強・感想）"}
                 </button>
+              )}
+            </div>
+
+            {hasText && (
+              <>
                 {showDetail && (
-                  <div className="mt-2 space-y-2 border-t border-separator pt-2">
+                  <div className="mt-1 space-y-2 border-t border-separator pt-2">
                     {sel.records.map((r) => {
                       const cond = r.condition ? CONDITIONS[r.condition] : null;
                       return (
