@@ -14,7 +14,15 @@ export default async function TimelinePage() {
   return (
     <>
       <Header title="タイムライン" large />
-      <TimelineView initialItems={feed} currentUserId={profile.id} favoriteIds={favoriteIds} />
+      <TimelineView
+        initialItems={feed}
+        currentUser={{
+          id: profile.id,
+          display_name: profile.display_name,
+          avatar_url: profile.avatar_url,
+        }}
+        favoriteIds={favoriteIds}
+      />
     </>
   );
 }

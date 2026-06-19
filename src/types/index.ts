@@ -107,10 +107,13 @@ export interface Comment {
   target_id: string;
   content: string;
   created_at: string;
+  updated_at: string;
 }
 
+export type CommentAuthor = Pick<Profile, "id" | "display_name" | "avatar_url">;
+
 export interface CommentWithAuthor extends Comment {
-  author: Pick<Profile, "id" | "display_name" | "avatar_url">;
+  author: CommentAuthor;
 }
 
 export interface PracticeSchedule {

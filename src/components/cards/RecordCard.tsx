@@ -9,19 +9,19 @@ import { PostActions } from "@/components/cards/PostActions";
 import { Linkify } from "@/components/common/Linkify";
 import { RecordOwnerMenu } from "@/components/cards/PostOwnerMenu";
 import { CONDITIONS, gradeShort } from "@/lib/constants";
-import type { RecordWithAuthor } from "@/types";
+import type { CommentAuthor, RecordWithAuthor } from "@/types";
 
 /** タイムライン用の練習記録カード */
 export function RecordCard({
   record,
-  currentUserId,
+  currentUser,
 }: {
   record: RecordWithAuthor;
-  currentUserId?: string;
+  currentUser: CommentAuthor;
 }) {
   const { author } = record;
   const cond = record.condition ? CONDITIONS[record.condition] : null;
-  const isOwner = currentUserId === author.id;
+  const isOwner = currentUser.id === author.id;
   const gradeLabel = gradeShort(author.grade);
 
   return (
@@ -79,6 +79,7 @@ export function RecordCard({
         initialLikes={record.likes_count}
         initialLiked={record.liked_by_me ?? false}
         initialComments={record.comments_count ?? 0}
+        currentUser={currentUser}
       />
     </Card>
   );

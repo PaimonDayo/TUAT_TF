@@ -52,6 +52,11 @@ export default async function HomePage() {
     (s, r) => s + (r.dist_low + r.dist_mid + r.dist_high + r.dist_speed),
     0,
   );
+  const currentUser = {
+    id: profile.id,
+    display_name: profile.display_name,
+    avatar_url: profile.avatar_url,
+  };
 
   return (
     <>
@@ -163,9 +168,9 @@ export default async function HomePage() {
             ) : (
               feed.map((item) =>
                 item.kind === "record" ? (
-                  <RecordCard key={`r-${item.id}`} record={item} currentUserId={profile.id} />
+                  <RecordCard key={`r-${item.id}`} record={item} currentUser={currentUser} />
                 ) : (
-                  <TweetCard key={`t-${item.id}`} tweet={item} currentUserId={profile.id} />
+                  <TweetCard key={`t-${item.id}`} tweet={item} currentUser={currentUser} />
                 ),
               )
             )}

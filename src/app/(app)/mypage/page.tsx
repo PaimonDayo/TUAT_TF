@@ -116,7 +116,14 @@ export default async function MyPage({
         <section className="space-y-2">
           <p className="section-label">これまでの投稿</p>
           <Suspense fallback={<ActivitySkeleton />}>
-            <MyActivity userId={profile.id} />
+            <MyActivity
+              userId={profile.id}
+              currentUser={{
+                id: profile.id,
+                display_name: profile.display_name,
+                avatar_url: profile.avatar_url,
+              }}
+            />
           </Suspense>
         </section>
 
@@ -127,7 +134,13 @@ export default async function MyPage({
 }
 
 /** 自分の投稿一覧（記録＋つぶやき）。Suspense で遅延読み込み */
-async function MyActivity({ userId }: { userId: string }) {
+async function MyActivity({
+  userId,
+  currentUser,
+}: {
+  userId: string;
+  currentUser: import("@/types").CommentAuthor;
+}) {
   const activity = await getUserActivity(userId, userId);
   if (activity.length === 0) {
     return (
@@ -140,9 +153,9 @@ async function MyActivity({ userId }: { userId: string }) {
     <div className="space-y-3">
       {activity.map((item) =>
         item.kind === "record" ? (
-          <RecordCard key={`r-${item.id}`} record={item} currentUserId={userId} />
+          <RecordCard key={`r-${item.id}`} record={item} currentUser={currentUser} />
         ) : (
-          <TweetCard key={`t-${item.id}`} tweet={item} currentUserId={userId} />
+          <TweetCard key={`t-${item.id}`} tweet={item} currentUser={currentUser} />
         ),
       )}
     </div>

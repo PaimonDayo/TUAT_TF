@@ -10,7 +10,7 @@ import { GradeFilter } from "@/components/features/GradeFilter";
 import { SIMPLE_BLOCK_ITEMS, matchSimpleBlock } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { loadFeed } from "@/app/(app)/timeline/actions";
-import type { FeedItem } from "@/types";
+import type { CommentAuthor, FeedItem } from "@/types";
 
 const PAGE = 30;
 
@@ -21,11 +21,11 @@ const PAGE = 30;
  */
 export function TimelineView({
   initialItems,
-  currentUserId,
+  currentUser,
   favoriteIds = [],
 }: {
   initialItems: FeedItem[];
-  currentUserId: string;
+  currentUser: CommentAuthor;
   favoriteIds?: string[];
 }) {
   const [items, setItems] = useState(initialItems);
@@ -84,9 +84,9 @@ export function TimelineView({
           <div className="space-y-3">
             {filtered.map((item) =>
               item.kind === "record" ? (
-                <RecordCard key={`r-${item.id}`} record={item} currentUserId={currentUserId} />
+                <RecordCard key={`r-${item.id}`} record={item} currentUser={currentUser} />
               ) : (
-                <TweetCard key={`t-${item.id}`} tweet={item} currentUserId={currentUserId} />
+                <TweetCard key={`t-${item.id}`} tweet={item} currentUser={currentUser} />
               ),
             )}
 
