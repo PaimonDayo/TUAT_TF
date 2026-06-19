@@ -48,7 +48,10 @@ export function ScheduleSheetsManager() {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `${year}-${String(month).padStart(2, "0")}-${kind}-${block}.csv`;
+    anchor.download =
+      kind === "practice"
+        ? `${year}-${String(month).padStart(2, "0")}-practice-${block}.csv`
+        : `meets-${block}.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
   }
@@ -84,8 +87,8 @@ export function ScheduleSheetsManager() {
         .from("schedule_sheets")
         .insert({
           author_id: user.id,
-          target_year: year,
-          target_month: month,
+          target_year: kind === "practice" ? year : null,
+          target_month: kind === "practice" ? month : null,
           kind,
           target_block: block,
           sheet_url: `csv-upload://${fileName || "schedule.csv"}`,
@@ -149,33 +152,7 @@ export function ScheduleSheetsManager() {
       <section className="space-y-3">
         <div className="flex items-center gap-2">
           <Step number={1} />
-          <p className="text-headline">入力する予定の範囲を選ぶ</p>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <Input
-            type="number"
-            min={2020}
-            max={2100}
-            value={year}
-            aria-label="年"
-            onChange={(event) => {
-              setYear(Number(event.target.value));
-              setPreview(null);
-              setSheetId(null);
-            }}
-          />
-          <Input
-            type="number"
-            min={1}
-            max={12}
-            value={month}
-            aria-label="月"
-            onChange={(event) => {
-              setMonth(Number(event.target.value));
-              setPreview(null);
-              setSheetId(null);
-            }}
-          />
+          <p className="text-headline">入力する予定の種類を選ぶ</p>
         </div>
         <SegmentedControl
           items={[
@@ -189,6 +166,34 @@ export function ScheduleSheetsManager() {
             setSheetId(null);
           }}
         />
+        {kind === "practice" && (
+          <div className="grid grid-cols-2 gap-2">
+            <Input
+              type="number"
+              min={2020}
+              max={2100}
+              value={year}
+              aria-label="年"
+              onChange={(event) => {
+                setYear(Number(event.target.value));
+                setPreview(null);
+                setSheetId(null);
+              }}
+            />
+            <Input
+              type="number"
+              min={1}
+              max={12}
+              value={month}
+              aria-label="月"
+              onChange={(event) => {
+                setMonth(Number(event.target.value));
+                setPreview(null);
+                setSheetId(null);
+              }}
+            />
+          </div>
+        )}
         <select
           value={block}
           onChange={(event) => {
@@ -212,7 +217,9 @@ export function ScheduleSheetsManager() {
           <p className="text-headline">テンプレートをダウンロード</p>
         </div>
         <p className="text-caption">
-          日付と曜日が入力済みのCSVです。Googleスプレッドシートで開いて予定を入力してください。
+          {kind === "practice"
+            ? "選んだ月の日付と曜日が入力済みです。Googleスプレッドシートで予定を入力してください。"
+            : "記録会名・日付・エントリー開始日・締切日を入力する一覧です。月をまたいで入力できます。"}
         </p>
         <Button type="button" variant="outline" size="lg" onClick={downloadTemplate}>
           <Download size={17} />
@@ -356,10 +363,18 @@ function createTemplateRows(
   month: number,
   kind: ScheduleSheetKind,
   block: ScheduleSheetBlock,
-) {
+): Record<string, string>[] {
   const days = new Date(year, month, 0).getDate();
   const blockName = block === "all" ? "全体" : BLOCKS[block].label;
   const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+  if (kind === "meet") {
+    return Array.from({ length: 10 }, () => ({
+      "記録会名": "",
+      "日付": "",
+      "エントリー開始日": "",
+      "エントリー締切日": "",
+    }));
+  }
   return Array.from({ length: days }, (_, index) => {
     const day = index + 1;
     const date = new Date(year, month - 1, day);
@@ -367,23 +382,13 @@ function createTemplateRows(
       "日付": `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
       "曜日": weekdays[date.getDay()],
     };
-    return kind === "practice"
-      ? {
-          ...base,
-          "対象ブロック": blockName,
-          "時間": "",
-          "場所": "",
-          "詳細": "",
-        }
-      : {
-          ...base,
-          "記録会名": "",
-          "場所": "",
-          "エントリー開始日": "",
-          "エントリー締切日": "",
-          "対象ブロック": blockName,
-          "詳細": "",
-        };
+    return {
+      ...base,
+      "対象ブロック": blockName,
+      "時間": "",
+      "場所": "",
+      "詳細": "",
+    };
   });
 }
 

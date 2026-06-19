@@ -90,19 +90,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "CSVの引用符が正しく閉じられていません" }, { status: 400 });
   }
 
-  const start = `${sheet.target_year}-${String(sheet.target_month).padStart(2, "0")}-01`;
-  const nextMonth =
-    sheet.target_month === 12
-      ? `${sheet.target_year + 1}-01-01`
-      : `${sheet.target_year}-${String(sheet.target_month + 1).padStart(2, "0")}-01`;
-  const { data: existingData } = await supabase
+  let existingQuery = supabase
     .from("practice_schedules")
     .select("*")
-    .gte("schedule_date", start)
-    .lt("schedule_date", nextMonth)
     .eq("schedule_type", sheet.kind)
     .order("schedule_date", { ascending: true })
     .order("created_at", { ascending: true });
+  if (sheet.kind === "practice" && sheet.target_year && sheet.target_month) {
+    const start = `${sheet.target_year}-${String(sheet.target_month).padStart(2, "0")}-01`;
+    const nextMonth =
+      sheet.target_month === 12
+        ? `${sheet.target_year + 1}-01-01`
+        : `${sheet.target_year}-${String(sheet.target_month + 1).padStart(2, "0")}-01`;
+    existingQuery = existingQuery
+      .gte("schedule_date", start)
+      .lt("schedule_date", nextMonth);
+  }
+  const { data: existingData } = await existingQuery;
 
   const targetBlocks: Block[] =
     sheet.target_block === "all" ? [] : [sheet.target_block];
@@ -150,8 +154,21 @@ export async function POST(request: Request) {
     }
 
     const date = parseSheetDate(raw["日付"], sheet.target_year);
-    if (!date || !date.startsWith(`${sheet.target_year}-${String(sheet.target_month).padStart(2, "0")}-`)) {
-      preview.errors.push({ rowNumber, message: "日付が対象年月内の有効な日付ではありません" });
+    const outsidePracticeMonth =
+      sheet.kind === "practice" &&
+      (!sheet.target_year ||
+        !sheet.target_month ||
+        !date?.startsWith(
+          `${sheet.target_year}-${String(sheet.target_month).padStart(2, "0")}-`,
+        ));
+    if (!date || outsidePracticeMonth) {
+      preview.errors.push({
+        rowNumber,
+        message:
+          sheet.kind === "practice"
+            ? "日付が対象年月内の有効な日付ではありません"
+            : "日付は YYYY-MM-DD 形式で入力してください",
+      });
       return;
     }
 
@@ -188,9 +205,13 @@ export async function POST(request: Request) {
     }
 
     const entryStart =
-      sheet.kind === "meet" ? parseOptionalDate(raw["エントリー開始日"], sheet.target_year) : null;
+      sheet.kind === "meet"
+        ? parseOptionalDate(raw["エントリー開始日"], null)
+        : null;
     const entryEnd =
-      sheet.kind === "meet" ? parseOptionalDate(raw["エントリー締切日"], sheet.target_year) : null;
+      sheet.kind === "meet"
+        ? parseOptionalDate(raw["エントリー締切日"], null)
+        : null;
     if (
       sheet.kind === "meet" &&
       ((raw["エントリー開始日"]?.trim() && !entryStart) ||
@@ -200,7 +221,11 @@ export async function POST(request: Request) {
       return;
     }
 
-    const matched = (byDate.get(date) ?? []).find((schedule) => !usedIds.has(schedule.id));
+    const matched = (byDate.get(date) ?? []).find(
+      (schedule) =>
+        !usedIds.has(schedule.id) &&
+        (sheet.kind === "practice" || schedule.title === title),
+    );
     if (matched) usedIds.add(matched.id);
     const item: ScheduleImportRow = {
       rowNumber,
@@ -222,7 +247,10 @@ export async function POST(request: Request) {
     else preview.additions.push(item);
   });
 
-  preview.deletions = existing.filter((schedule) => !usedIds.has(schedule.id));
+  preview.deletions = existing.filter(
+    (schedule) =>
+      schedule.source_sheet_id === sheet.id && !usedIds.has(schedule.id),
+  );
   return NextResponse.json(preview);
 }
 
@@ -230,13 +258,20 @@ function sameBlocks(left: Block[], right: Block[]): boolean {
   return [...left].sort().join(",") === [...right].sort().join(",");
 }
 
-function parseSheetDate(value: string | undefined, defaultYear: number): string | null {
+function parseSheetDate(
+  value: string | undefined,
+  defaultYear: number | null,
+): string | null {
   const text = value?.trim();
   if (!text) return null;
   const normalized = text.replace(/年|月/g, "/").replace(/日/g, "").replace(/-/g, "/");
   const parts = normalized.split("/").filter(Boolean).map(Number);
   const [year, month, day] =
-    parts.length === 3 ? parts : parts.length === 2 ? [defaultYear, ...parts] : [];
+    parts.length === 3
+      ? parts
+      : parts.length === 2 && defaultYear
+        ? [defaultYear, ...parts]
+        : [];
   if (!year || !month || !day) return null;
   const date = new Date(year, month - 1, day);
   if (
@@ -249,7 +284,10 @@ function parseSheetDate(value: string | undefined, defaultYear: number): string 
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-function parseOptionalDate(value: string | undefined, defaultYear: number): string | null {
+function parseOptionalDate(
+  value: string | undefined,
+  defaultYear: number | null,
+): string | null {
   if (!value?.trim()) return null;
   return parseSheetDate(value, defaultYear);
 }

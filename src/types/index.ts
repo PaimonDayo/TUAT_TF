@@ -160,8 +160,8 @@ export type ScheduleSheetBlock = "all" | Block;
 export interface ScheduleSheet {
   id: string;
   author_id: string;
-  target_year: number;
-  target_month: number;
+  target_year: number | null;
+  target_month: number | null;
   kind: ScheduleSheetKind;
   target_block: ScheduleSheetBlock;
   sheet_url: string;
