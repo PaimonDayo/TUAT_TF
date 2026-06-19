@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * 学年フィルター（iOS風プルダウン）。ボタンを押すとチェックリストが出て複数選択できる。
- * 空配列＝全学年。選択中はボタンに件数を表示するので幅がほぼ変わらずガクつかない。
+ * 空配列＝全学年。選択状態は色だけで示し（フォロー/簡易トグルと同様）、ボタンの幅は一切変わらない。
  */
 export function GradeMenu({
   value,
@@ -34,7 +34,7 @@ export function GradeMenu({
           active ? "bg-accent text-white border-accent" : "bg-card border-separator text-muted2",
         )}
       >
-        学年{active && ` ${value.length}`}
+        学年
         <ChevronDown size={14} className={cn("transition-transform", open && "rotate-180")} />
       </button>
 
@@ -54,7 +54,7 @@ export function GradeMenu({
             {GRADE_OPTIONS.map((g) => (
               <MenuRow
                 key={g.value}
-                label={g.label}
+                label={g.short}
                 checked={value.includes(g.value)}
                 onClick={() => toggle(g.value)}
               />

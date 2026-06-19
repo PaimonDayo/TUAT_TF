@@ -92,10 +92,10 @@ export const NOTICE_CATEGORIES: Record<NoticeCategory, { label: string; color: s
 
 /** 学年（学部1〜4年 / 修士 M1・M2 / 博士 D1〜D3） */
 export const GRADE_OPTIONS: { value: string; label: string; short: string }[] = [
-  { value: "1", label: "学部1年", short: "1年" },
-  { value: "2", label: "学部2年", short: "2年" },
-  { value: "3", label: "学部3年", short: "3年" },
-  { value: "4", label: "学部4年", short: "4年" },
+  { value: "1", label: "学部1年", short: "B1" },
+  { value: "2", label: "学部2年", short: "B2" },
+  { value: "3", label: "学部3年", short: "B3" },
+  { value: "4", label: "学部4年", short: "B4" },
   { value: "M1", label: "修士1年", short: "M1" },
   { value: "M2", label: "修士2年", short: "M2" },
   { value: "D1", label: "博士1年", short: "D1" },
@@ -103,7 +103,7 @@ export const GRADE_OPTIONS: { value: string; label: string; short: string }[] = 
   { value: "D3", label: "博士3年", short: "D3" },
 ];
 
-/** grade 値を短い表示名に（"1"→"1年", "M1"→"M1"） */
+/** grade 値を短い表示名に（"1"→"B1", "M1"→"M1"） */
 export function gradeShort(grade: string | null): string | null {
   if (!grade) return null;
   return GRADE_OPTIONS.find((g) => g.value === grade)?.short ?? grade;
