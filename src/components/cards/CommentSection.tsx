@@ -1,15 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MoreHorizontal } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Avatar } from "@/components/common/Avatar";
 import { Linkify } from "@/components/common/Linkify";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { OwnerActionMenu } from "@/components/ui/owner-actions";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { ActionMenu } from "@/components/ui/action-menu";
 import type { CommentAuthor, CommentWithAuthor, TargetType } from "@/types";
 
 export function CommentSection({
@@ -28,11 +25,8 @@ export function CommentSection({
   const [error, setError] = useState("");
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
-  const [actionTarget, setActionTarget] = useState<CommentWithAuthor | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
-  const [deletingTarget, setDeletingTarget] = useState<CommentWithAuthor | null>(null);
-  const [deleting, setDeleting] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -102,7 +96,6 @@ export function CommentSection({
   }
 
   function beginEdit(comment: CommentWithAuthor) {
-    setActionTarget(null);
     setEditingId(comment.id);
     setEditText(comment.content);
     setError("");
@@ -137,31 +130,26 @@ export function CommentSection({
     setSaving(false);
   }
 
-  async function remove() {
-    if (!deletingTarget || deleting) return;
-
-    setDeleting(true);
+  async function remove(comment: CommentWithAuthor) {
     setError("");
     const supabase = createClient();
     const { error: deleteError } = await supabase
       .from("comments")
       .delete()
-      .eq("id", deletingTarget.id)
+      .eq("id", comment.id)
       .eq("user_id", currentUser.id);
 
     if (deleteError) {
       setError("コメントを削除できませんでした");
-      setDeleting(false);
-      return;
+      return false;
     }
 
     setComments((items) => {
-      const next = items.filter((item) => item.id !== deletingTarget.id);
+      const next = items.filter((item) => item.id !== comment.id);
       onCountChange(next.length);
       return next;
     });
-    setDeleting(false);
-    setDeletingTarget(null);
+    return true;
   }
 
   return (
@@ -189,14 +177,14 @@ export function CommentSection({
                       {comment.author.display_name || "名無し"}
                     </p>
                     {comment.user_id === currentUser.id && !editing && (
-                      <button
-                        type="button"
-                        onClick={() => setActionTarget(comment)}
-                        aria-label="コメントのメニュー"
-                        className="h-8 w-8 -mr-1 flex shrink-0 items-center justify-center text-muted active:opacity-50"
-                      >
-                        <MoreHorizontal size={18} />
-                      </button>
+                      <ActionMenu
+                        onEdit={() => beginEdit(comment)}
+                        onDelete={() => remove(comment)}
+                        deleteTitle="コメントを削除しますか？"
+                        deleteDescription="削除したコメントは元に戻せません。"
+                        triggerLabel="コメントのメニュー"
+                        className="-mr-1"
+                      />
                     )}
                   </div>
 
@@ -271,28 +259,6 @@ export function CommentSection({
         </Button>
       </div>
 
-      <Sheet open={!!actionTarget} onOpenChange={(open) => !open && setActionTarget(null)}>
-        <SheetContent>
-          {actionTarget && (
-            <OwnerActionMenu
-              onEdit={() => beginEdit(actionTarget)}
-              onDelete={() => {
-                setDeletingTarget(actionTarget);
-                setActionTarget(null);
-              }}
-            />
-          )}
-        </SheetContent>
-      </Sheet>
-
-      <ConfirmDialog
-        open={!!deletingTarget}
-        onOpenChange={(open) => !open && setDeletingTarget(null)}
-        title="コメントを削除しますか？"
-        description="削除したコメントは元に戻せません。"
-        busy={deleting}
-        onConfirm={remove}
-      />
     </div>
   );
 }

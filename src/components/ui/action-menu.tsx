@@ -17,7 +17,7 @@ export function ActionMenu({
   className,
 }: {
   onEdit?: () => void;
-  onDelete?: () => void | Promise<void>;
+  onDelete?: () => void | boolean | Promise<void | boolean>;
   editLabel?: string;
   deleteLabel?: string;
   deleteTitle?: string;
@@ -38,8 +38,8 @@ export function ActionMenu({
     if (!onDelete || deleting) return;
     setDeleting(true);
     try {
-      await onDelete();
-      setConfirmOpen(false);
+      const deleted = await onDelete();
+      if (deleted !== false) setConfirmOpen(false);
     } finally {
       setDeleting(false);
     }
