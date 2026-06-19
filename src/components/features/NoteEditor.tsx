@@ -120,6 +120,7 @@ function NoteEditor({
       .select("*")
       .single();
     if (themeError || !data) {
+      console.error("Failed to create note theme", themeError);
       setError("テーマを追加できませんでした");
     } else {
       const theme = data as NoteTheme;
@@ -176,6 +177,7 @@ function NoteEditor({
         .update(updatePayload)
         .eq("id", note.id);
       if (updateError) {
+        console.error("Failed to update note", updateError);
         setError("ノートを更新できませんでした");
         setSaving(false);
         return;
@@ -187,6 +189,7 @@ function NoteEditor({
         .select("id")
         .single();
       if (insertError || !data) {
+        console.error("Failed to create note", insertError);
         setError("ノートを保存できませんでした");
         setSaving(false);
         return;
@@ -200,6 +203,7 @@ function NoteEditor({
         .delete()
         .eq("note_id", noteId);
       if (deleteEditorsError) {
+        console.error("Failed to reset note editors", deleteEditorsError);
         setError("編集者の設定を更新できませんでした");
         setSaving(false);
         return;
@@ -209,6 +213,7 @@ function NoteEditor({
           .from("note_editors")
           .insert(editorIds.map((userId) => ({ note_id: noteId, user_id: userId })));
         if (editorError) {
+          console.error("Failed to save note editors", editorError);
           setError("編集者の設定を保存できませんでした");
           setSaving(false);
           return;
@@ -240,6 +245,9 @@ function NoteEditor({
         <>
           <div>
             <p className="section-label mb-1.5">テーマ</p>
+            <p className="text-micro mb-2">
+              共有ノートを整理するフォルダです。例: 大会、怪我予防、短距離
+            </p>
             {themes.length > 0 && (
               <select
                 value={themeId}
