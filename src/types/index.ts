@@ -175,6 +175,7 @@ export interface ScheduleImportRow {
   rowNumber: number;
   id?: string;
   schedule_date: string;
+  end_date: string | null;
   schedule_type: ScheduleSheetKind;
   meeting_time: string | null;
   venue_name: string | null;

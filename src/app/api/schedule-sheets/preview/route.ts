@@ -153,7 +153,10 @@ export async function POST(request: Request) {
       return;
     }
 
-    const date = parseSheetDate(raw["日付"], sheet.target_year);
+    const date = parseSheetDate(
+      sheet.kind === "meet" ? raw["開始日"] || raw["日付"] : raw["日付"],
+      sheet.target_year,
+    );
     const outsidePracticeMonth =
       sheet.kind === "practice" &&
       (!sheet.target_year ||
@@ -168,6 +171,22 @@ export async function POST(request: Request) {
           sheet.kind === "practice"
             ? "日付が対象年月内の有効な日付ではありません"
             : "日付は YYYY-MM-DD 形式で入力してください",
+      });
+      return;
+    }
+    const endDate =
+      sheet.kind === "meet" ? parseOptionalDate(raw["終了日"], null) : null;
+    if (sheet.kind === "meet" && raw["終了日"]?.trim() && !endDate) {
+      preview.errors.push({
+        rowNumber,
+        message: "終了日は YYYY-MM-DD 形式で入力してください",
+      });
+      return;
+    }
+    if (endDate && endDate < date) {
+      preview.errors.push({
+        rowNumber,
+        message: "終了日は開始日以降にしてください",
       });
       return;
     }
@@ -231,6 +250,7 @@ export async function POST(request: Request) {
       rowNumber,
       id: matched?.id,
       schedule_date: date,
+      end_date: endDate,
       schedule_type: sheet.kind,
       meeting_time: meetingTime,
       venue_name: venue?.name ?? null,

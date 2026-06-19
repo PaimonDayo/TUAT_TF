@@ -219,7 +219,7 @@ export function ScheduleSheetsManager() {
         <p className="text-caption">
           {kind === "practice"
             ? "選んだ月の日付と曜日が入力済みです。Googleスプレッドシートで予定を入力してください。"
-            : "記録会名・日付・エントリー開始日・締切日を入力する一覧です。月をまたいで入力できます。"}
+            : "記録会名・開始日・終了日・エントリー開始日・締切日を入力します。1日開催は終了日を空欄にします。"}
         </p>
         <Button type="button" variant="outline" size="lg" onClick={downloadTemplate}>
           <Download size={17} />
@@ -320,6 +320,7 @@ function PreviewSection({
               </p>
               <p className="text-micro">
                 {row.rowNumber}行目
+                {row.end_date ? ` / 終了 ${row.end_date}` : ""}
                 {row.meeting_time ? ` / ${row.meeting_time}` : ""}
               </p>
             </div>
@@ -370,7 +371,8 @@ function createTemplateRows(
   if (kind === "meet") {
     return Array.from({ length: 10 }, () => ({
       "記録会名": "",
-      "日付": "",
+      "開始日": "",
+      "終了日": "",
       "エントリー開始日": "",
       "エントリー締切日": "",
     }));
@@ -396,6 +398,7 @@ function toRpcRow(row: ScheduleImportRow) {
   return {
     id: row.id ?? "",
     schedule_date: row.schedule_date,
+    end_date: row.end_date ?? "",
     meeting_time: row.meeting_time ?? "",
     venue_name: row.venue_name ?? "",
     venue_access: row.venue_access ?? "",
