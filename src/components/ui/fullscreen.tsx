@@ -14,11 +14,13 @@ export const FullScreen = Dialog.Root;
 export function FullScreenContent({
   title,
   children,
+  footer,
   autoFocus = true,
   className,
 }: {
   title: string;
   children: React.ReactNode;
+  footer?: React.ReactNode;
   autoFocus?: boolean;
   className?: string;
 }) {
@@ -49,6 +51,12 @@ export function FullScreenContent({
         <div className="flex-1 overflow-y-auto px-4 pt-3 pb-[max(env(safe-area-inset-bottom),16px)]">
           {children}
         </div>
+
+        {footer && (
+          <div className="shrink-0 border-t border-separator bg-card px-4 pt-3 pb-[max(env(safe-area-inset-bottom),12px)]">
+            {footer}
+          </div>
+        )}
       </Dialog.Content>
     </Dialog.Portal>
   );
