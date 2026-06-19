@@ -540,5 +540,6 @@ function toRpcRow(row: ScheduleImportRow) {
     entry_start: row.entry_start ?? "",
     entry_end: row.entry_end ?? "",
     note: row.note ?? "",
+    target_blocks: row.target_blocks,
   };
 }

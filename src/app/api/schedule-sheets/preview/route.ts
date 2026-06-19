@@ -108,13 +108,9 @@ export async function POST(request: Request) {
   }
   const { data: existingData } = await existingQuery;
 
-  const targetBlocks: Block[] =
+  const defaultTargetBlocks: Block[] =
     sheet.target_block === "all" ? [] : [sheet.target_block];
-  const existing = ((existingData ?? []) as PracticeSchedule[]).filter(
-    (schedule) =>
-      schedule.source_sheet_id === sheet.id ||
-      sameBlocks(schedule.target_blocks ?? [], targetBlocks),
-  );
+  const existing = (existingData ?? []) as PracticeSchedule[];
   const venues = (venueData ?? []) as VenueRow[];
   const byDate = new Map<string, PracticeSchedule[]>();
   for (const schedule of existing) {
@@ -196,13 +192,15 @@ export async function POST(request: Request) {
 
     const rowBlockText = raw["対象ブロック"]?.trim();
     const rowBlock = rowBlockText ? BLOCK_LABELS[rowBlockText] : sheet.target_block;
-    if (!rowBlock || rowBlock !== sheet.target_block) {
+    if (!rowBlock) {
       preview.errors.push({
         rowNumber,
-        message: "対象ブロックが登録したシートの範囲と一致しません",
+        message: `対象ブロックを確認してください: ${rowBlockText}`,
       });
       return;
     }
+    const rowTargetBlocks: Block[] =
+      rowBlock === "all" ? [] : [rowBlock];
 
     const venueText = raw["場所"]?.trim() || "";
     const venue = venueText
@@ -254,6 +252,7 @@ export async function POST(request: Request) {
       : (byDate.get(date) ?? []).find(
           (schedule) =>
             !usedIds.has(schedule.id) &&
+            sameBlocks(schedule.target_blocks ?? [], rowTargetBlocks) &&
             (sheet.kind === "practice" || schedule.title === title),
         );
     if (explicitId && !matched) {
@@ -279,7 +278,8 @@ export async function POST(request: Request) {
       entry_start: entryStart,
       entry_end: entryEnd,
       note: raw["詳細"]?.trim() || null,
-      target_blocks: targetBlocks,
+      target_blocks:
+        sheet.kind === "practice" ? rowTargetBlocks : defaultTargetBlocks,
     };
     if (matched) preview.updates.push(item);
     else preview.additions.push(item);
@@ -333,10 +333,11 @@ function parseOptionalDate(
 function parseTime(value: string | undefined): string | null {
   const text = value?.trim();
   if (!text) return null;
-  const match = text.match(/^(\d{1,2}):(\d{2})$/);
+  const match = text.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
   if (!match) return null;
   const hour = Number(match[1]);
   const minute = Number(match[2]);
-  if (hour > 23 || minute > 59) return null;
+  const second = Number(match[3] ?? 0);
+  if (hour > 23 || minute > 59 || second > 59) return null;
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
