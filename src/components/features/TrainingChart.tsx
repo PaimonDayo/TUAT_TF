@@ -138,8 +138,8 @@ export function TrainingChart({ records }: { records: PracticeRecord[] }) {
                   {barH > 0 ? (
                     <div
                       className={cn(
-                        "w-full rounded-t-[4px] overflow-hidden flex flex-col-reverse border border-separator/70 shadow-sm transition-all",
-                        isSel ? "ring-2 ring-accent/50" : "opacity-95",
+                        "w-full rounded-t-[4px] overflow-hidden flex flex-col-reverse border shadow-sm transition-all",
+                        isSel ? "border-accent ring-2 ring-inset ring-accent/60" : "border-separator/70 opacity-95",
                       )}
                       style={{ height: `${barH}px` }}
                     >

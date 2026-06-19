@@ -131,25 +131,31 @@ export function ScheduleCard({
               value={`${fmt(schedule.entry_start)} 〜 ${fmt(schedule.entry_end)}`}
             />
           )}
-          {schedule.venue_access && (
+          {(schedule.venue_access || schedule.venue_fee) && (
             <div>
               <button
                 onClick={() => setAccessOpen((v) => !v)}
                 className="section-label flex items-center gap-1 active:opacity-50"
               >
-                <Train size={14} /> アクセス
+                <Train size={14} /> アクセス・参加費
                 <ChevronDown
                   size={14}
                   className={cn("transition-transform", accessOpen && "rotate-180")}
                 />
               </button>
               {accessOpen && (
-                <p className="text-[14px] whitespace-pre-wrap mt-0.5">{schedule.venue_access}</p>
+                <div className="mt-1 space-y-1.5">
+                  {schedule.venue_access && (
+                    <p className="text-[14px] whitespace-pre-wrap">{schedule.venue_access}</p>
+                  )}
+                  {schedule.venue_fee && (
+                    <p className="text-[13px] text-muted2 flex items-center gap-1">
+                      <Coins size={13} /> 参加費：{schedule.venue_fee}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
-          )}
-          {schedule.venue_fee && (
-            <Detail icon={<Coins size={14} />} label="参加費" value={schedule.venue_fee} />
           )}
           {schedule.note && (
             <Detail icon={<Info size={14} />} label="詳細情報" value={schedule.note} />

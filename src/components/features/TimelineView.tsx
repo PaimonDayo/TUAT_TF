@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Star } from "lucide-react";
+import { UserCheck } from "lucide-react";
 import { RecordCard } from "@/components/cards/RecordCard";
 import { TweetCard } from "@/components/cards/TweetCard";
 import { Button } from "@/components/ui/button";
@@ -68,11 +68,11 @@ export function TimelineView({
           onClick={() => setFavOnly((v) => !v)}
           className={cn(
             "h-8 px-3 rounded-full border text-[13px] font-semibold inline-flex items-center gap-1 shrink-0 active:opacity-60",
-            favOnly ? "bg-warning text-white border-warning" : "bg-card border-separator text-muted2",
+            favOnly ? "bg-accent text-white border-accent" : "bg-card border-separator text-muted2",
           )}
         >
-          <Star size={14} fill={favOnly ? "#fff" : "none"} />
-          お気に入り
+          <UserCheck size={14} />
+          フォロー中
         </button>
         <GradeFilter value={grade} onChange={setGrade} />
       </div>
