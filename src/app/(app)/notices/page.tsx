@@ -1,4 +1,4 @@
-import { Header } from "@/components/layout/Header";
+import { SubHeader } from "@/components/layout/SubHeader";
 import { NoticeCard } from "@/components/cards/NoticeCard";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getNotices } from "@/lib/queries";
@@ -19,9 +19,10 @@ export default async function NoticesPage({
 
   return (
     <>
-      <Header
+      <SubHeader
         title="お知らせ"
-        large
+        backHref="/home"
+        backLabel="ホーム"
         right={canCreateNotice ? <NoticeComposer autoOpen={compose === "1"} /> : undefined}
       />
       <div className="px-4 pt-1 space-y-3">

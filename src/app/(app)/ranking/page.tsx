@@ -1,4 +1,4 @@
-import { Header } from "@/components/layout/Header";
+import { SubHeader } from "@/components/layout/SubHeader";
 import { RankingList } from "@/components/features/RankingList";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getWeeklyRanking } from "@/lib/queries";
@@ -10,7 +10,7 @@ export default async function RankingPage() {
 
   return (
     <>
-      <Header title="ランキング" large />
+      <SubHeader title="ランキング" backHref="/home" backLabel="ホーム" />
       <div className="px-4 pb-3 space-y-2">
         <p className="text-body text-muted">直近7日間の走行距離 ・ 中長距離ブロック</p>
         <div className="flex flex-wrap gap-x-3 gap-y-0.5">

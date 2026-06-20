@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/common/Avatar";
 import { BlockPills } from "@/components/common/BlockPill";
 import { SegmentedControl } from "@/components/ui/segmented";
-import { GradeFilter } from "@/components/features/GradeFilter";
+import { GradeMenu } from "@/components/features/GradeMenu";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SIMPLE_BLOCK_ITEMS, matchSimpleBlock, gradeShort } from "@/lib/constants";
 import type { AuthorMini } from "@/types";
@@ -15,16 +15,16 @@ import type { AuthorMini } from "@/types";
 /** メンバー名簿。中長/短・学年で絞り込みできる */
 export function MemberDirectory({ members }: { members: AuthorMini[] }) {
   const [block, setBlock] = useState("all");
-  const [grade, setGrade] = useState("all");
+  const [grades, setGrades] = useState<string[]>([]);
 
   const filtered = useMemo(
     () =>
       members.filter(
         (m) =>
           matchSimpleBlock(m.blocks, block) &&
-          (grade === "all" || m.grade === grade),
+          (grades.length === 0 || grades.includes(m.grade ?? "")),
       ),
-    [members, block, grade],
+    [members, block, grades],
   );
 
   return (
@@ -34,7 +34,7 @@ export function MemberDirectory({ members }: { members: AuthorMini[] }) {
       </div>
       <div className="px-4 pb-2 flex items-center justify-between">
         <span className="text-caption">{filtered.length}人</span>
-        <GradeFilter value={grade} onChange={setGrade} />
+        <GradeMenu value={grades} onChange={setGrades} />
       </div>
 
       <div className="px-4 pt-1">
