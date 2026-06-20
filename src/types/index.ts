@@ -202,7 +202,24 @@ export interface ScheduleImportRow {
   target_blocks: Block[];
 }
 
+export type ScheduleImportRowStatus =
+  | "addition"
+  | "update"
+  | "error"
+  | "skip"
+  | "editing";
+
+export interface ScheduleImportEditableRow {
+  rowNumber: number;
+  values: Record<string, string>;
+  status: ScheduleImportRowStatus;
+  message: string | null;
+  normalized: ScheduleImportRow | null;
+}
+
 export interface ScheduleImportPreview {
+  columns: string[];
+  rows: ScheduleImportEditableRow[];
   additions: ScheduleImportRow[];
   updates: ScheduleImportRow[];
   deletions: PracticeSchedule[];

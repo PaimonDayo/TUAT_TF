@@ -3,7 +3,15 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Papa from "papaparse";
-import { Check, Download, ExternalLink, Link2, Upload } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  Download,
+  ExternalLink,
+  Link2,
+  RefreshCw,
+  Upload,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,6 +22,7 @@ import { createClient } from "@/lib/supabase/client";
 import { BLOCKS } from "@/lib/constants";
 import type {
   ScheduleImportPreview,
+  ScheduleImportEditableRow,
   ScheduleImportRow,
   ScheduleSheetBlock,
   ScheduleSheetKind,
@@ -265,7 +274,18 @@ export function ScheduleSheetsManager() {
     if (!preview || !sheetId || applying) return;
     setApplying(true);
     setError(null);
-    const rows = [...preview.additions, ...preview.updates].map(toRpcRow);
+    const validated = await validateEditedRows(preview.rows);
+    if (!validated) {
+      setApplying(false);
+      return;
+    }
+    const validRows = [...validated.additions, ...validated.updates];
+    if (validRows.length === 0) {
+      setPreview(validated);
+      setApplying(false);
+      return;
+    }
+    const rows = validRows.map(toRpcRow);
     const supabase = createClient();
     const { error: applyError } = await supabase.rpc("apply_schedule_sheet_import", {
       target_sheet_id: sheetId,
@@ -277,16 +297,84 @@ export function ScheduleSheetsManager() {
       return;
     }
     router.refresh();
-    setPreview(null);
-    setCsv("");
-    setFileName("");
-    setSheetUrl("");
-    setSheetId(null);
+    const remaining = validated.rows.filter((row) => row.status === "error");
+    if (remaining.length > 0) {
+      setPreview({
+        ...validated,
+        rows: remaining,
+        additions: [],
+        updates: [],
+        deletions: [],
+      });
+    } else {
+      setPreview(null);
+      setCsv("");
+      setFileName("");
+      setSheetUrl("");
+      setSheetId(null);
+    }
     setApplying(false);
   }
 
+  async function validateEditedRows(
+    rows: ScheduleImportEditableRow[],
+  ): Promise<ScheduleImportPreview | null> {
+    if (!sheetId) return null;
+    setLoading(true);
+    setError(null);
+    const response = await fetch("/api/schedule-sheets/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sheetId,
+        rows: rows.map(({ rowNumber, values }) => ({ rowNumber, values })),
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      setError(result.error ?? "入力内容を再確認できませんでした");
+      setLoading(false);
+      return null;
+    }
+    const next = {
+      ...(result as ScheduleImportPreview),
+      deletions: preview?.deletions ?? [],
+    };
+    setPreview(next);
+    setLoading(false);
+    return next;
+  }
+
+  function updatePreviewCell(rowNumber: number, column: string, value: string) {
+    setPreview((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        rows: current.rows.map((row) =>
+          row.rowNumber === rowNumber
+            ? {
+                ...row,
+                values: { ...row.values, [column]: value },
+                status: "editing",
+                message: "未確認の変更があります",
+                normalized: null,
+              }
+            : row,
+        ),
+      };
+    });
+  }
+
   const applicable = preview
-    ? preview.additions.length + preview.updates.length
+    ? preview.rows.filter(
+        (row) => row.status === "addition" || row.status === "update",
+      ).length
+    : 0;
+  const errorCount = preview
+    ? preview.rows.filter((row) => row.status === "error").length
+    : 0;
+  const dirtyCount = preview
+    ? preview.rows.filter((row) => row.status === "editing").length
     : 0;
 
   return (
@@ -598,30 +686,52 @@ export function ScheduleSheetsManager() {
             <Step number={4} />
             <p className="text-headline">確認して予定へ反映</p>
           </div>
-          <PreviewSection title="追加予定" rows={preview.additions} />
-          <PreviewSection title="更新予定" rows={preview.updates} />
+          <Card className="grid grid-cols-3 divide-x divide-separator overflow-hidden">
+            <SummaryCount label="取込可能" value={applicable} />
+            <SummaryCount label="エラー" value={errorCount} danger={errorCount > 0} />
+            <SummaryCount label="未確認" value={dirtyCount} />
+          </Card>
+          <EditablePreviewTable
+            columns={preview.columns}
+            rows={preview.rows}
+            onChange={updatePreviewCell}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            disabled={loading}
+            onClick={() => void validateEditedRows(preview.rows)}
+          >
+            <RefreshCw size={17} />
+            {loading ? "再確認中..." : "編集内容を再確認"}
+          </Button>
           <SimpleSection
             title="削除候補（削除しません）"
             items={preview.deletions.map(
               (row) => `${row.schedule_date} ${row.title || row.venue_name || "予定"}`,
             )}
           />
-          <SimpleSection
-            title="エラー行"
-            danger
-            items={preview.errors.map(
-              (row) => `${row.rowNumber}行目: ${row.message}`,
-            )}
-          />
-          <SimpleSection
-            title="スキップ行"
-            items={preview.skips.map(
-              (row) => `${row.rowNumber}行目: ${row.message}`,
-            )}
-          />
-          <Button size="lg" disabled={applying || applicable === 0} onClick={apply}>
-            {applying ? "反映中..." : `${applicable}件を予定に反映`}
+          <Button
+            size="lg"
+            disabled={
+              applying ||
+              preview.rows.length === 0 ||
+              (applicable === 0 && dirtyCount === 0)
+            }
+            onClick={apply}
+          >
+            {applying
+              ? "反映中..."
+              : dirtyCount > 0
+                ? "再確認して正常行を反映"
+                : `${applicable}件を予定に反映`}
           </Button>
+          {errorCount > 0 && (
+            <p className="text-caption text-danger">
+              エラー行は反映せず画面に残ります。正常行だけ先に反映できます。
+            </p>
+          )}
         </section>
       )}
 
@@ -650,40 +760,122 @@ function Step({ number }: { number: number }) {
   );
 }
 
-function PreviewSection({
-  title,
+function EditablePreviewTable({
+  columns,
   rows,
+  onChange,
 }: {
-  title: string;
-  rows: ScheduleImportRow[];
+  columns: string[];
+  rows: ScheduleImportEditableRow[];
+  onChange: (rowNumber: number, column: string, value: string) => void;
 }) {
+  const visibleColumns = columns.filter((column) => column !== "曜日");
   return (
     <section className="space-y-2">
-      <div className="flex items-center justify-between">
-        <p className="section-label">{title}</p>
-        <Badge>{rows.length}件</Badge>
+      <p className="section-label">取込内容を編集</p>
+      <div className="overflow-x-auto rounded-xl border border-separator bg-card">
+        <table className="w-max min-w-full border-collapse text-left">
+          <thead>
+            <tr className="border-b border-separator bg-bg">
+              <th className="sticky left-0 z-10 min-w-44 bg-bg px-2 py-2 text-micro">
+                行・判定
+              </th>
+              {visibleColumns.map((column) => (
+                <th key={column} className="min-w-32 px-2 py-2 text-micro">
+                  {column}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr
+                key={row.rowNumber}
+                className="border-b border-separator/70 last:border-b-0"
+              >
+                <td className="sticky left-0 z-10 bg-card px-2 py-2 align-top">
+                  <p className="text-micro">{row.rowNumber}行</p>
+                  <RowStatus row={row} />
+                </td>
+                {visibleColumns.map((column) => (
+                  <td key={column} className="px-1.5 py-1.5 align-top">
+                    <input
+                      type={inputTypeForColumn(column)}
+                      value={row.values[column] ?? ""}
+                      readOnly={column === "予定ID"}
+                      aria-label={`${row.rowNumber}行目 ${column}`}
+                      onChange={(event) =>
+                        onChange(row.rowNumber, column, event.target.value)
+                      }
+                      className="h-9 w-full min-w-32 rounded-lg border border-separator bg-white px-2 text-[13px] outline-none focus:border-accent read-only:bg-bg read-only:text-muted"
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-      {rows.length > 0 && (
-        <Card className="space-y-2 p-3">
-          {rows.map((row) => (
-            <div
-              key={`${title}-${row.rowNumber}`}
-              className="border-b border-separator pb-2 last:border-b-0 last:pb-0"
-            >
-              <p className="text-[13px] font-semibold">
-                {row.schedule_date} {row.title || row.venue_name || "予定"}
-              </p>
-              <p className="text-micro">
-                {row.rowNumber}行目
-                {row.end_date ? ` / 終了 ${row.end_date}` : ""}
-                {row.meeting_time ? ` / ${row.meeting_time}` : ""}
-              </p>
-            </div>
-          ))}
-        </Card>
-      )}
     </section>
   );
+}
+
+function RowStatus({ row }: { row: ScheduleImportEditableRow }) {
+  if (row.status === "error") {
+    return (
+      <div className="mt-1 max-w-40 text-[10px] leading-4 text-danger">
+        <span className="inline-flex items-center gap-1 font-semibold">
+          <AlertCircle size={12} />
+          エラー
+        </span>
+        <p>{row.message}</p>
+      </div>
+    );
+  }
+  const labels = {
+    addition: "追加",
+    update: "更新",
+    skip: "スキップ",
+    editing: "未確認",
+  } as const;
+  return (
+    <span className="mt-1 inline-block whitespace-nowrap text-[10px] font-semibold text-muted2">
+      {labels[row.status]}
+    </span>
+  );
+}
+
+function SummaryCount({
+  label,
+  value,
+  danger = false,
+}: {
+  label: string;
+  value: number;
+  danger?: boolean;
+}) {
+  return (
+    <div className="p-3 text-center">
+      <p className="text-micro">{label}</p>
+      <p className={`mt-0.5 text-title tabular-nums ${danger ? "text-danger" : ""}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function inputTypeForColumn(column: string) {
+  if (
+    column === "日付" ||
+    column === "開始日" ||
+    column === "終了日" ||
+    column === "エントリー開始日" ||
+    column === "エントリー締切日"
+  ) {
+    return "date";
+  }
+  if (column === "時間") return "time";
+  return "text";
 }
 
 function SimpleSection({
@@ -728,8 +920,11 @@ function createTemplateRows(
       [kind === "meet" ? "大会名" : "記録会名"]: "",
       "開始日": "",
       "終了日": "",
+      "場所": "",
       "エントリー開始日": "",
       "エントリー締切日": "",
+      "対象ブロック": blockName,
+      "詳細": "",
     }));
   }
   return Array.from({ length: days }, (_, index) => {
@@ -773,8 +968,14 @@ function createExistingRows(
     [titleKey]: schedule.title ?? "",
     "開始日": schedule.schedule_date,
     "終了日": schedule.end_date ?? "",
+    "場所": schedule.venue_name ?? "",
     "エントリー開始日": schedule.entry_start ?? "",
     "エントリー締切日": schedule.entry_end ?? "",
+    "対象ブロック":
+      schedule.target_blocks.length === 0
+        ? "全体"
+        : schedule.target_blocks.map((item) => BLOCKS[item].label).join(","),
+    "詳細": schedule.note ?? "",
   }));
 }
 
