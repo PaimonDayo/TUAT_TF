@@ -146,7 +146,7 @@ function ContextualFAB({
 
       <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 mx-auto h-0 w-full max-w-md">
         {isFeed && speedDialOpen && (
-          <div className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] flex w-[min(15rem,calc(100vw-2.5rem))] flex-col items-stretch gap-2">
+          <div className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-2xl border border-separator bg-card shadow-xl">
             <SpeedDialAction
               icon={<Activity size={19} />}
               label="練習記録"
@@ -257,9 +257,9 @@ function SpeedDialAction({
     <button
       type="button"
       onClick={onClick}
-      className="flex h-11 w-full items-center gap-2 whitespace-nowrap rounded-full border border-separator bg-card px-3.5 text-[14px] font-semibold text-ink shadow-lg active:bg-bg"
+      className="flex w-full items-center gap-3 whitespace-nowrap px-4 py-3 text-left text-[14px] font-semibold text-ink active:bg-bg"
     >
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-white">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent">
         {icon}
       </span>
       {label}
