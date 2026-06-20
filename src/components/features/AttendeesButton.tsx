@@ -24,9 +24,13 @@ export function AttendeesButton({ attendees }: { attendees: Attendee[] }) {
         className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-bg border border-separator text-[13px] font-semibold text-muted2 active:opacity-60 shrink-0"
       >
         <Users size={15} />
-        {/* 0でも消さず常に表示（消えると枠が縮んでガクつくため）。数字は等幅。 */}
-        <span className="text-success tabular-nums">参加 {present.length}</span>
-        <span className="text-danger tabular-nums">欠席 {absent.length}</span>
+        {/* 0でも消さず常に表示。数字は等幅＋2桁ぶんの固定幅で桁が増えてもガクつかない。 */}
+        <span className="text-success">
+          出席 <span className="inline-block min-w-[2ch] text-right tabular-nums">{present.length}</span>
+        </span>
+        <span className="text-danger">
+          欠席 <span className="inline-block min-w-[2ch] text-right tabular-nums">{absent.length}</span>
+        </span>
       </button>
 
       <Sheet open={open} onOpenChange={setOpen}>

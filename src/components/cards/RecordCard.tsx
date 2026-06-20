@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
+import { Heart, MessageCircle } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
 import { BlockPills } from "@/components/common/BlockPill";
 import { Card } from "@/components/ui/card";
@@ -9,7 +10,6 @@ import { IntensityBar } from "@/components/features/IntensityBar";
 import { PostActions } from "@/components/cards/PostActions";
 import { RecordOwnerMenu } from "@/components/cards/PostOwnerMenu";
 import { CONDITIONS, gradeShort } from "@/lib/constants";
-import { cn } from "@/lib/utils";
 import type { CommentAuthor, RecordWithAuthor } from "@/types";
 
 /** タイムライン用の練習記録カード。compact=簡易表示（テキスト詳細を畳む） */
@@ -30,7 +30,7 @@ export function RecordCard({
     record.dist_low + record.dist_mid + record.dist_high + record.dist_speed;
 
   return (
-    <Card className={cn("p-4", compact ? "space-y-2" : "space-y-3")}>
+    <Card className="p-4 space-y-3">
       {/* ヘッダー */}
       <div className="flex items-center gap-2.5">
         <Link href={`/members/${author.id}`} onClick={(e) => e.stopPropagation()}>
@@ -53,15 +53,27 @@ export function RecordCard({
             の練習
           </p>
         </div>
-        {cond && (
-          <span
-            className="inline-flex items-center gap-1 text-[13px] font-semibold shrink-0"
-            style={{ color: cond.color }}
-            title={cond.label}
-          >
-            <span className="text-[16px] leading-none">{cond.symbol}</span>
-            {cond.label}
+        {/* 簡易表示ではコンディションの位置にいいね・返信数を出す */}
+        {compact ? (
+          <span className="flex shrink-0 items-center gap-3 text-[12px] text-muted">
+            <span className="flex items-center gap-1">
+              <Heart size={14} /> <span className="tabular-nums">{record.likes_count}</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <MessageCircle size={14} /> <span className="tabular-nums">{record.comments_count ?? 0}</span>
+            </span>
           </span>
+        ) : (
+          cond && (
+            <span
+              className="inline-flex items-center gap-1 text-[13px] font-semibold shrink-0"
+              style={{ color: cond.color }}
+              title={cond.label}
+            >
+              <span className="text-[16px] leading-none">{cond.symbol}</span>
+              {cond.label}
+            </span>
+          )
         )}
         {isOwner && (
           <span onClick={(e) => e.stopPropagation()}>

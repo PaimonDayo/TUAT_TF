@@ -5,17 +5,16 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { NOTICE_CATEGORIES } from "@/lib/constants";
 import { NoticeActions } from "@/components/cards/NoticeActions";
-import { NoticeReactions } from "@/components/features/NoticeReactions";
 import { Linkify } from "@/components/common/Linkify";
 import type { NoticeWithReactions } from "@/types";
 
 export function NoticeCard({
   notice,
-  userId,
   canManage = false,
 }: {
   notice: NoticeWithReactions;
-  userId: string;
+  /** リアクション機能で使用していたが現在は未使用（呼び出し側の互換のため残置） */
+  userId?: string;
   canManage?: boolean;
 }) {
   const meta = NOTICE_CATEGORIES[notice.category];
@@ -45,12 +44,6 @@ export function NoticeCard({
           {overdue && "（終了）"}
         </p>
       )}
-      <NoticeReactions
-        noticeId={notice.id}
-        userId={userId}
-        initialCounts={notice.reaction_counts}
-        initialMine={notice.my_reactions}
-      />
     </Card>
   );
 }

@@ -8,7 +8,6 @@ import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
 import { Linkify } from "@/components/common/Linkify";
-import { NoticeReactions } from "@/components/features/NoticeReactions";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { NOTICE_CATEGORIES } from "@/lib/constants";
@@ -120,12 +119,6 @@ export function HomeNotices({
                   <X size={16} />
                 </button>
               </div>
-              <NoticeReactions
-                noticeId={notice.id}
-                userId={userId}
-                initialCounts={notice.reaction_counts}
-                initialMine={notice.my_reactions}
-              />
             </Card>
           );
         })}

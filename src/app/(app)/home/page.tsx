@@ -141,10 +141,18 @@ export default async function HomePage() {
                               <Clock size={12} /> {s.meeting_time.slice(0, 5)}
                             </span>
                           )}
-                          <span className="shrink-0 tabular-nums text-success">参加 {presentCount.get(s.id) ?? 0}</span>
-                          {(absentCount.get(s.id) ?? 0) > 0 && (
-                            <span className="shrink-0 tabular-nums text-danger">欠席 {absentCount.get(s.id)}</span>
-                          )}
+                          <span className="shrink-0 text-success">
+                            出席{" "}
+                            <span className="inline-block min-w-[2ch] text-right tabular-nums">
+                              {presentCount.get(s.id) ?? 0}
+                            </span>
+                          </span>
+                          <span className="shrink-0 text-danger">
+                            欠席{" "}
+                            <span className="inline-block min-w-[2ch] text-right tabular-nums">
+                              {absentCount.get(s.id) ?? 0}
+                            </span>
+                          </span>
                         </div>
                       </div>
                     </Link>
