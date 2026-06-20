@@ -67,28 +67,36 @@ export function RecordCard({
         )}
       </div>
 
-      {/* 距離 */}
-      {compact ? (
-        totalDistance > 0 && (
-          <p className="text-[13px] font-semibold text-muted2 tabular-nums">
-            走行距離 {Math.round(totalDistance * 10) / 10}km
-          </p>
-        )
-      ) : (
-        <IntensityBar record={record} />
-      )}
+      {/* 距離（中長距離。データがある時だけ表示） */}
+      {compact
+        ? totalDistance > 0 && (
+            <p className="text-[13px] font-semibold text-muted2 tabular-nums">
+              走行距離 {Math.round(totalDistance * 10) / 10}km
+            </p>
+          )
+        : totalDistance > 0 && <IntensityBar record={record} />}
       {!compact && record.strides > 0 && (
         <p className="text-[12px] text-muted2">流し {record.strides}本</p>
       )}
 
-      {/* テキスト各種（簡易表示では畳む） */}
-      {!compact && (record.result_text || record.strength_text || record.memo) && (
-        <dl>
-          <KeyValue label="結果・タイム" value={record.result_text} />
-          <KeyValue label="補強" value={record.strength_text} />
-          <KeyValue label="感想" value={record.memo} />
-        </dl>
-      )}
+      {/* テキスト各種（簡易表示では畳む。存在する項目だけ表示） */}
+      {!compact &&
+        (record.menu_text ||
+          record.focus_text ||
+          record.result_text ||
+          record.strength_text ||
+          record.memo) && (
+          <dl>
+            <KeyValue label="メニュー" value={record.menu_text} />
+            <KeyValue label="目的・意識すること" value={record.focus_text} />
+            <KeyValue
+              label={record.menu_text || record.focus_text ? "タイム" : "結果・タイム"}
+              value={record.result_text}
+            />
+            <KeyValue label="補強" value={record.strength_text} />
+            <KeyValue label="感想" value={record.memo} />
+          </dl>
+        )}
 
       {!compact && (
         <PostActions

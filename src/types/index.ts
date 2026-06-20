@@ -71,6 +71,10 @@ export interface PracticeRecord {
   result_text: string | null;
   strength_text: string | null;
   memo: string | null;
+  /** 短距離・跳躍・投擲向け: 実施メニュー */
+  menu_text: string | null;
+  /** 短距離・跳躍・投擲向け: 目的・意識すること */
+  focus_text: string | null;
   condition: Condition | null;
   likes_count: number;
   created_at: string;

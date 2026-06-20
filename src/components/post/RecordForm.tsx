@@ -47,6 +47,8 @@ export function RecordForm({
   const [strides, setStrides] = useState(numStr(record?.strides ?? 0));
   const [resultText, setResultText] = useState(record?.result_text ?? "");
   const [strengthText, setStrengthText] = useState(record?.strength_text ?? "");
+  const [menuText, setMenuText] = useState(record?.menu_text ?? "");
+  const [focusText, setFocusText] = useState(record?.focus_text ?? "");
   const [memo, setMemo] = useState(record?.memo ?? "");
   const [condition, setCondition] = useState<Condition | null>(record?.condition ?? null);
   const [saving, setSaving] = useState(false);
@@ -58,15 +60,24 @@ export function RecordForm({
       (parseFloat(dist.mid) || 0) +
       (parseFloat(dist.high) || 0) +
       (parseFloat(dist.speed) || 0);
-    const hasContent =
-      distTotal > 0 ||
-      (parseInt(strides) || 0) > 0 ||
-      !!resultText.trim() ||
-      !!strengthText.trim() ||
-      !!memo.trim() ||
-      !!condition;
+    const hasContent = isMiddleLong
+      ? distTotal > 0 ||
+        (parseInt(strides) || 0) > 0 ||
+        !!resultText.trim() ||
+        !!strengthText.trim() ||
+        !!memo.trim() ||
+        !!condition
+      : !!menuText.trim() ||
+        !!focusText.trim() ||
+        !!resultText.trim() ||
+        !!memo.trim() ||
+        !!condition;
     if (!hasContent) {
-      setError("距離・タイム・補強・感想のいずれかを入力してください");
+      setError(
+        isMiddleLong
+          ? "距離・タイム・補強・感想のいずれかを入力してください"
+          : "メニュー・目的・タイム・感想のいずれかを入力してください",
+      );
       return;
     }
 
@@ -74,18 +85,36 @@ export function RecordForm({
     setError(null);
     const supabase = createClient();
 
-    const payload = {
-      recorded_date: date,
-      dist_low: parseFloat(dist.low) || 0,
-      dist_mid: parseFloat(dist.mid) || 0,
-      dist_high: parseFloat(dist.high) || 0,
-      dist_speed: parseFloat(dist.speed) || 0,
-      strides: parseInt(strides) || 0,
-      result_text: resultText.trim() || null,
-      strength_text: strengthText.trim() || null,
-      memo: memo.trim() || null,
-      condition,
-    };
+    // 中長距離は距離系、それ以外はメニュー/目的系。使わない側は null/0 にする。
+    const payload = isMiddleLong
+      ? {
+          recorded_date: date,
+          dist_low: parseFloat(dist.low) || 0,
+          dist_mid: parseFloat(dist.mid) || 0,
+          dist_high: parseFloat(dist.high) || 0,
+          dist_speed: parseFloat(dist.speed) || 0,
+          strides: parseInt(strides) || 0,
+          result_text: resultText.trim() || null,
+          strength_text: strengthText.trim() || null,
+          menu_text: null,
+          focus_text: null,
+          memo: memo.trim() || null,
+          condition,
+        }
+      : {
+          recorded_date: date,
+          dist_low: 0,
+          dist_mid: 0,
+          dist_high: 0,
+          dist_speed: 0,
+          strides: 0,
+          result_text: resultText.trim() || null,
+          strength_text: null,
+          menu_text: menuText.trim() || null,
+          focus_text: focusText.trim() || null,
+          memo: memo.trim() || null,
+          condition,
+        };
 
     const { error } = editing
       ? await supabase.from("practice_records").update(payload).eq("id", record!.id)
@@ -129,9 +158,35 @@ export function RecordForm({
         </div>
       )}
 
+      {/* メニュー（短距離・跳躍・投擲） */}
+      {!isMiddleLong && (
+        <div>
+          <p className="section-label mb-1.5">メニュー</p>
+          <Textarea
+            rows={2}
+            placeholder="今日取り組んだメニュー"
+            value={menuText}
+            onChange={(e) => setMenuText(e.target.value)}
+          />
+        </div>
+      )}
+
+      {/* 目的・意識すること（短距離・跳躍・投擲） */}
+      {!isMiddleLong && (
+        <div>
+          <p className="section-label mb-1.5">目的・意識すること</p>
+          <Textarea
+            rows={2}
+            placeholder="このメニューの狙い・意識したポイント"
+            value={focusText}
+            onChange={(e) => setFocusText(e.target.value)}
+          />
+        </div>
+      )}
+
       {/* 結果・タイム */}
       <div>
-        <p className="section-label mb-1.5">結果・タイム</p>
+        <p className="section-label mb-1.5">{isMiddleLong ? "結果・タイム" : "タイム"}</p>
         <Textarea
           rows={2}
           placeholder={isMiddleLong ? "例: 5000m 16'20\"" : "例: 100m 11.2 (+1.5)"}
@@ -140,16 +195,18 @@ export function RecordForm({
         />
       </div>
 
-      {/* 補強 */}
-      <div>
-        <p className="section-label mb-1.5">補強</p>
-        <Textarea
-          rows={2}
-          placeholder="腹筋・背筋・体幹 など"
-          value={strengthText}
-          onChange={(e) => setStrengthText(e.target.value)}
-        />
-      </div>
+      {/* 補強（中長距離のみ） */}
+      {isMiddleLong && (
+        <div>
+          <p className="section-label mb-1.5">補強</p>
+          <Textarea
+            rows={2}
+            placeholder="腹筋・背筋・体幹 など"
+            value={strengthText}
+            onChange={(e) => setStrengthText(e.target.value)}
+          />
+        </div>
+      )}
 
       {/* 感想 */}
       <div>
