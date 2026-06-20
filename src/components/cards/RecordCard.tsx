@@ -33,12 +33,16 @@ export function RecordCard({
     <Card className={cn("p-4", compact ? "space-y-2" : "space-y-3")}>
       {/* ヘッダー */}
       <div className="flex items-center gap-2.5">
-        <Link href={`/members/${author.id}`}>
+        <Link href={`/members/${author.id}`} onClick={(e) => e.stopPropagation()}>
           <Avatar name={author.display_name} blocks={author.blocks} avatarUrl={author.avatar_url} />
         </Link>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <Link href={`/members/${author.id}`} className="text-headline truncate">
+            <Link
+              href={`/members/${author.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="text-headline truncate"
+            >
               {author.display_name || "名無し"}
             </Link>
             <BlockPills blocks={author.blocks} />
@@ -60,10 +64,12 @@ export function RecordCard({
           </span>
         )}
         {isOwner && (
-          <RecordOwnerMenu
-            record={record}
-            isMiddleLong={author.blocks?.includes("middle_long") ?? false}
-          />
+          <span onClick={(e) => e.stopPropagation()}>
+            <RecordOwnerMenu
+              record={record}
+              isMiddleLong={author.blocks?.includes("middle_long") ?? false}
+            />
+          </span>
         )}
       </div>
 
@@ -99,14 +105,16 @@ export function RecordCard({
         )}
 
       {!compact && (
-        <PostActions
-          targetType="record"
-          targetId={record.id}
-          initialLikes={record.likes_count}
-          initialLiked={record.liked_by_me ?? false}
-          initialComments={record.comments_count ?? 0}
-          currentUser={currentUser}
-        />
+        <div onClick={(e) => e.stopPropagation()}>
+          <PostActions
+            targetType="record"
+            targetId={record.id}
+            initialLikes={record.likes_count}
+            initialLiked={record.liked_by_me ?? false}
+            initialComments={record.comments_count ?? 0}
+            currentUser={currentUser}
+          />
+        </div>
       )}
     </Card>
   );

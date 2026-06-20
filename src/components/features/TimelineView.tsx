@@ -43,11 +43,22 @@ export function TimelineView({
   const [favOnly, setFavOnly] = useState(false);
   // 簡易表示の設定はタブを離れても保持する（cookie。SSRから初期値復元でフラッシュ無し）
   const [compact, setCompact] = useState(initialCompact);
+  // 簡易表示中に個別展開した投稿
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   function toggleCompact() {
     const next = !compact;
     setCompact(next);
     document.cookie = `timeline-compact=${next ? "1" : "0"};path=/;max-age=31536000`;
+  }
+
+  function toggleExpanded(key: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   }
 
   const favSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
@@ -115,13 +126,26 @@ export function TimelineView({
           <EmptyState title="条件に合う投稿がありません" />
         ) : (
           <div className="space-y-3">
-            {filtered.map((item) =>
-              item.kind === "record" ? (
-                <RecordCard key={`r-${item.id}`} record={item} currentUser={currentUser} compact={compact} />
+            {filtered.map((item) => {
+              const key = `${item.kind}-${item.id}`;
+              // 簡易表示は既定。個別にタップで展開でき、もう一度タップで閉じる。
+              const isExpanded = expanded.has(key);
+              const effectiveCompact = compact && !isExpanded;
+              const card =
+                item.kind === "record" ? (
+                  <RecordCard record={item} currentUser={currentUser} compact={effectiveCompact} />
+                ) : (
+                  <TweetCard tweet={item} currentUser={currentUser} compact={effectiveCompact} />
+                );
+              // 簡易表示のときだけ開閉トグルを付ける（詳細表示は常に展開済み）
+              return compact ? (
+                <div key={key} onClick={() => toggleExpanded(key)} className="cursor-pointer">
+                  {card}
+                </div>
               ) : (
-                <TweetCard key={`t-${item.id}`} tweet={item} currentUser={currentUser} compact={compact} />
-              ),
-            )}
+                <div key={key}>{card}</div>
+              );
+            })}
 
             {!ended && (
               <div className="pt-1 pb-2">

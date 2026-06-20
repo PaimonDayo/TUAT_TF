@@ -44,20 +44,9 @@ export function HomeFeed({
             <TweetCard tweet={item} currentUser={currentUser} compact={!isOpen} />
           );
 
-        // 展開後は内部のいいね等を操作できるよう、簡易表示のときだけタップで展開する。
-        // 展開中は専用の「閉じる」で畳む（カード内操作で誤って閉じないようにする）。
-        return isOpen ? (
-          <div key={key}>
-            {card}
-            <button
-              type="button"
-              onClick={() => toggle(key)}
-              className="mt-1 w-full py-1 text-center text-[12px] text-muted active:opacity-60"
-            >
-              閉じる
-            </button>
-          </div>
-        ) : (
+        // カードのどこをタップしても開閉する（もう一度タップで閉じる）。
+        // いいね・コメント・⋯・名前リンクはカード側で伝播を止めてあるので誤爆しない。
+        return (
           <div key={key} onClick={() => toggle(key)} className="cursor-pointer">
             {card}
           </div>
