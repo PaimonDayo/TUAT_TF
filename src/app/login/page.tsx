@@ -14,17 +14,18 @@ export default function LoginPage() {
     setError(null);
     const supabase = createClient();
     const domain = process.env.NEXT_PUBLIC_UNIVERSITY_DOMAIN;
+    const next =
+      new URLSearchParams(window.location.search).get("next") ?? "/home";
 
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { error: signInError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        // Google Workspace の場合、大学ドメインのみ表示
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
         queryParams: domain ? { hd: domain, prompt: "select_account" } : {},
       },
     });
 
-    if (error) {
+    if (signInError) {
       setError("ログインに失敗しました。もう一度お試しください。");
       setLoading(false);
     }
@@ -32,14 +33,15 @@ export default function LoginPage() {
 
   return (
     <main className="min-h-dvh flex flex-col items-center justify-center px-8 max-w-md mx-auto">
-      {/* ロゴ */}
       <div className="flex flex-col items-center gap-3 mb-12">
         <div className="h-20 w-20 rounded-[22px] bg-accent flex items-center justify-center shadow-lg shadow-accent/20">
-          <span className="text-white text-[26px] font-extrabold tracking-tight">{APP_MONO}</span>
+          <span className="text-white text-[26px] font-extrabold tracking-tight">
+            {APP_MONO}
+          </span>
         </div>
         <h1 className="text-large-title">{APP_NAME}</h1>
         <p className="text-body text-muted text-center">
-          練習記録・予定・ランキングを
+          練習記録・予定・ノートを
           <br />
           部内で共有しよう
         </p>
@@ -54,13 +56,13 @@ export default function LoginPage() {
           className="gap-3"
         >
           <GoogleIcon />
-          {loading ? "ログイン中…" : "Google でログイン"}
+          {loading ? "ログイン中..." : "Googleでログイン"}
         </Button>
 
         {error && <p className="text-caption text-danger text-center">{error}</p>}
 
         <p className="text-micro text-center pt-2">
-          大学のGoogleアカウント（@{process.env.NEXT_PUBLIC_UNIVERSITY_DOMAIN}）
+          大学のGoogleアカウント（{process.env.NEXT_PUBLIC_UNIVERSITY_DOMAIN}）
           <br />
           でのみログインできます
         </p>
