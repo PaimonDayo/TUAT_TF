@@ -10,9 +10,9 @@ import type { ScheduleWithMenus, Attendee, AttendanceStatusOrNone } from "@/type
 export default async function SchedulePage({
   searchParams,
 }: {
-  searchParams: Promise<{ compose?: string }>;
+  searchParams: Promise<{ compose?: string; open?: string }>;
 }) {
-  const { compose } = await searchParams;
+  const { compose, open } = await searchParams;
   const profile = await getCurrentProfile();
   const perms = permissionsOf(profile.roles);
   // 種別の絞り込みはクライアント側で行うため、今後の予定を全件取得する。
@@ -53,6 +53,7 @@ export default async function SchedulePage({
         canManage={perms.createSchedule}
         attendeesBySchedule={attendeesBySchedule}
         myStatusBySchedule={myStatusBySchedule}
+        openId={open}
       />
     </>
   );

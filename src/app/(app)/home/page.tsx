@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { format, subDays } from "date-fns";
 import { ja } from "date-fns/locale";
-import { Clock, ChevronRight } from "lucide-react";
+import { Clock, ChevronRight, FileText } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { RecordCard } from "@/components/cards/RecordCard";
-import { TweetCard } from "@/components/cards/TweetCard";
+import { HomeFeed } from "@/components/features/HomeFeed";
 import { HomeNotices } from "@/components/features/HomeNotices";
 import { AttendanceToggle } from "@/components/features/AttendanceToggle";
 import { getCurrentProfile } from "@/lib/supabase/auth";
@@ -14,6 +13,7 @@ import {
   getFeed,
   getUserRecords,
   getHomeNotices,
+  getRecentSharedNotes,
   getAttendanceSchedules,
   getAttendancesForSchedules,
 } from "@/lib/queries";
@@ -24,6 +24,7 @@ import type {
   PracticeRecord,
   PracticeSchedule,
   Notice,
+  NoteWithRelations,
   AttendanceStatusOrNone,
 } from "@/types";
 
@@ -32,10 +33,11 @@ export default async function HomePage() {
   const perms = permissionsOf(profile.roles);
   const sevenDaysAgo = format(subDays(new Date(), 6), "yyyy-MM-dd");
 
-  const [weekRecords, feed, notices, attSchedules] = await Promise.all([
+  const [weekRecords, feed, notices, sharedNotes, attSchedules] = await Promise.all([
     getUserRecords(profile.id, sevenDaysAgo),
     getFeed(profile.id, "all", 3),
     getHomeNotices(profile.id),
+    getRecentSharedNotes(3),
     getAttendanceSchedules(profile.blocks, perms.createSchedule, 3),
   ]);
 
@@ -93,10 +95,10 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* 出欠（これからの予定） */}
+        {/* 予定 */}
         <section className="space-y-2">
           <div className="flex items-center justify-between">
-            <p className="section-label">出欠（これからの予定）</p>
+            <p className="section-label">予定</p>
             <Link href="/schedule" className="text-[13px] text-accent flex items-center">
               すべて見る <ChevronRight size={15} />
             </Link>
@@ -111,35 +113,41 @@ export default async function HomePage() {
                 const meta = SCHEDULE_TYPES[s.schedule_type];
                 return (
                   <Card key={s.id} className="p-3 flex items-center gap-3">
-                    <div className="flex flex-col items-center w-10 shrink-0">
-                      <span className="text-[10px]" style={{ color: meta.color }}>
-                        {format(new Date(s.schedule_date + "T00:00:00"), "EEE", { locale: ja })}
-                      </span>
-                      <span className="text-xl font-bold leading-tight tabular-nums">
-                        {format(new Date(s.schedule_date + "T00:00:00"), "d")}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <Badge style={{ backgroundColor: meta.color + "1a", color: meta.color }}>
-                          {meta.label}
-                        </Badge>
-                        <span className="text-[14px] font-semibold truncate">
-                          {s.title ?? venueShort(s.venue_name) ?? meta.label}
+                    {/* 日付・内容をタップすると予定タブで該当日のメニューを展開 */}
+                    <Link
+                      href={`/schedule?open=${s.id}`}
+                      className="flex flex-1 items-center gap-3 min-w-0 active:opacity-60"
+                    >
+                      <div className="flex flex-col items-center w-10 shrink-0">
+                        <span className="text-[10px]" style={{ color: meta.color }}>
+                          {format(new Date(s.schedule_date + "T00:00:00"), "EEE", { locale: ja })}
+                        </span>
+                        <span className="text-xl font-bold leading-tight tabular-nums">
+                          {format(new Date(s.schedule_date + "T00:00:00"), "d")}
                         </span>
                       </div>
-                      <div className="flex items-center gap-x-3 text-[12px] text-muted2 mt-0.5 min-w-0">
-                        {s.meeting_time && (
-                          <span className="flex items-center gap-1 shrink-0">
-                            <Clock size={12} /> {s.meeting_time.slice(0, 5)}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <Badge style={{ backgroundColor: meta.color + "1a", color: meta.color }}>
+                            {meta.label}
+                          </Badge>
+                          <span className="text-[14px] font-semibold truncate">
+                            {s.title ?? venueShort(s.venue_name) ?? meta.label}
                           </span>
-                        )}
-                        <span className="shrink-0 tabular-nums text-success">参加 {presentCount.get(s.id) ?? 0}</span>
-                        {(absentCount.get(s.id) ?? 0) > 0 && (
-                          <span className="shrink-0 tabular-nums text-danger">欠席 {absentCount.get(s.id)}</span>
-                        )}
+                        </div>
+                        <div className="flex items-center gap-x-3 text-[12px] text-muted2 mt-0.5 min-w-0">
+                          {s.meeting_time && (
+                            <span className="flex items-center gap-1 shrink-0">
+                              <Clock size={12} /> {s.meeting_time.slice(0, 5)}
+                            </span>
+                          )}
+                          <span className="shrink-0 tabular-nums text-success">参加 {presentCount.get(s.id) ?? 0}</span>
+                          {(absentCount.get(s.id) ?? 0) > 0 && (
+                            <span className="shrink-0 tabular-nums text-danger">欠席 {absentCount.get(s.id)}</span>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    </Link>
                     <AttendanceToggle
                       scheduleId={s.id}
                       userId={profile.id}
@@ -153,29 +161,43 @@ export default async function HomePage() {
           )}
         </section>
 
-        {/* 最新の投稿 */}
+        {/* ノート */}
+        {(sharedNotes as NoteWithRelations[]).length > 0 && (
+          <section className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="section-label">ノート</p>
+              <Link href="/notes" className="text-[13px] text-accent flex items-center">
+                すべて見る <ChevronRight size={15} />
+              </Link>
+            </div>
+            <div className="space-y-2">
+              {(sharedNotes as NoteWithRelations[]).map((note) => (
+                <Link key={note.id} href={`/notes/${note.id}`}>
+                  <Card className="p-4 active:bg-bg">
+                    <div className="flex items-start gap-3">
+                      <FileText size={19} className="mt-0.5 shrink-0 text-accent" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-headline truncate">{note.title}</p>
+                        <p className="mt-1 line-clamp-2 text-caption">{note.body}</p>
+                      </div>
+                      <ChevronRight size={18} className="mt-0.5 shrink-0 text-muted" />
+                    </div>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* タイムライン */}
         <section className="space-y-2">
           <div className="flex items-center justify-between">
-            <p className="section-label">最新の投稿</p>
+            <p className="section-label">タイムライン</p>
             <Link href="/timeline" className="text-[13px] text-accent flex items-center">
-              タイムライン <ChevronRight size={15} />
+              すべて見る <ChevronRight size={15} />
             </Link>
           </div>
-          <div className="space-y-3">
-            {feed.length === 0 ? (
-              <Card className="p-4">
-                <p className="text-caption">まだ投稿がありません</p>
-              </Card>
-            ) : (
-              feed.map((item) =>
-                item.kind === "record" ? (
-                  <RecordCard key={`r-${item.id}`} record={item} currentUser={currentUser} />
-                ) : (
-                  <TweetCard key={`t-${item.id}`} tweet={item} currentUser={currentUser} />
-                ),
-              )
-            )}
-          </div>
+          <HomeFeed feed={feed} currentUser={currentUser} />
         </section>
       </div>
     </>

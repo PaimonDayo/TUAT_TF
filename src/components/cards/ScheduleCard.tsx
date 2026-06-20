@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
@@ -44,6 +44,7 @@ export function ScheduleCard({
   userId,
   myStatus = "none",
   attendees = [],
+  defaultOpen = false,
 }: {
   schedule: ScheduleWithMenus;
   canEditMenu?: boolean;
@@ -52,9 +53,18 @@ export function ScheduleCard({
   userId?: string;
   myStatus?: AttendanceStatusOrNone;
   attendees?: Attendee[];
+  defaultOpen?: boolean;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  // ホームの「予定」からタップで来たときは、対象カードまでスクロールする
+  useEffect(() => {
+    if (defaultOpen) {
+      cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [defaultOpen]);
   const meta = SCHEDULE_TYPES[schedule.schedule_type];
   const date = new Date(schedule.schedule_date + "T00:00:00");
   const hasMenus = schedule.menus && schedule.menus.length > 0;
@@ -71,7 +81,7 @@ export function ScheduleCard({
     canManage;
 
   return (
-    <Card className="overflow-hidden">
+    <Card ref={cardRef} className="overflow-hidden scroll-mt-20">
       <button
         onClick={() => hasDetail && setOpen((v) => !v)}
         className="w-full p-4 flex items-center gap-3 text-left active:bg-bg"

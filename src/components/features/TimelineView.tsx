@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { UserCheck, List } from "lucide-react";
 import { RecordCard } from "@/components/cards/RecordCard";
 import { TweetCard } from "@/components/cards/TweetCard";
@@ -37,7 +37,16 @@ export function TimelineView({
   const [block, setBlock] = useState<string>("all");
   const [grades, setGrades] = useState<string[]>([]);
   const [favOnly, setFavOnly] = useState(false);
+  // 簡易表示の設定はタブを離れても保持する（localStorage）
   const [compact, setCompact] = useState(false);
+
+  useEffect(() => {
+    setCompact(localStorage.getItem("timeline-compact") === "1");
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("timeline-compact", compact ? "1" : "0");
+  }, [compact]);
 
   const favSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
 

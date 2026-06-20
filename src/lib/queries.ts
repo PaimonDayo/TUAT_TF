@@ -456,6 +456,20 @@ export async function getNoteById(id: string): Promise<NoteWithRelations | null>
   return (data as unknown as NoteWithRelations | null) ?? null;
 }
 
+/** ホームに表示する最近の共有ノート（RLSで閲覧可能なもの） */
+export async function getRecentSharedNotes(
+  limit = 3,
+): Promise<NoteWithRelations[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("notes")
+    .select(NOTE_SELECT)
+    .eq("scope", "shared")
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+  return (data ?? []) as unknown as NoteWithRelations[];
+}
+
 /** プロフィールに表示する公開個人ノート */
 export async function getPublishedPersonalNotes(
   authorId: string,

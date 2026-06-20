@@ -21,6 +21,7 @@ export function ScheduleView({
   canManage = false,
   attendeesBySchedule,
   myStatusBySchedule,
+  openId,
 }: {
   schedules: ScheduleWithMenus[];
   userId: string;
@@ -29,6 +30,7 @@ export function ScheduleView({
   canManage?: boolean;
   attendeesBySchedule: Record<string, Attendee[]>;
   myStatusBySchedule: Record<string, AttendanceStatusOrNone>;
+  openId?: string;
 }) {
   const [type, setType] = useState("all");
 
@@ -79,6 +81,7 @@ export function ScheduleView({
                     userId={userId}
                     myStatus={myStatusBySchedule[s.id] ?? "none"}
                     attendees={attendeesBySchedule[s.id] ?? []}
+                    defaultOpen={s.id === openId}
                   />
                 </div>
               </Fragment>
