@@ -43,6 +43,8 @@ export interface Profile {
   display_name: string;
   avatar_url: string | null;
   blocks: Block[];
+  /** 専門種目（任意・複数可。情報表示用） */
+  events: string[];
   grade: string | null;
   /** 目標（自由入力。マイページから設定） */
   goal: string | null;

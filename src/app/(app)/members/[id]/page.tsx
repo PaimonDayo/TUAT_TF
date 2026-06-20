@@ -62,6 +62,18 @@ export default async function MemberPage({
               <BlockPills blocks={profile.blocks} full />
             </div>
             <p className="text-caption mt-0.5">{gradeShort(profile.grade) ?? "学年未設定"}</p>
+            {profile.events?.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {profile.events.map((ev) => (
+                  <span
+                    key={ev}
+                    className="rounded-full border border-separator bg-bg px-2 py-0.5 text-micro text-muted2"
+                  >
+                    {ev}
+                  </span>
+                ))}
+              </div>
+            )}
             {profile.roles?.length > 0 && (
               <div className="mt-1 flex flex-wrap gap-1">
                 {profile.roles.map((role) => (

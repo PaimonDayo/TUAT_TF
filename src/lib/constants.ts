@@ -13,6 +13,33 @@ export const BLOCKS: Record<
 
 export const BLOCK_ORDER: Block[] = ["middle_long", "short", "jump", "throw"];
 
+/** 専門種目の選択肢（ブロック別）。プロフィールの「専門種目」入力に使う。 */
+export const EVENTS_BY_BLOCK: Record<Block, string[]> = {
+  middle_long: [
+    "800m",
+    "1500m",
+    "3000m",
+    "3000mSC",
+    "5000m",
+    "10000m",
+    "ハーフ",
+    "マラソン",
+    "駅伝",
+  ],
+  short: [
+    "100m",
+    "200m",
+    "400m",
+    "100mH",
+    "110mH",
+    "400mH",
+    "4×100mR",
+    "4×400mR",
+  ],
+  jump: ["走高跳", "走幅跳", "三段跳", "棒高跳"],
+  throw: ["砲丸投", "円盤投", "ハンマー投", "やり投"],
+};
+
 /** 簡素化したブロック絞り込み（中長 / 短。跳躍・投擲は「短」に含める） */
 export const SIMPLE_BLOCK_ITEMS: { key: string; label: string }[] = [
   { key: "all", label: "すべて" },

@@ -37,6 +37,7 @@ export async function getCurrentProfile(): Promise<Profile> {
       display_name: "",
       avatar_url: null,
       blocks: [],
+      events: [],
       grade: null,
       goal: null,
       role: "member",

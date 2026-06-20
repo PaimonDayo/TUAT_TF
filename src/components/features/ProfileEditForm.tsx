@@ -8,7 +8,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/common/Avatar";
-import { BLOCK_ORDER, BLOCKS, GRADE_OPTIONS } from "@/lib/constants";
+import { BLOCK_ORDER, BLOCKS, EVENTS_BY_BLOCK, GRADE_OPTIONS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { Block, Profile } from "@/types";
 
@@ -18,13 +18,17 @@ export function ProfileEditForm({
   onDone,
   isSetup = false,
 }: {
-  profile: Pick<Profile, "id" | "display_name" | "blocks" | "grade" | "avatar_url">;
+  profile: Pick<
+    Profile,
+    "id" | "display_name" | "blocks" | "events" | "grade" | "avatar_url"
+  >;
   onDone: () => void;
   isSetup?: boolean;
 }) {
   const router = useRouter();
   const [name, setName] = useState(profile.display_name ?? "");
   const [blocks, setBlocks] = useState<Block[]>(profile.blocks ?? []);
+  const [events, setEvents] = useState<string[]>(profile.events ?? []);
   const [grade, setGrade] = useState<string | null>(profile.grade);
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url ?? "");
   const [saving, setSaving] = useState(false);
@@ -45,6 +49,15 @@ export function ProfileEditForm({
     setBlocks((cur) => (cur.includes(b) ? cur.filter((x) => x !== b) : [...cur, b]));
   }
 
+  function toggleEvent(ev: string) {
+    setEvents((cur) => (cur.includes(ev) ? cur.filter((x) => x !== ev) : [...cur, ev]));
+  }
+
+  // 選択中ブロックに対応する種目だけ出す（重複排除・ブロック順）
+  const eventOptions = BLOCK_ORDER.filter((b) => blocks.includes(b)).flatMap(
+    (b) => EVENTS_BY_BLOCK[b],
+  );
+
   async function save() {
     if (!valid) {
       setError("すべての項目を入力してください");
@@ -58,6 +71,8 @@ export function ProfileEditForm({
       .update({
         display_name: name.trim(),
         blocks,
+        // 選択ブロックに無い種目は保存しない（ブロックを外したら自動で外れる）
+        events: events.filter((ev) => eventOptions.includes(ev)),
         grade,
         avatar_url: avatarUrl.trim() || null,
       })
@@ -130,6 +145,32 @@ export function ProfileEditForm({
           })}
         </div>
       </div>
+
+      {eventOptions.length > 0 && (
+        <div>
+          <p className="section-label mb-1.5">専門種目（任意・複数可）</p>
+          <div className="flex flex-wrap gap-2">
+            {eventOptions.map((ev) => {
+              const active = events.includes(ev);
+              return (
+                <button
+                  key={ev}
+                  type="button"
+                  onClick={() => toggleEvent(ev)}
+                  className={cn(
+                    "h-9 rounded-full border px-3.5 text-[13px] font-semibold transition-active active:scale-[0.97]",
+                    active
+                      ? "border-accent bg-accent text-white"
+                      : "border-separator bg-card text-muted",
+                  )}
+                >
+                  {ev}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div>
         <p className="section-label mb-1.5">学年</p>

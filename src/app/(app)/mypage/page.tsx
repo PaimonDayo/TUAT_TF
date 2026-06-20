@@ -40,6 +40,7 @@ export default async function MyPage({
               id: profile.id,
               display_name: profile.display_name,
               blocks: profile.blocks,
+              events: profile.events,
               grade: profile.grade,
               avatar_url: profile.avatar_url,
             }}
