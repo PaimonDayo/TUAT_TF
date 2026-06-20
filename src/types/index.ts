@@ -31,6 +31,7 @@ export type Condition = "great" | "normal" | "bad";
 export type Intensity = "low" | "mid" | "high" | "speed";
 export type ScheduleType = "practice" | "meet" | "event" | "time_trial";
 export type NoticeCategory = "fee" | "entry" | "info" | "rule";
+export type NoticeReaction = "ack" | "thanks" | "question";
 export type TargetType = "record" | "tweet";
 export type AttendanceStatus = "present" | "absent";
 export type NoteScope = "shared" | "personal";
@@ -268,6 +269,11 @@ export interface Notice {
   deadline: string | null;
   pin_home: boolean;
   created_at: string;
+}
+
+export interface NoticeWithReactions extends Notice {
+  reaction_counts: Record<NoticeReaction, number>;
+  my_reactions: NoticeReaction[];
 }
 
 export interface PbRecord {

@@ -23,7 +23,7 @@ import { venueShort } from "@/lib/venues";
 import type {
   PracticeRecord,
   PracticeSchedule,
-  Notice,
+  NoticeWithReactions,
   NoteWithRelations,
   AttendanceStatusOrNone,
 } from "@/types";
@@ -72,7 +72,7 @@ export default async function HomePage() {
         </p>
 
         {/* 重要なお知らせ */}
-        <HomeNotices notices={notices as Notice[]} userId={profile.id} />
+        <HomeNotices notices={notices as NoticeWithReactions[]} userId={profile.id} />
 
         {/* 直近7日間の統計 */}
         <section className="space-y-2">

@@ -4,12 +4,12 @@ import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getNotices } from "@/lib/queries";
 import { permissionsOf } from "@/lib/permissions";
 import { EmptyState } from "@/components/ui/empty-state";
-import type { Notice } from "@/types";
+import type { NoticeWithReactions } from "@/types";
 
 export default async function NoticesPage() {
   const profile = await getCurrentProfile();
   const canCreateNotice = permissionsOf(profile.roles).createNotice;
-  const notices = (await getNotices()) as Notice[];
+  const notices = (await getNotices(profile.id)) as NoticeWithReactions[];
 
   return (
     <>
@@ -22,7 +22,14 @@ export default async function NoticesPage() {
         {notices.length === 0 ? (
           <EmptyState title="お知らせはありません" />
         ) : (
-          notices.map((n) => <NoticeCard key={n.id} notice={n} canManage={canCreateNotice} />)
+          notices.map((n) => (
+            <NoticeCard
+              key={n.id}
+              notice={n}
+              userId={profile.id}
+              canManage={canCreateNotice}
+            />
+          ))
         )}
       </div>
     </>

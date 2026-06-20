@@ -8,11 +8,60 @@ import type {
   Block,
   AppRole,
   AuthorMini,
+  Notice,
+  NoticeReaction,
+  NoticeWithReactions,
   NoteArticleWithAuthor,
   NoteWithRelations,
 } from "@/types";
 
 const AUTHOR_SELECT = "author:profiles!user_id(id, display_name, avatar_url, blocks, grade)";
+const NOTICE_REACTIONS: NoticeReaction[] = ["ack", "thanks", "question"];
+
+function dateInJapan(offsetDays = 0) {
+  const date = new Date(Date.now() + offsetDays * 86_400_000);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+async function withNoticeReactions(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  notices: Notice[],
+  userId: string,
+): Promise<NoticeWithReactions[]> {
+  const ids = notices.map((notice) => notice.id);
+  if (ids.length === 0) return [];
+  const { data } = await supabase
+    .from("notice_reactions")
+    .select("notice_id, user_id, reaction")
+    .in("notice_id", ids);
+
+  const counts = new Map<string, Record<NoticeReaction, number>>();
+  const mine = new Map<string, NoticeReaction[]>();
+  for (const id of ids) {
+    counts.set(id, { ack: 0, thanks: 0, question: 0 });
+    mine.set(id, []);
+  }
+  for (const row of data ?? []) {
+    const reaction = row.reaction as NoticeReaction;
+    if (!NOTICE_REACTIONS.includes(reaction)) continue;
+    const noticeCounts = counts.get(row.notice_id as string);
+    if (noticeCounts) noticeCounts[reaction] += 1;
+    if (row.user_id === userId) {
+      mine.get(row.notice_id as string)?.push(reaction);
+    }
+  }
+
+  return notices.map((notice) => ({
+    ...notice,
+    reaction_counts: counts.get(notice.id) ?? { ack: 0, thanks: 0, question: 0 },
+    my_reactions: mine.get(notice.id) ?? [],
+  }));
+}
 
 /** 自分がいいね済みの target_id 集合を取得 */
 async function fetchMyLikedIds(
@@ -194,13 +243,13 @@ export async function getUpcomingSchedules(
 }
 
 /** お知らせ一覧 */
-export async function getNotices() {
+export async function getNotices(userId: string): Promise<NoticeWithReactions[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("notices")
     .select("*")
     .order("created_at", { ascending: false });
-  return data ?? [];
+  return withNoticeReactions(supabase, (data ?? []) as Notice[], userId);
 }
 
 /** あるユーザーの PB 一覧 */
@@ -317,23 +366,36 @@ export async function getUserActivity(
   return items;
 }
 
-/** ホームに表示する重要お知らせ（pin_home・期限内・未非表示） */
-export async function getHomeNotices(userId: string) {
+/** ホーム: 重要は全件、通常は直近3件、明日締切は件数外で表示 */
+export async function getHomeNotices(userId: string): Promise<NoticeWithReactions[]> {
   const supabase = await createClient();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = dateInJapan();
+  const tomorrow = dateInJapan(1);
 
   const [{ data: notices }, { data: dismissed }] = await Promise.all([
     supabase
       .from("notices")
       .select("*")
-      .eq("pin_home", true)
       .or(`deadline.is.null,deadline.gte.${today}`)
       .order("created_at", { ascending: false }),
     supabase.from("notice_dismissals").select("notice_id").eq("user_id", userId),
   ]);
 
   const dismissedIds = new Set((dismissed ?? []).map((d) => d.notice_id as string));
-  return (notices ?? []).filter((n) => !dismissedIds.has(n.id));
+  const visible = ((notices ?? []) as Notice[]).filter(
+    (notice) => !dismissedIds.has(notice.id),
+  );
+  const important = visible.filter((notice) => notice.pin_home);
+  const reminders = visible.filter((notice) => notice.deadline === tomorrow);
+  const recent = visible.filter((notice) => !notice.pin_home).slice(0, 3);
+  const selected = new Map<string, Notice>();
+  for (const notice of [...important, ...reminders, ...recent]) {
+    selected.set(notice.id, notice);
+  }
+  const ordered = [...selected.values()].sort((a, b) =>
+    a.created_at < b.created_at ? 1 : -1,
+  );
+  return withNoticeReactions(supabase, ordered, userId);
 }
 
 /** 出欠対象の今後の予定（出欠は別途取得） */

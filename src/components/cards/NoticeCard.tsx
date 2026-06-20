@@ -5,14 +5,17 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { NOTICE_CATEGORIES } from "@/lib/constants";
 import { NoticeActions } from "@/components/cards/NoticeActions";
+import { NoticeReactions } from "@/components/features/NoticeReactions";
 import { Linkify } from "@/components/common/Linkify";
-import type { Notice } from "@/types";
+import type { NoticeWithReactions } from "@/types";
 
 export function NoticeCard({
   notice,
+  userId,
   canManage = false,
 }: {
-  notice: Notice;
+  notice: NoticeWithReactions;
+  userId: string;
   canManage?: boolean;
 }) {
   const meta = NOTICE_CATEGORIES[notice.category];
@@ -20,7 +23,7 @@ export function NoticeCard({
   const overdue = deadline ? isPast(deadline) : false;
 
   return (
-    <Card className="p-4 space-y-2">
+    <Card id={`notice-${notice.id}`} className="scroll-mt-16 space-y-2 p-4">
       <div className="flex items-center gap-2">
         <Badge style={{ backgroundColor: meta.bg, color: meta.color }}>{meta.label}</Badge>
         <span className="text-micro ml-auto">
@@ -42,6 +45,12 @@ export function NoticeCard({
           {overdue && "（終了）"}
         </p>
       )}
+      <NoticeReactions
+        noticeId={notice.id}
+        userId={userId}
+        initialCounts={notice.reaction_counts}
+        initialMine={notice.my_reactions}
+      />
     </Card>
   );
 }
