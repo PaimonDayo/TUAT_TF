@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar } from "@/components/common/Avatar";
 import { BlockPills } from "@/components/common/BlockPill";
 import { SegmentedControl } from "@/components/ui/segmented";
-import { GradeMenu } from "@/components/features/GradeMenu";
+import { GradeFilter } from "@/components/features/GradeFilter";
 import { GradeChips } from "@/components/features/GradeChips";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -74,7 +74,7 @@ export function MemberDirectory({ members }: { members: AuthorMini[] }) {
       </div>
       <div className="px-4 pb-2 flex items-center justify-between">
         <span className="text-caption tabular-nums">{filtered.length}人</span>
-        <GradeMenu value={grades} onChange={setGrades} availableGrades={presentGrades} />
+        <GradeFilter value={grades} onChange={setGrades} availableGrades={presentGrades} />
       </div>
       {grades.length > 0 && (
         <div className="px-4 pb-2">

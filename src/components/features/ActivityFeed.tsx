@@ -1,0 +1,70 @@
+"use client";
+
+import { useState } from "react";
+import { List } from "lucide-react";
+import { RecordCard } from "@/components/cards/RecordCard";
+import { TweetCard } from "@/components/cards/TweetCard";
+import { cn } from "@/lib/utils";
+import type { CommentAuthor, FeedItem } from "@/types";
+
+/**
+ * 投稿一覧（記録＋つぶやき）。タイムラインと同じく簡易表示トグル＋タップ展開に対応。
+ * マイページの「これまでの投稿」で使用。
+ */
+export function ActivityFeed({
+  activity,
+  currentUser,
+}: {
+  activity: FeedItem[];
+  currentUser: CommentAuthor;
+}) {
+  const [compact, setCompact] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  function toggleExpanded(key: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  return (
+    <>
+      <div className="flex justify-end pb-2">
+        <button
+          type="button"
+          onClick={() => setCompact((v) => !v)}
+          aria-label={compact ? "詳細表示にする" : "簡易表示にする"}
+          title={compact ? "詳細表示" : "簡易表示"}
+          className={cn(
+            "inline-flex h-8 w-8 items-center justify-center rounded-full border active:opacity-60",
+            compact ? "border-accent bg-accent text-white" : "border-separator bg-card text-muted2",
+          )}
+        >
+          <List size={15} />
+        </button>
+      </div>
+      <div className="space-y-3">
+        {activity.map((item) => {
+          const key = `${item.kind}-${item.id}`;
+          const effectiveCompact = compact && !expanded.has(key);
+          const card =
+            item.kind === "record" ? (
+              <RecordCard record={item} currentUser={currentUser} compact={effectiveCompact} />
+            ) : (
+              <TweetCard tweet={item} currentUser={currentUser} compact={effectiveCompact} />
+            );
+          return compact ? (
+            <div key={key} onClick={() => toggleExpanded(key)} className="cursor-pointer">
+              {card}
+            </div>
+          ) : (
+            <div key={key}>{card}</div>
+          );
+        })}
+      </div>
+    </>
+  );
+}

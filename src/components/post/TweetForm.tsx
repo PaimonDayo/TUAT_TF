@@ -65,20 +65,15 @@ export function TweetForm({
         value={content}
         onChange={(e) => setContent(e.target.value)}
       />
-      <div className="flex items-center justify-between">
-        <span className="text-caption tabular-nums">
+      <div className="flex items-center justify-between text-caption">
+        <span className="tabular-nums">
           {content.length} / {MAX}
         </span>
-        {error && <span className="text-caption text-danger">{error}</span>}
-        <Button
-          size="sm"
-          onClick={submit}
-          disabled={saving || !content.trim()}
-          className="px-5"
-        >
-          {saving ? "保存中…" : editing ? "更新" : "投稿"}
-        </Button>
+        {error && <span className="text-danger">{error}</span>}
       </div>
+      <Button size="lg" onClick={submit} disabled={saving || !content.trim()}>
+        {saving ? "保存中…" : editing ? "更新する" : "投稿する"}
+      </Button>
     </div>
   );
 }

@@ -5,8 +5,7 @@ import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/common/Avatar";
 import { BlockPills } from "@/components/common/BlockPill";
-import { RecordCard } from "@/components/cards/RecordCard";
-import { TweetCard } from "@/components/cards/TweetCard";
+import { ActivityFeed } from "@/components/features/ActivityFeed";
 import { TrainingChart } from "@/components/features/TrainingChart";
 import { EditProfileButton } from "@/components/features/MyPageActions";
 import { GoalEditor } from "@/components/features/GoalEditor";
@@ -165,17 +164,7 @@ async function MyActivity({
       </Card>
     );
   }
-  return (
-    <div className="space-y-3">
-      {activity.map((item) =>
-        item.kind === "record" ? (
-          <RecordCard key={`r-${item.id}`} record={item} currentUser={currentUser} />
-        ) : (
-          <TweetCard key={`t-${item.id}`} tweet={item} currentUser={currentUser} />
-        ),
-      )}
-    </div>
-  );
+  return <ActivityFeed activity={activity} currentUser={currentUser} />;
 }
 
 function ActivitySkeleton() {

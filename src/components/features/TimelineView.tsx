@@ -6,10 +6,10 @@ import { RecordCard } from "@/components/cards/RecordCard";
 import { TweetCard } from "@/components/cards/TweetCard";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented";
-import { GradeMenu } from "@/components/features/GradeMenu";
+import { GradeFilter } from "@/components/features/GradeFilter";
 import { GradeChips } from "@/components/features/GradeChips";
 import { EmptyState } from "@/components/ui/empty-state";
-import { SIMPLE_BLOCK_ITEMS, matchSimpleBlock } from "@/lib/constants";
+import { GRADE_OPTIONS, SIMPLE_BLOCK_ITEMS, matchSimpleBlock } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { loadFeed } from "@/app/(app)/timeline/actions";
 import type { CommentAuthor, FeedItem } from "@/types";
@@ -63,6 +63,12 @@ export function TimelineView({
 
   const favSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
 
+  // 投稿者にいる学年だけをフィルタ候補に出す（メンバー一覧と同じ仕様）
+  const presentGrades = useMemo(() => {
+    const set = new Set(items.map((i) => i.author?.grade ?? "").filter(Boolean));
+    return GRADE_OPTIONS.map((g) => g.value).filter((v) => set.has(v));
+  }, [items]);
+
   const filtered = useMemo(() => {
     return items.filter((item) => {
       if (!matchSimpleBlock(item.author?.blocks, block)) return false;
@@ -89,7 +95,7 @@ export function TimelineView({
           <div className="min-w-0 flex-1">
             <SegmentedControl items={SIMPLE_BLOCK_ITEMS} value={block} onChange={setBlock} />
           </div>
-          <GradeMenu value={grades} onChange={setGrades} />
+          <GradeFilter value={grades} onChange={setGrades} availableGrades={presentGrades} />
           <button
             onClick={() => setFavOnly((v) => !v)}
             aria-label={favOnly ? "フォロー中のみを解除" : "フォロー中のみ表示"}
