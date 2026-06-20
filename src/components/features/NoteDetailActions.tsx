@@ -4,13 +4,12 @@ import { useRouter } from "next/navigation";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { NoteEditorButton } from "@/components/features/NoteEditor";
 import { createClient } from "@/lib/supabase/client";
-import type { AuthorMini, NoteTheme, NoteWithRelations } from "@/types";
+import type { AuthorMini, NoteWithRelations } from "@/types";
 
 export function NoteDetailActions({
   note,
   currentUser,
   members,
-  themes,
   isAdmin,
   canEdit,
   canDelete,
@@ -18,7 +17,6 @@ export function NoteDetailActions({
   note: NoteWithRelations;
   currentUser: AuthorMini;
   members: AuthorMini[];
-  themes: NoteTheme[];
   isAdmin: boolean;
   canEdit: boolean;
   canDelete: boolean;
@@ -47,18 +45,17 @@ export function NoteDetailActions({
             : undefined
         }
         onDelete={canDelete ? remove : undefined}
-        deleteTitle="ノートを削除しますか？"
-        deleteDescription="削除したノートは元に戻せません。"
+        deleteTitle="ノートフォルダを削除しますか？"
+        deleteDescription="フォルダ内の記事もすべて削除され、元に戻せません。"
       />
       {canEdit && (
         <span id={`edit-note-${note.id}`} className="hidden">
           <NoteEditorButton
             currentUser={currentUser}
             members={members}
-            themes={themes}
             note={note}
             isAdmin={isAdmin}
-            label="編集"
+            label="フォルダ設定を編集"
           />
         </span>
       )}

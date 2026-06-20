@@ -2,284 +2,93 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { BookOpen, ChevronRight, FileText, FolderPlus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { BookOpen, ChevronRight, FolderPlus } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
-import { ActionMenu } from "@/components/ui/action-menu";
+import { NoteComposer } from "@/components/features/NoteComposer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormModal } from "@/components/ui/form-modal";
-import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented";
-import { Textarea } from "@/components/ui/textarea";
-import { createClient } from "@/lib/supabase/client";
 import type {
   AuthorMini,
   NoteScope,
-  NoteTheme,
   NoteWithRelations,
 } from "@/types";
 
-const UNASSIGNED_THEME = "__unassigned__";
-
 export function NotesView({
   currentUser,
-  themes,
   notes,
   isAdmin,
   mine = false,
 }: {
   currentUser: AuthorMini;
-  themes: NoteTheme[];
   notes: NoteWithRelations[];
   isAdmin: boolean;
   mine?: boolean;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [scope, setScope] = useState<NoteScope>("shared");
-  const [folderCreateOpen, setFolderCreateOpen] = useState(false);
-  const [themeForm, setThemeForm] = useState<NoteTheme | null>(null);
-  const themeId = searchParams.get("folder");
-
-  function setThemeId(nextThemeId: string | null) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (nextThemeId) {
-      params.set("folder", nextThemeId);
-    } else {
-      params.delete("folder");
-    }
-    const query = params.toString();
-    window.history.pushState(null, "", query ? `${pathname}?${query}` : pathname);
-  }
+  const [createOpen, setCreateOpen] = useState(false);
   const visibleNotes = useMemo(
     () =>
       notes.filter((note) => {
         if (mine && note.author_id !== currentUser.id) return false;
         if (note.scope !== scope) return false;
-        if (!mine && scope === "personal" && note.status !== "published") return false;
+        if (!mine && note.status !== "published") return false;
         return true;
       }),
     [currentUser.id, mine, notes, scope],
   );
 
-  const selectedTheme = themes.find((theme) => theme.id === themeId);
-  const themeNotes = visibleNotes.filter((note) =>
-    themeId === UNASSIGNED_THEME ? note.theme_id === null : note.theme_id === themeId,
-  );
-  const unassignedNotes = visibleNotes.filter((note) => note.theme_id === null);
-
   return (
-    <div className="px-4 space-y-4 pt-1">
+    <div className="space-y-4 px-4 pt-1">
       <SegmentedControl
         items={[
           { key: "shared", label: "共有" },
           { key: "personal", label: "個人" },
         ]}
         value={scope}
-        onChange={(value) => {
-          setScope(value);
-          setThemeId(null);
-        }}
+        onChange={setScope}
       />
 
-      {scope === "shared" && !themeId && (
-        <div className="space-y-2">
-          <div className="flex justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setFolderCreateOpen(true)}
-            >
-              <FolderPlus size={17} />
-              フォルダを作成
-            </Button>
-          </div>
-          {themes.length === 0 ? (
-            <EmptyState
-              title="共有フォルダがありません"
-              description="上の「フォルダを作成」から追加できます。"
-            />
-          ) : (
-            themes.map((theme) => {
-              const count = visibleNotes.filter((note) => note.theme_id === theme.id).length;
-              return (
-                <Card key={theme.id} className="flex items-center gap-1 p-2">
-                  <button
-                    type="button"
-                    className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 text-left active:bg-bg"
-                    onClick={() => setThemeId(theme.id)}
-                  >
-                    <BookOpen size={20} className="shrink-0 text-accent" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-headline">{theme.name}</p>
-                      {theme.description && (
-                        <p className="mt-0.5 line-clamp-2 text-caption">
-                          {theme.description}
-                        </p>
-                      )}
-                    </div>
-                    <Badge>{count}件</Badge>
-                    <ChevronRight size={18} className="text-muted" />
-                  </button>
-                  {isAdmin && (
-                    <ActionMenu
-                      onEdit={() => setThemeForm(theme)}
-                      onDelete={async () => {
-                        const supabase = createClient();
-                        const { error } = await supabase
-                          .from("note_themes")
-                          .delete()
-                          .eq("id", theme.id);
-                        if (error) return false;
-                        setThemeId(null);
-                        router.refresh();
-                        return true;
-                      }}
-                      deleteTitle="フォルダを削除しますか？"
-                      deleteDescription="ノートは削除されず、フォルダ未設定になります。"
-                    />
-                  )}
-                </Card>
-              );
-            })
-          )}
-          {unassignedNotes.length > 0 && (
-            <button
-              type="button"
-              className="block w-full text-left"
-              onClick={() => setThemeId(UNASSIGNED_THEME)}
-            >
-              <Card className="flex items-center gap-3 p-4 active:bg-bg">
-                <BookOpen size={20} className="shrink-0 text-muted2" />
-                <p className="min-w-0 flex-1 text-headline">フォルダ未設定</p>
-                <Badge>{unassignedNotes.length}件</Badge>
-                <ChevronRight size={18} className="text-muted" />
-              </Card>
-            </button>
-          )}
-        </div>
-      )}
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setCreateOpen(true)}
+        >
+          <FolderPlus size={17} />
+          フォルダを作成
+        </Button>
+      </div>
 
-      {scope === "shared" && themeId && (
-        <section className="space-y-2">
-          <button
-            type="button"
-            onClick={() => setThemeId(null)}
-            className="text-[13px] font-medium text-accent"
-          >
-            共有フォルダに戻る
-          </button>
-          <h2 className="text-title">
-            {themeId === UNASSIGNED_THEME
-              ? "フォルダ未設定"
-              : selectedTheme?.name ?? "共有ノート"}
-          </h2>
-          <NoteList notes={themeNotes} currentUserId={currentUser.id} />
-        </section>
-      )}
+      <NoteList
+        notes={visibleNotes}
+        currentUserId={currentUser.id}
+        showAuthor={!mine}
+      />
 
-      {scope === "personal" && (
-        <NoteList notes={visibleNotes} currentUserId={currentUser.id} showAuthor />
-      )}
-
-      {folderCreateOpen && (
+      {createOpen && (
         <FormModal
           open
-          onOpenChange={(open) => !open && setFolderCreateOpen(false)}
-          title="フォルダを作成"
+          onOpenChange={(open) => !open && setCreateOpen(false)}
+          title="ノートフォルダを作成"
         >
-          <FolderForm
-            currentUserId={currentUser.id}
+          <NoteComposer
+            currentUser={currentUser}
+            isAdmin={isAdmin}
+            initialScope={scope}
             onDone={() => {
-              setFolderCreateOpen(false);
+              setCreateOpen(false);
               router.refresh();
             }}
           />
         </FormModal>
       )}
-
-      {themeForm && (
-        <FormModal
-          open
-          onOpenChange={(open) => !open && setThemeForm(null)}
-          title="フォルダを編集"
-        >
-          <FolderForm
-            currentUserId={currentUser.id}
-            theme={themeForm}
-            onDone={() => {
-              setThemeForm(null);
-              router.refresh();
-            }}
-          />
-        </FormModal>
-      )}
-    </div>
-  );
-}
-
-export function FolderForm({
-  currentUserId,
-  theme,
-  onDone,
-}: {
-  currentUserId: string;
-  theme?: NoteTheme;
-  onDone: () => void;
-}) {
-  const [name, setName] = useState(theme?.name ?? "");
-  const [description, setDescription] = useState(theme?.description ?? "");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function submit() {
-    if (!name.trim()) {
-      setError("フォルダ名を入力してください");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    const supabase = createClient();
-    const payload = {
-      name: name.trim(),
-      description: description.trim() || null,
-    };
-    const { error: saveError } = theme
-      ? await supabase.from("note_themes").update(payload).eq("id", theme.id)
-      : await supabase
-          .from("note_themes")
-          .insert({ ...payload, created_by: currentUserId });
-    if (saveError) {
-      setError("フォルダを保存できませんでした");
-      setSaving(false);
-      return;
-    }
-    onDone();
-  }
-
-  return (
-    <div className="space-y-4 pb-4">
-      <div>
-        <p className="section-label mb-1.5">フォルダ名</p>
-        <Input value={name} onChange={(event) => setName(event.target.value)} maxLength={40} />
-      </div>
-      <div>
-        <p className="section-label mb-1.5">説明</p>
-        <Textarea
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-          rows={4}
-        />
-      </div>
-      {error && <p className="text-center text-caption text-danger">{error}</p>}
-      <Button size="lg" disabled={saving} onClick={submit}>
-        {saving ? "保存中..." : "保存する"}
-      </Button>
     </div>
   );
 }
@@ -294,7 +103,12 @@ export function NoteList({
   showAuthor?: boolean;
 }) {
   if (notes.length === 0) {
-    return <EmptyState title="ノートがありません" />;
+    return (
+      <EmptyState
+        title="ノートフォルダがありません"
+        description="フォルダを作成すると、その中へ記事を追加できます。"
+      />
+    );
   }
 
   return (
@@ -303,13 +117,15 @@ export function NoteList({
         <Link key={note.id} href={`/notes/${note.id}`}>
           <Card className="p-4 active:bg-bg">
             <div className="flex items-start gap-3">
-              <FileText size={19} className="mt-0.5 shrink-0 text-accent" />
+              <BookOpen size={20} className="mt-0.5 shrink-0 text-accent" />
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <p className="text-headline">{note.title}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="min-w-0 flex-1 truncate text-headline">{note.title}</p>
                   {note.status === "draft" && <Badge>下書き</Badge>}
                 </div>
-                <p className="mt-1 line-clamp-2 text-caption">{note.body}</p>
+                <p className="mt-1 text-caption">
+                  {note.articles?.length ?? 0}件の記事
+                </p>
                 {showAuthor && (
                   <div className="mt-2 flex items-center gap-2">
                     <Avatar

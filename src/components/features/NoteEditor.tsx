@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { FormModal } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented";
-import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type {
@@ -16,28 +15,23 @@ import type {
   NoteEditPolicy,
   NoteScope,
   NoteStatus,
-  NoteTheme,
   NoteWithRelations,
 } from "@/types";
 
 export function NoteEditorButton({
   currentUser,
   members,
-  themes,
   note,
   isAdmin = false,
   initialScope = "shared",
-  initialThemeId,
-  label = "新しいノート",
+  label = "新しいフォルダ",
   onDone,
 }: {
   currentUser: AuthorMini;
   members: AuthorMini[];
-  themes: NoteTheme[];
   note?: NoteWithRelations;
   isAdmin?: boolean;
   initialScope?: NoteScope;
-  initialThemeId?: string | null;
   label?: string;
   onDone?: () => void;
 }) {
@@ -53,16 +47,14 @@ export function NoteEditorButton({
         <FormModal
           open
           onOpenChange={setOpen}
-          title={note ? "ノートを編集" : "ノートを作成"}
+          title={note ? "フォルダ設定を編集" : "ノートフォルダを作成"}
         >
           <NoteEditor
             currentUser={currentUser}
             members={members}
-            themes={themes}
             note={note}
             isAdmin={isAdmin}
             initialScope={initialScope}
-            initialThemeId={initialThemeId}
             onDone={() => {
               setOpen(false);
               onDone?.();
@@ -77,35 +69,23 @@ export function NoteEditorButton({
 export function NoteEditor({
   currentUser,
   members,
-  themes: initialThemes,
   note,
   isAdmin,
   initialScope,
-  initialThemeId,
   onDone,
 }: {
   currentUser: AuthorMini;
   members: AuthorMini[];
-  themes: NoteTheme[];
   note?: NoteWithRelations;
   isAdmin: boolean;
   initialScope: NoteScope;
-  initialThemeId?: string | null;
   onDone: () => void;
 }) {
   const router = useRouter();
   const ownsNote = !note || note.author_id === currentUser.id;
   const canManagePermissions = ownsNote || isAdmin;
   const [scope, setScope] = useState<NoteScope>(note?.scope ?? initialScope);
-  const [themes] = useState(initialThemes);
-  const validInitialThemeId = initialThemes.some((theme) => theme.id === initialThemeId)
-    ? initialThemeId
-    : null;
-  const [themeId, setThemeId] = useState(
-    note?.theme_id ?? validInitialThemeId ?? initialThemes[0]?.id ?? "",
-  );
   const [title, setTitle] = useState(note?.title ?? "");
-  const [body, setBody] = useState(note?.body ?? "");
   const [status, setStatus] = useState<NoteStatus>(note?.status ?? "draft");
   const [editPolicy, setEditPolicy] = useState<NoteEditPolicy>(
     note?.edit_policy ?? "author",
@@ -123,16 +103,11 @@ export function NoteEditor({
   }
 
   async function submit() {
-    if (!title.trim() || !body.trim()) {
-      setError("タイトルと本文を入力してください");
-      return;
-    }
-    if (scope === "shared" && !themeId) {
-      setError("共有ノートのフォルダを選択してください");
+    if (!title.trim()) {
+      setError("フォルダ名を入力してください");
       return;
     }
     if (
-      scope === "shared" &&
       editPolicy === "specified" &&
       editorIds.length === 0
     ) {
@@ -145,32 +120,38 @@ export function NoteEditor({
     const supabase = createClient();
     const payload = {
       scope,
-      theme_id: scope === "shared" ? themeId : null,
+      theme_id: null,
       title: title.trim(),
-      body: body.trim(),
       status,
-      edit_policy: scope === "shared" ? editPolicy : "author",
+      edit_policy: editPolicy,
     };
 
     let noteId = note?.id;
     if (note) {
       const updatePayload = canManagePermissions
         ? payload
-        : { title: payload.title, body: payload.body, status: payload.status };
-      const { error: updateError } = await supabase
-        .from("notes")
-        .update(updatePayload)
-        .eq("id", note.id);
-      if (updateError) {
+        : { title: payload.title, status: payload.status };
+      const runUpdate = () =>
+        supabase
+          .from("notes")
+          .update(updatePayload)
+          .eq("id", note.id)
+          .select("id");
+      let { data, error: updateError } = await runUpdate();
+      if (!updateError && (!data || data.length === 0)) {
+        await supabase.auth.refreshSession();
+        ({ data, error: updateError } = await runUpdate());
+      }
+      if (updateError || !data || data.length === 0) {
         console.error("Failed to update note", updateError);
-        setError("ノートを更新できませんでした");
+        setError("フォルダ設定を更新できませんでした");
         setSaving(false);
         return;
       }
     } else {
       const { data, error: insertError } = await supabase
         .from("notes")
-        .insert({ ...payload, author_id: currentUser.id })
+        .insert({ ...payload, body: "", author_id: currentUser.id })
         .select("id")
         .single();
       if (insertError || !data) {
@@ -193,7 +174,7 @@ export function NoteEditor({
         setSaving(false);
         return;
       }
-      if (scope === "shared" && editPolicy === "specified" && editorIds.length > 0) {
+      if (editPolicy === "specified" && editorIds.length > 0) {
         const { error: editorError } = await supabase
           .from("note_editors")
           .insert(editorIds.map((userId) => ({ note_id: noteId, user_id: userId })));
@@ -226,34 +207,10 @@ export function NoteEditor({
         </div>
       )}
 
-      {scope === "shared" && canManagePermissions && (
+      {canManagePermissions && (
         <>
           <div>
-            <p className="section-label mb-1.5">フォルダ</p>
-            <p className="text-micro mb-2">
-              共有ノートを整理する場所です。例: 大会、怪我予防、短距離
-            </p>
-            {themes.length > 0 ? (
-              <select
-                value={themeId}
-                onChange={(event) => setThemeId(event.target.value)}
-                className="h-11 w-full rounded-xl border border-separator bg-card px-3 text-[15px] outline-none"
-              >
-                {themes.map((theme) => (
-                  <option key={theme.id} value={theme.id}>
-                    {theme.name}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <p className="rounded-xl border border-separator bg-bg p-3 text-caption">
-                先に共有フォルダ一覧でフォルダを作成してください。
-              </p>
-            )}
-          </div>
-
-          <div>
-            <p className="section-label mb-1.5">編集権限</p>
+            <p className="section-label mb-1.5">記事を追加・編集できる人</p>
             <SegmentedControl
               items={[
                 { key: "everyone", label: "全員" },
@@ -306,22 +263,12 @@ export function NoteEditor({
       )}
 
       <div>
-        <p className="section-label mb-1.5">タイトル</p>
+        <p className="section-label mb-1.5">フォルダ名</p>
         <Input
           value={title}
           onChange={(event) => setTitle(event.target.value)}
-          placeholder="タイトル"
+          placeholder="例: 大会準備、怪我予防、今季の振り返り"
           maxLength={100}
-        />
-      </div>
-
-      <div>
-        <p className="section-label mb-1.5">本文</p>
-        <Textarea
-          value={body}
-          onChange={(event) => setBody(event.target.value)}
-          placeholder="残しておきたい知識や考えを書く"
-          rows={14}
         />
       </div>
 

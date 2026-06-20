@@ -8,7 +8,7 @@ import type {
   Block,
   AppRole,
   AuthorMini,
-  NoteTheme,
+  NoteArticleWithAuthor,
   NoteWithRelations,
 } from "@/types";
 
@@ -416,31 +416,23 @@ const NOTE_SELECT = `
   *,
   author:profiles!author_id(id, display_name, avatar_url, blocks, grade),
   theme:note_themes(*),
+  articles:note_articles(id),
   editors:note_editors(
     user_id,
     profile:profiles!user_id(id, display_name, avatar_url, blocks, grade)
   )
 `;
 
-/** RLSで閲覧可能なノートと全テーマを取得 */
+/** RLSで閲覧可能なノートフォルダを取得 */
 export async function getNotesData(): Promise<{
-  themes: NoteTheme[];
   notes: NoteWithRelations[];
 }> {
   const supabase = await createClient();
-  const [{ data: themes }, { data: notes }] = await Promise.all([
-    supabase
-      .from("note_themes")
-      .select("*")
-      .order("sort", { ascending: true })
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("notes")
-      .select(NOTE_SELECT)
-      .order("updated_at", { ascending: false }),
-  ]);
+  const { data: notes } = await supabase
+    .from("notes")
+    .select(NOTE_SELECT)
+    .order("updated_at", { ascending: false });
   return {
-    themes: (themes ?? []) as NoteTheme[],
     notes: (notes ?? []) as unknown as NoteWithRelations[],
   };
 }
@@ -456,6 +448,40 @@ export async function getNoteById(id: string): Promise<NoteWithRelations | null>
   return (data as unknown as NoteWithRelations | null) ?? null;
 }
 
+/** フォルダ内の記事一覧。フォルダRLSを継承する */
+export async function getNoteArticles(
+  noteId: string,
+): Promise<NoteArticleWithAuthor[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("note_articles")
+    .select(`
+      *,
+      author:profiles!author_id(id, display_name, avatar_url, blocks, grade)
+    `)
+    .eq("note_id", noteId)
+    .order("updated_at", { ascending: false });
+  return (data ?? []) as unknown as NoteArticleWithAuthor[];
+}
+
+/** 記事詳細。親フォルダのRLSにより閲覧不可ならnull */
+export async function getNoteArticleById(
+  noteId: string,
+  articleId: string,
+): Promise<NoteArticleWithAuthor | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("note_articles")
+    .select(`
+      *,
+      author:profiles!author_id(id, display_name, avatar_url, blocks, grade)
+    `)
+    .eq("note_id", noteId)
+    .eq("id", articleId)
+    .maybeSingle();
+  return (data as unknown as NoteArticleWithAuthor | null) ?? null;
+}
+
 /** ホームに表示する最近の共有ノート（RLSで閲覧可能なもの） */
 export async function getRecentSharedNotes(
   limit = 3,
@@ -465,6 +491,7 @@ export async function getRecentSharedNotes(
     .from("notes")
     .select(NOTE_SELECT)
     .eq("scope", "shared")
+    .eq("status", "published")
     .order("updated_at", { ascending: false })
     .limit(limit);
   return (data ?? []) as unknown as NoteWithRelations[];

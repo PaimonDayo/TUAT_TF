@@ -318,6 +318,21 @@ export interface NoteWithRelations extends NoteRow {
   author: AuthorMini;
   theme: NoteTheme | null;
   editors?: { user_id: string; profile?: AuthorMini | null }[];
+  articles?: { id: string }[];
+}
+
+export interface NoteArticleRow {
+  id: string;
+  note_id: string;
+  author_id: string;
+  title: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NoteArticleWithAuthor extends NoteArticleRow {
+  author: AuthorMini;
 }
 
 /** フィード（タイムライン）用の合成型 */

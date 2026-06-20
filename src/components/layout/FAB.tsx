@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Activity,
@@ -12,12 +12,13 @@ import {
   Trophy,
 } from "lucide-react";
 import { FormModal } from "@/components/ui/form-modal";
-import { NoteComposer } from "@/components/features/NoteComposer";
+import { NoteArticleEditor } from "@/components/features/NoteArticleEditor";
 import { NoticeForm } from "@/components/post/NoticeForm";
 import { RecordForm } from "@/components/post/RecordForm";
 import { ResultForm } from "@/components/post/ResultForm";
 import { ScheduleCreatePanel } from "@/components/post/ScheduleForm";
 import { TweetForm } from "@/components/post/TweetForm";
+import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { AuthorMini } from "@/types";
 
@@ -27,7 +28,7 @@ export type FabPermissions = {
   manageMembers: boolean;
 };
 
-type DirectForm = "schedule" | "notice" | "note" | null;
+type DirectForm = "schedule" | "notice" | "article" | null;
 
 type FabProps = {
   userId: string;
@@ -46,7 +47,6 @@ export function FAB(props: FabProps) {
       key={routeKey}
       {...props}
       pathname={pathname}
-      folderId={searchParams.get("folder")}
       autoOpen={searchParams.get("compose") === "1"}
     />
   );
@@ -58,11 +58,9 @@ function ContextualFAB({
   isMiddleLong,
   can,
   pathname,
-  folderId: requestedFolderId,
   autoOpen,
 }: FabProps & {
   pathname: string;
-  folderId: string | null;
   autoOpen: boolean;
 }) {
   const router = useRouter();
@@ -70,6 +68,7 @@ function ContextualFAB({
   const [recordOpen, setRecordOpen] = useState(false);
   const [tweetOpen, setTweetOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState(false);
+  const [canEditArticles, setCanEditArticles] = useState(false);
   const [directForm, setDirectForm] = useState<DirectForm>(() => {
     if (autoOpen && pathname === "/schedule" && can.createSchedule) {
       return "schedule";
@@ -83,12 +82,24 @@ function ContextualFAB({
   const isFeed = pathname === "/home" || pathname === "/timeline";
   const isSchedule = pathname === "/schedule" && can.createSchedule;
   const isNotice = pathname === "/notices" && can.createNotice;
-  const folderId =
-    pathname === "/notes" && requestedFolderId !== "__unassigned__"
-      ? requestedFolderId
-      : null;
-  const isNoteFolder = Boolean(folderId);
+  const noteFolderMatch = pathname.match(/^\/notes\/([^/]+)$/);
+  const noteId = noteFolderMatch?.[1] ?? null;
+  const isNoteFolder = Boolean(noteId && canEditArticles);
   const visible = isFeed || isSchedule || isNotice || isNoteFolder;
+
+  useEffect(() => {
+    if (!noteId) return;
+    let active = true;
+    const supabase = createClient();
+    void supabase
+      .rpc("can_edit_note", { target_note_id: noteId })
+      .then(({ data }) => {
+        if (active) setCanEditArticles(data === true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [noteId]);
 
   function handleMainAction() {
     if (isFeed) {
@@ -97,7 +108,7 @@ function ContextualFAB({
     }
     if (isSchedule) setDirectForm("schedule");
     if (isNotice) setDirectForm("notice");
-    if (isNoteFolder) setDirectForm("note");
+    if (isNoteFolder) setDirectForm("article");
   }
 
   function openFeedForm(setOpen: (open: boolean) => void) {
@@ -120,7 +131,7 @@ function ContextualFAB({
       ? "予定を作成"
       : isNotice
         ? "お知らせを作成"
-        : "このフォルダにノートを作成";
+        : "このフォルダに記事を作成";
 
   return (
     <>
@@ -217,16 +228,17 @@ function ContextualFAB({
       </FormModal>
 
       <FormModal
-        open={directForm === "note"}
+        open={directForm === "article"}
         onOpenChange={(open) => !open && closeDirectForm()}
-        title="ノートを作成"
+        title="記事を作成"
       >
-        <NoteComposer
-          currentUser={currentUser}
-          isAdmin={can.manageMembers}
-          initialThemeId={folderId}
-          onDone={closeDirectForm}
-        />
+        {noteId && (
+          <NoteArticleEditor
+            noteId={noteId}
+            currentUser={currentUser}
+            onDone={closeDirectForm}
+          />
+        )}
       </FormModal>
     </>
   );

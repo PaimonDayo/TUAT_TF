@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { format, subDays } from "date-fns";
 import { ja } from "date-fns/locale";
-import { Clock, ChevronRight, FileText } from "lucide-react";
+import { Clock, ChevronRight, BookOpen } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -175,10 +175,12 @@ export default async function HomePage() {
                 <Link key={note.id} href={`/notes/${note.id}`}>
                   <Card className="p-4 active:bg-bg">
                     <div className="flex items-start gap-3">
-                      <FileText size={19} className="mt-0.5 shrink-0 text-accent" />
+                      <BookOpen size={19} className="mt-0.5 shrink-0 text-accent" />
                       <div className="min-w-0 flex-1">
                         <p className="text-headline truncate">{note.title}</p>
-                        <p className="mt-1 line-clamp-2 text-caption">{note.body}</p>
+                        <p className="mt-1 text-caption">
+                          {note.articles?.length ?? 0}件の記事
+                        </p>
                       </div>
                       <ChevronRight size={18} className="mt-0.5 shrink-0 text-muted" />
                     </div>

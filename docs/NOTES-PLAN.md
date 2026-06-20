@@ -1,98 +1,117 @@
-# ノート機能（実装指示）
+# ノート機能: フォルダ＋記事形式
 
-> 前提: `origin/master` が正・force-push禁止・作業前 pull。マイグレーションは新タイムスタンプ＆冪等。
-> UI/操作は `docs/UI-UNIFICATION.md` の規約（書く=全画面FormModal／選ぶ=シート／編集削除=⋯ActionMenu／共通部品EmptyState等）に従う。
+> `origin/master` が正。force-push禁止。マイグレーションは新タイムスタンプかつ冪等。
+> UIは「書く＝全画面FormModal」「選ぶ＝シート」に従う。
 
-## 0. ねらい
-- 投稿・タイムラインのように**流れて消える**ものではなく、**テーマごと・個人ごとに残る知識/考えの蓄積**。
-- **タイムラインには流さない**（投稿とは完全に別扱い）。
-- まずは**コメント・いいね・人気順・画像添付なし**。最低限 **下書き/公開** を持つ。
+## 1. 目的
 
-## 1. 種類
-- **共有ノート(shared)**: テーマ別に記事を蓄積（例: 怪我予防・中長距離・短距離・補強・大会準備・新入生向け）。部全体の知見。
-- **個人ノート(personal)**: 各ユーザーが自分の考え・目標・意識していること等を残す。プロフィールに「〇〇のノート」として表示。
+- ノートをタイムラインとは別の、継続して参照する知識・考えの置き場にする。
+- 1つの長い本文を更新し続けず、ノートフォルダの中へ記事を追加していく。
+- 共有ノートと個人ノートのどちらでも、設定に応じて共同編集できる。
 
-作成時にまず **共有/個人** を選ぶ。
+## 2. 用語と構造
 
-## 2. データモデル
+- `notes`: ノートフォルダ。名前、共有/個人、公開状態、共同編集権限を持つ。
+- `note_articles`: フォルダ内の記事。タイトル、本文、作成者、作成日時、更新日時を持つ。
+- `note_editors`: フォルダの指定編集者。
+- `note_themes`: 旧共有分類。既存データ互換のためDBには残すが、新UIでは使用しない。
 
-### `note_themes`（共有ノートのテーマ）
-```
+既存の`notes.title`はフォルダ名として引き継ぐ。既存の`notes.body`は移行時に
+同じタイトルの最初の記事へ変換する。移行後の新規フォルダでは`body`は空文字とする。
+
+## 3. データモデル
+
+### `notes`（フォルダ）
+
+```text
 id          UUID PK
-name        TEXT NOT NULL
-description TEXT NULL
-sort        INT NOT NULL DEFAULT 0
-created_by  UUID FK -> profiles(id)
-created_at  TIMESTAMPTZ DEFAULT now()
-```
-- **誰でも作成可**。**削除・編集（管理）は管理者(is_admin)のみ**。
-
-### `notes`
-```
-id          UUID PK
-author_id   UUID FK -> profiles(id) ON DELETE CASCADE
-scope       TEXT NOT NULL CHECK (scope IN ('shared','personal'))
-theme_id    UUID NULL FK -> note_themes(id) ON DELETE SET NULL   -- shared のみ。personal は NULL
+author_id   UUID FK -> profiles(id)
+scope       shared | personal
+theme_id    UUID NULL（旧データ互換）
 title       TEXT NOT NULL
-body        TEXT NOT NULL                                         -- 自由記述
-status      TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','published'))
-edit_policy TEXT NOT NULL DEFAULT 'author' CHECK (edit_policy IN ('everyone','specified','author'))
-created_at  TIMESTAMPTZ DEFAULT now()
-updated_at  TIMESTAMPTZ DEFAULT now()
-```
-- `edit_policy` は**共有ノートの記事ごとの編集権限**。作成時に選ぶ:
-  - `everyone` 全員が編集可 / `specified` 指定者のみ編集可 / `author` 作者のみ編集可。
-- **個人ノート(personal)は常に作者のみ編集**（`edit_policy` は 'author' を強制）。
-
-### `note_editors`（edit_policy='specified' の編集許可者）
-```
-note_id UUID FK -> notes(id) ON DELETE CASCADE
-user_id UUID FK -> profiles(id) ON DELETE CASCADE
-PRIMARY KEY (note_id, user_id)
+body        TEXT NOT NULL DEFAULT ''（旧データ互換）
+status      draft | published
+edit_policy everyone | specified | author
+created_at  TIMESTAMPTZ
+updated_at  TIMESTAMPTZ
 ```
 
-## 3. 可視性 / RLS（最終的な守りはRLSで）
-- `note_themes`: select TRUE。insert は認証済みなら可。update/delete は `is_admin()`。
-- `notes` select:
-  - `status='published'`（共有/個人とも公開は全部員に見える） **OR** 自分が作者 **OR** 編集可能者（下記）**OR** `is_admin()`。
-  - ※下書きは作者・指定編集者・管理者にだけ見える。
-- `notes` insert: `auth.uid() = author_id`。
-- `notes` update:
-  - 作者 **OR** `is_admin()` **OR**（`scope='shared'` かつ `edit_policy='everyone'`）**OR**（`edit_policy='specified'` かつ `EXISTS note_editors(note_id, auth.uid())`）。
-  - `scope='personal'` は作者のみ（everyone/specified を無視）。
-- `notes` delete: 作者 **OR** `is_admin()`。
-- `note_editors`: 親ノートの作者・管理者が管理。select は親が見えるなら可（簡易TRUEでも可）。
+- `personal`でも`edit_policy`を選択できる。
+- `theme_id`は新規作成時はNULL。
+- 公開状態はフォルダ単位。下書きフォルダの記事は閲覧権限者だけが見られる。
 
-## 4. 画面 / 導線
+### `note_articles`
 
-### 下ナビ変更（重要）
-- 「ランキング」を「ノート」に置き換える。**並び順: ホーム / 予定 / タイムライン / ノート / マイページ**。
-- **ランキングは削除しない**。ホームの機能一覧・マイページの一覧から遷移できるようにする（`/ranking` ページは維持）。
+```text
+id         UUID PK
+note_id    UUID FK -> notes(id) ON DELETE CASCADE
+author_id  UUID FK -> profiles(id) ON DELETE RESTRICT
+title      TEXT NOT NULL
+body       TEXT NOT NULL
+created_at TIMESTAMPTZ
+updated_at TIMESTAMPTZ
+```
 
-### `/notes`（ノートタブ）
-- 上部に `SegmentedControl`「共有 / 個人」。
-- **共有**: テーマ一覧（`note_themes`、記事数バッジ）。テーマを開く→そのテーマの公開記事一覧。`＋`でテーマ追加（誰でも）／記事追加。
-- **個人**: 最近更新された**公開**個人ノートの軽い索引（部員ごと or 更新順。いいね/人気順なし、流れるフィードにしない）。
-- `＋`（新規ノート）→ 全画面エディタ（§5）。
+## 4. 権限とRLS
 
-### プロフィールページ（部員詳細）
-- **「〇〇のノート」セクション**を追加。その人の**公開**個人ノート一覧を表示（タップで閲覧）。
+### フォルダ閲覧
 
-### マイページ
-- **「自分のノート」**への導線を追加 → 自分のノート（共有/個人とも自分が作者のもの）を作成・編集・削除、下書き/公開の切替。
-- ランキングへの導線もここ（または機能一覧）に置く。
+- `status='published'`
+- フォルダ作者
+- 管理者
+- `edit_policy='everyone'`
+- `edit_policy='specified'`かつ`note_editors`に登録済み
 
-## 5. エディタ（書く=全画面 FormModal）
-- 種別: **共有 / 個人** を選択（SegmentedControl）。
-- 共有のとき: **テーマ選択**（既存から or 新規作成）＋ **編集権限**（全員/指定者/作者のみ）。`specified` のときは対象者を複数選択（メンバー選択UIは `MenuForm` の対象者選択を流用）。
-- 個人のとき: テーマ・編集権限は出さない（作者のみ）。
-- 共通: **タイトル**＋**本文(自由記述・Textarea・Linkify対応で表示)**＋**下書き/公開**。
-- 一覧/閲覧での編集・削除は `⋯`(ActionMenu)。本文表示は `whitespace-pre-wrap` ＋ `Linkify`。
+### フォルダ編集・記事作成編集削除
 
-## 6. やらないこと（今回スコープ外）
-- コメント・いいね・人気順・画像添付。
-- **ブックマークはフェーズ2**（別途）。設計上、後から `note_bookmarks(user_id, note_id)` を足せる形にしておく。
+- フォルダ作者
+- 管理者
+- `edit_policy='everyone'`
+- `edit_policy='specified'`かつ指定編集者
 
-## 7. 今回ついでのUI微修正（`docs/UI-UNIFICATION.md` §3 にも追記）
-- ホームの「こんにちは 〇〇さん」挨拶を**削除**。
-- マイページのリンク順を整理（推奨順: 自分のノート → 目標 → 大会・記録会の結果 → メンバー一覧 → ランキング）。実装時に違和感あれば調整可。
+記事の全操作は`can_view_note(note_id)` / `can_edit_note(note_id)`を通じて
+親フォルダの権限を継承する。UIガードだけにしない。
+
+`note_editors`の変更はフォルダ作者または管理者だけが行える。
+
+## 5. 画面
+
+### `/notes`
+
+- `共有 / 個人`の切替。
+- 各行はノートフォルダ名、記事数、作者、公開状態を表示。
+- フォルダ作成は一覧上部のボタンから全画面フォームを開く。
+- 共有/個人、公開状態、共同編集権限を設定する。
+
+### `/notes/[id]`
+
+- フォルダ名と説明情報、記事一覧を表示。
+- 記事行はタイトル、作成者、更新日を表示。
+- FABでこのフォルダへ記事を直接作成する。
+- フォルダ作者・管理者はフォルダ設定の編集と削除ができる。
+
+### `/notes/[id]/articles/[articleId]`
+
+- 記事本文を`Linkify`＋`whitespace-pre-wrap`で表示。
+- 編集権限者は記事を編集・削除できる。
+- 閉じる・戻る操作は元のフォルダへ戻る。
+
+### 部員詳細
+
+- その人が作成した公開個人ノートフォルダを表示する。
+
+## 6. 記事エディタ
+
+- タイトル
+- 本文
+- 保存中は二重送信を防止
+- 作成者は記事作成時のユーザーとして記録
+
+フォルダの共有設定は記事ごとに重複して持たず、フォルダ設定を継承する。
+
+## 7. 今回対象外
+
+- コメント
+- いいね、人気順
+- 画像・ファイル添付
+- ブックマーク

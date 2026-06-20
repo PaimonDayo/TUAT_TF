@@ -1,40 +1,44 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
+import { ChevronRight, FileText } from "lucide-react";
+import { Avatar } from "@/components/common/Avatar";
+import { NoteDetailActions } from "@/components/features/NoteDetailActions";
+import { SubHeader } from "@/components/layout/SubHeader";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Avatar } from "@/components/common/Avatar";
-import { Linkify } from "@/components/common/Linkify";
-import { SubHeader } from "@/components/layout/SubHeader";
-import { NoteDetailActions } from "@/components/features/NoteDetailActions";
-import { getCurrentProfile } from "@/lib/supabase/auth";
-import { getMembersList, getNoteById, getNotesData } from "@/lib/queries";
+import { EmptyState } from "@/components/ui/empty-state";
+import {
+  getMembersList,
+  getNoteArticles,
+  getNoteById,
+} from "@/lib/queries";
 import { permissionsOf } from "@/lib/permissions";
+import { getCurrentProfile } from "@/lib/supabase/auth";
 
-export default async function NoteDetailPage({
+export default async function NoteFolderPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [profile, note, members, data] = await Promise.all([
+  const [profile, note, members, articles] = await Promise.all([
     getCurrentProfile(),
     getNoteById(id),
     getMembersList(),
-    getNotesData(),
+    getNoteArticles(id),
   ]);
   if (!note) notFound();
 
-  const permissions = permissionsOf(profile.roles);
-  const isAdmin = permissions.manageMembers;
+  const isAdmin = permissionsOf(profile.roles).manageMembers;
   const isAuthor = note.author_id === profile.id;
   const isSpecifiedEditor =
     note.edit_policy === "specified" &&
     (note.editors ?? []).some((editor) => editor.user_id === profile.id);
   const canEdit =
-    note.scope === "personal"
-      ? isAuthor
-      : isAuthor || isAdmin || note.edit_policy === "everyone" || isSpecifiedEditor;
+    isAuthor || isAdmin || note.edit_policy === "everyone" || isSpecifiedEditor;
+  const canManageFolder = isAuthor || isAdmin;
   const canDelete = isAuthor || isAdmin;
   const currentUser = {
     id: profile.id,
@@ -50,23 +54,22 @@ export default async function NoteDetailPage({
         title="ノート"
         backHref="/notes"
         right={
-          canEdit || canDelete ? (
+          canManageFolder || canDelete ? (
             <NoteDetailActions
               note={note}
               currentUser={currentUser}
               members={members}
-              themes={data.themes}
               isAdmin={isAdmin}
-              canEdit={canEdit}
+              canEdit={canManageFolder}
               canDelete={canDelete}
             />
           ) : undefined
         }
       />
-      <article className="px-4 pt-1">
-        <Card className="space-y-4 p-4">
+      <div className="space-y-4 px-4 pt-1">
+        <section className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge>{note.scope === "shared" ? note.theme?.name ?? "共有" : "個人"}</Badge>
+            <Badge>{note.scope === "shared" ? "共有" : "個人"}</Badge>
             {note.status === "draft" && <Badge>下書き</Badge>}
           </div>
           <h1 className="text-title">{note.title}</h1>
@@ -77,20 +80,47 @@ export default async function NoteDetailPage({
               blocks={note.author.blocks}
               size="sm"
             />
-            <div className="min-w-0">
-              <p className="truncate text-[13px] font-semibold">
-                {note.author.display_name}
-              </p>
-              <p className="text-micro">
-                {format(new Date(note.updated_at), "yyyy年M月d日 更新", { locale: ja })}
-              </p>
+            <span className="text-caption">{note.author.display_name}</span>
+          </div>
+        </section>
+
+        <section className="space-y-2">
+          <p className="section-label">記事</p>
+          {articles.length === 0 ? (
+            <EmptyState
+              title="記事がありません"
+              description={
+                canEdit ? "右下のボタンから最初の記事を追加できます。" : undefined
+              }
+            />
+          ) : (
+            <div className="space-y-2">
+              {articles.map((article) => (
+                <Link
+                  key={article.id}
+                  href={`/notes/${note.id}/articles/${article.id}`}
+                >
+                  <Card className="p-4 active:bg-bg">
+                    <div className="flex items-start gap-3">
+                      <FileText size={19} className="mt-0.5 shrink-0 text-accent" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-headline">{article.title}</p>
+                        <p className="mt-1 text-caption">
+                          {article.author.display_name}・
+                          {format(new Date(article.updated_at), "M月d日更新", {
+                            locale: ja,
+                          })}
+                        </p>
+                      </div>
+                      <ChevronRight size={18} className="mt-0.5 shrink-0 text-muted" />
+                    </div>
+                  </Card>
+                </Link>
+              ))}
             </div>
-          </div>
-          <div className="whitespace-pre-wrap break-words text-[15px] leading-7">
-            <Linkify text={note.body} />
-          </div>
-        </Card>
-      </article>
+          )}
+        </section>
+      </div>
     </>
   );
 }

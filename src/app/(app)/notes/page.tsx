@@ -27,7 +27,6 @@ export default async function NotesPage({
           blocks: profile.blocks,
           grade: profile.grade,
         }}
-        themes={data.themes}
         notes={data.notes}
         isAdmin={permissions.manageMembers}
         mine={mine === "1"}
