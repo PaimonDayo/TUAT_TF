@@ -1,13 +1,9 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { format } from "date-fns";
-import { ja } from "date-fns/locale";
-import { ChevronRight, FileText } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
+import { NoteArticleList } from "@/components/features/NoteArticleList";
 import { NoteDetailActions } from "@/components/features/NoteDetailActions";
 import { SubHeader } from "@/components/layout/SubHeader";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
   getMembersList,
@@ -94,30 +90,7 @@ export default async function NoteFolderPage({
               }
             />
           ) : (
-            <div className="space-y-2">
-              {articles.map((article) => (
-                <Link
-                  key={article.id}
-                  href={`/notes/${note.id}/articles/${article.id}`}
-                >
-                  <Card className="p-4 active:bg-bg">
-                    <div className="flex items-start gap-3">
-                      <FileText size={19} className="mt-0.5 shrink-0 text-accent" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-headline">{article.title}</p>
-                        <p className="mt-1 text-caption">
-                          {article.author.display_name}・
-                          {format(new Date(article.updated_at), "M月d日更新", {
-                            locale: ja,
-                          })}
-                        </p>
-                      </div>
-                      <ChevronRight size={18} className="mt-0.5 shrink-0 text-muted" />
-                    </div>
-                  </Card>
-                </Link>
-              ))}
-            </div>
+            <NoteArticleList noteId={note.id} articles={articles} />
           )}
         </section>
       </div>

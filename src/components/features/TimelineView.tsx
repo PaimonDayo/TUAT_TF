@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useMemo, useState } from "react";
 import { UserCheck, List } from "lucide-react";
 import { RecordCard } from "@/components/cards/RecordCard";
 import { TweetCard } from "@/components/cards/TweetCard";
@@ -15,18 +15,6 @@ import type { CommentAuthor, FeedItem } from "@/types";
 
 const PAGE = 30;
 
-/** 簡易表示の設定を localStorage に保持する外部ストア（useSyncExternalStore 用） */
-function subscribeCompact(callback: () => void) {
-  window.addEventListener("timeline-compact-change", callback);
-  return () => window.removeEventListener("timeline-compact-change", callback);
-}
-
-function toggleCompact() {
-  const next = localStorage.getItem("timeline-compact") !== "1";
-  localStorage.setItem("timeline-compact", next ? "1" : "0");
-  window.dispatchEvent(new Event("timeline-compact-change"));
-}
-
 /**
  * タイムライン本体。ブロック・学年・お気に入りの絞り込みはサーバー往復せず
  * 読み込み済みアイテムをクライアント側でフィルタするため、タブ切替が即時。
@@ -36,10 +24,13 @@ export function TimelineView({
   initialItems,
   currentUser,
   favoriteIds = [],
+  initialCompact = false,
 }: {
   initialItems: FeedItem[];
   currentUser: CommentAuthor;
   favoriteIds?: string[];
+  /** 簡易表示の初期値（サーバーが cookie から復元して渡す。詳細→簡易のフラッシュ防止） */
+  initialCompact?: boolean;
 }) {
   const [items, setItems] = useState(initialItems);
   const [limit, setLimit] = useState(PAGE);
@@ -49,12 +40,14 @@ export function TimelineView({
   const [block, setBlock] = useState<string>("all");
   const [grades, setGrades] = useState<string[]>([]);
   const [favOnly, setFavOnly] = useState(false);
-  // 簡易表示の設定はタブを離れても保持する（localStorage。SSR安全・effect内setState回避）
-  const compact = useSyncExternalStore(
-    subscribeCompact,
-    () => localStorage.getItem("timeline-compact") === "1",
-    () => false,
-  );
+  // 簡易表示の設定はタブを離れても保持する（cookie。SSRから初期値復元でフラッシュ無し）
+  const [compact, setCompact] = useState(initialCompact);
+
+  function toggleCompact() {
+    const next = !compact;
+    setCompact(next);
+    document.cookie = `timeline-compact=${next ? "1" : "0"};path=/;max-age=31536000`;
+  }
 
   const favSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
 
@@ -79,8 +72,8 @@ export function TimelineView({
 
   return (
     <>
-      <div className="px-4 pb-2">
-        <div className="flex items-center gap-2">
+      <div className="px-4 pt-1 pb-3">
+        <div className="flex min-h-9 items-center gap-2">
           <div className="min-w-0 flex-1">
             <SegmentedControl items={SIMPLE_BLOCK_ITEMS} value={block} onChange={setBlock} />
           </div>

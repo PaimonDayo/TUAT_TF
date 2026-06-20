@@ -24,7 +24,7 @@ export function TweetCard({
   const isOwner = currentUser.id === author.id;
 
   return (
-    <Card className={cn("p-4 space-y-2.5", compact && "p-3 space-y-1.5")}>
+    <Card className={cn("p-4", compact ? "space-y-1.5" : "space-y-2.5")}>
       <div className="flex items-center gap-2.5">
         <Link href={`/members/${author.id}`}>
           <Avatar name={author.display_name} blocks={author.blocks} avatarUrl={author.avatar_url} size="sm" />

@@ -52,8 +52,10 @@ export function ScheduleView({
 
   return (
     <>
-      <div className="px-4 pb-2">
-        <SegmentedControl items={items} value={type} onChange={setType} />
+      <div className="px-4 pt-1 pb-3">
+        <div className="flex min-h-9 items-center">
+          <SegmentedControl items={items} value={type} onChange={setType} className="w-full" />
+        </div>
       </div>
 
       <div className="px-4 pt-1">

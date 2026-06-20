@@ -45,14 +45,17 @@ export function NotesView({
 
   return (
     <div className="space-y-4 px-4 pt-1">
-      <SegmentedControl
-        items={[
-          { key: "shared", label: "共有" },
-          { key: "personal", label: "個人" },
-        ]}
-        value={scope}
-        onChange={setScope}
-      />
+      <div className="flex min-h-9 items-center">
+        <SegmentedControl
+          items={[
+            { key: "shared", label: "共有" },
+            { key: "personal", label: "個人" },
+          ]}
+          value={scope}
+          onChange={setScope}
+          className="w-full"
+        />
+      </div>
 
       <div className="flex justify-end">
         <Button

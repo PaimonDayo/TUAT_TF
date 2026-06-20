@@ -30,7 +30,7 @@ export function RecordCard({
     record.dist_low + record.dist_mid + record.dist_high + record.dist_speed;
 
   return (
-    <Card className={cn("space-y-3 p-4", compact && "space-y-2 p-3")}>
+    <Card className={cn("p-4", compact ? "space-y-2" : "space-y-3")}>
       {/* ヘッダー */}
       <div className="flex items-center gap-2.5">
         <Link href={`/members/${author.id}`}>

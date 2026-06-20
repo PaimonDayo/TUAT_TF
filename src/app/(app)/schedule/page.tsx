@@ -40,7 +40,7 @@ export default async function SchedulePage({
   return (
     <>
       <Header
-        title="練習予定"
+        title="予定"
         large
       />
       <ScheduleView

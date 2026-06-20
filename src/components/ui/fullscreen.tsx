@@ -11,6 +11,35 @@ import { cn } from "@/lib/utils";
  */
 export const FullScreen = Dialog.Root;
 
+/** ソフトキーボード対策: visualViewport の高さ/位置を購読する（SSR安全） */
+function subscribeViewport(callback: () => void) {
+  const vv = window.visualViewport;
+  if (!vv) return () => {};
+  vv.addEventListener("resize", callback);
+  vv.addEventListener("scroll", callback);
+  return () => {
+    vv.removeEventListener("resize", callback);
+    vv.removeEventListener("scroll", callback);
+  };
+}
+
+function getViewportSnapshot() {
+  const vv = window.visualViewport;
+  return vv ? `${Math.round(vv.height)}:${Math.round(vv.offsetTop)}` : "";
+}
+
+/** キーボード表示で縮んだ可視領域に全画面フォームを収めるための inline style */
+function useViewportStyle(): React.CSSProperties | undefined {
+  const snapshot = React.useSyncExternalStore(
+    subscribeViewport,
+    getViewportSnapshot,
+    () => "",
+  );
+  if (!snapshot) return undefined;
+  const [height, offsetTop] = snapshot.split(":");
+  return { height: `${height}px`, transform: `translateY(${offsetTop}px)` };
+}
+
 export function FullScreenContent({
   title,
   children,
@@ -24,14 +53,18 @@ export function FullScreenContent({
   autoFocus?: boolean;
   className?: string;
 }) {
+  const viewportStyle = useViewportStyle();
   return (
     <Dialog.Portal>
       <Dialog.Overlay className="sheet-overlay fixed inset-0 z-50 bg-black/30" />
       <Dialog.Content
         onOpenAutoFocus={autoFocus ? undefined : (e) => e.preventDefault()}
         onCloseAutoFocus={(e) => e.preventDefault()}
+        style={viewportStyle}
         className={cn(
-          "sheet-content fixed inset-0 z-50 mx-auto w-full max-w-md bg-bg flex flex-col outline-none",
+          // 既定は dvh で全画面。キーボード表示時は viewportStyle が高さを上書きし、
+          // ヘッダー(閉じる)・スクロール領域・フッター(投稿)を可視領域内に収める。
+          "sheet-content fixed inset-x-0 top-0 z-50 mx-auto h-dvh w-full max-w-md bg-bg flex flex-col outline-none",
           className,
         )}
       >

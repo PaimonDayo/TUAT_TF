@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { Header } from "@/components/layout/Header";
 import { TimelineView } from "@/components/features/TimelineView";
 import { getCurrentProfile } from "@/lib/supabase/auth";
@@ -6,10 +7,12 @@ import { getFeed, getMyFavoriteIds } from "@/lib/queries";
 export default async function TimelinePage() {
   const profile = await getCurrentProfile();
   // 絞り込みはクライアント側で行うため、ここでは全件をまとめて取得する。
-  const [feed, favoriteIds] = await Promise.all([
+  const [feed, favoriteIds, cookieStore] = await Promise.all([
     getFeed(profile.id, "all", 30, "all"),
     getMyFavoriteIds(profile.id),
+    cookies(),
   ]);
+  const initialCompact = cookieStore.get("timeline-compact")?.value === "1";
 
   return (
     <>
@@ -22,6 +25,7 @@ export default async function TimelinePage() {
           avatar_url: profile.avatar_url,
         }}
         favoriteIds={favoriteIds}
+        initialCompact={initialCompact}
       />
     </>
   );
