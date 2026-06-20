@@ -9,6 +9,7 @@ import { Avatar } from "@/components/common/Avatar";
 import { BlockPills } from "@/components/common/BlockPill";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { GradeMenu } from "@/components/features/GradeMenu";
+import { GradeChips } from "@/components/features/GradeChips";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
   GRADE_OPTIONS,
@@ -75,6 +76,11 @@ export function MemberDirectory({ members }: { members: AuthorMini[] }) {
         <span className="text-caption tabular-nums">{filtered.length}人</span>
         <GradeMenu value={grades} onChange={setGrades} availableGrades={presentGrades} />
       </div>
+      {grades.length > 0 && (
+        <div className="px-4 pb-2">
+          <GradeChips value={grades} onChange={setGrades} />
+        </div>
+      )}
 
       <div className="px-4 pt-1">
         {groups.length === 0 ? (

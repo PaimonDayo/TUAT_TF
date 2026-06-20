@@ -7,6 +7,7 @@ import { TweetCard } from "@/components/cards/TweetCard";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { GradeMenu } from "@/components/features/GradeMenu";
+import { GradeChips } from "@/components/features/GradeChips";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SIMPLE_BLOCK_ITEMS, matchSimpleBlock } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -102,6 +103,12 @@ export function TimelineView({
           </button>
         </div>
       </div>
+
+      {grades.length > 0 && (
+        <div className="px-4 pb-2">
+          <GradeChips value={grades} onChange={setGrades} />
+        </div>
+      )}
 
       <div className="px-4 pt-1">
         {filtered.length === 0 ? (
