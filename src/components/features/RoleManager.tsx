@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronUp, Lock, Plus, SlidersHorizontal } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Lock, Plus, SlidersHorizontal } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,6 @@ import { FormModal } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
 import { ReorderList } from "@/components/ui/reorder-list";
 import { Avatar } from "@/components/common/Avatar";
-import { EmptyState } from "@/components/ui/empty-state";
 import { PERMISSION_LIST } from "@/lib/permissions";
 import type { AppRole, Permission, Profile } from "@/types";
 
@@ -85,9 +84,7 @@ export function RoleManager({
           <RoleRow
             key={role.id}
             role={role}
-            members={members.filter((member) =>
-              member.roles.some((assigned) => assigned.id === role.id),
-            )}
+            members={members}
             onUpdated={(updated) => {
               setRoles((items) => items.map((item) => (item.id === updated.id ? updated : item)));
               router.refresh();
@@ -147,9 +144,36 @@ function RoleRow({
   onUpdated: (role: AppRole) => void;
   onDeleted: () => void;
 }) {
+  const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [viewingMembers, setViewingMembers] = useState(false);
+  const [query, setQuery] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
   const perms = PERMISSION_LIST.filter((permission) => role[PERM_COLUMN[permission.key]]);
+  const assignedCount = members.filter((m) =>
+    m.roles.some((r) => r.id === role.id),
+  ).length;
+
+  async function toggleMember(member: Profile) {
+    if (busyId) return;
+    setBusyId(member.id);
+    const has = member.roles.some((r) => r.id === role.id);
+    const nextIds = has
+      ? member.roles.filter((r) => r.id !== role.id).map((r) => r.id)
+      : [...member.roles.map((r) => r.id), role.id];
+    const supabase = createClient();
+    const { error } = await supabase.rpc("set_profile_roles", {
+      target_profile_id: member.id,
+      target_role_ids: nextIds,
+    });
+    if (error) {
+      alert("ロールを更新できませんでした");
+      setBusyId(null);
+      return;
+    }
+    router.refresh();
+    setBusyId(null);
+  }
 
   async function remove() {
     const supabase = createClient();
@@ -224,30 +248,50 @@ function RoleRow({
         <FormModal
           open
           onOpenChange={(open) => !open && setViewingMembers(false)}
-          title={role.name}
+          title={`${role.name} のメンバー`}
         >
-          {members.length === 0 ? (
-            <EmptyState title="このロールの部員はいません" />
-          ) : (
-            <div className="space-y-2 pb-4">
-              {members.map((member) => (
-                <Card key={member.id} className="flex items-center gap-3 p-3">
-                  <Avatar
-                    name={member.display_name || "?"}
-                    avatarUrl={member.avatar_url}
-                    blocks={member.blocks}
-                    size="sm"
-                  />
-                  <div className="min-w-0">
-                    <p className="truncate text-[14px] font-semibold">
-                      {member.display_name || "名前未設定"}
-                    </p>
-                    <p className="truncate text-caption">{member.email}</p>
-                  </div>
-                </Card>
-              ))}
+          <div className="space-y-3 pb-4">
+            <p className="text-caption">
+              タップで付与・解除できます（{assignedCount}人に付与中）。
+            </p>
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="名前で検索"
+            />
+            <div className="space-y-1">
+              {members
+                .filter((member) => {
+                  const q = query.trim().toLowerCase();
+                  return !q || (member.display_name ?? "").toLowerCase().includes(q);
+                })
+                .map((member) => {
+                  const has = member.roles.some((r) => r.id === role.id);
+                  return (
+                    <button
+                      key={member.id}
+                      type="button"
+                      disabled={busyId === member.id}
+                      onClick={() => void toggleMember(member)}
+                      className={`flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left active:bg-bg disabled:opacity-50 ${
+                        has ? "bg-accent/10" : ""
+                      }`}
+                    >
+                      <Avatar
+                        name={member.display_name || "?"}
+                        avatarUrl={member.avatar_url}
+                        blocks={member.blocks}
+                        size="sm"
+                      />
+                      <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">
+                        {member.display_name || "名前未設定"}
+                      </span>
+                      {has && <Check size={18} className="shrink-0 text-accent" />}
+                    </button>
+                  );
+                })}
             </div>
-          )}
+          </div>
         </FormModal>
       )}
     </Card>
