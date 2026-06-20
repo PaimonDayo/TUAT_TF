@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { BookOpen, ChevronRight, FileText } from "lucide-react";
+import { BookOpen, ChevronRight, FileText, FolderPlus } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +41,7 @@ export function NotesView({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [scope, setScope] = useState<NoteScope>("shared");
+  const [folderCreateOpen, setFolderCreateOpen] = useState(false);
   const [themeForm, setThemeForm] = useState<NoteTheme | null>(null);
   const themeId = searchParams.get("folder");
 
@@ -87,10 +88,21 @@ export function NotesView({
 
       {scope === "shared" && !themeId && (
         <div className="space-y-2">
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setFolderCreateOpen(true)}
+            >
+              <FolderPlus size={17} />
+              フォルダを作成
+            </Button>
+          </div>
           {themes.length === 0 ? (
             <EmptyState
               title="共有フォルダがありません"
-              description="右下の作成メニューからフォルダを作成できます。"
+              description="上の「フォルダを作成」から追加できます。"
             />
           ) : (
             themes.map((theme) => {
@@ -173,6 +185,22 @@ export function NotesView({
 
       {scope === "personal" && (
         <NoteList notes={visibleNotes} currentUserId={currentUser.id} showAuthor />
+      )}
+
+      {folderCreateOpen && (
+        <FormModal
+          open
+          onOpenChange={(open) => !open && setFolderCreateOpen(false)}
+          title="フォルダを作成"
+        >
+          <FolderForm
+            currentUserId={currentUser.id}
+            onDone={() => {
+              setFolderCreateOpen(false);
+              router.refresh();
+            }}
+          />
+        </FormModal>
       )}
 
       {themeForm && (

@@ -145,15 +145,6 @@ h1, h2, h3, p {
   animation: fade-in 0.18s ease-out;
 }
 
-@keyframes fab-icon-swap {
-  from { transform: scale(0.92); }
-  to { transform: scale(1); }
-}
-.fab-icon-swap {
-  display: flex;
-  animation: fab-icon-swap 0.18s ease-out;
-}
-
 @keyframes comment-pop {
   from { opacity: 0; transform: translateY(-6px) scale(0.99); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -181,10 +172,4 @@ input[type="date"]::-webkit-date-and-time-value {
 input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="time"]::-webkit-calendar-picker-indicator {
   margin-left: auto;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fab-icon-swap {
-    animation: none;
-  }
 }

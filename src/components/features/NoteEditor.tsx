@@ -247,7 +247,7 @@ export function NoteEditor({
               </select>
             ) : (
               <p className="rounded-xl border border-separator bg-bg p-3 text-caption">
-                先に右下の作成メニューからフォルダを作成してください。
+                先に共有フォルダ一覧でフォルダを作成してください。
               </p>
             )}
           </div>
