@@ -2,6 +2,31 @@
 
 最終更新: 2026-06-21
 
+## 文脈FABの実機手直し（タスク1.1）
+
+- 実装コミット: `67e7934` FABの実機不具合を修正
+- `/notes` の共有フォルダ一覧上部に「フォルダを作成」を追加。
+  - 既存の `FolderForm` を全画面 `FormModal` で開く。
+  - 保存後はモーダルを閉じて `router.refresh()` で一覧を更新する。
+  - 空状態とノートエディタ内の案内文も新しい導線に合わせた。
+- Speed Dial:
+  - コンテナを最大15remのレスポンシブ固定幅にした。
+  - 3項目を `w-full` にして等幅化し、`whitespace-nowrap` は維持。
+- 予定/お知らせ/ノートのFAB:
+  - `scale(0.92) -> scale(1)` のアイコンアニメーションを削除。
+  - タブ切替時に位置・サイズが動かず、即時にアイコンだけ差し替わる。
+
+確認済み:
+
+- `npx tsc --noEmit`
+- `npx eslint src/components/layout/FAB.tsx src/components/features/NotesView.tsx src/components/features/NoteEditor.tsx`
+
+実機で確認すること:
+
+1. 共有フォルダ一覧からフォルダを作成し、保存直後に一覧へ表示される。
+2. Speed Dialの3項目が狭い端末でも同じ幅かつ1行で表示される。
+3. 予定・お知らせ・ノートへ切り替えた際、FABアイコンが拡大・移動しない。
+
 ## 文脈FAB（タスク1）
 
 - 実装コミット: `e889516` 文脈に応じたFABへ刷新
