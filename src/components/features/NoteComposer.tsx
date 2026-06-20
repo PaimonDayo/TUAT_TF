@@ -11,10 +11,12 @@ import type { AuthorMini, NoteTheme } from "@/types";
 export function NoteComposer({
   currentUser,
   isAdmin,
+  initialThemeId,
   onDone,
 }: {
   currentUser: AuthorMini;
   isAdmin: boolean;
+  initialThemeId?: string | null;
   onDone: () => void;
 }) {
   const [members, setMembers] = useState<AuthorMini[] | null>(null);
@@ -61,6 +63,7 @@ export function NoteComposer({
       themes={folders}
       isAdmin={isAdmin}
       initialScope="shared"
+      initialThemeId={initialThemeId}
       onDone={onDone}
     />
   );

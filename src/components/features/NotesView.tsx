@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { BookOpen, ChevronRight, FileText } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
 import { ActionMenu } from "@/components/ui/action-menu";
@@ -38,9 +38,22 @@ export function NotesView({
   mine?: boolean;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [scope, setScope] = useState<NoteScope>("shared");
-  const [themeId, setThemeId] = useState<string | null>(null);
   const [themeForm, setThemeForm] = useState<NoteTheme | null>(null);
+  const themeId = searchParams.get("folder");
+
+  function setThemeId(nextThemeId: string | null) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextThemeId) {
+      params.set("folder", nextThemeId);
+    } else {
+      params.delete("folder");
+    }
+    const query = params.toString();
+    window.history.pushState(null, "", query ? `${pathname}?${query}` : pathname);
+  }
   const visibleNotes = useMemo(
     () =>
       notes.filter((note) => {

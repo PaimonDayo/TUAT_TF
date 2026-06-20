@@ -27,6 +27,7 @@ export function NoteEditorButton({
   note,
   isAdmin = false,
   initialScope = "shared",
+  initialThemeId,
   label = "新しいノート",
   onDone,
 }: {
@@ -36,6 +37,7 @@ export function NoteEditorButton({
   note?: NoteWithRelations;
   isAdmin?: boolean;
   initialScope?: NoteScope;
+  initialThemeId?: string | null;
   label?: string;
   onDone?: () => void;
 }) {
@@ -60,6 +62,7 @@ export function NoteEditorButton({
             note={note}
             isAdmin={isAdmin}
             initialScope={initialScope}
+            initialThemeId={initialThemeId}
             onDone={() => {
               setOpen(false);
               onDone?.();
@@ -78,6 +81,7 @@ export function NoteEditor({
   note,
   isAdmin,
   initialScope,
+  initialThemeId,
   onDone,
 }: {
   currentUser: AuthorMini;
@@ -86,6 +90,7 @@ export function NoteEditor({
   note?: NoteWithRelations;
   isAdmin: boolean;
   initialScope: NoteScope;
+  initialThemeId?: string | null;
   onDone: () => void;
 }) {
   const router = useRouter();
@@ -93,7 +98,12 @@ export function NoteEditor({
   const canManagePermissions = ownsNote || isAdmin;
   const [scope, setScope] = useState<NoteScope>(note?.scope ?? initialScope);
   const [themes] = useState(initialThemes);
-  const [themeId, setThemeId] = useState(note?.theme_id ?? initialThemes[0]?.id ?? "");
+  const validInitialThemeId = initialThemes.some((theme) => theme.id === initialThemeId)
+    ? initialThemeId
+    : null;
+  const [themeId, setThemeId] = useState(
+    note?.theme_id ?? validInitialThemeId ?? initialThemes[0]?.id ?? "",
+  );
   const [title, setTitle] = useState(note?.title ?? "");
   const [body, setBody] = useState(note?.body ?? "");
   const [status, setStatus] = useState<NoteStatus>(note?.status ?? "draft");

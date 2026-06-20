@@ -29,7 +29,6 @@ export default async function AppLayout({
         isMiddleLong={profile.blocks?.includes("middle_long") ?? false}
         can={{
           createSchedule: perms.createSchedule,
-          createMenu: perms.createMenu,
           createNotice: perms.createNotice,
           manageMembers: perms.manageMembers,
         }}

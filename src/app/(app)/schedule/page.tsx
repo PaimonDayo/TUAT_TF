@@ -1,6 +1,5 @@
 import { Header } from "@/components/layout/Header";
 import { ScheduleView } from "@/components/features/ScheduleView";
-import { ScheduleComposer } from "@/components/post/ScheduleForm";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getUpcomingSchedules, getAttendancesForSchedules } from "@/lib/queries";
 import { permissionsOf } from "@/lib/permissions";
@@ -12,7 +11,7 @@ export default async function SchedulePage({
 }: {
   searchParams: Promise<{ compose?: string; open?: string }>;
 }) {
-  const { compose, open } = await searchParams;
+  const { open } = await searchParams;
   const profile = await getCurrentProfile();
   const perms = permissionsOf(profile.roles);
   // 種別の絞り込みはクライアント側で行うため、今後の予定を全件取得する。
@@ -43,7 +42,6 @@ export default async function SchedulePage({
       <Header
         title="練習予定"
         large
-        right={perms.createSchedule ? <ScheduleComposer autoOpen={compose === "1"} /> : undefined}
       />
       <ScheduleView
         schedules={schedules}

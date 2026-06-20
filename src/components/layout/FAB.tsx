@@ -1,170 +1,184 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Activity, MessageCircle, Trophy, CalendarPlus, ClipboardList, Bell, BookOpen, FolderPlus, ChevronLeft } from "lucide-react";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import {
+  Activity,
+  BellPlus,
+  CalendarPlus,
+  MessageCircle,
+  NotebookPen,
+  Plus,
+  Trophy,
+} from "lucide-react";
 import { FormModal } from "@/components/ui/form-modal";
-import { RecordForm } from "@/components/post/RecordForm";
-import { TweetForm } from "@/components/post/TweetForm";
-import { ScheduleCreatePanel } from "@/components/post/ScheduleForm";
+import { NoteComposer } from "@/components/features/NoteComposer";
 import { NoticeForm } from "@/components/post/NoticeForm";
-import { MenuComposerForm } from "@/components/post/MenuForm";
+import { RecordForm } from "@/components/post/RecordForm";
 import { ResultForm } from "@/components/post/ResultForm";
-import { FolderComposer, NoteComposer } from "@/components/features/NoteComposer";
+import { ScheduleCreatePanel } from "@/components/post/ScheduleForm";
+import { TweetForm } from "@/components/post/TweetForm";
+import { cn } from "@/lib/utils";
 import type { AuthorMini } from "@/types";
-
-type Mode = "menu" | "note";
 
 export type FabPermissions = {
   createSchedule: boolean;
-  createMenu: boolean;
   createNotice: boolean;
   manageMembers: boolean;
 };
 
-/** 右下のフローティング投稿ボタン。権限に応じて作成できる種別を出し分ける */
-export function FAB({
-  userId,
-  currentUser,
-  isMiddleLong,
-  can,
-}: {
+type DirectForm = "schedule" | "notice" | "note" | null;
+
+type FabProps = {
   userId: string;
   currentUser: AuthorMini;
   isMiddleLong: boolean;
   can: FabPermissions;
+};
+
+export function FAB(props: FabProps) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const routeKey = `${pathname}?${searchParams.toString()}`;
+
+  return (
+    <ContextualFAB
+      key={routeKey}
+      {...props}
+      pathname={pathname}
+      folderId={searchParams.get("folder")}
+      autoOpen={searchParams.get("compose") === "1"}
+    />
+  );
+}
+
+function ContextualFAB({
+  userId,
+  currentUser,
+  isMiddleLong,
+  can,
+  pathname,
+  folderId: requestedFolderId,
+  autoOpen,
+}: FabProps & {
+  pathname: string;
+  folderId: string | null;
+  autoOpen: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<Mode>("menu");
+  const router = useRouter();
+  const [speedDialOpen, setSpeedDialOpen] = useState(false);
   const [recordOpen, setRecordOpen] = useState(false);
   const [tweetOpen, setTweetOpen] = useState(false);
-  const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [noticeOpen, setNoticeOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [noteOpen, setNoteOpen] = useState(false);
-  const [folderOpen, setFolderOpen] = useState(false);
+  const [directForm, setDirectForm] = useState<DirectForm>(() => {
+    if (autoOpen && pathname === "/schedule" && can.createSchedule) {
+      return "schedule";
+    }
+    if (autoOpen && pathname === "/notices" && can.createNotice) {
+      return "notice";
+    }
+    return null;
+  });
 
-  function openMenu() {
-    setMode("menu");
+  const isFeed = pathname === "/home" || pathname === "/timeline";
+  const isSchedule = pathname === "/schedule" && can.createSchedule;
+  const isNotice = pathname === "/notices" && can.createNotice;
+  const folderId =
+    pathname === "/notes" && requestedFolderId !== "__unassigned__"
+      ? requestedFolderId
+      : null;
+  const isNoteFolder = Boolean(folderId);
+  const visible = isFeed || isSchedule || isNotice || isNoteFolder;
+
+  function handleMainAction() {
+    if (isFeed) {
+      setSpeedDialOpen((open) => !open);
+      return;
+    }
+    if (isSchedule) setDirectForm("schedule");
+    if (isNotice) setDirectForm("notice");
+    if (isNoteFolder) setDirectForm("note");
+  }
+
+  function openFeedForm(setOpen: (open: boolean) => void) {
+    setSpeedDialOpen(false);
     setOpen(true);
   }
-  function close() {
-    setOpen(false);
-    // アニメーション後にメニューへ戻す
-    setTimeout(() => setMode("menu"), 250);
+
+  function closeDirectForm() {
+    setDirectForm(null);
+    if (autoOpen) router.back();
   }
 
-  function openForm(setFormOpen: (open: boolean) => void) {
-    setOpen(false);
-    setMode("menu");
-    setFormOpen(true);
-  }
+  if (!visible) return null;
 
-  const titles: Record<Mode, string | undefined> = {
-    menu: undefined,
-    note: "ノート",
-  };
+  const label = isFeed
+    ? speedDialOpen
+      ? "作成メニューを閉じる"
+      : "作成メニューを開く"
+    : isSchedule
+      ? "予定を作成"
+      : isNotice
+        ? "お知らせを作成"
+        : "このフォルダにノートを作成";
 
   return (
     <>
-      <button
-        onClick={openMenu}
-        aria-label="投稿する"
-        className="fixed z-40 right-5 bottom-[calc(74px+env(safe-area-inset-bottom))] h-14 w-14 rounded-full bg-accent text-white shadow-lg shadow-accent/30 flex items-center justify-center active:scale-95 transition-active"
-      >
-        <Plus size={28} strokeWidth={2.5} />
-      </button>
+      {isFeed && speedDialOpen && (
+        <button
+          type="button"
+          aria-label="作成メニューを閉じる"
+          className="fixed inset-0 z-30 bg-black/20"
+          onClick={() => setSpeedDialOpen(false)}
+        />
+      )}
 
-      <Sheet open={open} onOpenChange={(o) => (o ? setOpen(true) : close())}>
-        <SheetContent title={titles[mode]}>
-          {mode === "menu" && (
-            <div className="space-y-2 pb-4">
-              <PostOption
-                icon={<Activity size={22} />}
-                color="#007aff"
-                title="練習記録"
-                desc="距離・タイム・補強を記録"
-                onClick={() => openForm(setRecordOpen)}
-              />
-              <PostOption
-                icon={<BookOpen size={22} />}
-                color="#5856d6"
-                title="ノート"
-                desc="ノートや共有フォルダを作成"
-                onClick={() => setMode("note")}
-              />
-              <PostOption
-                icon={<MessageCircle size={22} />}
-                color="#34c759"
-                title="つぶやき"
-                desc="ひとことシェア（200字まで）"
-                onClick={() => openForm(setTweetOpen)}
-              />
-              <PostOption
-                icon={<Trophy size={22} />}
-                color="#ff9500"
-                title="大会・記録会の結果"
-                desc="PB・記録を登録"
-                onClick={() => openForm(setResultOpen)}
-              />
-              {can.createSchedule && (
-                <PostOption
-                  icon={<CalendarPlus size={22} />}
-                  color="#ff9500"
-                  title="予定"
-                  desc="練習・大会・記録会などの予定を作成"
-                  onClick={() => openForm(setScheduleOpen)}
-                />
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 mx-auto h-0 w-full max-w-md">
+        {isFeed && speedDialOpen && (
+          <div className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] flex w-max flex-col items-end gap-2">
+            <SpeedDialAction
+              icon={<Activity size={19} />}
+              label="練習記録"
+              onClick={() => openFeedForm(setRecordOpen)}
+            />
+            <SpeedDialAction
+              icon={<MessageCircle size={19} />}
+              label="つぶやき"
+              onClick={() => openFeedForm(setTweetOpen)}
+            />
+            <SpeedDialAction
+              icon={<Trophy size={19} />}
+              label="大会・記録会の結果"
+              onClick={() => openFeedForm(setResultOpen)}
+            />
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={handleMainAction}
+          aria-label={label}
+          aria-expanded={isFeed ? speedDialOpen : undefined}
+          className="pointer-events-auto absolute right-5 bottom-[calc(74px+env(safe-area-inset-bottom))] flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-lg shadow-accent/30 active:scale-95 transition-active"
+        >
+          {isFeed ? (
+            <Plus
+              size={28}
+              strokeWidth={2.5}
+              className={cn(
+                "transition-transform duration-200 motion-reduce:transition-none",
+                speedDialOpen && "rotate-45",
               )}
-              {can.createMenu && (
-                <PostOption
-                  icon={<ClipboardList size={22} />}
-                  color="#af52de"
-                  title="練習メニュー"
-                  desc="予定にメニューを追加"
-                  onClick={() => openForm(setMenuOpen)}
-                />
-              )}
-              {can.createNotice && (
-                <PostOption
-                  icon={<Bell size={22} />}
-                  color="#ff3b30"
-                  title="お知らせ"
-                  desc="部内へのお知らせを投稿"
-                  onClick={() => openForm(setNoticeOpen)}
-                />
-              )}
-            </div>
+            />
+          ) : (
+            <span key={pathname} className="fab-icon-swap">
+              {isSchedule && <CalendarPlus size={25} />}
+              {isNotice && <BellPlus size={25} />}
+              {isNoteFolder && <NotebookPen size={25} />}
+            </span>
           )}
-          {mode === "note" && (
-            <div className="space-y-2 pb-4">
-              <button
-                type="button"
-                onClick={() => setMode("menu")}
-                className="mb-1 inline-flex h-9 items-center gap-1 text-[13px] font-medium text-accent"
-              >
-                <ChevronLeft size={17} />
-                作成メニュー
-              </button>
-              <PostOption
-                icon={<BookOpen size={22} />}
-                color="#5856d6"
-                title="ノートを作成"
-                desc="共有ノートまたは個人ノートを書く"
-                onClick={() => openForm(setNoteOpen)}
-              />
-              <PostOption
-                icon={<FolderPlus size={22} />}
-                color="#34c759"
-                title="フォルダを作成"
-                desc="共有ノートを分類するフォルダ"
-                onClick={() => openForm(setFolderOpen)}
-              />
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
+        </button>
+      </div>
 
       <FormModal open={recordOpen} onOpenChange={setRecordOpen} title="練習記録">
         <RecordForm
@@ -178,14 +192,6 @@ export function FAB({
         <TweetForm onDone={() => setTweetOpen(false)} />
       </FormModal>
 
-      <FormModal open={scheduleOpen} onOpenChange={setScheduleOpen} title="予定を作成">
-        <ScheduleCreatePanel onDone={() => setScheduleOpen(false)} />
-      </FormModal>
-
-      <FormModal open={noticeOpen} onOpenChange={setNoticeOpen} title="お知らせを投稿">
-        <NoticeForm onDone={() => setNoticeOpen(false)} />
-      </FormModal>
-
       <FormModal
         open={resultOpen}
         onOpenChange={setResultOpen}
@@ -194,53 +200,57 @@ export function FAB({
         <ResultForm userId={userId} onDone={() => setResultOpen(false)} />
       </FormModal>
 
-      <FormModal open={menuOpen} onOpenChange={setMenuOpen} title="練習メニューを追加">
-        <MenuComposerForm onDone={() => setMenuOpen(false)} />
+      <FormModal
+        open={directForm === "schedule"}
+        onOpenChange={(open) => !open && closeDirectForm()}
+        title="予定を作成"
+      >
+        <ScheduleCreatePanel onDone={closeDirectForm} />
       </FormModal>
 
-      <FormModal open={noteOpen} onOpenChange={setNoteOpen} title="ノートを作成">
+      <FormModal
+        open={directForm === "notice"}
+        onOpenChange={(open) => !open && closeDirectForm()}
+        title="お知らせを投稿"
+      >
+        <NoticeForm onDone={closeDirectForm} />
+      </FormModal>
+
+      <FormModal
+        open={directForm === "note"}
+        onOpenChange={(open) => !open && closeDirectForm()}
+        title="ノートを作成"
+      >
         <NoteComposer
           currentUser={currentUser}
           isAdmin={can.manageMembers}
-          onDone={() => setNoteOpen(false)}
+          initialThemeId={folderId}
+          onDone={closeDirectForm}
         />
-      </FormModal>
-
-      <FormModal open={folderOpen} onOpenChange={setFolderOpen} title="フォルダを作成">
-        <FolderComposer userId={userId} onDone={() => setFolderOpen(false)} />
       </FormModal>
     </>
   );
 }
 
-function PostOption({
+function SpeedDialAction({
   icon,
-  color,
-  title,
-  desc,
+  label,
   onClick,
 }: {
   icon: React.ReactNode;
-  color: string;
-  title: string;
-  desc: string;
+  label: string;
   onClick: () => void;
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      className="w-full flex items-center gap-3 rounded-xl bg-card border border-separator p-3 active:bg-bg transition-active"
+      className="flex h-11 w-max items-center gap-2 whitespace-nowrap rounded-full border border-separator bg-card px-3.5 text-[14px] font-semibold text-ink shadow-lg active:bg-bg"
     >
-      <span
-        className="h-11 w-11 rounded-full flex items-center justify-center text-white shrink-0"
-        style={{ backgroundColor: color }}
-      >
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-white">
         {icon}
       </span>
-      <span className="text-left">
-        <span className="block text-headline">{title}</span>
-        <span className="block text-caption">{desc}</span>
-      </span>
+      {label}
     </button>
   );
 }
