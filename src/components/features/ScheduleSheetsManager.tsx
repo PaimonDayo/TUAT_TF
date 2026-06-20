@@ -19,7 +19,7 @@ import { Disclosure } from "@/components/ui/disclosure";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { createClient } from "@/lib/supabase/client";
-import { BLOCKS } from "@/lib/constants";
+import { BLOCKS, SCHEDULE_TYPE_OPTIONS } from "@/lib/constants";
 import type {
   ScheduleImportPreview,
   ScheduleImportEditableRow,
@@ -125,14 +125,14 @@ export function ScheduleSheetsManager() {
     void query.then(({ data }) => {
       if (!active) return;
       const targetBlocks = block === "all" ? [] : [block];
-      setExisting(
-        ((data ?? []) as PracticeSchedule[]).filter(
-          (schedule) =>
-            [...(schedule.target_blocks ?? [])].sort().join(",") ===
-            [...targetBlocks].sort().join(","),
-        ),
+      const filteredExisting = ((data ?? []) as PracticeSchedule[]).filter(
+        (schedule) =>
+          [...(schedule.target_blocks ?? [])].sort().join(",") ===
+          [...targetBlocks].sort().join(","),
       );
-      setSelectedIds([]);
+      setExisting(filteredExisting);
+      // 既存を編集は「全選択スタート」。必要な人だけ外す運用にする。
+      setSelectedIds(filteredExisting.map((schedule) => schedule.id));
     });
     return () => {
       active = false;
@@ -385,14 +385,13 @@ export function ScheduleSheetsManager() {
           <p className="text-headline">入力する予定の種類を選ぶ</p>
         </div>
         <SegmentedControl
-          items={[
-            { key: "practice", label: "練習予定" },
-            { key: "meet", label: "大会" },
-            { key: "time_trial", label: "記録会" },
-          ]}
+          items={SCHEDULE_TYPE_OPTIONS.map((option) => ({
+            key: option.key,
+            label: option.label,
+          }))}
           value={kind}
           onChange={(value) => {
-            setKind(value);
+            setKind(value as ScheduleSheetKind);
             setPreview(null);
             setSheetId(null);
           }}
@@ -448,9 +447,30 @@ export function ScheduleSheetsManager() {
           value={inputMode}
           onChange={(value) => {
             setInputMode(value);
-            setSelectedIds([]);
+            // 編集は全選択スタート / 新規は選択なし
+            setSelectedIds(value === "edit" ? existing.map((s) => s.id) : []);
           }}
         />
+        {inputMode === "edit" && existing.length > 0 && (
+          <div className="flex items-center justify-between px-1">
+            <span className="text-caption tabular-nums">
+              {selectedIds.length} / {existing.length} 件を編集対象
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                setSelectedIds(
+                  selectedIds.length === existing.length
+                    ? []
+                    : existing.map((s) => s.id),
+                )
+              }
+              className="text-[13px] font-semibold text-accent active:opacity-60"
+            >
+              {selectedIds.length === existing.length ? "すべて解除" : "すべて選択"}
+            </button>
+          </div>
+        )}
         {inputMode === "edit" && (
           <div className="max-h-64 space-y-1 overflow-y-auto rounded-xl border border-separator bg-card p-1">
             {existing.length === 0 ? (
