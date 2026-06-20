@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { UserCheck, List } from "lucide-react";
 import { RecordCard } from "@/components/cards/RecordCard";
 import { TweetCard } from "@/components/cards/TweetCard";
@@ -14,6 +14,18 @@ import { loadFeed } from "@/app/(app)/timeline/actions";
 import type { CommentAuthor, FeedItem } from "@/types";
 
 const PAGE = 30;
+
+/** 簡易表示の設定を localStorage に保持する外部ストア（useSyncExternalStore 用） */
+function subscribeCompact(callback: () => void) {
+  window.addEventListener("timeline-compact-change", callback);
+  return () => window.removeEventListener("timeline-compact-change", callback);
+}
+
+function toggleCompact() {
+  const next = localStorage.getItem("timeline-compact") !== "1";
+  localStorage.setItem("timeline-compact", next ? "1" : "0");
+  window.dispatchEvent(new Event("timeline-compact-change"));
+}
 
 /**
  * タイムライン本体。ブロック・学年・お気に入りの絞り込みはサーバー往復せず
@@ -37,16 +49,12 @@ export function TimelineView({
   const [block, setBlock] = useState<string>("all");
   const [grades, setGrades] = useState<string[]>([]);
   const [favOnly, setFavOnly] = useState(false);
-  // 簡易表示の設定はタブを離れても保持する（localStorage）
-  const [compact, setCompact] = useState(false);
-
-  useEffect(() => {
-    setCompact(localStorage.getItem("timeline-compact") === "1");
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem("timeline-compact", compact ? "1" : "0");
-  }, [compact]);
+  // 簡易表示の設定はタブを離れても保持する（localStorage。SSR安全・effect内setState回避）
+  const compact = useSyncExternalStore(
+    subscribeCompact,
+    () => localStorage.getItem("timeline-compact") === "1",
+    () => false,
+  );
 
   const favSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
 
@@ -89,7 +97,7 @@ export function TimelineView({
             <UserCheck size={14} />
           </button>
           <button
-            onClick={() => setCompact((v) => !v)}
+            onClick={toggleCompact}
             aria-label={compact ? "詳細表示にする" : "簡易表示にする"}
             title={compact ? "詳細表示" : "簡易表示"}
             className={cn(

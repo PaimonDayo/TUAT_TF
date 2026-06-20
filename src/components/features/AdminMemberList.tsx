@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FormModal } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
+import { GRADE_OPTIONS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { AppRole, Profile } from "@/types";
 
@@ -32,8 +33,20 @@ export function AdminMemberList({
     );
   }, [members, query]);
 
+  // 学年ごとにグループ化（GRADE_OPTIONS 順。学年未設定は末尾）
+  const groups = useMemo(() => {
+    const out: { key: string; label: string; list: Profile[] }[] = [];
+    for (const g of GRADE_OPTIONS) {
+      const list = filtered.filter((m) => m.grade === g.value);
+      if (list.length > 0) out.push({ key: g.value, label: g.short, list });
+    }
+    const noGrade = filtered.filter((m) => !m.grade);
+    if (noGrade.length > 0) out.push({ key: "none", label: "学年未設定", list: noGrade });
+    return out;
+  }, [filtered]);
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-4">
       <div className="relative">
         <Search
           size={17}
@@ -47,49 +60,59 @@ export function AdminMemberList({
         />
       </div>
 
-      {filtered.map((member) => (
-        <button
-          key={member.id}
-          type="button"
-          onClick={() => setSelected(member)}
-          className="w-full text-left"
-        >
-          <Card className="flex items-center gap-3 p-3 active:bg-bg">
-            <Avatar
-              name={member.display_name || "?"}
-              blocks={member.blocks}
-              avatarUrl={member.avatar_url}
-              size="sm"
-            />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <span className="truncate text-[14px] font-semibold">
-                  {member.display_name || "名前未設定"}
-                </span>
-                <BlockPills blocks={member.blocks} />
-              </div>
-              <div className="mt-1 flex flex-wrap gap-1">
-                {member.roles.length === 0 ? (
-                  <span className="text-micro">ロールなし</span>
-                ) : (
-                  member.roles.map((role) => (
-                    <span
-                      key={role.id}
-                      className="rounded-full px-2 py-0.5 text-micro"
-                      style={{
-                        color: role.color,
-                        backgroundColor: `${role.color}18`,
-                      }}
-                    >
-                      {role.name}
-                    </span>
-                  ))
-                )}
-              </div>
-            </div>
-            <ChevronRight size={18} className="shrink-0 text-muted" />
-          </Card>
-        </button>
+      {groups.map((group) => (
+        <section key={group.key}>
+          <p className="section-label mb-2">
+            {group.label}
+            <span className="ml-1.5 tabular-nums">{group.list.length}</span>
+          </p>
+          <div className="space-y-2">
+            {group.list.map((member) => (
+              <button
+                key={member.id}
+                type="button"
+                onClick={() => setSelected(member)}
+                className="w-full text-left"
+              >
+                <Card className="flex items-center gap-3 p-3 active:bg-bg">
+                  <Avatar
+                    name={member.display_name || "?"}
+                    blocks={member.blocks}
+                    avatarUrl={member.avatar_url}
+                    size="sm"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate text-[14px] font-semibold">
+                        {member.display_name || "名前未設定"}
+                      </span>
+                      <BlockPills blocks={member.blocks} />
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {member.roles.length === 0 ? (
+                        <span className="text-micro">ロールなし</span>
+                      ) : (
+                        member.roles.map((role) => (
+                          <span
+                            key={role.id}
+                            className="rounded-full px-2 py-0.5 text-micro"
+                            style={{
+                              color: role.color,
+                              backgroundColor: `${role.color}18`,
+                            }}
+                          >
+                            {role.name}
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                  <ChevronRight size={18} className="shrink-0 text-muted" />
+                </Card>
+              </button>
+            ))}
+          </div>
+        </section>
       ))}
 
       {selected && (

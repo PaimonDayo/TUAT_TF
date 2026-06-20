@@ -12,12 +12,18 @@ import { cn } from "@/lib/utils";
 export function GradeMenu({
   value,
   onChange,
+  availableGrades,
 }: {
   value: string[];
   onChange: (v: string[]) => void;
+  /** 指定すると、この学年（値）だけを選択肢に出す（在籍者がいる学年のみ表示する用途） */
+  availableGrades?: string[];
 }) {
   const [open, setOpen] = useState(false);
   const active = value.length > 0;
+  const options = availableGrades
+    ? GRADE_OPTIONS.filter((g) => availableGrades.includes(g.value))
+    : GRADE_OPTIONS;
 
   function toggle(v: string) {
     onChange(value.includes(v) ? value.filter((g) => g !== v) : [...value, v]);
@@ -51,7 +57,7 @@ export function GradeMenu({
           <div className="absolute right-0 top-full z-50 mt-2 w-40 max-h-[60vh] overflow-y-auto rounded-2xl border border-separator bg-card py-1 shadow-lg">
             <MenuRow label="すべて" checked={value.length === 0} onClick={() => onChange([])} />
             <div className="my-1 border-t border-separator" />
-            {GRADE_OPTIONS.map((g) => (
+            {options.map((g) => (
               <MenuRow
                 key={g.value}
                 label={g.short}
