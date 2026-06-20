@@ -192,14 +192,39 @@ export function ScheduleForm({
       target_blocks: targetBlocks,
     };
 
-    const { error } = editing
-      ? await supabase.from("practice_schedules").update(payload).eq("id", schedule!.id)
-      : await supabase.from("practice_schedules").insert({ ...payload, created_by: user.id });
-
-    if (error) {
-      setError(editing ? "更新に失敗しました" : "作成に失敗しました");
-      setSaving(false);
-      return;
+    if (editing) {
+      // update は RLS で弾かれても「エラー無し・0件」になり無言で失敗する。
+      // .select() で更新件数を確認し、0件ならセッション切れの可能性として
+      // セッションを更新して1回だけ再試行する。
+      const runUpdate = () =>
+        supabase
+          .from("practice_schedules")
+          .update(payload)
+          .eq("id", schedule!.id)
+          .select("id");
+      let { data, error } = await runUpdate();
+      if (!error && (!data || data.length === 0)) {
+        await supabase.auth.refreshSession();
+        ({ data, error } = await runUpdate());
+      }
+      if (error || !data || data.length === 0) {
+        setError(
+          error
+            ? "更新に失敗しました"
+            : "更新できませんでした。ページを再読み込みしてからお試しください",
+        );
+        setSaving(false);
+        return;
+      }
+    } else {
+      const { error } = await supabase
+        .from("practice_schedules")
+        .insert({ ...payload, created_by: user.id });
+      if (error) {
+        setError("作成に失敗しました");
+        setSaving(false);
+        return;
+      }
     }
     router.refresh();
     onDone();
