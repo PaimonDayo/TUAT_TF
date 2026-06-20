@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { Heart, MessageCircle } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
 import { BlockPills } from "@/components/common/BlockPill";
 import { Card } from "@/components/ui/card";
@@ -55,27 +54,15 @@ export function RecordCard({
             の練習
           </p>
         </div>
-        {/* 簡易表示ではコンディションの位置にいいね・返信数を出す */}
-        {compact ? (
-          <span className="flex shrink-0 items-center gap-3 text-[12px] text-muted">
-            <span className="flex items-center gap-1">
-              <Heart size={14} /> <span className="tabular-nums">{record.likes_count}</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <MessageCircle size={14} /> <span className="tabular-nums">{record.comments_count ?? 0}</span>
-            </span>
+        {cond && (
+          <span
+            className="inline-flex items-center gap-1 text-[13px] font-semibold shrink-0"
+            style={{ color: cond.color }}
+            title={cond.label}
+          >
+            <span className="text-[16px] leading-none">{cond.symbol}</span>
+            {cond.label}
           </span>
-        ) : (
-          cond && (
-            <span
-              className="inline-flex items-center gap-1 text-[13px] font-semibold shrink-0"
-              style={{ color: cond.color }}
-              title={cond.label}
-            >
-              <span className="text-[16px] leading-none">{cond.symbol}</span>
-              {cond.label}
-            </span>
-          )
         )}
         {isOwner && (
           <span onClick={(e) => e.stopPropagation()}>
@@ -118,18 +105,17 @@ export function RecordCard({
           </dl>
         )}
 
-      {!compact && (
-        <div onClick={(e) => e.stopPropagation()}>
-          <PostActions
-            targetType="record"
-            targetId={record.id}
-            initialLikes={record.likes_count}
-            initialLiked={record.liked_by_me ?? false}
-            initialComments={record.comments_count ?? 0}
-            currentUser={currentUser}
-          />
-        </div>
-      )}
+      {/* いいね・返信は簡易表示でも直接押せるよう常に表示。タップで展開しないよう伝播を止める */}
+      <div onClick={(e) => e.stopPropagation()}>
+        <PostActions
+          targetType="record"
+          targetId={record.id}
+          initialLikes={record.likes_count}
+          initialLiked={record.liked_by_me ?? false}
+          initialComments={record.comments_count ?? 0}
+          currentUser={currentUser}
+        />
+      </div>
     </Card>
   );
 }

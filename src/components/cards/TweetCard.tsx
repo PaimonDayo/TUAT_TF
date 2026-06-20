@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { ja } from "date-fns/locale";
-import { Heart, MessageCircle } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
 import { BlockPills } from "@/components/common/BlockPill";
 import { Card } from "@/components/ui/card";
@@ -47,17 +46,6 @@ export function TweetCard({
             {formatDistanceToNow(new Date(tweet.created_at), { addSuffix: true, locale: ja })}
           </p>
         </div>
-        {/* 簡易表示ではヘッダー右にいいね・返信数を出す */}
-        {compact && (
-          <span className="flex shrink-0 items-center gap-3 text-[12px] text-muted">
-            <span className="flex items-center gap-1">
-              <Heart size={14} /> <span className="tabular-nums">{tweet.likes_count}</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <MessageCircle size={14} /> <span className="tabular-nums">{tweet.comments_count ?? 0}</span>
-            </span>
-          </span>
-        )}
         {isOwner && (
           <span onClick={(e) => e.stopPropagation()}>
             <TweetOwnerMenu tweet={{ id: tweet.id, content: tweet.content }} />
@@ -69,18 +57,17 @@ export function TweetCard({
         <Linkify text={tweet.content} />
       </p>
 
-      {!compact && (
-        <div onClick={(e) => e.stopPropagation()}>
-          <PostActions
-            targetType="tweet"
-            targetId={tweet.id}
-            initialLikes={tweet.likes_count}
-            initialLiked={tweet.liked_by_me ?? false}
-            initialComments={tweet.comments_count ?? 0}
-            currentUser={currentUser}
-          />
-        </div>
-      )}
+      {/* いいね・返信は簡易表示でも直接押せるよう常に表示。タップで展開しないよう伝播を止める */}
+      <div onClick={(e) => e.stopPropagation()}>
+        <PostActions
+          targetType="tweet"
+          targetId={tweet.id}
+          initialLikes={tweet.likes_count}
+          initialLiked={tweet.liked_by_me ?? false}
+          initialComments={tweet.comments_count ?? 0}
+          currentUser={currentUser}
+        />
+      </div>
     </Card>
   );
 }
