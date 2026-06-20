@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Papa from "papaparse";
-import { Check, Download, Link2, Upload } from "lucide-react";
+import { Check, Download, ExternalLink, Link2, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -37,6 +37,9 @@ export function ScheduleSheetsManager() {
   const [inputMode, setInputMode] = useState<"new" | "edit">("new");
   const [existing, setExisting] = useState<PracticeSchedule[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
+  const [googleEmail, setGoogleEmail] = useState<string | null>(null);
+  const [issuing, setIssuing] = useState(false);
   const [source, setSource] = useState<"url" | "file">("url");
   const [sheetUrl, setSheetUrl] = useState("");
   const [fileName, setFileName] = useState("");
@@ -46,6 +49,20 @@ export function ScheduleSheetsManager() {
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/google/status")
+      .then((response) => response.json())
+      .then((status) => {
+        if (!active) return;
+        setGoogleConnected(!!status.connected);
+        setGoogleEmail(status.email ?? null);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -99,6 +116,40 @@ export function ScheduleSheetsManager() {
         : `${kind}-${block}.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function issueSpreadsheet() {
+    if (inputMode === "edit" && selectedIds.length === 0) {
+      setError("編集する予定を選択してください");
+      return;
+    }
+    setIssuing(true);
+    setError(null);
+    const popup = window.open("", "_blank");
+    const response = await fetch("/api/google/sheets/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kind,
+        block,
+        year: kind === "practice" ? year : undefined,
+        month: kind === "practice" ? month : undefined,
+        scheduleIds: inputMode === "edit" ? selectedIds : [],
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      popup?.close();
+      setError(result.error ?? "スプレッドシートを発行できませんでした");
+      setIssuing(false);
+      return;
+    }
+    setSheetUrl(result.url);
+    setSheetId(result.id);
+    setSource("url");
+    setPreview(null);
+    setIssuing(false);
+    if (popup) popup.location.href = result.url;
   }
 
   async function selectFile(file: File | undefined) {
@@ -318,9 +369,45 @@ export function ScheduleSheetsManager() {
       </section>
 
       <section className="space-y-3">
+        <div>
+          <p className="text-headline">Googleスプレッドシートを発行</p>
+          <p className="mt-1 text-caption">
+            マイドライブに作成し、場所と対象ブロックのプルダウンを自動設定します。
+          </p>
+        </div>
+        {googleConnected === false ? (
+          <Button type="button" size="lg" asChild>
+            <a href="/api/google/connect">Google Driveと連携</a>
+          </Button>
+        ) : (
+          <>
+            {googleEmail && (
+              <p className="text-micro">連携中: {googleEmail}</p>
+            )}
+            <Button
+              type="button"
+              size="lg"
+              disabled={issuing || googleConnected === null}
+              onClick={issueSpreadsheet}
+            >
+              {issuing ? "発行中..." : "シートを発行"}
+            </Button>
+          </>
+        )}
+        {sheetUrl && (
+          <Button type="button" variant="outline" size="lg" asChild>
+            <a href={sheetUrl} target="_blank" rel="noreferrer">
+              <ExternalLink size={17} />
+              発行したシートを開く
+            </a>
+          </Button>
+        )}
+      </section>
+
+      <section className="space-y-3">
         <div className="flex items-center gap-2">
           <Step number={2} />
-          <p className="text-headline">テンプレートをダウンロード</p>
+          <p className="text-headline">CSVで作る場合</p>
         </div>
         <p className="text-caption">
           {kind === "practice"

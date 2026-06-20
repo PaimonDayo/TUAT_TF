@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Plus, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { ActionMenu } from "@/components/ui/action-menu";
@@ -53,7 +53,10 @@ export function ScheduleComposer({ autoOpen = false }: { autoOpen?: boolean }) {
 }
 
 export function ScheduleCreatePanel({ onDone }: { onDone: () => void }) {
-  const [mode, setMode] = useState<"normal" | "sheets">("normal");
+  const searchParams = useSearchParams();
+  const [mode, setMode] = useState<"normal" | "sheets">(
+    searchParams.get("sheets") === "1" ? "sheets" : "normal",
+  );
 
   return (
     <div className="space-y-5">
