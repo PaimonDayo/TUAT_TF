@@ -411,9 +411,11 @@ export function ScheduleSheetsManager() {
           </p>
         </div>
         {googleConnected === false ? (
-          <Button type="button" size="lg" asChild>
-            <a href="/api/google/connect">Google Driveと連携</a>
-          </Button>
+          <form action="/api/google/connect" method="post">
+            <Button type="submit" size="lg">
+              Google Driveと連携
+            </Button>
+          </form>
         ) : (
           <>
             {googleEmail && (

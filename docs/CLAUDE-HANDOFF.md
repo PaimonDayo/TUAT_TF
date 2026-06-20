@@ -15,6 +15,8 @@
 - OAuthトークンは `google_drive_connections` に暗号化して保存する。
 - OAuthスコープは `openid email drive.file`。アプリが作成したファイルだけを扱う。
 - 作成したスプレッドシートは、連携した利用者本人のマイドライブへ入る。
+- OAuth開始は `/api/google/connect` への明示的なPOSTだけで行う。GETは予定画面へ戻す。
+  ブラウザの履歴復元やURL直開きで認可画面へ飛ばないための対策。
 
 ## Google Cloud 構成
 
