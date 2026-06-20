@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/common/Avatar";
@@ -27,6 +28,7 @@ export function ProfileEditForm({
   const [grade, setGrade] = useState<string | null>(profile.grade);
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url ?? "");
   const [saving, setSaving] = useState(false);
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -160,14 +162,25 @@ export function ProfileEditForm({
 
       {!isSetup && (
         <button
-          onClick={signOut}
+          onClick={() => setConfirmSignOut(true)}
           disabled={signingOut}
           className="mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-separator text-[15px] font-semibold text-danger active:bg-bg"
         >
           <LogOut size={18} />
-          {signingOut ? "ログアウト中…" : "ログアウト"}
+          ログアウト
         </button>
       )}
+
+      <ConfirmDialog
+        open={confirmSignOut}
+        onOpenChange={setConfirmSignOut}
+        title="ログアウトしますか？"
+        description="次に使うときは再度ログインが必要になります。"
+        confirmLabel="ログアウト"
+        busyLabel="ログアウト中…"
+        busy={signingOut}
+        onConfirm={signOut}
+      />
     </div>
   );
 }

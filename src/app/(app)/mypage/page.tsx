@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { BookOpen, Trophy, ChevronRight, Shield, Bell, CalendarPlus, Users, Target, MapPin } from "lucide-react";
+import { BookOpen, Trophy, ChevronRight, Shield, Bell, CalendarPlus, Users, Target, MapPin, Settings } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/common/Avatar";
@@ -108,11 +108,23 @@ export default async function MyPage({
               {perms.createNotice && (
                 <RowLink href="/notices?compose=1" icon={<Bell size={20} className="text-warning" />} label="お知らせを作成" />
               )}
-              {perms.manageMembers && (
-                <RowLink href="/admin" icon={<Users size={20} className="text-muted2" />} label="ロール管理" />
-              )}
-              {perms.createSchedule && (
-                <RowLink href="/venues" icon={<MapPin size={20} className="text-muted2" />} label="練習場所" />
+              {/* その他（めったに触らない設定はここに畳んでおく） */}
+              {(perms.manageMembers || perms.createSchedule) && (
+                <details>
+                  <summary className="flex cursor-pointer list-none items-center gap-3 p-4 active:bg-bg">
+                    <Settings size={20} className="text-muted2" />
+                    <span className="flex-1 text-headline">その他</span>
+                    <ChevronRight size={18} className="text-muted" />
+                  </summary>
+                  <div className="divide-y divide-separator/70 border-t border-separator/70 bg-bg/40">
+                    {perms.manageMembers && (
+                      <RowSubLink href="/admin" icon={<Users size={18} />} label="ロール管理" />
+                    )}
+                    {perms.createSchedule && (
+                      <RowSubLink href="/venues" icon={<MapPin size={18} />} label="練習場所" />
+                    )}
+                  </div>
+                </details>
               )}
             </Card>
           </section>
@@ -192,6 +204,17 @@ function RowLink({ href, icon, label }: { href: string; icon: React.ReactNode; l
       {icon}
       <span className="flex-1 text-headline">{label}</span>
       <ChevronRight size={18} className="text-muted" />
+    </Link>
+  );
+}
+
+/** 「その他」内のサブ行リンク（少しインデント） */
+function RowSubLink({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
+  return (
+    <Link href={href} prefetch className="flex items-center gap-3 py-3 pl-12 pr-4 active:bg-bg">
+      <span className="text-accent">{icon}</span>
+      <span className="flex-1 text-[14px] font-semibold">{label}</span>
+      <ChevronRight size={16} className="text-muted" />
     </Link>
   );
 }

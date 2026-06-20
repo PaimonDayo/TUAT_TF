@@ -9,6 +9,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel = "削除する",
+  busyLabel = "削除中…",
   busy = false,
   onConfirm,
 }: {
@@ -17,6 +18,7 @@ export function ConfirmDialog({
   title: string;
   description: string;
   confirmLabel?: string;
+  busyLabel?: string;
   busy?: boolean;
   onConfirm: () => void;
 }) {
@@ -36,7 +38,7 @@ export function ConfirmDialog({
               </Button>
             </Dialog.Close>
             <Button type="button" variant="danger" disabled={busy} onClick={onConfirm}>
-              {busy ? "削除中…" : confirmLabel}
+              {busy ? busyLabel : confirmLabel}
             </Button>
           </div>
         </Dialog.Content>
