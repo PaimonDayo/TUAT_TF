@@ -5,14 +5,32 @@ import { Users } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Avatar } from "@/components/common/Avatar";
 import { BlockPills } from "@/components/common/BlockPill";
-import { gradeShort } from "@/lib/constants";
+import { BLOCK_ORDER, GRADE_OPTIONS, gradeShort } from "@/lib/constants";
 import type { Attendee } from "@/types";
 
-/** 「参加◯」表示。タップで出席者・欠席者一覧 */
+/** 所属ブロック→学年→名前の順に並べる（見やすさのため） */
+function sortAttendees(list: Attendee[]): Attendee[] {
+  const blockIdx = (a: Attendee) => {
+    const i = BLOCK_ORDER.indexOf(a.profile.blocks?.[0]);
+    return i < 0 ? 99 : i;
+  };
+  const gradeIdx = (a: Attendee) => {
+    const i = GRADE_OPTIONS.findIndex((g) => g.value === a.profile.grade);
+    return i < 0 ? 99 : i;
+  };
+  return [...list].sort(
+    (a, b) =>
+      blockIdx(a) - blockIdx(b) ||
+      gradeIdx(a) - gradeIdx(b) ||
+      (a.profile.display_name || "").localeCompare(b.profile.display_name || "", "ja"),
+  );
+}
+
+/** 「出席◯」表示。タップで出席者・欠席者一覧 */
 export function AttendeesButton({ attendees }: { attendees: Attendee[] }) {
   const [open, setOpen] = useState(false);
-  const present = attendees.filter((a) => a.status === "present");
-  const absent = attendees.filter((a) => a.status === "absent");
+  const present = sortAttendees(attendees.filter((a) => a.status === "present"));
+  const absent = sortAttendees(attendees.filter((a) => a.status === "absent"));
 
   return (
     <>
