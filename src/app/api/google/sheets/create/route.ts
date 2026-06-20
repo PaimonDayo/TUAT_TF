@@ -11,6 +11,7 @@ import type {
   PracticeSchedule,
   ScheduleSheetBlock,
   ScheduleSheetKind,
+  ScheduleSheetWeekdayDefault,
   VenueRow,
 } from "@/types";
 
@@ -20,6 +21,7 @@ type RequestBody = {
   year?: number;
   month?: number;
   scheduleIds?: string[];
+  weekdayDefaults?: ScheduleSheetWeekdayDefault[];
 };
 
 export async function POST(request: Request) {
@@ -32,6 +34,9 @@ export async function POST(request: Request) {
   }
   if (body.kind === "practice" && (!body.year || !body.month)) {
     return NextResponse.json({ error: "対象年月を選択してください" }, { status: 400 });
+  }
+  if (!validWeekdayDefaults(body.weekdayDefaults)) {
+    return NextResponse.json({ error: "曜日ごとの設定が不正です" }, { status: 400 });
   }
 
   const supabase = await createClient();
@@ -88,6 +93,7 @@ export async function POST(request: Request) {
       block: body.block,
       venues: (venueData ?? []) as VenueRow[],
       schedules,
+      weekdayDefaults: body.kind === "practice" ? body.weekdayDefaults ?? [] : [],
     });
     const { data: sheet, error: saveError } = await supabase
       .from("schedule_sheets")
@@ -115,6 +121,30 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+}
+
+function validWeekdayDefaults(
+  defaults: ScheduleSheetWeekdayDefault[] | undefined,
+): boolean {
+  if (defaults === undefined) return true;
+  if (!Array.isArray(defaults) || defaults.length > 7) return false;
+  const weekdays = new Set<number>();
+  return defaults.every((item) => {
+    if (
+      !Number.isInteger(item.weekday) ||
+      item.weekday < 0 ||
+      item.weekday > 6 ||
+      weekdays.has(item.weekday) ||
+      typeof item.time !== "string" ||
+      (item.time !== "" && !/^([01]\d|2[0-3]):[0-5]\d$/.test(item.time)) ||
+      typeof item.venueName !== "string" ||
+      item.venueName.length > 200
+    ) {
+      return false;
+    }
+    weekdays.add(item.weekday);
+    return true;
+  });
 }
 
 function sheetTitle(body: RequestBody): string {

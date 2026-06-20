@@ -4,6 +4,7 @@ import type {
   PracticeSchedule,
   ScheduleSheetBlock,
   ScheduleSheetKind,
+  ScheduleSheetWeekdayDefault,
   VenueRow,
 } from "@/types";
 import { BLOCKS } from "@/lib/constants";
@@ -182,6 +183,7 @@ export async function createScheduleSpreadsheet({
   block,
   venues,
   schedules,
+  weekdayDefaults,
 }: {
   accessToken: string;
   title: string;
@@ -191,8 +193,16 @@ export async function createScheduleSpreadsheet({
   block: ScheduleSheetBlock;
   venues: VenueRow[];
   schedules: PracticeSchedule[];
+  weekdayDefaults: ScheduleSheetWeekdayDefault[];
 }): Promise<{ spreadsheetId: string; url: string }> {
-  const values = buildSheetValues({ kind, year, month, block, schedules });
+  const values = buildSheetValues({
+    kind,
+    year,
+    month,
+    block,
+    schedules,
+    weekdayDefaults,
+  });
   const createResponse = await fetch("https://sheets.googleapis.com/v4/spreadsheets", {
     method: "POST",
     headers: googleJsonHeaders(accessToken),
@@ -258,12 +268,14 @@ function buildSheetValues({
   month,
   block,
   schedules,
+  weekdayDefaults,
 }: {
   kind: ScheduleSheetKind;
   year: number | null;
   month: number | null;
   block: ScheduleSheetBlock;
   schedules: PracticeSchedule[];
+  weekdayDefaults: ScheduleSheetWeekdayDefault[];
 }): string[][] {
   if (schedules.length > 0) {
     return buildExistingValues(schedules, kind);
@@ -274,18 +286,23 @@ function buildSheetValues({
     const days = new Date(year, month, 0).getDate();
     const blockLabel = block === "all" ? "全体" : BLOCKS[block].label;
     const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+    const defaultsByWeekday = new Map(
+      weekdayDefaults.map((item) => [item.weekday, item]),
+    );
     return [
       headers,
       ...Array.from({ length: days }, (_, index) => {
         const day = index + 1;
         const date = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        const weekday = new Date(`${date}T00:00:00`).getDay();
+        const defaults = defaultsByWeekday.get(weekday);
         return [
           "",
           date,
-          weekdays[new Date(`${date}T00:00:00`).getDay()],
+          weekdays[weekday],
           blockLabel,
-          "",
-          "",
+          defaults?.time ?? "",
+          defaults?.venueName ?? "",
           "",
         ];
       }),

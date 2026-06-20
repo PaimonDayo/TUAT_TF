@@ -7,6 +7,7 @@ import { Check, Download, ExternalLink, Link2, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Disclosure } from "@/components/ui/disclosure";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { createClient } from "@/lib/supabase/client";
@@ -16,7 +17,9 @@ import type {
   ScheduleImportRow,
   ScheduleSheetBlock,
   ScheduleSheetKind,
+  ScheduleSheetWeekdayDefault,
   PracticeSchedule,
+  VenueRow,
 } from "@/types";
 
 const BLOCK_OPTIONS: { value: ScheduleSheetBlock; label: string }[] = [
@@ -26,6 +29,15 @@ const BLOCK_OPTIONS: { value: ScheduleSheetBlock; label: string }[] = [
   { value: "jump", label: "跳躍" },
   { value: "throw", label: "投擲" },
 ];
+
+const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
+const INITIAL_WEEKDAY_DEFAULTS: ScheduleSheetWeekdayDefault[] = WEEKDAYS.map(
+  (_, weekday) => ({
+    weekday,
+    time: weekday === 1 || weekday === 3 ? "17:00" : weekday === 6 ? "09:00" : "",
+    venueName: "",
+  }),
+);
 
 export function ScheduleSheetsManager() {
   const router = useRouter();
@@ -37,6 +49,10 @@ export function ScheduleSheetsManager() {
   const [inputMode, setInputMode] = useState<"new" | "edit">("new");
   const [existing, setExisting] = useState<PracticeSchedule[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [venues, setVenues] = useState<VenueRow[]>([]);
+  const [weekdayDefaults, setWeekdayDefaults] = useState(
+    INITIAL_WEEKDAY_DEFAULTS,
+  );
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
   const [googleEmail, setGoogleEmail] = useState<string | null>(null);
   const [issuing, setIssuing] = useState(false);
@@ -58,6 +74,21 @@ export function ScheduleSheetsManager() {
         if (!active) return;
         setGoogleConnected(!!status.connected);
         setGoogleEmail(status.email ?? null);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const supabase = createClient();
+    void supabase
+      .from("venues")
+      .select("*")
+      .order("sort", { ascending: true })
+      .then(({ data }) => {
+        if (active) setVenues((data ?? []) as VenueRow[]);
       });
     return () => {
       active = false;
@@ -135,6 +166,10 @@ export function ScheduleSheetsManager() {
         year: kind === "practice" ? year : undefined,
         month: kind === "practice" ? month : undefined,
         scheduleIds: inputMode === "edit" ? selectedIds : [],
+        weekdayDefaults:
+          kind === "practice" && inputMode === "new"
+            ? weekdayDefaults.filter((item) => item.time || item.venueName)
+            : [],
       }),
     });
     const result = await response.json();
@@ -384,6 +419,64 @@ export function ScheduleSheetsManager() {
             {googleEmail && (
               <p className="text-micro">連携中: {googleEmail}</p>
             )}
+            {kind === "practice" && inputMode === "new" && (
+              <Disclosure
+                title="曜日ごとの時間・場所"
+                className="border-b border-separator/70"
+              >
+                <div className="space-y-2 pt-1">
+                  <div className="grid grid-cols-[2rem_minmax(0,1fr)_minmax(0,1.25fr)] gap-2 px-1">
+                    <span />
+                    <span className="text-micro">時間</span>
+                    <span className="text-micro">場所</span>
+                  </div>
+                  {weekdayDefaults.map((item) => (
+                    <div
+                      key={item.weekday}
+                      className="grid grid-cols-[2rem_minmax(0,1fr)_minmax(0,1.25fr)] items-center gap-2"
+                    >
+                      <span className="text-center text-[14px] font-semibold">
+                        {WEEKDAYS[item.weekday]}
+                      </span>
+                      <Input
+                        type="time"
+                        value={item.time}
+                        aria-label={`${WEEKDAYS[item.weekday]}曜日の時間`}
+                        onChange={(event) =>
+                          updateWeekdayDefault(
+                            item.weekday,
+                            "time",
+                            event.target.value,
+                          )
+                        }
+                      />
+                      <select
+                        value={item.venueName}
+                        aria-label={`${WEEKDAYS[item.weekday]}曜日の場所`}
+                        onChange={(event) =>
+                          updateWeekdayDefault(
+                            item.weekday,
+                            "venueName",
+                            event.target.value,
+                          )
+                        }
+                        className="h-11 min-w-0 w-full rounded-xl border border-separator bg-card px-2 text-[14px] outline-none"
+                      >
+                        <option value="">未設定</option>
+                        {venues.map((venue) => (
+                          <option key={venue.id} value={venue.name}>
+                            {venue.short || venue.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                  <p className="px-1 text-micro">
+                    空欄の項目はシートでも空欄になります。
+                  </p>
+                </div>
+              </Disclosure>
+            )}
             <Button
               type="button"
               size="lg"
@@ -533,6 +626,18 @@ export function ScheduleSheetsManager() {
       {error && <p className="text-center text-caption text-danger">{error}</p>}
     </div>
   );
+
+  function updateWeekdayDefault(
+    weekday: number,
+    field: "time" | "venueName",
+    value: string,
+  ) {
+    setWeekdayDefaults((items) =>
+      items.map((item) =>
+        item.weekday === weekday ? { ...item, [field]: value } : item,
+      ),
+    );
+  }
 }
 
 function Step({ number }: { number: number }) {

@@ -157,6 +157,12 @@ export interface PracticeSchedule {
 export type ScheduleSheetKind = "practice" | "meet" | "time_trial";
 export type ScheduleSheetBlock = "all" | Block;
 
+export interface ScheduleSheetWeekdayDefault {
+  weekday: number;
+  time: string;
+  venueName: string;
+}
+
 export interface ScheduleSheet {
   id: string;
   author_id: string;
