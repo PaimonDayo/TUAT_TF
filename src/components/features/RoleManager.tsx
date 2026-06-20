@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronUp, Lock, Plus, SlidersHorizontal } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { ActionMenu } from "@/components/ui/action-menu";
@@ -39,6 +40,7 @@ export function RoleManager({
   roles: AppRole[];
   members: Profile[];
 }) {
+  const router = useRouter();
   const [roles, setRoles] = useState(initialRoles);
   const [creating, setCreating] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
@@ -86,10 +88,14 @@ export function RoleManager({
             members={members.filter((member) =>
               member.roles.some((assigned) => assigned.id === role.id),
             )}
-            onUpdated={(updated) =>
-              setRoles((items) => items.map((item) => (item.id === updated.id ? updated : item)))
-            }
-            onDeleted={() => setRoles((items) => items.filter((item) => item.id !== role.id))}
+            onUpdated={(updated) => {
+              setRoles((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+              router.refresh();
+            }}
+            onDeleted={() => {
+              setRoles((items) => items.filter((item) => item.id !== role.id));
+              router.refresh();
+            }}
           />
         )}
       />
@@ -121,6 +127,8 @@ export function RoleManager({
           onSaved={(role) => {
             setRoles((items) => [...items, role]);
             setCreating(false);
+            // 割当画面(AdminMemberList)にも新ロールを反映させるため再取得
+            router.refresh();
           }}
         />
       )}
