@@ -277,3 +277,22 @@
 
 問題が出た場合は、Vercelの `/api/google/sheets/create` のログと、Google Sheets APIの
 レスポンスを最初に確認する。
+# 統一感バックログ #4〜#13（Codex・2026-06-21）
+
+- 実装コミット: `6455a05` UIと操作の共通基盤を統一
+- `src/components/ui/toast.tsx` を追加し、`alert()` と無表示だった削除・並べ替え失敗を共通トーストへ統一。
+- `src/components/ui/select.tsx` を追加し、予定・練習メニュー・スプレッドシート設定の生 `<select>` を置換。
+- 結果・お知らせ・ロール権限の独自スイッチを共通 `Toggle` へ統一。
+- `FormModalFooter` を追加し、主要フォームの主送信ボタンを全画面モーダルの固定フッターへ移動。
+- `src/hooks/use-feed-display.ts` を追加し、ホーム・タイムライン・マイページの簡易表示と個別展開を共通化。
+- ホーム・マイページ・部員詳細・スプシ編集対象の空表示を `EmptyState` へ統一。
+- 予定・ノート・ノート記事の更新処理も `safeUpdate` / `safeUpdateMessage` へ統一。
+- `SubHeader.backLabel` を撤去。会場アクセス・プロフィール目標へ `Linkify` を適用。
+- 未使用だった `ScheduleComposer` / `NoticeComposer` を削除。
+- 更新後の再描画方針を `docs/UI-UNIFICATION.md` §4.5 に明文化し、`docs/CONSISTENCY-AUDIT.md` を完了状態へ更新。
+
+確認済み:
+
+- `npx tsc --noEmit`
+- `npm run lint`
+- `npm run build`
