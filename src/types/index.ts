@@ -55,6 +55,9 @@ export interface Profile {
   /** 付与されているロール一覧（複数可） */
   roles: AppRole[];
   status: ProfileStatus;
+  notify_comment: boolean;
+  notify_schedule: boolean;
+  notify_notice: boolean;
   created_at: string;
 }
 
