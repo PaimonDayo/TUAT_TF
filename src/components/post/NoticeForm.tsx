@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { FormModal } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -65,18 +66,20 @@ export function NoticeForm({
     const supabase = createClient();
 
     if (editing) {
-      const { error } = await supabase
-        .from("notices")
-        .update({
+      const result = await safeUpdate(
+        supabase,
+        "notices",
+        {
           category,
           title: title.trim(),
           content: content.trim(),
           deadline: deadline || null,
           pin_home: pinHome,
-        })
-        .eq("id", initial!.id);
-      if (error) {
-        setError("保存に失敗しました");
+        },
+        { id: initial!.id },
+      );
+      if (!result.ok) {
+        setError(safeUpdateMessage(result.reason));
         setSaving(false);
         return;
       }

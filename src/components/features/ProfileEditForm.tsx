@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -66,20 +67,22 @@ export function ProfileEditForm({
     setSaving(true);
     setError(null);
     const supabase = createClient();
-    const { error } = await supabase
-      .from("profiles")
-      .update({
+    const result = await safeUpdate(
+      supabase,
+      "profiles",
+      {
         display_name: name.trim(),
         blocks,
         // 選択ブロックに無い種目は保存しない（ブロックを外したら自動で外れる）
         events: events.filter((ev) => eventOptions.includes(ev)),
         grade,
         avatar_url: avatarUrl.trim() || null,
-      })
-      .eq("id", profile.id);
+      },
+      { id: profile.id },
+    );
 
-    if (error) {
-      setError("保存に失敗しました");
+    if (!result.ok) {
+      setError(safeUpdateMessage(result.reason));
       setSaving(false);
       return;
     }

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
+import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { IntensityInput, type IntensityValues } from "@/components/features/IntensityInput";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -116,14 +117,22 @@ export function RecordForm({
           condition,
         };
 
-    const { error } = editing
-      ? await supabase.from("practice_records").update(payload).eq("id", record!.id)
-      : await supabase.from("practice_records").insert({ user_id: userId, ...payload });
-
-    if (error) {
-      setError("記録の保存に失敗しました");
-      setSaving(false);
-      return;
+    if (editing) {
+      const result = await safeUpdate(supabase, "practice_records", payload, { id: record!.id });
+      if (!result.ok) {
+        setError(safeUpdateMessage(result.reason));
+        setSaving(false);
+        return;
+      }
+    } else {
+      const { error } = await supabase
+        .from("practice_records")
+        .insert({ user_id: userId, ...payload });
+      if (error) {
+        setError("記録の保存に失敗しました");
+        setSaving(false);
+        return;
+      }
     }
     router.refresh();
     onDone();

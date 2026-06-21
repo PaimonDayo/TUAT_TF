@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Target, ChevronRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { FormModal } from "@/components/ui/form-modal";
@@ -36,12 +37,14 @@ export function GoalEditor({
     setSaving(true);
     setError(null);
     const supabase = createClient();
-    const { error } = await supabase
-      .from("profiles")
-      .update({ goal: draft.trim() || null })
-      .eq("id", userId);
-    if (error) {
-      setError("保存に失敗しました");
+    const result = await safeUpdate(
+      supabase,
+      "profiles",
+      { goal: draft.trim() || null },
+      { id: userId },
+    );
+    if (!result.ok) {
+      setError(safeUpdateMessage(result.reason));
       setSaving(false);
       return;
     }

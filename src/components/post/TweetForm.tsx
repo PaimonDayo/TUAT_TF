@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 
@@ -30,9 +31,13 @@ export function TweetForm({
 
     const supabase = createClient();
 
-    let error;
     if (editing) {
-      ({ error } = await supabase.from("tweets").update({ content: text }).eq("id", tweet!.id));
+      const result = await safeUpdate(supabase, "tweets", { content: text }, { id: tweet!.id });
+      if (!result.ok) {
+        setError(safeUpdateMessage(result.reason));
+        setSaving(false);
+        return;
+      }
     } else {
       const {
         data: { user },
@@ -42,13 +47,12 @@ export function TweetForm({
         setSaving(false);
         return;
       }
-      ({ error } = await supabase.from("tweets").insert({ user_id: user.id, content: text }));
-    }
-
-    if (error) {
-      setError("投稿に失敗しました");
-      setSaving(false);
-      return;
+      const { error } = await supabase.from("tweets").insert({ user_id: user.id, content: text });
+      if (error) {
+        setError("投稿に失敗しました");
+        setSaving(false);
+        return;
+      }
     }
     setContent("");
     router.refresh();
