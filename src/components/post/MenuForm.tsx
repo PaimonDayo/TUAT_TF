@@ -194,6 +194,7 @@ function MenuEditor({
   const [presetEditOpen, setPresetEditOpen] = useState(false);
   const [targetSearch, setTargetSearch] = useState("");
   const [targetBlockFilter, setTargetBlockFilter] = useState<Block | "all">("all");
+  const [targetPickerOpen, setTargetPickerOpen] = useState(false);
   const [confirmPresetDelete, setConfirmPresetDelete] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -476,6 +477,11 @@ function MenuEditor({
     return true;
   });
 
+  const selectedNames = (members ?? [])
+    .filter((member) => targetIds.includes(member.id))
+    .map((member) => member.display_name)
+    .join("、");
+
   return (
     <div className="space-y-5 pb-4">
       {!fixedScheduleId && (
@@ -600,102 +606,32 @@ function MenuEditor({
           </div>
 
           <div>
-            <div className="mb-1.5 flex items-center justify-between">
-              <p className="section-label">対象者</p>
-              <span className="text-caption">{targetIds.length}人選択</span>
-            </div>
-            {members === null ? (
-              <div className="space-y-2">
-                {[0, 1, 2].map((item) => (
-                  <Skeleton key={item} className="h-12 w-full" />
-                ))}
-              </div>
-            ) : (
-              <>
-                <Input
-                  value={targetSearch}
-                  onChange={(event) => setTargetSearch(event.target.value)}
-                  placeholder="名前で検索"
-                  className="mb-2"
-                />
-                <div className="mb-2 flex flex-wrap gap-1.5">
-                  {(["all", ...BLOCK_ORDER] as const).map((key) => {
-                    const active = targetBlockFilter === key;
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => setTargetBlockFilter(key)}
-                        className={cn(
-                          "h-8 rounded-full border px-3 text-[12px] font-semibold",
-                          active
-                            ? "border-accent bg-accent text-white"
-                            : "border-separator bg-card text-muted",
-                        )}
-                      >
-                        {key === "all" ? "全ブロック" : BLOCKS[key].short}
-                      </button>
-                    );
-                  })}
-                </div>
-                {filteredMembers.length === 0 ? (
-                  <p className="px-1 py-4 text-center text-caption">該当する部員がいません</p>
-                ) : (
-                <div className="max-h-64 space-y-1 overflow-y-auto rounded-xl border border-separator bg-card p-1">
-                {filteredMembers.map((member) => {
-                  const active = targetIds.includes(member.id);
-                  return (
-                    <button
-                      key={member.id}
-                      type="button"
-                      onClick={() => toggleTarget(member.id)}
-                      className={cn(
-                        "flex min-h-12 w-full items-center gap-3 rounded-lg px-2 text-left",
-                        active ? "bg-accent/10" : "active:bg-bg",
-                      )}
-                    >
-                      <Avatar
-                        name={member.display_name}
-                        avatarUrl={member.avatar_url}
-                        blocks={member.blocks}
-                        size="sm"
-                      />
-                      <span className="min-w-0 flex-1 truncate text-[14px] font-medium">
-                        {member.display_name}
-                      </span>
-                      {active && <Check size={18} className="shrink-0 text-accent" />}
-                    </button>
-                  );
-                })}
-                </div>
+            <p className="section-label mb-1.5">対象者</p>
+            <button
+              type="button"
+              onClick={() => setTargetPickerOpen(true)}
+              className="flex min-h-11 w-full items-center justify-between gap-2 rounded-xl border border-separator bg-card px-3 py-2 text-left text-base"
+            >
+              <span className="min-w-0">
+                <span
+                  className={cn(
+                    "block",
+                    targetIds.length === 0 && "text-muted",
+                  )}
+                >
+                  {targetIds.length === 0
+                    ? "対象者を選択"
+                    : `${targetIds.length}人を選択中`}
+                </span>
+                {selectedNames && (
+                  <span className="mt-0.5 block truncate text-micro text-muted2">
+                    {selectedNames}
+                  </span>
                 )}
-              </>
-            )}
+              </span>
+              <ChevronRight size={17} className="shrink-0 text-muted" />
+            </button>
           </div>
-
-          {targetIds.length > 0 && (
-            <div className="flex items-end gap-2">
-              <div className="min-w-0 flex-1">
-                <p className="text-micro mb-1">現在の対象者・ブロック・メニューをプリセット保存</p>
-                <Input
-                  value={presetName}
-                  onChange={(event) => setPresetName(event.target.value)}
-                  placeholder="例: 長距離A"
-                  maxLength={30}
-                />
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={savePreset}
-                disabled={!presetName.trim() || !storageUserId}
-                className="h-11 px-3"
-              >
-                <Save size={16} />
-                保存
-              </Button>
-            </div>
-          )}
         </div>
       )}
 
@@ -734,6 +670,101 @@ function MenuEditor({
           {saving ? "保存中…" : menu ? "更新する" : "保存する"}
         </Button>
       </FormModalFooter>
+      <FormModal
+        open={targetPickerOpen}
+        onOpenChange={setTargetPickerOpen}
+        title="対象者を選択"
+        autoFocus={false}
+      >
+        <div className="space-y-3 pb-4">
+          <Input
+            value={targetSearch}
+            onChange={(event) => setTargetSearch(event.target.value)}
+            placeholder="名前で検索"
+          />
+          <div className="flex flex-wrap gap-1.5">
+            {(["all", ...BLOCK_ORDER] as const).map((key) => {
+              const active = targetBlockFilter === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setTargetBlockFilter(key)}
+                  className={cn(
+                    "h-8 rounded-full border px-3 text-[12px] font-semibold",
+                    active
+                      ? "border-accent bg-accent text-white"
+                      : "border-separator bg-card text-muted",
+                  )}
+                >
+                  {key === "all" ? "全ブロック" : BLOCKS[key].short}
+                </button>
+              );
+            })}
+          </div>
+          {filteredMembers.length === 0 ? (
+            <p className="px-1 py-8 text-center text-caption">該当する部員がいません</p>
+          ) : (
+            <div className="space-y-1">
+              {filteredMembers.map((member) => {
+                const active = targetIds.includes(member.id);
+                return (
+                  <button
+                    key={member.id}
+                    type="button"
+                    onClick={() => toggleTarget(member.id)}
+                    className={cn(
+                      "flex min-h-12 w-full items-center gap-3 rounded-lg px-2 text-left",
+                      active ? "bg-accent/10" : "active:bg-bg",
+                    )}
+                  >
+                    <Avatar
+                      name={member.display_name}
+                      avatarUrl={member.avatar_url}
+                      blocks={member.blocks}
+                      size="sm"
+                    />
+                    <span className="min-w-0 flex-1 truncate text-[14px] font-medium">
+                      {member.display_name}
+                    </span>
+                    {active && <Check size={18} className="shrink-0 text-accent" />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {targetIds.length > 0 && (
+            <div className="flex items-end gap-2 border-t border-separator pt-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-micro mb-1">現在の対象者・ブロック・メニューをプリセット保存</p>
+                <Input
+                  value={presetName}
+                  onChange={(event) => setPresetName(event.target.value)}
+                  placeholder="例: 長距離A"
+                  maxLength={30}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={savePreset}
+                disabled={!presetName.trim() || !storageUserId}
+                className="h-11 px-3"
+              >
+                <Save size={16} />
+                保存
+              </Button>
+            </div>
+          )}
+        </div>
+        <FormModalFooter>
+          <Button size="lg" onClick={() => setTargetPickerOpen(false)}>
+            完了（{targetIds.length}人）
+          </Button>
+        </FormModalFooter>
+      </FormModal>
+
       <Sheet open={presetPickerOpen} onOpenChange={setPresetPickerOpen}>
         <SheetContent title="プリセットを選択" autoFocus={false}>
           <ul className="max-h-[55vh] space-y-1 overflow-y-auto pb-2">

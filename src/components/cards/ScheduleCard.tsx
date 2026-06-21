@@ -324,10 +324,12 @@ function MenuCard({
     onChanged();
   }
 
+  const hasBadges = menu.status === "draft" || targetNames.length > 0;
+
   return (
     <div
       className={cn(
-        "rounded-xl border p-3",
+        "relative rounded-xl border p-3",
         isTargeted
           ? "border-accent/45 bg-accent/5" // 自分が対象の個別メニュー＝青系
           : isMyBlock
@@ -335,34 +337,33 @@ function MenuCard({
             : "border-transparent bg-bg",
       )}
     >
-      {(menu.status === "draft" || targetNames.length > 0 || canManage) && (
-        <div className="mb-1 flex items-start gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {menu.status === "draft" && (
-                <span className="rounded border border-warning px-1.5 py-0.5 text-[10px] font-bold text-warning">
-                  下書き
-                </span>
-              )}
-              {targetNames.length > 0 && (
-                <span className="text-[11px] text-muted2">
-                  対象: {targetNames.join("、")}
-                </span>
-              )}
-            </div>
-          </div>
-          {canManage && (
-            <ActionMenu
-              onEdit={() => setEditing(true)}
-              onDelete={remove}
-              deleteTitle="練習メニューを削除しますか？"
-              deleteDescription="削除したメニューは元に戻せません。"
-              triggerLabel="練習メニューの操作"
-            />
+      {/* 操作メニューは右上に絶対配置（空のヘッダー行で余白が出ないように） */}
+      {canManage && (
+        <div className="absolute right-1.5 top-1.5">
+          <ActionMenu
+            onEdit={() => setEditing(true)}
+            onDelete={remove}
+            deleteTitle="練習メニューを削除しますか？"
+            deleteDescription="削除したメニューは元に戻せません。"
+            triggerLabel="練習メニューの操作"
+          />
+        </div>
+      )}
+      {hasBadges && (
+        <div className={cn("mb-1 flex flex-wrap items-center gap-1.5", canManage && "pr-8")}>
+          {menu.status === "draft" && (
+            <span className="rounded border border-warning px-1.5 py-0.5 text-[10px] font-bold text-warning">
+              下書き
+            </span>
+          )}
+          {targetNames.length > 0 && (
+            <span className="text-[11px] text-muted2">
+              対象: {targetNames.join("、")}
+            </span>
           )}
         </div>
       )}
-      <p className="text-[14px] whitespace-pre-wrap">
+      <p className={cn("text-[14px] whitespace-pre-wrap", canManage && !hasBadges && "pr-8")}>
         <Linkify text={menu.content} />
       </p>
       {canManage && menu.status === "draft" && (
