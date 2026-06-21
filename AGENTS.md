@@ -11,13 +11,16 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## このアプリ
 TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind v4 + Supabase(@supabase/ssr)。本番 https://tuat-tf.vercel.app 。
-複数端末・複数AI（Claude Code / Codex）で **同じ origin/master を共有して並行開発** している。
+複数端末・複数AI（Claude Code / Codex / Antigravity(Gemini)）で **同じ origin/master を共有して開発** している。
 
 ## 厳守ルール
 - **origin/master が正。force-push 厳禁。作業前に必ず `git pull`**（diverge時は丸ごとマージせず自分の差分だけ載せ直す）。
 - マイグレーションは **新しいタイムスタンプ＋冪等**（`IF NOT EXISTS` / `DROP POLICY IF EXISTS`）。適用は `"Y" | npx --yes supabase db push`。
 - **検証は `npx tsc --noEmit` を基本**。`npm run build` は **push 直前だけ**（重い）。push 後 `xxxx..yyyy master -> master` を確認。
-- コミットメッセージ末尾に `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`。
+- **コミット署名は作業したエージェント自身の名で**（他AIの名を偽らない）。末尾に各自の `Co-Authored-By` を付ける:
+  - Claude Code → `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
+  - Codex → `Co-Authored-By: Codex <noreply@openai.com>`
+  - Antigravity → `Co-Authored-By: Antigravity (Gemini) <noreply@google.com>`
 - 認証はユーザー版を維持（proxy は cookie があれば getUser 失敗でもログアウトさせない＋SessionKeepAlive）。
 - アクセス制御は最終的に **RLS** が担保。UIガードと RLS の両方で守る。
 
@@ -32,9 +35,22 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 - `docs/QA-CHECKLIST.md` … 実機QA項目
 - `docs/ui-data-guidelines.md` … UI/データの細目
 
-## 担当分担（衝突防止：相手の領域は不用意に触らない）
-- **Claude Code**：横断的な小修正・レビュー・仕様docの作成（タイムライン、マイページ、共通部品、GradeMenu 等）。
-- **Codex**：ノート/フォルダ、予定（作成・CSV/Drive連携）、FAB、Google Sheets/Drive。
+## 衝突防止：固定の担当領域は設けない（柔軟運用）＋必ず報告する
+どのAIも領域を限定しない（柔軟に動けるように）。代わりに**「何を触るか／何をしたか」を必ず下の作業ログに報告**して可視化で事故を防ぐ。
+- **作業は1体ずつ。`git pull`→作業→検証→push まで終えてから次のエージェントに渡す**（push 前の中途半端な状態で別の体に着手させない）。
+- 着手したら**着手前に必ず `git pull`**（受け渡し直後でも省略しない）。
+- **着手前**：下の「作業ログ」に1行追加（日付・エージェント名・これから触る範囲）。
+- **完了後**：同じ行に結果（commit ハッシュ・要点）を追記。大きな変更は `docs/CLAUDE-HANDOFF.md` に詳細を書く。
+- 他AIが直前に触った範囲は、ログを見て**現状コードを確認してから**触る（古い前提で上書きしない）。
+
+## 作業ログ（着手前に追記・新しいものを上へ）
+<!-- 形式: YYYY-MM-DD / エージェント / 触る範囲 → 結果(commit・要点) -->
+- 2026-06-21 / Claude Code / AGENTS.md 運用ルール整理（署名・報告ルール・HANDOFF優先）→ (push後に追記)
+
+## 着手前の確認：何が「未実装」かを誤認しない
+- **未実装かどうかの判断は必ず `docs/CLAUDE-HANDOFF.md`（最新の実装状況）を正とする。**
+- `docs/UX-ISSUES-2026-06.md` / `docs/UI-AUDIT.md` / `docs/UI-UNIFICATION.md` は**過去の課題台帳・方針**で、**すでに実装済みの項目を「未実装」と書いたまま残している**ことがある。これらを根拠に「作り直し」をしない（完成済み機能を壊す事故の原因）。
+- 「直す前」に対象機能の現状コードを確認し、すでに動いているなら HANDOFF を信じてスキップ／微修正に留める。
 
 ## 実装の型（要点）
 - 初期データは Server Component ＋ `src/lib/queries.ts` に集約（画面に直接 supabase を書かない）。操作系は Client Component。
