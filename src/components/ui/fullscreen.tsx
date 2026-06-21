@@ -69,6 +69,18 @@ export function FullScreenContent({
         ref={contentRef}
         onOpenAutoFocus={autoFocus ? undefined : (e) => e.preventDefault()}
         onCloseAutoFocus={(e) => e.preventDefault()}
+        // Select 等の Radix ポップアップは Portal で Dialog 外に描画されるため、
+        // その操作を「外側クリック」と誤判定してモーダルが閉じるのを防ぐ。
+        onPointerDownOutside={(e) => {
+          const target = e.target as Element | null;
+          if (
+            target?.closest?.(
+              "[data-radix-popper-content-wrapper],[data-radix-select-viewport],[role='listbox']",
+            )
+          ) {
+            e.preventDefault();
+          }
+        }}
         className={cn(
           // 既定は dvh で全画面。キーボード表示時は viewportStyle が高さを上書きし、
           // ヘッダー(閉じる)・スクロール領域・フッター(投稿)を可視領域内に収める。

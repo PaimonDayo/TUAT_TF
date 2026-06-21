@@ -221,6 +221,10 @@ export function ScheduleCard({
                     canManage={
                       canManageAllMenus || (!!userId && m.author?.id === userId)
                     }
+                    isTargeted={
+                      !!userId && (m.targets?.some((t) => t.user_id === userId) ?? false)
+                    }
+                    isMyBlock={!!m.target_block && viewerBlocks.includes(m.target_block)}
                     onChanged={() => router.refresh()}
                   />
                 ))}
@@ -244,11 +248,15 @@ function MenuCard({
   menu,
   scheduleId,
   canManage,
+  isTargeted = false,
+  isMyBlock = false,
   onChanged,
 }: {
   menu: PracticeMenu;
   scheduleId: string;
   canManage: boolean;
+  isTargeted?: boolean;
+  isMyBlock?: boolean;
   onChanged: () => void;
 }) {
   const { showToast } = useToast();
@@ -287,7 +295,16 @@ function MenuCard({
   }
 
   return (
-    <div className="rounded-xl bg-bg p-3">
+    <div
+      className={cn(
+        "rounded-xl border p-3",
+        isTargeted
+          ? "border-accent/45 bg-accent/5" // 自分が対象の個別メニュー＝青系
+          : isMyBlock
+            ? "border-[#34c759]/45 bg-[#34c759]/8" // 自分の所属ブロック＝緑系
+            : "border-transparent bg-bg",
+      )}
+    >
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">

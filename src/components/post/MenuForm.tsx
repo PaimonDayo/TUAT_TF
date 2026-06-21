@@ -4,13 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { Check, Plus, Save, Trash2 } from "lucide-react";
+import { Check, ChevronRight, MoreHorizontal, Plus, Save, Trash2 } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select } from "@/components/ui/select";
@@ -31,6 +32,9 @@ type LocalMenuPreset = {
   id: string;
   name: string;
   userIds: string[];
+  // プリセットはメニュー本文・ブロックも一緒に保存する（テンプレートとして再利用）
+  block?: Block;
+  content?: string;
 };
 
 type MenuTargetPreferences = {
@@ -186,6 +190,8 @@ function MenuEditor({
   const [presetName, setPresetName] = useState("");
   const [selectedPreset, setSelectedPreset] = useState("");
   const [selectedPresetName, setSelectedPresetName] = useState("");
+  const [presetPickerOpen, setPresetPickerOpen] = useState(false);
+  const [presetEditOpen, setPresetEditOpen] = useState(false);
   const [confirmPresetDelete, setConfirmPresetDelete] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -318,14 +324,34 @@ function MenuEditor({
     );
   }
 
+  /** プリセットを読み込む（対象者・ブロック・メニュー本文をまとめて復元） */
+  function loadPreset(preset: LocalMenuPreset) {
+    setTargetIds(preset.userIds);
+    if (preset.block) setTargetBlock(preset.block);
+    if (preset.content) setContent(preset.content);
+    setSelectedPreset(preset.id);
+    setSelectedPresetName(preset.name);
+    if (storageUserId) {
+      const previous = readMenuPreferences(storageUserId);
+      writeMenuPreferences(storageUserId, {
+        ...previous,
+        presets,
+        lastTargetIds: preset.userIds,
+        lastPresetId: preset.id,
+      });
+    }
+  }
+
   function savePreset() {
     const name = presetName.trim();
     if (!name || targetIds.length === 0 || !storageUserId) return;
     setError(null);
-    const preset = {
+    const preset: LocalMenuPreset = {
       id: crypto.randomUUID(),
       name,
       userIds: targetIds,
+      block: targetBlock,
+      content: content.trim() || undefined,
     };
     const next = [...presets, preset];
     setPresets(next);
@@ -340,12 +366,19 @@ function MenuEditor({
     });
   }
 
+  /** 選択中プリセットを「現在の内容（対象者・ブロック・本文）」で上書き保存 */
   function updatePreset() {
     const name = selectedPresetName.trim();
     if (!storageUserId || !selectedPreset || !name || targetIds.length === 0) return;
     const next = presets.map((preset) =>
       preset.id === selectedPreset
-        ? { ...preset, name, userIds: targetIds }
+        ? {
+            ...preset,
+            name,
+            userIds: targetIds,
+            block: targetBlock,
+            content: content.trim() || undefined,
+          }
         : preset,
     );
     setPresets(next);
@@ -522,73 +555,34 @@ function MenuEditor({
           <div>
             <p className="section-label mb-1.5">プリセット</p>
             {presets.length > 0 ? (
-              <Select
-                value={selectedPreset}
-                onValueChange={(value) => {
-                  const preset = presets.find((item) => item.id === value);
-                  if (preset) {
-                    setTargetIds(preset.userIds);
-                    setSelectedPresetName(preset.name);
-                    if (storageUserId) {
-                      const previous = readMenuPreferences(storageUserId);
-                      writeMenuPreferences(storageUserId, {
-                        ...previous,
-                        presets,
-                        lastTargetIds: preset.userIds,
-                        lastPresetId: preset.id,
-                      });
-                    }
-                  }
-                  setSelectedPreset(value);
-                }}
-                ariaLabel="プリセット"
-                options={[
-                  { value: "", label: "プリセットを読み込む" },
-                  ...presets.map((preset) => ({
-                    value: preset.id,
-                    label: preset.name,
-                  })),
-                ]}
-              />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPresetPickerOpen(true)}
+                  className="flex h-11 min-w-0 flex-1 items-center justify-between rounded-xl border border-separator bg-card px-3 text-left text-base"
+                >
+                  <span className={cn("truncate", !selectedPreset && "text-muted")}>
+                    {selectedPresetName || "プリセットを選択"}
+                  </span>
+                  <ChevronRight size={17} className="shrink-0 text-muted" />
+                </button>
+                {selectedPreset && (
+                  <button
+                    type="button"
+                    onClick={() => setPresetEditOpen(true)}
+                    aria-label="プリセットを編集"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-separator bg-card text-muted active:bg-bg"
+                  >
+                    <MoreHorizontal size={20} />
+                  </button>
+                )}
+              </div>
             ) : (
-              <p className="text-caption">保存済みのプリセットはありません。</p>
+              <p className="text-caption">
+                保存済みのプリセットはありません。下で対象者を選んで保存できます。
+              </p>
             )}
           </div>
-
-          {selectedPreset && (
-            <div className="space-y-2 rounded-xl border border-separator bg-card p-3">
-              <p className="section-label">プリセットを編集</p>
-              <Input
-                value={selectedPresetName}
-                onChange={(event) => setSelectedPresetName(event.target.value)}
-                placeholder="プリセット名"
-                maxLength={30}
-              />
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={updatePreset}
-                  disabled={!selectedPresetName.trim() || targetIds.length === 0}
-                  className="h-10 flex-1"
-                >
-                  <Save size={16} />
-                  現在の対象者で上書き
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setConfirmPresetDelete(true)}
-                  aria-label="プリセットを削除"
-                  title="プリセットを削除"
-                  className="h-10 w-10 text-danger"
-                >
-                  <Trash2 size={17} />
-                </Button>
-              </div>
-            </div>
-          )}
 
           <div>
             <div className="mb-1.5 flex items-center justify-between">
@@ -635,7 +629,7 @@ function MenuEditor({
           {targetIds.length > 0 && (
             <div className="flex items-end gap-2">
               <div className="min-w-0 flex-1">
-                <p className="text-micro mb-1">現在の対象者をプリセットとして保存</p>
+                <p className="text-micro mb-1">現在の対象者・ブロック・メニューをプリセット保存</p>
                 <Input
                   value={presetName}
                   onChange={(event) => setPresetName(event.target.value)}
@@ -693,6 +687,93 @@ function MenuEditor({
           {saving ? "保存中…" : menu ? "更新する" : "保存する"}
         </Button>
       </FormModalFooter>
+      <Sheet open={presetPickerOpen} onOpenChange={setPresetPickerOpen}>
+        <SheetContent title="プリセットを選択" autoFocus={false}>
+          <ul className="max-h-[55vh] space-y-1 overflow-y-auto pb-2">
+            <li>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedPreset("");
+                  setSelectedPresetName("");
+                  setPresetPickerOpen(false);
+                }}
+                className="flex min-h-12 w-full items-center rounded-lg px-3 text-left text-[14px] text-muted active:bg-bg"
+              >
+                選択しない
+              </button>
+            </li>
+            {presets.map((preset) => (
+              <li key={preset.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    loadPreset(preset);
+                    setPresetPickerOpen(false);
+                  }}
+                  className={cn(
+                    "flex min-h-12 w-full items-center justify-between gap-2 rounded-lg px-3 text-left active:bg-bg",
+                    selectedPreset === preset.id && "bg-accent/10",
+                  )}
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14px] font-medium">
+                      {preset.name}
+                    </span>
+                    <span className="block text-micro text-muted2">
+                      {preset.userIds.length}人{preset.content ? "・メニュー付き" : ""}
+                    </span>
+                  </span>
+                  {selectedPreset === preset.id && (
+                    <Check size={18} className="shrink-0 text-accent" />
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={presetEditOpen} onOpenChange={setPresetEditOpen}>
+        <SheetContent title="プリセットを編集" autoFocus={false}>
+          <div className="space-y-3 pb-2">
+            <div>
+              <p className="section-label mb-1.5">プリセット名</p>
+              <Input
+                value={selectedPresetName}
+                onChange={(event) => setSelectedPresetName(event.target.value)}
+                placeholder="プリセット名"
+                maxLength={30}
+              />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={!selectedPresetName.trim() || targetIds.length === 0}
+              onClick={() => {
+                updatePreset();
+                setPresetEditOpen(false);
+              }}
+            >
+              <Save size={16} />
+              現在の内容で上書き
+            </Button>
+            <p className="text-micro">
+              いまの対象者・ブロック・メニュー本文をこのプリセットに保存します。
+            </p>
+            <button
+              type="button"
+              onClick={() => setConfirmPresetDelete(true)}
+              className="flex w-full items-center justify-center gap-1 rounded-xl border border-separator py-2.5 text-[14px] font-semibold text-danger active:bg-bg"
+            >
+              <Trash2 size={16} />
+              このプリセットを削除
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
       <ConfirmDialog
         open={confirmPresetDelete}
         onOpenChange={setConfirmPresetDelete}
@@ -702,6 +783,7 @@ function MenuEditor({
         onConfirm={() => {
           deletePreset();
           setConfirmPresetDelete(false);
+          setPresetEditOpen(false);
         }}
       />
     </div>
