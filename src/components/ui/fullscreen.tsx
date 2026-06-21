@@ -11,33 +11,40 @@ import { cn } from "@/lib/utils";
  */
 export const FullScreen = Dialog.Root;
 
-/** ソフトキーボード対策: visualViewport の高さ/位置を購読する（SSR安全） */
-function subscribeViewport(callback: () => void) {
-  const vv = window.visualViewport;
-  if (!vv) return () => {};
-  vv.addEventListener("resize", callback);
-  vv.addEventListener("scroll", callback);
-  return () => {
-    vv.removeEventListener("resize", callback);
-    vv.removeEventListener("scroll", callback);
-  };
-}
+/**
+ * ソフトキーボード対策: visualViewport の高さ/位置に全画面フォームを追従させる。
+ * React の再レンダリングを介さず ref に直接スタイルを当て、resize/scroll の
+ * 連続イベントは requestAnimationFrame で 1フレーム1回に間引く。
+ * （以前は useSyncExternalStore で毎イベント再描画していたため、キーボードの
+ *   開閉アニメに追従しきれず「ぐらつき」が出ていた）
+ */
+function useViewportSync(ref: React.RefObject<HTMLDivElement | null>) {
+  React.useEffect(() => {
+    const el = ref.current;
+    const vv = window.visualViewport;
+    if (!el || !vv) return;
 
-function getViewportSnapshot() {
-  const vv = window.visualViewport;
-  return vv ? `${Math.round(vv.height)}:${Math.round(vv.offsetTop)}` : "";
-}
+    let raf = 0;
+    const apply = () => {
+      raf = 0;
+      el.style.height = `${vv.height}px`;
+      el.style.transform = vv.offsetTop ? `translateY(${vv.offsetTop}px)` : "";
+    };
+    const schedule = () => {
+      if (!raf) raf = requestAnimationFrame(apply);
+    };
 
-/** キーボード表示で縮んだ可視領域に全画面フォームを収めるための inline style */
-function useViewportStyle(): React.CSSProperties | undefined {
-  const snapshot = React.useSyncExternalStore(
-    subscribeViewport,
-    getViewportSnapshot,
-    () => "",
-  );
-  if (!snapshot) return undefined;
-  const [height, offsetTop] = snapshot.split(":");
-  return { height: `${height}px`, transform: `translateY(${offsetTop}px)` };
+    apply();
+    vv.addEventListener("resize", schedule);
+    vv.addEventListener("scroll", schedule);
+    return () => {
+      vv.removeEventListener("resize", schedule);
+      vv.removeEventListener("scroll", schedule);
+      if (raf) cancelAnimationFrame(raf);
+      el.style.height = "";
+      el.style.transform = "";
+    };
+  }, [ref]);
 }
 
 export function FullScreenContent({
@@ -53,14 +60,15 @@ export function FullScreenContent({
   autoFocus?: boolean;
   className?: string;
 }) {
-  const viewportStyle = useViewportStyle();
+  const contentRef = React.useRef<HTMLDivElement | null>(null);
+  useViewportSync(contentRef);
   return (
     <Dialog.Portal>
       <Dialog.Overlay className="sheet-overlay fixed inset-0 z-50 bg-black/30" />
       <Dialog.Content
+        ref={contentRef}
         onOpenAutoFocus={autoFocus ? undefined : (e) => e.preventDefault()}
         onCloseAutoFocus={(e) => e.preventDefault()}
-        style={viewportStyle}
         className={cn(
           // 既定は dvh で全画面。キーボード表示時は viewportStyle が高さを上書きし、
           // ヘッダー(閉じる)・スクロール領域・フッター(投稿)を可視領域内に収める。
