@@ -13,6 +13,7 @@ import type {
   NoticeWithReactions,
   NoteArticleWithAuthor,
   NoteWithRelations,
+  AppNotificationWithActor,
 } from "@/types";
 
 const AUTHOR_SELECT = "author:profiles!user_id(id, display_name, avatar_url, blocks, grade)";
@@ -572,4 +573,27 @@ export async function getPublishedPersonalNotes(
     .eq("status", "published")
     .order("updated_at", { ascending: false });
   return (data ?? []) as unknown as NoteWithRelations[];
+}
+
+export async function getPersonalNotifications(userId: string): Promise<AppNotificationWithActor[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("notifications")
+    .select(`
+      *,
+      actor:profiles!actor_id(id, display_name, avatar_url)
+    `)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+  return (data ?? []) as unknown as AppNotificationWithActor[];
+}
+
+export async function getUnreadNotificationCount(userId: string): Promise<number> {
+  const supabase = await createClient();
+  const { count } = await supabase
+    .from("notifications")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("is_read", false);
+  return count ?? 0;
 }

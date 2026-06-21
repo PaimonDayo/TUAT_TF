@@ -363,3 +363,21 @@ export interface NoteArticleWithAuthor extends NoteArticleRow {
 export type FeedItem =
   | ({ kind: "record" } & RecordWithAuthor)
   | ({ kind: "tweet" } & TweetWithAuthor);
+
+export type NotificationType = "comment" | "schedule_update" | "notice";
+export type NotificationReferenceType = "record" | "tweet" | "schedule" | "notice";
+
+export interface AppNotification {
+  id: string;
+  user_id: string;
+  actor_id: string | null;
+  type: NotificationType;
+  reference_type: NotificationReferenceType | null;
+  reference_id: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface AppNotificationWithActor extends AppNotification {
+  actor: Pick<Profile, "id" | "display_name" | "avatar_url"> | null;
+}
