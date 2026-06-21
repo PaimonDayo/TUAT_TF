@@ -429,7 +429,7 @@ function MenuEditor({
         onClick={submit}
         disabled={saving || loading || (!fixedScheduleId && schedules?.length === 0)}
       >
-        {saving ? "保存中..." : menu ? "更新する" : "保存する"}
+        {saving ? "保存中…" : menu ? "更新する" : "保存する"}
       </Button>
     </div>
   );

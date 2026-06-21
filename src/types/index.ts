@@ -24,6 +24,8 @@ export interface AppRole {
   can_create_notice: boolean;
   is_system: boolean;
   color: string;
+  /** 表示上のカテゴリ（フォルダ分け。任意） */
+  category: string | null;
   sort_order: number;
   created_at: string;
 }

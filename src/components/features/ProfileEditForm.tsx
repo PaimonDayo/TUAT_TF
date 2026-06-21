@@ -198,7 +198,7 @@ export function ProfileEditForm({
 
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <Button size="lg" onClick={save} disabled={saving || !valid}>
-        {saving ? "保存中…" : isSetup ? "はじめる" : "保存"}
+        {saving ? "保存中…" : isSetup ? "はじめる" : "保存する"}
       </Button>
 
       {!isSetup && (

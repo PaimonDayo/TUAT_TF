@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, ChevronRight, ChevronUp, Lock, Plus, SlidersHorizontal } from "lucide-react";
+import { Check, ChevronRight, Lock, Plus, SlidersHorizontal } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
@@ -43,7 +43,6 @@ export function RoleManager({
   const [roles, setRoles] = useState(initialRoles);
   const [creating, setCreating] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
-  const [expanded, setExpanded] = useState(false);
 
   async function reorder(next: AppRole[]) {
     const previous = roles;
@@ -58,10 +57,39 @@ export function RoleManager({
     }
   }
 
-  const visibleRoles = reorderMode || expanded ? roles : roles.slice(0, 3);
+  function renderRole(role: AppRole) {
+    return (
+      <RoleRow
+        key={role.id}
+        role={role}
+        members={members}
+        onUpdated={(updated) => {
+          setRoles((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+          router.refresh();
+        }}
+        onDeleted={() => {
+          setRoles((items) => items.filter((item) => item.id !== role.id));
+          router.refresh();
+        }}
+      />
+    );
+  }
+
+  // カテゴリ（フォルダ）ごとにグループ化。未設定は最後にまとめる。
+  const groups: { category: string | null; roles: AppRole[] }[] = [];
+  for (const role of roles) {
+    const category = role.category?.trim() || null;
+    let group = groups.find((g) => g.category === category);
+    if (!group) {
+      group = { category, roles: [] };
+      groups.push(group);
+    }
+    group.roles.push(role);
+  }
+  groups.sort((a, b) => (a.category === null ? 1 : 0) - (b.category === null ? 1 : 0));
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <div className="flex justify-end">
         <Button
           type="button"
@@ -74,38 +102,24 @@ export function RoleManager({
         </Button>
       </div>
 
-      <ReorderList
-        items={visibleRoles}
-        enabled={reorderMode}
-        onReorder={(nextVisible) => {
-          if (visibleRoles.length === roles.length) void reorder(nextVisible);
-        }}
-        renderItem={(role) => (
-          <RoleRow
-            key={role.id}
-            role={role}
-            members={members}
-            onUpdated={(updated) => {
-              setRoles((items) => items.map((item) => (item.id === updated.id ? updated : item)));
-              router.refresh();
-            }}
-            onDeleted={() => {
-              setRoles((items) => items.filter((item) => item.id !== role.id));
-              router.refresh();
-            }}
-          />
-        )}
-      />
-
-      {!reorderMode && roles.length > 3 && (
-        <button
-          type="button"
-          onClick={() => setExpanded((value) => !value)}
-          className="flex h-10 w-full items-center justify-center gap-1 text-[13px] font-semibold text-accent active:opacity-60"
-        >
-          {expanded ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
-          {expanded ? "上位3件だけ表示" : `すべて表示（${roles.length}件）`}
-        </button>
+      {reorderMode ? (
+        <ReorderList
+          items={roles}
+          enabled
+          onReorder={(next) => void reorder(next)}
+          renderItem={(role) => renderRole(role)}
+        />
+      ) : (
+        <div className="space-y-4">
+          {groups.map((group) => (
+            <section key={group.category ?? "__none__"} className="space-y-2">
+              {group.category && (
+                <p className="section-label">{group.category}</p>
+              )}
+              <div className="space-y-2">{group.roles.map(renderRole)}</div>
+            </section>
+          ))}
+        </div>
       )}
 
       <button
@@ -329,6 +343,7 @@ function RoleEditor({
     create_notice: role?.can_create_notice ?? false,
   });
   const [color, setColor] = useState(role?.color ?? ROLE_COLORS[0]);
+  const [category, setCategory] = useState(role?.category ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -351,6 +366,7 @@ function RoleEditor({
       can_create_menu: flags.create_menu,
       can_create_notice: flags.create_notice,
       color,
+      category: category.trim() || null,
       sort_order: sortOrder,
     };
     const query = role
@@ -382,6 +398,16 @@ function RoleEditor({
             placeholder="例: 会計担当 / 主将"
             maxLength={20}
           />
+        </div>
+        <div>
+          <p className="section-label mb-1.5">カテゴリ（任意・フォルダ分け）</p>
+          <Input
+            value={category}
+            onChange={(event) => setCategory(event.target.value)}
+            placeholder="例: 運営 / 種目別"
+            maxLength={20}
+          />
+          <p className="text-micro mt-1">同じカテゴリ名のロールがまとめて表示されます。</p>
         </div>
         <div>
           <p className="section-label mb-1.5">権限</p>

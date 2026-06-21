@@ -18,7 +18,7 @@ export default async function NotesPage({
 
   return (
     <>
-      <Header title={mine === "1" ? "自分のノート" : "ノート"} large />
+      <Header title="ノート" large />
       <NotesView
         currentUser={{
           id: profile.id,

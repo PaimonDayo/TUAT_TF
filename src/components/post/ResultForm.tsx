@@ -96,7 +96,7 @@ export function ResultForm({
 
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <Button size="lg" onClick={submit} disabled={saving}>
-        {saving ? "保存中…" : editing ? "保存する" : "追加する"}
+        {saving ? "保存中…" : editing ? "更新する" : "追加する"}
       </Button>
     </div>
   );
