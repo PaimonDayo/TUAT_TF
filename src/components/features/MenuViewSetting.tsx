@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Eye } from "lucide-react";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { createClient } from "@/lib/supabase/client";
@@ -16,6 +17,7 @@ export function MenuViewSetting({
   userId: string;
   initial: boolean;
 }) {
+  const router = useRouter();
   const [on, setOn] = useState(initial);
   const [busy, setBusy] = useState(false);
 
@@ -35,7 +37,10 @@ export function MenuViewSetting({
     if (!result.ok) {
       setOn(!next);
       alert(safeUpdateMessage(result.reason));
+      return;
     }
+    // サーバー側のキャッシュを更新（戻ってきたときに状態が戻らない・メニュー表示も即反映）
+    router.refresh();
   }
 
   return (

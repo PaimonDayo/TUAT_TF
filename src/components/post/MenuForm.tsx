@@ -192,6 +192,8 @@ function MenuEditor({
   const [selectedPresetName, setSelectedPresetName] = useState("");
   const [presetPickerOpen, setPresetPickerOpen] = useState(false);
   const [presetEditOpen, setPresetEditOpen] = useState(false);
+  const [targetSearch, setTargetSearch] = useState("");
+  const [targetBlockFilter, setTargetBlockFilter] = useState<Block | "all">("all");
   const [confirmPresetDelete, setConfirmPresetDelete] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -461,6 +463,19 @@ function MenuEditor({
 
   const loading = schedules === null || members === null;
 
+  // 対象者リストの検索・ブロック絞り込み
+  const filteredMembers = (members ?? []).filter((member) => {
+    if (
+      targetBlockFilter !== "all" &&
+      !(member.blocks ?? []).includes(targetBlockFilter)
+    ) {
+      return false;
+    }
+    const q = targetSearch.trim().toLowerCase();
+    if (q && !member.display_name.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
   return (
     <div className="space-y-5 pb-4">
       {!fixedScheduleId && (
@@ -596,8 +611,38 @@ function MenuEditor({
                 ))}
               </div>
             ) : (
-              <div className="max-h-64 space-y-1 overflow-y-auto rounded-xl border border-separator bg-card p-1">
-                {members.map((member) => {
+              <>
+                <Input
+                  value={targetSearch}
+                  onChange={(event) => setTargetSearch(event.target.value)}
+                  placeholder="名前で検索"
+                  className="mb-2"
+                />
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {(["all", ...BLOCK_ORDER] as const).map((key) => {
+                    const active = targetBlockFilter === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setTargetBlockFilter(key)}
+                        className={cn(
+                          "h-8 rounded-full border px-3 text-[12px] font-semibold",
+                          active
+                            ? "border-accent bg-accent text-white"
+                            : "border-separator bg-card text-muted",
+                        )}
+                      >
+                        {key === "all" ? "全ブロック" : BLOCKS[key].short}
+                      </button>
+                    );
+                  })}
+                </div>
+                {filteredMembers.length === 0 ? (
+                  <p className="px-1 py-4 text-center text-caption">該当する部員がいません</p>
+                ) : (
+                <div className="max-h-64 space-y-1 overflow-y-auto rounded-xl border border-separator bg-card p-1">
+                {filteredMembers.map((member) => {
                   const active = targetIds.includes(member.id);
                   return (
                     <button
@@ -622,7 +667,9 @@ function MenuEditor({
                     </button>
                   );
                 })}
-              </div>
+                </div>
+                )}
+              </>
             )}
           </div>
 

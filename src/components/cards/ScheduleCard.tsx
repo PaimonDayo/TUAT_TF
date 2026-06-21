@@ -335,32 +335,34 @@ function MenuCard({
             : "border-transparent bg-bg",
       )}
     >
-      <div className="flex items-start gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {menu.status === "draft" && (
-              <span className="rounded border border-warning px-1.5 py-0.5 text-[10px] font-bold text-warning">
-                下書き
-              </span>
-            )}
-            {targetNames.length > 0 && (
-              <span className="text-[11px] text-muted2">
-                対象: {targetNames.join("、")}
-              </span>
-            )}
+      {(menu.status === "draft" || targetNames.length > 0 || canManage) && (
+        <div className="mb-1 flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {menu.status === "draft" && (
+                <span className="rounded border border-warning px-1.5 py-0.5 text-[10px] font-bold text-warning">
+                  下書き
+                </span>
+              )}
+              {targetNames.length > 0 && (
+                <span className="text-[11px] text-muted2">
+                  対象: {targetNames.join("、")}
+                </span>
+              )}
+            </div>
           </div>
+          {canManage && (
+            <ActionMenu
+              onEdit={() => setEditing(true)}
+              onDelete={remove}
+              deleteTitle="練習メニューを削除しますか？"
+              deleteDescription="削除したメニューは元に戻せません。"
+              triggerLabel="練習メニューの操作"
+            />
+          )}
         </div>
-        {canManage && (
-          <ActionMenu
-            onEdit={() => setEditing(true)}
-            onDelete={remove}
-            deleteTitle="練習メニューを削除しますか？"
-            deleteDescription="削除したメニューは元に戻せません。"
-            triggerLabel="練習メニューの操作"
-          />
-        )}
-      </div>
-      <p className="mt-1 text-[14px] whitespace-pre-wrap">
+      )}
+      <p className="text-[14px] whitespace-pre-wrap">
         <Linkify text={menu.content} />
       </p>
       {canManage && menu.status === "draft" && (
