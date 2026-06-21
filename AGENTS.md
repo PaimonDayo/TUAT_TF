@@ -11,7 +11,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## このアプリ
 TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind v4 + Supabase(@supabase/ssr)。本番 https://tuat-tf.vercel.app 。
-複数端末・複数AI（Claude Code / Codex / Antigravity(Gemini)）で **同じ origin/master を共有して開発** している。
+複数端末・複数AI（Claude Code / Codex）で **同じ origin/master を共有して開発** している。
 
 ## 厳守ルール
 - **origin/master が正。force-push 厳禁。作業前に必ず `git pull`**（diverge時は丸ごとマージせず自分の差分だけ載せ直す）。
@@ -20,7 +20,6 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 - **コミット署名は作業したエージェント自身の名で**（他AIの名を偽らない）。末尾に各自の `Co-Authored-By` を付ける:
   - Claude Code → `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
   - Codex → `Co-Authored-By: Codex <noreply@openai.com>`
-  - Antigravity → `Co-Authored-By: Antigravity (Gemini) <noreply@google.com>`
 - 認証はユーザー版を維持（proxy は cookie があれば getUser 失敗でもログアウトさせない＋SessionKeepAlive）。
 - アクセス制御は最終的に **RLS** が担保。UIガードと RLS の両方で守る。
 
@@ -32,7 +31,7 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 - `docs/SCHEDULE-MENU-PLAN.md` … 予定のブロック対象化＋メニュー刷新
 - `docs/NOTES-PLAN.md` … ノート機能
 - `docs/SHEETS-IMPORT-PLAN.md` … 予定のスプレッドシート一括入力
-- `docs/NOTIFICATIONS-PLAN.md` … 通知機能（通知センター・受信設定・Web Push）※Antigravity担当
+- `docs/NOTIFICATIONS-PLAN.md` … 通知機能（通知センター・受信設定・Web Push）※実装・本番投入済み
 - `docs/QA-CHECKLIST.md` … 実機QA項目
 - `docs/ui-data-guidelines.md` … UI/データの細目
 
@@ -49,7 +48,7 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 - 2026-06-22 / Claude Code / Web Push基盤を本番投入: VAPID secrets登録/Edge Function send-web-push デプロイ/Vercel env(公開鍵)/pg_netで通知INSERT→push のwebhookトリガー。本番DBへ全マイグレ適用済み（バグ修正含む＝コメント/お知らせ投稿の不具合解消） → (このcommit)
 - 2026-06-21 / Claude Code / 予定(schedule_update)通知を廃止（トリガー/関数/notify_schedule列/UI/型/Edge関数）。コメント＋お知らせのみに → a07843f
 - 2026-06-21 / Claude Code / 通知トリガーの列名バグ修正（active→status / 予定列名 / notices.author_id）＋重複マイグレ削除 → ac94ce0
-- 2026-06-21 / Antigravity / 通知機能（Phase 1-3）実装着手 → (作業中)
+- 2026-06-21 / Antigravity / 通知機能（Phase 1-3）実装 → 列名バグ等を Claude が修正のうえ本番投入。以後 Antigravity の運用は終了
 - 2026-06-21 / Claude Code / 通知機能の仕様書 `docs/NOTIFICATIONS-PLAN.md` 起案（実装はAntigravity担当）→ (このcommit)
 - 2026-06-21 / Claude Code / AGENTS.md 運用ルール整理（署名・報告ルール・HANDOFF優先）→ ed4c8c4
 
