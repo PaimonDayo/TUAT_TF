@@ -7,6 +7,7 @@ import { Avatar } from "@/components/common/Avatar";
 import { Button } from "@/components/ui/button";
 import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
@@ -87,6 +88,7 @@ export function NoteEditor({
   const canManagePermissions = ownsNote || isAdmin;
   const [scope, setScope] = useState<NoteScope>(note?.scope ?? initialScope);
   const [title, setTitle] = useState(note?.title ?? "");
+  const [description, setDescription] = useState(note?.description ?? "");
   const [status, setStatus] = useState<NoteStatus>(note?.status ?? "draft");
   const [editPolicy, setEditPolicy] = useState<NoteEditPolicy>(
     note?.edit_policy ?? "author",
@@ -123,6 +125,7 @@ export function NoteEditor({
       scope,
       theme_id: null,
       title: title.trim(),
+      description: description.trim() || null,
       status,
       edit_policy: editPolicy,
     };
@@ -261,6 +264,17 @@ export function NoteEditor({
           onChange={(event) => setTitle(event.target.value)}
           placeholder="例: 大会準備、怪我予防、今季の振り返り"
           maxLength={100}
+        />
+      </div>
+
+      <div>
+        <p className="section-label mb-1.5">説明（任意）</p>
+        <Textarea
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          placeholder="このフォルダにまとめる内容"
+          rows={3}
+          maxLength={300}
         />
       </div>
 

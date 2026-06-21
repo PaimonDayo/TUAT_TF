@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ActionMenu } from "@/components/ui/action-menu";
-import { NoteEditorButton } from "@/components/features/NoteEditor";
+import { NoteEditor } from "@/components/features/NoteEditor";
+import { FormModal } from "@/components/ui/form-modal";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/toast";
 import type { AuthorMini, NoteWithRelations } from "@/types";
@@ -24,6 +26,7 @@ export function NoteDetailActions({
 }) {
   const router = useRouter();
   const { showToast } = useToast();
+  const [editing, setEditing] = useState(false);
 
   async function remove() {
     const supabase = createClient();
@@ -40,29 +43,26 @@ export function NoteDetailActions({
   return (
     <>
       <ActionMenu
-        onEdit={
-          canEdit
-            ? () => {
-                document
-                  .querySelector<HTMLButtonElement>(`#edit-note-${note.id} button`)
-                  ?.click();
-              }
-            : undefined
-        }
+        onEdit={canEdit ? () => setEditing(true) : undefined}
         onDelete={canDelete ? remove : undefined}
         deleteTitle="ノートフォルダを削除しますか？"
         deleteDescription="フォルダ内の記事もすべて削除され、元に戻せません。"
       />
-      {canEdit && (
-        <span id={`edit-note-${note.id}`} className="hidden">
-          <NoteEditorButton
+      {editing && (
+        <FormModal
+          open
+          onOpenChange={setEditing}
+          title="フォルダ設定を編集"
+        >
+          <NoteEditor
             currentUser={currentUser}
             members={members}
             note={note}
             isAdmin={isAdmin}
-            label="フォルダ設定を編集"
+            initialScope={note.scope}
+            onDone={() => setEditing(false)}
           />
-        </span>
+        </FormModal>
       )}
     </>
   );

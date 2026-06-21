@@ -129,6 +129,11 @@ export function NoteList({
                 <p className="mt-1 text-caption">
                   {note.articles?.length ?? 0}件の記事
                 </p>
+                {note.description && (
+                  <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-caption">
+                    {note.description}
+                  </p>
+                )}
                 {showAuthor && (
                   <div className="mt-2 flex items-center gap-2">
                     <Avatar

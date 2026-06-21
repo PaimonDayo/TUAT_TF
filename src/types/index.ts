@@ -271,14 +271,6 @@ export interface PracticeMenuTarget {
   profile?: Pick<Profile, "id" | "display_name" | "avatar_url" | "blocks" | "grade"> | null;
 }
 
-export interface MenuTargetPreset {
-  id: string;
-  author_id: string;
-  name: string;
-  user_ids: string[];
-  created_at: string;
-}
-
 export interface Notice {
   id: string;
   author_id: string;
@@ -338,6 +330,7 @@ export interface NoteRow {
   scope: NoteScope;
   theme_id: string | null;
   title: string;
+  description: string | null;
   body: string;
   status: NoteStatus;
   edit_policy: NoteEditPolicy;

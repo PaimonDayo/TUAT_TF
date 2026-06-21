@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { Avatar } from "@/components/common/Avatar";
+import { Linkify } from "@/components/common/Linkify";
 import { NoteArticleList } from "@/components/features/NoteArticleList";
 import { NoteDetailActions } from "@/components/features/NoteDetailActions";
 import { SubHeader } from "@/components/layout/SubHeader";
@@ -69,6 +70,11 @@ export default async function NoteFolderPage({
             {note.status === "draft" && <Badge>下書き</Badge>}
           </div>
           <h1 className="text-title">{note.title}</h1>
+          {note.description && (
+            <div className="whitespace-pre-wrap text-body text-muted2">
+              <Linkify text={note.description} />
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <Avatar
               name={note.author.display_name}

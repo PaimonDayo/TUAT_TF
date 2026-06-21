@@ -4,15 +4,19 @@ import {
   createContext,
   useContext,
   useEffect,
+  useMemo,
   useState,
-  type Dispatch,
   type ReactNode,
-  type SetStateAction,
 } from "react";
+import { createPortal } from "react-dom";
 import { FullScreen, FullScreenContent } from "@/components/ui/fullscreen";
 
-const FormModalFooterContext =
-  createContext<Dispatch<SetStateAction<ReactNode | null>> | null>(null);
+type FooterContextValue = {
+  target: HTMLDivElement | null;
+  register: () => () => void;
+};
+
+const FormModalFooterContext = createContext<FooterContextValue | null>(null);
 
 export function FormModal({
   open,
@@ -29,16 +33,30 @@ export function FormModal({
   footer?: ReactNode;
   autoFocus?: boolean;
 }) {
-  const [registeredFooter, setRegisteredFooter] = useState<ReactNode | null>(null);
+  const [footerCount, setFooterCount] = useState(0);
+  const [footerTarget, setFooterTarget] = useState<HTMLDivElement | null>(null);
+  const context = useMemo<FooterContextValue>(
+    () => ({
+      target: footerTarget,
+      register: () => {
+        setFooterCount((count) => count + 1);
+        return () => setFooterCount((count) => Math.max(0, count - 1));
+      },
+    }),
+    [footerTarget],
+  );
+  const footerHost =
+    footer ??
+    (footerCount > 0 ? <div ref={setFooterTarget} className="w-full" /> : undefined);
 
   return (
     <FullScreen open={open} onOpenChange={onOpenChange}>
       <FullScreenContent
         title={title}
-        footer={footer ?? registeredFooter}
+        footer={footerHost}
         autoFocus={autoFocus}
       >
-        <FormModalFooterContext.Provider value={setRegisteredFooter}>
+        <FormModalFooterContext.Provider value={context}>
           {children}
         </FormModalFooterContext.Provider>
       </FullScreenContent>
@@ -48,13 +66,13 @@ export function FormModal({
 
 /** 子フォームの送信操作を FormModal の固定フッターへ配置する。 */
 export function FormModalFooter({ children }: { children: ReactNode }) {
-  const setFooter = useContext(FormModalFooterContext);
+  const context = useContext(FormModalFooterContext);
 
   useEffect(() => {
-    if (!setFooter) return;
-    setFooter(children);
-    return () => setFooter(null);
-  }, [children, setFooter]);
+    if (!context) return;
+    return context.register();
+  }, [context]);
 
-  return setFooter ? null : children;
+  if (!context) return children;
+  return context.target ? createPortal(children, context.target) : null;
 }

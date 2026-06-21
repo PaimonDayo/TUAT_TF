@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { Check, Plus, Save } from "lucide-react";
+import { Check, Plus, Save, Trash2 } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
@@ -20,12 +21,65 @@ import { cn } from "@/lib/utils";
 import type {
   AuthorMini,
   Block,
-  MenuTargetPreset,
   PracticeMenu,
 } from "@/types";
 
 type MenuKind = "block" | "people";
 type MenuStatus = "draft" | "published";
+
+type LocalMenuPreset = {
+  id: string;
+  name: string;
+  userIds: string[];
+};
+
+type MenuTargetPreferences = {
+  presets: LocalMenuPreset[];
+  lastTargetIds: string[];
+  lastPresetId: string | null;
+  migratedLegacyPresets: boolean;
+};
+
+const EMPTY_PREFERENCES: MenuTargetPreferences = {
+  presets: [],
+  lastTargetIds: [],
+  lastPresetId: null,
+  migratedLegacyPresets: false,
+};
+
+function menuPreferencesKey(userId: string) {
+  return `track-app:menu-targets:${userId}`;
+}
+
+function readMenuPreferences(userId: string): MenuTargetPreferences {
+  try {
+    const value = localStorage.getItem(menuPreferencesKey(userId));
+    if (!value) return EMPTY_PREFERENCES;
+    const parsed = JSON.parse(value) as Partial<MenuTargetPreferences>;
+    return {
+      presets: Array.isArray(parsed.presets)
+        ? parsed.presets.filter(
+            (preset): preset is LocalMenuPreset =>
+              typeof preset?.id === "string" &&
+              typeof preset.name === "string" &&
+              Array.isArray(preset.userIds),
+          )
+        : [],
+      lastTargetIds: Array.isArray(parsed.lastTargetIds)
+        ? parsed.lastTargetIds.filter((id): id is string => typeof id === "string")
+        : [],
+      lastPresetId:
+        typeof parsed.lastPresetId === "string" ? parsed.lastPresetId : null,
+      migratedLegacyPresets: parsed.migratedLegacyPresets === true,
+    };
+  } catch {
+    return EMPTY_PREFERENCES;
+  }
+}
+
+function writeMenuPreferences(userId: string, value: MenuTargetPreferences) {
+  localStorage.setItem(menuPreferencesKey(userId), JSON.stringify(value));
+}
 
 type UpcomingSchedule = {
   id: string;
@@ -106,7 +160,8 @@ function MenuEditor({
     fixedScheduleId ? [] : null,
   );
   const [members, setMembers] = useState<AuthorMini[] | null>(null);
-  const [presets, setPresets] = useState<MenuTargetPreset[]>([]);
+  const [storageUserId, setStorageUserId] = useState<string | null>(null);
+  const [presets, setPresets] = useState<LocalMenuPreset[]>([]);
   const [scheduleId, setScheduleId] = useState(fixedScheduleId ?? menu?.schedule_id ?? "");
   const [kind, setKind] = useState<MenuKind>(
     initialTargetIds.length > 0 ? "people" : "block",
@@ -119,8 +174,9 @@ function MenuEditor({
   const [status, setStatus] = useState<MenuStatus>(menu?.status ?? "draft");
   const [presetName, setPresetName] = useState("");
   const [selectedPreset, setSelectedPreset] = useState("");
+  const [selectedPresetName, setSelectedPresetName] = useState("");
+  const [confirmPresetDelete, setConfirmPresetDelete] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [savingPreset, setSavingPreset] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -131,7 +187,15 @@ function MenuEditor({
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      const [scheduleResult, memberResult, presetResult] = await Promise.all([
+      const storedPreferences = user
+        ? readMenuPreferences(user.id)
+        : EMPTY_PREFERENCES;
+      const [
+        scheduleResult,
+        memberResult,
+        previousMenuResult,
+        legacyPresetResult,
+      ] = await Promise.all([
         fixedScheduleId
           ? Promise.resolve({ data: [] })
           : supabase
@@ -144,10 +208,20 @@ function MenuEditor({
           .select("id, display_name, avatar_url, blocks, grade")
           .eq("status", "active")
           .order("display_name", { ascending: true }),
+        user && !storedPreferences.migratedLegacyPresets
+          ? supabase
+              .from("practice_menus")
+              .select("targets:practice_menu_targets!inner(user_id)")
+              .eq("author_id", user.id)
+              .is("target_block", null)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
         user
           ? supabase
               .from("menu_target_presets")
-              .select("*")
+              .select("id, name, user_ids")
               .eq("author_id", user.id)
               .order("created_at", { ascending: true })
           : Promise.resolve({ data: [] }),
@@ -155,18 +229,74 @@ function MenuEditor({
       if (!active) return;
 
       const scheduleRows = (scheduleResult.data ?? []) as UpcomingSchedule[];
+      const memberRows = (memberResult.data ?? []) as AuthorMini[];
       setSchedules(scheduleRows);
-      if (!fixedScheduleId && !scheduleId && scheduleRows.length > 0) {
-        setScheduleId(scheduleRows[0].id);
+      if (!fixedScheduleId && scheduleRows.length > 0) {
+        setScheduleId((current) => current || scheduleRows[0].id);
       }
-      setMembers((memberResult.data ?? []) as AuthorMini[]);
-      setPresets((presetResult.data ?? []) as MenuTargetPreset[]);
+      setMembers(memberRows);
+
+      if (user) {
+        setStorageUserId(user.id);
+        const preferences = storedPreferences;
+        const validMemberIds = new Set(memberRows.map((member) => member.id));
+        const legacyPresets = (
+          (legacyPresetResult.data ?? []) as {
+            id: string;
+            name: string;
+            user_ids: string[];
+          }[]
+        ).map((preset) => ({
+          id: preset.id,
+          name: preset.name,
+          userIds: preset.user_ids,
+        }));
+        const sourcePresets =
+          preferences.presets.length > 0 || preferences.migratedLegacyPresets
+            ? preferences.presets
+            : legacyPresets;
+        const validPresets = sourcePresets.map((preset) => ({
+          ...preset,
+          userIds: preset.userIds.filter((id) => validMemberIds.has(id)),
+        }));
+        setPresets(validPresets);
+        if (!preferences.migratedLegacyPresets) {
+          writeMenuPreferences(user.id, {
+            ...preferences,
+            presets: validPresets,
+            migratedLegacyPresets: true,
+          });
+        }
+
+        if (!menu) {
+          const previousMenuTargets = (
+            (previousMenuResult.data?.targets ?? []) as { user_id: string }[]
+          ).map((target) => target.user_id);
+          const previousPreset = validPresets.find(
+            (preset) => preset.id === preferences.lastPresetId,
+          );
+          const previousTargets = (
+            previousPreset?.userIds ??
+            (previousMenuTargets.length > 0
+              ? previousMenuTargets
+              : preferences.lastTargetIds)
+          ).filter((id) => validMemberIds.has(id));
+          if (previousTargets.length > 0) {
+            setKind("people");
+            setTargetIds(previousTargets);
+          }
+          if (previousPreset) {
+            setSelectedPreset(previousPreset.id);
+            setSelectedPresetName(previousPreset.name);
+          }
+        }
+      }
     }
     void load();
     return () => {
       active = false;
     };
-  }, [fixedScheduleId, scheduleId]);
+  }, [fixedScheduleId, menu]);
 
   function toggleTarget(userId: string) {
     setTargetIds((current) =>
@@ -176,31 +306,58 @@ function MenuEditor({
     );
   }
 
-  async function savePreset() {
+  function savePreset() {
     const name = presetName.trim();
-    if (!name || targetIds.length === 0 || savingPreset) return;
-    setSavingPreset(true);
+    if (!name || targetIds.length === 0 || !storageUserId) return;
     setError(null);
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      setSavingPreset(false);
-      return;
-    }
-    const { data, error: presetError } = await supabase
-      .from("menu_target_presets")
-      .insert({ author_id: user.id, name, user_ids: targetIds })
-      .select("*")
-      .single();
-    if (presetError || !data) {
-      setError("プリセットを保存できませんでした");
-    } else {
-      setPresets((items) => [...items, data as MenuTargetPreset]);
-      setPresetName("");
-    }
-    setSavingPreset(false);
+    const preset = {
+      id: crypto.randomUUID(),
+      name,
+      userIds: targetIds,
+    };
+    const next = [...presets, preset];
+    setPresets(next);
+    setSelectedPreset(preset.id);
+    setSelectedPresetName(preset.name);
+    setPresetName("");
+    const previous = readMenuPreferences(storageUserId);
+    writeMenuPreferences(storageUserId, {
+      ...previous,
+      presets: next,
+      lastPresetId: preset.id,
+    });
+  }
+
+  function updatePreset() {
+    const name = selectedPresetName.trim();
+    if (!storageUserId || !selectedPreset || !name || targetIds.length === 0) return;
+    const next = presets.map((preset) =>
+      preset.id === selectedPreset
+        ? { ...preset, name, userIds: targetIds }
+        : preset,
+    );
+    setPresets(next);
+    const previous = readMenuPreferences(storageUserId);
+    writeMenuPreferences(storageUserId, {
+      ...previous,
+      presets: next,
+      lastPresetId: selectedPreset,
+      lastTargetIds: targetIds,
+    });
+  }
+
+  function deletePreset() {
+    if (!storageUserId || !selectedPreset) return;
+    const next = presets.filter((preset) => preset.id !== selectedPreset);
+    setPresets(next);
+    setSelectedPreset("");
+    setSelectedPresetName("");
+    const previous = readMenuPreferences(storageUserId);
+    writeMenuPreferences(storageUserId, {
+      ...previous,
+      presets: next,
+      lastPresetId: null,
+    });
   }
 
   async function submit() {
@@ -233,6 +390,20 @@ function MenuEditor({
       setError("メニューを保存できませんでした");
       setSaving(false);
       return;
+    }
+    if (!menu && storageUserId && kind === "people") {
+      const previous = readMenuPreferences(storageUserId);
+      const activePreset = presets.find((preset) => preset.id === selectedPreset);
+      const presetStillMatches =
+        activePreset &&
+        activePreset.userIds.length === targetIds.length &&
+        activePreset.userIds.every((id) => targetIds.includes(id));
+      writeMenuPreferences(storageUserId, {
+        ...previous,
+        presets,
+        lastTargetIds: targetIds,
+        lastPresetId: presetStillMatches ? activePreset.id : null,
+      });
     }
     router.refresh();
     onDone();
@@ -313,8 +484,20 @@ function MenuEditor({
                 value={selectedPreset}
                 onValueChange={(value) => {
                   const preset = presets.find((item) => item.id === value);
-                  if (preset) setTargetIds(preset.user_ids);
-                  setSelectedPreset("");
+                  if (preset) {
+                    setTargetIds(preset.userIds);
+                    setSelectedPresetName(preset.name);
+                    if (storageUserId) {
+                      const previous = readMenuPreferences(storageUserId);
+                      writeMenuPreferences(storageUserId, {
+                        ...previous,
+                        presets,
+                        lastTargetIds: preset.userIds,
+                        lastPresetId: preset.id,
+                      });
+                    }
+                  }
+                  setSelectedPreset(value);
                 }}
                 ariaLabel="プリセット"
                 options={[
@@ -329,6 +512,41 @@ function MenuEditor({
               <p className="text-caption">保存済みのプリセットはありません。</p>
             )}
           </div>
+
+          {selectedPreset && (
+            <div className="space-y-2 rounded-xl border border-separator bg-card p-3">
+              <p className="section-label">プリセットを編集</p>
+              <Input
+                value={selectedPresetName}
+                onChange={(event) => setSelectedPresetName(event.target.value)}
+                placeholder="プリセット名"
+                maxLength={30}
+              />
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={updatePreset}
+                  disabled={!selectedPresetName.trim() || targetIds.length === 0}
+                  className="h-10 flex-1"
+                >
+                  <Save size={16} />
+                  現在の対象者で上書き
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setConfirmPresetDelete(true)}
+                  aria-label="プリセットを削除"
+                  title="プリセットを削除"
+                  className="h-10 w-10 text-danger"
+                >
+                  <Trash2 size={17} />
+                </Button>
+              </div>
+            </div>
+          )}
 
           <div>
             <div className="mb-1.5 flex items-center justify-between">
@@ -387,7 +605,7 @@ function MenuEditor({
                 type="button"
                 variant="outline"
                 onClick={savePreset}
-                disabled={!presetName.trim() || savingPreset}
+                disabled={!presetName.trim() || !storageUserId}
                 className="h-11 px-3"
               >
                 <Save size={16} />
@@ -433,6 +651,17 @@ function MenuEditor({
           {saving ? "保存中…" : menu ? "更新する" : "保存する"}
         </Button>
       </FormModalFooter>
+      <ConfirmDialog
+        open={confirmPresetDelete}
+        onOpenChange={setConfirmPresetDelete}
+        title="プリセットを削除しますか？"
+        description="この端末に保存されたプリセットを削除します。"
+        confirmLabel="削除する"
+        onConfirm={() => {
+          deletePreset();
+          setConfirmPresetDelete(false);
+        }}
+      />
     </div>
   );
 }
