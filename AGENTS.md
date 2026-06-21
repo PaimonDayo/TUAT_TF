@@ -45,7 +45,8 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 
 ## 作業ログ（着手前に追記・新しいものを上へ）
 <!-- 形式: YYYY-MM-DD / エージェント / 触る範囲 → 結果(commit・要点) -->
-- 2026-06-22 / Claude Code / お知らせに「メンバーに通知する」トグル追加（notices.notify_members＋トリガー条件分岐）＋ホームの重要/通常お知らせ混在時の枠被り修正（Linkをblock化） → (このcommit)
+- 2026-06-22 / Claude Code / お知らせ通知タップで該当お知らせへ（タブ切替+スクロール+展開）＋お知らせを折りたたみ表示（基本タイトル/タップで展開）に → (このcommit)
+- 2026-06-22 / Claude Code / お知らせに「メンバーに通知する」トグル追加（notices.notify_members＋トリガー条件分岐）＋ホームの重要/通常お知らせ混在時の枠被り修正（Linkをblock化） → d2397e8
 - 2026-06-22 / Claude Code / キーボード表示時のフォーム揺れ解消: FullScreenContentのvisualViewport追従をReact再描画→ref直接更新+rAF間引きに（毎イベント再描画が原因のぐらつきを除去） → 55e5480
 - 2026-06-22 / Claude Code / 通知設定をマイページのリスト（目標等の並び）へ移設＋入力欄の自動ズーム対策（Input/Textarea/スプシ入力を16px以上に＝iOSのガクつき解消） → b45771d
 - 2026-06-22 / Claude Code / Web Push基盤を本番投入: VAPID secrets登録/Edge Function send-web-push デプロイ/Vercel env(公開鍵)/pg_netで通知INSERT→push のwebhookトリガー。本番DBへ全マイグレ適用済み（バグ修正含む＝コメント/お知らせ投稿の不具合解消） → 7d0f93a 他

@@ -15,9 +15,12 @@ import type { AppNotificationWithActor } from "@/types";
 export function NotificationsList({
   initialNotifications,
   userId,
+  onOpenNotice,
 }: {
   initialNotifications: AppNotificationWithActor[];
   userId: string;
+  /** お知らせ通知をタップしたとき、同じ画面の「お知らせ」タブで該当を開く */
+  onOpenNotice?: (noticeId: string) => void;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -49,7 +52,6 @@ export function NotificationsList({
   };
 
   const handleTap = async (n: AppNotificationWithActor) => {
-    const href = getHref(n);
     if (!n.is_read) {
       setNotifications((prev) =>
         prev.map((it) => (it.id === n.id ? { ...it, is_read: true } : it))
@@ -57,6 +59,12 @@ export function NotificationsList({
       markNotificationAsRead(n.id).catch(() => {});
       router.refresh();
     }
+    // お知らせ通知は同じ画面の「お知らせ」タブで開く（ページ遷移しない）
+    if (n.reference_type === "notice" && n.reference_id && onOpenNotice) {
+      onOpenNotice(n.reference_id);
+      return;
+    }
+    const href = getHref(n);
     if (href) {
       router.push(href);
     }
