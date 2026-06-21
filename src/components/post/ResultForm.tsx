@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Toggle } from "@/components/ui/toggle";
+import { FormModalFooter } from "@/components/ui/form-modal";
 import type { PbRecord } from "@/types";
 
 /**
@@ -90,43 +92,16 @@ export function ResultForm({
         <Input type="date" value={recordedOn} onChange={(e) => setRecordedOn(e.target.value)} />
       </div>
 
-      <ToggleRow label="PB（自己ベスト）として記録" value={isPb} onToggle={() => setIsPb((v) => !v)} />
-      <ToggleRow label="UB として記録" value={isUb} onToggle={() => setIsUb((v) => !v)} />
-      <ToggleRow label="公認記録" value={isOfficial} onToggle={() => setIsOfficial((v) => !v)} />
+      <Toggle label="PB（自己ベスト）として記録" checked={isPb} onChange={() => setIsPb((v) => !v)} />
+      <Toggle label="UB として記録" checked={isUb} onChange={() => setIsUb((v) => !v)} />
+      <Toggle label="公認記録" checked={isOfficial} onChange={() => setIsOfficial((v) => !v)} />
 
       {error && <p className="text-caption text-danger text-center">{error}</p>}
-      <Button size="lg" onClick={submit} disabled={saving}>
-        {saving ? "保存中…" : editing ? "更新する" : "追加する"}
-      </Button>
+      <FormModalFooter>
+        <Button size="lg" onClick={submit} disabled={saving}>
+          {saving ? "保存中…" : editing ? "更新する" : "追加する"}
+        </Button>
+      </FormModalFooter>
     </div>
-  );
-}
-
-function ToggleRow({
-  label,
-  value,
-  onToggle,
-}: {
-  label: string;
-  value: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className="w-full flex items-center justify-between rounded-xl bg-card border border-separator p-3.5 active:bg-bg"
-    >
-      <span className="text-[14px]">{label}</span>
-      <span
-        className="h-6 w-10 rounded-full p-0.5 transition-colors flex"
-        style={{
-          backgroundColor: value ? "#34c759" : "#e5e5ea",
-          justifyContent: value ? "flex-end" : "flex-start",
-        }}
-      >
-        <span className="h-5 w-5 rounded-full bg-white shadow" />
-      </span>
-    </button>
   );
 }

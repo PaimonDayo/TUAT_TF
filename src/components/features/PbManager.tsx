@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { FormModal } from "@/components/ui/form-modal";
+import { useToast } from "@/components/ui/toast";
 import { ResultsList } from "@/components/features/ResultsList";
 import { ResultForm } from "@/components/post/ResultForm";
 import type { PbRecord } from "@/types";
@@ -16,6 +18,8 @@ export function PbManager({
   userId: string;
   initial: PbRecord[];
 }) {
+  const router = useRouter();
+  const { showToast } = useToast();
   const [items, setItems] = useState<PbRecord[]>(initial);
   const [open, setOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<PbRecord | null>(null);
@@ -36,8 +40,10 @@ export function PbManager({
     const { error } = await supabase.from("pb_records").delete().eq("id", id);
     if (error) {
       setItems(previous);
+      showToast("結果を削除できませんでした");
       return false;
     }
+    router.refresh();
     return true;
   }
 

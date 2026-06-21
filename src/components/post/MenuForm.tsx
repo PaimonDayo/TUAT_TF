@@ -8,10 +8,11 @@ import { Check, Plus, Save } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { FormModal } from "@/components/ui/form-modal";
+import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
 import { BLOCK_ORDER, BLOCKS } from "@/lib/constants";
@@ -117,6 +118,7 @@ function MenuEditor({
   const [content, setContent] = useState(menu?.content ?? "");
   const [status, setStatus] = useState<MenuStatus>(menu?.status ?? "draft");
   const [presetName, setPresetName] = useState("");
+  const [selectedPreset, setSelectedPreset] = useState("");
   const [saving, setSaving] = useState(false);
   const [savingPreset, setSavingPreset] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -252,17 +254,15 @@ function MenuEditor({
               className="min-h-24 py-4"
             />
           ) : (
-            <select
+            <Select
               value={scheduleId}
-              onChange={(event) => setScheduleId(event.target.value)}
-              className="h-11 w-full rounded-xl border border-separator bg-card px-3 text-[15px] outline-none"
-            >
-              {schedules.map((schedule) => (
-                <option key={schedule.id} value={schedule.id}>
-                  {scheduleLabel(schedule)}
-                </option>
-              ))}
-            </select>
+              onValueChange={setScheduleId}
+              ariaLabel="対象の予定"
+              options={schedules.map((schedule) => ({
+                value: schedule.id,
+                label: scheduleLabel(schedule),
+              }))}
+            />
           )}
         </div>
       )}
@@ -309,22 +309,22 @@ function MenuEditor({
           <div>
             <p className="section-label mb-1.5">プリセット</p>
             {presets.length > 0 ? (
-              <select
-                defaultValue=""
-                onChange={(event) => {
-                  const preset = presets.find((item) => item.id === event.target.value);
+              <Select
+                value={selectedPreset}
+                onValueChange={(value) => {
+                  const preset = presets.find((item) => item.id === value);
                   if (preset) setTargetIds(preset.user_ids);
-                  event.target.value = "";
+                  setSelectedPreset("");
                 }}
-                className="h-11 w-full rounded-xl border border-separator bg-card px-3 text-[15px] outline-none"
-              >
-                <option value="">プリセットを読み込む</option>
-                {presets.map((preset) => (
-                  <option key={preset.id} value={preset.id}>
-                    {preset.name}
-                  </option>
-                ))}
-              </select>
+                ariaLabel="プリセット"
+                options={[
+                  { value: "", label: "プリセットを読み込む" },
+                  ...presets.map((preset) => ({
+                    value: preset.id,
+                    label: preset.name,
+                  })),
+                ]}
+              />
             ) : (
               <p className="text-caption">保存済みのプリセットはありません。</p>
             )}
@@ -424,13 +424,15 @@ function MenuEditor({
       </div>
 
       {error && <p className="text-center text-caption text-danger">{error}</p>}
-      <Button
-        size="lg"
-        onClick={submit}
-        disabled={saving || loading || (!fixedScheduleId && schedules?.length === 0)}
-      >
-        {saving ? "保存中…" : menu ? "更新する" : "保存する"}
-      </Button>
+      <FormModalFooter>
+        <Button
+          size="lg"
+          onClick={submit}
+          disabled={saving || loading || (!fixedScheduleId && schedules?.length === 0)}
+        >
+          {saving ? "保存中…" : menu ? "更新する" : "保存する"}
+        </Button>
+      </FormModalFooter>
     </div>
   );
 }

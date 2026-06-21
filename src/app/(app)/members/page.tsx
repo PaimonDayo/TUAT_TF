@@ -7,7 +7,7 @@ export default async function MembersPage() {
 
   return (
     <>
-      <SubHeader title="メンバー一覧" backHref="/mypage" backLabel="マイページ" />
+      <SubHeader title="メンバー一覧" backHref="/mypage" />
       <div className="pt-2">
         <MemberDirectory members={members} />
       </div>

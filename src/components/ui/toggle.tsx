@@ -3,11 +3,13 @@ import { cn } from "@/lib/utils";
 /** ラベル付きオン/オフトグル（iOS風スイッチ） */
 export function Toggle({
   label,
+  description,
   checked,
   onChange,
   className,
 }: {
   label: string;
+  description?: string;
   checked: boolean;
   onChange: () => void;
   className?: string;
@@ -21,7 +23,10 @@ export function Toggle({
         className,
       )}
     >
-      <span className="text-[14px] text-left">{label}</span>
+      <span className="min-w-0 text-left">
+        <span className="block text-[14px] font-medium">{label}</span>
+        {description && <span className="block text-micro">{description}</span>}
+      </span>
       <span
         className="h-6 w-10 rounded-full p-0.5 transition-colors flex shrink-0 ml-3"
         style={{

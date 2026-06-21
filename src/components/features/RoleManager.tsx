@@ -7,9 +7,11 @@ import { createClient } from "@/lib/supabase/client";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { FormModal } from "@/components/ui/form-modal";
+import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
 import { ReorderList } from "@/components/ui/reorder-list";
+import { Toggle } from "@/components/ui/toggle";
+import { useToast } from "@/components/ui/toast";
 import { Avatar } from "@/components/common/Avatar";
 import { PERMISSION_LIST } from "@/lib/permissions";
 import type { AppRole, Permission, Profile } from "@/types";
@@ -40,6 +42,7 @@ export function RoleManager({
   members: Profile[];
 }) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [roles, setRoles] = useState(initialRoles);
   const [creating, setCreating] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
@@ -53,7 +56,7 @@ export function RoleManager({
     });
     if (error) {
       setRoles(previous);
-      alert("並び順を更新できませんでした");
+      showToast("並び順を更新できませんでした");
     }
   }
 
@@ -63,6 +66,7 @@ export function RoleManager({
         key={role.id}
         role={role}
         members={members}
+        onError={showToast}
         onUpdated={(updated) => {
           setRoles((items) => items.map((item) => (item.id === updated.id ? updated : item)));
           router.refresh();
@@ -152,11 +156,13 @@ function RoleRow({
   members,
   onUpdated,
   onDeleted,
+  onError,
 }: {
   role: AppRole;
   members: Profile[];
   onUpdated: (role: AppRole) => void;
   onDeleted: () => void;
+  onError: (message: string) => void;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -181,7 +187,7 @@ function RoleRow({
       target_role_ids: nextIds,
     });
     if (error) {
-      alert("ロールを更新できませんでした");
+      onError("ロールを更新できませんでした");
       setBusyId(null);
       return;
     }
@@ -195,7 +201,7 @@ function RoleRow({
       target_role_id: role.id,
     });
     if (error || !data) {
-      alert("ロールを削除できませんでした");
+      onError("ロールを削除できませんでした");
       return false;
     }
     onDeleted();
@@ -413,26 +419,13 @@ function RoleEditor({
           <p className="section-label mb-1.5">権限</p>
           <div className="space-y-2">
             {PERMISSION_LIST.map((permission) => (
-              <button
+              <Toggle
                 key={permission.key}
-                type="button"
-                onClick={() => toggle(permission.key)}
-                className="flex w-full items-center justify-between gap-3 rounded-xl border border-separator bg-card p-3 text-left active:bg-bg"
-              >
-                <span className="min-w-0">
-                  <span className="block text-[14px] font-medium">{permission.label}</span>
-                  <span className="block text-micro">{permission.desc}</span>
-                </span>
-                <span
-                  className="flex h-6 w-10 shrink-0 rounded-full p-0.5 transition-colors"
-                  style={{
-                    backgroundColor: flags[permission.key] ? "#34c759" : "#e5e5ea",
-                    justifyContent: flags[permission.key] ? "flex-end" : "flex-start",
-                  }}
-                >
-                  <span className="h-5 w-5 rounded-full bg-white shadow" />
-                </span>
-              </button>
+                checked={flags[permission.key]}
+                onChange={() => toggle(permission.key)}
+                label={permission.label}
+                description={permission.desc}
+              />
             ))}
           </div>
         </div>
@@ -465,9 +458,11 @@ function RoleEditor({
           </div>
         </div>
         {error && <p className="text-center text-caption text-danger">{error}</p>}
-        <Button size="lg" onClick={save} disabled={saving}>
-          {saving ? "保存中…" : role ? "保存する" : "作成する"}
-        </Button>
+        <FormModalFooter>
+          <Button size="lg" onClick={save} disabled={saving}>
+            {saving ? "保存中…" : role ? "保存する" : "作成する"}
+          </Button>
+        </FormModalFooter>
       </div>
     </FormModal>
   );

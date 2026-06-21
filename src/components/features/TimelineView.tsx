@@ -12,6 +12,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { GRADE_OPTIONS, SIMPLE_BLOCK_ITEMS, matchSimpleBlock } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { loadFeed } from "@/app/(app)/timeline/actions";
+import { useFeedDisplay } from "@/hooks/use-feed-display";
 import type { CommentAuthor, FeedItem } from "@/types";
 
 const PAGE = 30;
@@ -41,25 +42,10 @@ export function TimelineView({
   const [block, setBlock] = useState<string>("all");
   const [grades, setGrades] = useState<string[]>([]);
   const [favOnly, setFavOnly] = useState(false);
-  // 簡易表示の設定はタブを離れても保持する（cookie。SSRから初期値復元でフラッシュ無し）
-  const [compact, setCompact] = useState(initialCompact);
-  // 簡易表示中に個別展開した投稿
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-
-  function toggleCompact() {
-    const next = !compact;
-    setCompact(next);
-    document.cookie = `timeline-compact=${next ? "1" : "0"};path=/;max-age=31536000`;
-  }
-
-  function toggleExpanded(key: string) {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
+  const { compact, toggleCompact, toggleExpanded, isCompact } = useFeedDisplay({
+    initialCompact,
+    cookieName: "timeline-compact",
+  });
 
   const favSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
 
@@ -135,8 +121,7 @@ export function TimelineView({
             {filtered.map((item) => {
               const key = `${item.kind}-${item.id}`;
               // 簡易表示は既定。個別にタップで展開でき、もう一度タップで閉じる。
-              const isExpanded = expanded.has(key);
-              const effectiveCompact = compact && !isExpanded;
+              const effectiveCompact = isCompact(key);
               const card =
                 item.kind === "record" ? (
                   <RecordCard record={item} currentUser={currentUser} compact={effectiveCompact} />

@@ -2,15 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus, X } from "lucide-react";
+import { X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { ActionMenu } from "@/components/ui/action-menu";
-import { FormModal } from "@/components/ui/form-modal";
+import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
+import { Select } from "@/components/ui/select";
+import { useToast } from "@/components/ui/toast";
 import { ScheduleSheetsManager } from "@/components/features/ScheduleSheetsManager";
 import {
   BLOCK_ORDER,
@@ -22,35 +25,6 @@ import { cn } from "@/lib/utils";
 import type { Block, PracticeSchedule, ScheduleType, VenueRow } from "@/types";
 
 const OTHER = "__other__";
-
-/** ヘッダー右の「＋作成」ボタン。?compose=1 で自動オープン（全画面モーダル） */
-export function ScheduleComposer({ autoOpen = false }: { autoOpen?: boolean }) {
-  const router = useRouter();
-  const [open, setOpen] = useState(autoOpen);
-
-  // ?compose=1 で別画面（マイページ等）から開いた場合、閉じたら元の画面へ戻す。
-  // この画面のヘッダー「＋作成」から開いた場合はその場で閉じるだけ。
-  function handleOpenChange(next: boolean) {
-    setOpen(next);
-    if (!next && autoOpen) router.back();
-  }
-
-  return (
-    <>
-      <button
-        onClick={() => setOpen(true)}
-        aria-label="予定を作成"
-        className="h-9 px-1 flex items-center gap-1 text-accent text-[15px] active:opacity-50"
-      >
-        <Plus size={20} />
-        作成
-      </button>
-      <FormModal open={open} onOpenChange={handleOpenChange} title="予定を作成">
-        <ScheduleCreatePanel onDone={() => handleOpenChange(false)} />
-      </FormModal>
-    </>
-  );
-}
 
 export function ScheduleCreatePanel({ onDone }: { onDone: () => void }) {
   const searchParams = useSearchParams();
@@ -193,26 +167,14 @@ export function ScheduleForm({
     };
 
     if (editing) {
-      // update は RLS で弾かれても「エラー無し・0件」になり無言で失敗する。
-      // .select() で更新件数を確認し、0件ならセッション切れの可能性として
-      // セッションを更新して1回だけ再試行する。
-      const runUpdate = () =>
-        supabase
-          .from("practice_schedules")
-          .update(payload)
-          .eq("id", schedule!.id)
-          .select("id");
-      let { data, error } = await runUpdate();
-      if (!error && (!data || data.length === 0)) {
-        await supabase.auth.refreshSession();
-        ({ data, error } = await runUpdate());
-      }
-      if (error || !data || data.length === 0) {
-        setError(
-          error
-            ? "更新に失敗しました"
-            : "更新できませんでした。ページを再読み込みしてからお試しください",
-        );
+      const result = await safeUpdate(
+        supabase,
+        "practice_schedules",
+        payload,
+        { id: schedule!.id },
+      );
+      if (!result.ok) {
+        setError(safeUpdateMessage(result.reason));
         setSaving(false);
         return;
       }
@@ -293,19 +255,19 @@ export function ScheduleForm({
       {/* 場所（選択式） */}
       <div>
         <p className="section-label mb-1.5">場所</p>
-        <select
+        <Select
           value={venueKey}
-          onChange={(e) => setVenueKey(e.target.value)}
-          className="h-11 w-full rounded-xl bg-card border border-separator px-3 text-[15px] outline-none"
-        >
-          <option value="">選択しない</option>
-          {venues.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.short ? `${v.short}：${v.name}` : v.name}
-            </option>
-          ))}
-          <option value={OTHER}>その他（手入力）</option>
-        </select>
+          onValueChange={setVenueKey}
+          ariaLabel="場所"
+          options={[
+            { value: "", label: "選択しない" },
+            ...venues.map((venue) => ({
+              value: venue.id,
+              label: venue.short ? `${venue.short}：${venue.name}` : venue.name,
+            })),
+            { value: OTHER, label: "その他（手入力）" },
+          ]}
+        />
         {venueKey === OTHER && (
           <Input
             className="mt-2"
@@ -434,9 +396,11 @@ export function ScheduleForm({
       </div>
 
       {error && <p className="text-caption text-danger text-center">{error}</p>}
-      <Button size="lg" onClick={submit} disabled={saving}>
-        {saving ? "保存中…" : editing ? "更新する" : "作成する"}
-      </Button>
+      <FormModalFooter>
+        <Button size="lg" onClick={submit} disabled={saving}>
+          {saving ? "保存中…" : editing ? "更新する" : "作成する"}
+        </Button>
+      </FormModalFooter>
     </div>
   );
 }
@@ -444,12 +408,16 @@ export function ScheduleForm({
 /** 予定の編集・削除（権限保持者向け）。予定カード内に表示 */
 export function ScheduleManageActions({ schedule }: { schedule: PracticeSchedule }) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [editOpen, setEditOpen] = useState(false);
 
   async function remove() {
     const supabase = createClient();
     const { error } = await supabase.from("practice_schedules").delete().eq("id", schedule.id);
-    if (error) return false;
+    if (error) {
+      showToast("予定を削除できませんでした");
+      return false;
+    }
     router.refresh();
     return true;
   }

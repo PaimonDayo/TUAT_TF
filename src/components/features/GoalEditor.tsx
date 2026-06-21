@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { FormModal } from "@/components/ui/form-modal";
+import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 
 /**
  * 目標（自由入力）の表示＆編集ボタン。
@@ -79,9 +79,11 @@ export function GoalEditor({
             <p className="text-micro mt-1">プロフィールに表示され、何に向けて頑張っているか共有できます。</p>
           </div>
           {error && <p className="text-caption text-danger text-center">{error}</p>}
-          <Button size="lg" onClick={save} disabled={saving}>
-            {saving ? "保存中…" : "保存する"}
-          </Button>
+          <FormModalFooter>
+            <Button size="lg" onClick={save} disabled={saving}>
+              {saving ? "保存中…" : "保存する"}
+            </Button>
+          </FormModalFooter>
         </div>
       </FormModal>
     </>

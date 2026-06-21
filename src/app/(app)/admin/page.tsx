@@ -18,7 +18,7 @@ export default async function AdminPage() {
 
   return (
     <>
-      <SubHeader title="部員・ロール管理" backHref="/mypage" backLabel="マイページ" />
+      <SubHeader title="部員・ロール管理" backHref="/mypage" />
 
       <div className="px-4 pt-2 space-y-6">
         <section className="space-y-2">

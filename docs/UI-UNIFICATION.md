@@ -103,9 +103,11 @@
 - → 「重い一覧を待ってからページ全体を出す」をやめ、**軽い所を先に出して重い所を流し込む**を全画面で標準化。
 
 ### 更新（ミューテーション）
-- **楽観的更新（即UI反映）＋必要なときだけ `router.refresh()`**。
-- **全ページ再取得（router.refresh）の多用は禁止**。SessionKeepAlive がトークン更新ごとに refresh して全体がもたついた事例あり（→ SIGNED_OUT のみ refresh に修正済）。
-- 件数表示などの軽い反映はローカル state で。破壊的操作は確認を挟む。
+- **保存・編集・削除の成功後は `router.refresh()` を既定**とし、Server Component の表示を正しい状態へ戻す。
+- いいね・リアクション・コメント件数・展開状態など、現在の画面だけで完結する軽い反映はローカル state で即時更新する。
+- 一覧の追加・削除をローカルで即時反映する場合も、他セクションや権限表示へ影響する操作は最後に `router.refresh()` する。
+- セッション維持などユーザー操作以外を起点とした `router.refresh()` は禁止。`SessionKeepAlive` は SIGNED_OUT のみ refresh する。
+- 破壊的操作は確認を挟む。更新失敗は `safeUpdateMessage`、その他の操作失敗は共通トーストで通知する。
 
 ### 認証 / セッション
 - 検証・更新は **proxy(`getUser`)**、ページは **`getCurrentProfile`(`getSession`、ネット往復なし)**。

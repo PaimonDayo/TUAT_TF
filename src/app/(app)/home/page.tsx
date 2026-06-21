@@ -5,6 +5,7 @@ import { Clock, ChevronRight, BookOpen } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { HomeFeed } from "@/components/features/HomeFeed";
 import { HomeNotices } from "@/components/features/HomeNotices";
 import { AttendanceToggle } from "@/components/features/AttendanceToggle";
@@ -104,9 +105,7 @@ export default async function HomePage() {
             </Link>
           </div>
           {schedules.length === 0 ? (
-            <Card className="p-4">
-              <p className="text-caption">対象の予定はありません</p>
-            </Card>
+            <EmptyState title="対象の予定はありません" className="min-h-24 py-4" />
           ) : (
             <div className="space-y-2">
               {schedules.map((s) => {

@@ -50,27 +50,24 @@
   お知らせ/目標/プロフィール/つぶやき/練習記録の編集に適用済み。
   予定は既存インライン実装、結果/ロール/会場は `.single()` で0件検出済み。
 
-### 残り（Codex 担当）
+### ✅ 対応済み（Codex）
 
 **高優先**
-- **#4 更新後の再描画方式を統一**: `router.refresh()` / 楽観的更新 / ローカル即時 が混在。
-  方針を1つ決めて明文化し寄せる（推奨: 既定は `router.refresh()`、件数表示など軽い反映のみローカル）。
-- **#10 エラー通知を共通化**: `alert()`（例 `VenueManager.tsx:30`, `NoticeActions.tsx:20`）/ フォーム内 / 無表示 が混在。
-  → **共通トースト**を新設し `alert()` を全廃。フォーム内バリデーションは現状維持で可。
+- [x] **#4 更新後の再描画方式を統一**: 保存・編集・削除後は `router.refresh()`、件数・リアクション・展開状態など軽い反映のみローカル state とする方針を `UI-UNIFICATION.md` §4.5 に明文化。会場・結果管理もこの方針へ統一。
+- [x] **#10 エラー通知を共通化**: `src/components/ui/toast.tsx` を追加し `alert()` を全廃。削除・並べ替え・RPC失敗もトースト表示へ統一。フォーム内バリデーションは現状維持。
   - 更新失敗時は `src/lib/safe-update.ts` の `safeUpdate`＋`safeUpdateMessage` を使えば文言も揃う（#2の基盤を流用）。
 
 **中優先（入力部品の共通化）**
-- **#5 トグル統一**: 共通 `src/components/ui/toggle.tsx` に寄せる（独自スイッチ＝`ResultForm.tsx:105`, `RoleManager.tsx`）。
-- **#6 `<select>` 共通部品**: 生 `<select>`（予定 `ScheduleForm` / 管理 / スプシ `ScheduleSheetsManager`）を共通 `Select` 部品に。
-- **#7 空表示を `EmptyState` に統一**: カード直書き（`home/page.tsx:107` 付近, `mypage/page.tsx:162` 付近）を置換。
-- **#8 簡易表示・展開状態の一元化**: ホーム(`HomeFeed`)/タイムライン(`TimelineView`,cookie)/`ActivityFeed`(local) の
-  状態管理・永続化方式がバラバラ。共通フック/部品に寄せる。
-- **#9 フォーム下部ボタン**: 本文末尾配置を `FormModal` の固定フッターに寄せる（長尺・キーボード時の操作性）。
+- [x] **#5 トグル統一**: 結果・お知らせ・ロール権限を共通 `Toggle` へ統一。説明文表示にも対応。
+- [x] **#6 `<select>` 共通部品**: `src/components/ui/select.tsx` を追加し、予定・練習メニュー・スプレッドシート設定の生 `<select>` を全廃。
+- [x] **#7 空表示を `EmptyState` に統一**: ホーム、マイページ、部員詳細、スプレッドシート編集対象の空表示を置換。
+- [x] **#8 簡易表示・展開状態の一元化**: `src/hooks/use-feed-display.ts` を追加し、ホーム・タイムライン・マイページで共用。
+- [x] **#9 フォーム下部ボタン**: `FormModalFooter` を追加し、主要入力フォームの主送信ボタンを固定フッターへ移動。
 
 **低優先**
-- **#11 `backLabel` 撤去**: `SubHeader` は表示しないのに呼び出し側がまだ渡している。各ページから削除。
-- **#12 Linkify 拡大**: 会場アクセス情報・プロフィール目標も `Linkify`。
-- **#13 未使用部品の確認削除**: `ScheduleComposer` / `NoticeComposer` が未使用なら削除。
+- [x] **#11 `backLabel` 撤去**: `SubHeader` の型と全呼び出しから削除。
+- [x] **#12 Linkify 拡大**: 会場アクセス情報・プロフィール目標へ適用。
+- [x] **#13 未使用部品の確認削除**: 未参照だった `ScheduleComposer` / `NoticeComposer` を削除。
   ※ `GradeFilter` / `ActivityFeed` は**現行部品**（削除しない）。
 
 ---

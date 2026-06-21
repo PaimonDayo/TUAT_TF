@@ -8,16 +8,12 @@ import { BackButton } from "@/components/layout/BackButton";
 export function SubHeader({
   title,
   backHref,
-  // 旧APIの backLabel は廃止（表示は常に「戻る」で統一）。型は互換のため残す。
-  backLabel: _backLabel,
   right,
 }: {
   title: string;
   backHref?: string;
-  backLabel?: string;
   right?: React.ReactNode;
 }) {
-  void _backLabel;
   return (
     <header className="sticky top-0 z-30 bg-bg/80 backdrop-blur-xl pt-[env(safe-area-inset-top)]">
       <div className="h-12 px-2 grid grid-cols-[1fr_auto_1fr] items-center">

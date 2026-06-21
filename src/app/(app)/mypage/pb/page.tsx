@@ -10,7 +10,7 @@ export default async function PbPage() {
 
   return (
     <>
-      <SubHeader title="大会・記録会の結果" backHref="/mypage" backLabel="マイページ" />
+      <SubHeader title="大会・記録会の結果" backHref="/mypage" />
 
       <div className="px-4 pt-2">
         <PbManager userId={profile.id} initial={pbs} />

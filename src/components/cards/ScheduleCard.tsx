@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Disclosure } from "@/components/ui/disclosure";
 import { KeyValue } from "@/components/ui/key-value";
+import { useToast } from "@/components/ui/toast";
 import { SCHEDULE_TYPES, ATTENDANCE_TYPES } from "@/lib/constants";
 import { BLOCKS } from "@/lib/constants";
 import { venueShort } from "@/lib/venues";
@@ -240,6 +241,7 @@ function MenuCard({
   canManage: boolean;
   onChanged: () => void;
 }) {
+  const { showToast } = useToast();
   const [editing, setEditing] = useState(false);
   const targetNames =
     menu.targets?.map((target) => target.profile?.display_name).filter(Boolean) ?? [];
@@ -247,7 +249,10 @@ function MenuCard({
   async function remove() {
     const supabase = createClient();
     const { error } = await supabase.from("practice_menus").delete().eq("id", menu.id);
-    if (error) return false;
+    if (error) {
+      showToast("練習メニューを削除できませんでした");
+      return false;
+    }
     onChanged();
     return true;
   }

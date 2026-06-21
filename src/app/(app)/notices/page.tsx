@@ -16,7 +16,6 @@ export default async function NoticesPage() {
       <SubHeader
         title="お知らせ"
         backHref="/home"
-        backLabel="ホーム"
       />
       <div className="px-4 pt-1 space-y-3">
         {notices.length === 0 ? (

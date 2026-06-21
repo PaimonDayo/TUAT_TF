@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { FormModalFooter } from "@/components/ui/form-modal";
 
 const MAX = 200;
 
@@ -75,9 +76,11 @@ export function TweetForm({
         </span>
         {error && <span className="text-danger">{error}</span>}
       </div>
-      <Button size="lg" onClick={submit} disabled={saving || !content.trim()}>
-        {saving ? "保存中…" : editing ? "更新する" : "投稿する"}
-      </Button>
+      <FormModalFooter>
+        <Button size="lg" onClick={submit} disabled={saving || !content.trim()}>
+          {saving ? "保存中…" : editing ? "更新する" : "投稿する"}
+        </Button>
+      </FormModalFooter>
     </div>
   );
 }

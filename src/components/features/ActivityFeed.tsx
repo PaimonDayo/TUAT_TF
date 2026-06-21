@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import { List } from "lucide-react";
 import { RecordCard } from "@/components/cards/RecordCard";
 import { TweetCard } from "@/components/cards/TweetCard";
 import { cn } from "@/lib/utils";
+import { useFeedDisplay } from "@/hooks/use-feed-display";
 import type { CommentAuthor, FeedItem } from "@/types";
 
 /**
@@ -18,24 +18,16 @@ export function ActivityFeed({
   activity: FeedItem[];
   currentUser: CommentAuthor;
 }) {
-  const [compact, setCompact] = useState(false);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-
-  function toggleExpanded(key: string) {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
+  const { compact, toggleCompact, toggleExpanded, isCompact } = useFeedDisplay({
+    initialCompact: false,
+  });
 
   return (
     <>
       <div className="flex justify-end pb-2">
         <button
           type="button"
-          onClick={() => setCompact((v) => !v)}
+          onClick={toggleCompact}
           aria-label={compact ? "詳細表示にする" : "簡易表示にする"}
           title={compact ? "詳細表示" : "簡易表示"}
           className={cn(
@@ -49,7 +41,7 @@ export function ActivityFeed({
       <div className="space-y-3">
         {activity.map((item) => {
           const key = `${item.kind}-${item.id}`;
-          const effectiveCompact = compact && !expanded.has(key);
+          const effectiveCompact = isCompact(key);
           const card =
             item.kind === "record" ? (
               <RecordCard record={item} currentUser={currentUser} compact={effectiveCompact} />

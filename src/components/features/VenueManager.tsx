@@ -1,20 +1,26 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { MapPin, Plus, SlidersHorizontal } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Card } from "@/components/ui/card";
-import { FormModal } from "@/components/ui/form-modal";
+import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import { ReorderList } from "@/components/ui/reorder-list";
+import { useToast } from "@/components/ui/toast";
+import { Linkify } from "@/components/common/Linkify";
+import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import type { VenueRow } from "@/types";
 
 /** 練習場所の管理（追加・編集・削除・選択リスト表示の切替） */
 export function VenueManager({ initial }: { initial: VenueRow[] }) {
+  const router = useRouter();
+  const { showToast } = useToast();
   const [items, setItems] = useState<VenueRow[]>(initial);
   const [editing, setEditing] = useState<VenueRow | null>(null);
   const [creating, setCreating] = useState(false);
@@ -24,21 +30,29 @@ export function VenueManager({ initial }: { initial: VenueRow[] }) {
     const previous = items;
     setItems((arr) => arr.map((x) => (x.id === v.id ? { ...x, pinned: !x.pinned } : x)));
     const supabase = createClient();
-    const { error } = await supabase.from("venues").update({ pinned: !v.pinned }).eq("id", v.id);
-    if (error) {
+    const result = await safeUpdate(
+      supabase,
+      "venues",
+      { pinned: !v.pinned },
+      { id: v.id },
+    );
+    if (!result.ok) {
       setItems(previous);
-      alert("リスト表示を更新できませんでした");
+      showToast(safeUpdateMessage(result.reason));
+      return;
     }
+    router.refresh();
   }
 
   async function remove(v: VenueRow) {
     const supabase = createClient();
     const { error } = await supabase.from("venues").delete().eq("id", v.id);
     if (error) {
-      alert("会場を削除できませんでした");
+      showToast("会場を削除できませんでした");
       return false;
     }
     setItems((arr) => arr.filter((x) => x.id !== v.id));
+    router.refresh();
     return true;
   }
 
@@ -51,8 +65,10 @@ export function VenueManager({ initial }: { initial: VenueRow[] }) {
     });
     if (error) {
       setItems(previous);
-      alert("並び順を更新できませんでした");
+      showToast("並び順を更新できませんでした");
+      return;
     }
+    router.refresh();
   }
 
   return (
@@ -89,7 +105,11 @@ export function VenueManager({ initial }: { initial: VenueRow[] }) {
                   </p>
                 )}
                 <p className="text-headline break-words">{v.name}</p>
-                {v.access && <p className="text-caption whitespace-pre-wrap mt-0.5">{v.access}</p>}
+                {v.access && (
+                  <div className="text-caption whitespace-pre-wrap mt-0.5">
+                    <Linkify text={v.access} />
+                  </div>
+                )}
                 {v.fee && <p className="text-caption">参加費：{v.fee}</p>}
               </div>
               <div className="flex shrink-0 flex-col items-end gap-3">
@@ -215,9 +235,11 @@ function VenueForm({
       </div>
       <Toggle label="予定作成に表示" checked={pinned} onChange={() => setPinned((v) => !v)} />
       {error && <p className="text-caption text-danger text-center">{error}</p>}
-      <Button size="lg" onClick={submit} disabled={saving} className="gap-1">
-        <MapPin size={16} /> {saving ? "保存中…" : venue ? "更新する" : "追加する"}
-      </Button>
+      <FormModalFooter>
+        <Button size="lg" onClick={submit} disabled={saving} className="gap-1">
+          <MapPin size={16} /> {saving ? "保存中…" : venue ? "更新する" : "追加する"}
+        </Button>
+      </FormModalFooter>
     </div>
   );
 }

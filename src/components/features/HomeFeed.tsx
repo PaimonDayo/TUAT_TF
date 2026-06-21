@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { RecordCard } from "@/components/cards/RecordCard";
 import { TweetCard } from "@/components/cards/TweetCard";
 import { EmptyState } from "@/components/ui/empty-state";
+import { useFeedDisplay } from "@/hooks/use-feed-display";
 import type { CommentAuthor, FeedItem } from "@/types";
 
 /**
@@ -17,37 +17,28 @@ export function HomeFeed({
   feed: FeedItem[];
   currentUser: CommentAuthor;
 }) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const { toggleExpanded, isCompact } = useFeedDisplay({ initialCompact: true });
 
   if (feed.length === 0) {
     return <EmptyState title="まだ投稿がありません" />;
-  }
-
-  function toggle(key: string) {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
   }
 
   return (
     <div className="space-y-3">
       {feed.map((item) => {
         const key = `${item.kind}-${item.id}`;
-        const isOpen = expanded.has(key);
+        const compact = isCompact(key);
         const card =
           item.kind === "record" ? (
-            <RecordCard record={item} currentUser={currentUser} compact={!isOpen} />
+            <RecordCard record={item} currentUser={currentUser} compact={compact} />
           ) : (
-            <TweetCard tweet={item} currentUser={currentUser} compact={!isOpen} />
+            <TweetCard tweet={item} currentUser={currentUser} compact={compact} />
           );
 
         // カードのどこをタップしても開閉する（もう一度タップで閉じる）。
         // いいね・コメント・⋯・名前リンクはカード側で伝播を止めてあるので誤爆しない。
         return (
-          <div key={key} onClick={() => toggle(key)} className="cursor-pointer">
+          <div key={key} onClick={() => toggleExpanded(key)} className="cursor-pointer">
             {card}
           </div>
         );

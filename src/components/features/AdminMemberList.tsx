@@ -8,7 +8,7 @@ import { Avatar } from "@/components/common/Avatar";
 import { BlockPills } from "@/components/common/BlockPill";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { FormModal } from "@/components/ui/form-modal";
+import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
 import { GRADE_OPTIONS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -215,9 +215,11 @@ function MemberRoleEditor({
         </div>
 
         {error && <p className="text-center text-caption text-danger">{error}</p>}
-        <Button size="lg" onClick={save} disabled={saving}>
-          {saving ? "保存中..." : "保存する"}
-        </Button>
+        <FormModalFooter>
+          <Button size="lg" onClick={save} disabled={saving}>
+            {saving ? "保存中..." : "保存する"}
+          </Button>
+        </FormModalFooter>
       </div>
     </FormModal>
   );

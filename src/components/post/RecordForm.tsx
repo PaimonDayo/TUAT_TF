@@ -9,6 +9,7 @@ import { IntensityInput, type IntensityValues } from "@/components/features/Inte
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { FormModalFooter } from "@/components/ui/form-modal";
 import { CONDITIONS, CONDITION_ORDER } from "@/lib/constants";
 import type { Condition, PracticeRecord } from "@/types";
 
@@ -139,7 +140,7 @@ export function RecordForm({
   }
 
   return (
-    <div className="space-y-4 pb-4 max-h-[72vh] overflow-y-auto">
+    <div className="space-y-4 pb-4">
       {/* 日付 */}
       <div>
         <p className="section-label mb-1.5">日付</p>
@@ -265,9 +266,11 @@ export function RecordForm({
       </div>
 
       {error && <p className="text-caption text-danger text-center">{error}</p>}
-      <Button size="lg" onClick={submit} disabled={saving}>
-        {saving ? "保存中…" : editing ? "更新する" : "記録する"}
-      </Button>
+      <FormModalFooter>
+        <Button size="lg" onClick={submit} disabled={saving}>
+          {saving ? "保存中…" : editing ? "更新する" : "記録する"}
+        </Button>
+      </FormModalFooter>
     </div>
   );
 }

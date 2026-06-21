@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { NoteEditorButton } from "@/components/features/NoteEditor";
 import { createClient } from "@/lib/supabase/client";
+import { useToast } from "@/components/ui/toast";
 import type { AuthorMini, NoteWithRelations } from "@/types";
 
 export function NoteDetailActions({
@@ -22,11 +23,15 @@ export function NoteDetailActions({
   canDelete: boolean;
 }) {
   const router = useRouter();
+  const { showToast } = useToast();
 
   async function remove() {
     const supabase = createClient();
     const { error } = await supabase.from("notes").delete().eq("id", note.id);
-    if (error) return false;
+    if (error) {
+      showToast("ノートフォルダを削除できませんでした");
+      return false;
+    }
     router.push("/notes");
     router.refresh();
     return true;

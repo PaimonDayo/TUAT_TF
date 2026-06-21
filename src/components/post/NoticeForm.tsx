@@ -2,42 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
-import { FormModal } from "@/components/ui/form-modal";
+import { FormModalFooter } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Toggle } from "@/components/ui/toggle";
 import { NOTICE_CATEGORIES } from "@/lib/constants";
 import type { Notice, NoticeCategory } from "@/types";
-
-export function NoticeComposer({ autoOpen = false }: { autoOpen?: boolean }) {
-  const router = useRouter();
-  const [open, setOpen] = useState(autoOpen);
-
-  // ?compose=1 で別画面（マイページ等）から開いた場合、閉じたら元の画面へ戻す。
-  function handleOpenChange(next: boolean) {
-    setOpen(next);
-    if (!next && autoOpen) router.back();
-  }
-
-  return (
-    <>
-      <button
-        onClick={() => setOpen(true)}
-        aria-label="お知らせを投稿"
-        className="h-9 px-1 flex items-center gap-1 text-accent text-[15px] active:opacity-50"
-      >
-        <Plus size={20} />
-        投稿
-      </button>
-      <FormModal open={open} onOpenChange={handleOpenChange} title="お知らせを投稿">
-        <NoticeForm onDone={() => handleOpenChange(false)} />
-      </FormModal>
-    </>
-  );
-}
 
 export function NoticeForm({
   initial,
@@ -151,23 +124,17 @@ export function NoticeForm({
         <Input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
         <p className="text-micro mt-1">締切を設定すると、その日を過ぎたらホームから自動で消えます</p>
       </div>
-      <button
-        type="button"
-        onClick={() => setPinHome((v) => !v)}
-        className="w-full flex items-center justify-between rounded-xl bg-card border border-separator p-3.5 active:bg-bg"
-      >
-        <span className="text-[14px]">ホームに表示（重要なお知らせ）</span>
-        <span
-          className="h-6 w-10 rounded-full p-0.5 transition-colors flex"
-          style={{ backgroundColor: pinHome ? "#34c759" : "#e5e5ea", justifyContent: pinHome ? "flex-end" : "flex-start" }}
-        >
-          <span className="h-5 w-5 rounded-full bg-white shadow" />
-        </span>
-      </button>
+      <Toggle
+        label="ホームに表示（重要なお知らせ）"
+        checked={pinHome}
+        onChange={() => setPinHome((v) => !v)}
+      />
       {error && <p className="text-caption text-danger text-center">{error}</p>}
-      <Button size="lg" onClick={submit} disabled={saving}>
-        {saving ? "保存中…" : editing ? "更新する" : "投稿する"}
-      </Button>
+      <FormModalFooter>
+        <Button size="lg" onClick={submit} disabled={saving}>
+          {saving ? "保存中…" : editing ? "更新する" : "投稿する"}
+        </Button>
+      </FormModalFooter>
     </div>
   );
 }

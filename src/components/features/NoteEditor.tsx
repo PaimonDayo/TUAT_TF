@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { Check, Plus } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
 import { Button } from "@/components/ui/button";
-import { FormModal } from "@/components/ui/form-modal";
+import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { createClient } from "@/lib/supabase/client";
+import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { cn } from "@/lib/utils";
 import type {
   AuthorMini,
@@ -131,20 +132,11 @@ export function NoteEditor({
       const updatePayload = canManagePermissions
         ? payload
         : { title: payload.title, status: payload.status };
-      const runUpdate = () =>
-        supabase
-          .from("notes")
-          .update(updatePayload)
-          .eq("id", note.id)
-          .select("id");
-      let { data, error: updateError } = await runUpdate();
-      if (!updateError && (!data || data.length === 0)) {
-        await supabase.auth.refreshSession();
-        ({ data, error: updateError } = await runUpdate());
-      }
-      if (updateError || !data || data.length === 0) {
-        console.error("Failed to update note", updateError);
-        setError("フォルダ設定を更新できませんでした");
+      const result = await safeUpdate(supabase, "notes", updatePayload, {
+        id: note.id,
+      });
+      if (!result.ok) {
+        setError(safeUpdateMessage(result.reason));
         setSaving(false);
         return;
       }
@@ -285,9 +277,11 @@ export function NoteEditor({
       </div>
 
       {error && <p className="text-center text-caption text-danger">{error}</p>}
-      <Button size="lg" disabled={saving} onClick={submit}>
-        {saving ? "保存中..." : note ? "更新する" : "保存する"}
-      </Button>
+      <FormModalFooter>
+        <Button size="lg" disabled={saving} onClick={submit}>
+          {saving ? "保存中..." : note ? "更新する" : "保存する"}
+        </Button>
+      </FormModalFooter>
     </div>
   );
 }

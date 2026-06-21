@@ -2,8 +2,10 @@ import { notFound } from "next/navigation";
 import { Target } from "lucide-react";
 import { SubHeader } from "@/components/layout/SubHeader";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Avatar } from "@/components/common/Avatar";
 import { BlockPills } from "@/components/common/BlockPill";
+import { Linkify } from "@/components/common/Linkify";
 import { RecordCard } from "@/components/cards/RecordCard";
 import { ResultsList } from "@/components/features/ResultsList";
 import { TrainingChart } from "@/components/features/TrainingChart";
@@ -90,7 +92,9 @@ export default async function MemberPage({
             {profile.goal && (
               <p className="text-caption mt-1 flex items-start gap-1">
                 <Target size={12} className="text-accent mt-[2px] shrink-0" />
-                <span className="text-ink whitespace-pre-wrap">{profile.goal}</span>
+                <span className="text-ink whitespace-pre-wrap">
+                  <Linkify text={profile.goal} />
+                </span>
               </p>
             )}
           </div>
@@ -113,9 +117,7 @@ export default async function MemberPage({
         <section className="space-y-2">
           <p className="section-label">これまでの記録</p>
           {records.length === 0 ? (
-            <Card className="p-4">
-              <p className="text-caption">まだ記録がありません</p>
-            </Card>
+            <EmptyState title="まだ記録がありません" className="min-h-24 py-4" />
           ) : (
             <div className="space-y-3">
               {records.map((r) => (

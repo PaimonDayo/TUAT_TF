@@ -8,6 +8,7 @@ import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { FormModalFooter } from "@/components/ui/form-modal";
 import { Avatar } from "@/components/common/Avatar";
 import { BLOCK_ORDER, BLOCKS, EVENTS_BY_BLOCK, GRADE_OPTIONS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -200,9 +201,11 @@ export function ProfileEditForm({
       </div>
 
       {error && <p className="text-caption text-danger text-center">{error}</p>}
-      <Button size="lg" onClick={save} disabled={saving || !valid}>
-        {saving ? "保存中…" : isSetup ? "はじめる" : "保存する"}
-      </Button>
+      <FormModalFooter>
+        <Button size="lg" onClick={save} disabled={saving || !valid}>
+          {saving ? "保存中…" : isSetup ? "はじめる" : "保存する"}
+        </Button>
+      </FormModalFooter>
 
       {!isSetup && (
         <button

@@ -3,8 +3,10 @@ import { Suspense } from "react";
 import { Trophy, ChevronRight, Shield, Bell, CalendarPlus, Users, Target, MapPin, Settings } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Avatar } from "@/components/common/Avatar";
 import { BlockPills } from "@/components/common/BlockPill";
+import { Linkify } from "@/components/common/Linkify";
 import { ActivityFeed } from "@/components/features/ActivityFeed";
 import { TrainingChart } from "@/components/features/TrainingChart";
 import { EditProfileButton } from "@/components/features/MyPageActions";
@@ -79,7 +81,9 @@ export default async function MyPage({
             {profile.goal && (
               <p className="text-caption mt-1.5 flex items-start gap-1">
                 <Target size={12} className="text-accent mt-[2px] shrink-0" />
-                <span className="text-ink whitespace-pre-wrap">{profile.goal}</span>
+                <span className="text-ink whitespace-pre-wrap">
+                  <Linkify text={profile.goal} />
+                </span>
               </p>
             )}
           </div>
@@ -158,11 +162,7 @@ async function MyActivity({
 }) {
   const activity = await getUserActivity(userId, userId);
   if (activity.length === 0) {
-    return (
-      <Card className="p-4">
-        <p className="text-caption">まだ投稿がありません</p>
-      </Card>
-    );
+    return <EmptyState title="まだ投稿がありません" className="min-h-24 py-4" />;
   }
   return <ActivityFeed activity={activity} currentUser={currentUser} />;
 }

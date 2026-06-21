@@ -7,6 +7,7 @@ import { ActionMenu } from "@/components/ui/action-menu";
 import { FormModal } from "@/components/ui/form-modal";
 import { RecordForm } from "@/components/post/RecordForm";
 import { TweetForm } from "@/components/post/TweetForm";
+import { useToast } from "@/components/ui/toast";
 import type { PracticeRecord } from "@/types";
 
 /** 練習記録の編集・削除メニュー（本人のみ表示） */
@@ -18,12 +19,16 @@ export function RecordOwnerMenu({
   isMiddleLong: boolean;
 }) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [editOpen, setEditOpen] = useState(false);
 
   async function remove() {
     const supabase = createClient();
     const { error } = await supabase.from("practice_records").delete().eq("id", record.id);
-    if (error) return false;
+    if (error) {
+      showToast("練習記録を削除できませんでした");
+      return false;
+    }
     router.refresh();
     return true;
   }
@@ -53,12 +58,16 @@ export function RecordOwnerMenu({
 /** つぶやきの編集・削除メニュー（本人のみ表示） */
 export function TweetOwnerMenu({ tweet }: { tweet: { id: string; content: string } }) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [editOpen, setEditOpen] = useState(false);
 
   async function remove() {
     const supabase = createClient();
     const { error } = await supabase.from("tweets").delete().eq("id", tweet.id);
-    if (error) return false;
+    if (error) {
+      showToast("つぶやきを削除できませんでした");
+      return false;
+    }
     router.refresh();
     return true;
   }

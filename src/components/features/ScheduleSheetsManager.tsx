@@ -16,8 +16,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Disclosure } from "@/components/ui/disclosure";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented";
+import { Select } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
 import { BLOCKS, SCHEDULE_TYPE_OPTIONS } from "@/lib/constants";
 import type {
@@ -424,21 +426,16 @@ export function ScheduleSheetsManager() {
             />
           </div>
         )}
-        <select
+        <Select
           value={block}
-          onChange={(event) => {
-            setBlock(event.target.value as ScheduleSheetBlock);
+          onValueChange={(value) => {
+            setBlock(value as ScheduleSheetBlock);
             setPreview(null);
             setSheetId(null);
           }}
-          className="h-11 w-full rounded-xl border border-separator bg-card px-3 text-[15px] outline-none"
-        >
-          {BLOCK_OPTIONS.map((item) => (
-            <option key={item.value} value={item.value}>
-              {item.label}
-            </option>
-          ))}
-        </select>
+          ariaLabel="対象ブロック"
+          options={BLOCK_OPTIONS}
+        />
         <SegmentedControl
           items={[
             { key: "new", label: "新しく入力" },
@@ -474,7 +471,7 @@ export function ScheduleSheetsManager() {
         {inputMode === "edit" && (
           <div className="max-h-64 space-y-1 overflow-y-auto rounded-xl border border-separator bg-card p-1">
             {existing.length === 0 ? (
-              <p className="p-3 text-caption">該当する予定がありません。</p>
+              <EmptyState title="該当する予定がありません" className="min-h-24 py-4" />
             ) : (
               existing.map((schedule) => {
                 const active = selectedIds.includes(schedule.id);
@@ -560,25 +557,25 @@ export function ScheduleSheetsManager() {
                           )
                         }
                       />
-                      <select
+                      <Select
                         value={item.venueName}
-                        aria-label={`${WEEKDAYS[item.weekday]}曜日の場所`}
-                        onChange={(event) =>
+                        ariaLabel={`${WEEKDAYS[item.weekday]}曜日の場所`}
+                        onValueChange={(value) =>
                           updateWeekdayDefault(
                             item.weekday,
                             "venueName",
-                            event.target.value,
+                            value,
                           )
                         }
-                        className="h-11 min-w-0 w-full rounded-xl border border-separator bg-card px-2 text-[14px] outline-none"
-                      >
-                        <option value="">未設定</option>
-                        {venues.map((venue) => (
-                          <option key={venue.id} value={venue.name}>
-                            {venue.short || venue.name}
-                          </option>
-                        ))}
-                      </select>
+                        className="px-2 text-[14px]"
+                        options={[
+                          { value: "", label: "未設定" },
+                          ...venues.map((venue) => ({
+                            value: venue.name,
+                            label: venue.short || venue.name,
+                          })),
+                        ]}
+                      />
                     </div>
                   ))}
                   <p className="px-1 text-micro">
