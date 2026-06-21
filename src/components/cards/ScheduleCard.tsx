@@ -256,6 +256,8 @@ function MenuCard({
   const targetNames =
     menu.targets?.map((target) => target.profile?.display_name).filter(Boolean) ?? [];
 
+  const [publishing, setPublishing] = useState(false);
+
   async function remove() {
     const supabase = createClient();
     const { error } = await supabase.from("practice_menus").delete().eq("id", menu.id);
@@ -265,6 +267,23 @@ function MenuCard({
     }
     onChanged();
     return true;
+  }
+
+  async function publish() {
+    setPublishing(true);
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("practice_menus")
+      .update({ status: "published" })
+      .eq("id", menu.id)
+      .select("id");
+    if (error || !data || data.length === 0) {
+      setPublishing(false);
+      showToast("公開できませんでした");
+      return;
+    }
+    showToast("メニューを公開しました");
+    onChanged();
   }
 
   return (
@@ -308,6 +327,16 @@ function MenuCard({
       <p className="mt-1 text-[14px] whitespace-pre-wrap">
         <Linkify text={menu.content} />
       </p>
+      {canManage && menu.status === "draft" && (
+        <button
+          type="button"
+          onClick={publish}
+          disabled={publishing}
+          className="mt-2 inline-flex items-center gap-1 rounded-lg bg-accent px-3 py-1.5 text-[12px] font-semibold text-white active:opacity-80 disabled:opacity-50"
+        >
+          {publishing ? "公開中…" : "公開する"}
+        </button>
+      )}
       <MenuEditModal
         menu={menu}
         scheduleId={scheduleId}

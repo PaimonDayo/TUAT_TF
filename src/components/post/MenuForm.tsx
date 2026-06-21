@@ -109,9 +109,9 @@ export function MenuForm({ scheduleId }: { scheduleId: string }) {
           event.stopPropagation();
           setOpen(true);
         }}
-        className="mt-1 inline-flex items-center gap-1 text-[13px] font-medium text-accent active:opacity-50"
+        className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-accent/50 py-2.5 text-[13px] font-semibold text-accent active:bg-accent/5"
       >
-        <Plus size={15} /> メニューを追加
+        <Plus size={16} /> メニューを追加
       </button>
       {open && (
         <FormModal open onOpenChange={setOpen} title="練習メニューを追加">
