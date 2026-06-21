@@ -78,7 +78,10 @@ export function PostActions({
           )}
         >
           <Heart size={18} fill={liked ? "#ff3b30" : "none"} strokeWidth={2} />
-          <span className="inline-block w-5 text-left tabular-nums">{likes > 0 ? likes : ""}</span>
+          {/* 常に数字を描画し0は透明にする＝箱が一定でガクつかない */}
+          <span className={cn("inline-block w-5 text-left tabular-nums", likes === 0 && "opacity-0")}>
+            {likes}
+          </span>
         </button>
         <button
           onClick={toggleComments}
@@ -89,7 +92,9 @@ export function PostActions({
           )}
         >
           <MessageCircle size={18} strokeWidth={2} />
-          <span className="inline-block w-5 text-left tabular-nums">{commentCount > 0 ? commentCount : ""}</span>
+          <span className={cn("inline-block w-5 text-left tabular-nums", commentCount === 0 && "opacity-0")}>
+            {commentCount}
+          </span>
         </button>
       </div>
 
