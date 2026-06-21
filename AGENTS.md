@@ -32,6 +32,7 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 - `docs/SCHEDULE-MENU-PLAN.md` … 予定のブロック対象化＋メニュー刷新
 - `docs/NOTES-PLAN.md` … ノート機能
 - `docs/SHEETS-IMPORT-PLAN.md` … 予定のスプレッドシート一括入力
+- `docs/NOTIFICATIONS-PLAN.md` … 通知機能（通知センター・受信設定・Web Push）※Antigravity担当
 - `docs/QA-CHECKLIST.md` … 実機QA項目
 - `docs/ui-data-guidelines.md` … UI/データの細目
 
@@ -45,6 +46,7 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 
 ## 作業ログ（着手前に追記・新しいものを上へ）
 <!-- 形式: YYYY-MM-DD / エージェント / 触る範囲 → 結果(commit・要点) -->
+- 2026-06-21 / Claude Code / 通知機能の仕様書 `docs/NOTIFICATIONS-PLAN.md` 起案（実装はAntigravity担当）→ (このcommit)
 - 2026-06-21 / Claude Code / AGENTS.md 運用ルール整理（署名・報告ルール・HANDOFF優先）→ ed4c8c4
 
 ## 着手前の確認：何が「未実装」かを誤認しない
