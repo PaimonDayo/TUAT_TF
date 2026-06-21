@@ -51,6 +51,14 @@ function menuPreferencesKey(userId: string) {
   return `track-app:menu-targets:${userId}`;
 }
 
+// 直近に使った「メニューの種類」（端末単位）。初期表示のチラつき防止に同期的に読む。
+const MENU_LAST_KIND_KEY = "track-app:menu-last-kind";
+
+function readLastMenuKind(): MenuKind {
+  if (typeof window === "undefined") return "block";
+  return localStorage.getItem(MENU_LAST_KIND_KEY) === "people" ? "people" : "block";
+}
+
 function readMenuPreferences(userId: string): MenuTargetPreferences {
   try {
     const value = localStorage.getItem(menuPreferencesKey(userId));
@@ -163,9 +171,12 @@ function MenuEditor({
   const [storageUserId, setStorageUserId] = useState<string | null>(null);
   const [presets, setPresets] = useState<LocalMenuPreset[]>([]);
   const [scheduleId, setScheduleId] = useState(fixedScheduleId ?? menu?.schedule_id ?? "");
-  const [kind, setKind] = useState<MenuKind>(
-    initialTargetIds.length > 0 ? "people" : "block",
-  );
+  const [kind, setKind] = useState<MenuKind>(() => {
+    if (initialTargetIds.length > 0) return "people";
+    if (menu) return "block";
+    // 新規作成時は直近に使った種類で開く（チラつき防止のため初期値で確定）
+    return readLastMenuKind();
+  });
   const [targetBlock, setTargetBlock] = useState<Block>(
     menu?.target_block ?? "middle_long",
   );
@@ -281,8 +292,9 @@ function MenuEditor({
               ? previousMenuTargets
               : preferences.lastTargetIds)
           ).filter((id) => validMemberIds.has(id));
+          // kind は初期値（直近の種類）で確定済みなので、ここでは対象者の
+          // プリロードだけ行う（setKind で切り替えるとチラつくため呼ばない）。
           if (previousTargets.length > 0) {
-            setKind("people");
             setTargetIds(previousTargets);
           }
           if (previousPreset) {
@@ -390,6 +402,10 @@ function MenuEditor({
       setError("メニューを保存できませんでした");
       setSaving(false);
       return;
+    }
+    // 次回の初期表示用に、選んだ種類を端末に保存
+    if (typeof window !== "undefined") {
+      localStorage.setItem(MENU_LAST_KIND_KEY, kind);
     }
     if (!menu && storageUserId && kind === "people") {
       const previous = readMenuPreferences(storageUserId);

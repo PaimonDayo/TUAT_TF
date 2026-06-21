@@ -15,7 +15,13 @@ export function BackButton({
 
   function back() {
     if (typeof window !== "undefined" && window.history.length > 1) {
+      // router.back() は standalone PWA 等で稀に無反応になる。
+      // 一定時間 URL が変わらなければ fallback へ確実に戻す。
+      const before = window.location.href;
       router.back();
+      window.setTimeout(() => {
+        if (window.location.href === before) router.push(fallback);
+      }, 500);
     } else {
       router.push(fallback);
     }

@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Heart, MessageCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { CommentSection } from "@/components/cards/CommentSection";
+import { LikersSheet } from "@/components/cards/LikersSheet";
 import { cn } from "@/lib/utils";
 import type { CommentAuthor, TargetType } from "@/types";
 
@@ -29,7 +30,34 @@ export function PostActions({
   const [openComments, setOpenComments] = useState(false);
   const [commentsMounted, setCommentsMounted] = useState(false);
   const [commentCount, setCommentCount] = useState(initialComments);
+  const [likersOpen, setLikersOpen] = useState(false);
   const updateCommentCount = useCallback((count: number) => setCommentCount(count), []);
+
+  // いいねボタンの長押しで「いいねした人」シートを開く
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressed = useRef(false);
+
+  function startPress() {
+    longPressed.current = false;
+    pressTimer.current = setTimeout(() => {
+      longPressed.current = true;
+      setLikersOpen(true);
+    }, 450);
+  }
+  function cancelPress() {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  }
+  function handleLikeClick() {
+    // 長押しでシートを開いた場合は通常のいいねトグルを行わない
+    if (longPressed.current) {
+      longPressed.current = false;
+      return;
+    }
+    toggleLike();
+  }
 
   function toggleComments() {
     setCommentsMounted(true);
@@ -71,9 +99,13 @@ export function PostActions({
     <>
       <div className="flex items-center gap-5 pt-1">
         <button
-          onClick={toggleLike}
+          onClick={handleLikeClick}
+          onPointerDown={startPress}
+          onPointerUp={cancelPress}
+          onPointerLeave={cancelPress}
+          onContextMenu={(e) => e.preventDefault()}
           className={cn(
-            "flex items-center gap-1.5 text-[13px] active:opacity-50 transition-active",
+            "flex select-none items-center gap-1.5 text-[13px] active:opacity-50 transition-active",
             liked ? "text-danger" : "text-muted",
           )}
         >
@@ -108,6 +140,13 @@ export function PostActions({
           />
         </div>
       )}
+
+      <LikersSheet
+        targetType={targetType}
+        targetId={targetId}
+        open={likersOpen}
+        onOpenChange={setLikersOpen}
+      />
     </>
   );
 }
