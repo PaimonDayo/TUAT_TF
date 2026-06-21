@@ -507,8 +507,8 @@ function MenuEditor({
         <p className="section-label mb-1.5">メニューの種類</p>
         <SegmentedControl
           items={[
-            { key: "block", label: "ブロック共通" },
-            { key: "people", label: "対象者を指定" },
+            { key: "block", label: "ブロック全体" },
+            { key: "people", label: "個人を指定" },
           ]}
           value={kind}
           onChange={(key) => setKind(key as MenuKind)}
@@ -517,7 +517,7 @@ function MenuEditor({
 
       {kind === "block" ? (
         <div>
-          <p className="section-label mb-1.5">対象ブロック</p>
+          <p className="section-label mb-1.5">ブロック</p>
           <div className="grid grid-cols-2 gap-2">
             {BLOCK_ORDER.map((block) => {
               const meta = BLOCKS[block];
