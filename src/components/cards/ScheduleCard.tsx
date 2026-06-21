@@ -33,12 +33,14 @@ import type {
   ScheduleWithMenus,
   Attendee,
   AttendanceStatusOrNone,
+  Block,
   PracticeMenu,
 } from "@/types";
 
 /** 展開式の練習予定カード */
 export function ScheduleCard({
   schedule,
+  viewerBlocks = [],
   canEditMenu = false,
   canManageAllMenus = false,
   canManage = false,
@@ -48,6 +50,7 @@ export function ScheduleCard({
   defaultOpen = false,
 }: {
   schedule: ScheduleWithMenus;
+  viewerBlocks?: Block[];
   canEditMenu?: boolean;
   canManageAllMenus?: boolean;
   canManage?: boolean;
@@ -69,6 +72,13 @@ export function ScheduleCard({
   const meta = SCHEDULE_TYPES[schedule.schedule_type];
   const date = new Date(schedule.schedule_date + "T00:00:00");
   const hasMenus = schedule.menus && schedule.menus.length > 0;
+  // 自分に関係するメニュー（自分が対象者 or 自分のブロック）を上に優先表示
+  const isRelevantMenu = (m: PracticeMenu) =>
+    (!!userId && (m.targets?.some((t) => t.user_id === userId) ?? false)) ||
+    (!!m.target_block && viewerBlocks.includes(m.target_block));
+  const sortedMenus = [...(schedule.menus ?? [])].sort(
+    (a, b) => Number(isRelevantMenu(b)) - Number(isRelevantMenu(a)),
+  );
   const showAttendance = userId && ATTENDANCE_TYPES.includes(schedule.schedule_type);
   const hasEntry = schedule.entry_start || schedule.entry_end;
   const hasDetail =
@@ -203,7 +213,7 @@ export function ScheduleCard({
             <div>
               <p className="section-label mb-1.5">練習メニュー</p>
               <div className="space-y-2">
-                {schedule.menus?.map((m) => (
+                {sortedMenus.map((m) => (
                   <MenuCard
                     key={m.id}
                     menu={m}

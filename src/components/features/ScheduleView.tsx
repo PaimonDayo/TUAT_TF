@@ -6,7 +6,7 @@ import { SegmentedControl } from "@/components/ui/segmented";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ScheduleCard } from "@/components/cards/ScheduleCard";
 import { SCHEDULE_TYPE_OPTIONS } from "@/lib/constants";
-import type { ScheduleWithMenus, Attendee, AttendanceStatusOrNone } from "@/types";
+import type { ScheduleWithMenus, Attendee, AttendanceStatusOrNone, Block } from "@/types";
 
 /**
  * 練習予定の一覧＋種別タブ。
@@ -16,6 +16,7 @@ import type { ScheduleWithMenus, Attendee, AttendanceStatusOrNone } from "@/type
 export function ScheduleView({
   schedules,
   userId,
+  viewerBlocks,
   canEditMenu,
   canManageAllMenus = false,
   canManage = false,
@@ -25,6 +26,7 @@ export function ScheduleView({
 }: {
   schedules: ScheduleWithMenus[];
   userId: string;
+  viewerBlocks: Block[];
   canEditMenu: boolean;
   canManageAllMenus?: boolean;
   canManage?: boolean;
@@ -77,6 +79,7 @@ export function ScheduleView({
                 <div className="mb-3">
                   <ScheduleCard
                     schedule={s}
+                    viewerBlocks={viewerBlocks}
                     canEditMenu={canEditMenu}
                     canManageAllMenus={canManageAllMenus}
                     canManage={canManage}

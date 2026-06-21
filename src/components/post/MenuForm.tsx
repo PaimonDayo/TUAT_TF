@@ -393,7 +393,8 @@ function MenuEditor({
       target_schedule_id: scheduleId,
       menu_content: content.trim(),
       menu_status: status,
-      menu_target_block: kind === "block" ? targetBlock : null,
+      // 個別メニューにもブロックを持たせる（同ブロックの部員が閲覧できるように）
+      menu_target_block: targetBlock,
       target_user_ids: kind === "people" ? targetIds : [],
       target_menu_id: menu?.id ?? null,
     });
@@ -493,6 +494,31 @@ function MenuEditor({
         </div>
       ) : (
         <div className="space-y-3">
+          <div>
+            <p className="section-label mb-1.5">ブロック</p>
+            <p className="text-micro mb-1.5">同じブロックの部員もこの個別メニューを閲覧できます。</p>
+            <div className="grid grid-cols-2 gap-2">
+              {BLOCK_ORDER.map((block) => {
+                const meta = BLOCKS[block];
+                const active = targetBlock === block;
+                return (
+                  <button
+                    key={block}
+                    type="button"
+                    onClick={() => setTargetBlock(block)}
+                    className="h-11 rounded-xl border text-[14px] font-semibold"
+                    style={{
+                      borderColor: active ? meta.color : "#e5e5ea",
+                      backgroundColor: active ? meta.bg : "#fff",
+                      color: active ? meta.color : "#8e8e93",
+                    }}
+                  >
+                    {meta.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <div>
             <p className="section-label mb-1.5">プリセット</p>
             {presets.length > 0 ? (

@@ -46,6 +46,7 @@ export default async function SchedulePage({
       <ScheduleView
         schedules={schedules}
         userId={profile.id}
+        viewerBlocks={profile.blocks}
         canEditMenu={perms.createMenu}
         canManageAllMenus={perms.manageMembers}
         canManage={perms.createSchedule}
