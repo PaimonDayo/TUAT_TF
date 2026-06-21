@@ -24,16 +24,13 @@ const urlBase64ToUint8Array = (base64String: string) => {
 export function NotificationSettings({
   profileId,
   initialComment,
-  initialSchedule,
   initialNotice,
 }: {
   profileId: string;
   initialComment: boolean;
-  initialSchedule: boolean;
   initialNotice: boolean;
 }) {
   const [comment, setComment] = useState(initialComment);
-  const [schedule, setSchedule] = useState(initialSchedule);
   const [notice, setNotice] = useState(initialNotice);
   
   const [pushStatus, setPushStatus] = useState<'unsupported' | 'default' | 'granted' | 'denied'>('unsupported');
@@ -61,7 +58,7 @@ export function NotificationSettings({
     setIsStandalone(window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true);
   }, []);
 
-  const handleChange = async (field: "notify_comment" | "notify_schedule" | "notify_notice", value: boolean, setter: (val: boolean) => void) => {
+  const handleChange = async (field: "notify_comment" | "notify_notice", value: boolean, setter: (val: boolean) => void) => {
     setter(value);
     const result = await safeUpdate(supabase, "profiles", { [field]: value }, { id: profileId });
     if (!result.ok) {
@@ -151,12 +148,6 @@ export function NotificationSettings({
             description="あなたの投稿にコメントがついたとき"
             checked={comment}
             onChange={() => handleChange("notify_comment", !comment, setComment)}
-          />
-          <Toggle
-            label="予定の更新"
-            description="新しい予定や変更があったとき"
-            checked={schedule}
-            onChange={() => handleChange("notify_schedule", !schedule, setSchedule)}
           />
           <Toggle
             label="お知らせ"

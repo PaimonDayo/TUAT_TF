@@ -56,7 +56,6 @@ export interface Profile {
   roles: AppRole[];
   status: ProfileStatus;
   notify_comment: boolean;
-  notify_schedule: boolean;
   notify_notice: boolean;
   created_at: string;
 }
@@ -367,8 +366,8 @@ export type FeedItem =
   | ({ kind: "record" } & RecordWithAuthor)
   | ({ kind: "tweet" } & TweetWithAuthor);
 
-export type NotificationType = "comment" | "schedule_update" | "notice";
-export type NotificationReferenceType = "record" | "tweet" | "schedule" | "notice";
+export type NotificationType = "comment" | "notice";
+export type NotificationReferenceType = "record" | "tweet" | "notice";
 
 export interface AppNotification {
   id: string;

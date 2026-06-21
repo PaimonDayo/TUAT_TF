@@ -27,9 +27,7 @@ export function NotificationsList({
     const actorName = n.actor?.display_name ?? "誰か";
     switch (n.type) {
       case "comment":
-        return `${actorName}さんがあなたの記録にコメントしました`;
-      case "schedule_update":
-        return `${actorName}さんが予定を追加・更新しました`;
+        return `${actorName}さんがあなたの投稿にコメントしました`;
       case "notice":
         return `${actorName}さんがお知らせを投稿しました`;
       default:
@@ -43,8 +41,6 @@ export function NotificationsList({
       case "record":
       case "tweet":
         return `/timeline#${n.reference_type}-${n.reference_id}`;
-      case "schedule":
-        return `/schedule`;
       case "notice":
         return `/notices#notice-${n.reference_id}`;
       default:

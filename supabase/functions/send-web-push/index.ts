@@ -55,10 +55,6 @@ serve(async (req) => {
     if (notification.type === 'comment') {
       title = "新しいコメント";
       bodyText = "あなたの投稿にコメントがつきました";
-    } else if (notification.type === 'schedule_update') {
-      title = "予定の更新";
-      bodyText = "新しい予定や変更がありました";
-      url = "/notices";
     } else if (notification.type === 'notice') {
       title = "新しいお知らせ";
       bodyText = "お知らせが投稿されました";

@@ -105,7 +105,6 @@ export default async function MyPage({
         <NotificationSettings
           profileId={profile.id}
           initialComment={profile.notify_comment ?? true}
-          initialSchedule={profile.notify_schedule ?? true}
           initialNotice={profile.notify_notice ?? true}
         />
 

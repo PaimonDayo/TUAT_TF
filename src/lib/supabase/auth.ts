@@ -44,7 +44,6 @@ export async function getCurrentProfile(): Promise<Profile> {
       roles: [],
       status: "active",
       notify_comment: true,
-      notify_schedule: true,
       notify_notice: true,
       created_at: new Date().toISOString(),
     };
