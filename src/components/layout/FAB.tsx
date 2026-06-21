@@ -6,6 +6,7 @@ import {
   Activity,
   BellPlus,
   CalendarPlus,
+  FolderPlus,
   MessageCircle,
   NotebookPen,
   Plus,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import { FormModal } from "@/components/ui/form-modal";
 import { NoteArticleEditor } from "@/components/features/NoteArticleEditor";
+import { NoteComposer } from "@/components/features/NoteComposer";
 import { NoticeForm } from "@/components/post/NoticeForm";
 import { RecordForm } from "@/components/post/RecordForm";
 import { ResultForm } from "@/components/post/ResultForm";
@@ -28,7 +30,7 @@ export type FabPermissions = {
   manageMembers: boolean;
 };
 
-type DirectForm = "schedule" | "notice" | "article" | null;
+type DirectForm = "schedule" | "notice" | "article" | "folder" | null;
 
 type FabProps = {
   userId: string;
@@ -82,10 +84,11 @@ function ContextualFAB({
   const isFeed = pathname === "/home" || pathname === "/timeline";
   const isSchedule = pathname === "/schedule" && can.createSchedule;
   const isNotice = pathname === "/notices" && can.createNotice;
+  const isNotesRoot = pathname === "/notes";
   const noteFolderMatch = pathname.match(/^\/notes\/([^/]+)$/);
   const noteId = noteFolderMatch?.[1] ?? null;
   const isNoteFolder = Boolean(noteId && canEditArticles);
-  const visible = isFeed || isSchedule || isNotice || isNoteFolder;
+  const visible = isFeed || isSchedule || isNotice || isNotesRoot || isNoteFolder;
 
   useEffect(() => {
     if (!noteId) return;
@@ -108,6 +111,7 @@ function ContextualFAB({
     }
     if (isSchedule) setDirectForm("schedule");
     if (isNotice) setDirectForm("notice");
+    if (isNotesRoot) setDirectForm("folder");
     if (isNoteFolder) setDirectForm("article");
   }
 
@@ -131,7 +135,9 @@ function ContextualFAB({
       ? "予定を作成"
       : isNotice
         ? "お知らせを作成"
-        : "このフォルダに記事を作成";
+        : isNotesRoot
+          ? "フォルダを作成"
+          : "このフォルダに記事を作成";
 
   return (
     <>
@@ -185,6 +191,7 @@ function ContextualFAB({
             <span key={pathname} className="flex">
               {isSchedule && <CalendarPlus size={25} />}
               {isNotice && <BellPlus size={25} />}
+              {isNotesRoot && <FolderPlus size={25} />}
               {isNoteFolder && <NotebookPen size={25} />}
             </span>
           )}
@@ -225,6 +232,18 @@ function ContextualFAB({
         title="お知らせを投稿"
       >
         <NoticeForm onDone={closeDirectForm} />
+      </FormModal>
+
+      <FormModal
+        open={directForm === "folder"}
+        onOpenChange={(open) => !open && closeDirectForm()}
+        title="ノートフォルダを作成"
+      >
+        <NoteComposer
+          currentUser={currentUser}
+          isAdmin={can.manageMembers}
+          onDone={closeDirectForm}
+        />
       </FormModal>
 
       <FormModal

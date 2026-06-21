@@ -96,7 +96,12 @@ export default async function NoteFolderPage({
               }
             />
           ) : (
-            <NoteArticleList noteId={note.id} articles={articles} />
+            <NoteArticleList
+              noteId={note.id}
+              articles={articles}
+              canEdit={canEdit}
+              currentUser={currentUser}
+            />
           )}
         </section>
       </div>

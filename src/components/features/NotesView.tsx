@@ -2,15 +2,11 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { BookOpen, ChevronRight, FolderPlus } from "lucide-react";
+import { BookOpen, ChevronRight } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
-import { NoteComposer } from "@/components/features/NoteComposer";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { FormModal } from "@/components/ui/form-modal";
 import { SegmentedControl } from "@/components/ui/segmented";
 import type {
   AuthorMini,
@@ -21,17 +17,15 @@ import type {
 export function NotesView({
   currentUser,
   notes,
-  isAdmin,
   mine = false,
 }: {
   currentUser: AuthorMini;
   notes: NoteWithRelations[];
-  isAdmin: boolean;
+  /** 旧: フォルダ作成フォーム用。作成導線はFABへ移したため未使用（呼び出し互換のため残置） */
+  isAdmin?: boolean;
   mine?: boolean;
 }) {
-  const router = useRouter();
   const [scope, setScope] = useState<NoteScope>("shared");
-  const [createOpen, setCreateOpen] = useState(false);
   const visibleNotes = useMemo(
     () =>
       notes.filter((note) => {
@@ -57,41 +51,11 @@ export function NotesView({
         />
       </div>
 
-      <div className="flex justify-end">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setCreateOpen(true)}
-        >
-          <FolderPlus size={17} />
-          フォルダを作成
-        </Button>
-      </div>
-
       <NoteList
         notes={visibleNotes}
         currentUserId={currentUser.id}
         showAuthor={!mine}
       />
-
-      {createOpen && (
-        <FormModal
-          open
-          onOpenChange={(open) => !open && setCreateOpen(false)}
-          title="ノートフォルダを作成"
-        >
-          <NoteComposer
-            currentUser={currentUser}
-            isAdmin={isAdmin}
-            initialScope={scope}
-            onDone={() => {
-              setCreateOpen(false);
-              router.refresh();
-            }}
-          />
-        </FormModal>
-      )}
     </div>
   );
 }
