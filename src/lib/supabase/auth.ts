@@ -45,6 +45,7 @@ export async function getCurrentProfile(): Promise<Profile> {
       status: "active",
       notify_comment: true,
       notify_notice: true,
+      menu_view_all_blocks: false,
       created_at: new Date().toISOString(),
     };
   }

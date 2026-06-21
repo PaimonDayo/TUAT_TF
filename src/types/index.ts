@@ -57,6 +57,7 @@ export interface Profile {
   status: ProfileStatus;
   notify_comment: boolean;
   notify_notice: boolean;
+  menu_view_all_blocks: boolean;
   created_at: string;
 }
 

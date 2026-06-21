@@ -20,7 +20,7 @@ import { Disclosure } from "@/components/ui/disclosure";
 import { KeyValue } from "@/components/ui/key-value";
 import { useToast } from "@/components/ui/toast";
 import { SCHEDULE_TYPES, ATTENDANCE_TYPES } from "@/lib/constants";
-import { BLOCKS } from "@/lib/constants";
+import { BLOCKS, BLOCK_ORDER } from "@/lib/constants";
 import { venueShort } from "@/lib/venues";
 import { cn } from "@/lib/utils";
 import { MenuEditModal, MenuForm } from "@/components/post/MenuForm";
@@ -72,13 +72,28 @@ export function ScheduleCard({
   const meta = SCHEDULE_TYPES[schedule.schedule_type];
   const date = new Date(schedule.schedule_date + "T00:00:00");
   const hasMenus = schedule.menus && schedule.menus.length > 0;
-  // 自分に関係するメニュー（自分が対象者 or 自分のブロック）を上に優先表示
-  const isRelevantMenu = (m: PracticeMenu) =>
-    (!!userId && (m.targets?.some((t) => t.user_id === userId) ?? false)) ||
-    (!!m.target_block && viewerBlocks.includes(m.target_block));
-  const sortedMenus = [...(schedule.menus ?? [])].sort(
-    (a, b) => Number(isRelevantMenu(b)) - Number(isRelevantMenu(a)),
+  // 所属ブロックごとにメニューをグループ化（自分のブロックを先頭に、全体向けは最後）
+  const menusByBlock = new Map<Block, PracticeMenu[]>();
+  const generalMenus: PracticeMenu[] = [];
+  for (const m of schedule.menus ?? []) {
+    if (m.target_block) {
+      const list = menusByBlock.get(m.target_block) ?? [];
+      list.push(m);
+      menusByBlock.set(m.target_block, list);
+    } else {
+      generalMenus.push(m);
+    }
+  }
+  const blocksByRelevance = [...BLOCK_ORDER].sort(
+    (a, b) =>
+      Number(viewerBlocks.includes(b)) - Number(viewerBlocks.includes(a)),
   );
+  const menuGroups: { block: Block | null; menus: PracticeMenu[] }[] = [];
+  for (const block of blocksByRelevance) {
+    const list = menusByBlock.get(block);
+    if (list && list.length > 0) menuGroups.push({ block, menus: list });
+  }
+  if (generalMenus.length > 0) menuGroups.push({ block: null, menus: generalMenus });
   const showAttendance = userId && ATTENDANCE_TYPES.includes(schedule.schedule_type);
   const hasEntry = schedule.entry_start || schedule.entry_end;
   const hasDetail =
@@ -183,6 +198,7 @@ export function ScheduleCard({
           )}
           {(schedule.venue_access || schedule.venue_fee) && (
             <Disclosure
+              className="border-t-0"
               title={
                 <span className="flex items-center gap-1.5">
                   <Train size={15} /> アクセス・参加費
@@ -212,21 +228,35 @@ export function ScheduleCard({
           {(hasMenus || canEditMenu) && (
             <div>
               <p className="section-label mb-1.5">練習メニュー</p>
-              <div className="space-y-2">
-                {sortedMenus.map((m) => (
-                  <MenuCard
-                    key={m.id}
-                    menu={m}
-                    scheduleId={schedule.id}
-                    canManage={
-                      canManageAllMenus || (!!userId && m.author?.id === userId)
-                    }
-                    isTargeted={
-                      !!userId && (m.targets?.some((t) => t.user_id === userId) ?? false)
-                    }
-                    isMyBlock={!!m.target_block && viewerBlocks.includes(m.target_block)}
-                    onChanged={() => router.refresh()}
-                  />
+              <div className="space-y-3">
+                {menuGroups.map((group) => (
+                  <div key={group.block ?? "general"} className="space-y-1.5">
+                    <p
+                      className="text-[11px] font-semibold"
+                      style={{ color: group.block ? BLOCKS[group.block].color : "#8e8e93" }}
+                    >
+                      {group.block ? BLOCKS[group.block].label : "全体"}
+                    </p>
+                    <div className="space-y-2">
+                      {group.menus.map((m) => (
+                        <MenuCard
+                          key={m.id}
+                          menu={m}
+                          scheduleId={schedule.id}
+                          canManage={
+                            canManageAllMenus || (!!userId && m.author?.id === userId)
+                          }
+                          isTargeted={
+                            !!userId && (m.targets?.some((t) => t.user_id === userId) ?? false)
+                          }
+                          isMyBlock={
+                            !!m.target_block && viewerBlocks.includes(m.target_block)
+                          }
+                          onChanged={() => router.refresh()}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
               {canEditMenu && <MenuForm scheduleId={schedule.id} />}
@@ -311,17 +341,6 @@ function MenuCard({
             {menu.status === "draft" && (
               <span className="rounded border border-warning px-1.5 py-0.5 text-[10px] font-bold text-warning">
                 下書き
-              </span>
-            )}
-            {menu.target_block && (
-              <span
-                className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                style={{
-                  color: BLOCKS[menu.target_block].color,
-                  backgroundColor: BLOCKS[menu.target_block].bg,
-                }}
-              >
-                {BLOCKS[menu.target_block].label}
               </span>
             )}
             {targetNames.length > 0 && (

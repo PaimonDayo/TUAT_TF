@@ -11,6 +11,7 @@ import { ActivityFeed } from "@/components/features/ActivityFeed";
 import { TrainingChart } from "@/components/features/TrainingChart";
 import { EditProfileButton } from "@/components/features/MyPageActions";
 import { NotificationSettingsButton } from "@/components/features/NotificationSettingsButton";
+import { MenuViewSetting } from "@/components/features/MenuViewSetting";
 import { GoalEditor } from "@/components/features/GoalEditor";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getUserRecords, getUserActivity } from "@/lib/queries";
@@ -29,7 +30,8 @@ export default async function MyPage({
   const records = (await getUserRecords(profile.id)) as PracticeRecord[];
 
   const perms = permissionsOf(profile.roles);
-  const showAdminMenu = perms.manageMembers || perms.createSchedule || perms.createNotice;
+  const showAdminMenu =
+    perms.manageMembers || perms.createSchedule || perms.createNotice || perms.createMenu;
 
   return (
     <>
@@ -118,7 +120,7 @@ export default async function MyPage({
                 <RowLink href="/notices?compose=1" icon={<Bell size={20} className="text-warning" />} label="お知らせを作成" />
               )}
               {/* その他（めったに触らない設定はここに畳んでおく） */}
-              {(perms.manageMembers || perms.createSchedule) && (
+              {(perms.manageMembers || perms.createSchedule || perms.createMenu) && (
                 <details>
                   <summary className="flex cursor-pointer list-none items-center gap-3 p-4 active:bg-bg">
                     <Settings size={20} className="text-muted2" />
@@ -131,6 +133,9 @@ export default async function MyPage({
                     )}
                     {perms.createSchedule && (
                       <RowSubLink href="/venues" icon={<MapPin size={18} />} label="練習場所" />
+                    )}
+                    {perms.createMenu && (
+                      <MenuViewSetting userId={profile.id} initial={profile.menu_view_all_blocks} />
                     )}
                   </div>
                 </details>

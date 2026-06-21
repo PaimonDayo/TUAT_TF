@@ -383,8 +383,9 @@ export async function getHomeNotices(userId: string): Promise<NoticeWithReaction
   ]);
 
   const dismissedIds = new Set((dismissed ?? []).map((d) => d.notice_id as string));
+  // 重要なお知らせ(pin_home)は消せない＝既読/非表示の対象外で常に表示する
   const visible = ((notices ?? []) as Notice[]).filter(
-    (notice) => !dismissedIds.has(notice.id),
+    (notice) => notice.pin_home || !dismissedIds.has(notice.id),
   );
   const important = visible.filter((notice) => notice.pin_home);
   const reminders = visible.filter((notice) => notice.deadline === tomorrow);

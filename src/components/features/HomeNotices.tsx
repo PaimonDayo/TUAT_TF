@@ -1,12 +1,7 @@
-"use client";
-
-import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Bell, CalendarClock, ChevronRight, X } from "lucide-react";
+import { Bell, CalendarClock, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { createClient } from "@/lib/supabase/client";
 import { Linkify } from "@/components/common/Linkify";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -22,25 +17,10 @@ function tomorrowInJapan() {
   }).format(new Date(Date.now() + 86_400_000));
 }
 
-export function HomeNotices({
-  notices,
-  userId,
-}: {
-  notices: NoticeWithReactions[];
-  userId: string;
-}) {
-  const router = useRouter();
-  const [items, setItems] = useState(notices);
+export function HomeNotices({ notices }: { notices: NoticeWithReactions[] }) {
   const tomorrow = tomorrowInJapan();
 
-  async function dismiss(id: string) {
-    setItems((current) => current.filter((notice) => notice.id !== id));
-    const supabase = createClient();
-    await supabase.from("notice_dismissals").upsert({ user_id: userId, notice_id: id });
-    router.refresh();
-  }
-
-  if (items.length === 0) return null;
+  if (notices.length === 0) return null;
 
   return (
     <section className="space-y-2">
@@ -51,7 +31,7 @@ export function HomeNotices({
         </Link>
       </div>
       <div className="space-y-2">
-        {items.map((notice) => {
+        {notices.map((notice) => {
           const meta = NOTICE_CATEGORIES[notice.category];
           const reminder = notice.deadline === tomorrow;
           const deadline = notice.deadline
@@ -67,9 +47,7 @@ export function HomeNotices({
                     {notice.title}
                   </span>
                   {reminder && (
-                    <Badge className="shrink-0 bg-danger/10 text-danger">
-                      明日締切
-                    </Badge>
+                    <Badge className="shrink-0 bg-danger/10 text-danger">明日締切</Badge>
                   )}
                   <ChevronRight size={17} className="shrink-0 text-muted" />
                 </Card>
@@ -77,10 +55,11 @@ export function HomeNotices({
             );
           }
 
+          // 重要なお知らせ：✗で消せないよう、閉じるボタンは出さない
           return (
             <Card
               key={notice.id}
-              className="space-y-2.5 border-warning/40 p-3.5"
+              className="space-y-2.5 p-3.5"
               style={{ borderColor: "#ff950055" }}
             >
               <div className="flex items-start gap-2">
@@ -110,14 +89,6 @@ export function HomeNotices({
                     </p>
                   )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => dismiss(notice.id)}
-                  aria-label="確認済みにする"
-                  className="-mr-1 -mt-1 flex h-7 w-7 shrink-0 items-center justify-center text-muted active:opacity-50"
-                >
-                  <X size={16} />
-                </button>
               </div>
             </Card>
           );
