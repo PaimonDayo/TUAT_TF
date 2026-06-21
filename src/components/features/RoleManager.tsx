@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, ChevronUp, Lock, Plus, SlidersHorizontal } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ChevronUp, Lock, Plus, SlidersHorizontal } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
@@ -222,6 +222,16 @@ function RoleRow({
             )}
           </div>
         </div>
+
+        <button
+          type="button"
+          onClick={() => setViewingMembers(true)}
+          aria-label={`${role.name}のメンバーを管理`}
+          className="flex h-9 shrink-0 items-center gap-0.5 rounded-lg pl-2 pr-1 text-[13px] font-semibold text-accent active:opacity-60"
+        >
+          <span className="tabular-nums">{assignedCount}</span>人
+          <ChevronRight size={18} />
+        </button>
 
         <ActionMenu
           onEdit={() => setEditing(true)}

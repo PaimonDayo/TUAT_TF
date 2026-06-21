@@ -78,7 +78,7 @@ export function PostActions({
           )}
         >
           <Heart size={18} fill={liked ? "#ff3b30" : "none"} strokeWidth={2} />
-          <span className="tabular-nums text-left min-w-[12px]">{likes > 0 ? likes : ""}</span>
+          <span className="inline-block w-5 text-left tabular-nums">{likes > 0 ? likes : ""}</span>
         </button>
         <button
           onClick={toggleComments}
@@ -89,7 +89,7 @@ export function PostActions({
           )}
         >
           <MessageCircle size={18} strokeWidth={2} />
-          <span className="tabular-nums text-left min-w-[12px]">{commentCount > 0 ? commentCount : ""}</span>
+          <span className="inline-block w-5 text-left tabular-nums">{commentCount > 0 ? commentCount : ""}</span>
         </button>
       </div>
 
