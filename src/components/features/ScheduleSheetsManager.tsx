@@ -824,7 +824,7 @@ function EditablePreviewTable({
                       onChange={(event) =>
                         onChange(row.rowNumber, column, event.target.value)
                       }
-                      className="h-9 w-full min-w-32 rounded-lg border border-separator bg-white px-2 text-[13px] outline-none focus:border-accent read-only:bg-bg read-only:text-muted"
+                      className="h-9 w-full min-w-32 rounded-lg border border-separator bg-white px-2 text-[16px] outline-none focus:border-accent read-only:bg-bg read-only:text-muted"
                     />
                   </td>
                 ))}

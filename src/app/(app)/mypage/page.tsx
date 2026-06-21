@@ -10,7 +10,7 @@ import { Linkify } from "@/components/common/Linkify";
 import { ActivityFeed } from "@/components/features/ActivityFeed";
 import { TrainingChart } from "@/components/features/TrainingChart";
 import { EditProfileButton } from "@/components/features/MyPageActions";
-import { NotificationSettings } from "@/components/features/NotificationSettings";
+import { NotificationSettingsButton } from "@/components/features/NotificationSettingsButton";
 import { GoalEditor } from "@/components/features/GoalEditor";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getUserRecords, getUserActivity } from "@/lib/queries";
@@ -99,14 +99,12 @@ export default async function MyPage({
           <RowLink href="/mypage/pb" icon={<Trophy size={20} className="text-warning" />} label="大会・記録会の結果" />
           <RowLink href="/members" icon={<Users size={20} className="text-accent" />} label="メンバー一覧" />
           <RowLink href="/ranking" icon={<Trophy size={20} className="text-muted2" />} label="ランキング" />
+          <NotificationSettingsButton
+            profileId={profile.id}
+            initialComment={profile.notify_comment ?? true}
+            initialNotice={profile.notify_notice ?? true}
+          />
         </Card>
-
-        {/* 通知設定 */}
-        <NotificationSettings
-          profileId={profile.id}
-          initialComment={profile.notify_comment ?? true}
-          initialNotice={profile.notify_notice ?? true}
-        />
 
         {/* 管理メニュー（権限に応じて表示） */}
         {showAdminMenu && (
