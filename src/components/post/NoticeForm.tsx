@@ -26,6 +26,7 @@ export function NoticeForm({
   const [content, setContent] = useState(initial?.content ?? "");
   const [deadline, setDeadline] = useState(initial?.deadline ?? "");
   const [pinHome, setPinHome] = useState(initial?.pin_home ?? false);
+  const [notifyMembers, setNotifyMembers] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -75,6 +76,7 @@ export function NoticeForm({
       content: content.trim(),
       deadline: deadline || null,
       pin_home: pinHome,
+      notify_members: notifyMembers,
     });
     if (error) {
       setError("投稿に失敗しました");
@@ -129,6 +131,14 @@ export function NoticeForm({
         checked={pinHome}
         onChange={() => setPinHome((v) => !v)}
       />
+      {!editing && (
+        <Toggle
+          label="メンバーに通知する"
+          description="オンにすると全部員に通知（プッシュ）が届きます"
+          checked={notifyMembers}
+          onChange={() => setNotifyMembers((v) => !v)}
+        />
+      )}
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <FormModalFooter>
         <Button size="lg" onClick={submit} disabled={saving}>

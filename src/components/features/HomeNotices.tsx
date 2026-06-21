@@ -60,7 +60,7 @@ export function HomeNotices({
 
           if (!notice.pin_home) {
             return (
-              <Link key={notice.id} href={`/notices#notice-${notice.id}`}>
+              <Link key={notice.id} href={`/notices#notice-${notice.id}`} className="block">
                 <Card className="flex min-h-12 items-center gap-2.5 p-3 active:bg-bg">
                   <Bell size={16} className="shrink-0 text-accent" />
                   <span className="min-w-0 flex-1 truncate text-headline">

@@ -281,6 +281,7 @@ export interface Notice {
   content: string;
   deadline: string | null;
   pin_home: boolean;
+  notify_members: boolean;
   created_at: string;
 }
 
