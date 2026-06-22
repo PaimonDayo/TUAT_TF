@@ -22,6 +22,8 @@ type BeforeInstallPromptEvent = Event & {
 export function InstallPrompt() {
   const [show, setShow] = useState(false);
   const [isIos, setIsIos] = useState(false);
+  // iOSでSafari以外（Chrome/Firefox/Edge等）。PWA追加はSafariでしかできないため案内を変える
+  const [iosNonSafari, setIosNonSafari] = useState(false);
   const [canPrompt, setCanPrompt] = useState(false);
   const deferredRef = useRef<BeforeInstallPromptEvent | null>(null);
 
@@ -51,7 +53,10 @@ export function InstallPrompt() {
 
     // iOSはイベントが来ないので案内バナーを直接出す
     if (iosLike) {
+      // Safari以外のiOSブラウザ（Chrome=crios, Firefox=fxios, Edge=edgios 等）はPWA追加不可
+      const nonSafari = /crios|fxios|edgios|opt\//.test(ua);
       setIsIos(true);
+      setIosNonSafari(nonSafari);
       setShow(true);
     }
 
@@ -83,7 +88,14 @@ export function InstallPrompt() {
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-[14px] font-semibold">アプリとして使う</p>
-            {isIos ? (
+            {isIos && iosNonSafari ? (
+              <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted2">
+                iPhone/iPadでは <span className="text-ink font-semibold">Safari</span> でのみホーム画面に追加できます。
+                このページを Safari で開いてから、共有
+                <Share size={13} className="mx-0.5 inline" />
+                →「ホーム画面に追加」を選んでください。
+              </p>
+            ) : isIos ? (
               <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted2">
                 ホーム画面に追加すると、通知が受け取れて全画面で快適に使えます。
                 <span className="mt-1 flex items-center gap-1 text-ink">
