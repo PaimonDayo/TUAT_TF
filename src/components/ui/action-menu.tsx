@@ -31,7 +31,12 @@ export function ActionMenu({
 
   function edit() {
     setMenuOpen(false);
-    onEdit?.();
+    // このメニュー(Sheet=Radixダイアログ)が閉じるのと、編集フォーム(別のRadix
+    // ダイアログ)が開くのが同じコミットで重なると、react-remove-scroll の
+    // スクロールロックの受け渡しが競合する。iOS ではこの瞬間にロックが外れ、
+    // 入力欄にフォーカスするとページがスクロールして入力欄がキーボードの
+    // 裏（画面外）へ隠れる。Sheet を閉じ切ってから編集フォームを開く。
+    window.setTimeout(() => onEdit?.(), 220);
   }
 
   async function remove() {
