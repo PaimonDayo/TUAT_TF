@@ -45,6 +45,7 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 
 ## 作業ログ（着手前に追記・新しいものを上へ）
 <!-- 形式: YYYY-MM-DD / エージェント / 触る範囲 → 結果(commit・要点) -->
+- 2026-06-22 / Claude Code / PWA未起動の人にホーム画面追加を促すバナー追加(InstallPrompt: Androidはbeforeinstallpromptでワンタップ追加/iOSは手順案内/スタンドアロン時は非表示/閉じたら5日再表示しない) → (このcommit)
 - 2026-06-22 / Claude Code / タイムラインのつぶやきカードに学年表示を追加(記録カードと同様/TweetCard) → (このcommit)
 - 2026-06-22 / Claude Code / RLSを戻し作成者は自分のメニューを常時閲覧可に(migration 080000)・通知設定を端末通知ON/OFF一本化(ONでブラウザ許可ダイアログ/別建ての有効解除ボタン廃止/ON時のみ種類トグル)・メニュー並びを作成日時非依存の固定順(全体→個別/対象者名順)に → (このcommit)
 - 2026-06-22 / Claude Code / 他ブロック閲覧オフでも作成者に他ブロック公開メニューが見える不具合修正(RLS:作成者常時可は下書きのみに/migration 070000)・予定メニューの並び順を作成順で固定(queries埋め込みorder)・「設定」をマイページに新設し通知設定+メニュー表示を展開式(details)で同居・メニュー表示設定を管理者限定から全員に開放(NotificationSettingsButton廃止) → (このcommit)
