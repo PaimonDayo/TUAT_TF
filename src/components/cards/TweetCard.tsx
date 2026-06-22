@@ -10,6 +10,7 @@ import { PostActions } from "@/components/cards/PostActions";
 import { Linkify } from "@/components/common/Linkify";
 import { TweetOwnerMenu } from "@/components/cards/PostOwnerMenu";
 import { cn } from "@/lib/utils";
+import { gradeShort } from "@/lib/constants";
 import type { CommentAuthor, TweetWithAuthor } from "@/types";
 
 /** タイムライン用のつぶやきカード。compact=簡易表示（本文を2行に省略） */
@@ -24,6 +25,7 @@ export function TweetCard({
 }) {
   const { author } = tweet;
   const isOwner = currentUser.id === author.id;
+  const gradeLabel = gradeShort(author.grade);
 
   return (
     <Card className="p-4 space-y-2.5">
@@ -41,6 +43,7 @@ export function TweetCard({
               {author.display_name || "名無し"}
             </Link>
             <BlockPills blocks={author.blocks} />
+            {gradeLabel && <span className="text-micro">{gradeLabel}</span>}
           </div>
           <p className="text-micro">
             {formatDistanceToNow(new Date(tweet.created_at), { addSuffix: true, locale: ja })}
