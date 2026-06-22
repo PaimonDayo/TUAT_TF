@@ -2,7 +2,6 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { FAB } from "@/components/layout/FAB";
 import { SessionKeepAlive } from "@/components/layout/SessionKeepAlive";
 import { VersionWatcher } from "@/components/features/VersionWatcher";
-import { InstallPrompt } from "@/components/features/InstallPrompt";
 import { ToastProvider } from "@/components/ui/toast";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { permissionsOf } from "@/lib/permissions";
@@ -37,7 +36,6 @@ export default async function AppLayout({
           }}
         />
         <BottomNav />
-        <InstallPrompt />
         <VersionWatcher />
       </div>
     </ToastProvider>

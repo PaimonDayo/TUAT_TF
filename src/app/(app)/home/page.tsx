@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { HomeFeed } from "@/components/features/HomeFeed";
 import { HomeNotices } from "@/components/features/HomeNotices";
+import { InstallPrompt } from "@/components/features/InstallPrompt";
 import { AttendanceToggle } from "@/components/features/AttendanceToggle";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import {
@@ -68,6 +69,9 @@ export default async function HomePage() {
       <Header title="ホーム" large />
 
       <div className="px-4 space-y-5 pt-1">
+        {/* PWA未起動の人へホーム画面追加を促す（自然に目に入るよう最上部に） */}
+        <InstallPrompt />
+
         <p className="text-body text-muted">
           {format(new Date(), "M月d日 (E)", { locale: ja })}
         </p>
