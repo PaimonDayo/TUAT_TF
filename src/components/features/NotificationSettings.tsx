@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { Toggle } from "@/components/ui/toggle";
-import { Button } from "@/components/ui/button";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { createClient } from "@/lib/supabase/client";
 
@@ -138,59 +137,59 @@ export function NotificationSettings({
     }
   };
 
-  return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <p className="section-label">通知設定</p>
-        <div className="space-y-1.5">
-          <Toggle
-            label="コメント通知"
-            description="あなたの投稿にコメントがついたとき"
-            checked={comment}
-            onChange={() => handleChange("notify_comment", !comment, setComment)}
-          />
-          <Toggle
-            label="お知らせ"
-            description="新しいお知らせが投稿されたとき"
-            checked={notice}
-            onChange={() => handleChange("notify_notice", !notice, setNotice)}
-          />
-        </div>
-      </div>
+  // 通知ON/OFFの本体。OFF→ONで「通知を許可しますか？」を出して購読、ON→OFFで解除。
+  const handleToggleNotifications = async () => {
+    if (isProcessing) return;
+    if (isSubscribed) {
+      await handleUnsubscribe();
+    } else {
+      await handleSubscribe();
+    }
+  };
 
-      <div className="space-y-2">
-        <p className="section-label">Web Push 通知</p>
-        <div className="bg-[var(--bg-secondary)] p-4 rounded-xl space-y-3">
-          {pushStatus === 'unsupported' ? (
-            <p className="text-[13px] text-[var(--text-secondary)]">この端末はWeb Push通知に対応していません。</p>
-          ) : (
-            <>
-              {isIos && !isStandalone && (
-                <p className="text-[13px] text-[var(--text-secondary)] mb-2">
-                  iPhoneで通知を受け取るには、ブラウザの共有メニューから「ホーム画面に追加」を行ってからアプリを開いて有効化してください。
-                </p>
-              )}
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[14px] font-medium text-[var(--text-primary)]">端末の通知</p>
-                  <p className="text-[13px] text-[var(--text-secondary)]">
-                    {pushStatus === 'denied' ? 'ブロック中 (ブラウザ設定で許可してください)' :
-                     isSubscribed ? '有効' : '未許可'}
-                  </p>
-                </div>
-                <Button
-                  variant={isSubscribed ? "secondary" : "primary"}
-                  size="sm"
-                  disabled={isProcessing || (isIos && !isStandalone) || pushStatus === 'denied'}
-                  onClick={isSubscribed ? handleUnsubscribe : handleSubscribe}
-                >
-                  {isProcessing ? "処理中..." : isSubscribed ? "解除する" : "有効にする"}
-                </Button>
-              </div>
-            </>
+  return (
+    <div className="space-y-3">
+      <p className="section-label">通知</p>
+
+      {pushStatus === "unsupported" ? (
+        <p className="text-[13px] text-muted2">この端末は通知に対応していません。</p>
+      ) : isIos && !isStandalone ? (
+        <p className="text-[13px] text-muted2">
+          iPhoneで通知を受け取るには、ブラウザの共有メニューから「ホーム画面に追加」をしてから、追加したアプリを開いて設定してください。
+        </p>
+      ) : (
+        <>
+          <Toggle
+            label="通知を受け取る"
+            description={
+              pushStatus === "denied"
+                ? "ブラウザの設定で通知がブロックされています"
+                : "この端末に通知を表示します"
+            }
+            checked={isSubscribed}
+            onChange={handleToggleNotifications}
+          />
+
+          {/* 何を通知するか（通知ON時のみ） */}
+          {isSubscribed && (
+            <div className="space-y-1.5 pt-1">
+              <p className="text-micro text-muted2">受け取る種類</p>
+              <Toggle
+                label="コメント"
+                description="自分の投稿にコメントがついたとき"
+                checked={comment}
+                onChange={() => handleChange("notify_comment", !comment, setComment)}
+              />
+              <Toggle
+                label="お知らせ"
+                description="新しいお知らせが投稿されたとき"
+                checked={notice}
+                onChange={() => handleChange("notify_notice", !notice, setNotice)}
+              />
+            </div>
           )}
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }

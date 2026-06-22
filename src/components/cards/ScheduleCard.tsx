@@ -72,10 +72,13 @@ export function ScheduleCard({
   const meta = SCHEDULE_TYPES[schedule.schedule_type];
   const date = new Date(schedule.schedule_date + "T00:00:00");
   const hasMenus = schedule.menus && schedule.menus.length > 0;
+  // 並び順は作成日時に依存させない（練習日ごとに入力順が違うと毎回バラつくため）。
+  // ブロック全体メニュー→個別メニュー、個別は対象者名の固定順で安定化する。
+  const sortedMenus = [...(schedule.menus ?? [])].sort(menuCompare);
   // 所属ブロックごとにメニューをグループ化（自分のブロックを先頭に、全体向けは最後）
   const menusByBlock = new Map<Block, PracticeMenu[]>();
   const generalMenus: PracticeMenu[] = [];
-  for (const m of schedule.menus ?? []) {
+  for (const m of sortedMenus) {
     if (m.target_block) {
       const list = menusByBlock.get(m.target_block) ?? [];
       list.push(m);
@@ -384,6 +387,24 @@ function MenuCard({
       />
     </div>
   );
+}
+
+/** メニューの安定した並び順（作成日時非依存）。全体メニュー→個別、個別は対象者名順、最後に本文 */
+function menuTargetNames(m: PracticeMenu): string {
+  return (m.targets?.map((t) => t.profile?.display_name).filter(Boolean) ?? [])
+    .sort((a, b) => (a as string).localeCompare(b as string, "ja"))
+    .join("、");
+}
+
+function menuCompare(a: PracticeMenu, b: PracticeMenu): number {
+  const aNames = menuTargetNames(a);
+  const bNames = menuTargetNames(b);
+  // 対象者なし（ブロック全体）を先頭に
+  const aHasTarget = aNames.length > 0 ? 1 : 0;
+  const bHasTarget = bNames.length > 0 ? 1 : 0;
+  if (aHasTarget !== bHasTarget) return aHasTarget - bHasTarget;
+  if (aNames !== bNames) return aNames.localeCompare(bNames, "ja");
+  return (a.content ?? "").localeCompare(b.content ?? "", "ja");
 }
 
 function fmt(d: string | null): string {
