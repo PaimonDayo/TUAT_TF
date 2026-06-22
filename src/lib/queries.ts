@@ -237,7 +237,9 @@ export async function getUpcomingSchedules(
       )
     `)
     .gte("schedule_date", today)
-    .order("schedule_date", { ascending: true });
+    .order("schedule_date", { ascending: true })
+    // メニューは作成順で固定（埋め込み既定順は不定で毎回入れ替わるため）
+    .order("created_at", { ascending: true, referencedTable: "practice_menus" });
   if (type && type !== "all") q = q.eq("schedule_type", type);
   const { data } = await q;
   return filterSchedulesForViewer(data ?? [], viewerBlocks, canManage);

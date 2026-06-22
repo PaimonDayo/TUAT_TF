@@ -10,8 +10,7 @@ import { Linkify } from "@/components/common/Linkify";
 import { ActivityFeed } from "@/components/features/ActivityFeed";
 import { TrainingChart } from "@/components/features/TrainingChart";
 import { EditProfileButton } from "@/components/features/MyPageActions";
-import { NotificationSettingsButton } from "@/components/features/NotificationSettingsButton";
-import { MenuViewSetting } from "@/components/features/MenuViewSetting";
+import { SettingsAccordion } from "@/components/features/SettingsAccordion";
 import { GoalEditor } from "@/components/features/GoalEditor";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getUserRecords, getUserActivity } from "@/lib/queries";
@@ -31,7 +30,7 @@ export default async function MyPage({
 
   const perms = permissionsOf(profile.roles);
   const showAdminMenu =
-    perms.manageMembers || perms.createSchedule || perms.createNotice || perms.createMenu;
+    perms.manageMembers || perms.createSchedule || perms.createNotice;
 
   return (
     <>
@@ -101,10 +100,11 @@ export default async function MyPage({
           <RowLink href="/mypage/pb" icon={<Trophy size={20} className="text-warning" />} label="大会・記録会の結果" />
           <RowLink href="/members" icon={<Users size={20} className="text-accent" />} label="メンバー一覧" />
           <RowLink href="/ranking" icon={<Trophy size={20} className="text-muted2" />} label="ランキング" />
-          <NotificationSettingsButton
+          <SettingsAccordion
             profileId={profile.id}
             initialComment={profile.notify_comment ?? true}
             initialNotice={profile.notify_notice ?? true}
+            menuViewAll={profile.menu_view_all_blocks ?? false}
           />
         </Card>
 
@@ -120,7 +120,7 @@ export default async function MyPage({
                 <RowLink href="/notices?compose=1" icon={<Bell size={20} className="text-warning" />} label="お知らせを作成" />
               )}
               {/* その他（めったに触らない設定はここに畳んでおく） */}
-              {(perms.manageMembers || perms.createSchedule || perms.createMenu) && (
+              {(perms.manageMembers || perms.createSchedule) && (
                 <details>
                   <summary className="flex cursor-pointer list-none items-center gap-3 p-4 active:bg-bg">
                     <Settings size={20} className="text-muted2" />
@@ -133,9 +133,6 @@ export default async function MyPage({
                     )}
                     {perms.createSchedule && (
                       <RowSubLink href="/venues" icon={<MapPin size={18} />} label="練習場所" />
-                    )}
-                    {perms.createMenu && (
-                      <MenuViewSetting userId={profile.id} initial={profile.menu_view_all_blocks} />
                     )}
                   </div>
                 </details>
