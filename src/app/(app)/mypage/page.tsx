@@ -11,6 +11,7 @@ import { ActivityFeed } from "@/components/features/ActivityFeed";
 import { TrainingChart } from "@/components/features/TrainingChart";
 import { EditProfileButton } from "@/components/features/MyPageActions";
 import { SettingsAccordion } from "@/components/features/SettingsAccordion";
+import { SheetSyncButton } from "@/components/features/SheetSyncButton";
 import { GoalEditor } from "@/components/features/GoalEditor";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getUserRecords, getUserActivity } from "@/lib/queries";
@@ -46,6 +47,8 @@ export default async function MyPage({
               events: profile.events,
               grade: profile.grade,
               avatar_url: profile.avatar_url,
+              sheet_name: profile.sheet_name,
+              record_fields: profile.record_fields,
             }}
             autoOpen={setup === "1"}
           />
@@ -134,6 +137,7 @@ export default async function MyPage({
                     {perms.createSchedule && (
                       <RowSubLink href="/venues" icon={<MapPin size={18} />} label="練習場所" />
                     )}
+                    {perms.manageMembers && <SheetSyncButton />}
                   </div>
                 </details>
               )}

@@ -46,6 +46,8 @@ export async function getCurrentProfile(): Promise<Profile> {
       notify_comment: true,
       notify_notice: true,
       menu_view_all_blocks: false,
+      sheet_name: null,
+      record_fields: [],
       created_at: new Date().toISOString(),
     };
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -10,9 +10,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { FormModalFooter } from "@/components/ui/form-modal";
 import { Avatar } from "@/components/common/Avatar";
+import { Plus, X } from "lucide-react";
 import { BLOCK_ORDER, BLOCKS, EVENTS_BY_BLOCK, GRADE_OPTIONS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import type { Block, Profile } from "@/types";
+import type { Block, Profile, RecordFieldDef } from "@/types";
 
 /** 名前・アバター・ブロック（複数可）・学年の編集フォーム（初回設定 / 後からの編集 共通） */
 export function ProfileEditForm({
@@ -22,7 +23,14 @@ export function ProfileEditForm({
 }: {
   profile: Pick<
     Profile,
-    "id" | "display_name" | "blocks" | "events" | "grade" | "avatar_url"
+    | "id"
+    | "display_name"
+    | "blocks"
+    | "events"
+    | "grade"
+    | "avatar_url"
+    | "sheet_name"
+    | "record_fields"
   >;
   onDone: () => void;
   isSetup?: boolean;
@@ -33,12 +41,37 @@ export function ProfileEditForm({
   const [events, setEvents] = useState<string[]>(profile.events ?? []);
   const [grade, setGrade] = useState<string | null>(profile.grade);
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url ?? "");
+  const [sheetName, setSheetName] = useState<string>(profile.sheet_name ?? "");
+  const [sheetOptions, setSheetOptions] = useState<string[] | null>(null);
+  const [recordFields, setRecordFields] = useState<RecordFieldDef[]>(
+    profile.record_fields ?? [],
+  );
   const [saving, setSaving] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const valid = name.trim() && blocks.length > 0 && grade;
+
+  // スプシ連携用：部員シート名の候補を取得（失敗しても編集は続行できる）
+  useEffect(() => {
+    let active = true;
+    fetch("/api/sheets/members")
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data: { members?: { name: string }[] }) => {
+        if (!active) return;
+        const names = (data.members ?? []).map((m) => m.name);
+        // 現在の保存値が候補に無くても選べるよう加えておく
+        if (profile.sheet_name && !names.includes(profile.sheet_name)) {
+          names.unshift(profile.sheet_name);
+        }
+        setSheetOptions(names);
+      })
+      .catch(() => active && setSheetOptions([]));
+    return () => {
+      active = false;
+    };
+  }, [profile.sheet_name]);
 
   async function signOut() {
     setSigningOut(true);
@@ -53,6 +86,19 @@ export function ProfileEditForm({
 
   function toggleEvent(ev: string) {
     setEvents((cur) => (cur.includes(ev) ? cur.filter((x) => x !== ev) : [...cur, ev]));
+  }
+
+  function addRecordField() {
+    setRecordFields((cur) => [
+      ...cur,
+      { key: crypto.randomUUID(), label: "", type: "text", sheetColumn: "" },
+    ]);
+  }
+  function updateRecordField(key: string, patch: Partial<RecordFieldDef>) {
+    setRecordFields((cur) => cur.map((f) => (f.key === key ? { ...f, ...patch } : f)));
+  }
+  function removeRecordField(key: string) {
+    setRecordFields((cur) => cur.filter((f) => f.key !== key));
   }
 
   // 選択中ブロックに対応する種目だけ出す（重複排除・ブロック順）
@@ -78,6 +124,16 @@ export function ProfileEditForm({
         events: events.filter((ev) => eventOptions.includes(ev)),
         grade,
         avatar_url: avatarUrl.trim() || null,
+        sheet_name: sheetName.trim() || null,
+        // ラベル空の項目は捨てる。sheetColumn 空は同期しない項目として保存
+        record_fields: recordFields
+          .filter((f) => f.label.trim())
+          .map((f) => ({
+            key: f.key,
+            label: f.label.trim(),
+            type: f.type,
+            sheetColumn: f.sheetColumn?.trim() || null,
+          })),
       },
       { id: profile.id },
     );
@@ -197,6 +253,83 @@ export function ProfileEditForm({
               </button>
             );
           })}
+        </div>
+      </div>
+
+      {/* スプレッドシート連携：自分のシートを選ぶ（練習記録の同期に使う） */}
+      {sheetOptions !== null && sheetOptions.length > 0 && (
+        <div>
+          <p className="section-label mb-1.5">スプレッドシートの自分のシート（任意）</p>
+          <select
+            value={sheetName}
+            onChange={(e) => setSheetName(e.target.value)}
+            className="h-11 w-full rounded-xl border border-separator bg-card px-3 text-[16px] text-ink"
+          >
+            <option value="">（連携しない）</option>
+            {sheetOptions.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+          <p className="text-micro mt-1">
+            選ぶと、そのシートと練習記録が1時間ごとに自動で同期されます。
+          </p>
+        </div>
+      )}
+
+      {/* 記録フォームのカスタム項目（短距離など独自列の人向け） */}
+      <div>
+        <p className="section-label mb-1.5">記録フォームのカスタム項目</p>
+        <p className="text-micro mb-2">
+          自分の記録フォームに項目を追加できます。「スプシ列名」を入れると、その見出しの列と同期します。
+        </p>
+        <div className="space-y-2">
+          {recordFields.map((f) => (
+            <div key={f.key} className="rounded-xl border border-separator p-2.5 space-y-2">
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="項目名（例: 起床時刻）"
+                  value={f.label}
+                  onChange={(e) => updateRecordField(f.key, { label: e.target.value })}
+                  maxLength={20}
+                />
+                <button
+                  type="button"
+                  onClick={() => removeRecordField(f.key)}
+                  aria-label="削除"
+                  className="shrink-0 rounded-full p-1.5 text-muted active:bg-bg"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={f.type}
+                  onChange={(e) =>
+                    updateRecordField(f.key, { type: e.target.value as "text" | "number" })
+                  }
+                  className="h-10 rounded-lg border border-separator bg-card px-2 text-[16px]"
+                >
+                  <option value="text">文字</option>
+                  <option value="number">数値</option>
+                </select>
+                <Input
+                  placeholder="スプシ列名（任意）"
+                  value={f.sheetColumn ?? ""}
+                  onChange={(e) => updateRecordField(f.key, { sheetColumn: e.target.value })}
+                  maxLength={30}
+                />
+              </div>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addRecordField}
+            className="flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-separator text-[14px] font-semibold text-muted active:bg-bg"
+          >
+            <Plus size={16} /> 項目を追加
+          </button>
         </div>
       </div>
 

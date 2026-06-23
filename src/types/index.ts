@@ -58,7 +58,22 @@ export interface Profile {
   notify_comment: boolean;
   notify_notice: boolean;
   menu_view_all_blocks: boolean;
+  /** スプレッドシート同期で使う、自分のシート名（例: B2駒井）。未設定なら同期対象外 */
+  sheet_name: string | null;
+  /** 記録フォームのカスタム項目定義（短距離など独自列の人向け） */
+  record_fields: RecordFieldDef[];
   created_at: string;
+}
+
+/** ユーザーが追加できる記録フォームのカスタム項目 */
+export interface RecordFieldDef {
+  /** 安定したキー（custom JSONB のキーになる） */
+  key: string;
+  /** 表示ラベル */
+  label: string;
+  type: "text" | "number";
+  /** スプシの見出し名（入れるとその列と同期。空なら同期しない） */
+  sheetColumn?: string | null;
 }
 
 /** 投稿カードに埋め込む投稿者の最小情報 */
@@ -86,6 +101,12 @@ export interface PracticeRecord {
   condition: Condition | null;
   likes_count: number;
   created_at: string;
+  /** アプリ側の最終更新（スプシ同期の last-writer-wins 判定用） */
+  updated_at?: string;
+  /** 最後にスプシと突合した時刻 */
+  synced_at?: string | null;
+  /** カスタム項目の値（key→値） */
+  custom?: Record<string, string | number | null>;
 }
 
 /** 投稿者情報を join した練習記録 */

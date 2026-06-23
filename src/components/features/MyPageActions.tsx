@@ -12,7 +12,14 @@ export function EditProfileButton({
 }: {
   profile: Pick<
     Profile,
-    "id" | "display_name" | "blocks" | "events" | "grade" | "avatar_url"
+    | "id"
+    | "display_name"
+    | "blocks"
+    | "events"
+    | "grade"
+    | "avatar_url"
+    | "sheet_name"
+    | "record_fields"
   >;
   autoOpen?: boolean;
 }) {

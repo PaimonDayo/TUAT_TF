@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { FormModalFooter } from "@/components/ui/form-modal";
 import { CONDITIONS, CONDITION_ORDER } from "@/lib/constants";
-import type { Condition, PracticeRecord } from "@/types";
+import type { Condition, PracticeRecord, RecordFieldDef } from "@/types";
 
 const EMPTY: IntensityValues = { low: "", mid: "", high: "", speed: "" };
 
@@ -56,6 +56,39 @@ export function RecordForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // カスタム項目（プロフィールで設定したもの）。フォームに動的に追加する。
+  const [customFields, setCustomFields] = useState<RecordFieldDef[]>([]);
+  const [customValues, setCustomValues] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const [k, v] of Object.entries(record?.custom ?? {})) {
+      init[k] = v == null ? "" : String(v);
+    }
+    return init;
+  });
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase
+      .from("profiles")
+      .select("record_fields")
+      .eq("id", userId)
+      .maybeSingle()
+      .then(({ data }) => {
+        const fields = (data?.record_fields ?? []) as RecordFieldDef[];
+        setCustomFields(fields);
+      });
+  }, [userId]);
+
+  function buildCustom(): Record<string, string | number | null> {
+    const out: Record<string, string | number | null> = { ...(record?.custom ?? {}) };
+    for (const f of customFields) {
+      const raw = (customValues[f.key] ?? "").trim();
+      if (!raw) out[f.key] = null;
+      else out[f.key] = f.type === "number" ? parseFloat(raw) || 0 : raw;
+    }
+    return out;
+  }
+
   async function submit() {
     const distTotal =
       (parseFloat(dist.low) || 0) +
@@ -87,6 +120,8 @@ export function RecordForm({
     setError(null);
     const supabase = createClient();
 
+    const custom = buildCustom();
+
     // 中長距離は距離系、それ以外はメニュー/目的系。使わない側は null/0 にする。
     const payload = isMiddleLong
       ? {
@@ -102,6 +137,7 @@ export function RecordForm({
           focus_text: null,
           memo: memo.trim() || null,
           condition,
+          custom,
         }
       : {
           recorded_date: date,
@@ -116,6 +152,7 @@ export function RecordForm({
           focus_text: focusText.trim() || null,
           memo: memo.trim() || null,
           condition,
+          custom,
         };
 
     if (editing) {
@@ -228,6 +265,32 @@ export function RecordForm({
           onChange={(e) => setMemo(e.target.value)}
         />
       </div>
+
+      {/* カスタム項目（プロフィールで追加したもの） */}
+      {customFields.map((f) => (
+        <div key={f.key}>
+          <p className="section-label mb-1.5">{f.label}</p>
+          {f.type === "number" ? (
+            <Input
+              type="number"
+              inputMode="decimal"
+              placeholder="0"
+              value={customValues[f.key] ?? ""}
+              onChange={(e) =>
+                setCustomValues((v) => ({ ...v, [f.key]: e.target.value }))
+              }
+            />
+          ) : (
+            <Textarea
+              rows={2}
+              value={customValues[f.key] ?? ""}
+              onChange={(e) =>
+                setCustomValues((v) => ({ ...v, [f.key]: e.target.value }))
+              }
+            />
+          )}
+        </div>
+      ))}
 
       {/* コンディション */}
       <div>

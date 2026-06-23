@@ -45,6 +45,7 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 
 ## 作業ログ（着手前に追記・新しいものを上へ）
 <!-- 形式: YYYY-MM-DD / エージェント / 触る範囲 → 結果(commit・要点) -->
+- 2026-06-23 / Claude Code / スプシ(TF構造)⇔練習記録の双方向同期を実装。GASブリッジ(fetchAllRaw/writeCells/listMembers＋日付ベースの汎用ヘッダー検出＋共有secret, TF/gas/Code.gs)・見出し名ベースのマッピング同期(lib/sheet-sync.ts, last-writer-wins)・/api/sheets/{sync,members}・プロフィールでシート選択＋記録フォームのカスタム項目(profiles.record_fields/practice_records.custom, 短距離の独自列対応)・RecordForm動的描画・管理者の手動同期ボタン・pg_cron手順(docs/SHEETS-SYNC-PLAN.md)。migration 20260623100000。menu同期はフェーズ2 → (このcommit)
 - 2026-06-22 / Claude Code / PWA未起動の人にホーム画面追加を促すバナー追加(InstallPrompt: Androidはbeforeinstallpromptでワンタップ追加/iOSは手順案内/スタンドアロン時は非表示/閉じたら5日再表示しない) → (このcommit)
 - 2026-06-22 / Claude Code / タイムラインのつぶやきカードに学年表示を追加(記録カードと同様/TweetCard) → (このcommit)
 - 2026-06-22 / Claude Code / RLSを戻し作成者は自分のメニューを常時閲覧可に(migration 080000)・通知設定を端末通知ON/OFF一本化(ONでブラウザ許可ダイアログ/別建ての有効解除ボタン廃止/ON時のみ種類トグル)・メニュー並びを作成日時非依存の固定順(全体→個別/対象者名順)に → (このcommit)
