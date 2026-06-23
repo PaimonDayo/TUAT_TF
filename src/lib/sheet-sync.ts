@@ -376,6 +376,7 @@ export async function runSheetSync(
           recorded_date: sr.date,
           synced_at: nowIso,
           updated_at: nowIso,
+          from_sheet: true, // シート由来＝タイムラインには出さない
           custom,
           ...builtin,
         });

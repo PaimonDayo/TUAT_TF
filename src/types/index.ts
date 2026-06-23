@@ -107,6 +107,8 @@ export interface PracticeRecord {
   synced_at?: string | null;
   /** カスタム項目の値（key→値） */
   custom?: Record<string, string | number | null>;
+  /** スプシ同期で取り込んだ記録か（true ならソーシャルなタイムラインには出さない） */
+  from_sheet?: boolean;
 }
 
 /** 投稿者情報を join した練習記録 */

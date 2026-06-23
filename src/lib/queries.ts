@@ -19,9 +19,9 @@ import type {
 const AUTHOR_SELECT = "author:profiles!user_id(id, display_name, avatar_url, blocks, grade)";
 const NOTICE_REACTIONS: NoticeReaction[] = ["ack", "thanks", "question"];
 
-// 練習記録の表示フィルタ。スプシ同期で空の日・未来日が大量に入ったため、
-// タイムライン等では「2026-06-22以降・未来日除外・中身が空でない」記録のみ表示する。
-const RECORD_DISPLAY_CUTOFF = "2026-06-22";
+// 練習記録の表示フィルタ。
+// タイムライン等のソーシャル表示は「アプリ投稿のみ（from_sheet=false）・未来日除外・中身あり」。
+// スプシ同期で取り込んだ記録(from_sheet=true)はタイムラインには出さない（マイページ集計には含む）。
 // 中身が空でない（距離いずれか>0、または各テキストが非null）
 const RECORD_NONEMPTY_OR =
   "dist_low.gt.0,dist_mid.gt.0,dist_high.gt.0,dist_speed.gt.0,strides.gt.0," +
@@ -125,7 +125,7 @@ export async function getFeed(
   const recordsQuery = supabase
     .from("practice_records")
     .select(`*, ${AUTHOR_SELECT}`)
-    .gte("recorded_date", RECORD_DISPLAY_CUTOFF)
+    .eq("from_sheet", false) // タイムラインはアプリ投稿のみ
     .lte("recorded_date", dateInJapan())
     .or(RECORD_NONEMPTY_OR)
     .order("recorded_date", { ascending: false })
@@ -338,7 +338,7 @@ export async function getUserActivity(
       .from("practice_records")
       .select(`*, ${AUTHOR_SELECT}`)
       .eq("user_id", userId)
-      .gte("recorded_date", RECORD_DISPLAY_CUTOFF)
+      .eq("from_sheet", false) // 投稿一覧はアプリ投稿のみ
       .lte("recorded_date", dateInJapan())
       .or(RECORD_NONEMPTY_OR)
       .order("recorded_date", { ascending: false })

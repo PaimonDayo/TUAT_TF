@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { FormModalFooter } from "@/components/ui/form-modal";
 import { Avatar } from "@/components/common/Avatar";
-import { Plus, X } from "lucide-react";
+import { Plus, X, ChevronUp, ChevronDown } from "lucide-react";
 import { BLOCK_ORDER, BLOCKS, EVENTS_BY_BLOCK, GRADE_OPTIONS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { Block, Profile, RecordFieldDef } from "@/types";
@@ -96,6 +96,15 @@ export function ProfileEditForm({
   }
   function removeRecordField(key: string) {
     setRecordFields((cur) => cur.filter((f) => f.key !== key));
+  }
+  function moveRecordField(index: number, dir: -1 | 1) {
+    setRecordFields((cur) => {
+      const next = [...cur];
+      const j = index + dir;
+      if (j < 0 || j >= next.length) return cur;
+      [next[index], next[j]] = [next[j], next[index]];
+      return next;
+    });
   }
 
   // 選択中ブロックに対応する種目だけ出す（重複排除・ブロック順）
@@ -283,8 +292,28 @@ export function ProfileEditForm({
           <b>項目名をスプシの列名と完全に同じ</b>にしてください（同名の列があればそこと同期します）。
         </p>
         <div className="space-y-2">
-          {recordFields.map((f) => (
+          {recordFields.map((f, index) => (
             <div key={f.key} className="flex items-center gap-2">
+              <div className="flex shrink-0 flex-col">
+                <button
+                  type="button"
+                  onClick={() => moveRecordField(index, -1)}
+                  disabled={index === 0}
+                  aria-label="上へ"
+                  className="text-muted active:text-accent disabled:opacity-30"
+                >
+                  <ChevronUp size={16} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveRecordField(index, 1)}
+                  disabled={index === recordFields.length - 1}
+                  aria-label="下へ"
+                  className="text-muted active:text-accent disabled:opacity-30"
+                >
+                  <ChevronDown size={16} />
+                </button>
+              </div>
               <Input
                 placeholder="項目名（スプシの列名と同じに）"
                 value={f.label}
