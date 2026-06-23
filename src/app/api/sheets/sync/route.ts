@@ -15,6 +15,15 @@ export const maxDuration = 60;
  *   - 管理者の手動実行: ログイン中かつ「部員・ロール管理」権限
  */
 export async function POST(request: Request) {
+  // ⚠️ 既定で無効化：空の日・未来日の取り込みでタイムラインが荒れる不具合のため、
+  // 安全に作り直すまで止める。再開するときだけ env SHEET_SYNC_ENABLED=true を設定する。
+  if (process.env.SHEET_SYNC_ENABLED !== "true") {
+    return NextResponse.json(
+      { ok: false, error: "同期は安全対策のため一時停止中です" },
+      { status: 503 },
+    );
+  }
+
   const secret = process.env.SHEET_SYNC_SECRET;
   const authHeader = request.headers.get("authorization") ?? "";
 

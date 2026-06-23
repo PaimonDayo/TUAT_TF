@@ -19,6 +19,15 @@ import type {
 const AUTHOR_SELECT = "author:profiles!user_id(id, display_name, avatar_url, blocks, grade)";
 const NOTICE_REACTIONS: NoticeReaction[] = ["ack", "thanks", "question"];
 
+// 練習記録の表示フィルタ。スプシ同期で空の日・未来日が大量に入ったため、
+// タイムライン等では「2026-06-22以降・未来日除外・中身が空でない」記録のみ表示する。
+const RECORD_DISPLAY_CUTOFF = "2026-06-22";
+// 中身が空でない（距離いずれか>0、または各テキストが非null）
+const RECORD_NONEMPTY_OR =
+  "dist_low.gt.0,dist_mid.gt.0,dist_high.gt.0,dist_speed.gt.0,strides.gt.0," +
+  "result_text.not.is.null,strength_text.not.is.null,memo.not.is.null," +
+  "menu_text.not.is.null,focus_text.not.is.null";
+
 function dateInJapan(offsetDays = 0) {
   const date = new Date(Date.now() + offsetDays * 86_400_000);
   return new Intl.DateTimeFormat("en-CA", {
@@ -116,6 +125,10 @@ export async function getFeed(
   const recordsQuery = supabase
     .from("practice_records")
     .select(`*, ${AUTHOR_SELECT}`)
+    .gte("recorded_date", RECORD_DISPLAY_CUTOFF)
+    .lte("recorded_date", dateInJapan())
+    .or(RECORD_NONEMPTY_OR)
+    .order("recorded_date", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -196,6 +209,8 @@ export async function getUserRecords(userId: string, fromDate?: string) {
     .from("practice_records")
     .select("*")
     .eq("user_id", userId)
+    .lte("recorded_date", dateInJapan()) // 未来日は除外
+    .or(RECORD_NONEMPTY_OR) // 空の記録は除外
     .order("recorded_date", { ascending: false });
   if (fromDate) q = q.gte("recorded_date", fromDate);
   const { data } = await q;
@@ -323,7 +338,10 @@ export async function getUserActivity(
       .from("practice_records")
       .select(`*, ${AUTHOR_SELECT}`)
       .eq("user_id", userId)
-      .order("created_at", { ascending: false })
+      .gte("recorded_date", RECORD_DISPLAY_CUTOFF)
+      .lte("recorded_date", dateInJapan())
+      .or(RECORD_NONEMPTY_OR)
+      .order("recorded_date", { ascending: false })
       .limit(limit),
     supabase
       .from("tweets")
