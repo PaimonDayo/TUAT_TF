@@ -21,9 +21,9 @@ const SHEET_NAME = 'Sheet1';
 const SYNC_SECRET = 'PUT-YOUR-SECRET-HERE';
 
 function verifySyncSecret(provided) {
-  if (!SYNC_SECRET || SYNC_SECRET === 'PUT-YOUR-SECRET-HERE') {
-    throw new Error('SYNC_SECRET is not configured');
-  }
+  // secret 未設定（初期値のまま）なら検証しない＝そのまま使える。
+  // secret を設定した時だけ一致を要求する。
+  if (!SYNC_SECRET || SYNC_SECRET === 'PUT-YOUR-SECRET-HERE') return;
   if ((provided || '').toString() !== SYNC_SECRET) {
     throw new Error('unauthorized');
   }
