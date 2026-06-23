@@ -17,18 +17,7 @@ const SPREADSHEET_ID = '1uAo7E8_rMbUZlml1H0vj119htQeoa2eMWqASUXQTqgg';
 const REACTIONS_SPREADSHEET_ID = '1hsmysg1b5uInd7mPE110hmzn0C2V5o87jRRatn-xhVQ';
 const SHEET_NAME = 'Sheet1';
 
-// ★TUAT T&Fアプリ同期用の共有シークレット（Vercelの SHEET_SYNC_SECRET と同じ値にする）
-const SYNC_SECRET = 'PUT-YOUR-SECRET-HERE';
-
-function verifySyncSecret(provided) {
-  // secret 未設定（初期値のまま）なら検証しない＝そのまま使える。
-  // secret を設定した時だけ一致を要求する。
-  if (!SYNC_SECRET || SYNC_SECRET === 'PUT-YOUR-SECRET-HERE') return;
-  if ((provided || '').toString() !== SYNC_SECRET) {
-    throw new Error('unauthorized');
-  }
-}
-
+// secret は使わない（設定し忘れの罠を避けるため撤廃）。URLが推測しにくいので当面これで運用。
 function getSpreadsheet() {
   return SpreadsheetApp.openById(SPREADSHEET_ID);
 }
@@ -57,11 +46,9 @@ function doGet(e) {
     }
     // ── 同期API（secret必須）──
     if (action === 'listMembers') {
-      verifySyncSecret(e.parameter.secret);
       return handleListMembers();
     }
     if (action === 'fetchAllRaw') {
-      verifySyncSecret(e.parameter.secret);
       return handleFetchAllRaw();
     }
 
@@ -79,9 +66,8 @@ function doPost(e) {
   try {
     const postData = JSON.parse(e.postData.contents);
 
-    // ── 同期API（secret必須・旧アプリの投稿には影響しない）──
+    // ── 同期API（旧アプリの投稿には影響しない）──
     if (postData.action === 'writeCells') {
-      verifySyncSecret(postData.secret);
       return createJsonResponse(writeCellsRecord(postData));
     }
 
