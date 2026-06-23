@@ -38,7 +38,10 @@ export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isPublic =
     pathname.startsWith("/login") ||
-    pathname.startsWith("/auth");
+    pathname.startsWith("/auth") ||
+    // 同期APIは route 側で独自に認証（cron=Bearer / 手動=管理者）。
+    // 未ログイン(cron)を /login にリダイレクトすると叩けないので素通りさせる。
+    pathname.startsWith("/api/sheets/sync");
 
   // Supabase の認証クッキー（sb-<ref>-auth-token[.n]）が存在するか。
   // クッキーがあるのに user が取れない場合は「本当のログアウト」ではなく、
