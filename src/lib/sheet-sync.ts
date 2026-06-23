@@ -23,11 +23,27 @@ type RawMember = {
 
 export type SheetMember = { name: string; gid: string };
 
+export type SyncOptions = { dryRun?: boolean; onlySheet?: string };
+
 export type SyncResult = {
-  pulled: number;
-  pushed: number;
+  inserted: number; // スプシ→アプリ 新規取込
+  updated: number; // スプシ→アプリ 更新取込
+  pushed: number; // アプリ→スプシ 書き戻し
+  conflicts: string[]; // 同日に複数記録があり安全のためスキップした "シート名 日付"
   skippedMembers: string[];
+  dryRun: boolean;
 };
+
+// これ以前の日付・未来日・空の行は同期しない（事故対策）
+const SYNC_CUTOFF = "2026-06-22";
+function todayJST(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
 
 // ── アプリの組み込みフィールド ⇔ スプシ見出しのキーワード ───────────────────
 type BuiltinKey =
@@ -231,23 +247,60 @@ function sheetToAppValues(map: FieldMap, cells: Record<string, string>) {
   return { builtin, custom };
 }
 
-/** アプリのレコードから、スプシへ送る cells（見出し名→値、マップされた項目のみ）を作る */
-function appToCells(map: FieldMap, rec: DbRecord): Record<string, string | number> {
+/** マップされた値がすべて空か（数値0・テキストnull） */
+function valuesEmpty(
+  builtin: Record<string, number | string | null>,
+  custom: Record<string, string | number | null>,
+): boolean {
+  for (const v of Object.values(builtin)) {
+    if (typeof v === "number" ? v !== 0 : (v ?? "").toString().trim() !== "") return false;
+  }
+  for (const v of Object.values(custom)) {
+    if ((v ?? "").toString().trim() !== "") return false;
+  }
+  return true;
+}
+
+/** アプリのレコードから、スプシへ送る cells（**中身のある項目だけ**。空でシートを潰さない） */
+function appToCellsNonEmpty(map: FieldMap, rec: DbRecord): Record<string, string | number> {
   const cells: Record<string, string | number> = {};
   for (const [key, m] of map.builtin) {
     const v = appBuiltin(rec, key);
-    cells[m.header] = m.numeric ? Number(v) || 0 : (v ?? "").toString();
+    if (m.numeric) {
+      if (Number(v) > 0) cells[m.header] = Number(v);
+    } else if ((v ?? "").toString().trim() !== "") {
+      cells[m.header] = (v as string).toString();
+    }
   }
   for (const [key, m] of map.custom) {
     const v = rec.custom?.[key];
-    cells[m.header] = m.type === "number" ? parseSheetNum(v as string) : (v ?? "").toString();
+    if ((v ?? "").toString().trim() === "") continue;
+    cells[m.header] = m.type === "number" ? parseSheetNum(v as string) : v!.toString();
   }
   return cells;
 }
 
 // ── 同期本体 ─────────────────────────────────────────────────────────────────
-export async function runSheetSync(admin: SupabaseClient): Promise<SyncResult> {
-  const result: SyncResult = { pulled: 0, pushed: 0, skippedMembers: [] };
+// 安全方針(docs/SHEETS-SYNC-PLAN.md・事故対策):
+//  - カットオフ(2026-06-22)以前・未来日・空の行は同期しない
+//  - 非破壊: シートが空の項目でアプリを空にしない／空のアプリ値でシートを潰さない
+//  - 同日に複数記録がある日付は曖昧なのでスキップ（conflictとして報告）
+//  - dryRun で「何が起きるか」だけ確認できる
+export async function runSheetSync(
+  admin: SupabaseClient,
+  options: SyncOptions = {},
+): Promise<SyncResult> {
+  const dryRun = !!options.dryRun;
+  const result: SyncResult = {
+    inserted: 0,
+    updated: 0,
+    pushed: 0,
+    conflicts: [],
+    skippedMembers: [],
+    dryRun,
+  };
+  const today = todayJST();
+  const inRange = (d: string) => d >= SYNC_CUTOFF && d <= today;
 
   const { data: profiles, error: pErr } = await admin
     .from("profiles")
@@ -255,15 +308,17 @@ export async function runSheetSync(admin: SupabaseClient): Promise<SyncResult> {
     .not("sheet_name", "is", null);
   if (pErr) throw pErr;
 
-  const linked = (profiles ?? []).filter((p) => p.sheet_name) as {
+  let linked = (profiles ?? []).filter((p) => p.sheet_name) as {
     id: string;
     sheet_name: string;
     record_fields: RecordFieldDef[] | null;
   }[];
+  if (options.onlySheet) {
+    linked = linked.filter((p) => p.sheet_name.trim() === options.onlySheet!.trim());
+  }
   if (linked.length === 0) return result;
 
   const sheetToProfile = new Map(linked.map((p) => [p.sheet_name.trim(), p]));
-
   const members = await fetchAllRaw();
   const memberByName = new Map(members.map((m) => [m.name.trim(), m]));
 
@@ -276,10 +331,14 @@ export async function runSheetSync(admin: SupabaseClient): Promise<SyncResult> {
     .in("user_id", userIds);
   if (rErr) throw rErr;
 
-  const byUser = new Map<string, Map<string, DbRecord>>();
+  // user_id -> date -> 記録の配列（複数/日を検出するため配列で持つ）
+  const byUser = new Map<string, Map<string, DbRecord[]>>();
   for (const uid of userIds) byUser.set(uid, new Map());
   for (const r of (existing ?? []) as DbRecord[]) {
-    byUser.get(r.user_id)?.set(r.recorded_date, r);
+    const m = byUser.get(r.user_id)!;
+    const arr = m.get(r.recorded_date) ?? [];
+    arr.push(r);
+    m.set(r.recorded_date, arr);
   }
 
   const nowIso = new Date().toISOString();
@@ -294,15 +353,24 @@ export async function runSheetSync(admin: SupabaseClient): Promise<SyncResult> {
       continue;
     }
     const map = resolveFieldMap(member.header, profile.record_fields ?? []);
-    const appRecs = byUser.get(profile.id)!;
+    const appByDate = byUser.get(profile.id)!;
     const seen = new Set<string>();
 
     for (const sr of member.records) {
-      if (!sr.date) continue;
+      if (!sr.date || !inRange(sr.date)) continue; // カットオフ前・未来日は無視
       seen.add(sr.date);
-      const app = appRecs.get(sr.date);
+
+      const appList = appByDate.get(sr.date) ?? [];
+      if (appList.length > 1) {
+        result.conflicts.push(`${sheetName} ${sr.date}`); // 複数/日は触らない
+        continue;
+      }
+      const { builtin, custom } = sheetToAppValues(map, sr.cells);
+      const sheetEmpty = valuesEmpty(builtin, custom);
+      const app = appList[0];
+
       if (!app) {
-        const { builtin, custom } = sheetToAppValues(map, sr.cells);
+        if (sheetEmpty) continue; // 空の行は取り込まない
         inserts.push({
           user_id: profile.id,
           recorded_date: sr.date,
@@ -311,29 +379,59 @@ export async function runSheetSync(admin: SupabaseClient): Promise<SyncResult> {
           custom,
           ...builtin,
         });
-        result.pulled++;
+        result.inserted++;
         continue;
       }
-      if (!differs(map, sr.cells, app)) continue;
+
       if (appIsNewer(app)) {
-        pushes.push({ id: app.id, memberName: sheetName, date: sr.date, cells: appToCells(map, app) });
+        // アプリ優先: 中身のある項目だけ書き戻し（差分があれば）
+        const cells = appToCellsNonEmpty(map, app);
+        if (Object.keys(cells).length > 0 && differs(map, sr.cells, app)) {
+          pushes.push({ id: app.id, memberName: sheetName, date: sr.date, cells });
+        }
       } else {
-        const { builtin, custom } = sheetToAppValues(map, sr.cells);
-        updates.push({
-          id: app.id,
-          patch: { ...builtin, custom: { ...(app.custom ?? {}), ...custom }, synced_at: nowIso },
-        });
-        result.pulled++;
+        // スプシ優先: **空でない**シート項目だけ取り込む（アプリを空にしない）
+        const patch: Record<string, unknown> = {};
+        for (const [key, m] of map.builtin) {
+          const v = builtin[key];
+          const nonEmpty = m.numeric ? Number(v) > 0 : (v ?? "").toString().trim() !== "";
+          if (nonEmpty && v !== appBuiltin(app, key as BuiltinKey)) patch[key] = v;
+        }
+        const customPatch: Record<string, string | number | null> = { ...(app.custom ?? {}) };
+        let customChanged = false;
+        for (const [key] of map.custom) {
+          const v = custom[key];
+          if ((v ?? "").toString().trim() !== "" && v !== (app.custom?.[key] ?? null)) {
+            customPatch[key] = v;
+            customChanged = true;
+          }
+        }
+        if (Object.keys(patch).length > 0 || customChanged) {
+          if (customChanged) patch.custom = customPatch;
+          patch.synced_at = nowIso;
+          updates.push({ id: app.id, patch });
+          result.updated++;
+        }
       }
     }
 
-    // アプリにあってシートに無い日付 → アプリで作られた記録なら書き戻し
-    for (const [date, app] of appRecs) {
-      if (seen.has(date)) continue;
-      if (appIsNewer(app)) {
-        pushes.push({ id: app.id, memberName: sheetName, date, cells: appToCells(map, app) });
+    // シートに行が無い日付で、アプリに中身がある記録 → 書き戻し（1件/日のみ）
+    for (const [date, list] of appByDate) {
+      if (seen.has(date) || !inRange(date) || list.length !== 1) continue;
+      const app = list[0];
+      if (!appIsNewer(app)) continue;
+      const cells = appToCellsNonEmpty(map, app);
+      if (Object.keys(cells).length > 0) {
+        pushes.push({ id: app.id, memberName: sheetName, date, cells });
       }
     }
+  }
+
+  if (dryRun) {
+    result.inserted = inserts.length;
+    result.updated = updates.length;
+    result.pushed = pushes.length;
+    return result;
   }
 
   if (inserts.length > 0) {

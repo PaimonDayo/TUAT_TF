@@ -15,14 +15,9 @@ export const maxDuration = 60;
  *   - 管理者の手動実行: ログイン中かつ「部員・ロール管理」権限
  */
 export async function POST(request: Request) {
-  // ⚠️ 既定で無効化：空の日・未来日の取り込みでタイムラインが荒れる不具合のため、
-  // 安全に作り直すまで止める。再開するときだけ env SHEET_SYNC_ENABLED=true を設定する。
-  if (process.env.SHEET_SYNC_ENABLED !== "true") {
-    return NextResponse.json(
-      { ok: false, error: "同期は安全対策のため一時停止中です" },
-      { status: 503 },
-    );
-  }
+  const body = await request.json().catch(() => ({}));
+  const dryRun = body?.dryRun === true;
+  const onlySheet = typeof body?.onlySheet === "string" ? body.onlySheet : undefined;
 
   const secret = process.env.SHEET_SYNC_SECRET;
   const authHeader = request.headers.get("authorization") ?? "";
@@ -48,24 +43,35 @@ export async function POST(request: Request) {
     triggeredBy = user.id;
   }
 
+  // 実際の書き込み（dryRun以外）は env SHEET_SYNC_ENABLED=true のときだけ許可。
+  // ドライラン（確認）は読み取り専用なので常に許可する。
+  if (!dryRun && process.env.SHEET_SYNC_ENABLED !== "true") {
+    return NextResponse.json(
+      { ok: false, error: "本番反映は無効化中です（確認=ドライランのみ可能）" },
+      { status: 503 },
+    );
+  }
+
   const admin = createAdminClient();
 
-  // 実行ログ（開始）
-  const { data: run } = await admin
-    .from("sheet_sync_runs")
-    .insert({ trigger, triggered_by: triggeredBy, status: "running" })
-    .select("id")
-    .single();
+  // ドライランはログを残さない
+  const { data: run } = dryRun
+    ? { data: undefined }
+    : await admin
+        .from("sheet_sync_runs")
+        .insert({ trigger, triggered_by: triggeredBy, status: "running" })
+        .select("id")
+        .single();
   const runId = run?.id as string | undefined;
 
   try {
-    const result = await runSheetSync(admin);
+    const result = await runSheetSync(admin, { dryRun, onlySheet });
     if (runId) {
       await admin
         .from("sheet_sync_runs")
         .update({
           status: "success",
-          pulled_count: result.pulled,
+          pulled_count: result.inserted + result.updated,
           pushed_count: result.pushed,
           finished_at: new Date().toISOString(),
         })

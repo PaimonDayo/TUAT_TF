@@ -89,10 +89,7 @@ export function ProfileEditForm({
   }
 
   function addRecordField() {
-    setRecordFields((cur) => [
-      ...cur,
-      { key: crypto.randomUUID(), label: "", type: "text", sheetColumn: "" },
-    ]);
+    setRecordFields((cur) => [...cur, { key: crypto.randomUUID(), label: "", type: "text" }]);
   }
   function updateRecordField(key: string, patch: Partial<RecordFieldDef>) {
     setRecordFields((cur) => cur.map((f) => (f.key === key ? { ...f, ...patch } : f)));
@@ -125,14 +122,14 @@ export function ProfileEditForm({
         grade,
         avatar_url: avatarUrl.trim() || null,
         sheet_name: sheetName.trim() || null,
-        // ラベル空の項目は捨てる。sheetColumn 空は同期しない項目として保存
+        // ラベル空の項目は捨てる。項目名＝スプシ列名（同名の列があれば同期される）
         record_fields: recordFields
           .filter((f) => f.label.trim())
           .map((f) => ({
             key: f.key,
             label: f.label.trim(),
             type: f.type,
-            sheetColumn: f.sheetColumn?.trim() || null,
+            sheetColumn: f.label.trim(),
           })),
       },
       { id: profile.id },
@@ -282,45 +279,36 @@ export function ProfileEditForm({
       <div>
         <p className="section-label mb-1.5">記録フォームのカスタム項目</p>
         <p className="text-micro mb-2">
-          自分の記録フォームに項目を追加できます。「スプシ列名」を入れると、その見出しの列と同期します。
+          自分の記録フォームに項目を追加できます。スプシと同期したい場合は、
+          <b>項目名をスプシの列名と完全に同じ</b>にしてください（同名の列があればそこと同期します）。
         </p>
         <div className="space-y-2">
           {recordFields.map((f) => (
-            <div key={f.key} className="rounded-xl border border-separator p-2.5 space-y-2">
-              <div className="flex items-center gap-2">
-                <Input
-                  placeholder="項目名（例: 起床時刻）"
-                  value={f.label}
-                  onChange={(e) => updateRecordField(f.key, { label: e.target.value })}
-                  maxLength={20}
-                />
-                <button
-                  type="button"
-                  onClick={() => removeRecordField(f.key)}
-                  aria-label="削除"
-                  className="shrink-0 rounded-full p-1.5 text-muted active:bg-bg"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-              <div className="flex items-center gap-2">
-                <select
-                  value={f.type}
-                  onChange={(e) =>
-                    updateRecordField(f.key, { type: e.target.value as "text" | "number" })
-                  }
-                  className="h-10 rounded-lg border border-separator bg-card px-2 text-[16px]"
-                >
-                  <option value="text">文字</option>
-                  <option value="number">数値</option>
-                </select>
-                <Input
-                  placeholder="スプシ列名（任意）"
-                  value={f.sheetColumn ?? ""}
-                  onChange={(e) => updateRecordField(f.key, { sheetColumn: e.target.value })}
-                  maxLength={30}
-                />
-              </div>
+            <div key={f.key} className="flex items-center gap-2">
+              <Input
+                placeholder="項目名（スプシの列名と同じに）"
+                value={f.label}
+                onChange={(e) => updateRecordField(f.key, { label: e.target.value })}
+                maxLength={30}
+              />
+              <select
+                value={f.type}
+                onChange={(e) =>
+                  updateRecordField(f.key, { type: e.target.value as "text" | "number" })
+                }
+                className="h-11 shrink-0 rounded-lg border border-separator bg-card px-2 text-[16px]"
+              >
+                <option value="text">文字</option>
+                <option value="number">数値</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => removeRecordField(f.key)}
+                aria-label="削除"
+                className="shrink-0 rounded-full p-1.5 text-muted active:bg-bg"
+              >
+                <X size={16} />
+              </button>
             </div>
           ))}
           <button
