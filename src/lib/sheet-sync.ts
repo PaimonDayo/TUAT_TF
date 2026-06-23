@@ -115,12 +115,7 @@ async function gasGet<T>(params: Record<string, string>): Promise<T> {
   const { url, secret } = gasConfig();
   const qs = new URLSearchParams({ ...params, secret });
   const res = await fetch(`${url}?${qs}`, { redirect: "follow" });
-  if (!res.ok) throw new Error(`GAS GET ${params.action} failed: ${res.status}`);
-  const json = (await res.json()) as T & { error?: string };
-  if (json && (json as { error?: string }).error) {
-    throw new Error(`GAS error: ${(json as { error?: string }).error}`);
-  }
-  return json;
+  return readGasJson<T>(res);
 }
 
 async function gasPost<T>(body: Record<string, unknown>): Promise<T> {
@@ -131,11 +126,21 @@ async function gasPost<T>(body: Record<string, unknown>): Promise<T> {
     headers: { "Content-Type": "text/plain;charset=utf-8" },
     body: JSON.stringify({ ...body, secret }),
   });
-  if (!res.ok) throw new Error(`GAS POST failed: ${res.status}`);
-  const json = (await res.json()) as T & { error?: string };
-  if (json && (json as { error?: string }).error) {
-    throw new Error(`GAS error: ${(json as { error?: string }).error}`);
+  return readGasJson<T>(res);
+}
+
+// GAS はエラー時に HTML ページ(<!DOCTYPE...)を返すことがある。JSONで読めない時は分かりやすく案内。
+async function readGasJson<T>(res: Response): Promise<T> {
+  const text = await res.text();
+  let json: T & { error?: string };
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error(
+      "スプレッドシート連携(GAS)に接続できません。GASの公開設定を確認してください（アクセス=全員／新バージョンでデプロイ／プロジェクトは sync-api のみ）。",
+    );
   }
+  if (json && json.error) throw new Error(`GASエラー: ${json.error}`);
   return json;
 }
 
