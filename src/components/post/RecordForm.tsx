@@ -153,6 +153,7 @@ export function RecordForm({
           memo: memo.trim() || null,
           condition,
           custom,
+          from_sheet: false, // アプリ入力＝タイムラインに出す・アプリ優先
         };
 
     if (editing) {
@@ -163,13 +164,31 @@ export function RecordForm({
         return;
       }
     } else {
-      const { error } = await supabase
+      // 同じ日の記録が既にあれば新規ではなく更新する（1日1件に保つ＝重複防止）
+      const { data: sameDay } = await supabase
         .from("practice_records")
-        .insert({ user_id: userId, ...payload });
-      if (error) {
-        setError("記録の保存に失敗しました");
-        setSaving(false);
-        return;
+        .select("id")
+        .eq("user_id", userId)
+        .eq("recorded_date", date)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (sameDay) {
+        const result = await safeUpdate(supabase, "practice_records", payload, { id: sameDay.id });
+        if (!result.ok) {
+          setError(safeUpdateMessage(result.reason));
+          setSaving(false);
+          return;
+        }
+      } else {
+        const { error } = await supabase
+          .from("practice_records")
+          .insert({ user_id: userId, ...payload });
+        if (error) {
+          setError("記録の保存に失敗しました");
+          setSaving(false);
+          return;
+        }
       }
     }
     router.refresh();

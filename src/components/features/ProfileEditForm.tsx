@@ -10,10 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { FormModalFooter } from "@/components/ui/form-modal";
 import { Avatar } from "@/components/common/Avatar";
-import { Plus, X, ChevronUp, ChevronDown } from "lucide-react";
 import { BLOCK_ORDER, BLOCKS, EVENTS_BY_BLOCK, GRADE_OPTIONS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import type { Block, Profile, RecordFieldDef } from "@/types";
+import type { Block, Profile } from "@/types";
 
 /** 名前・アバター・ブロック（複数可）・学年の編集フォーム（初回設定 / 後からの編集 共通） */
 export function ProfileEditForm({
@@ -30,7 +29,6 @@ export function ProfileEditForm({
     | "grade"
     | "avatar_url"
     | "sheet_name"
-    | "record_fields"
   >;
   onDone: () => void;
   isSetup?: boolean;
@@ -43,9 +41,6 @@ export function ProfileEditForm({
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url ?? "");
   const [sheetName, setSheetName] = useState<string>(profile.sheet_name ?? "");
   const [sheetOptions, setSheetOptions] = useState<string[] | null>(null);
-  const [recordFields, setRecordFields] = useState<RecordFieldDef[]>(
-    profile.record_fields ?? [],
-  );
   const [saving, setSaving] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -88,25 +83,6 @@ export function ProfileEditForm({
     setEvents((cur) => (cur.includes(ev) ? cur.filter((x) => x !== ev) : [...cur, ev]));
   }
 
-  function addRecordField() {
-    setRecordFields((cur) => [...cur, { key: crypto.randomUUID(), label: "", type: "text" }]);
-  }
-  function updateRecordField(key: string, patch: Partial<RecordFieldDef>) {
-    setRecordFields((cur) => cur.map((f) => (f.key === key ? { ...f, ...patch } : f)));
-  }
-  function removeRecordField(key: string) {
-    setRecordFields((cur) => cur.filter((f) => f.key !== key));
-  }
-  function moveRecordField(index: number, dir: -1 | 1) {
-    setRecordFields((cur) => {
-      const next = [...cur];
-      const j = index + dir;
-      if (j < 0 || j >= next.length) return cur;
-      [next[index], next[j]] = [next[j], next[index]];
-      return next;
-    });
-  }
-
   // 選択中ブロックに対応する種目だけ出す（重複排除・ブロック順）
   const eventOptions = BLOCK_ORDER.filter((b) => blocks.includes(b)).flatMap(
     (b) => EVENTS_BY_BLOCK[b],
@@ -131,15 +107,6 @@ export function ProfileEditForm({
         grade,
         avatar_url: avatarUrl.trim() || null,
         sheet_name: sheetName.trim() || null,
-        // ラベル空の項目は捨てる。項目名＝スプシ列名（同名の列があれば同期される）
-        record_fields: recordFields
-          .filter((f) => f.label.trim())
-          .map((f) => ({
-            key: f.key,
-            label: f.label.trim(),
-            type: f.type,
-            sheetColumn: f.label.trim(),
-          })),
       },
       { id: profile.id },
     );
@@ -283,72 +250,6 @@ export function ProfileEditForm({
           </p>
         </div>
       )}
-
-      {/* 記録フォームのカスタム項目（短距離など独自列の人向け） */}
-      <div>
-        <p className="section-label mb-1.5">記録フォームのカスタム項目</p>
-        <p className="text-micro mb-2">
-          自分の記録フォームに項目を追加できます。スプシと同期したい場合は、
-          <b>項目名をスプシの列名と完全に同じ</b>にしてください（同名の列があればそこと同期します）。
-        </p>
-        <div className="space-y-2">
-          {recordFields.map((f, index) => (
-            <div key={f.key} className="flex items-center gap-2">
-              <div className="flex shrink-0 flex-col">
-                <button
-                  type="button"
-                  onClick={() => moveRecordField(index, -1)}
-                  disabled={index === 0}
-                  aria-label="上へ"
-                  className="text-muted active:text-accent disabled:opacity-30"
-                >
-                  <ChevronUp size={16} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveRecordField(index, 1)}
-                  disabled={index === recordFields.length - 1}
-                  aria-label="下へ"
-                  className="text-muted active:text-accent disabled:opacity-30"
-                >
-                  <ChevronDown size={16} />
-                </button>
-              </div>
-              <Input
-                placeholder="項目名（スプシの列名と同じに）"
-                value={f.label}
-                onChange={(e) => updateRecordField(f.key, { label: e.target.value })}
-                maxLength={30}
-              />
-              <select
-                value={f.type}
-                onChange={(e) =>
-                  updateRecordField(f.key, { type: e.target.value as "text" | "number" })
-                }
-                className="h-11 shrink-0 rounded-lg border border-separator bg-card px-2 text-[16px]"
-              >
-                <option value="text">文字</option>
-                <option value="number">数値</option>
-              </select>
-              <button
-                type="button"
-                onClick={() => removeRecordField(f.key)}
-                aria-label="削除"
-                className="shrink-0 rounded-full p-1.5 text-muted active:bg-bg"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          ))}
-          <button
-            type="button"
-            onClick={addRecordField}
-            className="flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-separator text-[14px] font-semibold text-muted active:bg-bg"
-          >
-            <Plus size={16} /> 項目を追加
-          </button>
-        </div>
-      </div>
 
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <FormModalFooter>

@@ -3,9 +3,11 @@
 import { Settings, ChevronRight } from "lucide-react";
 import { NotificationSettings } from "@/components/features/NotificationSettings";
 import { MenuViewSetting } from "@/components/features/MenuViewSetting";
+import { RecordFieldsSetting } from "@/components/features/RecordFieldsSetting";
+import type { RecordFieldDef } from "@/types";
 
 /**
- * マイページの「設定」行。押すと展開（details）して、通知設定とメニュー表示設定をまとめて編集できる。
+ * マイページの「設定」行。押すと展開（details）して、通知・メニュー表示・記録項目をまとめて編集できる。
  * 全画面モーダルではなくその場で展開するタイプ（項目数が少ないため）。
  */
 export function SettingsAccordion({
@@ -13,11 +15,13 @@ export function SettingsAccordion({
   initialComment,
   initialNotice,
   menuViewAll,
+  recordFields,
 }: {
   profileId: string;
   initialComment: boolean;
   initialNotice: boolean;
   menuViewAll: boolean;
+  recordFields: RecordFieldDef[];
 }) {
   return (
     <details className="group">
@@ -39,6 +43,7 @@ export function SettingsAccordion({
           <p className="section-label">メニュー表示</p>
           <MenuViewSetting userId={profileId} initial={menuViewAll} />
         </div>
+        <RecordFieldsSetting profileId={profileId} initial={recordFields} />
       </div>
     </details>
   );

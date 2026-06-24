@@ -33,7 +33,9 @@ import type {
 export default async function HomePage() {
   const profile = await getCurrentProfile();
   const perms = permissionsOf(profile.roles);
-  const sevenDaysAgo = format(subDays(new Date(), 6), "yyyy-MM-dd");
+  // サーバーはUTCなので、日本時間の「今日」を基準にする（0時で日付が変わるように）
+  const nowJst = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
+  const sevenDaysAgo = format(subDays(nowJst, 6), "yyyy-MM-dd");
 
   const [weekRecords, feed, notices, sharedNotes, attSchedules] = await Promise.all([
     getUserRecords(profile.id, sevenDaysAgo),
@@ -73,7 +75,7 @@ export default async function HomePage() {
         <InstallPrompt />
 
         <p className="text-body text-muted">
-          {format(new Date(), "M月d日 (E)", { locale: ja })}
+          {format(nowJst, "M月d日 (E)", { locale: ja })}
         </p>
 
         {/* 重要なお知らせ */}

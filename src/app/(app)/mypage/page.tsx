@@ -48,7 +48,6 @@ export default async function MyPage({
               grade: profile.grade,
               avatar_url: profile.avatar_url,
               sheet_name: profile.sheet_name,
-              record_fields: profile.record_fields,
             }}
             autoOpen={setup === "1"}
           />
@@ -108,6 +107,7 @@ export default async function MyPage({
             initialComment={profile.notify_comment ?? true}
             initialNotice={profile.notify_notice ?? true}
             menuViewAll={profile.menu_view_all_blocks ?? false}
+            recordFields={profile.record_fields ?? []}
           />
         </Card>
 
