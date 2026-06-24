@@ -18,8 +18,11 @@ function createJsonResponse(data) {
   return output;
 }
 
-// secret は Script Properties に保存（コード＝publicリポジトリには置かない）。
+// secret は publicリポジトリに置かない。
+// 実体は gitignore した secret.js の SYNC_SECRET_VALUE（claspでGASにのみpush）か、
+// または Script Properties の SYNC_SECRET から読む。どちらも無ければ全拒否。
 function getSyncSecret() {
+  if (typeof SYNC_SECRET_VALUE !== 'undefined' && SYNC_SECRET_VALUE) return SYNC_SECRET_VALUE;
   return PropertiesService.getScriptProperties().getProperty('SYNC_SECRET') || '';
 }
 function verifySyncSecret(provided) {
