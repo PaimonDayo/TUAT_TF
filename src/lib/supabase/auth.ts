@@ -43,6 +43,7 @@ export async function getCurrentProfile(): Promise<Profile> {
       role: "member",
       roles: [],
       status: "active",
+      approved: false,
       notify_comment: true,
       notify_notice: true,
       menu_view_all_blocks: false,

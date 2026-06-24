@@ -55,6 +55,8 @@ export interface Profile {
   /** 付与されているロール一覧（複数可） */
   roles: AppRole[];
   status: ProfileStatus;
+  /** 管理者による利用承認。false の間は閲覧不可（承認待ち画面へ） */
+  approved: boolean;
   notify_comment: boolean;
   notify_notice: boolean;
   menu_view_all_blocks: boolean;
@@ -80,6 +82,12 @@ export interface RecordFieldDef {
 export type AuthorMini = Pick<
   Profile,
   "id" | "display_name" | "avatar_url" | "blocks" | "grade"
+>;
+
+/** 承認待ちユーザー（承認画面用。識別のため email も含む） */
+export type PendingProfile = Pick<
+  Profile,
+  "id" | "display_name" | "email" | "avatar_url" | "blocks" | "grade"
 >;
 
 export interface PracticeRecord {

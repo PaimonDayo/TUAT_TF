@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { FAB } from "@/components/layout/FAB";
 import { SessionKeepAlive } from "@/components/layout/SessionKeepAlive";
@@ -12,6 +13,8 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const profile = await getCurrentProfile();
+  // 未承認ユーザー（部外の同大生・承認待ちの新規部員）は閲覧不可。承認待ち画面へ。
+  if (!profile.approved) redirect("/pending");
   const perms = permissionsOf(profile.roles);
 
   return (
