@@ -33,6 +33,7 @@ function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
     if (body.action === 'writeCells') return createJsonResponse(writeCellsRecord(body));
+    if (body.action === 'writeReply') return createJsonResponse(writeReplyRecord(body));
     return createJsonResponse({ error: 'unknown action' });
   } catch (err) {
     return createJsonResponse({ error: err.toString() });
@@ -154,4 +155,58 @@ function writeCellsRecord(data) {
   });
 
   return { success: true, action: rowIdx === -1 ? 'created' : 'updated', row: sheetRowNum };
+}
+
+// ── リプライ（旧TFと同じ：感想列より右の「列名なし」列に左から書き足す）─────────
+function findHeaderCol(header, keywords) {
+  const normalized = header.map(normalizeHeaderCell);
+  return normalized.findIndex(function (cell) {
+    return keywords.some(function (k) { return cell.indexOf(k) !== -1; });
+  });
+}
+
+function getCommentColumn(header) {
+  return findHeaderCol(header, ['感想', 'コメント', '反省', '状態']);
+}
+
+function findNextReplyColumn(sheet, row, header) {
+  const commentCol = getCommentColumn(header);
+  const startCol = commentCol !== -1 ? commentCol + 1 : header.length;
+  let rightmostReplyCol = startCol - 1;
+  for (let col = startCol; col < sheet.getMaxColumns(); col++) {
+    const headerText = (header[col] || '').toString().trim();
+    if (headerText) continue; // 見出しのある列（状態・睡眠時間など）は飛ばす
+    if ((row[col] || '').toString().trim() !== '') rightmostReplyCol = col;
+  }
+  let nextCol = rightmostReplyCol + 1;
+  while (nextCol < sheet.getMaxColumns() && (header[nextCol] || '').toString().trim() !== '') {
+    nextCol += 1;
+  }
+  if (nextCol >= sheet.getMaxColumns()) {
+    sheet.insertColumnAfter(sheet.getMaxColumns());
+    return sheet.getMaxColumns();
+  }
+  return nextCol;
+}
+
+// payload: { action:'writeReply', memberName, date, text }
+function writeReplyRecord(data) {
+  const memberName = data.memberName;
+  const date = data.date;
+  const text = (data.text || '').toString().trim();
+  if (!memberName || !date || !text) throw new Error('memberName, date, text は必須です。');
+
+  const sheet = getSpreadsheet().getSheetByName(memberName);
+  if (!sheet) throw new Error('シート「' + memberName + '」が見つかりません。');
+
+  const values = sheet.getDataRange().getValues();
+  const hIdx = findGenericHeaderIndex(values);
+  if (hIdx === -1) throw new Error('見出し行（日付）が見つかりません。');
+
+  const rowIdx = findRecordRow(values, hIdx, date);
+  if (rowIdx === -1) return { success: false, action: 'no_row' }; // その日の行が無ければ何もしない
+
+  const col = findNextReplyColumn(sheet, values[rowIdx], values[hIdx]);
+  sheet.getRange(rowIdx + 1, col + 1).setValue(text);
+  return { success: true, action: 'replied', row: rowIdx + 1, col: col + 1 };
 }

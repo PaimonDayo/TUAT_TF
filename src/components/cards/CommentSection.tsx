@@ -92,6 +92,14 @@ export function CommentSection({
       onCountChange(next.length);
       return next;
     });
+    // 記録へのコメントは、作者がシート連携していればスプシのリプライ列にも書く（失敗しても投稿は成立）
+    if (targetType === "record") {
+      fetch("/api/sheets/reply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recordId: targetId, text: content }),
+      }).catch(() => {});
+    }
     setText("");
     setSaving(false);
     requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }));

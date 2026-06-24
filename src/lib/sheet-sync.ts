@@ -144,6 +144,15 @@ async function readGasJson<T>(res: Response): Promise<T> {
   return json;
 }
 
+/** アプリのコメントを、その人のスプシ当日行の右側（列名なし列）にリプライとして書く */
+export async function writeSheetReply(
+  memberName: string,
+  date: string,
+  text: string,
+): Promise<void> {
+  await gasPost({ action: "writeReply", memberName, date, text });
+}
+
 /** プロフィール選択用：部員シート名一覧 */
 export async function fetchSheetMembers(): Promise<SheetMember[]> {
   const data = await gasGet<{ members: SheetMember[] }>({ action: "listMembers" });

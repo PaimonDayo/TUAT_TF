@@ -45,6 +45,7 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 
 ## 作業ログ（着手前に追記・新しいものを上へ）
 <!-- 形式: YYYY-MM-DD / エージェント / 触る範囲 → 結果(commit・要点) -->
+- 2026-06-24 / Claude Code / アプリの記録コメントを旧TF式にスプシのリプライ列(感想列の右・列名なし列)へ書き込み。GAS sync-api に writeReply 追加(clasp で安定URL@3に更新)・/api/sheets/reply(作者のsheet_name+日付を引き「{コメント}　{投稿者名}」で書込・作者未連携ならskip)・CommentSectionから記録コメント時に呼ぶ(fire-and-forget) → (このcommit)
 - 2026-06-24 / Claude Code / 練習記録同期を本番稼働。GASは手貼り沼を脱しclaspでCLIデプロイ(個人acct, gas/sync-clasp/, secretなし・公開web app)。proxy/middlewareで /api/sheets/sync をBearer用に素通り許可。Vercel: SHEET_SYNC_GAS_URL=新URL/SHEET_SYNC_ENABLED=true 設定。BearerでdryRun→本反映を検証(2件取込・再実行0件=冪等)。残: 毎時cron(pg_cron SQLをユーザーがSupabaseで実行) → (このcommit)
 - 2026-06-24 / Claude Code / 表示分離＋カスタム項目並び替え＋GAS分離。①practice_records.from_sheet追加(migration 20260624100000)。シート由来(from_sheet=true)はタイムラインに出さず、アプリ投稿のみ表示(getFeed/getUserActivity)。マイページ集計(getUserRecords)は両方合算。②カスタム項目を上下で並び替え(ProfileEditForm)。③同期pullはfrom_sheet=trueで挿入(sheet-sync.ts)。④旧TFアプリ用GAS(TF/gas/Code.gs)は原状復帰、本アプリ用は別GAS(track-app/gas/sync-api.gs・secret付き)を別URLでデプロイする方針に → (このcommit)
 - 2026-06-23 / Claude Code / スプシ同期を安全に作り直し。①応急(15c31ed): 表示を6/22以降・未来除外・空除外に+同期停止。②空/未来のゴミ55行をDB削除(REST,残59)。③再設計: カットオフ/未来/空スキップ・非破壊(空でアプリ/シートを潰さない)・複数記録/日はconflictスキップ・dryRun対応(lib/sheet-sync.ts)。④/api/sheets/sync は dryRun常時可/本番反映は env SHEET_SYNC_ENABLED=true 必須。⑤手動ボタンを「確認(ドライラン)→反映」式に。⑥カスタム項目は項目名=スプシ列名に統一 → (このcommit)
