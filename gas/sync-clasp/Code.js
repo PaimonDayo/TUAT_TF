@@ -18,11 +18,33 @@ function createJsonResponse(data) {
   return output;
 }
 
+// secret は Script Properties に保存（コード＝publicリポジトリには置かない）。
+function getSyncSecret() {
+  return PropertiesService.getScriptProperties().getProperty('SYNC_SECRET') || '';
+}
+function verifySyncSecret(provided) {
+  const s = getSyncSecret();
+  if (!s) throw new Error('SYNC_SECRET not set'); // 未設定なら全拒否（fail closed）
+  if ((provided || '').toString() !== s) throw new Error('unauthorized');
+}
+
+// 管理用：Script Properties に secret を設定する（owner が clasp run で呼ぶ。Web公開はしていない）。
+function setSecret(s) {
+  PropertiesService.getScriptProperties().setProperty('SYNC_SECRET', (s || '').toString());
+  return 'len=' + getSyncSecret().length;
+}
+
 function doGet(e) {
   try {
     const action = e && e.parameter ? e.parameter.action : '';
-    if (action === 'listMembers') return handleListMembers();
-    if (action === 'fetchAllRaw') return handleFetchAllRaw();
+    if (action === 'listMembers') {
+      verifySyncSecret(e.parameter.secret);
+      return handleListMembers();
+    }
+    if (action === 'fetchAllRaw') {
+      verifySyncSecret(e.parameter.secret);
+      return handleFetchAllRaw();
+    }
     return createJsonResponse({ error: 'unknown action' });
   } catch (err) {
     return createJsonResponse({ error: err.toString() });
@@ -32,6 +54,7 @@ function doGet(e) {
 function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
+    verifySyncSecret(body.secret);
     if (body.action === 'writeCells') return createJsonResponse(writeCellsRecord(body));
     if (body.action === 'writeReply') return createJsonResponse(writeReplyRecord(body));
     return createJsonResponse({ error: 'unknown action' });
