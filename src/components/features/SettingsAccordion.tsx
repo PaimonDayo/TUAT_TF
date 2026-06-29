@@ -1,10 +1,19 @@
 "use client";
 
+import { useState } from "react";
+import dynamic from "next/dynamic";
 import { Settings, ChevronRight } from "lucide-react";
 import { NotificationSettings } from "@/components/features/NotificationSettings";
 import { MenuViewSetting } from "@/components/features/MenuViewSetting";
-import { RecordFieldsSetting } from "@/components/features/RecordFieldsSetting";
 import type { RecordFieldDef } from "@/types";
+
+const RecordFieldsSetting = dynamic(
+  () =>
+    import("@/components/features/RecordFieldsSetting").then(
+      (module) => module.RecordFieldsSetting,
+    ),
+  { loading: () => <div className="h-16 animate-pulse rounded-xl bg-separator/60" /> },
+);
 
 /**
  * マイページの「設定」行。押すと展開（details）して、通知・メニュー表示・記録項目をまとめて編集できる。
@@ -25,8 +34,12 @@ export function SettingsAccordion({
   recordFields: RecordFieldDef[];
   isMiddleLong: boolean;
 }) {
+  const [open, setOpen] = useState(false);
   return (
-    <details className="group">
+    <details
+      className="group"
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
       <summary className="flex cursor-pointer list-none items-center gap-3 p-4 active:bg-bg">
         <Settings size={20} className="text-muted2" />
         <span className="flex-1 text-headline">設定</span>
@@ -35,7 +48,7 @@ export function SettingsAccordion({
           className="text-muted transition-transform group-open:rotate-90"
         />
       </summary>
-      <div className="space-y-6 border-t border-separator/70 bg-bg/40 p-4">
+      {open && <div className="space-y-6 border-t border-separator/70 bg-bg/40 p-4">
         <NotificationSettings
           profileId={profileId}
           initialComment={initialComment}
@@ -50,7 +63,7 @@ export function SettingsAccordion({
           initial={recordFields}
           isMiddleLong={isMiddleLong}
         />
-      </div>
+      </div>}
     </details>
   );
 }

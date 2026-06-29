@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import { NOTICE_CATEGORIES } from "@/lib/constants";
-import type { Notice, NoticeCategory } from "@/types";
+import type { AppRole, Notice, NoticeCategory } from "@/types";
 
 export function NoticeForm({
   initial,
@@ -26,9 +26,35 @@ export function NoticeForm({
   const [content, setContent] = useState(initial?.content ?? "");
   const [deadline, setDeadline] = useState(initial?.deadline ?? "");
   const [pinHome, setPinHome] = useState(initial?.pin_home ?? false);
-  const [notifyMembers, setNotifyMembers] = useState(true);
+  const [notifyMembers, setNotifyMembers] = useState(initial?.notify_members ?? true);
+  const [roles, setRoles] = useState<AppRole[]>([]);
+  const [targetRoleIds, setTargetRoleIds] = useState<string[]>(initial?.target_role_ids ?? []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const supabase = createClient();
+    void supabase
+      .from("roles")
+      .select("*")
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true })
+      .then(({ data }) => {
+        if (active) setRoles((data ?? []) as AppRole[]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  function toggleTargetRole(roleId: string) {
+    setTargetRoleIds((current) =>
+      current.includes(roleId)
+        ? current.filter((id) => id !== roleId)
+        : [...current, roleId],
+    );
+  }
 
   async function submit() {
     if (!title.trim() || !content.trim()) {
@@ -49,6 +75,8 @@ export function NoticeForm({
           content: content.trim(),
           deadline: deadline || null,
           pin_home: pinHome,
+          notify_members: notifyMembers,
+          target_role_ids: targetRoleIds,
         },
         { id: initial!.id },
       );
@@ -77,6 +105,7 @@ export function NoticeForm({
       deadline: deadline || null,
       pin_home: pinHome,
       notify_members: notifyMembers,
+      target_role_ids: targetRoleIds,
     });
     if (error) {
       setError("投稿に失敗しました");
@@ -132,12 +161,57 @@ export function NoticeForm({
         onChange={() => setPinHome((v) => !v)}
       />
       {!editing && (
-        <Toggle
-          label="メンバーに通知する"
-          description="オンにすると全部員に通知（プッシュ）が届きます"
-          checked={notifyMembers}
-          onChange={() => setNotifyMembers((v) => !v)}
-        />
+        <>
+          <Toggle
+            label="メンバーに通知する"
+            description="オンにすると全員または選択したロールへ通知します"
+            checked={notifyMembers}
+            onChange={() => setNotifyMembers((v) => !v)}
+          />
+          {notifyMembers && (
+            <div className="space-y-2 rounded-xl border border-separator bg-bg/40 p-3">
+              <div>
+                <p className="section-label">通知先</p>
+                <p className="mt-0.5 text-micro text-muted">
+                  複数選択できます。全員を選ぶとロール指定は解除されます。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTargetRoleIds([])}
+                className={`min-h-10 w-full rounded-xl border px-3 text-left text-[14px] font-semibold ${
+                  targetRoleIds.length === 0
+                    ? "border-accent bg-accent/10 text-accent"
+                    : "border-separator bg-card"
+                }`}
+              >
+                全員
+              </button>
+              {roles.length > 0 && (
+                <div className="grid grid-cols-2 gap-2">
+                  {roles.map((role) => {
+                    const selected = targetRoleIds.includes(role.id);
+                    return (
+                      <button
+                        key={role.id}
+                        type="button"
+                        onClick={() => toggleTargetRole(role.id)}
+                        className="min-h-10 rounded-xl border px-3 text-left text-[13px] font-semibold"
+                        style={{
+                          borderColor: selected ? role.color : "#e5e5ea",
+                          color: selected ? role.color : undefined,
+                          backgroundColor: selected ? `${role.color}12` : "#fff",
+                        }}
+                      >
+                        {role.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <FormModalFooter>

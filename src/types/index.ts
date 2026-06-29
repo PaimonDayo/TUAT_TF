@@ -312,6 +312,8 @@ export interface Notice {
   deadline: string | null;
   pin_home: boolean;
   notify_members: boolean;
+  /** 空配列は全部員。値がある場合は該当ロールの部員だけへ通知する。 */
+  target_role_ids: string[];
   created_at: string;
 }
 

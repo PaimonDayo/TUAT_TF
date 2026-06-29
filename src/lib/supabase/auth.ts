@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole, Profile } from "@/types";
@@ -12,7 +13,7 @@ type SupabaseServer = Awaited<ReturnType<typeof createClient>>;
  * ここではネットワークを使わない getSession でユーザーIDだけ取り出す。
  * データ自体のアクセス制御は Supabase の RLS が担保する。
  */
-export async function getCurrentProfile(): Promise<Profile> {
+export const getCurrentProfile = cache(async (): Promise<Profile> => {
   const supabase = await createClient();
   const {
     data: { session },
@@ -55,7 +56,7 @@ export async function getCurrentProfile(): Promise<Profile> {
 
   const rolesMap = await fetchRolesByProfileIds(supabase, [user.id]);
   return { ...profile, roles: rolesMap.get(user.id) ?? [] } as Profile;
-}
+});
 
 /**
  * 指定プロフィール群のロールをまとめて取得する。

@@ -1,7 +1,6 @@
-import Link from "next/link";
-import { Bell } from "lucide-react";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getUnreadNotificationCount } from "@/lib/queries";
+import { NotificationBell } from "@/components/layout/NotificationBell";
 
 /** 全タブ統一ヘッダー（高さ48px / 右にベルアイコン固定） */
 export async function Header({
@@ -14,10 +13,12 @@ export async function Header({
   right?: React.ReactNode;
 }) {
   let unreadCount = 0;
+  let userId = "";
   try {
     const profile = await getCurrentProfile();
+    userId = profile.id;
     unreadCount = await getUnreadNotificationCount(profile.id);
-  } catch (e) {
+  } catch {
     // Ignore error if not logged in or during static generation
   }
 
@@ -27,16 +28,13 @@ export async function Header({
         <h1 className={large ? "text-large-title" : "text-title"}>{title}</h1>
         <div className="flex items-center gap-1">
           {right}
-          <Link
-            href="/notices"
-            aria-label="お知らせ"
-            className="relative h-9 w-9 flex items-center justify-center text-accent active:opacity-50"
-          >
-            <Bell size={22} strokeWidth={2} />
-            {unreadCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-bg" />
-            )}
-          </Link>
+          {userId && (
+            <NotificationBell
+              key={`${userId}-${unreadCount}`}
+              userId={userId}
+              initialUnread={unreadCount}
+            />
+          )}
         </div>
       </div>
     </header>

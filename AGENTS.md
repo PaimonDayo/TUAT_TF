@@ -45,6 +45,7 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 
 ## 作業ログ（着手前に追記・新しいものを上へ）
 <!-- 形式: YYYY-MM-DD / エージェント / 触る範囲 → 結果(commit・要点) -->
+- 2026-06-29 / Codex / ホームをSuspenseでストリーミング表示、プロフィール取得重複排除、設定/D&D遅延ロード、主要DB索引追加。お知らせ通知先を全員/複数ロール対応、ベル赤丸をRealtime更新。migration 20260629120000本番適用、tsc/対象Lint/build成功 → 完了
 - 2026-06-29 / Codex / 記録フォームをiPhoneホーム編集風の全画面エディタへ刷新、項目名完全一致時のみスプシ同期、全画面Pull-to-refresh、ホームの承認待ち導線、同期ボタン1タップ化。tsc/対象Lint/build成功 → 完了
 - 2026-06-29 / Codex / 過去方針の残タスクを文書上でリセット（コード変更なし）。新規登録者の承認ゲートの現状と本番DB適用を確認 → `TASK-codex.md`をアーカイブ化、HANDOFFのアクティブバックログを「なし」に更新
 - 2026-06-24 / Claude Code(Codex実装をレビュー適用) / セキュリティ修正を本番適用。RLSのSELECTが USING(TRUE)+public でanonキー単体で profiles(実メール)・記録・ノートが読めた脆弱性を是正。migration 110000(SELECTをTO authenticated＋REVOKE anon)・120000(profiles.approved 承認ゲート/is_member()でSELECT限定/approved直接UPDATE剥奪＋RPC set_member_approved=承認済みなら誰でも承認可/profilesは自分の行のみ例外)。回帰: anonで /rest/v1/profiles → 401 permission denied 確認。tsc/build OK → (このcommit)
