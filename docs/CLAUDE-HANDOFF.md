@@ -31,6 +31,15 @@
 - 本番適用済みマイグレーション: `20260629120000_role_notice_notifications_and_performance.sql`。
 - 確認済み: `npx tsc --noEmit`、変更ファイルのESLint、`npm run build`、Local/Remote migration一致。
 
+## システム管理権限と自己投稿通知（2026-06-29）
+
+- ロール権限へ `can_manage_system`（システム管理）を追加し、組込「管理者」へ初期付与。
+- システム管理権限者がお知らせを投稿した場合だけ、投稿者本人にもアプリ内通知・Web Pushを生成。通常投稿者の自己通知除外は維持。
+- 通常の部員管理者による権限昇格を防ぐため、システム管理フラグの変更、同権限ロールの割当・解除・削除をDB関数とトリガーで保護。最後のシステム管理者は解除不可。
+- 本番適用済みマイグレーション: `20260629130000_system_management_permission.sql`。
+- 本番確認: 組込管理者 `can_manage_system=true`、割当1名、対象プロフィールは承認済み・在籍・お知らせ通知ON・Push購読1件。
+- 確認済み: `npx tsc --noEmit`、変更ファイルのESLint、`npm run build`、Local/Remote migration一致。
+
 ## UI改善4点（指示書 docs/TASK-claude-ui-2026-06-21.md）— Claude実装・push済み
 
 コミット `86a279b`。`npx tsc --noEmit` は当該コミット単体でクリーン

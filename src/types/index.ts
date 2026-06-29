@@ -9,6 +9,7 @@ export type ProfileStatus = "active" | "graduated";
 
 /** 権限の種類 */
 export type Permission =
+  | "manage_system" // システム管理（最上位権限）
   | "manage_members" // 部員・ロール管理
   | "create_schedule" // 練習予定の作成
   | "create_menu" // 練習メニューの作成
@@ -18,6 +19,7 @@ export type Permission =
 export interface AppRole {
   id: string;
   name: string;
+  can_manage_system: boolean;
   can_manage_members: boolean;
   can_create_schedule: boolean;
   can_create_menu: boolean;

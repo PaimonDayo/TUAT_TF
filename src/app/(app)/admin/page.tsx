@@ -9,7 +9,8 @@ import type { Profile } from "@/types";
 
 export default async function AdminPage() {
   const profile = await getCurrentProfile();
-  if (!permissionsOf(profile.roles).manageMembers) redirect("/home");
+  const permissions = permissionsOf(profile.roles);
+  if (!permissions.manageMembers) redirect("/home");
 
   const [members, roles] = await Promise.all([
     getAllProfiles() as Promise<Profile[]>,
@@ -24,9 +25,13 @@ export default async function AdminPage() {
         <section className="space-y-2">
           <p className="section-label">ロール</p>
           <p className="text-caption">
-            ロールを作成し、権限（予定作成・メニュー作成・お知らせ作成・部員管理）を設定できます。1人に複数のロールを付与できます。
+            ロールを作成し、システム管理・部員管理・予定・メニュー・お知らせの権限を設定できます。1人に複数のロールを付与できます。
           </p>
-          <RoleManager roles={roles} members={members} />
+          <RoleManager
+            roles={roles}
+            members={members}
+            canManageSystem={permissions.manageSystem}
+          />
         </section>
 
         <section className="space-y-2">

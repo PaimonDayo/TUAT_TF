@@ -28,6 +28,7 @@ const ROLE_COLORS = [
 ];
 
 const PERM_COLUMN: Record<Permission, keyof AppRole> = {
+  manage_system: "can_manage_system",
   manage_members: "can_manage_members",
   create_schedule: "can_create_schedule",
   create_menu: "can_create_menu",
@@ -37,9 +38,11 @@ const PERM_COLUMN: Record<Permission, keyof AppRole> = {
 export function RoleManager({
   roles: initialRoles,
   members,
+  canManageSystem,
 }: {
   roles: AppRole[];
   members: Profile[];
+  canManageSystem: boolean;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -66,6 +69,7 @@ export function RoleManager({
         key={role.id}
         role={role}
         members={members}
+        canManageSystem={canManageSystem}
         onError={showToast}
         onUpdated={(updated) => {
           setRoles((items) => items.map((item) => (item.id === updated.id ? updated : item)));
@@ -139,6 +143,7 @@ export function RoleManager({
           open
           onClose={() => setCreating(false)}
           sortOrder={roles.length + 1}
+          canManageSystem={canManageSystem}
           onSaved={(role) => {
             setRoles((items) => [...items, role]);
             setCreating(false);
@@ -157,12 +162,14 @@ function RoleRow({
   onUpdated,
   onDeleted,
   onError,
+  canManageSystem,
 }: {
   role: AppRole;
   members: Profile[];
   onUpdated: (role: AppRole) => void;
   onDeleted: () => void;
   onError: (message: string) => void;
+  canManageSystem: boolean;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -268,6 +275,7 @@ function RoleRow({
           onClose={() => setEditing(false)}
           role={role}
           sortOrder={role.sort_order}
+          canManageSystem={canManageSystem}
           onSaved={(updated) => {
             onUpdated(updated);
             setEditing(false);
@@ -334,15 +342,18 @@ function RoleEditor({
   onSaved,
   sortOrder,
   role,
+  canManageSystem,
 }: {
   open: boolean;
   onClose: () => void;
   onSaved: (role: AppRole) => void;
   sortOrder: number;
   role?: AppRole;
+  canManageSystem: boolean;
 }) {
   const [name, setName] = useState(role?.name ?? "");
   const [flags, setFlags] = useState<Record<Permission, boolean>>({
+    manage_system: role?.can_manage_system ?? false,
     manage_members: role?.can_manage_members ?? false,
     create_schedule: role?.can_create_schedule ?? false,
     create_menu: role?.can_create_menu ?? false,
@@ -367,6 +378,7 @@ function RoleEditor({
     const supabase = createClient();
     const payload = {
       name: name.trim(),
+      can_manage_system: flags.manage_system,
       can_manage_members: flags.manage_members,
       can_create_schedule: flags.create_schedule,
       can_create_menu: flags.create_menu,
@@ -424,7 +436,12 @@ function RoleEditor({
                 checked={flags[permission.key]}
                 onChange={() => toggle(permission.key)}
                 label={permission.label}
-                description={permission.desc}
+                description={
+                  permission.key === "manage_system" && !canManageSystem
+                    ? `${permission.desc}（システム管理者のみ変更可）`
+                    : permission.desc
+                }
+                disabled={permission.key === "manage_system" && !canManageSystem}
               />
             ))}
           </div>

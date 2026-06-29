@@ -6,20 +6,23 @@ export function Toggle({
   description,
   checked,
   onChange,
+  disabled = false,
   className,
 }: {
   label: string;
   description?: string;
   checked: boolean;
   onChange: () => void;
+  disabled?: boolean;
   className?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onChange}
+      disabled={disabled}
       className={cn(
-        "w-full flex items-center justify-between rounded-xl bg-card border border-separator p-3.5 active:bg-bg",
+        "w-full flex items-center justify-between rounded-xl bg-card border border-separator p-3.5 active:bg-bg disabled:cursor-not-allowed disabled:opacity-50",
         className,
       )}
     >
