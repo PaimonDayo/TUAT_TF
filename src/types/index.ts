@@ -74,8 +74,6 @@ export interface RecordFieldDef {
   /** 表示ラベル */
   label: string;
   type: "text" | "number";
-  /** スプシの見出し名（入れるとその列と同期。空なら同期しない） */
-  sheetColumn?: string | null;
 }
 
 /** 投稿カードに埋め込む投稿者の最小情報 */

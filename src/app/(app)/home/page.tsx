@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { format, subDays } from "date-fns";
 import { ja } from "date-fns/locale";
-import { Clock, ChevronRight, BookOpen } from "lucide-react";
+import { Clock, ChevronRight, BookOpen, UserCheck } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,7 @@ import {
   getRecentSharedNotes,
   getAttendanceSchedules,
   getAttendancesForSchedules,
+  getPendingProfiles,
 } from "@/lib/queries";
 import { SCHEDULE_TYPES } from "@/lib/constants";
 import { permissionsOf } from "@/lib/permissions";
@@ -37,12 +38,13 @@ export default async function HomePage() {
   const nowJst = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
   const sevenDaysAgo = format(subDays(nowJst, 6), "yyyy-MM-dd");
 
-  const [weekRecords, feed, notices, sharedNotes, attSchedules] = await Promise.all([
+  const [weekRecords, feed, notices, sharedNotes, attSchedules, pendingProfiles] = await Promise.all([
     getUserRecords(profile.id, sevenDaysAgo),
     getFeed(profile.id, "all", 3),
     getHomeNotices(profile.id),
     getRecentSharedNotes(3),
     getAttendanceSchedules(profile.blocks, perms.createSchedule, 3),
+    getPendingProfiles(),
   ]);
 
   const schedules = attSchedules as PracticeSchedule[];
@@ -73,6 +75,23 @@ export default async function HomePage() {
       <div className="px-4 space-y-5 pt-1">
         {/* PWA未起動の人へホーム画面追加を促す（自然に目に入るよう最上部に） */}
         <InstallPrompt />
+
+        {pendingProfiles.length > 0 && (
+          <Link href="/members" className="block">
+            <Card className="flex items-center gap-3 border-accent/30 bg-accent/8 p-3 active:bg-accent/12">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent">
+                <UserCheck size={21} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[14px] font-semibold">新しいメンバーの承認</p>
+                <p className="text-caption text-muted">
+                  {pendingProfiles.length}人が利用承認を待っています
+                </p>
+              </div>
+              <ChevronRight size={18} className="shrink-0 text-accent" />
+            </Card>
+          </Link>
+        )}
 
         <p className="text-body text-muted">
           {format(nowJst, "M月d日 (E)", { locale: ja })}

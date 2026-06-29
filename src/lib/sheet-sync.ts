@@ -7,7 +7,7 @@ import type { RecordFieldDef } from "@/types";
  * 詳細・マッピング: docs/SHEETS-SYNC-PLAN.md
  *
  * 見出し名ベースで突合する（中長距離＝低強度等の数値枠／短距離＝メニュー等の自由記述／
- * ユーザー追加のカスタム項目＝指定見出し）。その見出しがシートに在る項目だけ同期する。
+ * ユーザー追加のカスタム項目＝アプリ上の項目名）。項目名とシート列名が一致する項目だけ同期する。
  *
  * 競合は last-writer-wins:
  *   updated_at <= synced_at  → スプシ優先（アプリへ取込）
@@ -179,11 +179,9 @@ function resolveFieldMap(header: string[], fields: RecordFieldDef[]): FieldMap {
   }
   const custom = new Map<string, { header: string; type: "text" | "number" }>();
   for (const f of fields) {
-    if (!f.sheetColumn) continue;
-    const target = norm(f.sheetColumn);
-    const hit =
-      normHeaders.find((h) => h.n === target) ??
-      normHeaders.find((h) => h.n.includes(target));
+    const target = f.label.trim();
+    if (!target) continue;
+    const hit = normHeaders.find((h) => h.raw.trim() === target);
     if (hit) custom.set(f.key, { header: hit.raw, type: f.type });
   }
   return { builtin, custom };

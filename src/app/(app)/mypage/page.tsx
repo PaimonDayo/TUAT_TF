@@ -108,6 +108,7 @@ export default async function MyPage({
             initialNotice={profile.notify_notice ?? true}
             menuViewAll={profile.menu_view_all_blocks ?? false}
             recordFields={profile.record_fields ?? []}
+            isMiddleLong={profile.blocks.includes("middle_long")}
           />
         </Card>
 

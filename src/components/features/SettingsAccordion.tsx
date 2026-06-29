@@ -16,12 +16,14 @@ export function SettingsAccordion({
   initialNotice,
   menuViewAll,
   recordFields,
+  isMiddleLong,
 }: {
   profileId: string;
   initialComment: boolean;
   initialNotice: boolean;
   menuViewAll: boolean;
   recordFields: RecordFieldDef[];
+  isMiddleLong: boolean;
 }) {
   return (
     <details className="group">
@@ -43,7 +45,11 @@ export function SettingsAccordion({
           <p className="section-label">メニュー表示</p>
           <MenuViewSetting userId={profileId} initial={menuViewAll} />
         </div>
-        <RecordFieldsSetting profileId={profileId} initial={recordFields} />
+        <RecordFieldsSetting
+          profileId={profileId}
+          initial={recordFields}
+          isMiddleLong={isMiddleLong}
+        />
       </div>
     </details>
   );

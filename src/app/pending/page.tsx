@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { PendingSignOut } from "./sign-out-button";
+import { PullToRefresh } from "@/components/layout/PullToRefresh";
 
 /**
  * 承認待ち画面。
@@ -27,18 +28,21 @@ export default async function PendingPage() {
   if (profile?.approved) redirect("/home");
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col items-center justify-center gap-6 px-8 text-center">
-      <div className="space-y-3">
-        <h1 className="text-headline">承認待ちです</h1>
-        <p className="text-caption leading-relaxed text-muted">
-          アカウントの作成が完了しました。
-          <br />
-          部の管理者が利用を承認すると、アプリを使えるようになります。
-          <br />
-          承認までしばらくお待ちください。
-        </p>
-      </div>
-      <PendingSignOut />
-    </main>
+    <>
+      <PullToRefresh />
+      <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col items-center justify-center gap-6 px-8 text-center">
+        <div className="space-y-3">
+          <h1 className="text-headline">承認待ちです</h1>
+          <p className="text-caption leading-relaxed text-muted">
+            アカウントの作成が完了しました。
+            <br />
+            承認済みの部員が利用を承認すると、アプリを使えるようになります。
+            <br />
+            承認後、この画面を下に引いて更新してください。
+          </p>
+        </div>
+        <PendingSignOut />
+      </main>
+    </>
   );
 }

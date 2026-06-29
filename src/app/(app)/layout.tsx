@@ -3,6 +3,7 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { FAB } from "@/components/layout/FAB";
 import { SessionKeepAlive } from "@/components/layout/SessionKeepAlive";
 import { VersionWatcher } from "@/components/features/VersionWatcher";
+import { PullToRefresh } from "@/components/layout/PullToRefresh";
 import { ToastProvider } from "@/components/ui/toast";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { permissionsOf } from "@/lib/permissions";
@@ -21,6 +22,7 @@ export default async function AppLayout({
     <ToastProvider>
       <div className="mx-auto w-full max-w-md min-h-dvh bg-bg overflow-x-hidden pb-[calc(52px+env(safe-area-inset-bottom))]">
         <SessionKeepAlive />
+        <PullToRefresh />
         {children}
         <FAB
           userId={profile.id}

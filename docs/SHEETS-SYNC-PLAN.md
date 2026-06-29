@@ -68,7 +68,7 @@ ALTER TABLE practice_records ADD COLUMN IF NOT EXISTS synced_at     TIMESTAMPTZ;
 -- sheet_sync_runs ログ表（最終実行・件数・エラー。手動同期ボタンの結果表示用）
 ```
 
-- `profiles.record_fields`: `[{key,label,type:'text'|'number',sheetColumn?}]`。`sheetColumn` を入れた項目だけスプシ同期。
+- `profiles.record_fields`: `[{key,label,type:'text'|'number'}]`。アプリの項目名 `label` とスプシ列名が完全一致する項目だけ同期する。アプリからスプシの列名は変更しない。
 - 記録フォームは「中長距離の数値枠 or 短距離の自由記述枠」＋ この**カスタム項目**を動的描画（`RecordForm`）。プロフィール編集で項目を追加・削除。
 
 - `practice_records` に一意制約は**追加しない**（既存の重複リスク回避）。突合は同期コードで `user_id + recorded_date` をキーに手動マッチ。
