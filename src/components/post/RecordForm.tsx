@@ -26,6 +26,7 @@ export function RecordForm({
   isMiddleLong,
   record,
   recordSource = "app",
+  recordFields,
   onDone,
 }: {
   userId: string;
@@ -33,6 +34,8 @@ export function RecordForm({
   record?: PracticeRecord;
   /** 記録の入力元。'sheet'ならスプレッドシートが正のためアプリからの投稿・編集はできない */
   recordSource?: "app" | "sheet";
+  /** カスタム項目定義。取得済みプロフィールから渡す（省略時のみ内部でフェッチする） */
+  recordFields?: RecordFieldDef[];
   onDone: () => void;
 }) {
   const router = useRouter();
@@ -60,7 +63,8 @@ export function RecordForm({
   const [error, setError] = useState<string | null>(null);
 
   // カスタム項目（プロフィールで設定したもの）。フォームに動的に追加する。
-  const [customFields, setCustomFields] = useState<RecordFieldDef[]>([]);
+  // 呼び出し側が取得済みプロフィールから渡していれば、それを使い再フェッチしない。
+  const [customFields, setCustomFields] = useState<RecordFieldDef[]>(recordFields ?? []);
   const [customValues, setCustomValues] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     for (const [k, v] of Object.entries(record?.custom ?? {})) {
@@ -70,6 +74,7 @@ export function RecordForm({
   });
 
   useEffect(() => {
+    if (recordFields) return;
     const supabase = createClient();
     supabase
       .from("profiles")
@@ -80,7 +85,7 @@ export function RecordForm({
         const fields = (data?.record_fields ?? []) as RecordFieldDef[];
         setCustomFields(fields);
       });
-  }, [userId]);
+  }, [userId, recordFields]);
 
   function buildCustom(): Record<string, string | number | null> {
     const out: Record<string, string | number | null> = { ...(record?.custom ?? {}) };

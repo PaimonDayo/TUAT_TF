@@ -32,6 +32,7 @@ export default async function AppLayout({
           }}
           isMiddleLong={profile.blocks?.includes("middle_long") ?? false}
           recordSource={profile.record_source}
+          recordFields={profile.record_fields}
           can={{
             createSchedule: perms.createSchedule,
             createNotice: perms.createNotice,

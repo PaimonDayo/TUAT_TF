@@ -22,7 +22,7 @@ import { ScheduleCreatePanel } from "@/components/post/ScheduleForm";
 import { TweetForm } from "@/components/post/TweetForm";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import type { AuthorMini } from "@/types";
+import type { AuthorMini, RecordFieldDef } from "@/types";
 
 export type FabPermissions = {
   createSchedule: boolean;
@@ -37,6 +37,7 @@ type FabProps = {
   currentUser: AuthorMini;
   isMiddleLong: boolean;
   recordSource: "app" | "sheet";
+  recordFields: RecordFieldDef[];
   can: FabPermissions;
 };
 
@@ -60,6 +61,7 @@ function ContextualFAB({
   currentUser,
   isMiddleLong,
   recordSource,
+  recordFields,
   can,
   pathname,
   autoOpen,
@@ -205,6 +207,7 @@ function ContextualFAB({
           userId={userId}
           isMiddleLong={isMiddleLong}
           recordSource={recordSource}
+          recordFields={recordFields}
           onDone={() => setRecordOpen(false)}
         />
       </FormModal>
