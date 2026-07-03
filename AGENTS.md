@@ -35,6 +35,78 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 - `docs/QA-CHECKLIST.md` … 実機QA項目
 - `docs/ui-data-guidelines.md` … UI/データの細目
 
+## 実装バックログ（2026-07-03 全体コードレビュー → オーナー確定。ここが現在の実装指示）
+
+> 2026-07-03 の全体レビュー（Claude Code / Fable 5）でオーナーが採否を確定した作業リスト。
+> **番号順に着手し、1タスク＝1コミット**。着手前に対象コードの現状を必ず確認すること。
+> マイグレーションは従来どおり新タイムスタンプ＋冪等で作成し `"Y" | npx --yes supabase db push` で本番適用。
+
+### 前提となる方針転換（オーナー決定・全タスクに影響）
+- **承認ゲート（profiles.approved）は廃止**する。理由: 部外の同大生が入ってくる可能性は実質なく、承認フローが不便。部外生ログイン時の閲覧リスクはオーナー了承済み。
+- **スプシ同期は双方向をやめ、部員ごとに方向を固定**する（record_source）。LWW・競合スキップ等の複雑さを撤去する。
+- **スプシ由来の記録もタイムラインに表示**する。「同期した時刻に投稿されたもの」という扱い（created_at＝取込時刻のまま並べてよい）。
+
+### 1. 承認ゲート廃止
+- migration: `profiles.approved` を DEFAULT TRUE 化し、既存の FALSE 行を TRUE にバックフィル。新規ユーザー作成トリガー（handle_new_user 相当）も approved=TRUE で作ることを確認。**approved 列と is_member() は残す**（RLSポリシー群は書き換えない。全員 TRUE になるので実質 authenticated ゲートとして機能し続ける）。
+- `src/app/(app)/layout.tsx` の `if (!profile.approved) redirect("/pending")` を撤去。`src/app/pending/` を削除。
+- `src/app/(app)/home/page.tsx` の PendingApprovalBanner、`queries.ts` の getPendingProfiles、members 画面の承認UI（set_member_approved 呼び出し）を撤去。RPC 自体はDBに残してよい。
+
+### 2. スプシ同期を「部員ごとの方向固定」へ（最重要）
+- migration: `profiles.record_source TEXT NOT NULL DEFAULT 'app' CHECK (record_source IN ('app','sheet'))`。バックフィル: **sheet_name 連携済みの部員は 'sheet'、未連携は 'app'**（従来のスプシ取込を切らさないための初期値。部員には切替方法を周知）。
+- `src/lib/sheet-sync.ts` を再構成:
+  - record_source='sheet' の部員 → **pull のみ**（シート→アプリ、from_sheet=true）。シートを正とし、マップ済み項目はシートの空欄も反映してよい。シートに行が無い日は触らない（安全側）。アプリ→シート書き戻しはしない。
+  - record_source='app' の部員 → **push のみ**（アプリ→シート）。シート側のマップ済みセルは同期が上書きしてよい（シート＝写し）。シート→アプリ取込はしない。
+  - これに伴い LWW（appIsNewer / updated_at・synced_at 比較）、同日複数記録の conflict スキップ、双方向前提の空値保護ロジックを撤去・簡素化。SYNC_CUTOFF・未来日除外・dryRun・sheet_sync_runs ログ・手動同期ボタンは維持。
+  - practice_records の読み込みに `.gte("recorded_date", SYNC_CUTOFF)` を付ける（下記 5-P3 と同時解消）。
+- UI: ProfileEditForm のシート選択の隣に「記録の入力元: アプリ / スプレッドシート」切替を追加。'sheet' の部員は自分の記録をアプリ内で**編集不可（閲覧のみ）**にし、「入力元をアプリに切り替えると編集できます」と案内。
+- `/api/sheets/reply`（コメント→シートのリプライ列追記）は追記専用で衝突しないため現状維持。
+
+### 3. スプシ由来記録のタイムライン表示
+- `src/lib/queries.ts` getFeed / getUserActivity の `.eq("from_sheet", false)` フィルタを撤去（全ブロック共通）。並び順は created_at のまま。
+- from_sheet 列は出典・同期方向の内部管理用に残す。RecordCard に小さな出典表示（「スプシ」バッジ等）を付けてよい（任意）。
+- RecordForm で from_sheet:false が短距離側 payload にしか付いていない非一貫は「**insert 時のみ設定・update では変更しない**」に統一。
+
+### 4. セキュリティ残タスク（承認ゲート関連の指摘は上記1により消滅）
+- S3: `src/lib/sheet-sync.ts` gasGet のクエリ文字列 secret 送信をやめ、listMembers / fetchAllRaw も POST ボディ化（GAS 側 doPost 対応＋clasp で再デプロイ）。
+- S4: `src/app/api/sheets/sync/route.ts:28` の Bearer 比較を `crypto.timingSafeEqual` に。
+- S5: `src/lib/google-drive.ts` の暗号鍵を service role key 派生から専用 env `GOOGLE_TOKEN_ENC_KEY` へ分離。**切替時は Drive 連携者全員の再連携が必要**なので、実施はオーナーと本番反映タイミングを合わせること。
+
+### 5. パフォーマンス（全採用）
+- P1: `queries.ts` getNotices / getPersonalNotifications / getUserRecords（fromDate なし呼び出し）に limit または期間窓（通知は直近50件＋ページング目安）。
+- P2: `TimelineView.tsx` の「もっと見る」を limit 増の全件再取得から**カーソル式**（最後の created_at より古い分を追加取得）へ。
+- P3: sheet-sync の全履歴取得に `.gte("recorded_date", SYNC_CUTOFF)`（タスク2と同時）。書き戻しの直列 GAS 呼び出しは可能なら一括化。
+- P4: `queries.ts` fetchCommentCounts を全行取得→JS集計から count 集計へ。
+- P5: getFeed の limit 後フィルタ問題は、タイムラインがクライアント側フィルタなので **getFeed の block/grade 引数を削除**して一本化。
+
+### 6. コード品質（全採用。修正によるデメリットなしと判断済み）
+- Q1: `npx supabase gen types typescript` の生成型へ移行し `as unknown as`（21箇所）を解消。
+- Q2: from_sheet の扱い統一はタスク3に含めて解消。
+- Q3: 「今日」の実装を JST 基準の共通 util（jstToday 等）1個に集約。`queries.ts:240,441` の `new Date().toISOString().slice(0,10)`（UTC）は**実バグ**（JST 0〜9時に前日の予定が今後の予定に残る）なので優先的に。
+- Q4: MenuForm.tsx（958行）/ ScheduleSheetsManager.tsx（1015行）の分割（対象者ピッカー・プリセット・プレビュー表などの単位で）。
+- Q5: getFeed / getUserActivity の FeedItem 組み立て重複（各約40行）を共通ヘルパーへ。
+
+### 7. UI/UX（採用分）
+- 記録フォームの日付に未来日を入力できないようにする（max 属性＋バリデーション。保存後に「消えた」ように見える問題の解消）。
+- JST統一は 6-Q3 で解消。
+- ホームの週間サマリー（走行距離・練習回数カード）は**中長距離ブロックの部員のみ表示**。他ブロックには表示しない（週間ランキングも従来どおり中長距離のみ）。
+- Service Worker にオフラインフォールバック＋静的アセットキャッシュを追加（現状 push 専用で、オフラインだと開けない）。
+
+### 8. ノート・お知らせの検索
+- ノート（フォルダ・記事）とお知らせを対象にしたテキスト検索を追加。Postgres の ilike で十分（全文検索基盤は不要）。UI はノートタブ・お知らせ画面それぞれに検索欄。
+
+### 9. お知らせの通知先を @メンション式に刷新
+- 現在の「全員/複数ロール」選択UIをやめ、`@ロール名` `@部員名` のメンション式へ（@入力でロール・部員のサジェスト表示）。
+- メンション対象: ロール→所属部員全員、個人→その部員。重複しても通知は1人1通（20260629120000 の重複排除ロジックを流用）。
+- notices にメンション保存列（例: mentioned_role_ids uuid[], mentioned_user_ids uuid[]）を追加し、通知トリガー/関数をメンション基準に改修。本文中のメンションはハイライト表示。
+- メンションなしのお知らせの通知挙動（従来の notify_members トグル相当を残すか）は実装時にオーナーへ確認。
+
+### 不採用（実装しないこと。過去の提案を根拠に着手しない）
+- 承認待ち画面の改善（リアルタイム承認検知）… 承認ゲートごと廃止のため不要。
+- ダークモード。
+- 記録・つぶやきのオフライン下書き保存。
+- コメントの @メンション（お知らせのみ対応する）。
+- 出欠リマインド通知・カレンダー(ICS)連携・PB自動判定 … 今回は見送り（禁止ではなく未承認）。
+
 ## 衝突防止：固定の担当領域は設けない（柔軟運用）＋必ず報告する
 どのAIも領域を限定しない（柔軟に動けるように）。代わりに**「何を触るか／何をしたか」を必ず下の作業ログに報告**して可視化で事故を防ぐ。
 - **作業は1体ずつ。`git pull`→作業→検証→push まで終えてから次のエージェントに渡す**（push 前の中途半端な状態で別の体に着手させない）。
@@ -45,6 +117,7 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 
 ## 作業ログ（着手前に追記・新しいものを上へ）
 <!-- 形式: YYYY-MM-DD / エージェント / 触る範囲 → 結果(commit・要点) -->
+- 2026-07-03 / Claude Code (Fable 5) / 全体コードレビュー→オーナー確定の実装バックログを本ファイルに追記（コード変更なし）。承認ゲート廃止・同期の方向固定(record_source)・スプシ由来記録のタイムライン表示ほか。実装は番号順に別エージェントが担当 → (このcommit)
 - 2026-06-29 / Codex / ロール権限にシステム管理を追加。通常管理者の権限昇格と最後の管理者解除をDBで防止し、システム管理者だけ自己投稿お知らせ通知を受信。migration 20260629130000本番適用、組込管理者への付与・通知設定ON・Push購読確認、tsc/対象Lint/build成功 → 完了
 - 2026-06-29 / Codex / ホームをSuspenseでストリーミング表示、プロフィール取得重複排除、設定/D&D遅延ロード、主要DB索引追加。お知らせ通知先を全員/複数ロール対応、ベル赤丸をRealtime更新。migration 20260629120000本番適用、tsc/対象Lint/build成功 → 完了
 - 2026-06-29 / Codex / 記録フォームをiPhoneホーム編集風の全画面エディタへ刷新、項目名完全一致時のみスプシ同期、全画面Pull-to-refresh、ホームの承認待ち導線、同期ボタン1タップ化。tsc/対象Lint/build成功 → 完了
