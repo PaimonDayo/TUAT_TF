@@ -76,6 +76,10 @@ export function ScheduleSheetsManager() {
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastApplied, setLastApplied] = useState<PracticeSchedule[]>([]);
+  const [undoing, setUndoing] = useState(false);
+  const [deletionIds, setDeletionIds] = useState<string[]>([]);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -269,6 +273,7 @@ export function ScheduleSheetsManager() {
       return;
     }
     setPreview(result as ScheduleImportPreview);
+    setDeletionIds((result as ScheduleImportPreview).deletions.map((row) => row.id));
     setLoading(false);
   }
 
@@ -289,6 +294,7 @@ export function ScheduleSheetsManager() {
     }
     const rows = validRows.map(toRpcRow);
     const supabase = createClient();
+    const beforeApply = new Date().toISOString();
     const { error: applyError } = await supabase.rpc("apply_schedule_sheet_import", {
       target_sheet_id: sheetId,
       import_rows: rows,
@@ -298,6 +304,13 @@ export function ScheduleSheetsManager() {
       setApplying(false);
       return;
     }
+    // 直前の取込で新規追加された予定を控えておき、誤登録時にすぐ取り消せるようにする
+    const { data: insertedData } = await supabase
+      .from("practice_schedules")
+      .select("*")
+      .eq("source_sheet_id", sheetId)
+      .gte("created_at", beforeApply);
+    setLastApplied((insertedData ?? []) as PracticeSchedule[]);
     router.refresh();
     const remaining = validated.rows.filter((row) => row.status === "error");
     if (remaining.length > 0) {
@@ -316,6 +329,52 @@ export function ScheduleSheetsManager() {
       setSheetId(null);
     }
     setApplying(false);
+  }
+
+  async function undoLastApply() {
+    if (lastApplied.length === 0 || undoing) return;
+    setUndoing(true);
+    setError(null);
+    const supabase = createClient();
+    const { error: deleteError } = await supabase
+      .from("practice_schedules")
+      .delete()
+      .in("id", lastApplied.map((schedule) => schedule.id));
+    if (deleteError) {
+      setError("取り消しに失敗しました");
+      setUndoing(false);
+      return;
+    }
+    setLastApplied([]);
+    router.refresh();
+    setUndoing(false);
+  }
+
+  async function deleteSelectedCandidates() {
+    if (deletionIds.length === 0 || deleting) return;
+    setDeleting(true);
+    setError(null);
+    const supabase = createClient();
+    const { error: deleteError } = await supabase
+      .from("practice_schedules")
+      .delete()
+      .in("id", deletionIds);
+    if (deleteError) {
+      setError("削除に失敗しました");
+      setDeleting(false);
+      return;
+    }
+    setPreview((current) =>
+      current
+        ? {
+            ...current,
+            deletions: current.deletions.filter((row) => !deletionIds.includes(row.id)),
+          }
+        : current,
+    );
+    setDeletionIds([]);
+    router.refresh();
+    setDeleting(false);
   }
 
   async function validateEditedRows(
@@ -381,6 +440,23 @@ export function ScheduleSheetsManager() {
 
   return (
     <div className="space-y-5 pb-4">
+      {lastApplied.length > 0 && (
+        <Card className="space-y-2 border-danger/30 bg-danger/5 p-3">
+          <p className="text-caption">
+            直前の取込で{lastApplied.length}件の予定を追加しました。間違えた場合はここから取り消せます。
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            disabled={undoing}
+            onClick={undoLastApply}
+            className="border-danger text-danger"
+          >
+            {undoing ? "取り消し中..." : `この取込を取り消す（${lastApplied.length}件削除）`}
+          </Button>
+        </Card>
+      )}
       <section className="space-y-3">
         <div className="flex items-center gap-2">
           <Step number={1} />
@@ -723,12 +799,15 @@ export function ScheduleSheetsManager() {
             <RefreshCw size={17} />
             {loading ? "再確認中..." : "編集内容を再確認"}
           </Button>
-          <SimpleSection
-            title="削除候補（削除しません）"
-            items={preview.deletions.map(
-              (row) => `${row.schedule_date} ${row.title || row.venue_name || "予定"}`,
-            )}
-          />
+          {preview.deletions.length > 0 && (
+            <DeletionCandidates
+              deletions={preview.deletions}
+              selectedIds={deletionIds}
+              onChange={setDeletionIds}
+              onDelete={deleteSelectedCandidates}
+              deleting={deleting}
+            />
+          )}
           <Button
             size="lg"
             disabled={
@@ -895,30 +974,62 @@ function inputTypeForColumn(column: string) {
   return "text";
 }
 
-function SimpleSection({
-  title,
-  items,
-  danger = false,
+function DeletionCandidates({
+  deletions,
+  selectedIds,
+  onChange,
+  onDelete,
+  deleting,
 }: {
-  title: string;
-  items: string[];
-  danger?: boolean;
+  deletions: PracticeSchedule[];
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
+  onDelete: () => void;
+  deleting: boolean;
 }) {
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between">
-        <p className="section-label">{title}</p>
-        <Badge>{items.length}件</Badge>
+        <p className="section-label">シートから消えた予定（選んで削除できます）</p>
+        <Badge>{deletions.length}件</Badge>
       </div>
-      {items.length > 0 && (
-        <Card className="space-y-1 p-3">
-          {items.map((item) => (
-            <p key={item} className={danger ? "text-caption text-danger" : "text-caption"}>
-              {item}
-            </p>
-          ))}
-        </Card>
-      )}
+      <Card className="space-y-1 p-1">
+        {deletions.map((row) => {
+          const checked = selectedIds.includes(row.id);
+          return (
+            <label
+              key={row.id}
+              className="flex min-h-11 items-center gap-2 rounded-lg px-2 active:bg-bg"
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() =>
+                  onChange(
+                    checked
+                      ? selectedIds.filter((id) => id !== row.id)
+                      : [...selectedIds, row.id],
+                  )
+                }
+                className="h-4 w-4 shrink-0"
+              />
+              <span className="text-caption text-danger">
+                {row.schedule_date} {row.title || row.venue_name || "予定"}
+              </span>
+            </label>
+          );
+        })}
+      </Card>
+      <Button
+        type="button"
+        variant="outline"
+        size="lg"
+        disabled={deleting || selectedIds.length === 0}
+        onClick={onDelete}
+        className="border-danger text-danger"
+      >
+        {deleting ? "削除中..." : `選択した${selectedIds.length}件を削除`}
+      </Button>
     </section>
   );
 }
