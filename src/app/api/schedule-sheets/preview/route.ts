@@ -46,20 +46,22 @@ export async function POST(request: Request) {
     if ("error" in csvResult) {
       return NextResponse.json({ error: csvResult.error }, { status: csvResult.status });
     }
-    const parsed = Papa.parse<Record<string, string>>(csvResult.csv, {
-      header: true,
-      skipEmptyLines: false,
-      transformHeader: (header) => header.replace(/^\uFEFF/, "").trim(),
-    });
-    if (parsed.errors.some((error) => error.type === "Quotes")) {
+    const rawParsed = Papa.parse<string[]>(csvResult.csv, { skipEmptyLines: false });
+    if (rawParsed.errors.some((error) => error.type === "Quotes")) {
       return NextResponse.json(
         { error: "CSVの引用符が正しく閉じられていません" },
         { status: 400 },
       );
     }
-    const headers = parsed.meta.fields ?? [];
+    // 冒頭に自由メモ行が入る実物スプシ対応: 「曜日・時間・場所」等を含む行を
+    // 見出し行として探す（見つからなければ従来どおり先頭行を見出しとみなす）。
+    const rawRows = rawParsed.data;
+    const headerRowIndex = detectHeaderRowIndex(rawRows, sheet);
+    const headerRow = (rawRows[headerRowIndex] ?? []).map((h) =>
+      h.replace(BOM_PATTERN, "").trim(),
+    );
     const missing = requiredImportHeaders(sheet).filter(
-      (choices) => !choices.some((header) => headers.includes(header)),
+      (choices) => !choices.some((header) => headerRow.includes(header)),
     );
     if (missing.length > 0) {
       return NextResponse.json(
@@ -71,9 +73,12 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    rows = parsed.data.map((raw, index) => ({
-      rowNumber: index + 2,
-      values: canonicalImportValues(raw, sheet),
+    rows = rawRows.slice(headerRowIndex + 1).map((cells, index) => ({
+      rowNumber: headerRowIndex + index + 2,
+      values: canonicalImportValues(
+        Object.fromEntries(headerRow.map((h, i) => [h, cells[i] ?? ""])),
+        sheet,
+      ),
     }));
   }
 
@@ -87,6 +92,27 @@ export async function POST(request: Request) {
       includeDeletions: !editedRows,
     }),
   );
+}
+
+const BOM_PATTERN = /^﻿/;
+
+/**
+ * 冒頭の自由メモ行を飛ばして見出し行を探す。
+ * practice: 「曜日・時間・場所」を全部含む行を見出しとみなす。
+ * meet/time_trial: 「開始日」または「日付」を含む行を見出しとみなす。
+ * 見つからなければ従来どおり先頭行（index 0）を見出しとみなす。
+ */
+function detectHeaderRowIndex(rows: string[][], sheet: ScheduleSheet): number {
+  const normalizeCell = (cell: string) => cell.replace(BOM_PATTERN, "").trim();
+  for (let i = 0; i < rows.length; i++) {
+    const cells = (rows[i] ?? []).map(normalizeCell);
+    if (sheet.kind === "practice") {
+      if (["曜日", "時間", "場所"].every((anchor) => cells.includes(anchor))) return i;
+    } else {
+      if (cells.includes("開始日") || cells.includes("日付")) return i;
+    }
+  }
+  return 0;
 }
 
 async function loadCsv(
@@ -126,12 +152,14 @@ async function loadExistingSchedules(
     .order("schedule_date", { ascending: true })
     .order("created_at", { ascending: true });
   if (sheet.kind === "practice" && sheet.target_year && sheet.target_month) {
-    const start = `${sheet.target_year}-${String(sheet.target_month).padStart(2, "0")}-01`;
-    const nextMonth =
-      sheet.target_month === 12
-        ? `${sheet.target_year + 1}-01-01`
-        : `${sheet.target_year}-${String(sheet.target_month + 1).padStart(2, "0")}-01`;
-    query = query.gte("schedule_date", start).lt("schedule_date", nextMonth);
+    // 月またぎ（タブ末尾に翌月初日がはみ出す実物スプシ）を許容するため前後1ヶ月分を含める。
+    const prevMonthDate = new Date(sheet.target_year, sheet.target_month - 2, 1);
+    const nextMonthDate = new Date(sheet.target_year, sheet.target_month + 1, 1);
+    const toDateStr = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+    query = query
+      .gte("schedule_date", toDateStr(prevMonthDate))
+      .lt("schedule_date", toDateStr(nextMonthDate));
   }
   const { data } = await query;
   return (data ?? []) as PracticeSchedule[];

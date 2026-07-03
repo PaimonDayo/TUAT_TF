@@ -163,18 +163,19 @@ function validateRow(
     sheet.kind === "practice" ? values["日付"] : values["開始日"],
     sheet.target_year,
   );
+  // 月末に翌月初日がはみ出す実物スプシ形式（例: 6月タブに7/1が混在）を許容するため、
+  // 対象月そのものだけでなく前後1ヶ月までを許容範囲とする。
   const outsidePracticeMonth =
     sheet.kind === "practice" &&
     (!sheet.target_year ||
       !sheet.target_month ||
-      !date?.startsWith(
-        `${sheet.target_year}-${String(sheet.target_month).padStart(2, "0")}-`,
-      ));
+      !date ||
+      !isWithinScheduleWindow(date, sheet.target_year, sheet.target_month));
   if (!date || outsidePracticeMonth) {
     return result(
       "error",
       sheet.kind === "practice"
-        ? "日付が対象年月内の有効な日付ではありません"
+        ? "日付が対象年月の前後1ヶ月から外れています"
         : "開始日は YYYY-MM-DD 形式で入力してください",
     );
   }
@@ -363,6 +364,19 @@ export function parseSheetDate(
     return null;
   }
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/** 対象年月、またはその前後1ヶ月に収まっているか（タブ末尾の月またぎ対策） */
+function isWithinScheduleWindow(
+  date: string,
+  targetYear: number,
+  targetMonth: number,
+): boolean {
+  const [y, m] = date.split("-").map(Number);
+  const monthIndex = (year: number, month: number) => year * 12 + (month - 1);
+  const target = monthIndex(targetYear, targetMonth);
+  const actual = monthIndex(y, m);
+  return Math.abs(actual - target) <= 1;
 }
 
 function parseOptionalDate(value: string | undefined): string | null {
