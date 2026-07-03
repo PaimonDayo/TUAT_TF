@@ -8,7 +8,7 @@ import type {
   VenueRow,
 } from "@/types";
 
-const BLOCK_LABELS: Record<string, "all" | Block> = {
+export const BLOCK_LABELS: Record<string, "all" | Block> = {
   all: "all",
   "全体": "all",
   "全員": "all",
@@ -336,7 +336,7 @@ function sameBlocks(left: Block[], right: Block[]): boolean {
   return [...left].sort().join(",") === [...right].sort().join(",");
 }
 
-function parseSheetDate(
+export function parseSheetDate(
   value: string | undefined,
   defaultYear: number | null,
 ): string | null {
