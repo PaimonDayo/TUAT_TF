@@ -9,6 +9,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { FormModalFooter } from "@/components/ui/form-modal";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar } from "@/components/common/Avatar";
 import { BLOCK_ORDER, BLOCKS, EVENTS_BY_BLOCK, GRADE_OPTIONS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -234,22 +235,27 @@ export function ProfileEditForm({
         </div>
       </div>
 
-      {/* スプレッドシート連携：自分のシートを選ぶ（練習記録の同期に使う） */}
-      {sheetOptions !== null && sheetOptions.length > 0 && (
+      {/* スプレッドシート連携：自分のシートを選ぶ（練習記録の同期に使う）。
+          候補取得中も欄自体は出しておき、後から急に現れる遅延を無くす。 */}
+      {(sheetOptions === null || sheetOptions.length > 0) && (
         <div>
           <p className="section-label mb-1.5">スプレッドシートの自分のシート（任意）</p>
-          <select
-            value={sheetName}
-            onChange={(e) => setSheetName(e.target.value)}
-            className="h-11 w-full rounded-xl border border-separator bg-card px-3 text-[16px] text-ink"
-          >
-            <option value="">（連携しない）</option>
-            {sheetOptions.map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
+          {sheetOptions === null ? (
+            <Skeleton className="h-11 w-full" />
+          ) : (
+            <select
+              value={sheetName}
+              onChange={(e) => setSheetName(e.target.value)}
+              className="h-11 w-full rounded-xl border border-separator bg-card px-3 text-[16px] text-ink"
+            >
+              <option value="">（連携しない）</option>
+              {sheetOptions.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          )}
           <p className="text-micro mt-1">
             選ぶと、そのシートと練習記録が1時間ごとに自動で同期されます。
           </p>

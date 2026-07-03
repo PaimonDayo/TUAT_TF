@@ -289,7 +289,7 @@ export async function runSheetSync(
 
   const { data: profiles, error: pErr } = await admin
     .from("profiles")
-    .select("id, sheet_name, record_fields, record_source")
+    .select("id, sheet_name, record_fields, record_source, sheet_linked_at")
     .not("sheet_name", "is", null);
   if (pErr) throw pErr;
 
@@ -298,6 +298,7 @@ export async function runSheetSync(
     sheet_name: string;
     record_fields: RecordFieldDef[] | null;
     record_source: "app" | "sheet";
+    sheet_linked_at: string | null;
   }[];
   if (options.onlySheet) {
     linked = linked.filter((p) => p.sheet_name.trim() === options.onlySheet!.trim());
@@ -344,8 +345,14 @@ export async function runSheetSync(
 
     if (profile.record_source === "sheet") {
       // pullのみ: シートを正としてアプリへ反映。シートに行が無い日は触らない。
+      // 新規に連携した部員は連携日より前の履歴を一気に取り込まない（sheet_linked_atが個別カットオフ）。
+      const cutoff =
+        profile.sheet_linked_at && profile.sheet_linked_at > SYNC_CUTOFF
+          ? profile.sheet_linked_at
+          : SYNC_CUTOFF;
+      const inRangeForProfile = (d: string) => d >= cutoff && d <= today;
       for (const sr of member.records) {
-        if (!sr.date || !inRange(sr.date)) continue; // カットオフ前・未来日は無視
+        if (!sr.date || !inRangeForProfile(sr.date)) continue; // カットオフ前・未来日は無視
 
         const appList = appByDate.get(sr.date) ?? [];
         if (appList.length > 1) {

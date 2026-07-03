@@ -21,8 +21,11 @@ const AUTHOR_SELECT = "author:profiles!user_id(id, display_name, avatar_url, blo
 const NOTICE_REACTIONS: NoticeReaction[] = ["ack", "thanks", "question"];
 
 // 練習記録の表示フィルタ。
-// タイムライン等のソーシャル表示は「未来日除外・中身あり」。スプシ由来(from_sheet=true)の記録も
-// 同期した時刻に投稿されたものとしてタイムラインに表示する（record_source方向固定に伴う仕様変更）。
+// タイムライン等のソーシャル表示は「未来日除外・中身あり」。
+// スプシ由来(from_sheet=true)の記録もタイムラインに表示するが、連携直後に古い記録が
+// 一気に流れ込んで埋まらないよう、この機能を入れた日以降の recorded_date だけ対象にする。
+const SHEET_TIMELINE_CUTOFF = "2026-07-04";
+const SHEET_TIMELINE_OR = `from_sheet.eq.false,and(from_sheet.eq.true,recorded_date.gte.${SHEET_TIMELINE_CUTOFF})`;
 // 中身が空でない（距離いずれか>0、または各テキストが非null）
 const RECORD_NONEMPTY_OR =
   "dist_low.gt.0,dist_mid.gt.0,dist_high.gt.0,dist_speed.gt.0,strides.gt.0," +
@@ -118,6 +121,7 @@ export async function getFeed(
     .select(`*, ${AUTHOR_SELECT}`)
     .lte("recorded_date", jstToday())
     .or(RECORD_NONEMPTY_OR)
+    .or(SHEET_TIMELINE_OR)
     .order("recorded_date", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -331,6 +335,7 @@ export async function getUserActivity(
       .eq("user_id", userId)
       .lte("recorded_date", jstToday())
       .or(RECORD_NONEMPTY_OR)
+      .or(SHEET_TIMELINE_OR)
       .order("recorded_date", { ascending: false })
       .limit(limit),
     supabase

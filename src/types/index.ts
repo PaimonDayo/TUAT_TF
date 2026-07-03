@@ -64,6 +64,8 @@ export interface Profile {
   menu_view_all_blocks: boolean;
   /** スプレッドシート同期で使う、自分のシート名（例: B2駒井）。未設定なら同期対象外 */
   sheet_name: string | null;
+  /** シート連携した日(JST)。新規連携時は同期側でこれ以降のみ取り込む個別カットオフに使う */
+  sheet_linked_at: string | null;
   /** 記録の入力元。'sheet'ならスプシが正でアプリは閲覧専用、'app'ならアプリが正でスプシへ書き戻す */
   record_source: "app" | "sheet";
   /** 記録フォームのカスタム項目定義（短距離など独自列の人向け） */
