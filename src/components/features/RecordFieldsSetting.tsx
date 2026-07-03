@@ -43,11 +43,19 @@ export function RecordFieldsSetting({
   function addField() {
     const label = newLabel.trim();
     if (!label) return;
-    const key = crypto.randomUUID();
-    setFields((current) => [...current, { id: key, key, label, type: newType }]);
-    setNewLabel("");
-    setNewType("text");
-    setAddOpen(false);
+    try {
+      const key =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `field_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      setFields((current) => [...current, { id: key, key, label, type: newType }]);
+      setNewLabel("");
+      setNewType("text");
+      setAddOpen(false);
+    } catch (err) {
+      console.error("[RecordFieldsSetting] addField failed", err);
+      setMessage("項目の追加に失敗しました。もう一度お試しください");
+    }
   }
 
   function updateField(key: string, patch: Partial<RecordFieldDef>) {
@@ -72,19 +80,25 @@ export function RecordFieldsSetting({
         label: field.label.trim(),
         type: field.type,
       }));
-    const result = await safeUpdate(
-      createClient(),
-      "profiles",
-      { record_fields },
-      { id: profileId },
-    );
-    setSaving(false);
-    if (!result.ok) {
-      setMessage(safeUpdateMessage(result.reason));
-      return;
+    try {
+      const result = await safeUpdate(
+        createClient(),
+        "profiles",
+        { record_fields },
+        { id: profileId },
+      );
+      if (!result.ok) {
+        setMessage(safeUpdateMessage(result.reason));
+        return;
+      }
+      setOpen(false);
+      router.refresh();
+    } catch (err) {
+      console.error("[RecordFieldsSetting] save failed", err);
+      setMessage("保存に失敗しました。もう一度お試しください");
+    } finally {
+      setSaving(false);
     }
-    setOpen(false);
-    router.refresh();
   }
 
   return (
