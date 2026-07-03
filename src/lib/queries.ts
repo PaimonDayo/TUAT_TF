@@ -92,14 +92,13 @@ async function fetchCommentCounts(
 ): Promise<Map<string, number>> {
   const map = new Map<string, number>();
   if (ids.length === 0) return map;
-  const { data } = await supabase
-    .from("comments")
-    .select("target_id")
-    .eq("target_type", type)
-    .in("target_id", ids);
-  for (const row of data ?? []) {
-    const id = row.target_id as string;
-    map.set(id, (map.get(id) ?? 0) + 1);
+  // 全行取得→JS集計ではなく、DB側でGROUP BY集計するRPCを使う（P4）
+  const { data } = await supabase.rpc("count_comments_by_target", {
+    target_type_in: type,
+    target_ids: ids,
+  });
+  for (const row of (data ?? []) as { target_id: string; count: number }[]) {
+    map.set(row.target_id, Number(row.count));
   }
   return map;
 }
@@ -199,14 +198,17 @@ export async function getSchedulesOn(date: string) {
 /** ユーザーの期間内の練習記録（マイページ・週間集計に使用） */
 export async function getUserRecords(userId: string, fromDate?: string) {
   const supabase = await createClient();
-  let q = supabase
+  // fromDate省略時も無期限取得はしない（TrainingChartの最大表示期間は12ヶ月分）。
+  const defaultFromDate = new Date();
+  defaultFromDate.setDate(defaultFromDate.getDate() - 400);
+  const q = supabase
     .from("practice_records")
     .select("*")
     .eq("user_id", userId)
     .lte("recorded_date", jstToday()) // 未来日は除外
     .or(RECORD_NONEMPTY_OR) // 空の記録は除外
+    .gte("recorded_date", fromDate ?? defaultFromDate.toISOString().slice(0, 10))
     .order("recorded_date", { ascending: false });
-  if (fromDate) q = q.gte("recorded_date", fromDate);
   const { data } = await q;
   return data ?? [];
 }
@@ -252,13 +254,14 @@ export async function getUpcomingSchedules(
   return filterSchedulesForViewer(data ?? [], viewerBlocks, canManage);
 }
 
-/** お知らせ一覧 */
+/** お知らせ一覧（直近200件。無期限の全件取得はしない） */
 export async function getNotices(userId: string): Promise<NoticeWithReactions[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("notices")
     .select("*")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(200);
   return withNoticeReactions(supabase, (data ?? []) as Notice[], userId);
 }
 
@@ -589,6 +592,7 @@ export async function getPublishedPersonalNotes(
   return (data ?? []) as unknown as NoteWithRelations[];
 }
 
+/** 直近50件（無期限の全件取得はしない） */
 export async function getPersonalNotifications(userId: string): Promise<AppNotificationWithActor[]> {
   const supabase = await createClient();
   const { data } = await supabase
@@ -598,7 +602,8 @@ export async function getPersonalNotifications(userId: string): Promise<AppNotif
       actor:profiles!actor_id(id, display_name, avatar_url)
     `)
     .eq("user_id", userId)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(50);
   return (data ?? []) as unknown as AppNotificationWithActor[];
 }
 
