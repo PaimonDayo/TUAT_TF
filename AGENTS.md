@@ -22,6 +22,7 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
   - Codex → `Co-Authored-By: Codex <noreply@openai.com>`
 - 認証はユーザー版を維持（proxy は cookie があれば getUser 失敗でもログアウトさせない＋SessionKeepAlive）。
 - アクセス制御は最終的に **RLS** が担保。UIガードと RLS の両方で守る。
+- **同期・一括更新系のロジック変更は、本番初回実行の前に①対象テーブルのスナップショット取得（例: service roleでCSVエクスポート）②dryRunで差分確認、を必ず行う**（2026-07-03のデータ消失インシデントの教訓。本番DBはPITR/バックアップ無しで、消えたら戻せない）。
 
 ## ドキュメント索引
 - `docs/CLAUDE-HANDOFF.md` … **最新の進捗・引き継ぎ（まずここ）**
@@ -68,7 +69,8 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 ### 2. スプシ同期を「部員ごとの方向固定」へ（最重要）
 - migration: `profiles.record_source TEXT NOT NULL DEFAULT 'app' CHECK (record_source IN ('app','sheet'))`。バックフィル: **sheet_name 連携済みの部員は 'sheet'、未連携は 'app'**（従来のスプシ取込を切らさないための初期値。部員には切替方法を周知）。
 - `src/lib/sheet-sync.ts` を再構成:
-  - record_source='sheet' の部員 → **pull のみ**（シート→アプリ、from_sheet=true）。シートを正とし、マップ済み項目はシートの空欄も反映してよい。シートに行が無い日は触らない（安全側）。アプリ→シート書き戻しはしない。
+  - record_source='sheet' の部員 → **pull のみ**（シート→アプリ、from_sheet=true）。**空でないシート項目だけ取り込む（非破壊。空欄でアプリの値を消さない）**。シートに行が無い日は触らない。アプリ→シート書き戻しはしない。
+  - ⚠️ **2026-07-03 インシデント**: 当初仕様「シートの空欄も反映してよい」（Fable 5起案）で実装した結果、17:00 UTCのcron同期でアプリ側にだけあった6レコードの内容がヌルクリアされた（部員2名、復元不能=PITR/バックアップ無しをCLIで確認済み）。5de45d5で非破壊に修正済み。**非破壊pullが恒久仕様。以後どの方向でも「空で相手の値を消す」実装は禁止。**
   - record_source='app' の部員 → **push のみ**（アプリ→シート）。シート側のマップ済みセルは同期が上書きしてよい（シート＝写し）。シート→アプリ取込はしない。
   - これに伴い LWW（appIsNewer / updated_at・synced_at 比較）、同日複数記録の conflict スキップ、双方向前提の空値保護ロジックを撤去・簡素化。SYNC_CUTOFF・未来日除外・dryRun・sheet_sync_runs ログ・手動同期ボタンは維持。
   - practice_records の読み込みに `.gte("recorded_date", SYNC_CUTOFF)` を付ける（下記 5-P3 と同時解消）。
