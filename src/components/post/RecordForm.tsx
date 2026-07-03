@@ -203,14 +203,66 @@ export function RecordForm({
   }
 
   if (recordSource === "sheet") {
+    const rows: { label: string; value: string | null }[] = record
+      ? isMiddleLong
+        ? [
+            {
+              label: "強度別距離",
+              value:
+                [
+                  dist.low && `低強度 ${dist.low}km`,
+                  dist.mid && `中強度 ${dist.mid}km`,
+                  dist.high && `高強度 ${dist.high}km`,
+                  dist.speed && `解糖系 ${dist.speed}km`,
+                  strides !== "0" && strides && `流し ${strides}本`,
+                ]
+                  .filter(Boolean)
+                  .join(" / ") || null,
+            },
+            { label: "結果・タイム", value: resultText || null },
+            { label: "補強", value: strengthText || null },
+            { label: "感想・振り返り", value: memo || null },
+          ]
+        : [
+            { label: "メニュー", value: menuText || null },
+            { label: "目的・意識すること", value: focusText || null },
+            { label: "タイム", value: resultText || null },
+            { label: "感想・振り返り", value: memo || null },
+          ]
+      : [];
+
     return (
-      <div className="space-y-3 pb-4 text-center">
-        <p className="text-body">
+      <div className="space-y-3 pb-4">
+        <div className="rounded-xl bg-accent/8 px-3 py-2.5 text-caption leading-relaxed">
           記録の入力元がスプレッドシートに設定されているため、アプリからは投稿・編集できません。
-        </p>
-        <p className="text-caption text-muted">
           マイページの設定で入力元をアプリに切り替えると編集できます。
-        </p>
+        </div>
+        {record ? (
+          <div className="space-y-3">
+            <div>
+              <p className="section-label mb-1">日付</p>
+              <p className="text-[14px]">{date}</p>
+            </div>
+            {rows.map((row) => (
+              <div key={row.label}>
+                <p className="section-label mb-1">{row.label}</p>
+                <p className="whitespace-pre-wrap text-[14px]">{row.value ?? "（未入力）"}</p>
+              </div>
+            ))}
+            {condition && (
+              <div>
+                <p className="section-label mb-1">コンディション</p>
+                <p className="text-[14px]">
+                  {CONDITIONS[condition].symbol} {CONDITIONS[condition].label}
+                </p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-center text-caption text-muted">
+            新しい記録はスプレッドシート側に入力してください。
+          </p>
+        )}
       </div>
     );
   }
