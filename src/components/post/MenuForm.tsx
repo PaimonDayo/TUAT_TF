@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { Check, ChevronRight, MoreHorizontal, Plus, Save, Trash2 } from "lucide-react";
+import { Check, ChevronRight, Copy, Plus } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
 import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
@@ -30,35 +29,6 @@ import type {
 type MenuKind = "block" | "people";
 type MenuStatus = "draft" | "published";
 
-type LocalMenuPreset = {
-  id: string;
-  name: string;
-  // プリセットは「メニュー1件まるごと」を保存する再利用テンプレート。
-  // 種類（ブロック全体/個人）・ブロック・対象者・メニュー本文をすべて含む。
-  kind: MenuKind;
-  userIds: string[];
-  block?: Block;
-  content?: string;
-};
-
-type MenuTargetPreferences = {
-  presets: LocalMenuPreset[];
-  lastTargetIds: string[];
-  lastPresetId: string | null;
-  migratedLegacyPresets: boolean;
-};
-
-const EMPTY_PREFERENCES: MenuTargetPreferences = {
-  presets: [],
-  lastTargetIds: [],
-  lastPresetId: null,
-  migratedLegacyPresets: false,
-};
-
-function menuPreferencesKey(userId: string) {
-  return `track-app:menu-targets:${userId}`;
-}
-
 // 直近に使った「メニューの種類」（端末単位）。初期表示のチラつき防止に同期的に読む。
 const MENU_LAST_KIND_KEY = "track-app:menu-last-kind";
 
@@ -67,51 +37,23 @@ function readLastMenuKind(): MenuKind {
   return localStorage.getItem(MENU_LAST_KIND_KEY) === "people" ? "people" : "block";
 }
 
-function readMenuPreferences(userId: string): MenuTargetPreferences {
-  try {
-    const value = localStorage.getItem(menuPreferencesKey(userId));
-    if (!value) return EMPTY_PREFERENCES;
-    const parsed = JSON.parse(value) as Partial<MenuTargetPreferences>;
-    return {
-      presets: Array.isArray(parsed.presets)
-        ? parsed.presets
-            .filter(
-              (preset): preset is LocalMenuPreset =>
-                typeof preset?.id === "string" &&
-                typeof preset.name === "string" &&
-                Array.isArray(preset.userIds),
-            )
-            // 旧データには kind が無い（対象者専用だった）ので個人指定として扱う
-            .map((preset) => ({
-              ...preset,
-              kind:
-                preset.kind === "block" || preset.kind === "people"
-                  ? preset.kind
-                  : "people",
-            }))
-        : [],
-      lastTargetIds: Array.isArray(parsed.lastTargetIds)
-        ? parsed.lastTargetIds.filter((id): id is string => typeof id === "string")
-        : [],
-      lastPresetId:
-        typeof parsed.lastPresetId === "string" ? parsed.lastPresetId : null,
-      migratedLegacyPresets: parsed.migratedLegacyPresets === true,
-    };
-  } catch {
-    return EMPTY_PREFERENCES;
-  }
-}
-
-function writeMenuPreferences(userId: string, value: MenuTargetPreferences) {
-  localStorage.setItem(menuPreferencesKey(userId), JSON.stringify(value));
-}
-
 type UpcomingSchedule = {
   id: string;
   schedule_date: string;
   title: string | null;
   venue_name: string | null;
   schedule_type: string;
+};
+
+/** 「過去メニューから複製」ピッカーに出す1件 */
+type HistoryMenu = {
+  id: string;
+  content: string;
+  pace: string | null;
+  supplement: string | null;
+  target_block: Block | null;
+  created_at: string;
+  targets: { user_id: string }[];
 };
 
 /** 予定カードから練習メニューを追加する */
@@ -178,16 +120,12 @@ function MenuEditor({
 }) {
   const router = useRouter();
   const { showToast } = useToast();
-  const initialTargetIds = useMemo(
-    () => menu?.targets?.map((target) => target.user_id) ?? [],
-    [menu],
-  );
+  const initialTargetIds = menu?.targets?.map((target) => target.user_id) ?? [];
   const [schedules, setSchedules] = useState<UpcomingSchedule[] | null>(
     fixedScheduleId ? [] : null,
   );
   const [members, setMembers] = useState<AuthorMini[] | null>(null);
-  const [storageUserId, setStorageUserId] = useState<string | null>(null);
-  const [presets, setPresets] = useState<LocalMenuPreset[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [scheduleId, setScheduleId] = useState(fixedScheduleId ?? menu?.schedule_id ?? "");
   const [kind, setKind] = useState<MenuKind>(() => {
     if (initialTargetIds.length > 0) return "people";
@@ -203,16 +141,12 @@ function MenuEditor({
   const [pace, setPace] = useState(menu?.pace ?? "");
   const [supplement, setSupplement] = useState(menu?.supplement ?? "");
   const [status, setStatus] = useState<MenuStatus>(menu?.status ?? "draft");
-  const [presetName, setPresetName] = useState("");
-  const [selectedPreset, setSelectedPreset] = useState("");
-  const [selectedPresetName, setSelectedPresetName] = useState("");
-  const [presetPickerOpen, setPresetPickerOpen] = useState(false);
-  const [presetSaveOpen, setPresetSaveOpen] = useState(false);
-  const [presetEditOpen, setPresetEditOpen] = useState(false);
+  const [history, setHistory] = useState<HistoryMenu[] | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historySearch, setHistorySearch] = useState("");
   const [targetSearch, setTargetSearch] = useState("");
   const [targetBlockFilter, setTargetBlockFilter] = useState<Block | "all">("all");
   const [targetPickerOpen, setTargetPickerOpen] = useState(false);
-  const [confirmPresetDelete, setConfirmPresetDelete] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -224,15 +158,7 @@ function MenuEditor({
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      const storedPreferences = user
-        ? readMenuPreferences(user.id)
-        : EMPTY_PREFERENCES;
-      const [
-        scheduleResult,
-        memberResult,
-        previousMenuResult,
-        legacyPresetResult,
-      ] = await Promise.all([
+      const [scheduleResult, memberResult, previousMenuResult] = await Promise.all([
         fixedScheduleId
           ? Promise.resolve({ data: [] })
           : supabase
@@ -245,7 +171,7 @@ function MenuEditor({
           .select("id, display_name, avatar_url, blocks, grade")
           .eq("status", "active")
           .order("display_name", { ascending: true }),
-        user && !storedPreferences.migratedLegacyPresets
+        user
           ? supabase
               .from("practice_menus")
               .select("targets:practice_menu_targets!inner(user_id)")
@@ -255,13 +181,6 @@ function MenuEditor({
               .limit(1)
               .maybeSingle()
           : Promise.resolve({ data: null }),
-        user
-          ? supabase
-              .from("menu_target_presets")
-              .select("id, name, user_ids")
-              .eq("author_id", user.id)
-              .order("created_at", { ascending: true })
-          : Promise.resolve({ data: [] }),
       ]);
       if (!active) return;
 
@@ -274,59 +193,17 @@ function MenuEditor({
       setMembers(memberRows);
 
       if (user) {
-        setStorageUserId(user.id);
-        const preferences = storedPreferences;
-        const validMemberIds = new Set(memberRows.map((member) => member.id));
-        const legacyPresets = (
-          (legacyPresetResult.data ?? []) as {
-            id: string;
-            name: string;
-            user_ids: string[];
-          }[]
-        ).map((preset) => ({
-          id: preset.id,
-          name: preset.name,
-          kind: "people" as MenuKind,
-          userIds: preset.user_ids,
-        }));
-        const sourcePresets =
-          preferences.presets.length > 0 || preferences.migratedLegacyPresets
-            ? preferences.presets
-            : legacyPresets;
-        const validPresets = sourcePresets.map((preset) => ({
-          ...preset,
-          userIds: preset.userIds.filter((id) => validMemberIds.has(id)),
-        }));
-        setPresets(validPresets);
-        if (!preferences.migratedLegacyPresets) {
-          writeMenuPreferences(user.id, {
-            ...preferences,
-            presets: validPresets,
-            migratedLegacyPresets: true,
-          });
-        }
-
+        setCurrentUserId(user.id);
+        // 直近値の自動初期値（対象者引き継ぎ）: 新規作成時だけ、直前に作った
+        // 個別メニューの対象者をプリロードする。
         if (!menu) {
+          const validMemberIds = new Set(memberRows.map((member) => member.id));
           const previousMenuTargets = (
             (previousMenuResult.data?.targets ?? []) as { user_id: string }[]
           ).map((target) => target.user_id);
-          const previousPreset = validPresets.find(
-            (preset) => preset.id === preferences.lastPresetId,
-          );
-          const previousTargets = (
-            previousPreset?.userIds ??
-            (previousMenuTargets.length > 0
-              ? previousMenuTargets
-              : preferences.lastTargetIds)
-          ).filter((id) => validMemberIds.has(id));
-          // kind は初期値（直近の種類）で確定済みなので、ここでは対象者の
-          // プリロードだけ行う（setKind で切り替えるとチラつくため呼ばない）。
+          const previousTargets = previousMenuTargets.filter((id) => validMemberIds.has(id));
           if (previousTargets.length > 0) {
             setTargetIds(previousTargets);
-          }
-          if (previousPreset) {
-            setSelectedPreset(previousPreset.id);
-            setSelectedPresetName(previousPreset.name);
           }
         }
       }
@@ -337,6 +214,28 @@ function MenuEditor({
     };
   }, [fixedScheduleId, menu]);
 
+  // 過去のメニュー履歴はシートを開いたときだけ取得する
+  useEffect(() => {
+    if (!historyOpen || history !== null || !currentUserId) return;
+    let active = true;
+    const supabase = createClient();
+    void supabase
+      .from("practice_menus")
+      .select(
+        "id, content, pace, supplement, target_block, created_at, targets:practice_menu_targets(user_id)",
+      )
+      .eq("author_id", currentUserId)
+      .eq("status", "published")
+      .order("created_at", { ascending: false })
+      .limit(30)
+      .then(({ data }) => {
+        if (active) setHistory((data ?? []) as unknown as HistoryMenu[]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [historyOpen, history, currentUserId]);
+
   function toggleTarget(userId: string) {
     setTargetIds((current) =>
       current.includes(userId)
@@ -345,110 +244,36 @@ function MenuEditor({
     );
   }
 
-  /** プリセット＝メニュー1件を丸ごと復元（種類・ブロック・対象者・本文） */
-  function loadPreset(preset: LocalMenuPreset) {
-    setKind(preset.kind);
-    if (preset.block) setTargetBlock(preset.block);
-    setTargetIds(preset.kind === "people" ? preset.userIds : []);
-    setContent(preset.content ?? "");
-    setSelectedPreset(preset.id);
-    setSelectedPresetName(preset.name);
-    if (storageUserId) {
-      const previous = readMenuPreferences(storageUserId);
-      writeMenuPreferences(storageUserId, {
-        ...previous,
-        presets,
-        lastTargetIds: preset.userIds,
-        lastPresetId: preset.id,
-      });
-    }
-    showToast(`「${preset.name}」を読み込みました`, "success");
+  /** 過去に公開したメニュー1件を丸ごと複製（種類・ブロック・対象者・本文・ペース・補強） */
+  function loadHistoryItem(item: HistoryMenu) {
+    const ids = item.targets?.map((target) => target.user_id) ?? [];
+    setKind(ids.length > 0 ? "people" : "block");
+    if (item.target_block) setTargetBlock(item.target_block);
+    setTargetIds(ids);
+    setContent(item.content ?? "");
+    setPace(item.pace ?? "");
+    setSupplement(item.supplement ?? "");
+    setHistoryOpen(false);
+    showToast("過去のメニューを読み込みました", "success");
   }
 
-  /** いまのフォーム内容を、新しいプリセットとして保存 */
-  function savePreset(rawName: string) {
-    const name = rawName.trim();
-    if (!name || !storageUserId) return;
-    if (!content.trim() && (kind === "block" || targetIds.length === 0)) {
-      setError("保存する内容がありません");
-      return;
-    }
-    const preset: LocalMenuPreset = {
-      id: crypto.randomUUID(),
-      name,
-      kind,
-      userIds: kind === "people" ? targetIds : [],
-      block: targetBlock,
-      content: content.trim() || undefined,
-    };
-    const next = [...presets, preset];
-    setPresets(next);
-    setSelectedPreset(preset.id);
-    setSelectedPresetName(preset.name);
-    setPresetName("");
-    const previous = readMenuPreferences(storageUserId);
-    writeMenuPreferences(storageUserId, {
-      ...previous,
-      presets: next,
-      lastPresetId: preset.id,
-    });
-    showToast(`プリセット「${name}」を保存しました`, "success");
-  }
-
-  /** 選択中プリセットを、いまのフォーム内容で上書き */
-  function updatePreset() {
-    const name = selectedPresetName.trim();
-    if (!storageUserId || !selectedPreset || !name) return;
-    const next = presets.map((preset) =>
-      preset.id === selectedPreset
-        ? {
-            ...preset,
-            name,
-            kind,
-            userIds: kind === "people" ? targetIds : [],
-            block: targetBlock,
-            content: content.trim() || undefined,
-          }
-        : preset,
-    );
-    setPresets(next);
-    const previous = readMenuPreferences(storageUserId);
-    writeMenuPreferences(storageUserId, {
-      ...previous,
-      presets: next,
-      lastPresetId: selectedPreset,
-      lastTargetIds: targetIds,
-    });
-    showToast(`「${name}」を上書きしました`, "success");
-  }
-
-  function deletePreset() {
-    if (!storageUserId || !selectedPreset) return;
-    const removed = presets.find((preset) => preset.id === selectedPreset);
-    const next = presets.filter((preset) => preset.id !== selectedPreset);
-    setPresets(next);
-    setSelectedPreset("");
-    setSelectedPresetName("");
-    const previous = readMenuPreferences(storageUserId);
-    writeMenuPreferences(storageUserId, {
-      ...previous,
-      presets: next,
-      lastPresetId: null,
-    });
-    if (removed) showToast(`「${removed.name}」を削除しました`, "success");
-  }
-
-  /** プリセットの内容を1行で表す（メニューが保存されていることを明示） */
-  function presetSummary(preset: LocalMenuPreset): string {
+  /** 履歴一覧の1行要約 */
+  function historySummary(item: HistoryMenu): string {
     const scope =
-      preset.kind === "people"
-        ? `個人${preset.userIds.length}人`
-        : preset.block
-          ? BLOCKS[preset.block].label
+      item.targets.length > 0
+        ? `個人${item.targets.length}人`
+        : item.target_block
+          ? BLOCKS[item.target_block].label
           : "ブロック";
-    const firstLine = preset.content?.split("\n").find((line) => line.trim());
+    const firstLine = item.content?.split("\n").find((line) => line.trim());
     return firstLine ? `${scope}・${firstLine}` : scope;
   }
+
+  const filteredHistory = (history ?? []).filter((item) => {
+    const q = historySearch.trim().toLowerCase();
+    if (!q) return true;
+    return item.content.toLowerCase().includes(q);
+  });
 
   async function submit() {
     if (!scheduleId) {
@@ -489,20 +314,6 @@ function MenuEditor({
     // 次回の初期表示用に、選んだ種類を端末に保存
     if (typeof window !== "undefined") {
       localStorage.setItem(MENU_LAST_KIND_KEY, kind);
-    }
-    if (!menu && storageUserId && kind === "people") {
-      const previous = readMenuPreferences(storageUserId);
-      const activePreset = presets.find((preset) => preset.id === selectedPreset);
-      const presetStillMatches =
-        activePreset &&
-        activePreset.userIds.length === targetIds.length &&
-        activePreset.userIds.every((id) => targetIds.includes(id));
-      writeMenuPreferences(storageUserId, {
-        ...previous,
-        presets,
-        lastTargetIds: targetIds,
-        lastPresetId: presetStillMatches ? activePreset.id : null,
-      });
     }
     router.refresh();
     onDone();
@@ -555,39 +366,13 @@ function MenuEditor({
         </div>
       )}
 
-      {presets.length > 0 && (
-        <div>
-          <p className="section-label mb-1.5">プリセットから入力</p>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setPresetPickerOpen(true)}
-              className="flex h-11 min-w-0 flex-1 items-center justify-between rounded-xl border border-separator bg-card px-3 text-left text-base"
-            >
-              <span className={cn("truncate", !selectedPreset && "text-muted")}>
-                {selectedPreset
-                  ? `${selectedPresetName} を使用中`
-                  : "保存したメニューを呼び出す"}
-              </span>
-              {selectedPreset ? (
-                <Check size={18} className="shrink-0 text-success" />
-              ) : (
-                <ChevronRight size={17} className="shrink-0 text-muted" />
-              )}
-            </button>
-            {selectedPreset && (
-              <button
-                type="button"
-                onClick={() => setPresetEditOpen(true)}
-                aria-label="プリセットを管理"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-separator bg-card text-muted active:bg-bg"
-              >
-                <MoreHorizontal size={20} />
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+      <button
+        type="button"
+        onClick={() => setHistoryOpen(true)}
+        className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-accent/50 py-2.5 text-[13px] font-semibold text-accent active:bg-accent/5"
+      >
+        <Copy size={16} /> 過去のメニューから複製
+      </button>
 
       <div>
         <p className="section-label mb-1.5">メニューの種類</p>
@@ -731,22 +516,6 @@ function MenuEditor({
         </p>
       </div>
 
-      <div>
-        <button
-          type="button"
-          onClick={() => {
-            setPresetName("");
-            setPresetSaveOpen(true);
-          }}
-          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-accent/50 py-2.5 text-[13px] font-semibold text-accent active:bg-accent/5"
-        >
-          <Save size={16} /> このメニューをプリセット保存
-        </button>
-        <p className="text-micro mt-1.5">
-          種類・ブロック・対象者・メニュー内容をまとめて保存し、次回そのまま呼び出せます。
-        </p>
-      </div>
-
       {error && <p className="text-center text-caption text-danger">{error}</p>}
       <FormModalFooter>
         <Button
@@ -828,150 +597,48 @@ function MenuEditor({
         </FormModalFooter>
       </FormModal>
 
-      <Sheet open={presetPickerOpen} onOpenChange={setPresetPickerOpen}>
-        <SheetContent title="プリセットを選択" autoFocus={false}>
-          <ul className="max-h-[55vh] space-y-1 overflow-y-auto pb-2">
-            <li>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedPreset("");
-                  setSelectedPresetName("");
-                  setPresetPickerOpen(false);
-                }}
-                className="flex min-h-12 w-full items-center rounded-lg px-3 text-left text-[14px] text-muted active:bg-bg"
-              >
-                選択しない
-              </button>
-            </li>
-            {presets.map((preset) => (
-              <li key={preset.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    loadPreset(preset);
-                    setPresetPickerOpen(false);
-                  }}
-                  className={cn(
-                    "flex min-h-12 w-full items-center justify-between gap-2 rounded-lg px-3 text-left active:bg-bg",
-                    selectedPreset === preset.id && "bg-accent/10",
-                  )}
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[14px] font-medium">
-                      {preset.name}
-                    </span>
-                    <span className="block truncate text-micro text-muted2">
-                      {presetSummary(preset)}
-                    </span>
-                  </span>
-                  {selectedPreset === preset.id && (
-                    <Check size={18} className="shrink-0 text-accent" />
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </SheetContent>
-      </Sheet>
-
-      <Sheet open={presetSaveOpen} onOpenChange={setPresetSaveOpen}>
-        <SheetContent title="プリセットを保存" autoFocus={false}>
+      <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
+        <SheetContent title="過去のメニューから複製" autoFocus={false}>
           <div className="space-y-3 pb-2">
-            <p className="text-caption">
-              いまの種類・ブロック・対象者・メニュー内容をまとめて保存します。
-            </p>
-            {selectedPreset && (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={() => {
-                  updatePreset();
-                  setPresetSaveOpen(false);
-                }}
-              >
-                <Save size={16} />「{selectedPresetName}」を上書き保存
-              </Button>
+            <Input
+              value={historySearch}
+              onChange={(event) => setHistorySearch(event.target.value)}
+              placeholder="内容で検索"
+            />
+            {history === null ? (
+              <div className="space-y-2">
+                <Skeleton className="h-14 w-full" />
+                <Skeleton className="h-14 w-full" />
+                <Skeleton className="h-14 w-full" />
+              </div>
+            ) : filteredHistory.length === 0 ? (
+              <EmptyState
+                title="過去に公開したメニューがありません"
+                className="min-h-24 py-4"
+              />
+            ) : (
+              <ul className="max-h-[55vh] space-y-1 overflow-y-auto">
+                {filteredHistory.map((item) => (
+                  <li key={item.id}>
+                    <button
+                      type="button"
+                      onClick={() => loadHistoryItem(item)}
+                      className="flex min-h-14 w-full flex-col items-start gap-0.5 rounded-lg px-3 py-2 text-left active:bg-bg"
+                    >
+                      <span className="block w-full truncate text-[14px] font-medium">
+                        {historySummary(item)}
+                      </span>
+                      <span className="block text-micro text-muted2">
+                        {format(new Date(item.created_at), "M/d(E)", { locale: ja })}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
-            <div>
-              <p className="section-label mb-1.5">
-                {selectedPreset ? "新しいプリセットとして保存" : "プリセット名"}
-              </p>
-              <Input
-                value={presetName}
-                onChange={(event) => setPresetName(event.target.value)}
-                placeholder="例: 長距離A・スピード練"
-                maxLength={30}
-              />
-            </div>
-            <Button
-              size="lg"
-              className="w-full"
-              disabled={!presetName.trim() || !storageUserId}
-              onClick={() => {
-                savePreset(presetName);
-                setPresetSaveOpen(false);
-              }}
-            >
-              保存する
-            </Button>
           </div>
         </SheetContent>
       </Sheet>
-
-      <Sheet open={presetEditOpen} onOpenChange={setPresetEditOpen}>
-        <SheetContent title="プリセットを管理" autoFocus={false}>
-          <div className="space-y-3 pb-2">
-            <div>
-              <p className="section-label mb-1.5">プリセット名</p>
-              <Input
-                value={selectedPresetName}
-                onChange={(event) => setSelectedPresetName(event.target.value)}
-                placeholder="プリセット名"
-                maxLength={30}
-              />
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              disabled={!selectedPresetName.trim()}
-              onClick={() => {
-                updatePreset();
-                setPresetEditOpen(false);
-              }}
-            >
-              <Save size={16} />
-              現在の内容で上書き
-            </Button>
-            <p className="text-micro">
-              いまの種類・ブロック・対象者・メニュー内容をこのプリセットに保存します。
-            </p>
-            <button
-              type="button"
-              onClick={() => setConfirmPresetDelete(true)}
-              className="flex w-full items-center justify-center gap-1 rounded-xl border border-separator py-2.5 text-[14px] font-semibold text-danger active:bg-bg"
-            >
-              <Trash2 size={16} />
-              このプリセットを削除
-            </button>
-          </div>
-        </SheetContent>
-      </Sheet>
-
-      <ConfirmDialog
-        open={confirmPresetDelete}
-        onOpenChange={setConfirmPresetDelete}
-        title="プリセットを削除しますか？"
-        description="この端末に保存されたプリセットを削除します。"
-        confirmLabel="削除する"
-        onConfirm={() => {
-          deletePreset();
-          setConfirmPresetDelete(false);
-          setPresetEditOpen(false);
-        }}
-      />
     </div>
   );
 }
