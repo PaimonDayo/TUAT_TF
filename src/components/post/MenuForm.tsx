@@ -18,6 +18,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { createClient } from "@/lib/supabase/client";
+import { jstToday } from "@/lib/date";
 import { BLOCK_ORDER, BLOCKS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type {
@@ -219,7 +220,7 @@ function MenuEditor({
     let active = true;
     async function load() {
       const supabase = createClient();
-      const today = new Date().toISOString().slice(0, 10);
+      const today = jstToday();
       const {
         data: { user },
       } = await supabase.auth.getUser();

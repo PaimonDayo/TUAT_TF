@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { fetchRolesByProfileIds } from "@/lib/supabase/auth";
+import { jstToday } from "@/lib/date";
 import type {
   FeedItem,
   RecordWithAuthor,
@@ -27,16 +28,6 @@ const RECORD_NONEMPTY_OR =
   "dist_low.gt.0,dist_mid.gt.0,dist_high.gt.0,dist_speed.gt.0,strides.gt.0," +
   "result_text.not.is.null,strength_text.not.is.null,memo.not.is.null," +
   "menu_text.not.is.null,focus_text.not.is.null";
-
-function dateInJapan(offsetDays = 0) {
-  const date = new Date(Date.now() + offsetDays * 86_400_000);
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Tokyo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
-}
 
 async function withNoticeReactions(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -126,7 +117,7 @@ export async function getFeed(
     .from("practice_records")
     .select(`*, ${AUTHOR_SELECT}`)
     .eq("from_sheet", false) // タイムラインはアプリ投稿のみ
-    .lte("recorded_date", dateInJapan())
+    .lte("recorded_date", jstToday())
     .or(RECORD_NONEMPTY_OR)
     .order("recorded_date", { ascending: false })
     .order("created_at", { ascending: false })
@@ -209,7 +200,7 @@ export async function getUserRecords(userId: string, fromDate?: string) {
     .from("practice_records")
     .select("*")
     .eq("user_id", userId)
-    .lte("recorded_date", dateInJapan()) // 未来日は除外
+    .lte("recorded_date", jstToday()) // 未来日は除外
     .or(RECORD_NONEMPTY_OR) // 空の記録は除外
     .order("recorded_date", { ascending: false });
   if (fromDate) q = q.gte("recorded_date", fromDate);
@@ -236,7 +227,7 @@ export async function getUpcomingSchedules(
   type?: string,
 ) {
   const supabase = await createClient();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = jstToday();
   let q = supabase
     .from("practice_schedules")
     .select(`
@@ -340,7 +331,7 @@ export async function getUserActivity(
       .select(`*, ${AUTHOR_SELECT}`)
       .eq("user_id", userId)
       .eq("from_sheet", false) // 投稿一覧はアプリ投稿のみ
-      .lte("recorded_date", dateInJapan())
+      .lte("recorded_date", jstToday())
       .or(RECORD_NONEMPTY_OR)
       .order("recorded_date", { ascending: false })
       .limit(limit),
@@ -389,8 +380,8 @@ export async function getUserActivity(
 /** ホーム: 重要は全件、通常は直近3件、明日締切は件数外で表示 */
 export async function getHomeNotices(userId: string): Promise<NoticeWithReactions[]> {
   const supabase = await createClient();
-  const today = dateInJapan();
-  const tomorrow = dateInJapan(1);
+  const today = jstToday();
+  const tomorrow = jstToday(1);
 
   const [{ data: notices }, { data: dismissed }] = await Promise.all([
     supabase
@@ -426,7 +417,7 @@ export async function getAttendanceSchedules(
   limit = 10,
 ) {
   const supabase = await createClient();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = jstToday();
   const { data } = await supabase
     .from("practice_schedules")
     .select("*")

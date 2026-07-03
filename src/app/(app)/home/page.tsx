@@ -13,6 +13,7 @@ import { HomeNotices } from "@/components/features/HomeNotices";
 import { InstallPrompt } from "@/components/features/InstallPrompt";
 import { AttendanceToggle } from "@/components/features/AttendanceToggle";
 import { getCurrentProfile } from "@/lib/supabase/auth";
+import { jstNow } from "@/lib/date";
 import {
   getAttendanceSchedules,
   getAttendancesForSchedules,
@@ -35,7 +36,7 @@ import type {
 
 export default async function HomePage() {
   const profile = await getCurrentProfile();
-  const nowJst = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
+  const nowJst = jstNow();
 
   return (
     <>

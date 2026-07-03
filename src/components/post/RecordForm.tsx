@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { format } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
+import { jstToday } from "@/lib/date";
 import { IntensityInput, type IntensityValues } from "@/components/features/IntensityInput";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -35,7 +35,7 @@ export function RecordForm({
   const router = useRouter();
   const editing = !!record;
 
-  const [date, setDate] = useState(record?.recorded_date ?? format(new Date(), "yyyy-MM-dd"));
+  const [date, setDate] = useState(record?.recorded_date ?? jstToday());
   const [dist, setDist] = useState<IntensityValues>(
     record
       ? {
@@ -90,6 +90,10 @@ export function RecordForm({
   }
 
   async function submit() {
+    if (date > jstToday()) {
+      setError("未来の日付は選べません");
+      return;
+    }
     const distTotal =
       (parseFloat(dist.low) || 0) +
       (parseFloat(dist.mid) || 0) +
@@ -200,7 +204,12 @@ export function RecordForm({
       {/* 日付 */}
       <div>
         <p className="section-label mb-1.5">日付</p>
-        <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+        <Input
+          type="date"
+          value={date}
+          max={jstToday()}
+          onChange={(event) => setDate(event.target.value)}
+        />
       </div>
 
       {/* 強度別距離（中長距離のみ） */}

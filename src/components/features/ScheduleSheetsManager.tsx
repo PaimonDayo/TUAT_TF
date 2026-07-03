@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { Select } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
+import { jstToday } from "@/lib/date";
 import { BLOCKS, SCHEDULE_TYPE_OPTIONS } from "@/lib/constants";
 import type {
   ScheduleImportPreview,
@@ -126,7 +127,7 @@ export function ScheduleSheetsManager() {
           : `${year}-${String(month + 1).padStart(2, "0")}-01`;
       query = query.gte("schedule_date", start).lt("schedule_date", nextMonth);
     } else {
-      query = query.gte("schedule_date", new Date().toISOString().slice(0, 10));
+      query = query.gte("schedule_date", jstToday());
     }
     void query.then(({ data }) => {
       if (!active) return;
