@@ -10,7 +10,8 @@ import type { RecordFieldDef } from "@/types";
  * ユーザー追加のカスタム項目＝アプリ上の項目名）。項目名とシート列名が一致する項目だけ同期する。
  *
  * 同期方向は部員ごとに固定（profiles.record_source）:
- *   'sheet' → pullのみ（シート→アプリ）。シートを正とし、マップ済み項目はシートの空欄も反映する。
+ *   'sheet' → pullのみ（シート→アプリ）。シートを正とするが、**空でないシート項目だけ**取り込む
+ *             （シートの空欄でアプリの既存内容を消さない。非破壊）。
  *             シートに行が無い日は触らない（安全側）。アプリ→シートの書き戻しはしない。
  *   'app'   → pushのみ（アプリ→シート）。マップ済みセルはアプリの内容で常に上書きする（シート＝写し）。
  *             シート→アプリの取込はしない。
@@ -377,17 +378,20 @@ export async function runSheetSync(
           continue;
         }
 
-        // 既存行はシートが正。マップ済み項目は空欄でも反映する。
+        // 既存行はシートが正。ただし**空でないシート項目だけ**取り込む
+        // （シートの空欄でアプリに直接入力された内容を消さないため。実際に
+        // シートの空欄で既存の記録内容が消える事故が発生したため非破壊に戻した）。
         const patch: Record<string, unknown> = {};
-        for (const [key] of map.builtin) {
+        for (const [key, m] of map.builtin) {
           const v = builtin[key];
-          if (v !== appBuiltin(app, key as BuiltinKey)) patch[key] = v;
+          const nonEmpty = m.numeric ? Number(v) > 0 : (v ?? "").toString().trim() !== "";
+          if (nonEmpty && v !== appBuiltin(app, key as BuiltinKey)) patch[key] = v;
         }
         const customPatch: Record<string, string | number | null> = { ...(app.custom ?? {}) };
         let customChanged = false;
         for (const [key] of map.custom) {
           const v = custom[key];
-          if (v !== (app.custom?.[key] ?? null)) {
+          if ((v ?? "").toString().trim() !== "" && v !== (app.custom?.[key] ?? null)) {
             customPatch[key] = v;
             customChanged = true;
           }
