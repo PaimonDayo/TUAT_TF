@@ -9,6 +9,7 @@ import {
   validateScheduleImportRows,
   type SubmittedScheduleRow,
 } from "@/lib/schedule-import";
+import { timingSafeEqualString } from "@/lib/timing-safe";
 import type { PracticeSchedule, ScheduleSheet, VenueRow } from "@/types";
 
 export const maxDuration = 60;
@@ -23,7 +24,7 @@ export const maxDuration = 60;
 export async function POST(request: Request) {
   const secret = process.env.SHEET_SYNC_SECRET;
   const authHeader = request.headers.get("authorization") ?? "";
-  if (!secret || authHeader !== `Bearer ${secret}`) {
+  if (!secret || !timingSafeEqualString(authHeader, `Bearer ${secret}`)) {
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
 

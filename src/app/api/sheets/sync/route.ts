@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchRolesByProfileIds } from "@/lib/supabase/auth";
 import { permissionsOf } from "@/lib/permissions";
 import { runSheetSync } from "@/lib/sheet-sync";
+import { timingSafeEqualString } from "@/lib/timing-safe";
 
 // 同期はネットワーク往復が多いので余裕を持たせる
 export const maxDuration = 60;
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
   let trigger: "cron" | "manual" = "cron";
   let triggeredBy: string | null = null;
 
-  const isCron = Boolean(secret) && authHeader === `Bearer ${secret}`;
+  const isCron = Boolean(secret) && timingSafeEqualString(authHeader, `Bearer ${secret}`);
   if (!isCron) {
     // 手動実行: 管理者のみ
     const supabase = await createClient();
