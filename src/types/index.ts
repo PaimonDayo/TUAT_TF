@@ -57,13 +57,15 @@ export interface Profile {
   /** 付与されているロール一覧（複数可） */
   roles: AppRole[];
   status: ProfileStatus;
-  /** 管理者による利用承認。false の間は閲覧不可（承認待ち画面へ） */
+  /** 旧・利用承認フラグ（承認ゲートは廃止済みで常にtrue。列は互換のため残置） */
   approved: boolean;
   notify_comment: boolean;
   notify_notice: boolean;
   menu_view_all_blocks: boolean;
   /** スプレッドシート同期で使う、自分のシート名（例: B2駒井）。未設定なら同期対象外 */
   sheet_name: string | null;
+  /** 記録の入力元。'sheet'ならスプシが正でアプリは閲覧専用、'app'ならアプリが正でスプシへ書き戻す */
+  record_source: "app" | "sheet";
   /** 記録フォームのカスタム項目定義（短距離など独自列の人向け） */
   record_fields: RecordFieldDef[];
   created_at: string;

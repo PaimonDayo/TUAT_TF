@@ -21,6 +21,8 @@ export function RecordOwnerMenu({
   const router = useRouter();
   const { showToast } = useToast();
   const [editOpen, setEditOpen] = useState(false);
+  // スプシ由来の記録は入力元がスプレッドシート側なので、アプリ内では閲覧のみ（編集不可）。
+  const editable = !record.from_sheet;
 
   async function remove() {
     const supabase = createClient();
@@ -36,8 +38,8 @@ export function RecordOwnerMenu({
   return (
     <>
       <ActionMenu
-        onEdit={() => setEditOpen(true)}
-        onDelete={remove}
+        onEdit={editable ? () => setEditOpen(true) : undefined}
+        onDelete={editable ? remove : undefined}
         deleteTitle="練習記録を削除しますか？"
         deleteDescription="削除した練習記録は元に戻せません。"
         triggerLabel="練習記録のメニュー"

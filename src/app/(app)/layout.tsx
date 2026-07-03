@@ -31,6 +31,7 @@ export default async function AppLayout({
             grade: profile.grade,
           }}
           isMiddleLong={profile.blocks?.includes("middle_long") ?? false}
+          recordSource={profile.record_source}
           can={{
             createSchedule: perms.createSchedule,
             createNotice: perms.createNotice,

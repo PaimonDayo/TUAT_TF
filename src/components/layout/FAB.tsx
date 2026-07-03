@@ -36,6 +36,7 @@ type FabProps = {
   userId: string;
   currentUser: AuthorMini;
   isMiddleLong: boolean;
+  recordSource: "app" | "sheet";
   can: FabPermissions;
 };
 
@@ -58,6 +59,7 @@ function ContextualFAB({
   userId,
   currentUser,
   isMiddleLong,
+  recordSource,
   can,
   pathname,
   autoOpen,
@@ -202,6 +204,7 @@ function ContextualFAB({
         <RecordForm
           userId={userId}
           isMiddleLong={isMiddleLong}
+          recordSource={recordSource}
           onDone={() => setRecordOpen(false)}
         />
       </FormModal>

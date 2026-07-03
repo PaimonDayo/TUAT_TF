@@ -49,6 +49,7 @@ export const getCurrentProfile = cache(async (): Promise<Profile> => {
       notify_notice: true,
       menu_view_all_blocks: false,
       sheet_name: null,
+      record_source: "app",
       record_fields: [],
       created_at: new Date().toISOString(),
     };

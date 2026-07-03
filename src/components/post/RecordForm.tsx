@@ -25,11 +25,14 @@ export function RecordForm({
   userId,
   isMiddleLong,
   record,
+  recordSource = "app",
   onDone,
 }: {
   userId: string;
   isMiddleLong: boolean;
   record?: PracticeRecord;
+  /** 記録の入力元。'sheet'ならスプレッドシートが正のためアプリからの投稿・編集はできない */
+  recordSource?: "app" | "sheet";
   onDone: () => void;
 }) {
   const router = useRouter();
@@ -157,7 +160,6 @@ export function RecordForm({
           memo: memo.trim() || null,
           condition,
           custom,
-          from_sheet: false, // アプリ入力＝タイムラインに出す・アプリ優先
         };
 
     if (editing) {
@@ -187,7 +189,8 @@ export function RecordForm({
       } else {
         const { error } = await supabase
           .from("practice_records")
-          .insert({ user_id: userId, ...payload });
+          // from_sheet はinsert時のみ設定する（アプリ投稿＝タイムラインに出す）。updateでは変更しない。
+          .insert({ user_id: userId, from_sheet: false, ...payload });
         if (error) {
           setError("記録の保存に失敗しました");
           setSaving(false);
@@ -197,6 +200,19 @@ export function RecordForm({
     }
     router.refresh();
     onDone();
+  }
+
+  if (recordSource === "sheet") {
+    return (
+      <div className="space-y-3 pb-4 text-center">
+        <p className="text-body">
+          記録の入力元がスプレッドシートに設定されているため、アプリからは投稿・編集できません。
+        </p>
+        <p className="text-caption text-muted">
+          マイページの設定で入力元をアプリに切り替えると編集できます。
+        </p>
+      </div>
+    );
   }
 
   return (

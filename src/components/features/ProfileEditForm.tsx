@@ -29,6 +29,7 @@ export function ProfileEditForm({
     | "grade"
     | "avatar_url"
     | "sheet_name"
+    | "record_source"
   >;
   onDone: () => void;
   isSetup?: boolean;
@@ -40,6 +41,9 @@ export function ProfileEditForm({
   const [grade, setGrade] = useState<string | null>(profile.grade);
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url ?? "");
   const [sheetName, setSheetName] = useState<string>(profile.sheet_name ?? "");
+  const [recordSource, setRecordSource] = useState<"app" | "sheet">(
+    profile.record_source ?? "app",
+  );
   const [sheetOptions, setSheetOptions] = useState<string[] | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
@@ -107,6 +111,7 @@ export function ProfileEditForm({
         grade,
         avatar_url: avatarUrl.trim() || null,
         sheet_name: sheetName.trim() || null,
+        record_source: sheetName.trim() ? recordSource : "app",
       },
       { id: profile.id },
     );
@@ -247,6 +252,42 @@ export function ProfileEditForm({
           </select>
           <p className="text-micro mt-1">
             選ぶと、そのシートと練習記録が1時間ごとに自動で同期されます。
+          </p>
+        </div>
+      )}
+
+      {sheetName.trim() && (
+        <div>
+          <p className="section-label mb-1.5">記録の入力元</p>
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                { value: "app", label: "アプリ" },
+                { value: "sheet", label: "スプレッドシート" },
+              ] as const
+            ).map((option) => {
+              const active = recordSource === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setRecordSource(option.value)}
+                  className={cn(
+                    "h-11 rounded-xl border text-[14px] font-semibold transition-active active:scale-[0.98]",
+                    active
+                      ? "border-accent bg-accent text-white"
+                      : "border-separator bg-card text-muted",
+                  )}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-micro mt-1">
+            {recordSource === "sheet"
+              ? "スプレッドシートが正となり、記録はアプリ内では編集できず閲覧のみになります。"
+              : "アプリが正となり、記録はスプレッドシートへ自動で書き戻されます。"}
           </p>
         </div>
       )}

@@ -19,6 +19,7 @@ export function EditProfileButton({
     | "grade"
     | "avatar_url"
     | "sheet_name"
+    | "record_source"
   >;
   autoOpen?: boolean;
 }) {

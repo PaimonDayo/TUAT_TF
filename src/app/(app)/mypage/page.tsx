@@ -48,6 +48,7 @@ export default async function MyPage({
               grade: profile.grade,
               avatar_url: profile.avatar_url,
               sheet_name: profile.sheet_name,
+              record_source: profile.record_source,
             }}
             autoOpen={setup === "1"}
           />
