@@ -69,13 +69,16 @@ export function FullScreenContent({
         ref={contentRef}
         onOpenAutoFocus={autoFocus ? undefined : (e) => e.preventDefault()}
         onCloseAutoFocus={(e) => e.preventDefault()}
-        // Select 等の Radix ポップアップは Portal で Dialog 外に描画されるため、
-        // その操作を「外側クリック」と誤判定してモーダルが閉じるのを防ぐ。
+        // Select 等の Radix ポップアップや、入れ子の Sheet（Dialog.Root）は
+        // Portal で Dialog 外（document.body直下）に描画されるため、その操作を
+        // 「外側クリック」と誤判定してこのモーダルごと閉じてしまうのを防ぐ。
+        // 例: RecordFieldsSetting の「追加する」Sheetを押すと保存前にモーダルが
+        //     閉じてしまう不具合（role="dialog"のSheetがこの判定に含まれていなかった）。
         onPointerDownOutside={(e) => {
           const target = e.target as Element | null;
           if (
             target?.closest?.(
-              "[data-radix-popper-content-wrapper],[data-radix-select-viewport],[role='listbox']",
+              "[data-radix-popper-content-wrapper],[data-radix-select-viewport],[role='listbox'],[role='dialog']",
             )
           ) {
             e.preventDefault();
