@@ -199,6 +199,8 @@ function MenuEditor({
   );
   const [targetIds, setTargetIds] = useState<string[]>(initialTargetIds);
   const [content, setContent] = useState(menu?.content ?? "");
+  const [pace, setPace] = useState(menu?.pace ?? "");
+  const [supplement, setSupplement] = useState(menu?.supplement ?? "");
   const [status, setStatus] = useState<MenuStatus>(menu?.status ?? "draft");
   const [presetName, setPresetName] = useState("");
   const [selectedPreset, setSelectedPreset] = useState("");
@@ -452,7 +454,9 @@ function MenuEditor({
       setError("対象の予定を選択してください");
       return;
     }
-    if (!content.trim()) {
+    const hasPaceOrSupplement =
+      targetBlock === "middle_long" && (pace.trim() || supplement.trim());
+    if (!content.trim() && !hasPaceOrSupplement) {
       setError("メニュー内容を入力してください");
       return;
     }
@@ -472,6 +476,8 @@ function MenuEditor({
       menu_target_block: targetBlock,
       target_user_ids: kind === "people" ? targetIds : [],
       target_menu_id: menu?.id ?? null,
+      menu_pace: targetBlock === "middle_long" ? pace.trim() || null : null,
+      menu_supplement: targetBlock === "middle_long" ? supplement.trim() || null : null,
     });
 
     if (saveError) {
@@ -677,7 +683,7 @@ function MenuEditor({
       )}
 
       <div>
-        <p className="section-label mb-1.5">メニュー内容</p>
+        <p className="section-label mb-1.5">詳細</p>
         <Textarea
           rows={8}
           placeholder={"例:\nW-up 2km\n本練習 1000m×5 (R3')\nD-down 2km"}
@@ -685,6 +691,29 @@ function MenuEditor({
           onChange={(event) => setContent(event.target.value)}
         />
       </div>
+
+      {targetBlock === "middle_long" && (
+        <>
+          <div>
+            <p className="section-label mb-1.5">ペース</p>
+            <Textarea
+              rows={3}
+              placeholder={"例: 1000mを3'30〜3'40"}
+              value={pace}
+              onChange={(event) => setPace(event.target.value)}
+            />
+          </div>
+          <div>
+            <p className="section-label mb-1.5">補強</p>
+            <Textarea
+              rows={4}
+              placeholder={"例: 体幹サーキット×3セット"}
+              value={supplement}
+              onChange={(event) => setSupplement(event.target.value)}
+            />
+          </div>
+        </>
+      )}
 
       <div>
         <p className="section-label mb-1.5">公開状態</p>

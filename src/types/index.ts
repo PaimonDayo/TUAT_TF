@@ -263,6 +263,36 @@ export interface ScheduleImportPreview {
   skips: { rowNumber: number; message: string }[];
 }
 
+export interface MenuImportRow {
+  rowNumber: number;
+  scheduleId: string;
+  scheduleDate: string;
+  targetBlock: Block;
+  content: string;
+  pace: string | null;
+  supplement: string | null;
+  existingMenuId: string | null;
+}
+
+export type MenuImportRowStatus = "addition" | "update" | "error" | "skip" | "editing";
+
+export interface MenuImportEditableRow {
+  rowNumber: number;
+  values: Record<string, string>;
+  status: MenuImportRowStatus;
+  message: string | null;
+  normalized: MenuImportRow | null;
+}
+
+export interface MenuImportPreview {
+  columns: string[];
+  rows: MenuImportEditableRow[];
+  additions: MenuImportRow[];
+  updates: MenuImportRow[];
+  errors: { rowNumber: number; message: string }[];
+  skips: { rowNumber: number; message: string }[];
+}
+
 export type AttendanceStatusOrNone = AttendanceStatus | "none";
 
 export interface Attendance {
@@ -291,6 +321,10 @@ export interface PracticeMenu {
   author_id: string;
   group_name: string | null;
   content: string;
+  /** 中長距離向け: ペース設定（詳細とは別枠） */
+  pace: string | null;
+  /** 中長距離向け: 補強メニュー（詳細とは別枠） */
+  supplement: string | null;
   target_block: Block | null;
   status: "draft" | "published";
   created_at: string;

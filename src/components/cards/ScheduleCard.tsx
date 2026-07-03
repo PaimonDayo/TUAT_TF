@@ -366,9 +366,27 @@ function MenuCard({
           )}
         </div>
       )}
-      <p className={cn("text-[14px] whitespace-pre-wrap", canManage && !hasBadges && "pr-8")}>
-        <Linkify text={menu.content} />
-      </p>
+      {menu.content && (
+        <p className={cn("text-[14px] whitespace-pre-wrap", canManage && !hasBadges && "pr-8")}>
+          <Linkify text={menu.content} />
+        </p>
+      )}
+      {menu.pace && (
+        <div className="mt-2">
+          <p className="text-[11px] font-semibold text-muted2">ペース</p>
+          <p className="text-[14px] whitespace-pre-wrap">
+            <Linkify text={menu.pace} />
+          </p>
+        </div>
+      )}
+      {menu.supplement && (
+        <div className="mt-2">
+          <p className="text-[11px] font-semibold text-muted2">補強</p>
+          <p className="text-[14px] whitespace-pre-wrap">
+            <Linkify text={menu.supplement} />
+          </p>
+        </div>
+      )}
       {canManage && menu.status === "draft" && (
         <button
           type="button"
