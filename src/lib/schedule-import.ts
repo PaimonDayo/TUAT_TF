@@ -34,6 +34,10 @@ export const PRACTICE_IMPORT_COLUMNS = [
   "時間",
   "場所",
   "詳細",
+  "メニュー",
+  "ペース",
+  "補足",
+  "補強",
 ];
 
 export const EVENT_IMPORT_COLUMNS = [
@@ -52,6 +56,60 @@ export type SubmittedScheduleRow = {
   rowNumber: number;
   values: Record<string, string>;
 };
+
+const BOM_PATTERN = /^﻿/;
+
+/**
+ * 冒頭の自由メモ行を飛ばして見出し行を探す。
+ * practice: 「曜日・時間・場所」を全部含む行を見出しとみなす。
+ * meet/time_trial: 「開始日」または「日付」を含む行を見出しとみなす。
+ * 見つからなければ従来どおり先頭行（index 0）を見出しとみなす。
+ */
+export function detectHeaderRowIndex(rows: string[][], sheet: ScheduleSheet): number {
+  const normalizeCell = (cell: string) => cell.replace(BOM_PATTERN, "").trim();
+  for (let i = 0; i < rows.length; i++) {
+    const cells = (rows[i] ?? []).map(normalizeCell);
+    if (sheet.kind === "practice") {
+      if (["曜日", "時間", "場所"].every((anchor) => cells.includes(anchor))) return i;
+    } else {
+      if (cells.includes("開始日") || cells.includes("日付")) return i;
+    }
+  }
+  return 0;
+}
+
+/**
+ * 見出し行のセル配列を整形する。実物スプシは日付列の見出しテキストが
+ * 固定名でない（例: 数字が入っている）ことがあるため、practice kindは
+ * 常に先頭列＝日付として扱う（位置ベース）。
+ */
+export function buildHeaderRow(rawRow: string[] | undefined, sheet: ScheduleSheet): string[] {
+  const headerRow = (rawRow ?? []).map((h) => h.replace(BOM_PATTERN, "").trim());
+  if (sheet.kind === "practice" && headerRow.length > 0) {
+    headerRow[0] = "日付";
+  }
+  return headerRow;
+}
+
+export function googleSheetCsvUrl(value: string): URL {
+  const url = new URL(value);
+  if (!["docs.google.com", "docs.googleusercontent.com"].includes(url.hostname)) {
+    throw new Error("unsupported host");
+  }
+  if (
+    url.searchParams.get("output") === "csv" ||
+    url.searchParams.get("format") === "csv"
+  ) {
+    return url;
+  }
+  const match = url.pathname.match(/\/spreadsheets\/d\/([^/]+)/);
+  if (!match) throw new Error("sheet id not found");
+  const gid =
+    url.searchParams.get("gid") ?? url.hash.match(/gid=(\d+)/)?.[1] ?? "0";
+  return new URL(
+    `https://docs.google.com/spreadsheets/d/${match[1]}/export?format=csv&gid=${gid}`,
+  );
+}
 
 export function validateScheduleImportRows({
   rows,
@@ -147,7 +205,7 @@ function validateRow(
   }
   const hasContent =
     sheet.kind === "practice"
-      ? [values["時間"], values["場所"], values["詳細"]].some(Boolean)
+      ? [values["時間"], values["場所"], values["詳細"], values["メニュー"]].some(Boolean)
       : [
           values["名称"],
           values["開始日"],
@@ -271,6 +329,10 @@ function validateRow(
     entry_end: entryEnd,
     note: values["詳細"] || null,
     target_blocks: targetBlocks,
+    menu_content: values["メニュー"] || null,
+    menu_pace: values["ペース"] || null,
+    menu_remark: values["補足"] || null,
+    menu_supplement: values["補強"] || null,
   };
   return {
     rowNumber: submitted.rowNumber,
@@ -294,6 +356,10 @@ export function canonicalImportValues(
       "時間": raw["時間"],
       "場所": raw["場所"],
       "詳細": raw["詳細"],
+      "メニュー": raw["メニュー"],
+      "ペース": raw["ペース"],
+      "補足": raw["補足"],
+      "補強": raw["補強"],
     });
   }
   return normalizeImportValues({

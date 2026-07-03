@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import Papa from "papaparse";
 import { createClient } from "@/lib/supabase/server";
 import {
+  buildHeaderRow,
   canonicalImportValues,
+  detectHeaderRowIndex,
+  googleSheetCsvUrl,
   normalizeImportValues,
   requiredImportHeaders,
   type SubmittedScheduleRow,
@@ -57,9 +60,7 @@ export async function POST(request: Request) {
     // 見出し行として探す（見つからなければ従来どおり先頭行を見出しとみなす）。
     const rawRows = rawParsed.data;
     const headerRowIndex = detectHeaderRowIndex(rawRows, sheet);
-    const headerRow = (rawRows[headerRowIndex] ?? []).map((h) =>
-      h.replace(BOM_PATTERN, "").trim(),
-    );
+    const headerRow = buildHeaderRow(rawRows[headerRowIndex], sheet);
     const missing = requiredImportHeaders(sheet).filter(
       (choices) => !choices.some((header) => headerRow.includes(header)),
     );
@@ -92,27 +93,6 @@ export async function POST(request: Request) {
       includeDeletions: !editedRows,
     }),
   );
-}
-
-const BOM_PATTERN = /^﻿/;
-
-/**
- * 冒頭の自由メモ行を飛ばして見出し行を探す。
- * practice: 「曜日・時間・場所」を全部含む行を見出しとみなす。
- * meet/time_trial: 「開始日」または「日付」を含む行を見出しとみなす。
- * 見つからなければ従来どおり先頭行（index 0）を見出しとみなす。
- */
-function detectHeaderRowIndex(rows: string[][], sheet: ScheduleSheet): number {
-  const normalizeCell = (cell: string) => cell.replace(BOM_PATTERN, "").trim();
-  for (let i = 0; i < rows.length; i++) {
-    const cells = (rows[i] ?? []).map(normalizeCell);
-    if (sheet.kind === "practice") {
-      if (["曜日", "時間", "場所"].every((anchor) => cells.includes(anchor))) return i;
-    } else {
-      if (cells.includes("開始日") || cells.includes("日付")) return i;
-    }
-  }
-  return 0;
 }
 
 async function loadCsv(
@@ -163,24 +143,4 @@ async function loadExistingSchedules(
   }
   const { data } = await query;
   return (data ?? []) as PracticeSchedule[];
-}
-
-function googleSheetCsvUrl(value: string): URL {
-  const url = new URL(value);
-  if (!["docs.google.com", "docs.googleusercontent.com"].includes(url.hostname)) {
-    throw new Error("unsupported host");
-  }
-  if (
-    url.searchParams.get("output") === "csv" ||
-    url.searchParams.get("format") === "csv"
-  ) {
-    return url;
-  }
-  const match = url.pathname.match(/\/spreadsheets\/d\/([^/]+)/);
-  if (!match) throw new Error("sheet id not found");
-  const gid =
-    url.searchParams.get("gid") ?? url.hash.match(/gid=(\d+)/)?.[1] ?? "0";
-  return new URL(
-    `https://docs.google.com/spreadsheets/d/${match[1]}/export?format=csv&gid=${gid}`,
-  );
 }

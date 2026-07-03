@@ -1123,5 +1123,9 @@ function toRpcRow(row: ScheduleImportRow) {
     entry_end: row.entry_end ?? "",
     note: row.note ?? "",
     target_blocks: row.target_blocks,
+    menu_content: row.menu_content ?? "",
+    menu_pace: row.menu_pace ?? "",
+    menu_remark: row.menu_remark ?? "",
+    menu_supplement: row.menu_supplement ?? "",
   };
 }

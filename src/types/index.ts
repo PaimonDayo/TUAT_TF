@@ -234,6 +234,11 @@ export interface ScheduleImportRow {
   entry_end: string | null;
   note: string | null;
   target_blocks: Block[];
+  /** 実物スプシ(メニュー/ペース/補足/補強列)から、対応する予定に紐づくブロック全体メニューを生成/更新するための値 */
+  menu_content?: string | null;
+  menu_pace?: string | null;
+  menu_remark?: string | null;
+  menu_supplement?: string | null;
 }
 
 export type ScheduleImportRowStatus =
