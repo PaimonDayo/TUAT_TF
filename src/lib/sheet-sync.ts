@@ -266,6 +266,163 @@ function appToCellsFull(map: FieldMap, rec: DbRecord): Record<string, string | n
   return cells;
 }
 
+/** アプリのレコードから、スプシへ送る cells（**中身のある項目だけ**。空でシートを潰さない） */
+function appToCellsNonEmpty(map: FieldMap, rec: DbRecord): Record<string, string | number> {
+  const cells: Record<string, string | number> = {};
+  for (const [key, m] of map.builtin) {
+    const v = appBuiltin(rec, key);
+    if (m.numeric) {
+      if (Number(v) > 0) cells[m.header] = Number(v);
+    } else if ((v ?? "").toString().trim() !== "") {
+      cells[m.header] = (v as string).toString();
+    }
+  }
+  for (const [key, m] of map.custom) {
+    const v = rec.custom?.[key];
+    if ((v ?? "").toString().trim() === "") continue;
+    cells[m.header] = m.type === "number" ? parseSheetNum(v as string) : v!.toString();
+  }
+  return cells;
+}
+
+export type ReconcileResult = {
+  direction: "to_sheet" | "to_app";
+  pushed: number;
+  pulled: number;
+  skipped: string[]; // "日付" 単位でスキップした理由
+  dryRun: boolean;
+};
+
+/**
+ * 入力元(record_source)を切り替える直前に、その部員だけを対象に一度だけ
+ * 両側を揃える（オーナー確定 2026-07-04・2026-07-03インシデントの再発防止）。
+ *   to_sheet（app→sheet切替）: アプリの中身のある項目をシートへ書き出す（アプリが正＝勝つ）。
+ *   to_app（sheet→app切替）: シートの中身のある項目をアプリへ取り込む（シートが正＝勝つ）。
+ * いずれも非破壊（空で相手を消さない）。同日複数記録など曖昧な日はスキップして報告する。
+ */
+export async function reconcileOnSwitch(
+  admin: SupabaseClient,
+  profileId: string,
+  direction: "to_sheet" | "to_app",
+  options: { dryRun?: boolean } = {},
+): Promise<ReconcileResult> {
+  const dryRun = !!options.dryRun;
+  const result: ReconcileResult = { direction, pushed: 0, pulled: 0, skipped: [], dryRun };
+  const today = todayJST();
+
+  const { data: profile, error: pErr } = await admin
+    .from("profiles")
+    .select("id, sheet_name, record_fields")
+    .eq("id", profileId)
+    .maybeSingle();
+  if (pErr) throw pErr;
+  if (!profile?.sheet_name) return result; // 連携していなければ何もしない
+
+  const members = await fetchAllRaw();
+  const member = members.find((m) => m.name.trim() === profile.sheet_name!.trim());
+  if (!member) {
+    result.skipped.push(`シート「${profile.sheet_name}」が見つかりません`);
+    return result;
+  }
+  const map = resolveFieldMap(member.header, (profile.record_fields as RecordFieldDef[]) ?? []);
+
+  const { data: existing, error: rErr } = await admin
+    .from("practice_records")
+    .select(
+      "id, user_id, recorded_date, dist_low, dist_mid, dist_high, dist_speed, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at",
+    )
+    .eq("user_id", profileId)
+    .gte("recorded_date", SYNC_CUTOFF);
+  if (rErr) throw rErr;
+
+  const byDate = new Map<string, DbRecord[]>();
+  for (const r of (existing ?? []) as DbRecord[]) {
+    const arr = byDate.get(r.recorded_date) ?? [];
+    arr.push(r);
+    byDate.set(r.recorded_date, arr);
+  }
+
+  const nowIso = new Date().toISOString();
+
+  if (direction === "to_sheet") {
+    // アプリが正: 中身のある項目だけシートへ書き出す
+    for (const [date, list] of byDate) {
+      if (date > today) continue;
+      if (list.length > 1) {
+        result.skipped.push(`${date}（同日に複数記録）`);
+        continue;
+      }
+      const cells = appToCellsNonEmpty(map, list[0]);
+      if (Object.keys(cells).length === 0) continue;
+      result.pushed++;
+      if (!dryRun) {
+        await gasPost({ action: "writeCells", memberName: profile.sheet_name, date, cells });
+        await admin
+          .from("practice_records")
+          .update({ synced_at: nowIso })
+          .eq("id", list[0].id);
+      }
+    }
+  } else {
+    // シートが正: 中身のある項目だけアプリへ取り込む
+    for (const sr of member.records) {
+      if (!sr.date || sr.date < SYNC_CUTOFF || sr.date > today) continue;
+      const appList = byDate.get(sr.date) ?? [];
+      if (appList.length > 1) {
+        result.skipped.push(`${sr.date}（同日に複数記録）`);
+        continue;
+      }
+      const { builtin, custom } = sheetToAppValues(map, sr.cells);
+      if (valuesEmpty(builtin, custom)) continue;
+      const app = appList[0];
+
+      if (!app) {
+        result.pulled++;
+        if (!dryRun) {
+          const { error } = await admin.from("practice_records").insert({
+            user_id: profileId,
+            recorded_date: sr.date,
+            synced_at: nowIso,
+            updated_at: nowIso,
+            from_sheet: true,
+            custom,
+            ...builtin,
+          });
+          if (error) throw error;
+        }
+        continue;
+      }
+
+      const patch: Record<string, unknown> = {};
+      for (const [key, m] of map.builtin) {
+        const v = builtin[key];
+        const nonEmpty = m.numeric ? Number(v) > 0 : (v ?? "").toString().trim() !== "";
+        if (nonEmpty && v !== appBuiltin(app, key as BuiltinKey)) patch[key] = v;
+      }
+      const customPatch: Record<string, string | number | null> = { ...(app.custom ?? {}) };
+      let customChanged = false;
+      for (const [key] of map.custom) {
+        const v = custom[key];
+        if ((v ?? "").toString().trim() !== "" && v !== (app.custom?.[key] ?? null)) {
+          customPatch[key] = v;
+          customChanged = true;
+        }
+      }
+      if (Object.keys(patch).length > 0 || customChanged) {
+        result.pulled++;
+        if (!dryRun) {
+          if (customChanged) patch.custom = customPatch;
+          patch.synced_at = nowIso;
+          const { error } = await admin.from("practice_records").update(patch).eq("id", app.id);
+          if (error) throw error;
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
 // ── 同期本体 ─────────────────────────────────────────────────────────────────
 // 安全方針(docs/SHEETS-SYNC-PLAN.md・事故対策):
 //  - カットオフ(2026-06-22)以前・未来日・空の行は同期しない

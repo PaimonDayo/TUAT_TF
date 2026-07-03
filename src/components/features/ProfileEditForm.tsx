@@ -100,6 +100,30 @@ export function ProfileEditForm({
     }
     setSaving(true);
     setError(null);
+
+    // 入力元を切り替える場合は、方向を固定する前に一度だけ両側を揃える
+    // （2026-07-03のデータ消失インシデントの再発防止・オーナー確定 2026-07-04）。
+    // 揃えに失敗したら切替自体を中止する。
+    const switchingSource =
+      sheetName.trim() && recordSource !== (profile.record_source ?? "app");
+    if (switchingSource) {
+      const response = await fetch("/api/sheets/reconcile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          direction: recordSource === "sheet" ? "to_sheet" : "to_app",
+        }),
+      });
+      const reconcileResult = await response.json();
+      if (!response.ok || !reconcileResult.ok) {
+        setError(
+          reconcileResult.error ?? "入力元の切替前の同期に失敗しました。もう一度お試しください",
+        );
+        setSaving(false);
+        return;
+      }
+    }
+
     const supabase = createClient();
     const result = await safeUpdate(
       supabase,
