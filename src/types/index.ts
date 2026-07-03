@@ -84,12 +84,6 @@ export type AuthorMini = Pick<
   "id" | "display_name" | "avatar_url" | "blocks" | "grade"
 >;
 
-/** 承認待ちユーザー（承認画面用。識別のため email も含む） */
-export type PendingProfile = Pick<
-  Profile,
-  "id" | "display_name" | "email" | "avatar_url" | "blocks" | "grade"
->;
-
 export interface PracticeRecord {
   id: string;
   user_id: string;

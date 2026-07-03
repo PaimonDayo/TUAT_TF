@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { format, subDays } from "date-fns";
 import { ja } from "date-fns/locale";
-import { BookOpen, ChevronRight, Clock, UserCheck } from "lucide-react";
+import { BookOpen, ChevronRight, Clock } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +18,6 @@ import {
   getAttendancesForSchedules,
   getFeed,
   getHomeNotices,
-  getPendingProfiles,
   getRecentSharedNotes,
   getUserRecords,
 } from "@/lib/queries";
@@ -43,9 +42,6 @@ export default async function HomePage() {
       <Header title="ホーム" large />
       <div className="space-y-5 px-4 pt-1">
         <InstallPrompt />
-        <Suspense fallback={null}>
-          <PendingApprovalBanner />
-        </Suspense>
 
         <p className="text-body text-muted">
           {format(nowJst, "M月d日 (E)", { locale: ja })}
@@ -68,25 +64,6 @@ export default async function HomePage() {
         </Suspense>
       </div>
     </>
-  );
-}
-
-async function PendingApprovalBanner() {
-  const pending = await getPendingProfiles();
-  if (pending.length === 0) return null;
-  return (
-    <Link href="/members" className="block">
-      <Card className="flex items-center gap-3 border-accent/30 bg-accent/8 p-3 active:bg-accent/12">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent">
-          <UserCheck size={21} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-semibold">新しいメンバーの承認</p>
-          <p className="text-caption text-muted">{pending.length}人が利用承認を待っています</p>
-        </div>
-        <ChevronRight size={18} className="shrink-0 text-accent" />
-      </Card>
-    </Link>
   );
 }
 

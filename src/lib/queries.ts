@@ -8,7 +8,6 @@ import type {
   Block,
   AppRole,
   AuthorMini,
-  PendingProfile,
   Notice,
   NoticeReaction,
   NoticeWithReactions,
@@ -314,17 +313,6 @@ export async function getMembersList(): Promise<AuthorMini[]> {
     .eq("approved", true)
     .order("display_name", { ascending: true });
   return (data ?? []) as unknown as AuthorMini[];
-}
-
-/** 承認待ち（未承認）ユーザー一覧。承認済み部員なら誰でも承認できる。 */
-export async function getPendingProfiles(): Promise<PendingProfile[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("profiles")
-    .select("id, display_name, email, avatar_url, blocks, grade")
-    .eq("approved", false)
-    .order("created_at", { ascending: true });
-  return (data ?? []) as unknown as PendingProfile[];
 }
 
 /** 全ロール定義を取得（管理画面用） */

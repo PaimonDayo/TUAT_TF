@@ -87,11 +87,6 @@ export function AdminMemberList({
                         {member.display_name || "名前未設定"}
                       </span>
                       <BlockPills blocks={member.blocks} />
-                      {!member.approved && (
-                        <span className="shrink-0 rounded-full bg-danger/15 px-2 py-0.5 text-micro text-danger">
-                          承認待ち
-                        </span>
-                      )}
                     </div>
                     <div className="mt-1 flex flex-wrap gap-1">
                       {member.roles.length === 0 ? (
@@ -144,29 +139,8 @@ function MemberRoleEditor({
   const [selectedIds, setSelectedIds] = useState<string[]>(
     member.roles.map((role) => role.id),
   );
-  const [approved, setApproved] = useState(member.approved);
-  const [approving, setApproving] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-
-  async function toggleApproved() {
-    setApproving(true);
-    setError("");
-    const supabase = createClient();
-    const next = !approved;
-    const { error: rpcError } = await supabase.rpc("set_member_approved", {
-      target_profile_id: member.id,
-      value: next,
-    });
-    if (rpcError) {
-      setError("承認状態を更新できませんでした");
-      setApproving(false);
-      return;
-    }
-    setApproved(next);
-    setApproving(false);
-    router.refresh();
-  }
 
   function toggle(roleId: string) {
     setSelectedIds((current) =>
@@ -207,23 +181,6 @@ function MemberRoleEditor({
             <p className="text-headline">{member.display_name || "名前未設定"}</p>
             <p className="truncate text-caption">{member.email}</p>
           </div>
-        </div>
-
-        <div className="flex items-center justify-between rounded-xl border border-separator bg-card p-3">
-          <div className="min-w-0">
-            <p className="text-[14px] font-semibold">アプリの利用</p>
-            <p className="text-micro text-muted">
-              {approved ? "承認済み（閲覧可）" : "承認待ち（閲覧不可）"}
-            </p>
-          </div>
-          <Button
-            size="sm"
-            variant={approved ? "outline" : "primary"}
-            onClick={toggleApproved}
-            disabled={approving}
-          >
-            {approving ? "更新中..." : approved ? "承認を取消" : "承認する"}
-          </Button>
         </div>
 
         <div className="space-y-2">

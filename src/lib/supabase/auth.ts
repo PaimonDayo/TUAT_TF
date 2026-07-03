@@ -44,7 +44,7 @@ export const getCurrentProfile = cache(async (): Promise<Profile> => {
       role: "member",
       roles: [],
       status: "active",
-      approved: false,
+      approved: true,
       notify_comment: true,
       notify_notice: true,
       menu_view_all_blocks: false,
