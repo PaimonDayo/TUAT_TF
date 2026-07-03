@@ -55,6 +55,8 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 **切り分け済み（2026-07-03 Claude Fable 5、本番DBで実測）:**
 - DB層は正常。使い捨てテストユーザー（検証後削除済み）の authenticated JWT で `PATCH /rest/v1/profiles` の `record_fields` 更新が**成功**する。RLS・列権限・スキーマに問題なし。
 - オーナーの本番 `profiles.record_fields` は `[]` のまま＝**クライアント側で更新が送信されていない／無言失敗している**。
+- オーナー実機の症状: **保存を押すとモーダルは閉じる（＝safeUpdateが成功扱い＝1行更新が返っている）のにDBは`[]`のまま**。→「空の`fields`で保存が成功している」可能性が最有力。追加操作（addFieldのSheet）で項目がstateに入っていない、またはaddField内で例外が握り潰されている線を最初に疑う。
+- 調査手順0: まずVercelの本番デプロイが最新コミットか確認（古いビルド配信の可能性を排除）。次にオーナー実機で「追加→リストに項目が見えるか」を確認してもらう。
 - 容疑箇所（この順に潰す）: ①`RecordFieldsSetting.tsx` の save→`safeUpdate` 経路（失敗時 message は出るが気づきにくい）②`FormModalFooter` のポータル登録レース（footerCount→target 設定順で保存ボタンが実際に描画されているか）③`ReorderList`（dnd-kit PointerSensor）が行内の入力・ボタンのタッチイベントを奪っていないか（実機タッチで要確認）④保存ボタンがキーボード表示中に可視か。
 - 修正時は実機（iOS PWA）で「項目追加→保存→再度開いて残っている→DBの record_fields に入っている」まで確認すること。
 
