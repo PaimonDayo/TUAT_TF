@@ -379,6 +379,14 @@ function MenuCard({
           </p>
         </div>
       )}
+      {menu.remark && (
+        <div className="mt-2">
+          <p className="text-[11px] font-semibold text-muted2">補足</p>
+          <p className="text-[14px] whitespace-pre-wrap">
+            <Linkify text={menu.remark} />
+          </p>
+        </div>
+      )}
       {menu.supplement && (
         <div className="mt-2">
           <p className="text-[11px] font-semibold text-muted2">補強</p>

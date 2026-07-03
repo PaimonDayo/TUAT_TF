@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { createClient } from "@/lib/supabase/client";
 import { jstToday } from "@/lib/date";
+import { MenuSheetImportManager } from "@/components/features/MenuSheetImportManager";
 import { BLOCK_ORDER, BLOCKS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type {
@@ -50,6 +51,7 @@ type HistoryMenu = {
   id: string;
   content: string;
   pace: string | null;
+  remark: string | null;
   supplement: string | null;
   target_block: Block | null;
   created_at: string;
@@ -74,7 +76,7 @@ export function MenuForm({ scheduleId }: { scheduleId: string }) {
       </button>
       {open && (
         <FormModal open onOpenChange={setOpen} title="練習メニューを追加">
-          <MenuEditor scheduleId={scheduleId} onDone={() => setOpen(false)} />
+          <MenuCreatePanel scheduleId={scheduleId} onDone={() => setOpen(false)} />
         </FormModal>
       )}
     </>
@@ -83,7 +85,36 @@ export function MenuForm({ scheduleId }: { scheduleId: string }) {
 
 /** FABから予定を選び、練習メニューを作成する */
 export function MenuComposerForm({ onDone }: { onDone: () => void }) {
-  return <MenuEditor onDone={onDone} />;
+  return <MenuCreatePanel onDone={onDone} />;
+}
+
+/** 通常入力とスプシ/CSVから一括登録を切り替えるパネル */
+function MenuCreatePanel({
+  scheduleId,
+  onDone,
+}: {
+  scheduleId?: string;
+  onDone: () => void;
+}) {
+  const [mode, setMode] = useState<"normal" | "sheets">("normal");
+
+  return (
+    <div className="space-y-5 pb-4">
+      <SegmentedControl
+        items={[
+          { key: "normal", label: "通常入力" },
+          { key: "sheets", label: "スプシ/CSVから入力" },
+        ]}
+        value={mode}
+        onChange={setMode}
+      />
+      {mode === "normal" ? (
+        <MenuEditor scheduleId={scheduleId} onDone={onDone} />
+      ) : (
+        <MenuSheetImportManager />
+      )}
+    </div>
+  );
 }
 
 export function MenuEditModal({
@@ -139,6 +170,7 @@ function MenuEditor({
   const [targetIds, setTargetIds] = useState<string[]>(initialTargetIds);
   const [content, setContent] = useState(menu?.content ?? "");
   const [pace, setPace] = useState(menu?.pace ?? "");
+  const [remark, setRemark] = useState(menu?.remark ?? "");
   const [supplement, setSupplement] = useState(menu?.supplement ?? "");
   const [status, setStatus] = useState<MenuStatus>(menu?.status ?? "draft");
   const [history, setHistory] = useState<HistoryMenu[] | null>(null);
@@ -222,7 +254,7 @@ function MenuEditor({
     void supabase
       .from("practice_menus")
       .select(
-        "id, content, pace, supplement, target_block, created_at, targets:practice_menu_targets(user_id)",
+        "id, content, pace, remark, supplement, target_block, created_at, targets:practice_menu_targets(user_id)",
       )
       .eq("author_id", currentUserId)
       .eq("status", "published")
@@ -244,7 +276,7 @@ function MenuEditor({
     );
   }
 
-  /** 過去に公開したメニュー1件を丸ごと複製（種類・ブロック・対象者・本文・ペース・補強） */
+  /** 過去に公開したメニュー1件を丸ごと複製（種類・ブロック・対象者・メニュー・ペース・補足・補強） */
   function loadHistoryItem(item: HistoryMenu) {
     const ids = item.targets?.map((target) => target.user_id) ?? [];
     setKind(ids.length > 0 ? "people" : "block");
@@ -252,6 +284,7 @@ function MenuEditor({
     setTargetIds(ids);
     setContent(item.content ?? "");
     setPace(item.pace ?? "");
+    setRemark(item.remark ?? "");
     setSupplement(item.supplement ?? "");
     setHistoryOpen(false);
     showToast("過去のメニューを読み込みました", "success");
@@ -280,9 +313,10 @@ function MenuEditor({
       setError("対象の予定を選択してください");
       return;
     }
-    const hasPaceOrSupplement =
-      targetBlock === "middle_long" && (pace.trim() || supplement.trim());
-    if (!content.trim() && !hasPaceOrSupplement) {
+    const hasMiddleLongExtras =
+      targetBlock === "middle_long" &&
+      (pace.trim() || remark.trim() || supplement.trim());
+    if (!content.trim() && !hasMiddleLongExtras) {
       setError("メニュー内容を入力してください");
       return;
     }
@@ -303,6 +337,7 @@ function MenuEditor({
       target_user_ids: kind === "people" ? targetIds : [],
       target_menu_id: menu?.id ?? null,
       menu_pace: targetBlock === "middle_long" ? pace.trim() || null : null,
+      menu_remark: targetBlock === "middle_long" ? remark.trim() || null : null,
       menu_supplement: targetBlock === "middle_long" ? supplement.trim() || null : null,
     });
 
@@ -469,7 +504,7 @@ function MenuEditor({
       )}
 
       <div>
-        <p className="section-label mb-1.5">詳細</p>
+        <p className="section-label mb-1.5">メニュー</p>
         <Textarea
           rows={8}
           placeholder={"例:\nW-up 2km\n本練習 1000m×5 (R3')\nD-down 2km"}
@@ -487,6 +522,15 @@ function MenuEditor({
               placeholder={"例: 1000mを3'30〜3'40"}
               value={pace}
               onChange={(event) => setPace(event.target.value)}
+            />
+          </div>
+          <div>
+            <p className="section-label mb-1.5">補足</p>
+            <Textarea
+              rows={3}
+              placeholder={"例: 雨天時は室内メニューに変更"}
+              value={remark}
+              onChange={(event) => setRemark(event.target.value)}
             />
           </div>
           <div>

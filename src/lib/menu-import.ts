@@ -8,7 +8,7 @@ import type {
   PracticeSchedule,
 } from "@/types";
 
-export const MENU_IMPORT_COLUMNS = ["日付", "対象ブロック", "詳細", "補強", "ペース"];
+export const MENU_IMPORT_COLUMNS = ["日付", "対象ブロック", "メニュー", "ペース", "補足", "補強"];
 
 export type SubmittedMenuRow = {
   rowNumber: number;
@@ -21,9 +21,10 @@ export function canonicalMenuImportValues(
   return normalizeImportValues({
     "日付": raw["日付"] ?? raw["開始日"],
     "対象ブロック": raw["対象ブロック"],
-    "詳細": raw["詳細"] ?? raw["メニュー"] ?? raw["補足"],
-    "補強": raw["補強"],
+    "メニュー": raw["メニュー"] ?? raw["詳細"],
     "ペース": raw["ペース"],
+    "補足": raw["補足"],
+    "補強": raw["補強"],
   });
 }
 
@@ -120,10 +121,11 @@ function validateRow(
   }
   const block = resolved;
 
-  const content = values["詳細"] ?? "";
-  const supplement = values["補強"] ?? "";
+  const content = values["メニュー"] ?? "";
   const pace = values["ペース"] ?? "";
-  if (!content && !supplement && !pace) {
+  const remark = values["補足"] ?? "";
+  const supplement = values["補強"] ?? "";
+  if (!content && !pace && !remark && !supplement) {
     return result("skip", "内容なし");
   }
 
@@ -153,6 +155,7 @@ function validateRow(
     targetBlock: block,
     content,
     pace: pace || null,
+    remark: remark || null,
     supplement: supplement || null,
     existingMenuId: existingMenu?.id ?? null,
   };

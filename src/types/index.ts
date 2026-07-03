@@ -266,6 +266,7 @@ export interface MenuImportRow {
   targetBlock: Block;
   content: string;
   pace: string | null;
+  remark: string | null;
   supplement: string | null;
   existingMenuId: string | null;
 }
@@ -316,10 +317,13 @@ export interface PracticeMenu {
   schedule_id: string;
   author_id: string;
   group_name: string | null;
+  /** メニュー本文 */
   content: string;
-  /** 中長距離向け: ペース設定（詳細とは別枠） */
+  /** 中長距離向け: ペース設定 */
   pace: string | null;
-  /** 中長距離向け: 補強メニュー（詳細とは別枠） */
+  /** 中長距離向け: 補足 */
+  remark: string | null;
+  /** 中長距離向け: 補強メニュー */
   supplement: string | null;
   target_block: Block | null;
   status: "draft" | "published";

@@ -43,9 +43,10 @@ export function MenuSheetImportManager() {
       {
         "日付": `${year}-${String(now.getMonth() + 1).padStart(2, "0")}-01`,
         "対象ブロック": BLOCKS[targetBlock].label,
-        "詳細": "",
-        "補強": "",
+        "メニュー": "",
         "ペース": "",
+        "補足": "",
+        "補強": "",
       },
     ];
     const content = `\uFEFF${Papa.unparse(rows)}`;
@@ -169,6 +170,7 @@ export function MenuSheetImportManager() {
         target_user_ids: [],
         target_menu_id: row.existingMenuId,
         menu_pace: row.pace,
+        menu_remark: row.remark,
         menu_supplement: row.supplement,
       });
       if (saveError) failedRowNumbers.add(row.rowNumber);
@@ -252,7 +254,7 @@ export function MenuSheetImportManager() {
           <p className="text-headline">CSVで作る場合</p>
         </div>
         <p className="text-caption">
-          列: 日付 / 対象ブロック(省略可) / 詳細 / 補強 / ペース。補強・ペースは中長距離向けの枠です。
+          列: 日付 / 対象ブロック(省略可) / メニュー / ペース / 補足 / 補強。ペース・補足・補強は中長距離向けの枠です。
         </p>
         <Button type="button" variant="outline" size="lg" onClick={downloadTemplate}>
           <Download size={17} />
@@ -409,7 +411,7 @@ function EditablePreviewTable({
                 </td>
                 {MENU_IMPORT_COLUMNS.map((column) => (
                   <td key={column} className="px-1.5 py-1.5 align-top">
-                    {column === "詳細" || column === "補強" || column === "ペース" ? (
+                    {column === "メニュー" || column === "ペース" || column === "補足" || column === "補強" ? (
                       <textarea
                         value={row.values[column] ?? ""}
                         aria-label={`${row.rowNumber}行目 ${column}`}

@@ -15,7 +15,6 @@ import { Toggle } from "@/components/ui/toggle";
 import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import { ScheduleSheetsManager } from "@/components/features/ScheduleSheetsManager";
-import { MenuSheetImportManager } from "@/components/features/MenuSheetImportManager";
 import {
   BLOCK_ORDER,
   BLOCKS,
@@ -29,7 +28,7 @@ const OTHER = "__other__";
 
 export function ScheduleCreatePanel({ onDone }: { onDone: () => void }) {
   const searchParams = useSearchParams();
-  const [mode, setMode] = useState<"normal" | "sheets" | "menus">(
+  const [mode, setMode] = useState<"normal" | "sheets">(
     searchParams.get("sheets") === "1" ? "sheets" : "normal",
   );
 
@@ -38,15 +37,12 @@ export function ScheduleCreatePanel({ onDone }: { onDone: () => void }) {
       <SegmentedControl
         items={[
           { key: "normal", label: "通常入力" },
-          { key: "sheets", label: "予定をスプシから入力" },
-          { key: "menus", label: "メニューをスプシから入力" },
+          { key: "sheets", label: "スプレッドシートから入力" },
         ]}
         value={mode}
         onChange={setMode}
       />
-      {mode === "normal" && <ScheduleForm onDone={onDone} />}
-      {mode === "sheets" && <ScheduleSheetsManager />}
-      {mode === "menus" && <MenuSheetImportManager />}
+      {mode === "normal" ? <ScheduleForm onDone={onDone} /> : <ScheduleSheetsManager />}
     </div>
   );
 }
