@@ -154,6 +154,7 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 
 ## 作業ログ（着手前に追記・新しいものを上へ）
 <!-- 形式: YYYY-MM-DD / エージェント / 触る範囲 → 結果(commit・要点) -->
+- 2026-07-04 / Claude Code (Sonnet 5) / オーナー割り込み依頼（バックログ番号外）: ①メニューにcontentとは別枠の pace/supplement（ペース/補強、中長距離向け）追加 ②メニューのスプシ/CSV一括登録（予定と同じ体験。対象日の既存予定に紐付け必須、schedule-import.ts型を流用したmenu-import.ts新設、/api/menu-sheets/preview、MenuSheetImportManager.tsx、予定FABを3択化） ③予定の一括登録直後の取り消し（source_sheet_id+created_at基準の再取得→まとめて削除。削除候補リストもチェックボックスで実削除可能に）。migration 20260704120000 本番適用済み・Local/Remote一致確認済み。tsc/lint/build成功。**実機/ブラウザでの動作確認は未実施**（CSVインポートのプレビュー→反映、中長距離メニューのペース/補強入力、予定取込の取り消しボタン、削除候補チェックボックス削除の4点は次のエージェントか実機で要確認）。この後バックログ番号順（タスク1: 承認ゲート廃止）へ復帰 → 67256ee, 48111af, e4845b4
 - 2026-07-04 / Claude Code (Sonnet 5) / タスク0（記録フォーム設定保存バグ）着手。Vercel本番デプロイが最新コミット反映済みを確認（調査手順0クリア）。RecordFieldsSetting/FormModalFooter/ReorderList/safe-updateを読み込み静的解析したが確定原因は特定できず。addField/saveの例外握り潰しの可能性を排除する防御的fix（try/catch＋メッセージ表示、crypto.randomUUID未対応時のフォールバック）を実装しpush。**実機（iOS PWA）での「追加→一覧に見えるか→保存→再度開いて残っているか」の再現確認が未完了。次のエージェントはまずオーナーに実機確認を依頼すること** → 5831ec2
 - 2026-07-03 / Claude Code (Fable 5) / バックログ10〜12を追記（予定のワンタップ/自動取込・表形式一括入力、メニューの履歴複製・まとめて入力、⋯統一・コメント500字ほか）。@All確定も反映。コード変更なし → 7a3d881ほか(このcommit)
 - 2026-07-03 / Claude Code (Fable 5) / 全体コードレビュー→オーナー確定の実装バックログを本ファイルに追記（コード変更なし）。承認ゲート廃止・同期の方向固定(record_source)・スプシ由来記録のタイムライン表示ほか。実装は番号順に別エージェントが担当 → (このcommit)
