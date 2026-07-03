@@ -212,7 +212,7 @@ export function CommentSection({
                     <div className="space-y-2">
                       <Textarea
                         rows={2}
-                        maxLength={200}
+                        maxLength={500}
                         value={editText}
                         onChange={(event) => setEditText(event.target.value)}
                         className="max-w-full"
@@ -262,7 +262,7 @@ export function CommentSection({
       <div className="mt-3 flex min-w-0 items-end gap-2">
         <Textarea
           rows={1}
-          maxLength={200}
+          maxLength={500}
           placeholder="コメントを追加…"
           value={text}
           onChange={(event) => setText(event.target.value)}
