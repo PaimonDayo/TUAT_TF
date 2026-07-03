@@ -54,6 +54,21 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
 
+  // "running"放置の解消: タイムアウト等で前回以前のrunがrunningのまま残っていたら
+  // ここでerrorへ倒す（2026-07-02/03に発生した放置の再発防止）。
+  if (!dryRun) {
+    const staleThreshold = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    await admin
+      .from("sheet_sync_runs")
+      .update({
+        status: "error",
+        error_text: "タイムアウトのため中断（次回実行時に自動検出）",
+        finished_at: new Date().toISOString(),
+      })
+      .eq("status", "running")
+      .lt("started_at", staleThreshold);
+  }
+
   // ドライランはログを残さない
   const { data: run } = dryRun
     ? { data: undefined }
@@ -73,6 +88,11 @@ export async function POST(request: Request) {
           status: "success",
           pulled_count: result.inserted + result.updated,
           pushed_count: result.pushed,
+          failed_members: result.failedMembers,
+          error_text:
+            result.failedMembers.length > 0
+              ? `${result.failedMembers.length}件が部分失敗（詳細はfailed_members参照）`
+              : null,
           finished_at: new Date().toISOString(),
         })
         .eq("id", runId);

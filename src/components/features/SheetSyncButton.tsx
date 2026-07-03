@@ -26,7 +26,12 @@ export function SheetSyncButton() {
       }
       setMessage(
         `同期しました：取込 ${data.inserted} / 更新 ${data.updated} / 書き戻し ${data.pushed}` +
-          (data.conflicts?.length ? ` / 競合スキップ ${data.conflicts.length}` : ""),
+          (data.conflicts?.length ? ` / 競合スキップ ${data.conflicts.length}` : "") +
+          (data.failedMembers?.length
+            ? ` / 失敗 ${data.failedMembers.length}件（${data.failedMembers
+                .map((f: { member: string }) => f.member)
+                .join("、")}）`
+            : ""),
       );
       router.refresh();
     } catch {

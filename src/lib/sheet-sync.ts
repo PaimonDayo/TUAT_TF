@@ -34,6 +34,8 @@ export type SyncResult = {
   pushed: number; // アプリ→スプシ 書き戻し
   conflicts: string[]; // 同日に複数記録があり安全のためスキップした "シート名 日付"
   skippedMembers: string[];
+  /** 部員ごとの失敗（1人の不調で他の部員の同期を止めないための部分失敗設計） */
+  failedMembers: { member: string; reason: string }[];
   dryRun: boolean;
 };
 
@@ -440,6 +442,7 @@ export async function runSheetSync(
     pushed: 0,
     conflicts: [],
     skippedMembers: [],
+    failedMembers: [],
     dryRun,
   };
   const today = todayJST();
@@ -581,22 +584,42 @@ export async function runSheetSync(
     return result;
   }
 
+  // 部分失敗設計: 1件（1部員）の失敗で他の部員の同期を止めない
+  // （2026-07-02〜03、1人のシート不調で28時間全滅した事故の再発防止）。
   if (inserts.length > 0) {
     const { error } = await admin.from("practice_records").insert(inserts);
-    if (error) throw error;
+    if (error) {
+      result.failedMembers.push({ member: "(取込一括)", reason: error.message });
+      result.inserted = 0;
+    }
   }
   for (const u of updates) {
-    const { error } = await admin.from("practice_records").update(u.patch).eq("id", u.id);
-    if (error) throw error;
+    try {
+      const { error } = await admin.from("practice_records").update(u.patch).eq("id", u.id);
+      if (error) throw error;
+    } catch (err) {
+      result.updated--;
+      result.failedMembers.push({
+        member: "(取込更新)",
+        reason: err instanceof Error ? err.message : "更新に失敗しました",
+      });
+    }
   }
   for (const p of pushes) {
-    await gasPost({ action: "writeCells", memberName: p.memberName, date: p.date, cells: p.cells });
-    const { error } = await admin
-      .from("practice_records")
-      .update({ synced_at: new Date().toISOString() })
-      .eq("id", p.id);
-    if (error) throw error;
-    result.pushed++;
+    try {
+      await gasPost({ action: "writeCells", memberName: p.memberName, date: p.date, cells: p.cells });
+      const { error } = await admin
+        .from("practice_records")
+        .update({ synced_at: new Date().toISOString() })
+        .eq("id", p.id);
+      if (error) throw error;
+      result.pushed++;
+    } catch (err) {
+      result.failedMembers.push({
+        member: p.memberName,
+        reason: err instanceof Error ? err.message : "書き戻しに失敗しました",
+      });
+    }
   }
 
   return result;
