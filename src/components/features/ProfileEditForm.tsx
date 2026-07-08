@@ -179,6 +179,7 @@ export function ProfileEditForm({
             />
             <p className="text-micro mt-1">
               画像URLを貼ると円形（中央基準）で表示されます。空欄ならイニシャル表示。
+              読み込みに失敗した場合はイニシャル表示に戻ります（Googleドライブ等の共有リンクは直接画像を指すURLではないため読み込めません）。
             </p>
           </div>
         </div>

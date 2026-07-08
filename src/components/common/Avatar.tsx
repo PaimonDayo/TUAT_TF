@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { cn, initials } from "@/lib/utils";
 import { BLOCKS } from "@/lib/constants";
 import type { Block } from "@/types";
@@ -8,7 +11,11 @@ const SIZES = {
   lg: "h-16 w-16 text-2xl",
 };
 
-/** イニシャル表示アバター。ブロックがあれば先頭ブロックの色で着色 */
+/**
+ * イニシャル表示アバター。ブロックがあれば先頭ブロックの色で着色。
+ * avatarUrlの画像読み込みに失敗した場合（リンク切れ・直リンクでない共有URL等）は
+ * 崩れた画像アイコンのまま出さず、イニシャル表示にフォールバックする。
+ */
 export function Avatar({
   name,
   blocks,
@@ -22,16 +29,23 @@ export function Avatar({
   size?: keyof typeof SIZES;
   className?: string;
 }) {
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [avatarUrl]);
+
   const primary = blocks && blocks.length > 0 ? blocks[0] : null;
   const color = primary ? BLOCKS[primary].color : "#8e8e93";
   const bg = primary ? BLOCKS[primary].bg : "#e5e5ea";
 
-  if (avatarUrl) {
+  if (avatarUrl && !imgError) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={avatarUrl}
         alt={name}
+        onError={() => setImgError(true)}
         className={cn("rounded-full object-cover", SIZES[size], className)}
       />
     );
