@@ -102,7 +102,7 @@ export function RecordCard({
             <KeyValue label="メニュー" value={record.menu_text} />
             <KeyValue label="目的・意識すること" value={record.focus_text} />
             <KeyValue
-              label={record.menu_text || record.focus_text ? "タイム" : "結果・タイム"}
+              label={record.menu_text || record.focus_text ? "タイム" : "結果"}
               value={record.result_text}
             />
             <KeyValue label="補強" value={record.strength_text} />

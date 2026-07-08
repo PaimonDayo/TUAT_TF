@@ -144,7 +144,7 @@ export function RecordFieldsSetting({
                   ))}
                 </div>
               </LockedField>
-              <LockedTextArea label="結果・タイム" />
+              <LockedTextArea label="結果" />
               <LockedTextArea label="補強" />
             </>
           ) : (

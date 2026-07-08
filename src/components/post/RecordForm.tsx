@@ -224,7 +224,7 @@ export function RecordForm({
                   .filter(Boolean)
                   .join(" / ") || null,
             },
-            { label: "結果・タイム", value: resultText || null },
+            { label: "結果", value: resultText || null },
             { label: "補強", value: strengthText || null },
             { label: "感想・振り返り", value: memo || null },
           ]
@@ -332,9 +332,9 @@ export function RecordForm({
         </div>
       )}
 
-      {/* 結果・タイム */}
+      {/* 結果 */}
       <div>
-        <p className="section-label mb-1.5">{isMiddleLong ? "結果・タイム" : "タイム"}</p>
+        <p className="section-label mb-1.5">{isMiddleLong ? "結果" : "タイム"}</p>
         <Textarea
           rows={2}
           placeholder={isMiddleLong ? "例: 5000m 16'20\"" : "例: 100m 11.2 (+1.5)"}
