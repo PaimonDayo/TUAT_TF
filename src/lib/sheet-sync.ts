@@ -169,6 +169,12 @@ async function fetchAllRaw(): Promise<RawMember[]> {
   return data.data ?? [];
 }
 
+/** 部員1人だけを軽量取得（write-through保存直後の確認・個人の記録画面用） */
+async function fetchMemberRaw(memberName: string): Promise<RawMember> {
+  const data = await gasGet<{ data: RawMember }>({ action: "fetchMember", memberName });
+  return data.data;
+}
+
 // ── マッピング解決：このシートの見出しから「アプリ項目→実際の見出し名」を作る ──
 type FieldMap = {
   builtin: Map<BuiltinKey, { header: string; numeric: boolean }>;
@@ -193,7 +199,7 @@ function resolveFieldMap(header: string[], fields: RecordFieldDef[]): FieldMap {
 }
 
 // ── 値の取り出し（アプリ側 / シート側）と比較 ────────────────────────────────
-type DbRecord = {
+export type DbRecord = {
   id: string;
   user_id: string;
   recorded_date: string;
@@ -210,6 +216,8 @@ type DbRecord = {
   custom: Record<string, string | number | null> | null;
   updated_at: string | null;
   synced_at: string | null;
+  /** write-through(保存直後のスプシ反映)が失敗し、毎時同期での再送が必要な状態か */
+  pending_sheet_push?: boolean;
 };
 
 function appBuiltin(rec: DbRecord, key: BuiltinKey): number | string | null {
@@ -287,6 +295,73 @@ function appToCellsNonEmpty(map: FieldMap, rec: DbRecord): Record<string, string
   return cells;
 }
 
+const BUILTIN_LABELS: Record<BuiltinKey, string> = {
+  dist_low: "低強度",
+  dist_mid: "中強度",
+  dist_high: "高強度",
+  dist_speed: "解糖系",
+  strides: "流し",
+  strength_text: "補強",
+  result_text: "結果",
+  memo: "感想",
+  menu_text: "メニュー",
+  focus_text: "目的・意識すること",
+};
+
+export type PushRecordResult = {
+  /** シートにその項目の列が無い等で書き込めなかった項目（アプリ側の表示ラベル）。黙って落とさず可視化するため */
+  unmapped: string[];
+  action: "created" | "updated";
+};
+
+/**
+ * write-through: アプリで保存した1件をその場でスプシへ書き込む（タスク16）。
+ * 非破壊（appToCellsNonEmptyを使用。空項目でシートの既存セルを消さない）。
+ * シートに列が無い項目は書き込まず unmapped に集めて呼び出し側へ返す（黙って落とさない）。
+ */
+export async function pushRecordToSheet(
+  sheetName: string,
+  recordFields: RecordFieldDef[],
+  rec: DbRecord,
+): Promise<PushRecordResult> {
+  const member = await fetchMemberRaw(sheetName);
+  const map = resolveFieldMap(member.header, recordFields);
+  const cells = appToCellsNonEmpty(map, rec);
+
+  // シートに列自体が無く、送信すらされなかった項目（可視化用）
+  const unmapped: string[] = [];
+  for (const b of BUILTINS) {
+    if (map.builtin.has(b.key)) continue;
+    const v = appBuiltin(rec, b.key);
+    const nonEmpty = b.numeric ? Number(v) > 0 : (v ?? "").toString().trim() !== "";
+    if (nonEmpty) unmapped.push(BUILTIN_LABELS[b.key]);
+  }
+  for (const f of recordFields) {
+    if (map.custom.has(f.key)) continue;
+    const v = rec.custom?.[f.key];
+    if ((v ?? "").toString().trim() !== "") unmapped.push(f.label);
+  }
+
+  if (Object.keys(cells).length === 0) {
+    return { unmapped, action: "updated" };
+  }
+
+  const res = await gasPost<{
+    success: boolean;
+    action: "created" | "updated";
+    unmapped?: string[];
+  }>({
+    action: "writeCells",
+    memberName: sheetName,
+    date: rec.recorded_date,
+    cells,
+  });
+
+  // GAS側でも書けなかった見出しがあれば統合（マッピング取得後にシート列が変わった等のズレ対策）
+  if (res.unmapped && res.unmapped.length > 0) unmapped.push(...res.unmapped);
+  return { unmapped, action: res.action };
+}
+
 export type ReconcileResult = {
   direction: "to_sheet" | "to_app";
   pushed: number;
@@ -331,7 +406,7 @@ export async function reconcileOnSwitch(
   const { data: existing, error: rErr } = await admin
     .from("practice_records")
     .select(
-      "id, user_id, recorded_date, dist_low, dist_mid, dist_high, dist_speed, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at",
+      "id, user_id, recorded_date, dist_low, dist_mid, dist_high, dist_speed, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at, pending_sheet_push",
     )
     .eq("user_id", profileId)
     .gte("recorded_date", SYNC_CUTOFF);
@@ -474,7 +549,7 @@ export async function runSheetSync(
   const { data: existing, error: rErr } = await admin
     .from("practice_records")
     .select(
-      "id, user_id, recorded_date, dist_low, dist_mid, dist_high, dist_speed, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at",
+      "id, user_id, recorded_date, dist_low, dist_mid, dist_high, dist_speed, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at, pending_sheet_push",
     )
     .in("user_id", userIds)
     .gte("recorded_date", SYNC_CUTOFF);
@@ -493,7 +568,14 @@ export async function runSheetSync(
   const nowIso = new Date().toISOString();
   const inserts: Record<string, unknown>[] = [];
   const updates: { id: string; patch: Record<string, unknown> }[] = [];
-  const pushes: { id: string; memberName: string; date: string; cells: Record<string, string | number> }[] = [];
+  const pushes: {
+    id: string;
+    memberName: string;
+    date: string;
+    cells: Record<string, string | number>;
+    /** write-through再送分か（成功時にpending_sheet_pushをfalseへ戻す対象） */
+    clearsPending?: boolean;
+  }[] = [];
 
   for (const [sheetName, profile] of sheetToProfile) {
     const member = memberByName.get(sheetName);
@@ -505,6 +587,21 @@ export async function runSheetSync(
     const appByDate = byUser.get(profile.id)!;
 
     if (profile.record_source === "sheet") {
+      // write-through保存がGAS側の一時失敗等で未反映のまま残っている記録があれば、
+      // pullで（古いシート値により）巻き戻される前に非破壊で再送する（タスク16の安全網）。
+      // 判定は専用フラグ pending_sheet_push のみを見る（updated_at/synced_atの大小比較=appIsNewer
+      // は使わない。write-through導入前からの無関係な時刻ズレまで再送対象と誤検知し、
+      // 部員がスプシへ直接入力した内容を古いアプリ値で上書きしかねないことがdry-runで判明したため）。
+      for (const [date, list] of appByDate) {
+        if (!inRange(date) || list.length !== 1) continue;
+        const app = list[0];
+        if (!app.pending_sheet_push) continue;
+        const cells = appToCellsNonEmpty(map, app);
+        if (Object.keys(cells).length > 0) {
+          pushes.push({ id: app.id, memberName: sheetName, date, cells, clearsPending: true });
+        }
+      }
+
       // pullのみ: シートを正としてアプリへ反映。シートに行が無い日は触らない。
       // 新規に連携した部員は連携日より前の履歴を一気に取り込まない（sheet_linked_atが個別カットオフ）。
       const cutoff =
@@ -610,7 +707,10 @@ export async function runSheetSync(
       await gasPost({ action: "writeCells", memberName: p.memberName, date: p.date, cells: p.cells });
       const { error } = await admin
         .from("practice_records")
-        .update({ synced_at: new Date().toISOString() })
+        .update({
+          synced_at: new Date().toISOString(),
+          ...(p.clearsPending ? { pending_sheet_push: false } : {}),
+        })
         .eq("id", p.id);
       if (error) throw error;
       result.pushed++;

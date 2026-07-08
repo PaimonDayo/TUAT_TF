@@ -64,19 +64,24 @@ export function RecordCard({
             {cond.label}
           </span>
         )}
-        {isOwner &&
-          (record.from_sheet ? (
-            <span className="shrink-0 rounded-full bg-bg px-2 py-0.5 text-micro text-muted2">
-              スプシ由来
-            </span>
-          ) : (
-            <span onClick={(e) => e.stopPropagation()}>
-              <RecordOwnerMenu
-                record={record}
-                isMiddleLong={author.blocks?.includes("middle_long") ?? false}
-              />
-            </span>
-          ))}
+        {isOwner && (
+          <div className="flex shrink-0 items-center gap-1.5">
+            {record.from_sheet && (
+              <span className="rounded-full bg-bg px-2 py-0.5 text-micro text-muted2">
+                スプシ由来
+              </span>
+            )}
+            {(author.record_source === "sheet" || !record.from_sheet) && (
+              <span onClick={(e) => e.stopPropagation()}>
+                <RecordOwnerMenu
+                  record={record}
+                  isMiddleLong={author.blocks?.includes("middle_long") ?? false}
+                  recordSource={author.record_source}
+                />
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 距離（中長距離。データがある時だけ表示） */}

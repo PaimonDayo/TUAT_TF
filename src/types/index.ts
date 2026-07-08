@@ -66,7 +66,7 @@ export interface Profile {
   sheet_name: string | null;
   /** シート連携した日(JST)。新規連携時は同期側でこれ以降のみ取り込む個別カットオフに使う */
   sheet_linked_at: string | null;
-  /** 記録の入力元。'sheet'ならスプシが正でアプリは閲覧専用、'app'ならアプリが正でスプシへ書き戻す */
+  /** 記録のメインDB。'sheet'ならスプシが正でアプリからの保存は即write-through、'app'ならアプリが正でスプシへ書き戻す */
   record_source: "app" | "sheet";
   /** 記録フォームのカスタム項目定義（短距離など独自列の人向け） */
   record_fields: RecordFieldDef[];
@@ -86,7 +86,10 @@ export interface RecordFieldDef {
 export type AuthorMini = Pick<
   Profile,
   "id" | "display_name" | "avatar_url" | "blocks" | "grade"
->;
+> & {
+  /** 練習記録カードの編集可否判定に使う。取得していない画面ではundefinedでよい（'app'相当として扱う） */
+  record_source?: Profile["record_source"];
+};
 
 export interface PracticeRecord {
   id: string;

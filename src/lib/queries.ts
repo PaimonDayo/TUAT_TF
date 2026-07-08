@@ -17,7 +17,8 @@ import type {
   AppNotificationWithActor,
 } from "@/types";
 
-const AUTHOR_SELECT = "author:profiles!user_id(id, display_name, avatar_url, blocks, grade)";
+const AUTHOR_SELECT =
+  "author:profiles!user_id(id, display_name, avatar_url, blocks, grade, record_source)";
 const NOTICE_REACTIONS: NoticeReaction[] = ["ack", "thanks", "question"];
 
 // 練習記録の表示フィルタ。

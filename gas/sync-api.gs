@@ -3,6 +3,7 @@
  * 別プロジェクトに「これだけ」貼ればよい（旧アプリのコードは不要）。
  *   GET  ?action=listMembers
  *   GET  ?action=fetchAllRaw
+ *   GET  ?action=fetchMember&memberName=...（1部員のみ。write-through用の軽量版）
  *   POST { action:'writeCells', memberName, date, cells:{見出し:値} }
  */
 
@@ -47,6 +48,10 @@ function doGet(e) {
     if (action === 'fetchAllRaw') {
       verifySyncSecret(e.parameter.secret);
       return handleFetchAllRaw();
+    }
+    if (action === 'fetchMember') {
+      verifySyncSecret(e.parameter.secret);
+      return handleFetchMember(e.parameter.memberName);
     }
     return createJsonResponse({ error: 'unknown action' });
   } catch (err) {
@@ -112,32 +117,50 @@ function handleListMembers() {
   return createJsonResponse({ members: members });
 }
 
+// 1シート分をfetchAllRawと同じ形式で読む（部員個別取得の共通部）
+function readMemberSheet(sheet) {
+  const name = sheet.getName();
+  const values = sheet.getDataRange().getDisplayValues();
+  const hIdx = findGenericHeaderIndex(values);
+  if (hIdx === -1) return null;
+  const header = values[hIdx].map(c => c.toString().trim());
+  const records = [];
+  for (const row of values.slice(hIdx + 1)) {
+    const dateRaw = row[0] ? row[0].toString().trim() : '';
+    if (!dateRaw || !/^\d{1,2}\/\d{1,2}/.test(dateRaw)) continue;
+    const cells = {};
+    for (let c = 0; c < header.length; c++) {
+      const key = header[c];
+      if (!key) continue;
+      if (cells[key] === undefined) cells[key] = row[c] != null ? row[c].toString() : '';
+    }
+    records.push({ date: parseSheetDate(dateRaw), cells: cells });
+  }
+  return { name: name, gid: sheet.getSheetId().toString(), header: header.filter(Boolean), records: records };
+}
+
 function handleFetchAllRaw() {
   const out = [];
   const sheets = getSpreadsheet().getSheets();
   for (const sheet of sheets) {
     const name = sheet.getName();
     if (!/^[BM]\d/.test(name)) continue;
-    const values = sheet.getDataRange().getDisplayValues();
-    const hIdx = findGenericHeaderIndex(values);
-    if (hIdx === -1) continue;
-    const header = values[hIdx].map(c => c.toString().trim());
-    const records = [];
-    for (const row of values.slice(hIdx + 1)) {
-      const dateRaw = row[0] ? row[0].toString().trim() : '';
-      if (!dateRaw || !/^\d{1,2}\/\d{1,2}/.test(dateRaw)) continue;
-      const cells = {};
-      for (let c = 0; c < header.length; c++) {
-        const key = header[c];
-        if (!key) continue;
-        if (cells[key] === undefined) cells[key] = row[c] != null ? row[c].toString() : '';
-      }
-      records.push({ date: parseSheetDate(dateRaw), cells: cells });
-    }
-    out.push({ name: name, gid: sheet.getSheetId().toString(), header: header.filter(Boolean), records: records });
+    const member = readMemberSheet(sheet);
+    if (member) out.push(member);
   }
   out.sort((a, b) => a.name.localeCompare(b.name));
   return createJsonResponse({ data: out });
+}
+
+// 部員1人だけを軽量取得（write-through保存直後の反映確認・個人の記録画面用。
+// 100人規模でも毎回全員分(fetchAllRaw)を読まずに済む）
+function handleFetchMember(memberName) {
+  if (!memberName) return createJsonResponse({ error: 'memberName は必須です。' });
+  const sheet = getSpreadsheet().getSheetByName(memberName);
+  if (!sheet) return createJsonResponse({ error: 'シート「' + memberName + '」が見つかりません。' });
+  const member = readMemberSheet(sheet);
+  if (!member) return createJsonResponse({ error: '見出し行（日付）が見つかりません。' });
+  return createJsonResponse({ data: member });
 }
 
 // 見出し名でセルを upsert（実際の距離などの数式列は触らない＝渡された見出しだけ書く）
@@ -174,13 +197,22 @@ function writeCellsRecord(data) {
     sheetRowNum = rowIdx + 1;
   }
 
+  const unmapped = [];
   Object.keys(cells).forEach(function (h) {
     const col = colOf[normalizeHeaderCell(h)];
-    if (col === undefined) return;
+    if (col === undefined) {
+      unmapped.push(h);
+      return;
+    }
     sheet.getRange(sheetRowNum, col + 1).setValue(cells[h]);
   });
 
-  return { success: true, action: rowIdx === -1 ? 'created' : 'updated', row: sheetRowNum };
+  return {
+    success: true,
+    action: rowIdx === -1 ? 'created' : 'updated',
+    row: sheetRowNum,
+    unmapped: unmapped, // 見出しが見つからず書き込めなかった項目（タブに列が無いケースの可視化用）
+  };
 }
 
 // ── リプライ（旧TFと同じ：感想列より右の「列名なし」列に左から書き足す）─────────

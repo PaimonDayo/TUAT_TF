@@ -14,15 +14,19 @@ import type { PracticeRecord } from "@/types";
 export function RecordOwnerMenu({
   record,
   isMiddleLong,
+  recordSource = "app",
 }: {
   record: PracticeRecord;
   isMiddleLong: boolean;
+  /** 記録のメイン。'sheet'ならスプシ由来(from_sheet)の記録も編集可（write-through） */
+  recordSource?: "app" | "sheet";
 }) {
   const router = useRouter();
   const { showToast } = useToast();
   const [editOpen, setEditOpen] = useState(false);
-  // スプシ由来の記録は入力元がスプレッドシート側なので、アプリ内では閲覧のみ（編集不可）。
-  const editable = !record.from_sheet;
+  // 記録のメインがアプリの部員は、スプシ由来(from_sheet)の記録はアプリ内では編集不可
+  // （そちらは今もスプシ側が正）。メインがスプシの部員はどちらの記録も編集可（write-through）。
+  const editable = recordSource === "sheet" || !record.from_sheet;
 
   async function remove() {
     const supabase = createClient();
@@ -50,6 +54,7 @@ export function RecordOwnerMenu({
           userId={record.user_id}
           isMiddleLong={isMiddleLong}
           record={record}
+          recordSource={recordSource}
           onDone={() => setEditOpen(false)}
         />
       </FormModal>

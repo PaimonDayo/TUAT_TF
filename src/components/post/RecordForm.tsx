@@ -10,8 +10,27 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { FormModalFooter } from "@/components/ui/form-modal";
+import { useToast } from "@/components/ui/toast";
 import { CONDITIONS, CONDITION_ORDER } from "@/lib/constants";
 import type { Condition, PracticeRecord, RecordFieldDef } from "@/types";
+
+/** write-through: 記録のメインがスプシの部員の保存を、その場でスプシへ反映する（タスク16） */
+async function pushRecordToSheet(recordId: string): Promise<{ ok: boolean; error?: string; unmapped?: string[] }> {
+  try {
+    const res = await fetch("/api/sheets/push-record", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recordId }),
+    });
+    const json = await res.json();
+    if (!res.ok || !json.ok) {
+      return { ok: false, error: json.error ?? "スプレッドシートへの反映に失敗しました" };
+    }
+    return { ok: true, unmapped: json.unmapped ?? [] };
+  } catch {
+    return { ok: false, error: "スプレッドシートへの反映に失敗しました（通信エラー）" };
+  }
+}
 
 const EMPTY: IntensityValues = { low: "", mid: "", high: "", speed: "" };
 
@@ -39,6 +58,7 @@ export function RecordForm({
   onDone: () => void;
 }) {
   const router = useRouter();
+  const { showToast } = useToast();
   const editing = !!record;
 
   const [date, setDate] = useState(record?.recorded_date ?? jstToday());
@@ -167,6 +187,7 @@ export function RecordForm({
           custom,
         };
 
+    let savedId: string;
     if (editing) {
       const result = await safeUpdate(supabase, "practice_records", payload, { id: record!.id });
       if (!result.ok) {
@@ -174,8 +195,10 @@ export function RecordForm({
         setSaving(false);
         return;
       }
+      savedId = record!.id;
     } else {
-      // 同じ日の記録が既にあれば新規ではなく更新する（1日1件に保つ＝重複防止）
+      // 同じ日の記録が既にあれば新規ではなく更新する（1日1件に保つ＝重複防止。
+      // 'sheet'メインの部員はシート行と1:1対応のため特に重要）
       const { data: sameDay } = await supabase
         .from("practice_records")
         .select("id")
@@ -191,85 +214,43 @@ export function RecordForm({
           setSaving(false);
           return;
         }
+        savedId = sameDay.id;
       } else {
-        const { error } = await supabase
+        const { data: inserted, error } = await supabase
           .from("practice_records")
           // from_sheet はinsert時のみ設定する（アプリ投稿＝タイムラインに出す）。updateでは変更しない。
-          .insert({ user_id: userId, from_sheet: false, ...payload });
-        if (error) {
+          .insert({ user_id: userId, from_sheet: false, ...payload })
+          .select("id")
+          .single();
+        if (error || !inserted) {
           setError("記録の保存に失敗しました");
           setSaving(false);
           return;
         }
+        savedId = inserted.id;
       }
     }
+
+    // write-through: 記録のメインがスプシの部員は、保存直後にその場でスプシへ反映する（タスク16）。
+    // アプリへの保存自体はすでに成功しているため、ここでの失敗はデータ消失にはならない
+    // （次回の毎時同期が再送する）。ユーザーには警告として知らせる。
+    if (recordSource === "sheet") {
+      const pushResult = await pushRecordToSheet(savedId);
+      if (!pushResult.ok) {
+        showToast(
+          `記録はアプリに保存されましたが、スプレッドシートへの反映に失敗しました（自動で再試行されます）: ${pushResult.error}`,
+          "error",
+        );
+      } else if (pushResult.unmapped && pushResult.unmapped.length > 0) {
+        showToast(
+          `スプレッドシートに次の項目の列が見つからず反映できませんでした: ${pushResult.unmapped.join("・")}`,
+          "error",
+        );
+      }
+    }
+
     router.refresh();
     onDone();
-  }
-
-  if (recordSource === "sheet") {
-    const rows: { label: string; value: string | null }[] = record
-      ? isMiddleLong
-        ? [
-            {
-              label: "強度別距離",
-              value:
-                [
-                  dist.low && `低強度 ${dist.low}km`,
-                  dist.mid && `中強度 ${dist.mid}km`,
-                  dist.high && `高強度 ${dist.high}km`,
-                  dist.speed && `解糖系 ${dist.speed}km`,
-                  strides !== "0" && strides && `流し ${strides}本`,
-                ]
-                  .filter(Boolean)
-                  .join(" / ") || null,
-            },
-            { label: "結果", value: resultText || null },
-            { label: "補強", value: strengthText || null },
-            { label: "感想・振り返り", value: memo || null },
-          ]
-        : [
-            { label: "メニュー", value: menuText || null },
-            { label: "目的・意識すること", value: focusText || null },
-            { label: "タイム", value: resultText || null },
-            { label: "感想・振り返り", value: memo || null },
-          ]
-      : [];
-
-    return (
-      <div className="space-y-3 pb-4">
-        <div className="rounded-xl bg-accent/8 px-3 py-2.5 text-caption leading-relaxed">
-          記録の入力元がスプレッドシートに設定されているため、アプリからは投稿・編集できません。
-          マイページの設定で入力元をアプリに切り替えると編集できます。
-        </div>
-        {record ? (
-          <div className="space-y-3">
-            <div>
-              <p className="section-label mb-1">日付</p>
-              <p className="text-[14px]">{date}</p>
-            </div>
-            {rows.map((row) => (
-              <div key={row.label}>
-                <p className="section-label mb-1">{row.label}</p>
-                <p className="whitespace-pre-wrap text-[14px]">{row.value ?? "（未入力）"}</p>
-              </div>
-            ))}
-            {condition && (
-              <div>
-                <p className="section-label mb-1">コンディション</p>
-                <p className="text-[14px]">
-                  {CONDITIONS[condition].symbol} {CONDITIONS[condition].label}
-                </p>
-              </div>
-            )}
-          </div>
-        ) : (
-          <p className="text-center text-caption text-muted">
-            新しい記録はスプレッドシート側に入力してください。
-          </p>
-        )}
-      </div>
-    );
   }
 
   return (
