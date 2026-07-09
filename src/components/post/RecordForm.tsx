@@ -81,6 +81,8 @@ export function RecordForm({
   const [condition, setCondition] = useState<Condition | null>(record?.condition ?? null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 新規作成モードでその日の記録が既にあるか（1日1記録ルール。見つかったら編集扱いでフォームへ読み込む）
+  const [hasExistingSameDay, setHasExistingSameDay] = useState(false);
 
   // カスタム項目（プロフィールで設定したもの）。フォームに動的に追加する。
   // 呼び出し側が取得済みプロフィールから渡していれば、それを使い再フェッチしない。
@@ -106,6 +108,54 @@ export function RecordForm({
         setCustomFields(fields);
       });
   }, [userId, recordFields]);
+
+  // 練習記録は1日1件（1日1記録ルール）。新規作成モードで日付を選ぶたび、その日の記録が
+  // 既にあれば「新規作成」ではなく実質的な編集としてフォームへ読み込む（未入力に見える状態で
+  // 保存し既存の内容を消してしまう事故を防ぐ）。DBをSupabase単独に統合した際は見直す可能性があるが、
+  // 'sheet'メインの部員はシート行と1:1対応のため当面はこのルールを維持する。
+  useEffect(() => {
+    if (editing) return; // 記録カードからの編集は渡された record をそのまま使う（対象外）
+    let active = true;
+    const supabase = createClient();
+    supabase
+      .from("practice_records")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("recorded_date", date)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!active) return;
+        const found = data as PracticeRecord | null;
+        setHasExistingSameDay(!!found);
+        setDist(
+          found
+            ? {
+                low: numStr(found.dist_low),
+                mid: numStr(found.dist_mid),
+                high: numStr(found.dist_high),
+                speed: numStr(found.dist_speed),
+              }
+            : EMPTY,
+        );
+        setStrides(numStr(found?.strides ?? 0));
+        setResultText(found?.result_text ?? "");
+        setStrengthText(found?.strength_text ?? "");
+        setMenuText(found?.menu_text ?? "");
+        setFocusText(found?.focus_text ?? "");
+        setMemo(found?.memo ?? "");
+        setCondition(found?.condition ?? null);
+        const custom: Record<string, string> = {};
+        for (const [k, v] of Object.entries(found?.custom ?? {})) {
+          custom[k] = v == null ? "" : String(v);
+        }
+        setCustomValues(custom);
+      });
+    return () => {
+      active = false;
+    };
+  }, [date, editing, userId]);
 
   function buildCustom(): Record<string, string | number | null> {
     const out: Record<string, string | number | null> = { ...(record?.custom ?? {}) };
@@ -264,6 +314,11 @@ export function RecordForm({
           max={jstToday()}
           onChange={(event) => setDate(event.target.value)}
         />
+        {!editing && hasExistingSameDay && (
+          <p className="text-caption text-muted2 mt-1">
+            この日の記録は既にあります。内容を読み込みました（保存すると更新されます）
+          </p>
+        )}
       </div>
 
       {/* 強度別距離（中長距離のみ） */}
@@ -413,7 +468,7 @@ export function RecordForm({
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <FormModalFooter>
         <Button size="lg" onClick={submit} disabled={saving}>
-          {saving ? "保存中…" : editing ? "更新する" : "記録する"}
+          {saving ? "保存中…" : editing || hasExistingSameDay ? "更新する" : "記録する"}
         </Button>
       </FormModalFooter>
     </div>
