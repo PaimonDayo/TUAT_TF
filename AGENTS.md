@@ -165,11 +165,11 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 - **GAS拡張**: `fetchMember`アクション追加（1部員だけ軽量取得。個人の記録画面・write-through確認用。100人規模でも毎回fetchAllRawを引かずに済む）。`writeCells`が書けなかった見出し(`unmapped`)を返すよう変更（未マップ項目の可視化。旧タスク15の教訓を反映）。clasp pushで本番反映済み（deployment `AKfycbyXUDkqE9BdgdNJmb9sGSZK6CTKt_J7OTyLuLvKXwZC3tPexS-i_XkndjuluQ33D7UK @6`）。
 - **記録カード（RecordCard/PostOwnerMenu）の編集可否**: 記録のメインが'sheet'の部員は、from_sheet=trueの過去記録（過去のpull由来）も含めて自分の記録を編集可能にした（従来は from_sheet=true を一律「編集不可・閲覧のみ」にしていた）。`AuthorMini`に`record_source`（optional）を追加し`queries.ts`のAUTHOR_SELECTで取得。
 - **⚠️ dry-runで実際に問題を発見・修正済み**: 当初、毎時同期側の「write-through失敗時の再送」を既存の`appIsNewer`（updated_at>synced_at比較）で判定する設計にしたところ、本番dry-runで**write-through導入前からの無関係なタイムスタンプのズレ**（'sheet'部員6名・8件、原因不明の過去データ）を「再送対象」に誤検知し、部員がスプシへ直接入力した内容を古いアプリ値で上書きしかねないことが判明。専用フラグ`pending_sheet_push`（write-through失敗時のみtrue、成功でfalseに戻す）に設計変更し、再dry-runで`pushed:0`（誤検知解消）を確認してから本番migration適用・push。**厳守ルールのdry-run確認がまさにこの事故を防いだ実例**。
-- **Supabaseミラー（内部配管）**: 既存のpull-onlyロジック（非破壊）をそのまま維持。'sheet'部員の記録もこれまでどおり毎時cronで取り込まれ、いいね・コメント・タイムライン・週間集計のキーとして機能する。write-through直後の即時ミラー更新（同期呼び出し内での反映確認）や、個人の記録画面をCSVエクスポート直読み/fetchMemberへ切り替える実装は**未着手**（下記残作業）。
+- **Supabaseミラー（内部配管）**: 既存のpull-onlyロジック（非破壊）をそのまま維持。'sheet'部員の記録もこれまでどおり毎時cronで取り込まれ、いいね・コメント・タイムライン・週間集計のキーとして機能する。
+- **個人の記録画面の即時反映（2026-07-10実装）**: マイページ・自分の`/members/[id]`表示時に`refreshOwnSheetRecords`（`queries.ts`）→`refreshMemberFromSheetLive`（`sheet-sync.ts`）が`fetchMember`で本人1人分だけ軽量取得し、毎時cronを待たずその場でDBミラーへ非破壊pullしてから記録を読む。cronのpull-onlyロジックは`computeMemberPull`として共通化（cron本体の挙動は不変・純粋な抽出）。GAS呼び出しは5秒タイムアウトで失敗しても例外を投げず、DBの現状のまま表示する（ページを壊さない）。他人の記録閲覧時（isSelf=false）は呼ばない（RLSで書けないうえ無駄なGAS呼び出しになるため）。
 - **1日1記録の制約**: 既存のRecordForm「同じ日の記録があれば新規ではなく更新」ロジック（重複防止）がそのまま適用されるため追加実装不要だった。
 
-**残作業（未着手。次のエージェントが着手する場合はここから）:**
-- 個人の記録閲覧・編集画面を「Supabaseミラー参照」から「CSVエクスポート直読み or fetchMember直読み」へ切り替え、常に最新のスプシ内容を表示する（現状は次の毎時同期まで反映されない可能性がある。write-through保存直後は保存した本人のブラウザには最新値が見えているので実用上の支障は小さいが、他デバイス・他人がスプシで直接編集した内容の即時反映はまだできない）。
+**残作業（次のエージェントが着手する場合はここから）:**
 - 100人規模でのfetchAllRaw応答時間を実測したところ**65部員で約70秒**（2026-07-10実測）。既存の`/api/sheets/sync`ルートは`maxDuration=60`のため、**部員数がこれ以上増えるとhourly cronがタイムアウトする可能性が高い**（今回のタスク16実装より前からの既存リスク）。対応候補: ①maxDurationを引き上げる（Vercelプランの上限を確認）②fetchAllRawをfetchMemberの並列呼び出しに置き換える③タブ分割バッチ化。**次のエージェントは着手前に実測すること**。
 - 未マップ項目(`unmapped`)をtoastで警告表示するようにしたが、記録フォーム側にも恒常的な表示（例:「この項目はスプシに列が無いため保存されません」の事前案内）はまだ無い。
 - 実機（iOS PWA）での動作確認は未実施。特に: ①'sheet'部員が記録を新規作成→保存直後にスプシに反映されるか ②GAS書き込みをわざと失敗させて`pending_sheet_push`が正しく再送されるか ③from_sheet=trueの記録がRecordCardから編集できるようになっているか。
@@ -192,6 +192,7 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 
 ## 作業ログ（着手前に追記・新しいものを上へ）
 <!-- 形式: YYYY-MM-DD / エージェント / 触る範囲 → 結果(commit・要点) -->
+- 2026-07-10 / Claude Code (Sonnet 5) / タスク16残作業「個人の記録画面のCSV/fetchMember直読み化」を実装。オーナー報告（'sheet'切替後もスプシの内容が反映されない）を受け着手。マイページ・自分の`/members/[id]`表示直前に`fetchMember`で本人分だけ軽量取得し毎時cronを待たず非破壊pullする`refreshMemberFromSheetLive`(`sheet-sync.ts`)＋`refreshOwnSheetRecords`(`queries.ts`)を追加。cronの`runSheetSync`側pull-onlyロジックは`computeMemberPull`として共通化しただけで**挙動は不変**（純粋な抽出、本番cronへの影響なし）。GAS呼び出しは5秒タイムアウト・失敗時は例外を投げずDBの現状のまま表示（ページを壊さない設計）。tsc/lint/build成功。**実機確認は未実施**（特に：スプシへ直接入力した内容がマイページ再訪で即座に反映されるか、GAS遅延時にページ表示が極端に遅くならないか） → 7ae16bd
 - 2026-07-10 / Claude Code (Sonnet 5) / タスク16（練習記録のスプシDB化）を実装・本番反映。RecordFormの'sheet'閲覧専用ブロック撤去、write-through保存(`/api/sheets/push-record`)、GAS拡張(`fetchMember`アクション追加・`writeCells`のunmapped返却。clasp deploy @6で本番反映済み)、RecordCard/PostOwnerMenuの編集可否をrecord_source考慮に変更。**dry-runで実際に危険な誤検知を発見**: 再送判定を`appIsNewer`(updated_at>synced_at)にしていたところ、'sheet'部員6名・8件の無関係な過去の時刻ズレを再送対象と誤検知し、部員がスプシへ直接入力した内容を古いアプリ値で上書きしかねない状態だった。専用フラグ`practice_records.pending_sheet_push`(migration 20260710100000)に設計変更し、再dry-runで`pushed:0`を確認してから適用(Local/Remote一致確認済み)。tsc/build成功。**個人記録画面のCSV直読み化・実機確認は未着手**（詳細はタスク16節の「残作業」参照）。100人規模でfetchAllRawが65部員で約70秒かかることを実測、既存のmaxDuration=60と衝突する可能性がある既存リスクを発見・記録 → (このcommit)
 - 2026-07-09 / Claude Code (Fable 5) / タスク15を削除（オーナーがシートに感想見出しを追加して解消・報告受領）。「未マップ項目の可視化」はタスク16へ引き継ぎ。キュー最前列はタスク16のみに。コード変更なし → (このcommit)
 - 2026-07-09 / Claude Code (Fable 5) / オーナー確定を受けタスク16を「練習記録のスプシDB化」（'sheet'部員＝旧TF方式: CSVエクスポート直読み＋GAS write-through、Supabaseはいいね/コメント/タイムライン用ミラー、いいね・コメント・時刻は全部員Supabaseメイン）に全面改稿。コード変更なし → (このcommit)
