@@ -91,11 +91,12 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 - S5: `src/lib/google-drive.ts` の暗号鍵を service role key 派生から専用 env `GOOGLE_TOKEN_ENC_KEY` へ分離。**切替時は Drive 連携者全員の再連携が必要**なので、実施はオーナーと本番反映タイミングを合わせること。
 
 ### 5. パフォーマンス（全採用）
-- P1: `queries.ts` getNotices / getPersonalNotifications / getUserRecords（fromDate なし呼び出し）に limit または期間窓（通知は直近50件＋ページング目安）。
-- P2: `TimelineView.tsx` の「もっと見る」を limit 増の全件再取得から**カーソル式**（最後の created_at より古い分を追加取得）へ。
-- P3: sheet-sync の全履歴取得に `.gte("recorded_date", SYNC_CUTOFF)`（タスク2と同時）。書き戻しの直列 GAS 呼び出しは可能なら一括化。
-- P4: `queries.ts` fetchCommentCounts を全行取得→JS集計から count 集計へ。
-- P5: getFeed の limit 後フィルタ問題は、タイムラインがクライアント側フィルタなので **getFeed の block/grade 引数を削除**して一本化。
+- P1: `queries.ts` getNotices / getPersonalNotifications / getUserRecords（fromDate なし呼び出し）に limit または期間窓（通知は直近50件＋ページング目安）。**済**（2026-07-04）。
+- P2: `TimelineView.tsx` の「もっと見る」を limit 増の全件再取得から**カーソル式**（最後の created_at より古い分を追加取得）へ。**未着手**（2026-07-10確認: 今も `loadMore` が `limit+PAGE` で0件目から再取得する設計のまま。押すたびに読む量が線形に増える。cursorはrecords/tweetsの2クエリをマージしてる関係で両方に必要）。
+- P3: sheet-sync の全履歴取得に `.gte("recorded_date", SYNC_CUTOFF)`（タスク2と同時）。**済**。書き戻しの直列 GAS 呼び出しの一括化は未着手。
+- P4: `queries.ts` fetchCommentCounts を全行取得→JS集計から count 集計へ。**済**（2026-07-04）。
+- P5: getFeed の limit 後フィルタ問題は、タイムラインがクライアント側フィルタなので **getFeed の block/grade 引数を削除**して一本化。**未着手**（2026-07-10確認: 実際の呼び出し元＝home/timeline/TimelineView は全部 `"all"` しか渡しておらず、引数自体が死んでいる。実害は今のところ無いが、将来「サーバー側でlimit後にfilterして件数が減る」を踏み抜く地雷なので削って一本化推奨）。
+- P6（2026-07-10追加・メモのみ）: マイページの即時スプシ反映（`refreshMemberFromSheetLive`、タスク16残作業の実装）が 'sheet' メインの部員のマイページ表示に毎回 GAS 呼び出し（最大5秒タイムアウト）を挟む。他のP項目と違い「DBクエリの効率化」ではなく「外部通信を都度挟む設計そのもの」なので対応方針の判断が要る（例: 短時間キャッシュ、非同期化してSuspenseで後追い表示、等）。**実装せずメモのみ。次のエージェントの判断に委ねる**。
 
 ### 6. コード品質（全採用。修正によるデメリットなしと判断済み）
 - Q1: `npx supabase gen types typescript` の生成型へ移行し `as unknown as`（21箇所）を解消。
@@ -192,7 +193,8 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 
 ## 作業ログ（着手前に追記・新しいものを上へ）
 <!-- 形式: YYYY-MM-DD / エージェント / 触る範囲 → 結果(commit・要点) -->
-- 2026-07-10 / Claude Code (Sonnet 5) / オーナー指示「練習記録は1日1つ」を明示化。RecordForm.tsxの新規作成モード（FAB経由）で、日付を選ぶたびその日の既存記録をDB検索し、あれば実質「編集」としてフォームへ内容を読み込むよう変更（従来は空欄のまま保存でき、未入力項目がnull/0で上書きされ既存内容が消える恐れがあった）。既存の同日dedupロジック（submit時にsameDayを検索しupdateへ回す）は変更なし・そのまま安全網として残置。見つかった日は案内文表示＋保存ボタンを「更新する」に変更。**オーナー確認: この1日1件ルールはDBをSupabase単独に統合した際に見直す可能性があるため、コードコメントにその旨明記**。tsc/lint/build成功。**実機確認は未実施** → (このcommit)
+- 2026-07-10 / Claude Code (Sonnet 5) / オーナーの依頼で「表示の効率化」を調査しタスク5節にメモを追記（**コード変更なし・実装はしていない。判断・着手は次のエージェント(Fable)に委ねる**）。P1/P3/P4は済でP2/P5は未着手のままと確認。優先度が一番高いと判断したのはP2（`TimelineView.tsx`の「もっと見る」がlimit増の全件再取得のまま）。あわせて今回自分が入れたP6（タスク16残作業の`refreshMemberFromSheetLive`が'sheet'部員のマイページ表示に毎回GAS呼び出しを挟む設計）も新規にメモ化。詳細はタスク5節参照 → (このcommit)
+- 2026-07-10 / Claude Code (Sonnet 5) / オーナー指示「練習記録は1日1つ」を明示化。RecordForm.tsxの新規作成モード（FAB経由）で、日付を選ぶたびその日の既存記録をDB検索し、あれば実質「編集」としてフォームへ内容を読み込むよう変更（従来は空欄のまま保存でき、未入力項目がnull/0で上書きされ既存内容が消える恐れがあった）。既存の同日dedupロジック（submit時にsameDayを検索しupdateへ回す）は変更なし・そのまま安全網として残置。見つかった日は案内文表示＋保存ボタンを「更新する」に変更。**オーナー確認: この1日1件ルールはDBをSupabase単独に統合した際に見直す可能性があるため、コードコメントにその旨明記**。tsc/lint/build成功。**オーナーが実機で動作確認済み（2026-07-10）** → (このcommit)
 - 2026-07-10 / Claude Code (Sonnet 5) / タスク16残作業「個人の記録画面のCSV/fetchMember直読み化」を実装。オーナー報告（'sheet'切替後もスプシの内容が反映されない）を受け着手。マイページ・自分の`/members/[id]`表示直前に`fetchMember`で本人分だけ軽量取得し毎時cronを待たず非破壊pullする`refreshMemberFromSheetLive`(`sheet-sync.ts`)＋`refreshOwnSheetRecords`(`queries.ts`)を追加。cronの`runSheetSync`側pull-onlyロジックは`computeMemberPull`として共通化しただけで**挙動は不変**（純粋な抽出、本番cronへの影響なし）。GAS呼び出しは5秒タイムアウト・失敗時は例外を投げずDBの現状のまま表示（ページを壊さない設計）。tsc/lint/build成功。**実機確認は未実施**（特に：スプシへ直接入力した内容がマイページ再訪で即座に反映されるか、GAS遅延時にページ表示が極端に遅くならないか） → 7ae16bd
 - 2026-07-10 / Claude Code (Sonnet 5) / タスク16（練習記録のスプシDB化）を実装・本番反映。RecordFormの'sheet'閲覧専用ブロック撤去、write-through保存(`/api/sheets/push-record`)、GAS拡張(`fetchMember`アクション追加・`writeCells`のunmapped返却。clasp deploy @6で本番反映済み)、RecordCard/PostOwnerMenuの編集可否をrecord_source考慮に変更。**dry-runで実際に危険な誤検知を発見**: 再送判定を`appIsNewer`(updated_at>synced_at)にしていたところ、'sheet'部員6名・8件の無関係な過去の時刻ズレを再送対象と誤検知し、部員がスプシへ直接入力した内容を古いアプリ値で上書きしかねない状態だった。専用フラグ`practice_records.pending_sheet_push`(migration 20260710100000)に設計変更し、再dry-runで`pushed:0`を確認してから適用(Local/Remote一致確認済み)。tsc/build成功。**個人記録画面のCSV直読み化・実機確認は未着手**（詳細はタスク16節の「残作業」参照）。100人規模でfetchAllRawが65部員で約70秒かかることを実測、既存のmaxDuration=60と衝突する可能性がある既存リスクを発見・記録 → (このcommit)
 - 2026-07-09 / Claude Code (Fable 5) / タスク15を削除（オーナーがシートに感想見出しを追加して解消・報告受領）。「未マップ項目の可視化」はタスク16へ引き継ぎ。キュー最前列はタスク16のみに。コード変更なし → (このcommit)
