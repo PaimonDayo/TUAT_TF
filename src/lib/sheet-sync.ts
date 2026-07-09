@@ -116,11 +116,20 @@ function gasConfig() {
   return { url, secret };
 }
 
-async function gasGet<T>(params: Record<string, string>): Promise<T> {
+async function gasGet<T>(
+  params: Record<string, string>,
+  opts: { timeoutMs?: number } = {},
+): Promise<T> {
   const { url, secret } = gasConfig();
   const qs = new URLSearchParams({ ...params, secret });
-  const res = await fetch(`${url}?${qs}`, { redirect: "follow" });
-  return readGasJson<T>(res);
+  const controller = opts.timeoutMs ? new AbortController() : undefined;
+  const timer = controller ? setTimeout(() => controller.abort(), opts.timeoutMs) : undefined;
+  try {
+    const res = await fetch(`${url}?${qs}`, { redirect: "follow", signal: controller?.signal });
+    return await readGasJson<T>(res);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 async function gasPost<T>(body: Record<string, unknown>): Promise<T> {
@@ -170,8 +179,11 @@ async function fetchAllRaw(): Promise<RawMember[]> {
 }
 
 /** 部員1人だけを軽量取得（write-through保存直後の確認・個人の記録画面用） */
-async function fetchMemberRaw(memberName: string): Promise<RawMember> {
-  const data = await gasGet<{ data: RawMember }>({ action: "fetchMember", memberName });
+async function fetchMemberRaw(
+  memberName: string,
+  opts: { timeoutMs?: number } = {},
+): Promise<RawMember> {
+  const data = await gasGet<{ data: RawMember }>({ action: "fetchMember", memberName }, opts);
   return data.data;
 }
 
@@ -500,6 +512,82 @@ export async function reconcileOnSwitch(
   return result;
 }
 
+type MemberPullComputation = {
+  inserts: Record<string, unknown>[];
+  updates: { id: string; patch: Record<string, unknown> }[];
+  /** 同日に複数記録がある曖昧な日付（呼び出し側でシート名等を付与して報告する） */
+  conflicts: string[];
+};
+
+/**
+ * 1部員分の「シート→アプリ」非破壊pullを計算する（runSheetSyncのpull-onlyブランチと
+ * refreshMemberFromSheetLive の共通ロジック）。副作用なし（DB書き込みは呼び出し側が行う）。
+ */
+function computeMemberPull(
+  profileId: string,
+  map: FieldMap,
+  sheetRecords: RawMember["records"],
+  appByDate: Map<string, DbRecord[]>,
+  inRangeForProfile: (date: string) => boolean,
+  nowIso: string,
+): MemberPullComputation {
+  const inserts: Record<string, unknown>[] = [];
+  const updates: { id: string; patch: Record<string, unknown> }[] = [];
+  const conflicts: string[] = [];
+
+  for (const sr of sheetRecords) {
+    if (!sr.date || !inRangeForProfile(sr.date)) continue; // カットオフ前・未来日は無視
+
+    const appList = appByDate.get(sr.date) ?? [];
+    if (appList.length > 1) {
+      conflicts.push(sr.date); // 複数/日は触らない
+      continue;
+    }
+    const { builtin, custom } = sheetToAppValues(map, sr.cells);
+    const app = appList[0];
+
+    if (!app) {
+      if (valuesEmpty(builtin, custom)) continue; // 空の行は新規に取り込まない
+      inserts.push({
+        user_id: profileId,
+        recorded_date: sr.date,
+        synced_at: nowIso,
+        updated_at: nowIso,
+        from_sheet: true, // シート由来＝タイムラインには出さない
+        custom,
+        ...builtin,
+      });
+      continue;
+    }
+
+    // 既存行はシートが正。ただし**空でないシート項目だけ**取り込む
+    // （シートの空欄でアプリに直接入力された内容を消さないため。実際に
+    // シートの空欄で既存の記録内容が消える事故が発生したため非破壊に戻した）。
+    const patch: Record<string, unknown> = {};
+    for (const [key, m] of map.builtin) {
+      const v = builtin[key];
+      const nonEmpty = m.numeric ? Number(v) > 0 : (v ?? "").toString().trim() !== "";
+      if (nonEmpty && v !== appBuiltin(app, key as BuiltinKey)) patch[key] = v;
+    }
+    const customPatch: Record<string, string | number | null> = { ...(app.custom ?? {}) };
+    let customChanged = false;
+    for (const [key] of map.custom) {
+      const v = custom[key];
+      if ((v ?? "").toString().trim() !== "" && v !== (app.custom?.[key] ?? null)) {
+        customPatch[key] = v;
+        customChanged = true;
+      }
+    }
+    if (Object.keys(patch).length > 0 || customChanged) {
+      if (customChanged) patch.custom = customPatch;
+      patch.synced_at = nowIso;
+      updates.push({ id: app.id, patch });
+    }
+  }
+
+  return { inserts, updates, conflicts };
+}
+
 // ── 同期本体 ─────────────────────────────────────────────────────────────────
 // 安全方針(docs/SHEETS-SYNC-PLAN.md・事故対策):
 //  - カットオフ(2026-06-22)以前・未来日・空の行は同期しない
@@ -609,57 +697,19 @@ export async function runSheetSync(
           ? profile.sheet_linked_at
           : SYNC_CUTOFF;
       const inRangeForProfile = (d: string) => d >= cutoff && d <= today;
-      for (const sr of member.records) {
-        if (!sr.date || !inRangeForProfile(sr.date)) continue; // カットオフ前・未来日は無視
-
-        const appList = appByDate.get(sr.date) ?? [];
-        if (appList.length > 1) {
-          result.conflicts.push(`${sheetName} ${sr.date}`); // 複数/日は触らない
-          continue;
-        }
-        const { builtin, custom } = sheetToAppValues(map, sr.cells);
-        const app = appList[0];
-
-        if (!app) {
-          if (valuesEmpty(builtin, custom)) continue; // 空の行は新規に取り込まない
-          inserts.push({
-            user_id: profile.id,
-            recorded_date: sr.date,
-            synced_at: nowIso,
-            updated_at: nowIso,
-            from_sheet: true, // シート由来＝タイムラインには出さない
-            custom,
-            ...builtin,
-          });
-          result.inserted++;
-          continue;
-        }
-
-        // 既存行はシートが正。ただし**空でないシート項目だけ**取り込む
-        // （シートの空欄でアプリに直接入力された内容を消さないため。実際に
-        // シートの空欄で既存の記録内容が消える事故が発生したため非破壊に戻した）。
-        const patch: Record<string, unknown> = {};
-        for (const [key, m] of map.builtin) {
-          const v = builtin[key];
-          const nonEmpty = m.numeric ? Number(v) > 0 : (v ?? "").toString().trim() !== "";
-          if (nonEmpty && v !== appBuiltin(app, key as BuiltinKey)) patch[key] = v;
-        }
-        const customPatch: Record<string, string | number | null> = { ...(app.custom ?? {}) };
-        let customChanged = false;
-        for (const [key] of map.custom) {
-          const v = custom[key];
-          if ((v ?? "").toString().trim() !== "" && v !== (app.custom?.[key] ?? null)) {
-            customPatch[key] = v;
-            customChanged = true;
-          }
-        }
-        if (Object.keys(patch).length > 0 || customChanged) {
-          if (customChanged) patch.custom = customPatch;
-          patch.synced_at = nowIso;
-          updates.push({ id: app.id, patch });
-          result.updated++;
-        }
-      }
+      const pulled = computeMemberPull(
+        profile.id,
+        map,
+        member.records,
+        appByDate,
+        inRangeForProfile,
+        nowIso,
+      );
+      inserts.push(...pulled.inserts);
+      updates.push(...pulled.updates);
+      result.inserted += pulled.inserts.length;
+      result.updated += pulled.updates.length;
+      for (const d of pulled.conflicts) result.conflicts.push(`${sheetName} ${d}`); // 複数/日は触らない
     } else {
       // pushのみ: 前回同期以降にアプリ側が変更された記録を、マップ済み項目まるごとシートへ書き戻す。
       for (const [date, list] of appByDate) {
@@ -723,4 +773,80 @@ export async function runSheetSync(
   }
 
   return result;
+}
+
+export type LiveRefreshResult = { inserted: number; updated: number };
+
+/**
+ * 個人の記録画面（マイページ等）を表示する直前に、スプシメイン(record_source='sheet')の
+ * 本人の記録を毎時同期を待たずその場でDB(Supabaseミラー)へ非破壊で反映する（タスク16残作業）。
+ * fetchMember 1回＋既存ロジック(computeMemberPull)の使い回しで、100人規模でもfetchAllRawを
+ * 引かずに済む。GAS不調・タイムアウト時はDBの現状のまま表示させるため例外を投げず null を返す
+ * （呼び出し側＝Server Componentのレンダリングを絶対に壊さないため）。
+ */
+export async function refreshMemberFromSheetLive(
+  supabase: SupabaseClient,
+  profile: {
+    id: string;
+    sheet_name: string | null;
+    record_source: "app" | "sheet";
+    record_fields: RecordFieldDef[] | null;
+    sheet_linked_at: string | null;
+  },
+): Promise<LiveRefreshResult | null> {
+  if (profile.record_source !== "sheet" || !profile.sheet_name) return null;
+
+  try {
+    const member = await fetchMemberRaw(profile.sheet_name, { timeoutMs: 5000 });
+    const map = resolveFieldMap(member.header, profile.record_fields ?? []);
+    const today = todayJST();
+    const cutoff =
+      profile.sheet_linked_at && profile.sheet_linked_at > SYNC_CUTOFF
+        ? profile.sheet_linked_at
+        : SYNC_CUTOFF;
+
+    const { data: existing, error } = await supabase
+      .from("practice_records")
+      .select(
+        "id, user_id, recorded_date, dist_low, dist_mid, dist_high, dist_speed, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at, pending_sheet_push",
+      )
+      .eq("user_id", profile.id)
+      .gte("recorded_date", cutoff);
+    if (error || !existing) return null;
+
+    const byDate = new Map<string, DbRecord[]>();
+    for (const r of existing as DbRecord[]) {
+      const arr = byDate.get(r.recorded_date) ?? [];
+      arr.push(r);
+      byDate.set(r.recorded_date, arr);
+    }
+
+    const nowIso = new Date().toISOString();
+    const { inserts, updates } = computeMemberPull(
+      profile.id,
+      map,
+      member.records,
+      byDate,
+      (d) => d >= cutoff && d <= today,
+      nowIso,
+    );
+    if (inserts.length === 0 && updates.length === 0) return { inserted: 0, updated: 0 };
+
+    let inserted = 0;
+    let updated = 0;
+    if (inserts.length > 0) {
+      const { error: insErr } = await supabase.from("practice_records").insert(inserts);
+      if (!insErr) inserted = inserts.length;
+    }
+    for (const u of updates) {
+      const { error: updErr } = await supabase
+        .from("practice_records")
+        .update(u.patch)
+        .eq("id", u.id);
+      if (!updErr) updated++;
+    }
+    return { inserted, updated };
+  } catch {
+    return null; // GAS不調・タイムアウト等はDBの現状のまま表示（ページを壊さない）
+  }
 }

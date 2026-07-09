@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { fetchRolesByProfileIds } from "@/lib/supabase/auth";
 import { jstToday } from "@/lib/date";
+import { refreshMemberFromSheetLive } from "@/lib/sheet-sync";
 import type {
   FeedItem,
   RecordWithAuthor,
@@ -15,6 +16,7 @@ import type {
   NoteArticleWithAuthor,
   NoteWithRelations,
   AppNotificationWithActor,
+  Profile,
 } from "@/types";
 
 const AUTHOR_SELECT =
@@ -194,6 +196,20 @@ export async function getSchedulesOn(date: string) {
     .eq("schedule_date", date)
     .order("meeting_time", { ascending: true });
   return data ?? [];
+}
+
+/**
+ * 記録のメインがスプシ(record_source='sheet')の本人が記録画面を開く直前に呼ぶ。
+ * 毎時同期を待たず、その場でスプシの最新内容をDB(Supabaseミラー)へ非破壊で反映する
+ * （タスク16残作業。他部員の記録を見ているだけの閲覧者から誤って書き込まないよう、
+ * 呼び出し側は必ず本人(isSelf)のときだけ呼ぶこと）。GAS不調時は何もせず現状のDBのまま表示する。
+ */
+export async function refreshOwnSheetRecords(
+  profile: Pick<Profile, "id" | "sheet_name" | "record_source" | "record_fields" | "sheet_linked_at">,
+) {
+  if (profile.record_source !== "sheet" || !profile.sheet_name) return;
+  const supabase = await createClient();
+  await refreshMemberFromSheetLive(supabase, profile);
 }
 
 /** ユーザーの期間内の練習記録（マイページ・週間集計に使用） */

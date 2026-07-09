@@ -14,7 +14,7 @@ import { SettingsAccordion } from "@/components/features/SettingsAccordion";
 import { SheetSyncButton } from "@/components/features/SheetSyncButton";
 import { GoalEditor } from "@/components/features/GoalEditor";
 import { getCurrentProfile } from "@/lib/supabase/auth";
-import { getUserRecords, getUserActivity } from "@/lib/queries";
+import { getUserRecords, getUserActivity, refreshOwnSheetRecords } from "@/lib/queries";
 import { gradeShort } from "@/lib/constants";
 import { permissionsOf } from "@/lib/permissions";
 import type { PracticeRecord } from "@/types";
@@ -26,6 +26,8 @@ export default async function MyPage({
 }) {
   const { setup } = await searchParams;
   const profile = await getCurrentProfile();
+  // スプシメインの部員は、毎時同期を待たずここで最新内容をDBミラーへ反映してから読む
+  await refreshOwnSheetRecords(profile);
   // グラフ用の記録だけ先に取得し、重い「これまでの投稿」は下で Suspense ストリーミング。
   const records = (await getUserRecords(profile.id)) as PracticeRecord[];
 

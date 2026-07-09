@@ -12,7 +12,14 @@ import { TrainingChart } from "@/components/features/TrainingChart";
 import { FavoriteButton } from "@/components/features/FavoriteButton";
 import { NoteList } from "@/components/features/NotesView";
 import { getCurrentProfile } from "@/lib/supabase/auth";
-import { getProfileById, getUserRecords, getPbRecords, getPublishedPersonalNotes, isFavorite } from "@/lib/queries";
+import {
+  getProfileById,
+  getUserRecords,
+  getPbRecords,
+  getPublishedPersonalNotes,
+  isFavorite,
+  refreshOwnSheetRecords,
+} from "@/lib/queries";
 import { gradeShort } from "@/lib/constants";
 import type { PbRecord, PracticeRecord, Profile, RecordWithAuthor } from "@/types";
 
@@ -27,6 +34,8 @@ export default async function MemberPage({
 
   const viewer = await getCurrentProfile();
   const isSelf = viewer.id === id;
+  // スプシメインの本人がここ(/members/自分)から記録を見る場合も、毎時同期を待たず最新化する
+  if (isSelf) await refreshOwnSheetRecords(viewer);
 
   const [records, pbs, notes, favorited] = await Promise.all([
     getUserRecords(id) as Promise<PracticeRecord[]>,
