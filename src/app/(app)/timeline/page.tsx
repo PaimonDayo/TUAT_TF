@@ -8,7 +8,7 @@ export default async function TimelinePage() {
   const profile = await getCurrentProfile();
   // 絞り込みはクライアント側で行うため、ここでは全件をまとめて取得する。
   const [feed, favoriteIds, cookieStore] = await Promise.all([
-    getFeed(profile.id, "all", 30, "all"),
+    getFeed(profile.id, 30),
     getMyFavoriteIds(profile.id),
     cookies(),
   ]);

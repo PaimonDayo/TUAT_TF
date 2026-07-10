@@ -83,7 +83,6 @@ export function NoticesClient({
         {tab === "for_you" && (
           <NotificationsList
             initialNotifications={notifications}
-            userId={profile.id}
             onOpenNotice={openNotice}
           />
         )}

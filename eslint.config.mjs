@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Apps Script の公開エントリポイントとローカル専用secretはJS側から直接参照される。
+    "gas/sync-clasp/Code.js",
+    "gas/sync-clasp/secret.js",
   ]),
 ]);
 

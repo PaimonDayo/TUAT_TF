@@ -54,6 +54,8 @@ export function InstallPrompt() {
 
     // iOSはイベントが来ないので案内バナーを直接出す
     if (iosLike) {
+      // ブラウザ判定結果をクライアントで反映する。
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsIos(true);
       setShow(true);
     }

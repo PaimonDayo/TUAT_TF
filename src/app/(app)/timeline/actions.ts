@@ -2,14 +2,16 @@
 
 import { getFeed } from "@/lib/queries";
 import { getCurrentProfile } from "@/lib/supabase/auth";
-import type { Block, FeedItem } from "@/types";
+import type { FeedItem } from "@/types";
 
-/** 「もっと見る」用：limit を増やして再取得する */
+/** 「もっと見る」用：既取得分より古い投稿だけを追加取得する */
 export async function loadFeed(
-  block: string,
-  grade: string,
-  limit: number,
+  cursors: {
+    record?: { createdAt: string; id: string };
+    tweet?: { createdAt: string; id: string };
+  },
+  limit = 30,
 ): Promise<FeedItem[]> {
   const profile = await getCurrentProfile();
-  return getFeed(profile.id, (block as Block) || "all", limit, grade || "all");
+  return getFeed(profile.id, limit, cursors);
 }

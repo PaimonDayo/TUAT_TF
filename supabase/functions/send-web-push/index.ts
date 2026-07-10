@@ -50,7 +50,7 @@ serve(async (req) => {
 
     let title = "新しいお知らせ";
     let bodyText = "新しい通知があります";
-    let url = "/notices";
+    const url = "/notices";
 
     if (notification.type === 'comment') {
       title = "新しいコメント";
@@ -77,8 +77,12 @@ serve(async (req) => {
 
       try {
         await webPush.sendNotification(pushSubscription, payload);
-      } catch (err: any) {
-        if (err.statusCode === 410 || err.statusCode === 404) {
+      } catch (err: unknown) {
+        const statusCode =
+          typeof err === "object" && err !== null && "statusCode" in err
+            ? Number((err as { statusCode: unknown }).statusCode)
+            : undefined;
+        if (statusCode === 410 || statusCode === 404) {
           await supabaseClient.from('push_subscriptions').delete().eq('id', sub.id);
         } else {
           console.error("Error sending push:", err);
@@ -93,8 +97,9 @@ serve(async (req) => {
       headers: { "Content-Type": "application/json" },
     });
 
-  } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message }), {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Push notification failed";
+    return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     });

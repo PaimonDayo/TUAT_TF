@@ -112,13 +112,15 @@ async function fetchCommentCounts(
  */
 export async function getFeed(
   currentUserId: string,
-  block?: Block | "all",
   limit = 30,
-  grade?: string | "all",
+  cursors?: {
+    record?: { createdAt: string; id: string };
+    tweet?: { createdAt: string; id: string };
+  },
 ): Promise<FeedItem[]> {
   const supabase = await createClient();
 
-  const recordsQuery = supabase
+  let recordsQuery = supabase
     .from("practice_records")
     .select(`*, ${AUTHOR_SELECT}`)
     .lte("recorded_date", jstToday())
@@ -126,33 +128,36 @@ export async function getFeed(
     .or(SHEET_TIMELINE_OR)
     .order("recorded_date", { ascending: false })
     .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
     .limit(limit);
 
-  const tweetsQuery = supabase
+  let tweetsQuery = supabase
     .from("tweets")
     .select(`*, ${AUTHOR_SELECT}`)
     .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
     .limit(limit);
+
+  if (cursors?.record) {
+    const { createdAt, id } = cursors.record;
+    recordsQuery = recordsQuery.or(
+      `created_at.lt.${createdAt},and(created_at.eq.${createdAt},id.lt.${id})`,
+    );
+  }
+  if (cursors?.tweet) {
+    const { createdAt, id } = cursors.tweet;
+    tweetsQuery = tweetsQuery.or(
+      `created_at.lt.${createdAt},and(created_at.eq.${createdAt},id.lt.${id})`,
+    );
+  }
 
   const [{ data: recRows }, { data: twRows }] = await Promise.all([
     recordsQuery,
     tweetsQuery,
   ]);
 
-  let records = (recRows ?? []) as unknown as RecordWithAuthor[];
-  let tweets = (twRows ?? []) as unknown as TweetWithAuthor[];
-
-  // ブロックフィルタ（投稿者の所属ブロックに含まれるかで絞る）
-  if (block && block !== "all") {
-    records = records.filter((r) => r.author?.blocks?.includes(block));
-    tweets = tweets.filter((t) => t.author?.blocks?.includes(block));
-  }
-
-  // 学年フィルタ
-  if (grade && grade !== "all") {
-    records = records.filter((r) => r.author?.grade === grade);
-    tweets = tweets.filter((t) => t.author?.grade === grade);
-  }
+  const records = (recRows ?? []) as unknown as RecordWithAuthor[];
+  const tweets = (twRows ?? []) as unknown as TweetWithAuthor[];
 
   const recIds = records.map((r) => r.id);
   const twIds = tweets.map((t) => t.id);
@@ -183,7 +188,11 @@ export async function getFeed(
     ),
   ];
 
-  items.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+  items.sort((a, b) =>
+    a.created_at === b.created_at
+      ? b.id.localeCompare(a.id)
+      : a.created_at < b.created_at ? 1 : -1,
+  );
   return items.slice(0, limit);
 }
 

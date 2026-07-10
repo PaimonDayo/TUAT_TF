@@ -51,9 +51,11 @@ export default async function HomePage() {
         <Suspense fallback={<SectionSkeleton rows={1} />}>
           <NoticesSection userId={profile.id} />
         </Suspense>
-        <Suspense fallback={<SummarySkeleton />}>
-          <WeeklySummary userId={profile.id} nowJst={nowJst} />
-        </Suspense>
+        {profile.blocks.includes("middle_long") && (
+          <Suspense fallback={<SummarySkeleton />}>
+            <WeeklySummary userId={profile.id} nowJst={nowJst} />
+          </Suspense>
+        )}
         <Suspense fallback={<SectionSkeleton title="予定" rows={2} />}>
           <SchedulesSection profile={profile} />
         </Suspense>
@@ -214,7 +216,7 @@ async function NotesSection() {
 }
 
 async function FeedSection({ profile }: { profile: Profile }) {
-  const feed = await getFeed(profile.id, "all", 3);
+  const feed = await getFeed(profile.id, 3);
   return (
     <section className="space-y-2">
       <SectionHeading title="タイムライン" href="/timeline" />

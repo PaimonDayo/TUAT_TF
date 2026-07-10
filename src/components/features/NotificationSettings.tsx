@@ -42,6 +42,8 @@ export function NotificationSettings({
 
   useEffect(() => {
     if (typeof window !== "undefined" && 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window) {
+      // ブラウザAPIの初期状態をマウント後に同期する。
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPushStatus(Notification.permission);
       
       navigator.serviceWorker.register('/sw.js').then(reg => {
@@ -54,7 +56,7 @@ export function NotificationSettings({
     const ua = window.navigator.userAgent.toLowerCase();
     const isIosDevice = /iphone|ipad|ipod/.test(ua);
     setIsIos(isIosDevice);
-    setIsStandalone(window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true);
+    setIsStandalone(window.matchMedia('(display-mode: standalone)').matches || (window.navigator as Navigator & { standalone?: boolean }).standalone === true);
   }, []);
 
   const handleChange = async (field: "notify_comment" | "notify_notice", value: boolean, setter: (val: boolean) => void) => {

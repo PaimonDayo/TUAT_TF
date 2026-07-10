@@ -35,7 +35,6 @@ export function TimelineView({
   initialCompact?: boolean;
 }) {
   const [items, setItems] = useState(initialItems);
-  const [limit, setLimit] = useState(PAGE);
   const [loading, setLoading] = useState(false);
   const [ended, setEnded] = useState(initialItems.length < PAGE);
 
@@ -65,13 +64,23 @@ export function TimelineView({
   }, [items, block, grades, favOnly, favSet]);
 
   async function loadMore() {
+    const lastRecord = items.findLast((item) => item.kind === "record");
+    const lastTweet = items.findLast((item) => item.kind === "tweet");
+    if (!lastRecord && !lastTweet) return;
     setLoading(true);
-    const nextLimit = limit + PAGE;
-    const res = await loadFeed("all", "all", nextLimit);
-    setItems(res);
-    setLimit(nextLimit);
-    setEnded(res.length < nextLimit);
-    setLoading(false);
+    try {
+      const res = await loadFeed({
+        record: lastRecord ? { createdAt: lastRecord.created_at, id: lastRecord.id } : undefined,
+        tweet: lastTweet ? { createdAt: lastTweet.created_at, id: lastTweet.id } : undefined,
+      }, PAGE);
+      setItems((current) => {
+        const seen = new Set(current.map((item) => `${item.kind}-${item.id}`));
+        return [...current, ...res.filter((item) => !seen.has(`${item.kind}-${item.id}`))];
+      });
+      setEnded(res.length < PAGE);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

@@ -32,6 +32,8 @@ export function Avatar({
   const [imgError, setImgError] = useState(false);
 
   useEffect(() => {
+    // URLが変わったら、新しい画像を再試行する。
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setImgError(false);
   }, [avatarUrl]);
 

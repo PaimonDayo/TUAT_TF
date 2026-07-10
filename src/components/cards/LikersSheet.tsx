@@ -32,6 +32,8 @@ export function LikersSheet({
   useEffect(() => {
     if (!open) return;
     let active = true;
+    // 新しい対象を開いた直後は読み込み表示へ戻す。
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLikers(null);
     const supabase = createClient();
     void supabase

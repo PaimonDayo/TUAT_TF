@@ -14,11 +14,9 @@ import type { AppNotificationWithActor } from "@/types";
 
 export function NotificationsList({
   initialNotifications,
-  userId,
   onOpenNotice,
 }: {
   initialNotifications: AppNotificationWithActor[];
-  userId: string;
   /** お知らせ通知をタップしたとき、同じ画面の「お知らせ」タブで該当を開く */
   onOpenNotice?: (noticeId: string) => void;
 }) {
@@ -75,7 +73,7 @@ export function NotificationsList({
       await deleteNotification(id);
       setNotifications((prev) => prev.filter((it) => it.id !== id));
       showToast("通知を削除しました");
-    } catch (e) {
+    } catch {
       showToast("削除に失敗しました");
       return false;
     }
@@ -87,7 +85,7 @@ export function NotificationsList({
       await markAllNotificationsAsRead();
       router.refresh();
       showToast("すべて既読にしました");
-    } catch (e) {
+    } catch {
       showToast("エラーが発生しました");
     }
   };
