@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Check, X, Minus, Loader2, CloudCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
+import { Toggle } from "@/components/ui/toggle";
+import { Input } from "@/components/ui/input";
 import type { AttendanceStatusOrNone } from "@/types";
 
 const NEXT: Record<AttendanceStatusOrNone, AttendanceStatusOrNone> = {
@@ -30,14 +33,17 @@ export function AttendanceToggle({
   scheduleId,
   userId,
   initial,
+  refreshOnChange = false,
   onChanged,
 }: {
   scheduleId: string;
   userId: string;
   initial: AttendanceStatusOrNone;
+  refreshOnChange?: boolean;
   onChanged?: (change: AttendanceChange) => void;
 }) {
   const { showToast } = useToast();
+  const router = useRouter();
   const [status, setStatus] = useState(initial);
   const [busy, setBusy] = useState(false);
 
@@ -62,7 +68,9 @@ export function AttendanceToggle({
       setStatus(prev);
       onChanged?.({ status: prev, isLate: false, lateNote: null });
       showToast("出欠を送信できませんでした。もう一度お試しください", "error");
+      return;
     }
+    if (refreshOnChange) router.refresh();
   }
 
   const style = STYLE[status];
@@ -101,23 +109,16 @@ export function LateAttendanceControl({
   const [late, setLate] = useState(initialLate);
   const [note, setNote] = useState(initialNote ?? "");
   const [busy, setBusy] = useState(false);
-  const [noteState, setNoteState] = useState<SaveState>("idle");
+  const [toggleState, setToggleState] = useState<SaveState>(initialLate ? "saved" : "idle");
+  const [noteState, setNoteState] = useState<SaveState>(initialNote ? "saved" : "idle");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const savedResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(
     () => () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
-      if (savedResetTimer.current) clearTimeout(savedResetTimer.current);
     },
     [],
   );
-
-  function flashSaved() {
-    setNoteState("saved");
-    if (savedResetTimer.current) clearTimeout(savedResetTimer.current);
-    savedResetTimer.current = setTimeout(() => setNoteState("idle"), 1800);
-  }
 
   async function persistNote(value: string) {
     const normalized = value.trim() || null;
@@ -132,7 +133,7 @@ export function LateAttendanceControl({
       showToast("連絡事項を送信できませんでした", "error");
       return;
     }
-    flashSaved();
+    setNoteState("saved");
     onChanged?.({ status: "present", isLate: true, lateNote: normalized });
   }
 
@@ -145,6 +146,7 @@ export function LateAttendanceControl({
     setLate(next);
     if (!next) setNote("");
     setBusy(true);
+    setToggleState("saving");
     const { error } = await createClient()
       .from("attendances")
       .update({ is_late: next, late_note: nextNote, updated_at: new Date().toISOString() })
@@ -154,9 +156,12 @@ export function LateAttendanceControl({
     if (error) {
       setLate(prevLate);
       setNote(prevNote);
+      setToggleState("error");
       showToast("遅刻の登録を送信できませんでした", "error");
       return;
     }
+    setToggleState("saved");
+    setNoteState(nextNote ? "saved" : "idle");
     onChanged?.({ status: "present", isLate: next, lateNote: nextNote });
   }
 
@@ -164,44 +169,39 @@ export function LateAttendanceControl({
     setNote(value);
     setNoteState("idle");
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => void persistNote(value), 700);
+    saveTimer.current = setTimeout(() => {
+      saveTimer.current = null;
+      void persistNote(value);
+    }, 700);
   }
 
   function blurNote() {
-    if (saveTimer.current) clearTimeout(saveTimer.current);
+    if (!saveTimer.current) return;
+    clearTimeout(saveTimer.current);
+    saveTimer.current = null;
     void persistNote(note);
   }
 
   return (
-    <div className="flex flex-col items-start gap-1.5" onClick={(event) => event.stopPropagation()}>
-      <button
-        type="button"
-        onClick={toggleLate}
-        disabled={busy}
-        className={cn(
-          "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[13px] font-semibold transition-active active:scale-95 disabled:opacity-60",
-          late ? "border-warning/60 bg-warning/10 text-warning" : "border-separator bg-card text-muted2",
-        )}
-      >
-        <span className={cn("relative h-4 w-7 shrink-0 rounded-full transition-colors", late ? "bg-warning" : "bg-separator")}>
-          <span className={cn("absolute top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform", late ? "translate-x-[14px]" : "translate-x-0.5")} />
+    <div className="space-y-2" onClick={(event) => event.stopPropagation()}>
+      <div className="relative">
+        <Toggle label="遅刻" checked={late} onChange={toggleLate} disabled={busy} className="min-h-11 p-3" />
+        <span className="pointer-events-none absolute right-14 top-1/2 -translate-y-1/2" aria-live="polite">
+          {toggleState === "saving" && <Loader2 size={16} className="animate-spin text-muted2" />}
+          {toggleState === "saved" && <CloudCheck size={17} className="text-success" />}
         </span>
-        遅刻
-      </button>
+      </div>
       {late && (
-        <div className="flex w-[240px] max-w-full items-center gap-1.5">
-          <input
+        <div className="flex w-full items-center gap-2">
+          <Input
             value={note}
             onChange={(event) => changeNote(event.target.value)}
             onBlur={blurNote}
             maxLength={60}
             placeholder="連絡事項（任意）"
-            className={cn(
-              "h-8 min-w-0 flex-1 rounded-xl border bg-warning/5 px-2.5 text-[13px] outline-none",
-              noteState === "error" ? "border-danger/50" : "border-warning/40",
-            )}
+            className={cn("min-w-0 flex-1", noteState === "error" && "border-danger/50")}
           />
-          <span className="w-4 shrink-0 text-muted2" aria-live="polite">
+          <span className="w-5 shrink-0 text-muted2" aria-live="polite">
             {noteState === "saving" && <Loader2 size={15} className="animate-spin" />}
             {noteState === "saved" && <CloudCheck size={15} className="text-success" />}
           </span>

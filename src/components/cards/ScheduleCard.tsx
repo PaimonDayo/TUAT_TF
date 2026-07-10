@@ -110,9 +110,14 @@ export function ScheduleCard({
   // ブロック全体メニュー→個別メニュー、個別は対象者名の固定順で安定化する。
   const sortedMenus = [...(schedule.menus ?? [])].sort(menuCompare);
   // 所属ブロックごとにメニューをグループ化（自分のブロックを先頭に、全体向けは最後）
+  const personalMenus = sortedMenus.filter(
+    (menu) => !!userId && (menu.targets?.some((target) => target.user_id === userId) ?? false),
+  );
+  const personalMenuIds = new Set(personalMenus.map((menu) => menu.id));
   const menusByBlock = new Map<Block, PracticeMenu[]>();
   const generalMenus: PracticeMenu[] = [];
   for (const m of sortedMenus) {
+    if (personalMenuIds.has(m.id)) continue;
     if (m.target_block) {
       const list = menusByBlock.get(m.target_block) ?? [];
       list.push(m);
@@ -125,12 +130,15 @@ export function ScheduleCard({
     (a, b) =>
       Number(viewerBlocks.includes(b)) - Number(viewerBlocks.includes(a)),
   );
-  const menuGroups: { block: Block | null; menus: PracticeMenu[] }[] = [];
+  const menuGroups: { key: string; label: string; block: Block | null; menus: PracticeMenu[] }[] = [];
+  if (personalMenus.length > 0) {
+    menuGroups.push({ key: "personal", label: "あなた向け", block: null, menus: personalMenus });
+  }
   for (const block of blocksByRelevance) {
     const list = menusByBlock.get(block);
-    if (list && list.length > 0) menuGroups.push({ block, menus: list });
+    if (list && list.length > 0) menuGroups.push({ key: block, label: BLOCKS[block].label, block, menus: list });
   }
-  if (generalMenus.length > 0) menuGroups.push({ block: null, menus: generalMenus });
+  if (generalMenus.length > 0) menuGroups.push({ key: "general", label: "全体", block: null, menus: generalMenus });
   const showAttendance = userId && ATTENDANCE_TYPES.includes(schedule.schedule_type);
   const hasEntry = schedule.entry_start || schedule.entry_end;
   const hasDetail =
@@ -213,8 +221,11 @@ export function ScheduleCard({
 
       {/* 出欠行 */}
       {showAttendance && (
-        <div className="-mt-1 flex flex-wrap items-start gap-2 px-4 pb-3">
-          <AttendanceToggle scheduleId={schedule.id} userId={userId!} initial={myStatus} onChanged={handleAttendanceChanged} />
+        <div className="-mt-1 space-y-2 px-4 pb-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <AttendanceToggle scheduleId={schedule.id} userId={userId!} initial={myStatus} onChanged={handleAttendanceChanged} />
+            <AttendeesButton attendees={attendeesState} viewerBlocks={viewerBlocks} showAllBlocks={showAllAttendanceBlocks} />
+          </div>
           {schedule.schedule_date === jstToday() && attendanceStatus === "present" && (
             <LateAttendanceControl
               scheduleId={schedule.id}
@@ -224,7 +235,6 @@ export function ScheduleCard({
               onChanged={handleAttendanceChanged}
             />
           )}
-          <AttendeesButton attendees={attendeesState} viewerBlocks={viewerBlocks} showAllBlocks={showAllAttendanceBlocks} />
         </div>
       )}
 
@@ -237,33 +247,8 @@ export function ScheduleCard({
               value={`${fmt(schedule.entry_start)} 〜 ${fmt(schedule.entry_end)}`}
             />
           )}
-          {(schedule.venue_access || schedule.venue_fee) && (
-            <Disclosure
-              className="border-t-0"
-              title={
-                <span className="flex items-center gap-1.5">
-                  <Train size={15} /> アクセス・参加費
-                </span>
-              }
-            >
-              <dl>
-                <KeyValue label="アクセス" value={schedule.venue_access} />
-                <KeyValue label="参加費" value={schedule.venue_fee} />
-              </dl>
-            </Disclosure>
-          )}
           {schedule.note && (
             <Detail icon={<Info size={14} />} label="詳細情報" value={schedule.note} />
-          )}
-          {schedule.venue_url && (
-            <a
-              href={schedule.venue_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-[13px] text-accent font-medium active:opacity-50"
-            >
-              <MapPin size={14} /> 地図を開く <ExternalLink size={12} className="opacity-50" />
-            </a>
           )}
 
           {(hasMenus || canEditMenu) && (
@@ -271,12 +256,12 @@ export function ScheduleCard({
               <p className="section-label mb-1.5">練習メニュー</p>
               <div className="space-y-3">
                 {menuGroups.map((group) => (
-                  <div key={group.block ?? "general"} className="space-y-1.5">
+                  <div key={group.key} className="space-y-1.5">
                     <p
                       className="text-[11px] font-semibold"
                       style={{ color: group.block ? BLOCKS[group.block].color : "#8e8e93" }}
                     >
-                      {group.block ? BLOCKS[group.block].label : "全体"}
+                      {group.label}
                     </p>
                     <div className="space-y-2">
                       {group.menus.map((m) => (
@@ -302,6 +287,23 @@ export function ScheduleCard({
               </div>
               {canEditMenu && <MenuForm scheduleId={schedule.id} />}
             </div>
+          )}
+
+          {(schedule.venue_access || schedule.venue_fee) && (
+            <Disclosure
+              className="border-t-0"
+              title={<span className="flex items-center gap-1.5"><Train size={15} /> アクセス・参加費</span>}
+            >
+              <dl>
+                <KeyValue label="アクセス" value={schedule.venue_access} />
+                <KeyValue label="参加費" value={schedule.venue_fee} />
+              </dl>
+            </Disclosure>
+          )}
+          {schedule.venue_url && (
+            <a href={schedule.venue_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[13px] font-medium text-accent active:opacity-50">
+              <MapPin size={14} /> 地図を開く <ExternalLink size={12} className="opacity-50" />
+            </a>
           )}
 
           {canManage && (

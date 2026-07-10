@@ -2,14 +2,16 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { format, subDays } from "date-fns";
 import { ja } from "date-fns/locale";
-import { BookOpen, ChevronRight } from "lucide-react";
+import { BookOpen, ChevronRight, Clock } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { HomeFeed } from "@/components/features/HomeFeed";
 import { HomeNotices } from "@/components/features/HomeNotices";
 import { InstallPrompt } from "@/components/features/InstallPrompt";
 import { ScheduleCard } from "@/components/cards/ScheduleCard";
+import { AttendanceToggle } from "@/components/features/AttendanceToggle";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { jstNow, jstToday } from "@/lib/date";
 import {
@@ -21,6 +23,8 @@ import {
   getUserRecords,
 } from "@/lib/queries";
 import { permissionsOf } from "@/lib/permissions";
+import { SCHEDULE_TYPES } from "@/lib/constants";
+import { venueShort } from "@/lib/venues";
 import type {
   Attendee,
   NoticeWithReactions,
@@ -104,13 +108,17 @@ async function WeeklySummary({ userId, nowJst }: { userId: string; nowJst: Date 
 
 async function SchedulesSection({ profile }: { profile: Profile }) {
   const perms = permissionsOf(profile.roles);
-  const schedules = ((await getAttendanceSchedules(
+  const today = jstToday();
+  const schedules = (await getAttendanceSchedules(
     profile.blocks,
     perms.createSchedule,
     10,
-  )) as ScheduleWithMenus[]).filter((schedule) => schedule.schedule_date === jstToday());
-  if (schedules.length === 0) return null;
-  const attendance = await getAttendancesForSchedules(schedules.map((schedule) => schedule.id));
+  )) as ScheduleWithMenus[];
+  const todaySchedules = schedules.filter((schedule) => schedule.schedule_date === today);
+  const upcomingSchedules = schedules.filter((schedule) => schedule.schedule_date > today).slice(0, 3);
+  const displayed = [...todaySchedules, ...upcomingSchedules];
+  if (displayed.length === 0) return null;
+  const attendance = await getAttendancesForSchedules(displayed.map((schedule) => schedule.id));
   const attendeesBySchedule = new Map<string, Attendee[]>();
   for (const row of attendance) {
     const rows = attendeesBySchedule.get(row.schedule_id) ?? [];
@@ -118,18 +126,56 @@ async function SchedulesSection({ profile }: { profile: Profile }) {
     attendeesBySchedule.set(row.schedule_id, rows);
   }
 
-  return (
-    <section className="space-y-2">
-      <SectionHeading title="本日の予定" href="/schedule" />
-      <div className="space-y-2">
-        {schedules.map((schedule) => {
-          const attendees = attendeesBySchedule.get(schedule.id) ?? [];
-          const mine = attendees.find((attendee) => attendee.user_id === profile.id);
-          return <ScheduleCard key={schedule.id} schedule={{ ...schedule, menus: schedule.menus ?? [] }} viewerBlocks={profile.blocks} userId={profile.id} myProfile={profile} myStatus={mine?.status ?? "none"} myLate={mine?.is_late ?? false} myLateNote={mine?.late_note ?? null} attendees={attendees} showAllAttendanceBlocks={profile.attendance_view_all_blocks ?? false} />;
-        })}
-      </div>
-    </section>
-  );
+  return <div className="space-y-5">
+    {todaySchedules.length > 0 && (
+      <section className="space-y-2">
+        <SectionHeading title="本日の予定" href="/schedule" />
+        <div className="space-y-2">
+          {todaySchedules.map((schedule) => {
+            const attendees = attendeesBySchedule.get(schedule.id) ?? [];
+            const mine = attendees.find((attendee) => attendee.user_id === profile.id);
+            return <ScheduleCard key={schedule.id} schedule={{ ...schedule, menus: schedule.menus ?? [] }} viewerBlocks={profile.blocks} userId={profile.id} myProfile={profile} myStatus={mine?.status ?? "none"} myLate={mine?.is_late ?? false} myLateNote={mine?.late_note ?? null} attendees={attendees} showAllAttendanceBlocks={profile.attendance_view_all_blocks ?? false} />;
+          })}
+        </div>
+      </section>
+    )}
+    {upcomingSchedules.length > 0 && (
+      <section className="space-y-2">
+        <SectionHeading title="今後の予定" href="/schedule" />
+        <div className="space-y-2">
+          {upcomingSchedules.map((schedule) => {
+            const attendees = attendeesBySchedule.get(schedule.id) ?? [];
+            const mine = attendees.find((attendee) => attendee.user_id === profile.id);
+            const present = attendees.filter((attendee) => attendee.status === "present").length;
+            const absent = attendees.filter((attendee) => attendee.status === "absent").length;
+            const meta = SCHEDULE_TYPES[schedule.schedule_type];
+            return (
+              <Card key={schedule.id} className="flex items-center gap-3 p-3">
+                <Link href={`/schedule?open=${schedule.id}`} className="flex min-w-0 flex-1 items-center gap-3 active:opacity-60">
+                  <div className="flex w-10 shrink-0 flex-col items-center">
+                    <span className="text-[10px]" style={{ color: meta.color }}>{format(new Date(`${schedule.schedule_date}T00:00:00`), "EEE", { locale: ja })}</span>
+                    <span className="text-xl font-bold leading-tight tabular-nums">{format(new Date(`${schedule.schedule_date}T00:00:00`), "d")}</span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <Badge style={{ backgroundColor: `${meta.color}1a`, color: meta.color }}>{meta.label}</Badge>
+                      <span className="truncate text-[14px] font-semibold">{schedule.title ?? venueShort(schedule.venue_name) ?? meta.label}</span>
+                    </div>
+                    <div className="mt-0.5 flex min-w-0 items-center gap-x-3 text-[12px] text-muted2">
+                      {schedule.meeting_time && <span className="flex shrink-0 items-center gap-1"><Clock size={12} /> {schedule.meeting_time.slice(0, 5)}</span>}
+                      <span className="shrink-0 text-success">出席 <span className="inline-block min-w-[2ch] text-right tabular-nums">{present}</span></span>
+                      <span className="shrink-0 text-danger">欠席 <span className="inline-block min-w-[2ch] text-right tabular-nums">{absent}</span></span>
+                    </div>
+                  </div>
+                </Link>
+                <AttendanceToggle scheduleId={schedule.id} userId={profile.id} initial={mine?.status ?? "none"} refreshOnChange />
+              </Card>
+            );
+          })}
+        </div>
+      </section>
+    )}
+  </div>;
 }
 
 async function NotesSection() {
