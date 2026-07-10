@@ -213,11 +213,8 @@ export function ScheduleCard({
 
       {/* 出欠行 */}
       {showAttendance && (
-        <div className="-mt-1 space-y-2 px-4 pb-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <AttendanceToggle scheduleId={schedule.id} userId={userId!} initial={myStatus} onChanged={handleAttendanceChanged} />
-            <AttendeesButton attendees={attendeesState} viewerBlocks={viewerBlocks} showAllBlocks={showAllAttendanceBlocks} />
-          </div>
+        <div className="-mt-1 flex flex-wrap items-start gap-2 px-4 pb-3">
+          <AttendanceToggle scheduleId={schedule.id} userId={userId!} initial={myStatus} onChanged={handleAttendanceChanged} />
           {schedule.schedule_date === jstToday() && attendanceStatus === "present" && (
             <LateAttendanceControl
               scheduleId={schedule.id}
@@ -227,6 +224,7 @@ export function ScheduleCard({
               onChanged={handleAttendanceChanged}
             />
           )}
+          <AttendeesButton attendees={attendeesState} viewerBlocks={viewerBlocks} showAllBlocks={showAllAttendanceBlocks} />
         </div>
       )}
 
