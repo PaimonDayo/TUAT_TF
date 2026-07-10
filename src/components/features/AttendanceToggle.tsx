@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, X, Minus, Loader2, CloudCheck } from "lucide-react";
+import { Check, X, Minus, Loader2, CircleCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
@@ -114,7 +114,6 @@ export function LateAttendanceControl({
   const [late, setLate] = useState(initialLate);
   const [note, setNote] = useState(initialNote ?? "");
   const [busy, setBusy] = useState(false);
-  const [toggleState, setToggleState] = useState<SaveState>(initialLate ? "saved" : "idle");
   const [noteState, setNoteState] = useState<SaveState>(initialNote ? "saved" : "idle");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -155,7 +154,6 @@ export function LateAttendanceControl({
     setLate(next);
     if (!next) setNote("");
     setBusy(true);
-    setToggleState("saving");
     const { data, error } = await createClient()
       .from("attendances")
       .update({ is_late: next, late_note: nextNote, updated_at: new Date().toISOString() })
@@ -168,11 +166,9 @@ export function LateAttendanceControl({
     if (error || !data) {
       setLate(prevLate);
       setNote(prevNote);
-      setToggleState("error");
       showToast("遅刻の登録を送信できませんでした", "error");
       return;
     }
-    setToggleState("saved");
     setNoteState(nextNote ? "saved" : "idle");
     onChanged?.({ isLate: next, lateNote: nextNote });
   }
@@ -196,26 +192,20 @@ export function LateAttendanceControl({
 
   return (
     <div className="space-y-2" onClick={(event) => event.stopPropagation()}>
-      <div className="relative">
-        <Toggle label="遅刻" checked={late} onChange={toggleLate} disabled={busy} className="min-h-11 p-3" />
-        <span className="pointer-events-none absolute right-14 top-1/2 -translate-y-1/2" aria-live="polite">
-          {toggleState === "saving" && <Loader2 size={16} className="animate-spin text-muted2" />}
-          {toggleState === "saved" && <CloudCheck size={17} className="text-success" />}
-        </span>
-      </div>
+      <Toggle label="遅刻" checked={late} onChange={toggleLate} disabled={busy} className="min-h-11 p-3" />
       {late && (
-        <div className="flex w-full items-center gap-2">
+        <div className="relative w-full">
           <Input
             value={note}
             onChange={(event) => changeNote(event.target.value)}
             onBlur={blurNote}
             maxLength={60}
             placeholder="連絡事項（任意）"
-            className={cn("min-w-0 flex-1", noteState === "error" && "border-danger/50")}
+            className={cn("w-full pr-10", noteState === "error" && "border-danger/50")}
           />
-          <span className="w-5 shrink-0 text-muted2" aria-live="polite">
-            {noteState === "saving" && <Loader2 size={15} className="animate-spin" />}
-            {noteState === "saved" && <CloudCheck size={15} className="text-success" />}
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" aria-live="polite">
+            {noteState === "saving" && <Loader2 size={17} className="animate-spin text-muted2" />}
+            {noteState === "saved" && <CircleCheck size={18} className="text-success" />}
           </span>
         </div>
       )}
