@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 import { jstToday } from "@/lib/date";
 import { MenuEditModal, MenuForm } from "@/components/post/MenuForm";
 import { ScheduleManageActions } from "@/components/post/ScheduleForm";
-import { AttendanceToggle, LateAttendanceControl, type AttendanceChange } from "@/components/features/AttendanceToggle";
+import { AttendanceToggle, LateAttendanceControl, type AttendanceChange, type LateAttendanceChange } from "@/components/features/AttendanceToggle";
 import { AttendeesButton } from "@/components/features/AttendeesButton";
 import { Linkify } from "@/components/common/Linkify";
 import { createClient } from "@/lib/supabase/client";
@@ -95,6 +95,18 @@ export function ScheduleCard({
       };
       return [...others, mine];
     });
+  }
+
+  // 遅刻操作は出欠状態を変更しない。現在の出席行だけを局所更新する。
+  function handleLateChanged(change: LateAttendanceChange) {
+    setLateState({ late: change.isLate, note: change.lateNote });
+    setAttendeesState((previous) =>
+      previous.map((attendee) =>
+        attendee.user_id === userId && attendee.status === "present"
+          ? { ...attendee, is_late: change.isLate, late_note: change.lateNote }
+          : attendee,
+      ),
+    );
   }
 
   // ホームの「予定」からタップで来たときは、対象カードまでスクロールする
@@ -232,7 +244,7 @@ export function ScheduleCard({
               userId={userId!}
               initialLate={lateState.late}
               initialNote={lateState.note}
-              onChanged={handleAttendanceChanged}
+              onChanged={handleLateChanged}
             />
           )}
         </div>

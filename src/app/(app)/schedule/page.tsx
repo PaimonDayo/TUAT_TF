@@ -25,12 +25,19 @@ export default async function SchedulePage({
     .filter((s) => ATTENDANCE_TYPES.includes(s.schedule_type))
     .map((s) => s.id);
   const attRows = await getAttendancesForSchedules(attIds);
+  // 非表示ブロックの自由記述をClient Componentへ渡さない。
+  const visibleAttendanceRows = attRows.filter(
+    (row) =>
+      row.user_id === profile.id ||
+      profile.attendance_view_all_blocks ||
+      row.profile.blocks?.some((block) => profile.blocks.includes(block)),
+  );
 
   const attendeesBySchedule: Record<string, Attendee[]> = {};
   const myStatusBySchedule: Record<string, AttendanceStatusOrNone> = {};
   const myLateBySchedule: Record<string, boolean> = {};
   const myLateNoteBySchedule: Record<string, string | null> = {};
-  for (const r of attRows) {
+  for (const r of visibleAttendanceRows) {
     (attendeesBySchedule[r.schedule_id] ??= []).push({
       user_id: r.user_id,
       status: r.status,

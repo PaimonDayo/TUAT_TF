@@ -12,6 +12,7 @@ const TABLES = [
   "notices",
   "practice_schedules",
   "practice_menus",
+  "attendances",
 ] as const;
 
 function csvCell(value: unknown): string {

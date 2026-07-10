@@ -28,6 +28,11 @@ export type AttendanceChange = {
   lateNote: string | null;
 };
 
+export type LateAttendanceChange = {
+  isLate: boolean;
+  lateNote: string | null;
+};
+
 /** 未回答→出席→欠席→未回答の1タップ操作。失敗時は表示を戻してエラーを知らせる。 */
 export function AttendanceToggle({
   scheduleId,
@@ -56,15 +61,15 @@ export function AttendanceToggle({
     setBusy(true);
     onChanged?.({ status: next, isLate: false, lateNote: null });
     const supabase = createClient();
-    const { error } =
+    const result =
       next === "none"
-        ? await supabase.from("attendances").delete().eq("schedule_id", scheduleId).eq("user_id", userId)
+        ? await supabase.from("attendances").delete().eq("schedule_id", scheduleId).eq("user_id", userId).select("id")
         : await supabase.from("attendances").upsert(
             { schedule_id: scheduleId, user_id: userId, status: next, is_late: false, late_note: null, updated_at: new Date().toISOString() },
             { onConflict: "schedule_id,user_id" },
-          );
+          ).select("status, is_late, late_note").single();
     setBusy(false);
-    if (error) {
+    if (result.error || (next !== "none" && !result.data)) {
       setStatus(prev);
       onChanged?.({ status: prev, isLate: false, lateNote: null });
       showToast("出欠を送信できませんでした。もう一度お試しください", "error");
@@ -103,7 +108,7 @@ export function LateAttendanceControl({
   userId: string;
   initialLate: boolean;
   initialNote: string | null;
-  onChanged?: (change: AttendanceChange) => void;
+  onChanged?: (change: LateAttendanceChange) => void;
 }) {
   const { showToast } = useToast();
   const [late, setLate] = useState(initialLate);
@@ -123,18 +128,22 @@ export function LateAttendanceControl({
   async function persistNote(value: string) {
     const normalized = value.trim() || null;
     setNoteState("saving");
-    const { error } = await createClient()
+    const { data, error } = await createClient()
       .from("attendances")
       .update({ late_note: normalized, updated_at: new Date().toISOString() })
       .eq("schedule_id", scheduleId)
-      .eq("user_id", userId);
-    if (error) {
+      .eq("user_id", userId)
+      .eq("status", "present")
+      .eq("is_late", true)
+      .select("is_late, late_note")
+      .maybeSingle();
+    if (error || !data) {
       setNoteState("error");
       showToast("連絡事項を送信できませんでした", "error");
       return;
     }
     setNoteState("saved");
-    onChanged?.({ status: "present", isLate: true, lateNote: normalized });
+    onChanged?.({ isLate: true, lateNote: normalized });
   }
 
   async function toggleLate() {
@@ -147,13 +156,16 @@ export function LateAttendanceControl({
     if (!next) setNote("");
     setBusy(true);
     setToggleState("saving");
-    const { error } = await createClient()
+    const { data, error } = await createClient()
       .from("attendances")
       .update({ is_late: next, late_note: nextNote, updated_at: new Date().toISOString() })
       .eq("schedule_id", scheduleId)
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .eq("status", "present")
+      .select("is_late, late_note")
+      .maybeSingle();
     setBusy(false);
-    if (error) {
+    if (error || !data) {
       setLate(prevLate);
       setNote(prevNote);
       setToggleState("error");
@@ -162,7 +174,7 @@ export function LateAttendanceControl({
     }
     setToggleState("saved");
     setNoteState(nextNote ? "saved" : "idle");
-    onChanged?.({ status: "present", isLate: next, lateNote: nextNote });
+    onChanged?.({ isLate: next, lateNote: nextNote });
   }
 
   function changeNote(value: string) {

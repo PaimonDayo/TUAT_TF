@@ -52,19 +52,16 @@ export function SettingsAccordion({
         />
       </summary>
       {open && <div className="space-y-6 border-t border-separator/70 bg-bg/40 p-4">
+        <div className="space-y-2">
+          <p className="section-label">表示</p>
+          <AttendanceViewSetting userId={profileId} initial={attendanceViewAll} />
+          <MenuViewSetting userId={profileId} initial={menuViewAll} />
+        </div>
         <NotificationSettings
           profileId={profileId}
           initialComment={initialComment}
           initialNotice={initialNotice}
         />
-        <div className="space-y-2">
-          <p className="section-label">メニュー表示</p>
-          <MenuViewSetting userId={profileId} initial={menuViewAll} />
-        </div>
-        <div className="space-y-2">
-          <p className="section-label">出欠表示</p>
-          <AttendanceViewSetting userId={profileId} initial={attendanceViewAll} />
-        </div>
         <RecordFieldsSetting
           profileId={profileId}
           initial={recordFields}

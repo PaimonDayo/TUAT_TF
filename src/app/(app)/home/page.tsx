@@ -119,8 +119,15 @@ async function SchedulesSection({ profile }: { profile: Profile }) {
   const displayed = [...todaySchedules, ...upcomingSchedules];
   if (displayed.length === 0) return null;
   const attendance = await getAttendancesForSchedules(displayed.map((schedule) => schedule.id));
+  // 非表示ブロックの遅刻連絡をブラウザへ送らない。
+  const visibleAttendance = attendance.filter(
+    (row) =>
+      row.user_id === profile.id ||
+      profile.attendance_view_all_blocks ||
+      row.profile.blocks?.some((block) => profile.blocks.includes(block)),
+  );
   const attendeesBySchedule = new Map<string, Attendee[]>();
-  for (const row of attendance) {
+  for (const row of visibleAttendance) {
     const rows = attendeesBySchedule.get(row.schedule_id) ?? [];
     rows.push({ user_id: row.user_id, status: row.status, is_late: row.is_late, late_note: row.late_note, profile: row.profile });
     attendeesBySchedule.set(row.schedule_id, rows);
