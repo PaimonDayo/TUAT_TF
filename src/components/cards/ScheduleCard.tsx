@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 import { jstToday } from "@/lib/date";
 import { MenuEditModal, MenuForm } from "@/components/post/MenuForm";
 import { ScheduleManageActions } from "@/components/post/ScheduleForm";
-import { AttendanceToggle } from "@/components/features/AttendanceToggle";
+import { AttendanceToggle, type AttendanceChange } from "@/components/features/AttendanceToggle";
 import { AttendeesButton } from "@/components/features/AttendeesButton";
 import { Linkify } from "@/components/common/Linkify";
 import { createClient } from "@/lib/supabase/client";
@@ -34,6 +34,7 @@ import type {
   ScheduleWithMenus,
   Attendee,
   AttendanceStatusOrNone,
+  AuthorMini,
   Block,
   PracticeMenu,
 } from "@/types";
@@ -46,6 +47,7 @@ export function ScheduleCard({
   canManageAllMenus = false,
   canManage = false,
   userId,
+  myProfile,
   myStatus = "none",
   myLate = false,
   myLateNote = null,
@@ -59,6 +61,8 @@ export function ScheduleCard({
   canManageAllMenus?: boolean;
   canManage?: boolean;
   userId?: string;
+  /** 自分の出欠を即時反映するための最小プロフィール（出欠一覧の表示名等に使う） */
+  myProfile?: AuthorMini;
   myStatus?: AttendanceStatusOrNone;
   myLate?: boolean;
   myLateNote?: string | null;
@@ -68,7 +72,26 @@ export function ScheduleCard({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(defaultOpen);
+  const [attendeesState, setAttendeesState] = useState(attendees);
   const cardRef = useRef<HTMLDivElement>(null);
+
+  // 自分の出欠変更をサーバー往復なしで即座に一覧へ反映する
+  function handleAttendanceChanged(change: AttendanceChange) {
+    setAttendeesState((prev) => {
+      const others = prev.filter((a) => a.user_id !== userId);
+      if (change.status === "none" || !userId) return others;
+      const mineProfile = myProfile ?? prev.find((a) => a.user_id === userId)?.profile;
+      if (!mineProfile) return prev;
+      const mine: Attendee = {
+        user_id: userId,
+        status: change.status,
+        is_late: change.isLate,
+        late_note: change.lateNote,
+        profile: mineProfile,
+      };
+      return [...others, mine];
+    });
+  }
 
   // ホームの「予定」からタップで来たときは、対象カードまでスクロールする
   useEffect(() => {
@@ -194,9 +217,9 @@ export function ScheduleCard({
             initialLate={myLate}
             initialLateNote={myLateNote}
             isToday={schedule.schedule_date === jstToday()}
-            refreshOnChange
+            onChanged={handleAttendanceChanged}
           />
-          <AttendeesButton attendees={attendees} viewerBlocks={viewerBlocks} showAllBlocks={showAllAttendanceBlocks} />
+          <AttendeesButton attendees={attendeesState} viewerBlocks={viewerBlocks} showAllBlocks={showAllAttendanceBlocks} />
         </div>
       )}
 

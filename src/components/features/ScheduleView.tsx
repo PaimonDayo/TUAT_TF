@@ -6,7 +6,7 @@ import { SegmentedControl } from "@/components/ui/segmented";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ScheduleCard } from "@/components/cards/ScheduleCard";
 import { SCHEDULE_TYPE_OPTIONS } from "@/lib/constants";
-import type { ScheduleWithMenus, Attendee, AttendanceStatusOrNone, Block } from "@/types";
+import type { ScheduleWithMenus, Attendee, AttendanceStatusOrNone, AuthorMini, Block } from "@/types";
 
 /**
  * 練習予定の一覧＋種別タブ。
@@ -16,6 +16,7 @@ import type { ScheduleWithMenus, Attendee, AttendanceStatusOrNone, Block } from 
 export function ScheduleView({
   schedules,
   userId,
+  myProfile,
   viewerBlocks,
   canEditMenu,
   canManageAllMenus = false,
@@ -29,6 +30,7 @@ export function ScheduleView({
 }: {
   schedules: ScheduleWithMenus[];
   userId: string;
+  myProfile?: AuthorMini;
   viewerBlocks: Block[];
   canEditMenu: boolean;
   canManageAllMenus?: boolean;
@@ -90,6 +92,7 @@ export function ScheduleView({
                     canManageAllMenus={canManageAllMenus}
                     canManage={canManage}
                     userId={userId}
+                    myProfile={myProfile}
                     myStatus={myStatusBySchedule[s.id] ?? "none"}
                     myLate={myLateBySchedule[s.id] ?? false}
                     myLateNote={myLateNoteBySchedule[s.id] ?? null}

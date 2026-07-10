@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Check, X, Minus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -26,6 +25,12 @@ const STYLE: Record<
   absent: { label: "欠席", cls: "bg-danger text-white border-danger", icon: <X size={15} /> },
 };
 
+export type AttendanceChange = {
+  status: AttendanceStatusOrNone;
+  isLate: boolean;
+  lateNote: string | null;
+};
+
 /** 出欠トグル（未定→出席→欠席→未定）。タップで自分の出欠を更新 */
 export function AttendanceToggle({
   scheduleId,
@@ -34,7 +39,6 @@ export function AttendanceToggle({
   initialLate = false,
   initialLateNote = null,
   isToday = false,
-  refreshOnChange = false,
   onChanged,
 }: {
   scheduleId: string;
@@ -43,10 +47,8 @@ export function AttendanceToggle({
   initialLate?: boolean;
   initialLateNote?: string | null;
   isToday?: boolean;
-  refreshOnChange?: boolean;
-  onChanged?: (status: AttendanceStatusOrNone) => void;
+  onChanged?: (change: AttendanceChange) => void;
 }) {
-  const router = useRouter();
   const [status, setStatus] = useState<AttendanceStatusOrNone>(initial);
   const [late, setLate] = useState(initialLate);
   const [lateNote, setLateNote] = useState(initialLateNote ?? "");
@@ -56,13 +58,15 @@ export function AttendanceToggle({
     e.stopPropagation();
     if (busy) return;
     const next = NEXT[status];
+    const nextLate = next === "present" ? late : false;
+    const nextNote = nextLate ? lateNote.trim() || null : null;
     setStatus(next);
     if (next !== "present") {
       setLate(false);
       setLateNote("");
     }
     setBusy(true);
-    onChanged?.(next);
+    onChanged?.({ status: next, isLate: nextLate, lateNote: nextNote });
 
     const supabase = createClient();
     if (next === "none") {
@@ -75,85 +79,88 @@ export function AttendanceToggle({
             schedule_id: scheduleId,
             user_id: userId,
             status: next,
-            is_late: next === "present" ? late : false,
-            late_note: next === "present" && late ? lateNote.trim() || null : null,
+            is_late: nextLate,
+            late_note: nextNote,
             updated_at: new Date().toISOString(),
           },
           { onConflict: "schedule_id,user_id" },
         );
     }
     setBusy(false);
-    if (refreshOnChange) router.refresh();
   }
 
   async function toggleLate(e: React.MouseEvent) {
     e.stopPropagation();
     if (busy || status !== "present") return;
     const next = !late;
+    const nextNote = next ? lateNote.trim() || null : null;
     setLate(next);
     if (!next) setLateNote("");
     setBusy(true);
+    onChanged?.({ status, isLate: next, lateNote: nextNote });
     const supabase = createClient();
     await supabase
       .from("attendances")
-      .update({ is_late: next, late_note: next ? lateNote.trim() || null : null, updated_at: new Date().toISOString() })
+      .update({ is_late: next, late_note: nextNote, updated_at: new Date().toISOString() })
       .eq("schedule_id", scheduleId)
       .eq("user_id", userId);
     setBusy(false);
-    if (refreshOnChange) router.refresh();
   }
 
   async function saveLateNote() {
     if (!late || status !== "present") return;
+    const note = lateNote.trim() || null;
+    onChanged?.({ status, isLate: late, lateNote: note });
     const supabase = createClient();
     await supabase
       .from("attendances")
-      .update({ late_note: lateNote.trim() || null, updated_at: new Date().toISOString() })
+      .update({ late_note: note, updated_at: new Date().toISOString() })
       .eq("schedule_id", scheduleId)
       .eq("user_id", userId);
-    if (refreshOnChange) router.refresh();
   }
 
   const s = STYLE[status];
+  const showLate = isToday && status === "present";
   return (
-    <div
-      className={cn(isToday && status === "present" ? "min-w-[168px] flex-1" : "w-[116px] shrink-0")}
-      onClick={(event) => event.stopPropagation()}
-    >
-      <button
-        onClick={toggle}
-        disabled={busy}
-        className={cn(
-          "inline-flex h-8 w-[116px] items-center justify-center gap-1 rounded-full border px-3 text-[13px] font-semibold transition-active active:scale-95 disabled:opacity-60",
-          s.cls,
-        )}
-      >
-        {s.icon}
-        {s.label}
-      </button>
-      {isToday && status === "present" && (
-        <div className="mt-2">
+    <div className="flex flex-col gap-1.5" onClick={(event) => event.stopPropagation()}>
+      <div className="flex items-center gap-1.5">
+        <button
+          onClick={toggle}
+          disabled={busy}
+          className={cn(
+            "inline-flex h-8 w-[104px] shrink-0 items-center justify-center gap-1 rounded-full border px-3 text-[13px] font-semibold transition-active active:scale-95 disabled:opacity-60",
+            s.cls,
+          )}
+        >
+          {s.icon}
+          {s.label}
+        </button>
+        {showLate && (
           <button
             type="button"
             onClick={toggleLate}
-            className="flex h-9 w-full items-center justify-between rounded-xl border border-separator bg-card px-2.5"
+            disabled={busy}
+            className={cn(
+              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[13px] font-semibold transition-active active:scale-95 disabled:opacity-60",
+              late ? "border-warning/60 bg-warning/10 text-warning" : "border-separator bg-card text-muted2",
+            )}
           >
-            <span className="text-[13px] font-semibold">遅刻</span>
-            <span className={cn("relative h-5 w-9 rounded-full transition-colors", late ? "bg-warning" : "bg-separator")}>
-              <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform", late ? "translate-x-[18px]" : "translate-x-0.5")} />
+            <span className={cn("relative h-4 w-7 shrink-0 rounded-full transition-colors", late ? "bg-warning" : "bg-separator")}>
+              <span className={cn("absolute top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform", late ? "translate-x-[14px]" : "translate-x-0.5")} />
             </span>
+            遅刻
           </button>
-          {late && (
-            <input
-              value={lateNote}
-              onChange={(event) => setLateNote(event.target.value)}
-              onBlur={saveLateNote}
-              maxLength={60}
-              placeholder="連絡事項（任意）"
-              className="mt-1.5 h-9 w-full rounded-xl border border-warning/40 bg-warning/5 px-2.5 text-[13px] outline-none"
-            />
-          )}
-        </div>
+        )}
+      </div>
+      {showLate && late && (
+        <input
+          value={lateNote}
+          onChange={(event) => setLateNote(event.target.value)}
+          onBlur={saveLateNote}
+          maxLength={60}
+          placeholder="連絡事項（任意）"
+          className="h-8 w-[220px] max-w-full rounded-xl border border-warning/40 bg-warning/5 px-2.5 text-[13px] outline-none"
+        />
       )}
     </div>
   );
