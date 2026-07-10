@@ -360,6 +360,9 @@ export interface Notice {
   notify_members: boolean;
   /** 空配列は全部員。値がある場合は該当ロールの部員だけへ通知する。 */
   target_role_ids: string[];
+  mentioned_all: boolean;
+  mentioned_role_ids: string[];
+  mentioned_user_ids: string[];
   created_at: string;
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import { NOTICE_CATEGORIES } from "@/lib/constants";
-import type { AppRole, Notice, NoticeCategory } from "@/types";
+import type { AppRole, AuthorMini, Notice, NoticeCategory } from "@/types";
 
 export function NoticeForm({
   initial,
@@ -26,35 +26,45 @@ export function NoticeForm({
   const [content, setContent] = useState(initial?.content ?? "");
   const [deadline, setDeadline] = useState(initial?.deadline ?? "");
   const [pinHome, setPinHome] = useState(initial?.pin_home ?? false);
-  const [notifyMembers, setNotifyMembers] = useState(initial?.notify_members ?? true);
   const [roles, setRoles] = useState<AppRole[]>([]);
-  const [targetRoleIds, setTargetRoleIds] = useState<string[]>(initial?.target_role_ids ?? []);
+  const [members, setMembers] = useState<AuthorMini[]>([]);
+  const [mentionedAll, setMentionedAll] = useState(
+    initial?.mentioned_all ?? (initial ? initial.notify_members && initial.target_role_ids.length === 0 : true),
+  );
+  const [mentionedRoleIds, setMentionedRoleIds] = useState<string[]>(
+    initial?.mentioned_role_ids ?? initial?.target_role_ids ?? [],
+  );
+  const [mentionedUserIds, setMentionedUserIds] = useState<string[]>(initial?.mentioned_user_ids ?? []);
+  const [mentionQuery, setMentionQuery] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     const supabase = createClient();
-    void supabase
-      .from("roles")
-      .select("*")
-      .order("sort_order", { ascending: true })
-      .order("created_at", { ascending: true })
-      .then(({ data }) => {
-        if (active) setRoles((data ?? []) as AppRole[]);
-      });
+    void Promise.all([
+      supabase.from("roles").select("*").order("sort_order", { ascending: true }).order("created_at", { ascending: true }),
+      supabase.from("profiles").select("id, display_name, avatar_url, blocks, grade").eq("status", "active").order("display_name"),
+    ]).then(([roleResult, memberResult]) => {
+      if (!active) return;
+      setRoles((roleResult.data ?? []) as AppRole[]);
+      setMembers((memberResult.data ?? []) as AuthorMini[]);
+    });
     return () => {
       active = false;
     };
   }, []);
 
-  function toggleTargetRole(roleId: string) {
-    setTargetRoleIds((current) =>
-      current.includes(roleId)
-        ? current.filter((id) => id !== roleId)
-        : [...current, roleId],
-    );
-  }
+  const normalizedMentionQuery = mentionQuery.replace(/^@/, "").trim().toLocaleLowerCase("ja");
+  const roleSuggestions = useMemo(
+    () => roles.filter((role) => !mentionedRoleIds.includes(role.id) && role.name.toLocaleLowerCase("ja").includes(normalizedMentionQuery)),
+    [roles, mentionedRoleIds, normalizedMentionQuery],
+  );
+  const memberSuggestions = useMemo(
+    () => members.filter((member) => !mentionedUserIds.includes(member.id) && member.display_name.toLocaleLowerCase("ja").includes(normalizedMentionQuery)),
+    [members, mentionedUserIds, normalizedMentionQuery],
+  );
+  const hasMentions = mentionedAll || mentionedRoleIds.length > 0 || mentionedUserIds.length > 0;
 
   async function submit() {
     if (!title.trim() || !content.trim()) {
@@ -75,8 +85,11 @@ export function NoticeForm({
           content: content.trim(),
           deadline: deadline || null,
           pin_home: pinHome,
-          notify_members: notifyMembers,
-          target_role_ids: targetRoleIds,
+          notify_members: hasMentions,
+          target_role_ids: mentionedRoleIds,
+          mentioned_all: mentionedAll,
+          mentioned_role_ids: mentionedRoleIds,
+          mentioned_user_ids: mentionedUserIds,
         },
         { id: initial!.id },
       );
@@ -104,8 +117,11 @@ export function NoticeForm({
       content: content.trim(),
       deadline: deadline || null,
       pin_home: pinHome,
-      notify_members: notifyMembers,
-      target_role_ids: targetRoleIds,
+      notify_members: hasMentions,
+      target_role_ids: mentionedRoleIds,
+      mentioned_all: mentionedAll,
+      mentioned_role_ids: mentionedRoleIds,
+      mentioned_user_ids: mentionedUserIds,
     });
     if (error) {
       setError("投稿に失敗しました");
@@ -160,59 +176,25 @@ export function NoticeForm({
         checked={pinHome}
         onChange={() => setPinHome((v) => !v)}
       />
-      {!editing && (
-        <>
-          <Toggle
-            label="メンバーに通知する"
-            description="オンにすると全員または選択したロールへ通知します"
-            checked={notifyMembers}
-            onChange={() => setNotifyMembers((v) => !v)}
-          />
-          {notifyMembers && (
-            <div className="space-y-2 rounded-xl border border-separator bg-bg/40 p-3">
-              <div>
-                <p className="section-label">通知先</p>
-                <p className="mt-0.5 text-micro text-muted">
-                  複数選択できます。全員を選ぶとロール指定は解除されます。
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setTargetRoleIds([])}
-                className={`min-h-10 w-full rounded-xl border px-3 text-left text-[14px] font-semibold ${
-                  targetRoleIds.length === 0
-                    ? "border-accent bg-accent/10 text-accent"
-                    : "border-separator bg-card"
-                }`}
-              >
-                全員
-              </button>
-              {roles.length > 0 && (
-                <div className="grid grid-cols-2 gap-2">
-                  {roles.map((role) => {
-                    const selected = targetRoleIds.includes(role.id);
-                    return (
-                      <button
-                        key={role.id}
-                        type="button"
-                        onClick={() => toggleTargetRole(role.id)}
-                        className="min-h-10 rounded-xl border px-3 text-left text-[13px] font-semibold"
-                        style={{
-                          borderColor: selected ? role.color : "#e5e5ea",
-                          color: selected ? role.color : undefined,
-                          backgroundColor: selected ? `${role.color}12` : "#fff",
-                        }}
-                      >
-                        {role.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-        </>
-      )}
+      <div className="space-y-2 rounded-xl border border-separator bg-bg/40 p-3">
+        <div>
+          <p className="section-label">通知先</p>
+          <p className="mt-0.5 text-micro text-muted">@All、ロール名、部員名を追加できます。空なら通知しません。</p>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {mentionedAll && <MentionChip label="@All" onRemove={() => setMentionedAll(false)} />}
+          {mentionedRoleIds.map((id) => <MentionChip key={id} label={`@${roles.find((role) => role.id === id)?.name ?? "ロール"}`} onRemove={() => setMentionedRoleIds((current) => current.filter((value) => value !== id))} />)}
+          {mentionedUserIds.map((id) => <MentionChip key={id} label={`@${members.find((member) => member.id === id)?.display_name ?? "部員"}`} onRemove={() => setMentionedUserIds((current) => current.filter((value) => value !== id))} />)}
+        </div>
+        <Input value={mentionQuery} onChange={(event) => setMentionQuery(event.target.value)} placeholder="@通知先を検索" />
+        {mentionQuery.trim() && (
+          <div className="max-h-48 space-y-1 overflow-y-auto rounded-xl border border-separator bg-card p-1">
+            {!mentionedAll && "all".includes(normalizedMentionQuery) && <MentionOption label="@All（全員）" onClick={() => { setMentionedAll(true); setMentionQuery(""); }} />}
+            {roleSuggestions.map((role) => <MentionOption key={role.id} label={`@${role.name}（ロール）`} onClick={() => { setMentionedRoleIds((current) => [...current, role.id]); setMentionQuery(""); }} />)}
+            {memberSuggestions.slice(0, 20).map((member) => <MentionOption key={member.id} label={`@${member.display_name}`} onClick={() => { setMentionedUserIds((current) => [...current, member.id]); setMentionQuery(""); }} />)}
+          </div>
+        )}
+      </div>
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <FormModalFooter>
         <Button size="lg" onClick={submit} disabled={saving}>
@@ -221,4 +203,12 @@ export function NoticeForm({
       </FormModalFooter>
     </div>
   );
+}
+
+function MentionChip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return <button type="button" onClick={onRemove} className="min-h-8 rounded-full bg-accent/10 px-2.5 text-[13px] font-semibold text-accent">{label} ×</button>;
+}
+
+function MentionOption({ label, onClick }: { label: string; onClick: () => void }) {
+  return <button type="button" onClick={onClick} className="min-h-10 w-full rounded-lg px-3 text-left text-[14px] active:bg-bg">{label}</button>;
 }
