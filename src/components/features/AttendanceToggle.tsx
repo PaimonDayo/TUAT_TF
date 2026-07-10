@@ -116,7 +116,10 @@ export function AttendanceToggle({
 
   const s = STYLE[status];
   return (
-    <div className="w-[116px] shrink-0" onClick={(event) => event.stopPropagation()}>
+    <div
+      className={cn(isToday && status === "present" ? "min-w-[168px] flex-1" : "w-[116px] shrink-0")}
+      onClick={(event) => event.stopPropagation()}
+    >
       <button
         onClick={toggle}
         disabled={busy}

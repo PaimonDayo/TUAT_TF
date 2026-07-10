@@ -186,7 +186,7 @@ export function ScheduleCard({
 
       {/* 出欠行 */}
       {showAttendance && (
-        <div className="-mt-1 flex items-start gap-2 px-4 pb-3">
+        <div className="-mt-1 flex flex-wrap items-start gap-2 px-4 pb-3">
           <AttendanceToggle
             scheduleId={schedule.id}
             userId={userId!}
