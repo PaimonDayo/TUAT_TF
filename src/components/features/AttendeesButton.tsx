@@ -69,7 +69,7 @@ export function AttendeesButton({
           <div className="pb-4 space-y-4 max-h-[60vh] overflow-y-auto">
             <Group title={`出席 ${present.length}`} color="#34c759" list={present} />
             {absent.length > 0 && <Group title={`欠席 ${absent.length}`} color="#ff3b30" list={absent} />}
-            {attendees.length === 0 && (
+            {visible.length === 0 && (
               <p className="text-caption text-center py-6">まだ誰も出欠を登録していません</p>
             )}
           </div>

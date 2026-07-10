@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 import { jstToday } from "@/lib/date";
 import { MenuEditModal, MenuForm } from "@/components/post/MenuForm";
 import { ScheduleManageActions } from "@/components/post/ScheduleForm";
-import { AttendanceToggle, type AttendanceChange } from "@/components/features/AttendanceToggle";
+import { AttendanceToggle, LateAttendanceControl, type AttendanceChange } from "@/components/features/AttendanceToggle";
 import { AttendeesButton } from "@/components/features/AttendeesButton";
 import { Linkify } from "@/components/common/Linkify";
 import { createClient } from "@/lib/supabase/client";
@@ -73,10 +73,14 @@ export function ScheduleCard({
   const router = useRouter();
   const [open, setOpen] = useState(defaultOpen);
   const [attendeesState, setAttendeesState] = useState(attendees);
+  const [attendanceStatus, setAttendanceStatus] = useState(myStatus);
+  const [lateState, setLateState] = useState({ late: myLate, note: myLateNote });
   const cardRef = useRef<HTMLDivElement>(null);
 
   // 自分の出欠変更をサーバー往復なしで即座に一覧へ反映する
   function handleAttendanceChanged(change: AttendanceChange) {
+    setAttendanceStatus(change.status);
+    setLateState({ late: change.isLate, note: change.lateNote });
     setAttendeesState((prev) => {
       const others = prev.filter((a) => a.user_id !== userId);
       if (change.status === "none" || !userId) return others;
@@ -209,17 +213,20 @@ export function ScheduleCard({
 
       {/* 出欠行 */}
       {showAttendance && (
-        <div className="-mt-1 flex flex-wrap items-start gap-2 px-4 pb-3">
-          <AttendanceToggle
-            scheduleId={schedule.id}
-            userId={userId!}
-            initial={myStatus}
-            initialLate={myLate}
-            initialLateNote={myLateNote}
-            isToday={schedule.schedule_date === jstToday()}
-            onChanged={handleAttendanceChanged}
-          />
-          <AttendeesButton attendees={attendeesState} viewerBlocks={viewerBlocks} showAllBlocks={showAllAttendanceBlocks} />
+        <div className="-mt-1 space-y-2 px-4 pb-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <AttendanceToggle scheduleId={schedule.id} userId={userId!} initial={myStatus} onChanged={handleAttendanceChanged} />
+            <AttendeesButton attendees={attendeesState} viewerBlocks={viewerBlocks} showAllBlocks={showAllAttendanceBlocks} />
+          </div>
+          {schedule.schedule_date === jstToday() && attendanceStatus === "present" && (
+            <LateAttendanceControl
+              scheduleId={schedule.id}
+              userId={userId!}
+              initialLate={lateState.late}
+              initialNote={lateState.note}
+              onChanged={handleAttendanceChanged}
+            />
+          )}
         </div>
       )}
 
