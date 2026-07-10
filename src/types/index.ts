@@ -62,6 +62,7 @@ export interface Profile {
   notify_comment: boolean;
   notify_notice: boolean;
   menu_view_all_blocks: boolean;
+  attendance_view_all_blocks: boolean;
   /** スプレッドシート同期で使う、自分のシート名（例: B2駒井）。未設定なら同期対象外 */
   sheet_name: string | null;
   /** シート連携した日(JST)。新規連携時は同期側でこれ以降のみ取り込む個別カットオフに使う */
@@ -307,6 +308,8 @@ export interface Attendance {
   schedule_id: string;
   user_id: string;
   status: AttendanceStatus;
+  is_late: boolean;
+  late_note: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -315,6 +318,8 @@ export interface Attendance {
 export interface Attendee {
   user_id: string;
   status: AttendanceStatus;
+  is_late: boolean;
+  late_note: string | null;
   profile: AuthorMini;
 }
 

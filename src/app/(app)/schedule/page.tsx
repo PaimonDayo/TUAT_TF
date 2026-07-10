@@ -28,13 +28,21 @@ export default async function SchedulePage({
 
   const attendeesBySchedule: Record<string, Attendee[]> = {};
   const myStatusBySchedule: Record<string, AttendanceStatusOrNone> = {};
+  const myLateBySchedule: Record<string, boolean> = {};
+  const myLateNoteBySchedule: Record<string, string | null> = {};
   for (const r of attRows) {
     (attendeesBySchedule[r.schedule_id] ??= []).push({
       user_id: r.user_id,
       status: r.status,
+      is_late: r.is_late,
+      late_note: r.late_note,
       profile: r.profile,
     });
-    if (r.user_id === profile.id) myStatusBySchedule[r.schedule_id] = r.status;
+    if (r.user_id === profile.id) {
+      myStatusBySchedule[r.schedule_id] = r.status;
+      myLateBySchedule[r.schedule_id] = r.is_late;
+      myLateNoteBySchedule[r.schedule_id] = r.late_note;
+    }
   }
 
   return (
@@ -52,6 +60,9 @@ export default async function SchedulePage({
         canManage={perms.createSchedule}
         attendeesBySchedule={attendeesBySchedule}
         myStatusBySchedule={myStatusBySchedule}
+        myLateBySchedule={myLateBySchedule}
+        myLateNoteBySchedule={myLateNoteBySchedule}
+        showAllAttendanceBlocks={profile.attendance_view_all_blocks ?? false}
         openId={open}
       />
     </>

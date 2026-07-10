@@ -110,6 +110,7 @@ export default async function MyPage({
             initialComment={profile.notify_comment ?? true}
             initialNotice={profile.notify_notice ?? true}
             menuViewAll={profile.menu_view_all_blocks ?? false}
+            attendanceViewAll={profile.attendance_view_all_blocks ?? false}
             recordFields={profile.record_fields ?? []}
             isMiddleLong={profile.blocks.includes("middle_long")}
           />

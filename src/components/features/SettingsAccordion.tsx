@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { Settings, ChevronRight } from "lucide-react";
 import { NotificationSettings } from "@/components/features/NotificationSettings";
 import { MenuViewSetting } from "@/components/features/MenuViewSetting";
+import { AttendanceViewSetting } from "@/components/features/AttendanceViewSetting";
 import type { RecordFieldDef } from "@/types";
 
 const RecordFieldsSetting = dynamic(
@@ -24,6 +25,7 @@ export function SettingsAccordion({
   initialComment,
   initialNotice,
   menuViewAll,
+  attendanceViewAll,
   recordFields,
   isMiddleLong,
 }: {
@@ -31,6 +33,7 @@ export function SettingsAccordion({
   initialComment: boolean;
   initialNotice: boolean;
   menuViewAll: boolean;
+  attendanceViewAll: boolean;
   recordFields: RecordFieldDef[];
   isMiddleLong: boolean;
 }) {
@@ -57,6 +60,10 @@ export function SettingsAccordion({
         <div className="space-y-2">
           <p className="section-label">メニュー表示</p>
           <MenuViewSetting userId={profileId} initial={menuViewAll} />
+        </div>
+        <div className="space-y-2">
+          <p className="section-label">出欠表示</p>
+          <AttendanceViewSetting userId={profileId} initial={attendanceViewAll} />
         </div>
         <RecordFieldsSetting
           profileId={profileId}

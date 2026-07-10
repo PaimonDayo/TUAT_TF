@@ -23,6 +23,7 @@ import { SCHEDULE_TYPES, ATTENDANCE_TYPES } from "@/lib/constants";
 import { BLOCKS, BLOCK_ORDER } from "@/lib/constants";
 import { venueShort } from "@/lib/venues";
 import { cn } from "@/lib/utils";
+import { jstToday } from "@/lib/date";
 import { MenuEditModal, MenuForm } from "@/components/post/MenuForm";
 import { ScheduleManageActions } from "@/components/post/ScheduleForm";
 import { AttendanceToggle } from "@/components/features/AttendanceToggle";
@@ -46,7 +47,10 @@ export function ScheduleCard({
   canManage = false,
   userId,
   myStatus = "none",
+  myLate = false,
+  myLateNote = null,
   attendees = [],
+  showAllAttendanceBlocks = false,
   defaultOpen = false,
 }: {
   schedule: ScheduleWithMenus;
@@ -56,7 +60,10 @@ export function ScheduleCard({
   canManage?: boolean;
   userId?: string;
   myStatus?: AttendanceStatusOrNone;
+  myLate?: boolean;
+  myLateNote?: string | null;
   attendees?: Attendee[];
+  showAllAttendanceBlocks?: boolean;
   defaultOpen?: boolean;
 }) {
   const router = useRouter();
@@ -179,14 +186,17 @@ export function ScheduleCard({
 
       {/* 出欠行 */}
       {showAttendance && (
-        <div className="px-4 pb-3 -mt-1 flex items-center gap-2">
+        <div className="-mt-1 flex items-start gap-2 px-4 pb-3">
           <AttendanceToggle
             scheduleId={schedule.id}
             userId={userId!}
             initial={myStatus}
+            initialLate={myLate}
+            initialLateNote={myLateNote}
+            isToday={schedule.schedule_date === jstToday()}
             refreshOnChange
           />
-          <AttendeesButton attendees={attendees} />
+          <AttendeesButton attendees={attendees} viewerBlocks={viewerBlocks} showAllBlocks={showAllAttendanceBlocks} />
         </div>
       )}
 

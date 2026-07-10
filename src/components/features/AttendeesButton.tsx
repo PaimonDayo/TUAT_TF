@@ -4,9 +4,9 @@ import { useState } from "react";
 import { Users } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Avatar } from "@/components/common/Avatar";
-import { BlockPills } from "@/components/common/BlockPill";
-import { BLOCK_ORDER, GRADE_OPTIONS, gradeShort } from "@/lib/constants";
-import type { Attendee } from "@/types";
+import { BLOCKS, BLOCK_ORDER, GRADE_OPTIONS, gradeShort } from "@/lib/constants";
+import { cn } from "@/lib/utils";
+import type { Attendee, Block } from "@/types";
 
 /** 所属ブロック→学年→名前の順に並べる（見やすさのため） */
 function sortAttendees(list: Attendee[]): Attendee[] {
@@ -27,10 +27,23 @@ function sortAttendees(list: Attendee[]): Attendee[] {
 }
 
 /** 「出席◯」表示。タップで出席者・欠席者一覧 */
-export function AttendeesButton({ attendees }: { attendees: Attendee[] }) {
+export function AttendeesButton({
+  attendees,
+  viewerBlocks,
+  showAllBlocks = false,
+}: {
+  attendees: Attendee[];
+  viewerBlocks: Block[];
+  showAllBlocks?: boolean;
+}) {
   const [open, setOpen] = useState(false);
-  const present = sortAttendees(attendees.filter((a) => a.status === "present"));
-  const absent = sortAttendees(attendees.filter((a) => a.status === "absent"));
+  const visible = showAllBlocks
+    ? attendees
+    : attendees.filter((attendee) =>
+        attendee.profile.blocks?.some((block) => viewerBlocks.includes(block)),
+      );
+  const present = sortAttendees(visible.filter((a) => a.status === "present"));
+  const absent = sortAttendees(visible.filter((a) => a.status === "absent"));
 
   return (
     <>
@@ -69,25 +82,41 @@ export function AttendeesButton({ attendees }: { attendees: Attendee[] }) {
 function Group({ title, color, list }: { title: string; color: string; list: Attendee[] }) {
   if (list.length === 0) return null;
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <p className="section-label" style={{ color }}>{title}</p>
-      <div className="space-y-2">
-        {list.map((a) => (
-          <div key={a.user_id} className="flex items-center gap-2.5">
-            <Avatar
-              name={a.profile.display_name}
-              blocks={a.profile.blocks}
-              avatarUrl={a.profile.avatar_url}
-              size="sm"
-            />
-            <span className="text-[14px] font-semibold">{a.profile.display_name || "名無し"}</span>
-            <BlockPills blocks={a.profile.blocks} />
-            {gradeShort(a.profile.grade) && (
-              <span className="text-micro">{gradeShort(a.profile.grade)}</span>
-            )}
+      {BLOCK_ORDER.map((block) => {
+        const blockMembers = list.filter((attendee) => attendee.profile.blocks?.[0] === block);
+        if (blockMembers.length === 0) return null;
+        return (
+          <div key={block} className="rounded-xl bg-bg/60 px-3 py-2">
+            <p className="text-[12px] font-semibold" style={{ color: BLOCKS[block].color }}>
+              {BLOCKS[block].label}
+            </p>
+            {[...GRADE_OPTIONS.map((grade) => grade.value), null].map((grade) => {
+              const gradeMembers = blockMembers.filter((attendee) => attendee.profile.grade === grade);
+              if (gradeMembers.length === 0) return null;
+              return (
+                <div key={grade ?? "unset"} className="mt-2">
+                  <p className="text-[10px] font-semibold tracking-wide text-muted2">{gradeShort(grade) ?? "—"}</p>
+                  <div className="divide-y divide-separator/60">
+                    {gradeMembers.map((attendee) => (
+                      <div key={attendee.user_id} className="flex min-h-10 items-center gap-2.5 py-1.5">
+                        <Avatar name={attendee.profile.display_name} blocks={attendee.profile.blocks} avatarUrl={attendee.profile.avatar_url} size="sm" />
+                        <span className={cn("min-w-0 flex-1 truncate text-[14px] font-semibold", attendee.is_late && "text-warning")}>
+                          {attendee.profile.display_name || "名無し"}
+                        </span>
+                        {attendee.is_late && attendee.late_note && (
+                          <span className="max-w-[45%] truncate text-[12px] text-muted2">{attendee.late_note}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 }

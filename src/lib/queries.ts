@@ -465,12 +465,14 @@ export async function getAttendancesForSchedules(scheduleIds: string[]) {
   const supabase = await createClient();
   const { data } = await supabase
     .from("attendances")
-    .select("schedule_id, user_id, status, profile:profiles!user_id(id, display_name, avatar_url, blocks, grade)")
+    .select("schedule_id, user_id, status, is_late, late_note, profile:profiles!user_id(id, display_name, avatar_url, blocks, grade)")
     .in("schedule_id", scheduleIds);
   return (data ?? []) as unknown as {
     schedule_id: string;
     user_id: string;
     status: "present" | "absent";
+    is_late: boolean;
+    late_note: string | null;
     profile: import("@/types").AuthorMini;
   }[];
 }
