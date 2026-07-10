@@ -481,9 +481,10 @@ export async function reconcileOnSwitch(
   if (pErr) throw pErr;
   if (!profile?.sheet_name) return result; // 連携していなければ何もしない
 
-  const members = await fetchAllRaw();
-  const member = members.find((m) => m.name.trim() === profile.sheet_name!.trim());
-  if (!member) {
+  let member: RawMember;
+  try {
+    member = await fetchMemberRaw(profile.sheet_name);
+  } catch {
     result.skipped.push(`シート「${profile.sheet_name}」が見つかりません`);
     return result;
   }

@@ -46,6 +46,7 @@ export function ProfileEditForm({
     profile.record_source ?? "app",
   );
   const [sheetOptions, setSheetOptions] = useState<string[] | null>(null);
+  const [sheetNameMissing, setSheetNameMissing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -61,6 +62,7 @@ export function ProfileEditForm({
       .then((data: { members?: { name: string }[] }) => {
         if (!active) return;
         const names = (data.members ?? []).map((m) => m.name);
+        setSheetNameMissing(Boolean(profile.sheet_name && !names.includes(profile.sheet_name)));
         // 現在の保存値が候補に無くても選べるよう加えておく
         if (profile.sheet_name && !names.includes(profile.sheet_name)) {
           names.unshift(profile.sheet_name);
@@ -285,6 +287,10 @@ export function ProfileEditForm({
             選ぶと、そのシートと練習記録が1時間ごとに自動で同期されます。
           </p>
         </div>
+      )}
+
+      {sheetNameMissing && (
+        <p className="-mt-3 text-micro text-danger">現在選ばれているシートが見つかりません。正しいシートを選び直してください。</p>
       )}
 
       {sheetName.trim() && (

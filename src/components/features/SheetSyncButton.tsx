@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 
@@ -9,6 +9,14 @@ export function SheetSyncButton() {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [hasIssue, setHasIssue] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/sheets/sync-status")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => setHasIssue(data?.latest?.hasIssue === true))
+      .catch(() => undefined);
+  }, []);
 
   async function sync() {
     setBusy(true);
@@ -22,8 +30,10 @@ export function SheetSyncButton() {
       const data = await res.json();
       if (!res.ok || data.ok === false) {
         setMessage(`失敗: ${data.error ?? res.status}`);
+        setHasIssue(true);
         return;
       }
+      setHasIssue(data.failedMembers?.length > 0);
       setMessage(
         `同期しました：取込 ${data.inserted} / 更新 ${data.updated} / 書き戻し ${data.pushed}` +
           (data.conflicts?.length ? ` / 競合スキップ ${data.conflicts.length}` : "") +
@@ -54,6 +64,7 @@ export function SheetSyncButton() {
       </button>
 
       {message && <p className="text-micro text-muted2">{message}</p>}
+      {hasIssue && !message && <p className="text-micro text-danger">前回の同期に確認が必要な項目があります</p>}
     </div>
   );
 }
