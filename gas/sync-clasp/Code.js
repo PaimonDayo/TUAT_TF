@@ -73,6 +73,7 @@ function runWeeklyBackup() {
   while (iterator.hasNext()) generations.push(iterator.next());
   generations.sort((a, b) => b.getName().localeCompare(a.getName()));
   generations.slice(8).forEach(oldFolder => oldFolder.setTrashed(true));
+  return { success: true, folder: stamp, files: payload.exports.length + 1 };
 }
 
 function doGet(e) {
@@ -102,6 +103,11 @@ function doPost(e) {
     verifySyncSecret(body.secret);
     if (body.action === 'writeCells') return createJsonResponse(writeCellsRecord(body));
     if (body.action === 'writeReply') return createJsonResponse(writeReplyRecord(body));
+    if (body.action === 'setupWeeklyBackup') {
+      setupWeeklyBackup(body.apiUrl);
+      return createJsonResponse(runWeeklyBackup());
+    }
+    if (body.action === 'runBackupNow') return createJsonResponse(runWeeklyBackup());
     return createJsonResponse({ error: 'unknown action' });
   } catch (err) {
     return createJsonResponse({ error: err.toString() });

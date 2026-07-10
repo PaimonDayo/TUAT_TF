@@ -195,11 +195,11 @@ function parseCsvDate(raw: string): string {
   return text;
 }
 
-function csvToRawMember(member: SheetMember, csv: string): RawMember {
+function csvToRawMember(member: SheetMember, csv: string): RawMember | null {
   if (/^\s*<!doctype html/i.test(csv)) {
     throw new Error("CSVを取得できません。スプレッドシートの共有設定を確認してください");
   }
-  const parsed = Papa.parse<string[]>(csv, { skipEmptyLines: false });
+  const parsed = Papa.parse<string[]>(csv, { delimiter: ",", skipEmptyLines: false });
   if (parsed.errors.length > 0 && parsed.data.length === 0) {
     throw new Error(parsed.errors[0]?.message ?? "CSVの解析に失敗しました");
   }
@@ -207,7 +207,8 @@ function csvToRawMember(member: SheetMember, csv: string): RawMember {
   const headerIndex = rows.slice(0, 15).findIndex((row) =>
     row.some((cell) => norm(cell) === "日付"),
   );
-  if (headerIndex < 0) throw new Error("見出し行（日付）が見つかりません");
+  // GASのhandleFetchAllRawと同じく、記録表ではない部員名形式のタブは対象外。
+  if (headerIndex < 0) return null;
   const rawHeader = rows[headerIndex].map((cell) => cell.trim());
   const header = rawHeader.filter(Boolean);
   const records = rows.slice(headerIndex + 1).flatMap((row) => {
@@ -222,7 +223,7 @@ function csvToRawMember(member: SheetMember, csv: string): RawMember {
   return { ...member, header, records };
 }
 
-async function fetchMemberCsv(spreadsheetId: string, member: SheetMember): Promise<RawMember> {
+async function fetchMemberCsv(spreadsheetId: string, member: SheetMember): Promise<RawMember | null> {
   const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}/export?format=csv&gid=${encodeURIComponent(member.gid)}`;
   const response = await fetch(url, { redirect: "follow", cache: "no-store" });
   if (!response.ok) throw new Error(`CSV取得 HTTP ${response.status}`);
@@ -235,7 +236,8 @@ async function fetchAllRawAsCsv(spreadsheetId: string): Promise<RawMember[]> {
   // Google側への瞬間的な負荷を抑えつつ、GASの直列70秒問題を避ける。
   for (let index = 0; index < members.length; index += 12) {
     const batch = members.slice(index, index + 12);
-    results.push(...(await Promise.all(batch.map((member) => fetchMemberCsv(spreadsheetId, member)))));
+    const fetched = await Promise.all(batch.map((member) => fetchMemberCsv(spreadsheetId, member)));
+    results.push(...fetched.filter((member): member is RawMember => member !== null));
   }
   return results.sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -251,7 +253,9 @@ async function fetchMemberRaw(
     const members = await fetchSheetMembers();
     const member = members.find((candidate) => candidate.name === memberName);
     if (!member) throw new Error(`シート「${memberName}」が見つかりません`);
-    return fetchMemberCsv(spreadsheetId, member);
+    const raw = await fetchMemberCsv(spreadsheetId, member);
+    if (!raw) throw new Error("見出し行（日付）が見つかりません");
+    return raw;
   }
   const data = await gasGet<{ data: RawMember }>({ action: "fetchMember", memberName }, opts);
   return data.data;
