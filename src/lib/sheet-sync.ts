@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import Papa from "papaparse";
 import type { RecordFieldDef } from "@/types";
 
 /**
@@ -174,8 +175,69 @@ export async function fetchSheetMembers(): Promise<SheetMember[]> {
 }
 
 async function fetchAllRaw(): Promise<RawMember[]> {
+  const spreadsheetId =
+    process.env.SHEET_SYNC_SPREADSHEET_ID ?? "1uAo7E8_rMbUZlml1H0vj119htQeoa2eMWqASUXQTqgg";
+  if (spreadsheetId) return fetchAllRawAsCsv(spreadsheetId);
   const data = await gasGet<{ data: RawMember[] }>({ action: "fetchAllRaw" });
   return data.data ?? [];
+}
+
+function parseCsvDate(raw: string): string {
+  const text = raw.trim().split(/\s/)[0];
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const parts = text.split(/[/-]/).map((part) => part.trim());
+  if (parts.length === 2) {
+    return `${new Date().getFullYear()}-${parts[0].padStart(2, "0")}-${parts[1].padStart(2, "0")}`;
+  }
+  if (parts.length === 3) {
+    return `${parts[0]}-${parts[1].padStart(2, "0")}-${parts[2].padStart(2, "0")}`;
+  }
+  return text;
+}
+
+function csvToRawMember(member: SheetMember, csv: string): RawMember {
+  if (/^\s*<!doctype html/i.test(csv)) {
+    throw new Error("CSVを取得できません。スプレッドシートの共有設定を確認してください");
+  }
+  const parsed = Papa.parse<string[]>(csv, { skipEmptyLines: false });
+  if (parsed.errors.length > 0 && parsed.data.length === 0) {
+    throw new Error(parsed.errors[0]?.message ?? "CSVの解析に失敗しました");
+  }
+  const rows = parsed.data;
+  const headerIndex = rows.slice(0, 15).findIndex((row) =>
+    row.some((cell) => norm(cell) === "日付"),
+  );
+  if (headerIndex < 0) throw new Error("見出し行（日付）が見つかりません");
+  const rawHeader = rows[headerIndex].map((cell) => cell.trim());
+  const header = rawHeader.filter(Boolean);
+  const records = rows.slice(headerIndex + 1).flatMap((row) => {
+    const dateRaw = row[0]?.trim() ?? "";
+    if (!/^\d{1,4}[/-]\d{1,2}(?:[/-]\d{1,2})?/.test(dateRaw)) return [];
+    const cells: Record<string, string> = {};
+    rawHeader.forEach((key, index) => {
+      if (key && cells[key] === undefined) cells[key] = row[index]?.trim() ?? "";
+    });
+    return [{ date: parseCsvDate(dateRaw), cells }];
+  });
+  return { ...member, header, records };
+}
+
+async function fetchMemberCsv(spreadsheetId: string, member: SheetMember): Promise<RawMember> {
+  const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}/export?format=csv&gid=${encodeURIComponent(member.gid)}`;
+  const response = await fetch(url, { redirect: "follow", cache: "no-store" });
+  if (!response.ok) throw new Error(`CSV取得 HTTP ${response.status}`);
+  return csvToRawMember(member, await response.text());
+}
+
+async function fetchAllRawAsCsv(spreadsheetId: string): Promise<RawMember[]> {
+  const members = await fetchSheetMembers();
+  const results: RawMember[] = [];
+  // Google側への瞬間的な負荷を抑えつつ、GASの直列70秒問題を避ける。
+  for (let index = 0; index < members.length; index += 12) {
+    const batch = members.slice(index, index + 12);
+    results.push(...(await Promise.all(batch.map((member) => fetchMemberCsv(spreadsheetId, member)))));
+  }
+  return results.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** 部員1人だけを軽量取得（write-through保存直後の確認・個人の記録画面用） */
@@ -183,6 +245,14 @@ async function fetchMemberRaw(
   memberName: string,
   opts: { timeoutMs?: number } = {},
 ): Promise<RawMember> {
+  const spreadsheetId =
+    process.env.SHEET_SYNC_SPREADSHEET_ID ?? "1uAo7E8_rMbUZlml1H0vj119htQeoa2eMWqASUXQTqgg";
+  if (spreadsheetId) {
+    const members = await fetchSheetMembers();
+    const member = members.find((candidate) => candidate.name === memberName);
+    if (!member) throw new Error(`シート「${memberName}」が見つかりません`);
+    return fetchMemberCsv(spreadsheetId, member);
+  }
   const data = await gasGet<{ data: RawMember }>({ action: "fetchMember", memberName }, opts);
   return data.data;
 }
