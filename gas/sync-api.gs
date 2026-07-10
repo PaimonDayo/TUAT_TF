@@ -39,10 +39,9 @@ function setSecret(s) {
 }
 
 // 管理用: 週次バックアップ先APIを設定し、日曜03:00〜04:00のトリガーを作る。
-function setupWeeklyBackup(apiUrl, secret) {
+function setupWeeklyBackup(apiUrl) {
   const props = PropertiesService.getScriptProperties();
-  props.setProperty('BACKUP_API_URL', (apiUrl || '').toString().replace(/\/$/, ''));
-  props.setProperty('BACKUP_SECRET', (secret || '').toString());
+  props.setProperty('BACKUP_API_URL', (apiUrl || 'https://tuat-tf.vercel.app').toString().replace(/\/$/, ''));
   ScriptApp.getProjectTriggers()
     .filter(trigger => trigger.getHandlerFunction() === 'runWeeklyBackup')
     .forEach(trigger => ScriptApp.deleteTrigger(trigger));
@@ -52,9 +51,9 @@ function setupWeeklyBackup(apiUrl, secret) {
 // 主要テーブルをDriveの TUAT-TF Backups 配下へ保存し、直近8世代だけ保持する。
 function runWeeklyBackup() {
   const props = PropertiesService.getScriptProperties();
-  const apiUrl = props.getProperty('BACKUP_API_URL');
-  const secret = props.getProperty('BACKUP_SECRET');
-  if (!apiUrl || !secret) throw new Error('BACKUP_API_URL / BACKUP_SECRET not set');
+  const apiUrl = props.getProperty('BACKUP_API_URL') || 'https://tuat-tf.vercel.app';
+  const secret = getSyncSecret();
+  if (!secret) throw new Error('SYNC_SECRET not set');
   const response = UrlFetchApp.fetch(apiUrl + '/api/backup', {
     method: 'post',
     headers: { Authorization: 'Bearer ' + secret },
