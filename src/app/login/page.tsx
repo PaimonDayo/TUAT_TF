@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Check, Copy, ExternalLink } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { APP_NAME, APP_MONO } from "@/lib/app";
@@ -8,8 +9,21 @@ import { APP_NAME, APP_MONO } from "@/lib/app";
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [embeddedBrowser, setEmbeddedBrowser] = useState<EmbeddedBrowser | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    // userAgent はブラウザでのみ確定するため、マウント後に案内を切り替える。
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setEmbeddedBrowser(detectEmbeddedBrowser(window.navigator.userAgent));
+  }, []);
 
   async function signInWithGoogle() {
+    const embedded = detectEmbeddedBrowser(window.navigator.userAgent);
+    if (embedded) {
+      setEmbeddedBrowser(embedded);
+      return;
+    }
     setLoading(true);
     setError(null);
     const supabase = createClient();
@@ -31,6 +45,21 @@ export default function LoginPage() {
     }
   }
 
+  async function copyCurrentUrl() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt("このURLをコピーしてください", window.location.href);
+    }
+  }
+
+  function openInChrome() {
+    const { host, pathname, search, hash } = window.location;
+    window.location.href = `intent://${host}${pathname}${search}${hash}#Intent;scheme=https;package=com.android.chrome;end`;
+  }
+
   return (
     <main className="min-h-dvh flex flex-col items-center justify-center px-8 max-w-md mx-auto">
       <div className="flex flex-col items-center gap-3 mb-12">
@@ -48,16 +77,42 @@ export default function LoginPage() {
       </div>
 
       <div className="w-full space-y-3">
-        <Button
-          size="lg"
-          variant="outline"
-          onClick={signInWithGoogle}
-          disabled={loading}
-          className="gap-3"
-        >
-          <GoogleIcon />
-          {loading ? "ログイン中..." : "Googleでログイン"}
-        </Button>
+        {embeddedBrowser ? (
+          <div className="space-y-3 rounded-2xl border border-warning/40 bg-warning/8 p-4">
+            <div>
+              <p className="text-headline">ブラウザで開いてください</p>
+              <p className="mt-1 text-[13px] leading-relaxed text-muted2">
+                {embeddedBrowser.name}内のブラウザでは、Googleのセキュリティ制限によりログインできません。
+              </p>
+            </div>
+            {embeddedBrowser.android ? (
+              <Button size="lg" onClick={openInChrome} className="gap-2">
+                <ExternalLink size={17} /> Chromeで開く
+              </Button>
+            ) : (
+              <p className="rounded-xl bg-card p-3 text-[13px] leading-relaxed">
+                画面右上または右下のメニューから
+                <span className="font-semibold">「デフォルトのブラウザで開く」</span>
+                を選んでください。
+              </p>
+            )}
+            <Button size="lg" variant="outline" onClick={copyCurrentUrl} className="gap-2">
+              {copied ? <Check size={17} /> : <Copy size={17} />}
+              {copied ? "URLをコピーしました" : "URLをコピー"}
+            </Button>
+          </div>
+        ) : (
+          <Button
+            size="lg"
+            variant="outline"
+            onClick={signInWithGoogle}
+            disabled={loading}
+            className="gap-3"
+          >
+            <GoogleIcon />
+            {loading ? "ログイン中..." : "Googleでログイン"}
+          </Button>
+        )}
 
         {error && <p className="text-caption text-danger text-center">{error}</p>}
 
@@ -69,6 +124,23 @@ export default function LoginPage() {
       </div>
     </main>
   );
+}
+
+type EmbeddedBrowser = { name: string; android: boolean };
+
+function detectEmbeddedBrowser(userAgent: string): EmbeddedBrowser | null {
+  const ua = userAgent.toLowerCase();
+  const android = ua.includes("android");
+  if (/\bline\//i.test(userAgent)) return { name: "LINE", android };
+  if (ua.includes("instagram")) return { name: "Instagram", android };
+  if (ua.includes("fban") || ua.includes("fbav")) return { name: "Facebook", android };
+  if (ua.includes("twitter") || ua.includes("x-client")) return { name: "X", android };
+  if (ua.includes("tiktok")) return { name: "TikTok", android };
+  // iOSの一般的なWebViewはSafariの識別子を持たない。
+  if (/iphone|ipad|ipod/.test(ua) && /applewebkit/.test(ua) && !/safari/.test(ua)) {
+    return { name: "アプリ", android: false };
+  }
+  return null;
 }
 
 function GoogleIcon() {
