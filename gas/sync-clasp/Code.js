@@ -38,6 +38,44 @@ function setSecret(s) {
   return 'len=' + getSyncSecret().length;
 }
 
+// 管理用: 週次バックアップ先APIを設定し、日曜03:00〜04:00のトリガーを作る。
+function setupWeeklyBackup(apiUrl, secret) {
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty('BACKUP_API_URL', (apiUrl || '').toString().replace(/\/$/, ''));
+  props.setProperty('BACKUP_SECRET', (secret || '').toString());
+  ScriptApp.getProjectTriggers()
+    .filter(trigger => trigger.getHandlerFunction() === 'runWeeklyBackup')
+    .forEach(trigger => ScriptApp.deleteTrigger(trigger));
+  ScriptApp.newTrigger('runWeeklyBackup').timeBased().onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(3).create();
+}
+
+// 主要テーブルをDriveの TUAT-TF Backups 配下へ保存し、直近8世代だけ保持する。
+function runWeeklyBackup() {
+  const props = PropertiesService.getScriptProperties();
+  const apiUrl = props.getProperty('BACKUP_API_URL');
+  const secret = props.getProperty('BACKUP_SECRET');
+  if (!apiUrl || !secret) throw new Error('BACKUP_API_URL / BACKUP_SECRET not set');
+  const response = UrlFetchApp.fetch(apiUrl + '/api/backup', {
+    method: 'post',
+    headers: { Authorization: 'Bearer ' + secret },
+    muteHttpExceptions: true,
+  });
+  if (response.getResponseCode() !== 200) throw new Error('backup API: ' + response.getContentText());
+  const payload = JSON.parse(response.getContentText());
+  const rootIterator = DriveApp.getFoldersByName('TUAT-TF Backups');
+  const root = rootIterator.hasNext() ? rootIterator.next() : DriveApp.createFolder('TUAT-TF Backups');
+  const stamp = Utilities.formatDate(new Date(payload.createdAt), 'Asia/Tokyo', 'yyyy-MM-dd_HHmmss');
+  const folder = root.createFolder(stamp);
+  payload.exports.forEach(item => folder.createFile(item.table + '.csv', item.csv, MimeType.CSV));
+  folder.createFile('manifest.json', JSON.stringify({ createdAt: payload.createdAt, tables: payload.exports.map(item => ({ table: item.table, rowCount: item.rowCount })) }, null, 2), MimeType.PLAIN_TEXT);
+
+  const generations = [];
+  const iterator = root.getFolders();
+  while (iterator.hasNext()) generations.push(iterator.next());
+  generations.sort((a, b) => b.getName().localeCompare(a.getName()));
+  generations.slice(8).forEach(oldFolder => oldFolder.setTrashed(true));
+}
+
 function doGet(e) {
   try {
     const action = e && e.parameter ? e.parameter.action : '';
