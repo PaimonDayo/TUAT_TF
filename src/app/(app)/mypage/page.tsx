@@ -8,7 +8,7 @@ import { Avatar } from "@/components/common/Avatar";
 import { BlockPills } from "@/components/common/BlockPill";
 import { Linkify } from "@/components/common/Linkify";
 import { ActivityFeed } from "@/components/features/ActivityFeed";
-import { TrainingChart } from "@/components/features/TrainingChart";
+import { MyTrainingChartCached } from "@/components/features/MyTrainingChartCached";
 import { EditProfileButton } from "@/components/features/MyPageActions";
 import { SettingsAccordion } from "@/components/features/SettingsAccordion";
 import { SheetSyncButton } from "@/components/features/SheetSyncButton";
@@ -98,7 +98,7 @@ export default async function MyPage({
         </Card>
 
         {/* 練習量の推移（日/週/月・横スライド） */}
-        <TrainingChart records={records} />
+        <MyTrainingChartCached userId={profile.id} initialRecords={records} />
 
         {/* リンク（1枚にまとめた区切り線リスト） */}
         <Card className="divide-y divide-separator/70 overflow-hidden">
