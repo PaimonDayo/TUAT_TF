@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import styles from "./SplashIntro.module.css";
 
 const SESSION_KEY = "tuat-splash-played";
-const FINISH_AFTER_MS = 5550;
+const FINISH_AFTER_MS = 4900;
 const FADE_MS = 80;
 
 const TAB_ROUTES = [
@@ -53,15 +53,7 @@ export default function SplashIntro() {
   return (
     <div aria-hidden="true" className={styles.overlay}>
       <main className={styles.stage}>
-        <section className={`${styles.scene} ${styles.paper}`} />
         <section className={`${styles.scene} ${styles.film}`} />
-        <section className={`${styles.scene} ${styles.mega}`}>
-          <div className={styles.blackRow}>
-            {"TUAT".split("").map((letter, index) => (
-              <div className={`${styles.blackGlyph} ${styles[`black${index}`]}`} key={index}><span>{letter}</span></div>
-            ))}
-          </div>
-        </section>
         <section className={`${styles.scene} ${styles.center}`}>
           <div className={styles.wordRow}>
             {"TUAT".split("").map((letter, index) => (
@@ -70,6 +62,7 @@ export default function SplashIntro() {
           </div>
         </section>
         <section className={`${styles.scene} ${styles.final}`}>
+          <div className={styles.skyBrushes}><i /><i /></div>
           <svg className={styles.frame} viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid meet">
             <defs>
               <filter id="splash-frame-rough" x="-6%" y="-6%" width="112%" height="112%">
