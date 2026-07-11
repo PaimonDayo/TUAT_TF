@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { Target } from "lucide-react";
 import { SubHeader } from "@/components/layout/SubHeader";
 import { Card } from "@/components/ui/card";
@@ -11,6 +12,7 @@ import { ResultsList } from "@/components/features/ResultsList";
 import { TrainingChart } from "@/components/features/TrainingChart";
 import { FavoriteButton } from "@/components/features/FavoriteButton";
 import { SheetLiveRefresh } from "@/components/features/SheetLiveRefresh";
+import { ListSkeleton } from "@/components/ui/page-skeletons";
 import { NoteList } from "@/components/features/NotesView";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import {
@@ -23,7 +25,15 @@ import {
 import { gradeShort } from "@/lib/constants";
 import type { PbRecord, PracticeRecord, Profile, RecordWithAuthor } from "@/types";
 
-export default async function MemberPage({
+export default function MemberPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  return <Suspense fallback={<ListSkeleton />}><MemberContent params={params} /></Suspense>;
+}
+
+async function MemberContent({
   params,
 }: {
   params: Promise<{ id: string }>;

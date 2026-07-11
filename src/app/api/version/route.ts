@@ -1,7 +1,5 @@
 // 現在デプロイされているバージョン（コミットSHA）を返す。
 // クライアントが定期的に取得し、起動時と異なれば「更新あり」と判断する。
-export const dynamic = "force-dynamic";
-
 export async function GET() {
   const version =
     process.env.VERCEL_GIT_COMMIT_SHA ??

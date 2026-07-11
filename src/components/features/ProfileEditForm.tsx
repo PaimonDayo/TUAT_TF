@@ -79,7 +79,7 @@ export function ProfileEditForm({
     setSigningOut(true);
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.push("/login");
+    window.location.assign("/login");
   }
 
   function toggleBlock(b: Block) {

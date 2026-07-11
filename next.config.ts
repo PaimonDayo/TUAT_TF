@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  cacheComponents: true,
   experimental: {
     // クライアント側ルーターキャッシュ。一度開いたタブを一定時間そのまま再表示し、
     // タブ移動を高速化する。局所操作はClient Componentのstateを更新し、
