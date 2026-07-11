@@ -37,7 +37,7 @@ export function BottomNav() {
               onMouseEnter={() => router.prefetch(href)}
               onTouchStart={() => router.prefetch(href)}
               className={cn(
-                "flex-1 flex flex-col items-center justify-center gap-0.5 active:opacity-50",
+                "flex-1 flex flex-col items-center justify-center gap-0.5",
                 active ? "text-accent" : "text-muted",
               )}
             >
