@@ -117,11 +117,11 @@ export default function SplashIntro() {
     >
       <video
         ref={videoRef}
-        src="/splash/intro.mp4"
+        src="/splash/intro.mp4?v=2"
         muted
         playsInline
         preload="auto"
-        style={{ width: "100%", height: "100%", objectFit: "contain" }}
+        style={{ width: "100%", height: "100%", objectFit: "cover" }}
       />
       <div
         className="pointer-events-none absolute inset-0 bg-white"
