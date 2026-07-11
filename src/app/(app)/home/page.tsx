@@ -7,6 +7,7 @@ import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { HomeSkeleton } from "@/components/ui/page-skeletons";
 import { HomeFeed } from "@/components/features/HomeFeed";
 import { HomeNotices } from "@/components/features/HomeNotices";
 import { InstallPrompt } from "@/components/features/InstallPrompt";
@@ -34,7 +35,11 @@ import type {
   Profile,
 } from "@/types";
 
-export default async function HomePage() {
+export default function HomePage() {
+  return <Suspense fallback={<HomeSkeleton />}><HomeContent /></Suspense>;
+}
+
+async function HomeContent() {
   const profile = await getCurrentProfile();
   const nowJst = jstNow();
 
@@ -48,23 +53,13 @@ export default async function HomePage() {
           {format(nowJst, "M月d日 (E)", { locale: ja })}
         </p>
 
-        <Suspense fallback={<SectionSkeleton rows={1} />}>
-          <NoticesSection userId={profile.id} />
-        </Suspense>
+        <NoticesSection userId={profile.id} />
         {profile.blocks.includes("middle_long") && (
-          <Suspense fallback={<SummarySkeleton />}>
-            <WeeklySummary userId={profile.id} nowJst={nowJst} />
-          </Suspense>
+          <WeeklySummary userId={profile.id} nowJst={nowJst} />
         )}
-        <Suspense fallback={<SectionSkeleton title="本日の予定" rows={1} />}>
-          <SchedulesSection profile={profile} />
-        </Suspense>
-        <Suspense fallback={<SectionSkeleton title="ノート" rows={1} />}>
-          <NotesSection />
-        </Suspense>
-        <Suspense fallback={<SectionSkeleton title="タイムライン" rows={2} />}>
-          <FeedSection profile={profile} />
-        </Suspense>
+        <SchedulesSection profile={profile} />
+        <NotesSection />
+        <FeedSection profile={profile} />
       </div>
     </>
   );
@@ -175,7 +170,7 @@ async function SchedulesSection({ profile }: { profile: Profile }) {
                     </div>
                   </div>
                 </Link>
-                <AttendanceToggle scheduleId={schedule.id} userId={profile.id} initial={mine?.status ?? "none"} refreshOnChange />
+                <AttendanceToggle scheduleId={schedule.id} userId={profile.id} initial={mine?.status ?? "none"} />
               </Card>
             );
           })}
