@@ -13,8 +13,8 @@ import { useRouter } from "next/navigation";
 
 const SESSION_KEY = "tuat-splash-played";
 const FADE_MS = 550;
-// canplaythrough が来なくても8秒で見切り発車（バッファしながら再生）
-const START_CAP_MS = 8000;
+// 動画を最後まで待たず、再生可能になり次第開始する。
+const START_CAP_MS = 1200;
 // ended が発火しない異常系でも必ず終わらせる保険
 const HARD_CAP_MS = 25000;
 
@@ -22,12 +22,12 @@ const TAB_ROUTES = [
   "/home",
   "/schedule",
   "/timeline",
-  "/members",
   "/notes",
+  "/mypage",
+  "/members",
   "/notices",
   "/ranking",
   "/venues",
-  "/mypage",
 ];
 
 export default function SplashIntro() {
@@ -52,6 +52,9 @@ export default function SplashIntro() {
     let started = false;
     let finished = false;
     const timers: ReturnType<typeof setTimeout>[] = [];
+    const themeColor = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    const previousThemeColor = themeColor?.content;
+    if (themeColor) themeColor.content = "#0b1020";
 
     const finish = () => {
       if (finished || cancelled) return;
@@ -60,6 +63,7 @@ export default function SplashIntro() {
       wrap.style.transition = `opacity ${FADE_MS}ms ease`;
       wrap.style.opacity = "0";
       timers.push(setTimeout(() => setDone(true), FADE_MS));
+      if (themeColor && previousThemeColor) themeColor.content = previousThemeColor;
     };
 
     const begin = () => {
@@ -79,19 +83,17 @@ export default function SplashIntro() {
             } catch {
               // prefetch失敗は無視（演出を止めない）
             }
-          }, 800 + i * 150),
+          }, 80 + i * 180),
         );
       });
     };
 
     video.addEventListener("ended", finish);
     video.addEventListener("error", finish);
-    // 全部バッファしてから再生開始（実機で途中からカクつく・
-    // 「右から読み込まれてくる」ように見えるのを防ぐ）
-    if (video.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) {
+    if (video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
       begin();
     } else {
-      video.addEventListener("canplaythrough", begin, { once: true });
+      video.addEventListener("canplay", begin, { once: true });
     }
     timers.push(setTimeout(begin, START_CAP_MS));
     timers.push(setTimeout(finish, HARD_CAP_MS));
@@ -101,7 +103,8 @@ export default function SplashIntro() {
       timers.forEach(clearTimeout);
       video.removeEventListener("ended", finish);
       video.removeEventListener("error", finish);
-      video.removeEventListener("canplaythrough", begin);
+      video.removeEventListener("canplay", begin);
+      if (themeColor && previousThemeColor) themeColor.content = previousThemeColor;
     };
   }, [router]);
 
@@ -110,7 +113,7 @@ export default function SplashIntro() {
     <div
       ref={wrapRef}
       aria-hidden="true"
-      style={{ position: "fixed", inset: 0, zIndex: 9999, background: "#f5f4ee" }}
+      style={{ position: "fixed", inset: 0, zIndex: 9999, background: "#0b1020", overflow: "hidden" }}
     >
       <video
         ref={videoRef}
@@ -118,8 +121,13 @@ export default function SplashIntro() {
         muted
         playsInline
         preload="auto"
-        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        style={{ width: "100%", height: "100%", objectFit: "contain" }}
       />
+      <div
+        className="pointer-events-none absolute inset-0 bg-white"
+        style={{ animation: "splash-white-fade 5s linear both" }}
+      />
+      <style>{`@keyframes splash-white-fade { 0%, 34%, 46%, 100% { opacity: 0 } 40% { opacity: 1 } }`}</style>
     </div>
   );
 }
