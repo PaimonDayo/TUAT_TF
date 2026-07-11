@@ -101,6 +101,9 @@ function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
     verifySyncSecret(body.secret);
+    if (body.action === 'listMembers') return handleListMembers();
+    if (body.action === 'fetchAllRaw') return handleFetchAllRaw();
+    if (body.action === 'fetchMember') return handleFetchMember(body.memberName);
     if (body.action === 'writeCells') return createJsonResponse(writeCellsRecord(body));
     if (body.action === 'writeReply') return createJsonResponse(writeReplyRecord(body));
     if (body.action === 'setupWeeklyBackup') {

@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
     // 複数領域へ影響する変更だけ router.refresh() を使う。
     staleTimes: {
       dynamic: 30, // 動的ページを30秒キャッシュ
-      static: 180,
+      static: 900,
     },
   },
 };

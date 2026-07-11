@@ -122,11 +122,16 @@ async function gasGet<T>(
   opts: { timeoutMs?: number } = {},
 ): Promise<T> {
   const { url, secret } = gasConfig();
-  const qs = new URLSearchParams({ ...params, secret });
   const controller = opts.timeoutMs ? new AbortController() : undefined;
   const timer = controller ? setTimeout(() => controller.abort(), opts.timeoutMs) : undefined;
   try {
-    const res = await fetch(`${url}?${qs}`, { redirect: "follow", signal: controller?.signal });
+    const res = await fetch(url, {
+      method: "POST",
+      redirect: "follow",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ ...params, secret }),
+      signal: controller?.signal,
+    });
     return await readGasJson<T>(res);
   } finally {
     if (timer) clearTimeout(timer);

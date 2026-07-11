@@ -100,14 +100,16 @@ function Group({ title, color, list }: { title: string; color: string; list: Att
                   <p className="text-[10px] font-semibold tracking-wide text-muted2">{gradeShort(grade) ?? "—"}</p>
                   <div className="divide-y divide-separator/60">
                     {gradeMembers.map((attendee) => (
-                      <div key={attendee.user_id} className="flex min-h-10 items-center gap-2.5 py-1.5">
+                      <div key={attendee.user_id} className="flex min-h-10 items-start gap-2.5 py-1.5">
                         <Avatar name={attendee.profile.display_name} blocks={attendee.profile.blocks} avatarUrl={attendee.profile.avatar_url} size="sm" />
-                        <span className={cn("min-w-0 flex-1 truncate text-[14px] font-semibold", attendee.is_late && "text-warning")}>
-                          {attendee.profile.display_name || "名無し"}
-                        </span>
-                        {attendee.is_late && attendee.late_note && (
-                          <span className="max-w-[45%] truncate text-[12px] text-muted2">{attendee.late_note}</span>
-                        )}
+                        <div className="min-w-0 flex-1 pt-0.5">
+                          <p className={cn("truncate text-[14px] font-semibold", attendee.is_late && "text-warning")}>
+                            {attendee.profile.display_name || "名無し"}
+                          </p>
+                          {attendee.is_late && attendee.late_note && (
+                            <p className="mt-0.5 whitespace-pre-wrap break-words text-[12px] leading-5 text-muted2">{attendee.late_note}</p>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
