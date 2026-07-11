@@ -4,6 +4,14 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
+## Current implementation status (2026-07-12; supersedes stale backlog notes below)
+
+- **Weekly backup (former task 13) is complete**: `/api/backup` and the GAS weekly Google Drive job are deployed. The owner has manually run and verified a saved backup; `attendances` is included.
+- **P2, P5, and P6 are complete**: timeline pagination uses composite cursors, obsolete `getFeed` filter arguments were removed, and sheet-member refresh now runs after My Page/own-member rendering.
+- **Tab experience work is complete**: Next.js Cache Components preserves the three most recent routes. Timeline, schedule, My Page, and notes have in-session caches. Only the timeline is persisted in IndexedDB (per-user, five-minute TTL); logout clears it. Schedules, attendance, late notes, and personal notifications are never persisted there.
+- **Home attendance is local-only**: changing attendance does not call `router.refresh()` or reload the page; the home initial state uses one coherent skeleton.
+- **Remaining candidates**: sync scalability at 100 members, sync-failure/mismatched-sheet visibility, search (explicitly deferred by owner), generated database types, and sheet bulk-input workflows. Use this section and the actual code over older “unstarted” labels below.
+
 # まずこれを読む（エージェント共通の入口）
 
 > このファイルだけ読めば着手できるようにしてある。各リンク先は必要なときだけ開けばよい。
