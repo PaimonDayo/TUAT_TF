@@ -13,6 +13,15 @@ const SESSION_KEY = "tuat-splash-played";
 const HOLD_MS = 1600; // 最後のピンクの余韻
 const FADE_MS = 550;
 
+const SPLASH_IMAGES = [
+  "/splash/paper.webp",
+  "/splash/mono.webp",
+  "/splash/blue.webp",
+  "/splash/final-blue.webp",
+  "/splash/mix.webp",
+  "/splash/pink.webp",
+];
+
 const TAB_ROUTES = [
   "/home",
   "/schedule",
@@ -170,16 +179,11 @@ export default function SplashIntro() {
     const timers: ReturnType<typeof setTimeout>[] = [];
 
     const start = async () => {
-      // 画像とフォントを先に読み込んでから再生開始する（実機で
-      // 「序盤がガクつく」「最終カードで一瞬白くなる」のを防ぐ）。上限3秒。
-      const images = [
-        "/splash/paper.webp",
-        "/splash/mono.webp",
-        "/splash/blue.webp",
-        "/splash/final-blue.webp",
-        "/splash/mix.webp",
-        "/splash/pink.webp",
-      ].map(
+      // 画像とフォントが揃ってから再生開始する（実機で
+      // 「背景なしで始まる」「最終カードが右から読み込まれる」のを防ぐ）。
+      // ダウンロード自体は<link rel="preload">で初期HTML時点から走っている。
+      // 保険として8秒で打ち切り。
+      const images = SPLASH_IMAGES.map(
         (src) =>
           new Promise<void>((resolve) => {
             const img = new Image();
@@ -196,7 +200,7 @@ export default function SplashIntro() {
       try {
         await Promise.race([
           Promise.all([...images, fontReady]),
-          new Promise((resolve) => setTimeout(resolve, 3000)),
+          new Promise((resolve) => setTimeout(resolve, 8000)),
         ]);
       } catch {
         // 読み込み失敗でも演出自体は開始する
@@ -244,6 +248,17 @@ export default function SplashIntro() {
   if (done) return null;
   return (
     <>
+      {/* 初期HTMLの時点でダウンロードを開始させる（effect実行を待たない） */}
+      {SPLASH_IMAGES.map((src) => (
+        <link key={src} rel="preload" as="image" href={src} />
+      ))}
+      <link
+        rel="preload"
+        as="font"
+        type="font/woff2"
+        href="/splash/ArchivoBlack.woff2"
+        crossOrigin="anonymous"
+      />
       {/* @font-face は Shadow DOM 内では読み込まれないため document 側に置く */}
       <style>{`@font-face{font-family:'Archivo Black';src:url('/splash/ArchivoBlack.woff2') format('woff2');font-weight:400 900;font-display:swap}`}</style>
       {/* SafariはShadow DOM内の filter:url(#id) をdocument側で解決するため、
