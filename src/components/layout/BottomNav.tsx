@@ -34,7 +34,9 @@ export function BottomNav() {
     <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md border-t border-separator bg-card/90 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]">
       <div className="h-[52px] flex items-stretch">
         {ITEMS.map(({ href, label, icon: Icon }) => {
-          const active = pendingHref === href || pathname === href || pathname.startsWith(href + "/");
+          const active = pendingHref
+            ? pendingHref === href
+            : pathname === href || pathname.startsWith(href + "/");
           return (
             <Link
               key={href}
