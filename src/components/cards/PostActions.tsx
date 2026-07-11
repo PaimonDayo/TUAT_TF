@@ -97,7 +97,7 @@ export function PostActions({
 
   return (
     <>
-      <div className="flex select-none items-center gap-5 pt-1" onSelectStart={(event) => event.preventDefault()}>
+      <div className="flex select-none items-center gap-5 pt-1">
         <button
           onClick={handleLikeClick}
           onPointerDown={(event) => {
