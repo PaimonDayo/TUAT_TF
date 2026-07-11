@@ -166,32 +166,78 @@ export default function SplashIntro() {
       return;
     }
 
-    // ログイン済みかは Supabase の auth cookie の有無で判定（未ログインはゆっくり再生）
-    const loggedIn = /sb-[^=;]*-auth-token/.test(document.cookie);
-    const durMs = loggedIn ? 3400 : 5100;
-    host.style.setProperty("--d", `${durMs}ms`);
+    let cancelled = false;
+    const timers: ReturnType<typeof setTimeout>[] = [];
 
-    const root = host.shadowRoot ?? host.attachShadow({ mode: "open" });
-    root.innerHTML = MARKUP;
-
-    // 演出中に裏で各タブを先読み
-    for (const route of TAB_ROUTES) {
+    const start = async () => {
+      // 画像とフォントを先に読み込んでから再生開始する（実機で
+      // 「序盤がガクつく」「最終カードで一瞬白くなる」のを防ぐ）。上限3秒。
+      const images = [
+        "/splash/paper.webp",
+        "/splash/mono.webp",
+        "/splash/blue.webp",
+        "/splash/final-blue.webp",
+        "/splash/mix.webp",
+        "/splash/pink.webp",
+      ].map(
+        (src) =>
+          new Promise<void>((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+            img.src = src;
+          }),
+      );
+      // iOSには'Arial Black'が無いため、フォールバックの細い文字で始まらないよう
+      // document側<style>の@font-faceを明示的にロードしてから開始する。
+      const fontReady = document.fonts
+        .load('900 100px "Archivo Black"')
+        .catch(() => undefined);
       try {
-        router.prefetch(route);
+        await Promise.race([
+          Promise.all([...images, fontReady]),
+          new Promise((resolve) => setTimeout(resolve, 3000)),
+        ]);
       } catch {
-        // prefetch失敗は無視（演出を止めない）
+        // 読み込み失敗でも演出自体は開始する
       }
-    }
+      if (cancelled || !host.isConnected) return;
 
-    const fadeTimer = setTimeout(() => {
-      sessionStorage.setItem(SESSION_KEY, "1");
-      host.style.transition = `opacity ${FADE_MS}ms ease`;
-      host.style.opacity = "0";
-    }, durMs + HOLD_MS);
-    const doneTimer = setTimeout(() => setDone(true), durMs + HOLD_MS + FADE_MS);
+      // ログイン済みかは Supabase の auth cookie の有無で判定（未ログインはゆっくり再生）
+      const loggedIn = /sb-[^=;]*-auth-token/.test(document.cookie);
+      const durMs = loggedIn ? 3400 : 5100;
+      host.style.setProperty("--d", `${durMs}ms`);
+
+      const root = host.shadowRoot ?? host.attachShadow({ mode: "open" });
+      root.innerHTML = MARKUP;
+
+      // 各タブの先読みは再生開始直後の負荷を避け、少し遅らせて分散実行
+      TAB_ROUTES.forEach((route, i) => {
+        timers.push(
+          setTimeout(() => {
+            try {
+              router.prefetch(route);
+            } catch {
+              // prefetch失敗は無視（演出を止めない）
+            }
+          }, 800 + i * 150),
+        );
+      });
+
+      timers.push(
+        setTimeout(() => {
+          sessionStorage.setItem(SESSION_KEY, "1");
+          host.style.transition = `opacity ${FADE_MS}ms ease`;
+          host.style.opacity = "0";
+        }, durMs + HOLD_MS),
+      );
+      timers.push(setTimeout(() => setDone(true), durMs + HOLD_MS + FADE_MS));
+    };
+
+    void start();
     return () => {
-      clearTimeout(fadeTimer);
-      clearTimeout(doneTimer);
+      cancelled = true;
+      timers.forEach(clearTimeout);
     };
   }, [router]);
 
@@ -200,6 +246,26 @@ export default function SplashIntro() {
     <>
       {/* @font-face は Shadow DOM 内では読み込まれないため document 側に置く */}
       <style>{`@font-face{font-family:'Archivo Black';src:url('/splash/ArchivoBlack.woff2') format('woff2');font-weight:400 900;font-display:swap}`}</style>
+      {/* SafariはShadow DOM内の filter:url(#id) をdocument側で解決するため、
+          文字のラフエッジ用フィルタをlight DOMにも複製しておく（Chromeはshadow側を使う） */}
+      <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden="true">
+        <filter id="roughG" x="-8%" y="-8%" width="116%" height="116%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.004 0.007" numOctaves="2" seed="5" result="n1" />
+          <feDisplacementMap in="SourceGraphic" in2="n1" scale="16" result="d1" />
+          <feTurbulence type="fractalNoise" baseFrequency="0.06 0.08" numOctaves="2" seed="9" result="n2" />
+          <feDisplacementMap in="d1" in2="n2" scale="6" />
+        </filter>
+        <filter id="roughW" x="-10%" y="-10%" width="120%" height="120%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.011 0.018" numOctaves="2" seed="7" result="n1" />
+          <feDisplacementMap in="SourceGraphic" in2="n1" scale="9" result="d1" />
+          <feTurbulence type="fractalNoise" baseFrequency="0.09 0.11" numOctaves="2" seed="3" result="n2" />
+          <feDisplacementMap in="d1" in2="n2" scale="4" />
+        </filter>
+        <filter id="roughS" x="-12%" y="-12%" width="124%" height="124%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.08 0.12" numOctaves="2" seed="5" result="n1" />
+          <feDisplacementMap in="SourceGraphic" in2="n1" scale="2.2" />
+        </filter>
+      </svg>
       <div
         ref={hostRef}
         aria-hidden="true"

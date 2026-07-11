@@ -10,7 +10,10 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: APP_NAME,
-    statusBarStyle: "default",
+    // black-translucent: ステータスバーをコンテンツに重ねる（起動スプラッシュが
+    // 時計・バッテリー領域まで描画される）。ヘッダー類は既に
+    // env(safe-area-inset-top) でパディング済みなのでレイアウトは崩れない。
+    statusBarStyle: "black-translucent",
   },
 };
 
