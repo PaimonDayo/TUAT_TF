@@ -97,15 +97,19 @@ export function PostActions({
 
   return (
     <>
-      <div className="flex items-center gap-5 pt-1">
+      <div className="flex select-none items-center gap-5 pt-1" onSelectStart={(event) => event.preventDefault()}>
         <button
           onClick={handleLikeClick}
-          onPointerDown={startPress}
+          onPointerDown={(event) => {
+            event.preventDefault();
+            startPress();
+          }}
           onPointerUp={cancelPress}
           onPointerLeave={cancelPress}
+          onPointerCancel={cancelPress}
           onContextMenu={(e) => e.preventDefault()}
           className={cn(
-            "flex select-none items-center gap-1.5 text-[13px] active:opacity-50 transition-active",
+            "flex select-none touch-manipulation items-center gap-1.5 text-[13px] active:opacity-50 transition-active [-webkit-touch-callout:none]",
             liked ? "text-danger" : "text-muted",
           )}
         >
