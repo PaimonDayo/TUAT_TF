@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import styles from "./SplashIntro.module.css";
 
 const SESSION_KEY = "tuat-splash-played";
-const FINISH_AFTER_MS = 3900;
-const FADE_MS = 320;
+const FINISH_AFTER_MS = 5550;
+const FADE_MS = 80;
 
 const TAB_ROUTES = [
   "/home", "/schedule", "/timeline", "/notes", "/mypage",
