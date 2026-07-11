@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { clearPersistedQueries } from "@/lib/client/query-persistence";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
@@ -78,6 +79,7 @@ export function ProfileEditForm({
   async function signOut() {
     setSigningOut(true);
     const supabase = createClient();
+    await clearPersistedQueries();
     await supabase.auth.signOut();
     window.location.assign("/login");
   }
