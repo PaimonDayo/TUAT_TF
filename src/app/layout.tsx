@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { APP_NAME, APP_DESCRIPTION } from "@/lib/app";
+import SplashIntro from "@/components/SplashIntro";
 
 export const metadata: Metadata = {
   title: APP_NAME,
@@ -31,7 +32,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ja" className="h-full">
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        {children}
+        <SplashIntro />
+      </body>
     </html>
   );
 }
