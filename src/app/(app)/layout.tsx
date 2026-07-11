@@ -5,11 +5,13 @@ import { SessionKeepAlive } from "@/components/layout/SessionKeepAlive";
 import { VersionWatcher } from "@/components/features/VersionWatcher";
 import { PullToRefresh } from "@/components/layout/PullToRefresh";
 import { ToastProvider } from "@/components/ui/toast";
+import { AppQueryProvider } from "@/components/providers/QueryProvider";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { permissionsOf } from "@/lib/permissions";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
+    <AppQueryProvider>
     <ToastProvider>
       <div className="mx-auto min-h-dvh w-full max-w-md overflow-x-hidden bg-bg pb-[calc(52px+env(safe-area-inset-bottom))]">
         <SessionKeepAlive />
@@ -20,6 +22,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <VersionWatcher />
       </div>
     </ToastProvider>
+    </AppQueryProvider>
   );
 }
 

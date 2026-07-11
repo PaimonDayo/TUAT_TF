@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { UserCheck, List } from "lucide-react";
 import { RecordCard } from "@/components/cards/RecordCard";
 import { TweetCard } from "@/components/cards/TweetCard";
@@ -16,6 +17,10 @@ import { useFeedDisplay } from "@/hooks/use-feed-display";
 import type { CommentAuthor, FeedItem } from "@/types";
 
 const PAGE = 30;
+type FeedCursor = {
+  record?: { createdAt: string; id: string };
+  tweet?: { createdAt: string; id: string };
+} | null;
 
 /**
  * タイムライン本体。ブロック・学年・お気に入りの絞り込みはサーバー往復せず
@@ -34,9 +39,23 @@ export function TimelineView({
   /** 簡易表示の初期値（サーバーが cookie から復元して渡す。詳細→簡易のフラッシュ防止） */
   initialCompact?: boolean;
 }) {
-  const [items, setItems] = useState(initialItems);
-  const [loading, setLoading] = useState(false);
-  const [ended, setEnded] = useState(initialItems.length < PAGE);
+  const feedQuery = useInfiniteQuery({
+    queryKey: ["timeline", currentUser.id],
+    queryFn: ({ pageParam }) => loadFeed(pageParam ?? {}, PAGE),
+    initialPageParam: null as FeedCursor,
+    initialData: { pages: [initialItems], pageParams: [null as FeedCursor] },
+    getNextPageParam: (lastPage): FeedCursor | undefined => {
+      if (lastPage.length < PAGE) return undefined;
+      const lastRecord = lastPage.findLast((item) => item.kind === "record");
+      const lastTweet = lastPage.findLast((item) => item.kind === "tweet");
+      if (!lastRecord && !lastTweet) return undefined;
+      return {
+        record: lastRecord ? { createdAt: lastRecord.created_at, id: lastRecord.id } : undefined,
+        tweet: lastTweet ? { createdAt: lastTweet.created_at, id: lastTweet.id } : undefined,
+      };
+    },
+  });
+  const items = feedQuery.data.pages.flat();
 
   const [block, setBlock] = useState<string>("all");
   const [grades, setGrades] = useState<string[]>([]);
@@ -63,25 +82,7 @@ export function TimelineView({
     });
   }, [items, block, grades, favOnly, favSet]);
 
-  async function loadMore() {
-    const lastRecord = items.findLast((item) => item.kind === "record");
-    const lastTweet = items.findLast((item) => item.kind === "tweet");
-    if (!lastRecord && !lastTweet) return;
-    setLoading(true);
-    try {
-      const res = await loadFeed({
-        record: lastRecord ? { createdAt: lastRecord.created_at, id: lastRecord.id } : undefined,
-        tweet: lastTweet ? { createdAt: lastTweet.created_at, id: lastTweet.id } : undefined,
-      }, PAGE);
-      setItems((current) => {
-        const seen = new Set(current.map((item) => `${item.kind}-${item.id}`));
-        return [...current, ...res.filter((item) => !seen.has(`${item.kind}-${item.id}`))];
-      });
-      setEnded(res.length < PAGE);
-    } finally {
-      setLoading(false);
-    }
-  }
+  function loadMore() { void feedQuery.fetchNextPage(); }
 
   return (
     <>
@@ -147,10 +148,10 @@ export function TimelineView({
               );
             })}
 
-            {!ended && (
+            {feedQuery.hasNextPage && (
               <div className="pt-1 pb-2">
-                <Button variant="outline" size="lg" onClick={loadMore} disabled={loading}>
-                  {loading ? "読み込み中…" : "もっと見る"}
+                <Button variant="outline" size="lg" onClick={loadMore} disabled={feedQuery.isFetchingNextPage}>
+                  {feedQuery.isFetchingNextPage ? "読み込み中…" : "もっと見る"}
                 </Button>
               </div>
             )}
