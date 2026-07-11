@@ -280,6 +280,40 @@ export async function getUpcomingSchedules(
   return filterSchedulesForViewer(data ?? [], viewerBlocks, canManage);
 }
 
+/** 予定一覧用。出欠を同じクエリに含め、一覧初期表示の往復を減らす。 */
+export async function getUpcomingSchedulesWithAttendances(
+  viewerBlocks: Block[],
+  canManage: boolean,
+) {
+  const supabase = await createClient();
+  const today = jstToday();
+  const { data } = await supabase
+    .from("practice_schedules")
+    .select(`
+      *,
+      menus:practice_menus(
+        *,
+        author:profiles!author_id(id, display_name),
+        targets:practice_menu_targets(
+          menu_id,
+          user_id,
+          profile:profiles!user_id(id, display_name, avatar_url, blocks, grade)
+        )
+      ),
+      attendances(
+        schedule_id,
+        user_id,
+        status,
+        is_late,
+        late_note,
+        profile:profiles!user_id(id, display_name, avatar_url, blocks, grade)
+      )
+    `)
+    .gte("schedule_date", today)
+    .order("schedule_date", { ascending: true });
+  return filterSchedulesForViewer(data ?? [], viewerBlocks, canManage);
+}
+
 /** お知らせ一覧（直近200件。無期限の全件取得はしない） */
 export async function getNotices(userId: string): Promise<NoticeWithReactions[]> {
   const supabase = await createClient();
