@@ -95,7 +95,7 @@ export default function SplashIntro() {
         <div className={styles.flash} />
       </main>
       <div className={styles.absorbColors}>
-        <i /><i /><i /><i /><i />
+        <i />
       </div>
     </div>
   );
