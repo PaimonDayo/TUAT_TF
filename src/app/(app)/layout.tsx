@@ -4,6 +4,7 @@ import { FAB } from "@/components/layout/FAB";
 import { SessionKeepAlive } from "@/components/layout/SessionKeepAlive";
 import { VersionWatcher } from "@/components/features/VersionWatcher";
 import { FreezeProbe } from "@/components/features/FreezeProbe";
+import { PullToRefresh } from "@/components/layout/PullToRefresh";
 import { ToastProvider } from "@/components/ui/toast";
 import { AppQueryProvider } from "@/components/providers/QueryProvider";
 import { getCurrentProfile } from "@/lib/supabase/auth";
@@ -15,6 +16,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <ToastProvider>
       <div className="mx-auto min-h-dvh w-full max-w-md overflow-x-hidden bg-bg pb-[calc(52px+env(safe-area-inset-bottom))]">
         <SessionKeepAlive />
+        <PullToRefresh />
         {children}
         <Suspense fallback={null}><AuthenticatedFab /></Suspense>
         <Suspense fallback={null}><BottomNav /></Suspense>

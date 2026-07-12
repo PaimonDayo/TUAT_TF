@@ -48,10 +48,10 @@ export function PullToRefresh() {
     function touchStart(event: TouchEvent) {
       if (refreshingRef.current || window.scrollY > 0 || event.touches.length !== 1) return;
       const target = event.target as HTMLElement | null;
-      if (target?.closest('[role="dialog"], input, textarea, select, [data-no-pull-refresh]')) return;
+      if (target?.closest('a, button, [role="button"], [role="dialog"], input, textarea, select, [data-no-pull-refresh]')) return;
       const touch = event.touches[0];
       start.current = { x: touch.clientX, y: touch.clientY };
-      window.addEventListener("touchmove", touchMove, { passive: false });
+      window.addEventListener("touchmove", touchMove, { passive: true });
       window.addEventListener("touchend", touchEnd, { passive: true });
       window.addEventListener("touchcancel", cancel, { passive: true });
     }
@@ -67,7 +67,6 @@ export function PullToRefresh() {
         cancel();
         return;
       }
-      event.preventDefault();
       const damped = Math.min(MAX_PULL, deltaY * 0.52);
       distanceRef.current = damped;
       setDistance(damped);
