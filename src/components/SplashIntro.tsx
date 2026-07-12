@@ -41,15 +41,6 @@ export default function SplashIntro() {
     } catch {
       // Continue even when persistence is unavailable.
     }
-    const endLaunch = () => {
-      try {
-        sessionStorage.removeItem(SESSION_KEY);
-      } catch {
-        // Nothing to clear when storage is unavailable.
-      }
-    };
-    window.addEventListener("pagehide", endLaunch);
-
     const prefetchTimer = window.setTimeout(() => {
       TAB_ROUTES.forEach((route, index) => {
         window.setTimeout(() => router.prefetch(route), index * 130);
@@ -62,7 +53,6 @@ export default function SplashIntro() {
     return () => {
       window.clearTimeout(prefetchTimer);
       window.clearTimeout(finishTimer);
-      window.removeEventListener("pagehide", endLaunch);
     };
   }, [router]);
 
