@@ -8,11 +8,19 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 - **Weekly backup (former task 13) is complete**: `/api/backup` and the GAS weekly Google Drive job are deployed. The owner has manually run and verified a saved backup; `attendances` is included.
 - **P2, P5, and P6 are complete**: timeline pagination uses composite cursors, obsolete `getFeed` filter arguments were removed, and sheet-member refresh now runs after My Page/own-member rendering.
-- **Tab experience work is NOT complete**: iOS PWAで別タブから`/home`へ移動すると毎回フリーズする重大障害が未解決。タイムラインのIndexedDB永続化は`c5786a9`で停止済み。下記の重大インシデント記録を正とする。
+- **Tab freeze incident is RESOLVED (2026-07-12)**: 原因は`cacheComponents`。b3698c5で無効化しオーナー実機確認済み。タイムラインのIndexedDB永続化は`c5786a9`で停止したまま（フリーズとは無関係と判明したが、再導入は必要になったときに）。詳細は下の解決済みインシデント節。
 - **Home attendance is local-only**: changing attendance does not call `router.refresh()` or reload the page; the home initial state uses one coherent skeleton.
 - **Remaining candidates**: sync scalability at 100 members, sync-failure/mismatched-sheet visibility, search (explicitly deferred by owner), generated database types, and sheet bulk-input workflows. Use this section and the actual code over older “unstarted” labels below.
 
-## 【重大・未解決 2026-07-12】iOS PWAのホーム遷移フリーズ
+## 【解決済み 2026-07-12】iOS PWAのホーム遷移フリーズ → 原因は cacheComponents
+
+**b3698c5（`next.config.ts`の`cacheComponents: true`無効化）で解消。オーナーが実機で「問題ない」と確認済み（2026-07-12）。**
+- 教訓: 有効化（60d6175, 07-12 00:14）と同日に全症状（他タブ→ホーム毎回フリーズ・予定/タイムラインのフリーズ・リロード時ガクつき・もっさり）が始まり、無効化で消えた。**`cacheComponents`と`experimental.staleTimes`は再導入禁止**（少なくともNext 16.2.9 + iOS PWAの組み合わせでは危険）。
+- タブ切替速度は ①Vercel関数の東京リージョン固定（vercel.json、削除禁止） ②各画面のreact-queryセッションキャッシュ ③loading.tsx で担保。
+- 調査資産: Tab Lab（/tab-lab、システム管理者のみ導線）とFreezeProbe（フリーズ痕跡の記録・トースト）は当面残す。
+- 以下は当時の調査記録（履歴として保持）:
+
+### （履歴）調査経緯
 
 - **現在の実機症状**: 予定など別タブからホームへ移動しようとすると毎回固まり、ホームへ戻れない。フリーズ、もっさり、スクロール時の構造崩れ、リロード時の配置ガクつきも報告あり。**解消したと扱わないこと。**
 - `c5786a9`: タイムラインのIndexedDB永続化を停止。**ホーム遷移フリーズは解消せず**、IDB主因仮説は外れた。
