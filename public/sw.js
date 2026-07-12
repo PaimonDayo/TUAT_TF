@@ -1,5 +1,5 @@
 const CACHE_NAME = 'tuat-tf-shell-v1';
-const APP_SHELL = ['/', '/login', '/icon.svg'];
+const APP_SHELL = ['/', '/login', '/branding/summer-icon-192.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));

@@ -13,10 +13,9 @@ export default function manifest(): MetadataRoute.Manifest {
     lang: "ja",
     orientation: "portrait",
     icons: [
-      { src: "/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
-      { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-      { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-      { src: "/icon-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      { src: "/branding/summer-icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/branding/summer-icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/branding/summer-icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };
 }

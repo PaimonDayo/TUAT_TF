@@ -337,3 +337,4 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 ### Worktree state at handoff
 
 - Clean. Codex briefly created an untracked draft `UpcomingScheduleCard.tsx`, but removed it before this handoff because it was incomplete. No implementation from the queued work should be assumed present.
+- 2026-07-13 / Codex / 季節別ブランド画像の夏版を実装。オーナー提供の夏TFアイコンを原本として、PWA 192/512、Apple 180、maskable 512（安全領域版）、favicon ICO/32、1024原本、OG/Twitter 1200x630を`public/branding/summer-*`へ生成。manifestとroot metadataを季節名付きURLへ接続し、OG/Twitter large image・apple-touch-icon・faviconを設定。SW事前キャッシュも夏アイコンへ変更。`npx tsc --noEmit`/`npm run build`成功。共有カードは夏絵の具背景＋左アイコン＋Archivo BlackのTUAT T&F。実機ホーム画面再追加およびSNSキャッシュ更新はオーナー確認待ち。
