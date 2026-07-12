@@ -13,7 +13,7 @@ export function HomeSkeleton() {
 }
 
 export function ScheduleSkeleton() {
-  return <div className="space-y-4 pb-6"><Title action /><div className="space-y-4 px-4"><div className="flex justify-between"><Skeleton className="h-8 w-8 rounded-full" /><Skeleton className="h-5 w-32" /><Skeleton className="h-8 w-8 rounded-full" /></div><Skeleton className="h-9 w-full rounded-xl" />{[0, 1, 2, 3].map((i) => <Card key={i} lines={i === 0 ? 3 : 1} />)}</div></div>;
+  return <div className="space-y-4 pb-6"><Title action /><div className="px-4 pb-3 pt-1"><Skeleton className="h-9 w-full rounded-xl" /></div><div className="space-y-3 px-4 pt-1"><Skeleton className="h-3 w-20" />{[0, 1, 2, 3].map((i) => <Card key={i} lines={i === 0 ? 3 : 1} />)}</div></div>;
 }
 
 export function FeedSkeleton() {
