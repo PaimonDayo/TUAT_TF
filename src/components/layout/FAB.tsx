@@ -30,7 +30,7 @@ export type FabPermissions = {
   manageMembers: boolean;
 };
 
-type DirectForm = "schedule" | "notice" | "article" | "folder" | null;
+type DirectForm = "schedule" | "notice" | "article" | "folder" | "subfolder" | null;
 
 type FabProps = {
   userId: string;
@@ -75,6 +75,11 @@ function ContextualFAB({
   const [tweetOpen, setTweetOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState(false);
   const [canEditArticles, setCanEditArticles] = useState(false);
+  const [folderInfo, setFolderInfo] = useState<{
+    scope: "shared" | "personal";
+    depth: number;
+    canManage: boolean;
+  } | null>(null);
   const [directForm, setDirectForm] = useState<DirectForm>(() => {
     if (autoOpen && pathname === "/schedule" && can.createSchedule) {
       return "schedule";
@@ -103,10 +108,37 @@ function ContextualFAB({
       .then(({ data }) => {
         if (active) setCanEditArticles(data === true);
       });
+    // サブフォルダ作成メニュー用: フォルダのscope・深さ（3階層まで）・管理可否
+    void (async () => {
+      const { data: folder } = await supabase
+        .from("notes")
+        .select("id, scope, parent_id, author_id")
+        .eq("id", noteId)
+        .maybeSingle();
+      if (!active || !folder) return;
+      let depth = 1;
+      let parentId = (folder as { parent_id: string | null }).parent_id;
+      while (parentId && depth < 3) {
+        depth++;
+        const { data: parent } = await supabase
+          .from("notes")
+          .select("parent_id")
+          .eq("id", parentId)
+          .maybeSingle();
+        parentId = (parent as { parent_id: string | null } | null)?.parent_id ?? null;
+      }
+      if (!active) return;
+      setFolderInfo({
+        scope: (folder as { scope: "shared" | "personal" }).scope,
+        depth,
+        canManage:
+          (folder as { author_id: string }).author_id === userId || can.manageMembers,
+      });
+    })();
     return () => {
       active = false;
     };
-  }, [noteId]);
+  }, [noteId, userId, can.manageMembers]);
 
   function handleMainAction() {
     if (isFeed) {
@@ -116,7 +148,14 @@ function ContextualFAB({
     if (isSchedule) setDirectForm("schedule");
     if (isNotice) setDirectForm("notice");
     if (isNotesRoot) setDirectForm("folder");
-    if (isNoteFolder) setDirectForm("article");
+    if (isNoteFolder) {
+      // サブフォルダを作れる立場なら2択メニュー、そうでなければ従来どおり記事作成へ直行
+      if (folderInfo?.canManage && folderInfo.depth < 3) {
+        setSpeedDialOpen((open) => !open);
+      } else {
+        setDirectForm("article");
+      }
+    }
   }
 
   function openFeedForm(setOpen: (open: boolean) => void) {
@@ -141,11 +180,11 @@ function ContextualFAB({
         ? "お知らせを作成"
         : isNotesRoot
           ? "フォルダを作成"
-          : "このフォルダに記事を作成";
+          : "このフォルダに作成";
 
   return (
     <>
-      {isFeed && speedDialOpen && (
+      {(isFeed || isNoteFolder) && speedDialOpen && (
         <button
           type="button"
           aria-label="作成メニューを閉じる"
@@ -175,14 +214,35 @@ function ContextualFAB({
           </div>
         )}
 
+        {isNoteFolder && speedDialOpen && (
+          <div className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-2xl border border-separator bg-card shadow-xl">
+            <SpeedDialAction
+              icon={<NotebookPen size={19} />}
+              label="記事を作成"
+              onClick={() => {
+                setSpeedDialOpen(false);
+                setDirectForm("article");
+              }}
+            />
+            <SpeedDialAction
+              icon={<FolderPlus size={19} />}
+              label="サブフォルダを作成"
+              onClick={() => {
+                setSpeedDialOpen(false);
+                setDirectForm("subfolder");
+              }}
+            />
+          </div>
+        )}
+
         <button
           type="button"
           onClick={handleMainAction}
           aria-label={label}
-          aria-expanded={isFeed ? speedDialOpen : undefined}
+          aria-expanded={isFeed || isNoteFolder ? speedDialOpen : undefined}
           className="pointer-events-auto absolute right-5 bottom-[calc(74px+env(safe-area-inset-bottom))] flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-lg shadow-accent/30 active:scale-95 transition-active"
         >
-          {isFeed ? (
+          {isFeed || (isNoteFolder && folderInfo?.canManage && folderInfo.depth < 3) ? (
             <Plus
               size={28}
               strokeWidth={2.5}
@@ -197,6 +257,7 @@ function ContextualFAB({
               {isNotice && <BellPlus size={25} />}
               {isNotesRoot && <FolderPlus size={25} />}
               {isNoteFolder && <NotebookPen size={25} />}
+              {/* サブフォルダを作れる場合は上のPlus分岐が使われる */}
             </span>
           )}
         </button>
@@ -250,6 +311,22 @@ function ContextualFAB({
           isAdmin={can.manageMembers}
           onDone={closeDirectForm}
         />
+      </FormModal>
+
+      <FormModal
+        open={directForm === "subfolder"}
+        onOpenChange={(open) => !open && closeDirectForm()}
+        title="サブフォルダを作成"
+      >
+        {noteId && folderInfo && (
+          <NoteComposer
+            currentUser={currentUser}
+            isAdmin={can.manageMembers}
+            initialScope={folderInfo.scope}
+            parentId={noteId}
+            onDone={closeDirectForm}
+          />
+        )}
       </FormModal>
 
       <FormModal
