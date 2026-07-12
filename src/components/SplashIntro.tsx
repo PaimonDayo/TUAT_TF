@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./SplashIntro.module.css";
 
-const SESSION_KEY = "tuat-splash-played";
+const STORAGE_KEY = "tuat-splash-played";
 const FINISH_AFTER_MS = 4380;
 const FADE_MS = 80;
 
@@ -18,17 +18,26 @@ export default function SplashIntro() {
   const [done, setDone] = useState(false);
 
   useEffect(() => {
+    let alreadyPlayed = false;
+    try {
+      alreadyPlayed = localStorage.getItem(STORAGE_KEY) === "1";
+    } catch {
+      // Storage may be unavailable in a restricted browser context.
+    }
     if (
-      sessionStorage.getItem(SESSION_KEY) ||
+      alreadyPlayed ||
       window.matchMedia("(prefers-reduced-motion: reduce)").matches
     ) {
       setDone(true);
       return;
     }
 
-    const themeColor = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-    const previousThemeColor = themeColor?.content;
-    if (themeColor) themeColor.content = "#101216";
+    // Record immediately so reloading during playback does not restart it.
+    try {
+      localStorage.setItem(STORAGE_KEY, "1");
+    } catch {
+      // Continue even when persistence is unavailable.
+    }
 
     const prefetchTimer = window.setTimeout(() => {
       TAB_ROUTES.forEach((route, index) => {
@@ -36,15 +45,12 @@ export default function SplashIntro() {
       });
     }, 60);
     const finishTimer = window.setTimeout(() => {
-      sessionStorage.setItem(SESSION_KEY, "1");
-      if (themeColor && previousThemeColor) themeColor.content = previousThemeColor;
       window.setTimeout(() => setDone(true), FADE_MS);
     }, FINISH_AFTER_MS);
 
     return () => {
       window.clearTimeout(prefetchTimer);
       window.clearTimeout(finishTimer);
-      if (themeColor && previousThemeColor) themeColor.content = previousThemeColor;
     };
   }, [router]);
 
@@ -53,7 +59,7 @@ export default function SplashIntro() {
   return (
     <div
       aria-hidden="true"
-      className={styles.overlay}
+      className={`${styles.overlay} tuat-splash-root`}
       style={{ position: "fixed", inset: 0, zIndex: 9999, overflow: "hidden", background: "#f5f4ee" }}
     >
       <main className={styles.stage} style={{ width: "100%", height: "100%", background: "#f5f4ee" }}>

@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     // black-translucent: ステータスバーをコンテンツに重ねる（起動スプラッシュが
     // 時計・バッテリー領域まで描画される）。ヘッダー類は既に
     // env(safe-area-inset-top) でパディング済みなのでレイアウトは崩れない。
-    statusBarStyle: "black-translucent",
+    statusBarStyle: "default",
   },
 };
 
@@ -35,6 +35,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ja" className="h-full">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(localStorage.getItem("tuat-splash-played")==="1"||sessionStorage.getItem("tuat-splash-played")==="1"){localStorage.setItem("tuat-splash-played","1");document.documentElement.dataset.tuatSplashPlayed="1"}}catch(e){}`,
+          }}
+        />
+        <style>{`html[data-tuat-splash-played="1"] .tuat-splash-root{display:none!important}`}</style>
+      </head>
       <body className="min-h-full">
         {children}
         <SplashIntro />
