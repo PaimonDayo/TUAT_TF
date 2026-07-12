@@ -64,12 +64,15 @@ type BuiltinKey =
   | "menu_text"
   | "focus_text";
 
-const BUILTINS: { key: BuiltinKey; keywords: string[]; numeric: boolean }[] = [
+const BUILTINS: { key: BuiltinKey; keywords: string[]; numeric: boolean; integer?: boolean }[] = [
   { key: "dist_low", keywords: ["低強度"], numeric: true },
   { key: "dist_mid", keywords: ["中強度"], numeric: true },
   { key: "dist_high", keywords: ["高強度"], numeric: true },
   { key: "dist_speed", keywords: ["解糖系"], numeric: true },
-  { key: "strides", keywords: ["流し"], numeric: true },
+  // strides はDBがINT型。シートに小数（例: 0.3）が入っていても丸めて取り込み、
+  // insert全体を巻き込んで失敗させない（2026-07-09〜12、この型不一致で毎時同期の
+  // 新規取込が3日間全滅した実例あり）。
+  { key: "strides", keywords: ["流し"], numeric: true, integer: true },
   { key: "strength_text", keywords: ["補強"], numeric: false },
   { key: "result_text", keywords: ["結果", "ペース", "タイム"], numeric: false },
   { key: "memo", keywords: ["感想", "コメント"], numeric: false },
@@ -268,16 +271,16 @@ async function fetchMemberRaw(
 
 // ── マッピング解決：このシートの見出しから「アプリ項目→実際の見出し名」を作る ──
 type FieldMap = {
-  builtin: Map<BuiltinKey, { header: string; numeric: boolean }>;
+  builtin: Map<BuiltinKey, { header: string; numeric: boolean; integer?: boolean }>;
   custom: Map<string, { header: string; type: "text" | "number" }>; // key -> header
 };
 
 function resolveFieldMap(header: string[], fields: RecordFieldDef[]): FieldMap {
   const normHeaders = header.map((h) => ({ raw: h, n: norm(h) }));
-  const builtin = new Map<BuiltinKey, { header: string; numeric: boolean }>();
+  const builtin = new Map<BuiltinKey, { header: string; numeric: boolean; integer?: boolean }>();
   for (const b of BUILTINS) {
     const hit = normHeaders.find((h) => b.keywords.some((k) => h.n.includes(norm(k))));
-    if (hit) builtin.set(b.key, { header: hit.raw, numeric: b.numeric });
+    if (hit) builtin.set(b.key, { header: hit.raw, numeric: b.numeric, integer: b.integer });
   }
   const custom = new Map<string, { header: string; type: "text" | "number" }>();
   for (const f of fields) {
@@ -326,7 +329,9 @@ function sheetToAppValues(map: FieldMap, cells: Record<string, string>) {
   const builtin: Record<string, number | string | null> = {};
   for (const [key, m] of map.builtin) {
     builtin[key] = m.numeric
-      ? Math.round(parseSheetNum(cells[m.header]) * 10) / 10
+      ? m.integer
+        ? Math.round(parseSheetNum(cells[m.header]))
+        : Math.round(parseSheetNum(cells[m.header]) * 10) / 10
       : txt(cells[m.header]);
   }
   const custom: Record<string, string | number | null> = {};
@@ -710,6 +715,7 @@ export async function runSheetSync(
   if (linked.length === 0) return result;
 
   const sheetToProfile = new Map(linked.map((p) => [p.sheet_name.trim(), p]));
+  const nameById = new Map(linked.map((p) => [p.id, p.sheet_name.trim()]));
   const members = await fetchAllRaw();
   const memberByName = new Map(members.map((m) => [m.name.trim(), m]));
 
@@ -816,8 +822,22 @@ export async function runSheetSync(
   if (inserts.length > 0) {
     const { error } = await admin.from("practice_records").insert(inserts);
     if (error) {
-      result.failedMembers.push({ member: "(取込一括)", reason: error.message });
+      // 一括insertが失敗したら1件ずつ入れ直し、不正な行（型不一致等）だけを
+      // スキップして残りを取り込む。失敗行は部員名・日付つきで記録する
+      // （2026-07-09〜12、「流し」列の小数1セルで全部員の新規取込が3日間
+      // 全滅・status=successのため誰も気づけなかった事故の再発防止）。
       result.inserted = 0;
+      for (const row of inserts) {
+        const { error: rowErr } = await admin.from("practice_records").insert(row);
+        if (rowErr) {
+          result.failedMembers.push({
+            member: nameById.get(row.user_id as string) ?? String(row.user_id),
+            reason: `${row.recorded_date}: ${rowErr.message}`,
+          });
+        } else {
+          result.inserted++;
+        }
+      }
     }
   }
   for (const u of updates) {
