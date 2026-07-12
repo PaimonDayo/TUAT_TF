@@ -2,10 +2,10 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
-export type TabLabMode = "empty" | "light" | "home";
+export type TabLabMode = "empty" | "light" | "home" | "real";
 
 type TabKey = "home" | "schedule" | "timeline" | "notes" | "mypage";
-type Sample = { tab: TabKey; ms: number; at: number };
+type Sample = { tab: TabKey; ms: number; nodes: number; at: number };
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "home", label: "ホーム" },
@@ -19,14 +19,17 @@ const MODE_LABELS: Record<TabLabMode, string> = {
   empty: "A: 空画面",
   light: "B: 軽量DOM",
   home: "C: 現ホーム",
+  real: "D: 実予定⇔ホーム",
 };
 
 export function TabNavigationLab({
   mode,
   homeContent,
+  scheduleContent,
 }: {
   mode: TabLabMode;
   homeContent?: ReactNode;
+  scheduleContent?: ReactNode;
 }) {
   const [active, setActive] = useState<TabKey>("schedule");
   const [samples, setSamples] = useState<Sample[]>([]);
@@ -55,6 +58,7 @@ export function TabNavigationLab({
         const sample = {
           tab: active,
           ms: Math.round((performance.now() - pending.startedAt) * 10) / 10,
+          nodes: viewport.current?.querySelectorAll("*").length ?? 0,
           at: Date.now(),
         } satisfies Sample;
         setSamples((current) => [...current.slice(-99), sample]);
@@ -90,6 +94,8 @@ export function TabNavigationLab({
   }, []);
 
   const worst = samples.reduce((value, sample) => Math.max(value, sample.ms), 0);
+  const currentNodes = samples.at(-1)?.nodes ?? 0;
+  const maxNodes = samples.reduce((value, sample) => Math.max(value, sample.nodes), 0);
   const average = samples.length
     ? samples.reduce((sum, sample) => sum + sample.ms, 0) / samples.length
     : 0;
@@ -102,13 +108,15 @@ export function TabNavigationLab({
         averageMs: Math.round(average * 10) / 10,
         worstMs: worst,
         maxEventLoopGapMs: maxGap,
+        currentDomNodes: currentNodes,
+        maxDomNodes: maxNodes,
         recent: samples.slice(-20),
         updatedAt: Date.now(),
       }));
     } catch {
       // 計測保存の失敗はラボ操作を妨げない。
     }
-  }, [average, maxGap, mode, samples, worst]);
+  }, [average, currentNodes, maxGap, maxNodes, mode, samples, worst]);
 
   function selectTab(tab: TabKey, startedAt: number) {
     if (tab === active) return;
@@ -161,8 +169,8 @@ export function TabNavigationLab({
           </div>
           <a href="/home" className="shrink-0 rounded-lg bg-bg px-3 py-2 font-semibold text-accent">終了</a>
         </div>
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          {(["empty", "light", "home"] as TabLabMode[]).map((item) => (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {(["empty", "light", "home", "real"] as TabLabMode[]).map((item) => (
             <a
               key={item}
               href={`/tab-lab?mode=${item}`}
@@ -172,11 +180,12 @@ export function TabNavigationLab({
             </a>
           ))}
         </div>
-        <div className="mt-3 grid grid-cols-4 gap-2 text-center tabular-nums">
+        <div className="mt-3 grid grid-cols-5 gap-2 text-center tabular-nums">
           <Metric label="切替" value={`${samples.length}`} />
           <Metric label="平均" value={`${Math.round(average)}ms`} />
           <Metric label="最悪" value={`${Math.round(worst)}ms`} />
           <Metric label="停止" value={`${maxGap}ms`} />
+          <Metric label="DOM" value={`${currentNodes}`} />
         </div>
         <div className="mt-2 flex gap-2">
           <button onClick={resetMetrics} className="flex-1 rounded-lg border border-separator px-3 py-2 font-semibold">計測リセット</button>
@@ -188,6 +197,13 @@ export function TabNavigationLab({
         {mode === "empty" && <EmptyPanel tab={active} />}
         {mode === "light" && <LightPanel tab={active} />}
         {mode === "home" && (active === "home" ? homeContent : <EmptyPanel tab={active} />)}
+        {mode === "real" && (
+          active === "home"
+            ? homeContent
+            : active === "schedule"
+              ? scheduleContent
+              : <EmptyPanel tab={active} />
+        )}
       </div>
 
       <nav className="fixed inset-x-0 bottom-0 z-[110] mx-auto w-full max-w-md border-t border-separator bg-card pb-[env(safe-area-inset-bottom)]">

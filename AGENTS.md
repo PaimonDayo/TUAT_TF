@@ -216,6 +216,7 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 
 ## 作業ログ（着手前に追記・新しいものを上へ）
 <!-- 形式: YYYY-MM-DD / エージェント / 触る範囲 → 結果(commit・要点) -->
+- 2026-07-12 / Codex / Tab Lab実機結果: A=61回 平均10ms/最悪23ms/停止6ms、B=59回 24/29/9ms、C=61回 24/75/26msで全モード安定。ただしCの遷移元は空画面で、実予定DOM破棄→実ホーム構築は未検証とのオーナー指摘。D=実予定⇔実ホームをRouter/Activityなしで破棄・再表示するモードと、切替後DOMノード数・最大DOM数の計測を追加。tsc/対象lint/build成功、実機判定待ち → (this commit)
 - 2026-07-12 / Codex / iOSタブ基盤の再構築案を推測で本番採用せず検証するため、通常画面から隔離したClient Tab Labを実装。A=空画面、B=36枚の軽量DOM、C=現ホームをRouter/Activityなしで破棄・再表示。タップ→2描画時間、最大イベントループ停止、直前50操作をlocalStorageへ保存し結果コピー可能。システム管理者だけマイページ→その他に導線表示。通常5タブ・DB・同期処理は変更なし。tsc/対象lint成功（home既存unused警告2件のみ）、本番build成功。実機A→B→C判定待ち → (this commit)
 - 2026-07-12 / Codex / iOSフリーズ調査の実機結果を反映。`c5786a9`(IDB停止)、`e2f2497`(予定Route Handler化・重複prefetch撤去・PullToRefresh停止・スケルトン修正)、`26ad026`(passive方式でPullToRefresh再導入)→`18c948f`(即撤回)を本番投入したが、最終実機結果は**別タブからホームへ毎回遷移不能・フリーズ**。PullToRefreshは明確な悪化要因だが撤去後も再現し、根本原因未特定。今回の対策群を成功扱いしない。AGENTS.mdに重大未解決インシデントとして記録 → (このcommit)
 - 2026-07-12 / Claude Code (Fable 5) / FreezeProbeの初回実機データ入手: **フリーズは /schedule と /timeline に集中**（オーナー報告）。＋リロード時の「一瞬上にズレてガクッと戻る」報告。ローカル再現不可のためCodexへ引き継ぎ（**詳細は docs/CLAUDE-HANDOFF.md 冒頭の2026-07-12節が正**。最有力仮説: この2画面だけにあるreact-queryキャッシュ機構＝timelineのIndexedDB永続化／scheduleのServer Action queryFn）。コードはドキュメントのみ変更 → (このcommit)
