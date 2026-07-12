@@ -1,6 +1,13 @@
 @font-face { font-family: SplashArchivo; src: url('/splash/assets/ArchivoBlack.woff2') format('woff2'); font-weight: 400 900; font-display: block; }
 
-.overlay { position: fixed; inset: 0; z-index: 9999; overflow: hidden; background: #f5f4ee; animation:simple-exit .26s ease 4.12s both; will-change:opacity; }
+.overlay { position: fixed; inset: 0; z-index: 9999; overflow: hidden; background: #f5f4ee; will-change:opacity; }
+/* 終了はシーン間と同じ「白フラッシュで明転→白の下からホームを見せる」演出。
+   ピーク(約4.28s)でTSXがexitingを付与→ステージを消し、白だけを残してフェードアウト。 */
+.exiting { pointer-events: none; }
+.exiting .stage { visibility: hidden; }
+.exiting .flash { visibility: visible; animation: flash-exit-out .45s ease both; }
+@keyframes flash-exit-in { from { opacity: 0 } to { opacity: 1 } }
+@keyframes flash-exit-out { from { opacity: 1 } to { opacity: 0 } }
 .stage { position: relative; width: 100%; height: 100%; overflow: hidden; isolation: isolate; container-type: size; background: #f5f4ee; font-family: SplashArchivo, Arial Black, Arial, sans-serif; }
 .stage::before { content:''; position:absolute; inset:-40%; z-index:25; pointer-events:none; opacity:.08; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.7'/%3E%3C/svg%3E"); mix-blend-mode:soft-light; animation:grain .22s steps(2) infinite; }
 .scene { position: absolute; inset: 0; overflow: hidden; }
@@ -24,8 +31,10 @@
 @keyframes grain { 0%{transform:translate(-2%,1%)}25%{transform:translate(2%,-1%)}50%{transform:translate(1%,2%)}75%{transform:translate(-1%,-2%)}100%{transform:translate(-2%,1%)} }
 
 /* One shared rhythm keeps the three scenes visually coherent. */
-.film,.film::after,.center,.wipe0,.wipe1,.wipe2,.wipe3,.final,.final::before,.final::after,.title,.title::before,.title::after,.frame,.frame path,.credit,.flash { animation-duration:4.2s !important; }
-.film { animation-name:film-from-start }.center { animation-name:center-from-start }.wipe0 { animation-name:white-start-0 }.wipe1 { animation-name:white-start-1 }.wipe2 { animation-name:white-start-2 }.wipe3 { animation-name:white-start-3 }.final { animation-name:final-from-white }.title { animation-name:title-aligned }.flash { animation-name:flash-between }
+.film,.film::after,.center,.wipe0,.wipe1,.wipe2,.wipe3,.final,.final::before,.final::after,.title,.title::before,.title::after,.frame,.frame path,.credit { animation-duration:4.2s !important; }
+.film { animation-name:film-from-start }.center { animation-name:center-from-start }.wipe0 { animation-name:white-start-0 }.wipe1 { animation-name:white-start-1 }.wipe2 { animation-name:white-start-2 }.wipe3 { animation-name:white-start-3 }.final { animation-name:final-from-white }.title { animation-name:title-aligned }
+/* flashのみ2本立て: シーン2→3の明転(flash-between) + 終了時の明転(flash-exit-in、3.98s開始→4.28sで白ピーク) */
+.flash { animation: flash-between 4.2s linear both, flash-exit-in .3s ease 3.98s both; }
 .black0 { animation-name:black-slow-0; }.black1 { animation-name:black-slow-1; }.black2 { animation-name:black-slow-2; }.black3 { animation-name:black-slow-3; }
 @keyframes black-slow-0 { 0%,2%{clip-path:inset(0 100% 0 0)}10%,25%{clip-path:inset(0)}31%,100%{clip-path:inset(0 0 0 100%)} }
 @keyframes black-slow-1 { 0%,5%{clip-path:inset(0 0 100% 0)}13%,26%{clip-path:inset(0)}31%,100%{clip-path:inset(100% 0 0 0)} }

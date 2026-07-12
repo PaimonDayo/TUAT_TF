@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import styles from "./SplashIntro.module.css";
 
 const SESSION_KEY = "tuat-splash-played";
-const FINISH_AFTER_MS = 4380;
-const FADE_MS = 80;
+// 終了もシーン間と同じ「白フラッシュで明転」: flash-exit-in が 3.98s→4.28s で白ピークに
+// 達するので、ピークでステージを消してホームを白の下に出し、白を450msでフェードアウトする。
+const EXIT_PEAK_MS = 4280;
+const REMOVE_AFTER_MS = 4780;
 
 const TAB_ROUTES = [
   "/home", "/schedule", "/timeline", "/notes", "/mypage",
@@ -16,6 +18,7 @@ const TAB_ROUTES = [
 export default function SplashIntro() {
   const router = useRouter();
   const [done, setDone] = useState(false);
+  const [exiting, setExiting] = useState(false);
 
   useEffect(() => {
     let playedThisLaunch = false;
@@ -43,13 +46,13 @@ export default function SplashIntro() {
         window.setTimeout(() => router.prefetch(route), index * 130);
       });
     }, 60);
-    const finishTimer = window.setTimeout(() => {
-      window.setTimeout(() => setDone(true), FADE_MS);
-    }, FINISH_AFTER_MS);
+    const exitTimer = window.setTimeout(() => setExiting(true), EXIT_PEAK_MS);
+    const removeTimer = window.setTimeout(() => setDone(true), REMOVE_AFTER_MS);
 
     return () => {
       window.clearTimeout(prefetchTimer);
-      window.clearTimeout(finishTimer);
+      window.clearTimeout(exitTimer);
+      window.clearTimeout(removeTimer);
     };
   }, [router]);
 
@@ -58,8 +61,15 @@ export default function SplashIntro() {
   return (
     <div
       aria-hidden="true"
-      className={`${styles.overlay} tuat-splash-root`}
-      style={{ position: "fixed", inset: 0, zIndex: 9999, overflow: "hidden", background: "#f5f4ee" }}
+      className={`${styles.overlay} ${exiting ? styles.exiting : ""} tuat-splash-root`}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9999,
+        overflow: "hidden",
+        // 白ピーク以降はホームを白の下から見せるため、覆いの地色を消す
+        background: exiting ? "transparent" : "#f5f4ee",
+      }}
     >
       <main className={styles.stage} style={{ width: "100%", height: "100%", background: "#f5f4ee" }}>
         <section className={`${styles.scene} ${styles.film}`} />
