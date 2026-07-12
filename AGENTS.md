@@ -21,6 +21,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **現在の本番状態**: PullToRefreshは未マウント、タイムラインIDB永続化なし、BottomNavの追加手動prefetchなし、予定再取得はRoute Handler。それでもホーム遷移フリーズは未解決。
 - **禁止**: PullToRefreshを方式変更だけで再導入しない。IndexedDB・prefetch・Server Actionのいずれかを「根本原因」と断定しない。ローカルE2E成功やbuild成功を実機障害の解消扱いにしない。
 - **次の調査**: `/home`遷移時のRSC要求開始/完了、Client Router状態、PPR/Suspense、保持中ルートとメモリ、メインスレッドlong taskを実機で採取する。推測ベースのキャッシュ微修正を続けず、まずホーム遷移そのものの証拠を取る。
+- **2026-07-12 Fable 5の切り分け**: 消去法と時系列で **`cacheComponents: true`（PPR Router層）が最有力**と判断し無効化を実施。根拠: ①有効化は2026-07-12 00:14（60d6175）で、全症状は同日から（それ以前はタブ切替一瞬・フリーズ無し） ②Tab Lab実測でRouterを通さない実DOM再構築は安定＝残る容疑はRouter層のみ ③IDB・Server Action・prefetch・PullToRefresh・staleTimes全撤去でも再現 ④`"use cache"`等の依存コード無しで無効化はコンフィグのみ。無効化ビルドでtsc/build/WebKit E2E（他タブ→ホーム含む）全パス。**実機での最終判定はオーナー確認待ち。これで直っても「解消」と書く前に必ず実機確認を取ること。**
 
 # まずこれを読む（エージェント共通の入口）
 
@@ -216,6 +217,7 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 
 ## 作業ログ（着手前に追記・新しいものを上へ）
 <!-- 形式: YYYY-MM-DD / エージェント / 触る範囲 → 結果(commit・要点) -->
+- 2026-07-12 / Claude Code (Fable 5) / ホーム遷移フリーズの根本原因切り分け: **`next.config.ts`の`cacheComponents: true`を無効化**。根拠は重大インシデント節に追記（有効化=07-12 00:14と症状開始の一致、Tab LabのRouter外安定、他容疑の全撤去でも再現、依存コード無し）。タブ切替速度は東京リージョン＋react-queryセッションキャッシュ＋loading.tsxで担保。tsc/build成功・WebKit E2E全パス（他タブ→ホーム遷移含む）。**実機判定待ち＝これで直ったらcacheComponentsは再導入禁止リスト入り、直らなければ「Router層でもない」ことが確定するので次はNext.jsのバージョン更新(16.2.9→最新patch)を試す** → (このcommit)
 - 2026-07-12 / Codex / Tab Lab実機結果: A=61回 平均10ms/最悪23ms/停止6ms、B=59回 24/29/9ms、C=61回 24/75/26msで全モード安定。ただしCの遷移元は空画面で、実予定DOM破棄→実ホーム構築は未検証とのオーナー指摘。D=実予定⇔実ホームをRouter/Activityなしで破棄・再表示するモードと、切替後DOMノード数・最大DOM数の計測を追加。tsc/対象lint/build成功、実機判定待ち → (this commit)
 - 2026-07-12 / Codex / iOSタブ基盤の再構築案を推測で本番採用せず検証するため、通常画面から隔離したClient Tab Labを実装。A=空画面、B=36枚の軽量DOM、C=現ホームをRouter/Activityなしで破棄・再表示。タップ→2描画時間、最大イベントループ停止、直前50操作をlocalStorageへ保存し結果コピー可能。システム管理者だけマイページ→その他に導線表示。通常5タブ・DB・同期処理は変更なし。tsc/対象lint成功（home既存unused警告2件のみ）、本番build成功。実機A→B→C判定待ち → (this commit)
 - 2026-07-12 / Codex / iOSフリーズ調査の実機結果を反映。`c5786a9`(IDB停止)、`e2f2497`(予定Route Handler化・重複prefetch撤去・PullToRefresh停止・スケルトン修正)、`26ad026`(passive方式でPullToRefresh再導入)→`18c948f`(即撤回)を本番投入したが、最終実機結果は**別タブからホームへ毎回遷移不能・フリーズ**。PullToRefreshは明確な悪化要因だが撤去後も再現し、根本原因未特定。今回の対策群を成功扱いしない。AGENTS.mdに重大未解決インシデントとして記録 → (このcommit)
