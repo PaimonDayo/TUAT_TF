@@ -38,7 +38,7 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var n=performance.getEntriesByType("navigation")[0];if((n&&n.type==="reload")||performance.navigation&&performance.navigation.type===1||sessionStorage.getItem("tuat-splash-played")==="1")document.documentElement.dataset.tuatSplashSkip="1"}catch(e){}`,
+            __html: `try{if(sessionStorage.getItem("tuat-splash-played")==="1")document.documentElement.dataset.tuatSplashSkip="1"}catch(e){}`,
           }}
         />
         <style>{`html[data-tuat-splash-skip="1"] .tuat-splash-root{display:none!important}`}</style>

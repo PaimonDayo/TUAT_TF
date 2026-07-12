@@ -24,11 +24,8 @@ export default function SplashIntro() {
     } catch {
       // Storage may be unavailable in a restricted browser context.
     }
-    const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
-    const isReload = navigation?.type === "reload";
     if (
       playedThisLaunch ||
-      isReload ||
       window.matchMedia("(prefers-reduced-motion: reduce)").matches
     ) {
       setDone(true);

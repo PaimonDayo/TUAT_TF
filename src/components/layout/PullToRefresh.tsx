@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 
@@ -12,8 +12,10 @@ export function PullToRefresh() {
   const router = useRouter();
   const start = useRef<{ x: number; y: number } | null>(null);
   const distanceRef = useRef(0);
+  const refreshTimer = useRef<number | null>(null);
+  const refreshingRef = useRef(false);
   const [distance, setDistance] = useState(0);
-  const [isPending, startRefresh] = useTransition();
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     function reset() {
@@ -23,7 +25,7 @@ export function PullToRefresh() {
     }
 
     function touchStart(event: TouchEvent) {
-      if (isPending || window.scrollY > 0 || event.touches.length !== 1) return;
+      if (refreshingRef.current || window.scrollY > 0 || event.touches.length !== 1) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest('[role="dialog"], input, textarea, select, [data-no-pull-refresh]')) return;
       const touch = event.touches[0];
@@ -49,7 +51,17 @@ export function PullToRefresh() {
       if (!start.current) return;
       const shouldRefresh = distanceRef.current >= THRESHOLD;
       reset();
-      if (shouldRefresh) startRefresh(() => router.refresh());
+      if (shouldRefresh) {
+        refreshingRef.current = true;
+        setIsRefreshing(true);
+        router.refresh();
+        if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
+        refreshTimer.current = window.setTimeout(() => {
+          refreshingRef.current = false;
+          setIsRefreshing(false);
+          refreshTimer.current = null;
+        }, 900);
+      }
     }
 
     window.addEventListener("touchstart", touchStart, { passive: true });
@@ -61,10 +73,11 @@ export function PullToRefresh() {
       window.removeEventListener("touchmove", touchMove);
       window.removeEventListener("touchend", touchEnd);
       window.removeEventListener("touchcancel", reset);
+      if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
     };
-  }, [isPending, router]);
+  }, [router]);
 
-  const visible = distance > 4 || isPending;
+  const visible = distance > 4 || isRefreshing;
   const progress = Math.min(1, distance / THRESHOLD);
 
   return (
@@ -74,18 +87,18 @@ export function PullToRefresh() {
       style={{
         top: "calc(env(safe-area-inset-top) + 8px)",
         opacity: visible ? 1 : 0,
-        transform: `translate(-50%, ${isPending ? 4 : Math.max(-28, distance - 42)}px)`,
+        transform: `translate(-50%, ${isRefreshing ? 4 : Math.max(-28, distance - 42)}px)`,
       }}
     >
       <div className="flex h-9 w-9 items-center justify-center rounded-full border border-separator bg-card shadow-lg">
         <RefreshCw
           size={18}
-          className={isPending ? "animate-spin text-accent" : "text-accent"}
-          style={{ transform: isPending ? undefined : `rotate(${progress * 210}deg)` }}
+          className={isRefreshing ? "animate-spin text-accent" : "text-accent"}
+          style={{ transform: isRefreshing ? undefined : `rotate(${progress * 210}deg)` }}
         />
       </div>
       <span className="sr-only">
-        {isPending ? "更新中" : progress >= 1 ? "離して更新" : "下に引いて更新"}
+        {isRefreshing ? "更新中" : progress >= 1 ? "離して更新" : "下に引いて更新"}
       </span>
     </div>
   );
