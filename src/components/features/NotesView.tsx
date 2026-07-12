@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { BookOpen, ChevronRight } from "lucide-react";
+import { ChevronRight, Folder } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -95,7 +95,7 @@ export function NoteList({
         <Link key={note.id} href={`/notes/${note.id}`}>
           <Card className="p-4 active:bg-bg">
             <div className="flex items-start gap-3">
-              <BookOpen size={20} className="mt-0.5 shrink-0 text-accent" />
+              <Folder size={20} className="mt-0.5 shrink-0 text-accent" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   <p className="min-w-0 flex-1 truncate text-headline">{note.title}</p>
