@@ -416,6 +416,8 @@ export interface NoteTheme {
 export interface NoteRow {
   id: string;
   author_id: string;
+  /** 親フォルダ（NULL=ルート）。深さ3階層まで（UI側で制限） */
+  parent_id: string | null;
   scope: NoteScope;
   theme_id: string | null;
   title: string;

@@ -74,6 +74,7 @@ export function NoteEditor({
   note,
   isAdmin,
   initialScope,
+  parentId,
   onDone,
 }: {
   currentUser: AuthorMini;
@@ -81,6 +82,8 @@ export function NoteEditor({
   note?: NoteWithRelations;
   isAdmin: boolean;
   initialScope: NoteScope;
+  /** サブフォルダとして新規作成する場合の親フォルダID（編集時は無視） */
+  parentId?: string;
   onDone: () => void;
 }) {
   const router = useRouter();
@@ -146,7 +149,7 @@ export function NoteEditor({
     } else {
       const { data, error: insertError } = await supabase
         .from("notes")
-        .insert({ ...payload, body: "", author_id: currentUser.id })
+        .insert({ ...payload, body: "", author_id: currentUser.id, parent_id: parentId ?? null })
         .select("id")
         .single();
       if (insertError || !data) {

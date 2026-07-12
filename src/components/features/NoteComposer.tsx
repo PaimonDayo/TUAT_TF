@@ -10,11 +10,14 @@ export function NoteComposer({
   currentUser,
   isAdmin,
   initialScope = "shared",
+  parentId,
   onDone,
 }: {
   currentUser: AuthorMini;
   isAdmin: boolean;
   initialScope?: NoteScope;
+  /** サブフォルダとして作成する場合の親フォルダID */
+  parentId?: string;
   onDone: () => void;
 }) {
   const [members, setMembers] = useState<AuthorMini[] | null>(null);
@@ -52,6 +55,7 @@ export function NoteComposer({
       members={members}
       isAdmin={isAdmin}
       initialScope={initialScope}
+      parentId={parentId}
       onDone={onDone}
     />
   );

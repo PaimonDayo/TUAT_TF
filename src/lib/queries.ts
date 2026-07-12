@@ -590,6 +590,37 @@ export async function getNoteById(id: string): Promise<NoteWithRelations | null>
   return (data as unknown as NoteWithRelations | null) ?? null;
 }
 
+/** フォルダ直下のサブフォルダ一覧（RLS継承） */
+export async function getChildNotes(parentId: string): Promise<NoteWithRelations[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("notes")
+    .select(NOTE_SELECT)
+    .eq("parent_id", parentId)
+    .order("updated_at", { ascending: false });
+  return (data ?? []) as unknown as NoteWithRelations[];
+}
+
+/** パンくず用の祖先チェーン（ルート側から順）。深さ上限3のため最大2回辿る */
+export async function getNoteAncestors(
+  note: { parent_id: string | null },
+): Promise<{ id: string; title: string }[]> {
+  const supabase = await createClient();
+  const chain: { id: string; title: string }[] = [];
+  let parentId = note.parent_id;
+  for (let i = 0; i < 2 && parentId; i++) {
+    const { data } = await supabase
+      .from("notes")
+      .select("id, title, parent_id")
+      .eq("id", parentId)
+      .maybeSingle();
+    if (!data) break;
+    chain.unshift({ id: data.id as string, title: data.title as string });
+    parentId = (data as { parent_id: string | null }).parent_id;
+  }
+  return chain;
+}
+
 /** フォルダ内の記事一覧。フォルダRLSを継承する */
 export async function getNoteArticles(
   noteId: string,

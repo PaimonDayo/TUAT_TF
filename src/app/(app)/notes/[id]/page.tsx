@@ -6,8 +6,12 @@ import { NoteDetailActions } from "@/components/features/NoteDetailActions";
 import { SubHeader } from "@/components/layout/SubHeader";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import Link from "next/link";
+import { SubfolderSection } from "@/components/features/SubfolderSection";
 import {
+  getChildNotes,
   getMembersList,
+  getNoteAncestors,
   getNoteArticles,
   getNoteById,
 } from "@/lib/queries";
@@ -20,13 +24,16 @@ export default async function NoteFolderPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [profile, note, members, articles] = await Promise.all([
+  const [profile, note, members, articles, childNotes] = await Promise.all([
     getCurrentProfile(),
     getNoteById(id),
     getMembersList(),
     getNoteArticles(id),
+    getChildNotes(id),
   ]);
   if (!note) notFound();
+  const ancestors = await getNoteAncestors(note);
+  const depth = ancestors.length + 1; // ルート=1
 
   const isAdmin = permissionsOf(profile.roles).manageMembers;
   const isAuthor = note.author_id === profile.id;
@@ -49,7 +56,7 @@ export default async function NoteFolderPage({
     <>
       <SubHeader
         title="ノート"
-        backHref="/notes"
+        backHref={ancestors.length > 0 ? `/notes/${ancestors[ancestors.length - 1].id}` : "/notes"}
         right={
           canManageFolder || canDelete ? (
             <NoteDetailActions
@@ -64,6 +71,21 @@ export default async function NoteFolderPage({
         }
       />
       <div className="space-y-4 px-4 pt-1">
+        {ancestors.length > 0 && (
+          <p className="flex flex-wrap items-center gap-1 text-caption">
+            <Link href="/notes" className="text-accent active:opacity-60">ノート</Link>
+            {ancestors.map((ancestor) => (
+              <span key={ancestor.id} className="flex items-center gap-1">
+                <span className="text-muted2">/</span>
+                <Link href={`/notes/${ancestor.id}`} className="text-accent active:opacity-60">
+                  {ancestor.title}
+                </Link>
+              </span>
+            ))}
+            <span className="text-muted2">/</span>
+            <span className="text-muted2">{note.title}</span>
+          </p>
+        )}
         <section className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <Badge>{note.scope === "shared" ? "共有" : "個人"}</Badge>
@@ -85,6 +107,17 @@ export default async function NoteFolderPage({
             <span className="text-caption">{note.author.display_name}</span>
           </div>
         </section>
+
+        <SubfolderSection
+          parentId={note.id}
+          parentScope={note.scope}
+          depth={depth}
+          currentUser={currentUser}
+          isAdmin={isAdmin}
+          canManage={canManageFolder}
+        >
+          {childNotes}
+        </SubfolderSection>
 
         <section className="space-y-2">
           <p className="section-label">記事</p>

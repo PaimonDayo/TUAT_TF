@@ -40,6 +40,7 @@ export function NotesView({
   const visibleNotes = useMemo(
     () =>
       notes.filter((note) => {
+        if (note.parent_id) return false; // サブフォルダは親フォルダ内でのみ表示
         if (mine && note.author_id !== currentUser.id) return false;
         if (note.scope !== scope) return false;
         if (!mine && note.status !== "published") return false;
