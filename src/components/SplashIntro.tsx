@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import styles from "./SplashIntro.module.css";
 
 const SESSION_KEY = "tuat-splash-played";
-const FINISH_AFTER_MS = 5000;
+const FINISH_AFTER_MS = 4420;
 const FADE_MS = 80;
 
 const TAB_ROUTES = [
@@ -63,7 +63,6 @@ export default function SplashIntro() {
         </section>
         <section className={`${styles.scene} ${styles.final}`}>
           <div className={styles.skyBrushes}><i /><i /></div>
-          <div className={styles.sunrise} />
           <svg className={styles.frame} viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid meet">
             <defs>
               <filter id="splash-frame-rough" x="-6%" y="-6%" width="112%" height="112%">
@@ -95,7 +94,6 @@ export default function SplashIntro() {
         </section>
         <div className={styles.flash} />
       </main>
-      <div className={styles.dawnReveal} />
     </div>
   );
 }
