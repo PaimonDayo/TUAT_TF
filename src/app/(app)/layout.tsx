@@ -19,17 +19,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <Suspense fallback={null}><AuthenticatedFab /></Suspense>
         <Suspense fallback={null}><BottomNav /></Suspense>
         <VersionWatcher />
-        <Suspense fallback={null}><FreezeProbeGate /></Suspense>
+        <FreezeProbe />
       </div>
     </ToastProvider>
     </AppQueryProvider>
   );
-}
-
-async function FreezeProbeGate() {
-  const profile = await getCurrentProfile();
-  const perms = permissionsOf(profile.roles);
-  return <FreezeProbe notify={perms.manageSystem} />;
 }
 
 async function AuthenticatedFab() {

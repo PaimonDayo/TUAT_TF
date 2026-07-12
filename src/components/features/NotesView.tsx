@@ -14,18 +14,29 @@ import type {
   NoteWithRelations,
 } from "@/types";
 
+/** 共有/個人タブの選択を保持するcookie（タイムラインの簡易表示cookieと同じ方式でSSR復元） */
+const SCOPE_COOKIE = "tuat-notes-scope";
+
 export function NotesView({
   currentUser,
   notes,
   mine = false,
+  initialScope = "shared",
 }: {
   currentUser: AuthorMini;
   notes: NoteWithRelations[];
   /** 旧: フォルダ作成フォーム用。作成導線はFABへ移したため未使用（呼び出し互換のため残置） */
   isAdmin?: boolean;
   mine?: boolean;
+  initialScope?: NoteScope;
 }) {
-  const [scope, setScope] = useState<NoteScope>("shared");
+  const [scope, setScope] = useState<NoteScope>(initialScope);
+
+  function changeScope(next: NoteScope) {
+    setScope(next);
+    // ノート詳細から戻ってページが再レンダーされても選択タブが残るようにする
+    document.cookie = `${SCOPE_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
+  }
   const visibleNotes = useMemo(
     () =>
       notes.filter((note) => {
@@ -46,7 +57,7 @@ export function NotesView({
             { key: "personal", label: "個人" },
           ]}
           value={scope}
-          onChange={setScope}
+          onChange={(key) => changeScope(key as NoteScope)}
           className="w-full"
         />
       </div>

@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { useToast } from "@/components/ui/toast";
 
 const PROBE_KEY = "tuat-freeze-probe";
 const SAFE_EXIT_KEY = "tuat-freeze-probe-safe";
@@ -21,12 +20,13 @@ type Report = { at: number; path: string; foundAt: number };
  * 止まるため、次回起動時に「正常離脱フラグ無しで心拍が途絶」していれば
  * フリーズ（またはクラッシュ）が起きたと判定できる。
  *
- * レポートは console.warn と localStorage（直近5件）に残し、
- * システム管理者（notify=true）にだけトーストで場所を知らせる。
+ * レポートは console.warn と localStorage（直近5件、キー tuat-freeze-reports）に残す。
+ * トースト通知は廃止（2026-07-12 オーナー報告: iOSがメモリ回収でページを再読込した
+ * だけのケースも「フリーズ痕跡」として頻繁に出て紛らわしい。フリーズ本体は
+ * cacheComponents無効化で解消済みのため、以後は静かに記録だけ取る）。
  */
-export function FreezeProbe({ notify = false }: { notify?: boolean }) {
+export function FreezeProbe() {
   const pathname = usePathname();
-  const { showToast } = useToast();
 
   // 起動時: 前回セッションの痕跡を判定してから、自分の記録を開始する。
   useEffect(() => {
@@ -42,14 +42,8 @@ export function FreezeProbe({ notify = false }: { notify?: boolean }) {
         ].slice(0, 5);
         localStorage.setItem(REPORTS_KEY, JSON.stringify(reports));
         console.warn(
-          `[FreezeProbe] 前回セッションが異常終了: ${probe.path} で ${new Date(probe.t).toLocaleString("ja-JP")} に応答停止`,
+          `[FreezeProbe] 前回セッションが異常終了: ${probe.path} で ${new Date(probe.t).toLocaleString("ja-JP")} に応答停止（またはOSによるページ再読込）`,
         );
-        if (notify) {
-          showToast(
-            `前回 ${probe.path} でフリーズの痕跡（${new Date(probe.t).toLocaleTimeString("ja-JP")}）`,
-            "error",
-          );
-        }
       }
       localStorage.removeItem(SAFE_EXIT_KEY);
     } catch {
