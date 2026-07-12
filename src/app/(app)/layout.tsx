@@ -3,6 +3,7 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { FAB } from "@/components/layout/FAB";
 import { SessionKeepAlive } from "@/components/layout/SessionKeepAlive";
 import { VersionWatcher } from "@/components/features/VersionWatcher";
+import { FreezeProbe } from "@/components/features/FreezeProbe";
 import { PullToRefresh } from "@/components/layout/PullToRefresh";
 import { ToastProvider } from "@/components/ui/toast";
 import { AppQueryProvider } from "@/components/providers/QueryProvider";
@@ -20,10 +21,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <Suspense fallback={null}><AuthenticatedFab /></Suspense>
         <Suspense fallback={null}><BottomNav /></Suspense>
         <VersionWatcher />
+        <Suspense fallback={null}><FreezeProbeGate /></Suspense>
       </div>
     </ToastProvider>
     </AppQueryProvider>
   );
+}
+
+async function FreezeProbeGate() {
+  const profile = await getCurrentProfile();
+  const perms = permissionsOf(profile.roles);
+  return <FreezeProbe notify={perms.manageSystem} />;
 }
 
 async function AuthenticatedFab() {

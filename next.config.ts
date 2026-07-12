@@ -2,19 +2,14 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
-  experimental: {
-    // クライアント側ルーターキャッシュ。一度開いたタブを一定時間そのまま再表示し、
-    // タブ移動を高速化する。局所操作はClient Componentのstateを更新し、
-    // 複数領域へ影響する変更だけ router.refresh() を使う。
-    // dynamic=30秒だと起動時（スプラッシュ中）にBottomNavのLink prefetch={true}で
-    // 全タブを先読みしても30秒で失効し、タップのたびにサーバー往復待ちになるため
-    // 300秒に延長（タイムラインIndexedDBキャッシュの5分TTLと揃える）。
-    // 鮮度は引っ張って更新（router.refresh）と各画面のセッションキャッシュ側で担保。
-    staleTimes: {
-      dynamic: 300,
-      static: 900,
-    },
-  },
+  // 注意: experimental.staleTimes（ルーターキャッシュTTL）は使わない。
+  // cacheComponents との併用はビルド時に "use with caution" と警告される実験的な
+  // 組み合わせで、導入後に実機iOS PWAで「タブ復帰時の完全フリーズ」「予定タブの
+  // 一瞬のUIズレ」が報告された（2026-07-12。ローカルのChromium/WebKitでは再現せず、
+  // 状況証拠による切り分け。FreezeProbeで実機の証拠収集中）。タブ切替の速さは
+  // ①Vercel関数の東京リージョン固定（vercel.json）
+  // ②各画面のreact-queryセッションキャッシュ（schedule/notes/mypage/timeline）
+  // で担保する。
 };
 
 export default nextConfig;

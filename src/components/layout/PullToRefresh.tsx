@@ -25,10 +25,24 @@ export function PullToRefresh() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
+    // 非passiveのtouchmoveを常時登録すると、アプリ内の**全スクロール**が
+    // 毎フレームJSを経由し、iOSでスクロールがカクつく原因になる。
+    // 「画面最上部から始まったタッチ」の間だけ動的に登録し、指を離したら外す。
+    function detachGesture() {
+      window.removeEventListener("touchmove", touchMove);
+      window.removeEventListener("touchend", touchEnd);
+      window.removeEventListener("touchcancel", cancel);
+    }
+
     function reset() {
       start.current = null;
       distanceRef.current = 0;
       setDistance(0);
+    }
+
+    function cancel() {
+      reset();
+      detachGesture();
     }
 
     function touchStart(event: TouchEvent) {
@@ -37,6 +51,9 @@ export function PullToRefresh() {
       if (target?.closest('[role="dialog"], input, textarea, select, [data-no-pull-refresh]')) return;
       const touch = event.touches[0];
       start.current = { x: touch.clientX, y: touch.clientY };
+      window.addEventListener("touchmove", touchMove, { passive: false });
+      window.addEventListener("touchend", touchEnd, { passive: true });
+      window.addEventListener("touchcancel", cancel, { passive: true });
     }
 
     function touchMove(event: TouchEvent) {
@@ -45,7 +62,9 @@ export function PullToRefresh() {
       const deltaY = touch.clientY - start.current.y;
       const deltaX = Math.abs(touch.clientX - start.current.x);
       if (deltaY <= 0 || deltaX > deltaY || window.scrollY > 0) {
-        reset();
+        // 引き下げでないと分かった時点でジェスチャー追跡ごとやめる
+        // （以降のスクロールを素通しにする）
+        cancel();
         return;
       }
       event.preventDefault();
@@ -55,9 +74,8 @@ export function PullToRefresh() {
     }
 
     function touchEnd() {
-      if (!start.current) return;
       const shouldRefresh = distanceRef.current >= THRESHOLD;
-      reset();
+      cancel();
       if (shouldRefresh) {
         refreshingRef.current = true;
         setIsRefreshing(true);
@@ -72,14 +90,9 @@ export function PullToRefresh() {
     }
 
     window.addEventListener("touchstart", touchStart, { passive: true });
-    window.addEventListener("touchmove", touchMove, { passive: false });
-    window.addEventListener("touchend", touchEnd, { passive: true });
-    window.addEventListener("touchcancel", reset, { passive: true });
     return () => {
       window.removeEventListener("touchstart", touchStart);
-      window.removeEventListener("touchmove", touchMove);
-      window.removeEventListener("touchend", touchEnd);
-      window.removeEventListener("touchcancel", reset);
+      detachGesture();
       if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
     };
   }, [router]);
