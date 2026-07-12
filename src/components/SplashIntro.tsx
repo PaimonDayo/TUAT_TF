@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import styles from "./SplashIntro.module.css";
 
 const SESSION_KEY = "tuat-splash-played";
-const FINISH_AFTER_MS = 4900;
+const FINISH_AFTER_MS = 5080;
 const FADE_MS = 80;
 
 const TAB_ROUTES = [
@@ -94,6 +94,9 @@ export default function SplashIntro() {
         </section>
         <div className={styles.flash} />
       </main>
+      <div className={styles.absorbColors}>
+        <i /><i /><i /><i /><i />
+      </div>
     </div>
   );
 }
