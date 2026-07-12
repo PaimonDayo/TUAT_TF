@@ -1,14 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 
 const THRESHOLD = 68;
 const MAX_PULL = 104;
-// 再取得が実際に終わるまで回すが、transitionが固まっても必ずここで止める上限。
-const REFRESH_CAP_MS = 6000;
-const MIN_SPIN_MS = 500;
+// router.refresh()の完了を示すコールバックはNext.jsに無い。
+// useTransitionのisPendingで代用すると、Suspense境界が絡む画面（ホーム等、
+// セクションごとに async Server Component が複数ある）で isPending が
+// 解消されずインジケーターが回りっぱなしで固まる実例があったため使わない
+// （2026-07-12、"リロードが終わらない"事故。以前に一度これで直した箇所を
+// 再度useTransition化して再発させた）。固定時間で必ず止める。
+const REFRESH_SPIN_MS = 900;
 
 /** 画面最上部から下へ引いたとき、現在のServer Componentsを再取得する。 */
 export function PullToRefresh() {
@@ -17,31 +21,8 @@ export function PullToRefresh() {
   const distanceRef = useRef(0);
   const refreshTimer = useRef<number | null>(null);
   const refreshingRef = useRef(false);
-  const startedAtRef = useRef(0);
   const [distance, setDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isPending, startRefresh] = useTransition();
-
-  // 実際の再取得完了（transition終了）でインジケーターを止める。
-  // 最低表示時間を確保しつつ、REFRESH_CAP_MS のタイマーが保険として必ず止める。
-  useEffect(() => {
-    if (!refreshingRef.current || isPending) return;
-    const elapsed = Date.now() - startedAtRef.current;
-    const stop = () => {
-      refreshingRef.current = false;
-      setIsRefreshing(false);
-      if (refreshTimer.current) {
-        window.clearTimeout(refreshTimer.current);
-        refreshTimer.current = null;
-      }
-    };
-    if (elapsed >= MIN_SPIN_MS) {
-      stop();
-      return;
-    }
-    const t = window.setTimeout(stop, MIN_SPIN_MS - elapsed);
-    return () => window.clearTimeout(t);
-  }, [isPending]);
 
   useEffect(() => {
     function reset() {
@@ -79,15 +60,14 @@ export function PullToRefresh() {
       reset();
       if (shouldRefresh) {
         refreshingRef.current = true;
-        startedAtRef.current = Date.now();
         setIsRefreshing(true);
-        startRefresh(() => router.refresh());
+        router.refresh();
         if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
         refreshTimer.current = window.setTimeout(() => {
           refreshingRef.current = false;
           setIsRefreshing(false);
           refreshTimer.current = null;
-        }, REFRESH_CAP_MS);
+        }, REFRESH_SPIN_MS);
       }
     }
 
