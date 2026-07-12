@@ -436,6 +436,29 @@ export interface NoteWithRelations extends NoteRow {
   articles?: { id: string }[];
 }
 
+export interface ThreadRow {
+  id: string;
+  author_id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ThreadWithAuthor extends ThreadRow {
+  author: AuthorMini;
+  posts?: { id: string }[];
+}
+
+export interface ThreadPostWithAuthor {
+  id: string;
+  thread_id: string;
+  author_id: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
+  author: AuthorMini;
+}
+
 export interface NoteArticleRow {
   id: string;
   note_id: string;

@@ -3,6 +3,8 @@ import { fetchRolesByProfileIds } from "@/lib/supabase/auth";
 import { jstToday } from "@/lib/date";
 import { refreshMemberFromSheetLive } from "@/lib/sheet-sync";
 import type {
+  ThreadPostWithAuthor,
+  ThreadWithAuthor,
   FeedItem,
   RecordWithAuthor,
   TweetWithAuthor,
@@ -588,6 +590,38 @@ export async function getNoteById(id: string): Promise<NoteWithRelations | null>
     .eq("id", id)
     .maybeSingle();
   return (data as unknown as NoteWithRelations | null) ?? null;
+}
+
+/** スレッド一覧（新しい返信があった順） */
+export async function getThreads(): Promise<ThreadWithAuthor[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("threads")
+    .select(`*, author:profiles!author_id(id, display_name, avatar_url, blocks, grade), posts:thread_posts(id)`)
+    .order("updated_at", { ascending: false });
+  return (data ?? []) as unknown as ThreadWithAuthor[];
+}
+
+/** スレッド詳細 */
+export async function getThreadById(id: string): Promise<ThreadWithAuthor | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("threads")
+    .select(`*, author:profiles!author_id(id, display_name, avatar_url, blocks, grade)`)
+    .eq("id", id)
+    .maybeSingle();
+  return (data as unknown as ThreadWithAuthor | null) ?? null;
+}
+
+/** スレッドの投稿（古い順=会話の流れ） */
+export async function getThreadPosts(threadId: string): Promise<ThreadPostWithAuthor[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("thread_posts")
+    .select(`*, author:profiles!author_id(id, display_name, avatar_url, blocks, grade)`)
+    .eq("thread_id", threadId)
+    .order("created_at", { ascending: true });
+  return (data ?? []) as unknown as ThreadPostWithAuthor[];
 }
 
 /** フォルダ直下のサブフォルダ一覧（RLS継承） */

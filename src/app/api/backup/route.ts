@@ -8,6 +8,8 @@ const TABLES = [
   "practice_records",
   "profiles",
   "notes",
+  "threads",
+  "thread_posts",
   "note_articles",
   "notices",
   "practice_schedules",

@@ -8,12 +8,14 @@ import {
   CalendarPlus,
   FolderPlus,
   MessageCircle,
+  MessagesSquare,
   NotebookPen,
   Plus,
   Trophy,
 } from "lucide-react";
 import { FormModal } from "@/components/ui/form-modal";
 import { NoteArticleEditor } from "@/components/features/NoteArticleEditor";
+import { ThreadComposer } from "@/components/features/ThreadList";
 import { NoteComposer } from "@/components/features/NoteComposer";
 import { NoticeForm } from "@/components/post/NoticeForm";
 import { RecordForm } from "@/components/post/RecordForm";
@@ -30,7 +32,7 @@ export type FabPermissions = {
   manageMembers: boolean;
 };
 
-type DirectForm = "schedule" | "notice" | "article" | "folder" | "subfolder" | null;
+type DirectForm = "schedule" | "notice" | "article" | "folder" | "subfolder" | "thread" | null;
 
 type FabProps = {
   userId: string;
@@ -147,7 +149,10 @@ function ContextualFAB({
     }
     if (isSchedule) setDirectForm("schedule");
     if (isNotice) setDirectForm("notice");
-    if (isNotesRoot) setDirectForm("folder");
+    if (isNotesRoot) {
+      setSpeedDialOpen((open) => !open);
+      return;
+    }
     if (isNoteFolder) {
       // サブフォルダを作れる立場なら2択メニュー、そうでなければ従来どおり記事作成へ直行
       if (folderInfo?.canManage && folderInfo.depth < 3) {
@@ -179,12 +184,12 @@ function ContextualFAB({
       : isNotice
         ? "お知らせを作成"
         : isNotesRoot
-          ? "フォルダを作成"
+          ? "作成メニューを開く"
           : "このフォルダに作成";
 
   return (
     <>
-      {(isFeed || isNoteFolder) && speedDialOpen && (
+      {(isFeed || isNotesRoot || isNoteFolder) && speedDialOpen && (
         <button
           type="button"
           aria-label="作成メニューを閉じる"
@@ -214,6 +219,27 @@ function ContextualFAB({
           </div>
         )}
 
+        {isNotesRoot && speedDialOpen && (
+          <div className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-2xl border border-separator bg-card shadow-xl">
+            <SpeedDialAction
+              icon={<FolderPlus size={19} />}
+              label="フォルダを作成"
+              onClick={() => {
+                setSpeedDialOpen(false);
+                setDirectForm("folder");
+              }}
+            />
+            <SpeedDialAction
+              icon={<MessagesSquare size={19} />}
+              label="スレッドを立てる"
+              onClick={() => {
+                setSpeedDialOpen(false);
+                setDirectForm("thread");
+              }}
+            />
+          </div>
+        )}
+
         {isNoteFolder && speedDialOpen && (
           <div className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-2xl border border-separator bg-card shadow-xl">
             <SpeedDialAction
@@ -239,10 +265,10 @@ function ContextualFAB({
           type="button"
           onClick={handleMainAction}
           aria-label={label}
-          aria-expanded={isFeed || isNoteFolder ? speedDialOpen : undefined}
+          aria-expanded={isFeed || isNotesRoot || isNoteFolder ? speedDialOpen : undefined}
           className="pointer-events-auto absolute right-5 bottom-[calc(74px+env(safe-area-inset-bottom))] flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-lg shadow-accent/30 active:scale-95 transition-active"
         >
-          {isFeed || (isNoteFolder && folderInfo?.canManage && folderInfo.depth < 3) ? (
+          {isFeed || isNotesRoot || (isNoteFolder && folderInfo?.canManage && folderInfo.depth < 3) ? (
             <Plus
               size={28}
               strokeWidth={2.5}
@@ -311,6 +337,14 @@ function ContextualFAB({
           isAdmin={can.manageMembers}
           onDone={closeDirectForm}
         />
+      </FormModal>
+
+      <FormModal
+        open={directForm === "thread"}
+        onOpenChange={(open) => !open && closeDirectForm()}
+        title="スレッドを立てる"
+      >
+        <ThreadComposer userId={userId} onDone={closeDirectForm} />
       </FormModal>
 
       <FormModal

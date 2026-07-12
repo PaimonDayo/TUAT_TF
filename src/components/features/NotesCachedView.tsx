@@ -4,9 +4,9 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { NotesView } from "@/components/features/NotesView";
 import { loadNotesPageData, type NotesPageData } from "@/app/(app)/notes/actions";
-import type { NoteScope } from "@/types";
+import type { NotesTab } from "@/components/features/NotesView";
 
-export function NotesCachedView({ initialData, mine, initialScope }: { initialData: NotesPageData; mine: boolean; initialScope?: NoteScope }) {
+export function NotesCachedView({ initialData, mine, initialScope }: { initialData: NotesPageData; mine: boolean; initialScope?: NotesTab }) {
   const queryClient = useQueryClient();
   const queryKey = ["notes", initialData.currentUser.id];
   const { data } = useQuery({ queryKey, queryFn: loadNotesPageData, initialData, staleTime: 60_000, refetchOnMount: false });

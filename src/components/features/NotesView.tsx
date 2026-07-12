@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronRight, Folder } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
 import { FolderRowActions } from "@/components/features/FolderRowActions";
+import { ThreadList } from "@/components/features/ThreadList";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -13,7 +14,10 @@ import type {
   AuthorMini,
   NoteScope,
   NoteWithRelations,
+  ThreadWithAuthor,
 } from "@/types";
+
+export type NotesTab = NoteScope | "threads";
 
 /** 共有/個人タブの選択を保持するcookie（タイムラインの簡易表示cookieと同じ方式でSSR復元） */
 const SCOPE_COOKIE = "tuat-notes-scope";
@@ -21,19 +25,21 @@ const SCOPE_COOKIE = "tuat-notes-scope";
 export function NotesView({
   currentUser,
   notes,
+  threads = [],
   isAdmin = false,
   mine = false,
   initialScope = "shared",
 }: {
   currentUser: AuthorMini;
   notes: NoteWithRelations[];
+  threads?: ThreadWithAuthor[];
   isAdmin?: boolean;
   mine?: boolean;
-  initialScope?: NoteScope;
+  initialScope?: NotesTab;
 }) {
-  const [scope, setScope] = useState<NoteScope>(initialScope);
+  const [scope, setScope] = useState<NotesTab>(initialScope);
 
-  function changeScope(next: NoteScope) {
+  function changeScope(next: NotesTab) {
     setScope(next);
     // ノート詳細から戻ってページが再レンダーされても選択タブが残るようにする
     document.cookie = `${SCOPE_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
@@ -57,19 +63,24 @@ export function NotesView({
           items={[
             { key: "shared", label: "共有" },
             { key: "personal", label: "個人" },
+            { key: "threads", label: "スレッド" },
           ]}
           value={scope}
-          onChange={(key) => changeScope(key as NoteScope)}
+          onChange={(key) => changeScope(key as NotesTab)}
           className="w-full"
         />
       </div>
 
-      <NoteList
-        notes={visibleNotes}
-        currentUser={currentUser}
-        isAdmin={isAdmin}
-        showAuthor={!mine}
-      />
+      {scope === "threads" ? (
+        <ThreadList threads={threads} currentUserId={currentUser.id} isAdmin={isAdmin} />
+      ) : (
+        <NoteList
+          notes={visibleNotes}
+          currentUser={currentUser}
+          isAdmin={isAdmin}
+          showAuthor={!mine}
+        />
+      )}
     </div>
   );
 }
