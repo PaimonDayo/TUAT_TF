@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import styles from "./SplashIntro.module.css";
 
 const SESSION_KEY = "tuat-splash-played";
-const FINISH_AFTER_MS = 4420;
+const FINISH_AFTER_MS = 4380;
 const FADE_MS = 80;
 
 const TAB_ROUTES = [
@@ -51,8 +51,12 @@ export default function SplashIntro() {
   if (done) return null;
 
   return (
-    <div aria-hidden="true" className={styles.overlay}>
-      <main className={styles.stage}>
+    <div
+      aria-hidden="true"
+      className={styles.overlay}
+      style={{ position: "fixed", inset: 0, zIndex: 9999, overflow: "hidden", background: "#f5f4ee" }}
+    >
+      <main className={styles.stage} style={{ width: "100%", height: "100%", background: "#f5f4ee" }}>
         <section className={`${styles.scene} ${styles.film}`} />
         <section className={`${styles.scene} ${styles.center}`}>
           <div className={styles.wordRow}>
