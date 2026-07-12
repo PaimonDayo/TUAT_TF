@@ -39,7 +39,7 @@ export default function HomePage() {
   return <Suspense fallback={<HomeSkeleton />}><HomeContent /></Suspense>;
 }
 
-async function HomeContent() {
+export async function HomeContent() {
   const profile = await getCurrentProfile();
   const nowJst = jstNow();
 

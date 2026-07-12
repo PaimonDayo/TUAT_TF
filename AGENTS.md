@@ -8,9 +8,19 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 - **Weekly backup (former task 13) is complete**: `/api/backup` and the GAS weekly Google Drive job are deployed. The owner has manually run and verified a saved backup; `attendances` is included.
 - **P2, P5, and P6 are complete**: timeline pagination uses composite cursors, obsolete `getFeed` filter arguments were removed, and sheet-member refresh now runs after My Page/own-member rendering.
-- **Tab experience work is complete**: Next.js Cache Components preserves the three most recent routes. Timeline, schedule, My Page, and notes have in-session caches. Only the timeline is persisted in IndexedDB (per-user, five-minute TTL); logout clears it. Schedules, attendance, late notes, and personal notifications are never persisted there.
+- **Tab experience work is NOT complete**: iOS PWAで別タブから`/home`へ移動すると毎回フリーズする重大障害が未解決。タイムラインのIndexedDB永続化は`c5786a9`で停止済み。下記の重大インシデント記録を正とする。
 - **Home attendance is local-only**: changing attendance does not call `router.refresh()` or reload the page; the home initial state uses one coherent skeleton.
 - **Remaining candidates**: sync scalability at 100 members, sync-failure/mismatched-sheet visibility, search (explicitly deferred by owner), generated database types, and sheet bulk-input workflows. Use this section and the actual code over older “unstarted” labels below.
+
+## 【重大・未解決 2026-07-12】iOS PWAのホーム遷移フリーズ
+
+- **現在の実機症状**: 予定など別タブからホームへ移動しようとすると毎回固まり、ホームへ戻れない。フリーズ、もっさり、スクロール時の構造崩れ、リロード時の配置ガクつきも報告あり。**解消したと扱わないこと。**
+- `c5786a9`: タイムラインのIndexedDB永続化を停止。**ホーム遷移フリーズは解消せず**、IDB主因仮説は外れた。
+- `e2f2497`: 予定のServer Action queryFnをキャンセル可能なRoute Handlerへ変更、BottomNavの手動・touch prefetchを撤去、PullToRefreshをレイアウトから停止、予定スケルトンを現UIへ合わせた。直後の短時間確認ではエラーなしとの報告だったが、後続の反復実機確認で**他タブ→ホームが毎回フリーズ**。成功ではない。
+- `26ad026`: PullToRefreshをpassive・preventDefaultなしで再導入したところ、フリーズ・もっさり・ガクつきが全面再発。`18c948f`で即撤回。PullToRefreshは症状を悪化させることは確認できたが、撤去後もホーム遷移フリーズは残るため**単独の根本原因ではない**。
+- **現在の本番状態**: PullToRefreshは未マウント、タイムラインIDB永続化なし、BottomNavの追加手動prefetchなし、予定再取得はRoute Handler。それでもホーム遷移フリーズは未解決。
+- **禁止**: PullToRefreshを方式変更だけで再導入しない。IndexedDB・prefetch・Server Actionのいずれかを「根本原因」と断定しない。ローカルE2E成功やbuild成功を実機障害の解消扱いにしない。
+- **次の調査**: `/home`遷移時のRSC要求開始/完了、Client Router状態、PPR/Suspense、保持中ルートとメモリ、メインスレッドlong taskを実機で採取する。推測ベースのキャッシュ微修正を続けず、まずホーム遷移そのものの証拠を取る。
 
 # まずこれを読む（エージェント共通の入口）
 
@@ -206,6 +216,8 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 
 ## 作業ログ（着手前に追記・新しいものを上へ）
 <!-- 形式: YYYY-MM-DD / エージェント / 触る範囲 → 結果(commit・要点) -->
+- 2026-07-12 / Codex / iOSタブ基盤の再構築案を推測で本番採用せず検証するため、通常画面から隔離したClient Tab Labを実装。A=空画面、B=36枚の軽量DOM、C=現ホームをRouter/Activityなしで破棄・再表示。タップ→2描画時間、最大イベントループ停止、直前50操作をlocalStorageへ保存し結果コピー可能。システム管理者だけマイページ→その他に導線表示。通常5タブ・DB・同期処理は変更なし。tsc/対象lint成功（home既存unused警告2件のみ）、本番build成功。実機A→B→C判定待ち → (this commit)
+- 2026-07-12 / Codex / iOSフリーズ調査の実機結果を反映。`c5786a9`(IDB停止)、`e2f2497`(予定Route Handler化・重複prefetch撤去・PullToRefresh停止・スケルトン修正)、`26ad026`(passive方式でPullToRefresh再導入)→`18c948f`(即撤回)を本番投入したが、最終実機結果は**別タブからホームへ毎回遷移不能・フリーズ**。PullToRefreshは明確な悪化要因だが撤去後も再現し、根本原因未特定。今回の対策群を成功扱いしない。AGENTS.mdに重大未解決インシデントとして記録 → (このcommit)
 - 2026-07-12 / Claude Code (Fable 5) / FreezeProbeの初回実機データ入手: **フリーズは /schedule と /timeline に集中**（オーナー報告）。＋リロード時の「一瞬上にズレてガクッと戻る」報告。ローカル再現不可のためCodexへ引き継ぎ（**詳細は docs/CLAUDE-HANDOFF.md 冒頭の2026-07-12節が正**。最有力仮説: この2画面だけにあるreact-queryキャッシュ機構＝timelineのIndexedDB永続化／scheduleのServer Action queryFn）。コードはドキュメントのみ変更 → (このcommit)
 - 2026-07-12 / Claude Code (Fable 5) / オーナー提案を実装: **スプシ由来記録のタイムライン並び順を「練習日の0時(JST)投稿扱い」へ変更**（取込時刻のままだと、まとめ取込のたびに数日分が先頭で団子になり順番が荒れるため）。`sheet-sync.ts` computeMemberPullのinsertに `created_at: 練習日T00:00:00+09:00` を追加＋migration 20260712150000で既存のfrom_sheet=true全80行をバックフィル（冪等UPDATE）。厳守ルールどおり適用前にスナップショット取得（scratchpadのsnapshot_from_sheet_created_at_20260712.json、80行のid/created_at）→オーナー承認→db push→RESTで全80行が0時JSTになったこと検証済み。タスク3の「created_at＝取込時刻」方針は本節で上書き（方針転換の節も更新済み）。tsc OK → (このcommit)
 - 2026-07-12 / Claude Code (Fable 5) / オーナー報告続報3点（①予定タブ表示時に一瞬UIズレ ②ホームのリロード=スピナー回りっぱなし ③予定→他タブ→予定で完全フリーズ・要アプリ再起動）。**E2E再現テストを実施**（オーナー許可を得て使い捨てテストユーザー作成→検証→削除。scripts/repro-freeze*.mjs 新設、playwrightは`npm i --no-save`）: ローカル本番ビルド＋Chromium/WebKit＋タッチ合成のpull-to-refreshで**いずれも再現せず**＝実機iOS PWA固有。②③は「メインスレッド停止」で説明が付く（スピナーはCSSアニメでGPU駆動のため固まっても回り続ける。スクロール不能はPullToRefreshの非passiveリスナー経由）。対応3点: (1)**FreezeProbe新設**（(app)layout常駐。1秒心拍をlocalStorageへ、hidden/pagehideで正常離脱マーク。次回起動時に異常終了を検出しconsole+直近5件保存、can_manage_system保持者にはトーストで場所を通知→**実機の証拠が取れる**）(2)**experimental.staleTimesを撤去**（cacheComponentsと併用の"use with caution"実験。導入以降に症状が出始めた最有力容疑。タブ速度は東京リージョン＋各画面のreact-queryキャッシュで担保）(3)**PullToRefreshの非passiveなtouchmoveを常時登録→タッチ中のみ動的登録に変更**（全スクロールが毎フレームJSを通っていた＝iOSカクつきの一因除去）。tsc/build成功、新ビルドでWebKit E2E全パス（pull表示→900ms消灯・タブ5往復・フリーズ無し）。**次: オーナーの実機でフリーズ再発時、次回起動時のトースト（フリーズ痕跡+パス）を報告してもらう** → (このcommit)
