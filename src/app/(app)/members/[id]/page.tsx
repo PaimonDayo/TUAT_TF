@@ -123,7 +123,7 @@ async function MemberContent({
 
         <section className="space-y-2">
           <p className="section-label">{profile.display_name || "部員"}のノート</p>
-          <NoteList notes={notes} currentUserId={viewer.id} />
+          <NoteList notes={notes} currentUser={{ id: viewer.id, display_name: viewer.display_name, avatar_url: viewer.avatar_url, blocks: viewer.blocks, grade: viewer.grade }} />
         </section>
 
         {pbs.length > 0 && (

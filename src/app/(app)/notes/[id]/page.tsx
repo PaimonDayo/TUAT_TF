@@ -7,7 +7,7 @@ import { SubHeader } from "@/components/layout/SubHeader";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import Link from "next/link";
-import { SubfolderSection } from "@/components/features/SubfolderSection";
+import { NoteList } from "@/components/features/NotesView";
 import {
   getChildNotes,
   getMembersList,
@@ -33,7 +33,6 @@ export default async function NoteFolderPage({
   ]);
   if (!note) notFound();
   const ancestors = await getNoteAncestors(note);
-  const depth = ancestors.length + 1; // ルート=1
 
   const isAdmin = permissionsOf(profile.roles).manageMembers;
   const isAuthor = note.author_id === profile.id;
@@ -108,16 +107,12 @@ export default async function NoteFolderPage({
           </div>
         </section>
 
-        <SubfolderSection
-          parentId={note.id}
-          parentScope={note.scope}
-          depth={depth}
-          currentUser={currentUser}
-          isAdmin={isAdmin}
-          canManage={canManageFolder}
-        >
-          {childNotes}
-        </SubfolderSection>
+        {childNotes.length > 0 && (
+          <section className="space-y-2">
+            <p className="section-label">サブフォルダ</p>
+            <NoteList notes={childNotes} currentUser={currentUser} isAdmin={isAdmin} showAuthor={false} />
+          </section>
+        )}
 
         <section className="space-y-2">
           <p className="section-label">記事</p>

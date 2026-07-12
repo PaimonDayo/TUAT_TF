@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronRight, Folder } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
+import { FolderRowActions } from "@/components/features/FolderRowActions";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -20,12 +21,12 @@ const SCOPE_COOKIE = "tuat-notes-scope";
 export function NotesView({
   currentUser,
   notes,
+  isAdmin = false,
   mine = false,
   initialScope = "shared",
 }: {
   currentUser: AuthorMini;
   notes: NoteWithRelations[];
-  /** 旧: フォルダ作成フォーム用。作成導線はFABへ移したため未使用（呼び出し互換のため残置） */
   isAdmin?: boolean;
   mine?: boolean;
   initialScope?: NoteScope;
@@ -65,7 +66,8 @@ export function NotesView({
 
       <NoteList
         notes={visibleNotes}
-        currentUserId={currentUser.id}
+        currentUser={currentUser}
+        isAdmin={isAdmin}
         showAuthor={!mine}
       />
     </div>
@@ -74,13 +76,16 @@ export function NotesView({
 
 export function NoteList({
   notes,
-  currentUserId,
+  currentUser,
+  isAdmin = false,
   showAuthor = false,
 }: {
   notes: NoteWithRelations[];
-  currentUserId: string;
+  currentUser: AuthorMini;
+  isAdmin?: boolean;
   showAuthor?: boolean;
 }) {
+  const currentUserId = currentUser.id;
   if (notes.length === 0) {
     return (
       <EmptyState
@@ -126,7 +131,20 @@ export function NoteList({
                   </div>
                 )}
               </div>
-              <ChevronRight size={18} className="mt-0.5 shrink-0 text-muted" />
+              {note.author_id === currentUserId || isAdmin ? (
+                <div
+                  className="-mr-2 -mt-1 shrink-0"
+                  onClick={(event) => {
+                    // 行全体がLinkのため、メニュー操作でフォルダへ遷移しない
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                >
+                  <FolderRowActions note={note} currentUser={currentUser} isAdmin={isAdmin} />
+                </div>
+              ) : (
+                <ChevronRight size={18} className="mt-0.5 shrink-0 text-muted" />
+              )}
             </div>
           </Card>
         </Link>
