@@ -310,7 +310,7 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 
 ## Claude handoff — 2026-07-12 tab lab D result and queued UX work
 
-- Tab Lab D (real schedule <-> real home, inactive DOM unmounted) owner result: 100 switches, average 30ms, worst 64ms, max event-loop stop 24ms. No freeze was reported. The DOM metric value was not included after the `DOM` label.
+- Tab Lab D (real schedule <-> real home, inactive DOM unmounted) owner result: 100 switches, average 30ms, worst 64ms, max event-loop stop 24ms. No freeze was reported. DOM nodes by tab in display order: Home 237, Schedule 888, Timeline 47, Notes 47, My Page 47.
 - Interpretation: cost rises with the real screen DOM, but the isolated client-owned switch path remains responsive for 100 switches. This supports replacing bottom-tab Next Router transitions with a client tab shell that unmounts inactive screen DOM/state. Codebase line count itself is not the cause; route retention/reactivation and the amount of mounted DOM/work are the relevant variables.
 - Lab commits already pushed: `199d61c` (A/B/C) and `ba46bf7` (D). Do not treat the lab as production navigation yet.
 - Owner explicitly asked Claude to take part of the remaining work because of Codex token limits.
