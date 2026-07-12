@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./SplashIntro.module.css";
 
-const STORAGE_KEY = "tuat-splash-played";
+const SESSION_KEY = "tuat-splash-played";
 const FINISH_AFTER_MS = 4380;
 const FADE_MS = 80;
 
@@ -18,26 +18,37 @@ export default function SplashIntro() {
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    let alreadyPlayed = false;
+    let playedThisLaunch = false;
     try {
-      alreadyPlayed = localStorage.getItem(STORAGE_KEY) === "1";
+      playedThisLaunch = sessionStorage.getItem(SESSION_KEY) === "1";
     } catch {
       // Storage may be unavailable in a restricted browser context.
     }
+    const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+    const isReload = navigation?.type === "reload";
     if (
-      alreadyPlayed ||
+      playedThisLaunch ||
+      isReload ||
       window.matchMedia("(prefers-reduced-motion: reduce)").matches
     ) {
       setDone(true);
       return;
     }
 
-    // Record immediately so reloading during playback does not restart it.
+    // Record immediately so reloading during this PWA launch does not restart it.
     try {
-      localStorage.setItem(STORAGE_KEY, "1");
+      sessionStorage.setItem(SESSION_KEY, "1");
     } catch {
       // Continue even when persistence is unavailable.
     }
+    const endLaunch = () => {
+      try {
+        sessionStorage.removeItem(SESSION_KEY);
+      } catch {
+        // Nothing to clear when storage is unavailable.
+      }
+    };
+    window.addEventListener("pagehide", endLaunch);
 
     const prefetchTimer = window.setTimeout(() => {
       TAB_ROUTES.forEach((route, index) => {
@@ -51,6 +62,7 @@ export default function SplashIntro() {
     return () => {
       window.clearTimeout(prefetchTimer);
       window.clearTimeout(finishTimer);
+      window.removeEventListener("pagehide", endLaunch);
     };
   }, [router]);
 
