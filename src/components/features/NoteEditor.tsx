@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Plus } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
@@ -100,6 +100,72 @@ export function NoteEditor({
     note?.editors?.map((editor) => editor.user_id) ?? [],
   );
   const [saving, setSaving] = useState(false);
+  // 場所（親フォルダ）の移動（タスク17-e）。編集時＋管理可の場合のみ使用。
+  const [parentIdValue, setParentIdValue] = useState<string | null>(note?.parent_id ?? parentId ?? null);
+  const [folderOptions, setFolderOptions] = useState<
+    { id: string; title: string; parent_id: string | null; scope: NoteScope }[] | null
+  >(null);
+
+  useEffect(() => {
+    // 移動UIは既存フォルダの編集時のみ（新規作成はFAB/親から場所が決まる）
+    if (!note || !canManagePermissions) return;
+    let active = true;
+    void createClient()
+      .from("notes")
+      .select("id, title, parent_id, scope")
+      .then(({ data }) => {
+        if (active) {
+          setFolderOptions(
+            (data ?? []) as { id: string; title: string; parent_id: string | null; scope: NoteScope }[],
+          );
+        }
+      });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 移動先候補: 同scope・自分自身と子孫は除外（循環禁止）・移動後もツリー全体が深さ3以内
+  const moveTargets = (() => {
+    if (!note || !folderOptions) return null;
+    const byParent = new Map<string | null, string[]>();
+    for (const f of folderOptions) {
+      const arr = byParent.get(f.parent_id) ?? [];
+      arr.push(f.id);
+      byParent.set(f.parent_id, arr);
+    }
+    // 自分配下の子孫集合と、自分のサブツリーの深さ
+    const descendants = new Set<string>();
+    let subtreeDepth = 1;
+    const walk = (id: string, level: number) => {
+      subtreeDepth = Math.max(subtreeDepth, level);
+      for (const child of byParent.get(id) ?? []) {
+        descendants.add(child);
+        walk(child, level + 1);
+      }
+    };
+    walk(note.id, 1);
+    const depthOf = (id: string): number => {
+      let d = 1;
+      let cur = folderOptions.find((f) => f.id === id);
+      while (cur?.parent_id && d < 5) {
+        d++;
+        cur = folderOptions.find((f) => f.id === cur!.parent_id);
+      }
+      return d;
+    };
+    return folderOptions
+      .filter(
+        (f) =>
+          f.id !== note.id &&
+          !descendants.has(f.id) &&
+          f.scope === scope &&
+          depthOf(f.id) + subtreeDepth <= 3,
+      )
+      .map((f) => ({ ...f, depth: depthOf(f.id) }))
+      .sort((a, b) => a.title.localeCompare(b.title, "ja"));
+  })();
   const [error, setError] = useState<string | null>(null);
 
   function toggleEditor(userId: string) {
@@ -131,6 +197,7 @@ export function NoteEditor({
       description: description.trim() || null,
       status,
       edit_policy: editPolicy,
+      parent_id: parentIdValue,
     };
 
     let noteId = note?.id;
@@ -200,8 +267,44 @@ export function NoteEditor({
               { key: "personal", label: "個人" },
             ]}
             value={scope}
-            onChange={(value) => setScope(value)}
+            onChange={(value) => {
+              setScope(value);
+              // 種類を切り替えたら移動先は一旦ルートへ（別scopeの親に残さない）
+              if (note) setParentIdValue(null);
+            }}
           />
+        </div>
+      )}
+
+      {note && canManagePermissions && moveTargets && (
+        <div>
+          <p className="section-label mb-1.5">場所</p>
+          <div className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-separator bg-card p-1">
+            {[{ id: null as string | null, title: "ルート（ノート一覧の直下）", depth: 0 }, ...moveTargets].map(
+              (target) => {
+                const active = parentIdValue === target.id;
+                return (
+                  <button
+                    key={target.id ?? "root"}
+                    type="button"
+                    onClick={() => setParentIdValue(target.id)}
+                    className={cn(
+                      "flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left",
+                      active ? "bg-accent/10" : "active:bg-bg",
+                    )}
+                  >
+                    <span
+                      className="min-w-0 flex-1 truncate text-[14px] font-medium"
+                      style={{ paddingLeft: `${target.depth * 14}px` }}
+                    >
+                      {target.title}
+                    </span>
+                    {active && <Check size={18} className="text-accent" />}
+                  </button>
+                );
+              },
+            )}
+          </div>
         </div>
       )}
 
