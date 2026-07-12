@@ -636,9 +636,12 @@ function computeMemberPull(
       inserts.push({
         user_id: profileId,
         recorded_date: sr.date,
+        // タイムラインでは「練習日の0時(JST)に投稿された」扱いで並べる
+        // (オーナー確定 2026-07-12。取込時刻だとまとめ取込のたびに先頭で団子になる)
+        created_at: `${sr.date}T00:00:00+09:00`,
         synced_at: nowIso,
         updated_at: nowIso,
-        from_sheet: true, // シート由来＝タイムラインには出さない
+        from_sheet: true,
         custom,
         ...builtin,
       });
