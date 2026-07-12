@@ -1,6 +1,40 @@
 # Claude Code 引き継ぎメモ
 
-最終更新: 2026-07-03
+最終更新: 2026-07-12
+
+## 【最優先・Codexへの引き継ぎ 2026-07-12】iOS実機のフリーズ（/schedule・/timeline）と表示ガクつき
+
+### 症状（オーナー報告・実機iPhone PWA）
+1. **FreezeProbe（後述）が /schedule と /timeline で頻繁にフリーズ痕跡を検出**。特に予定タブで「完全に操作不能（タップ・スクロール全滅、アプリ再起動が必要）」が多発。
+2. リロード時に**コンテンツが一瞬「上にズレて」表示され、ガクッと正しい位置に戻る**（スクロール位置/レイアウトの復元race）。
+3. ローカル再現は**失敗**: 本番ビルド＋Chromium/WebKit＋タッチ合成pull-to-refreshのE2E（`scripts/repro-freeze*.mjs`）では全パス。**実機iOS固有**。
+
+### 最重要の手がかり（まだ誰も検証していない仮説）
+フリーズが出る2画面は、**ちょうど react-query キャッシュ機構が入っている2画面**:
+- `/timeline` … `PersistQueryClientProvider` + **IndexedDB永続化**（`src/lib/client/query-persistence.ts`、idb-keyval）。iOS SafariはIDBが「復帰後にハングする」既知バグが多い。
+- `/schedule` … `ScheduleCachedView.tsx` の useQuery で **queryFn がServer Action**（`loadSchedulePageData`）。Server Actionは直列実行のため、ナビゲーション/refreshと重なると詰まる可能性。
+この相関を最初に疑うこと。切り分け案: ①タイムラインのIDB永続化を一時無効化（`QueryProvider.tsx`で`PersistQueryClientProvider`→素の`QueryClientProvider`に切替）した検証ビルドをオーナー実機で試す ②scheduleのqueryFnをServer Action→Route Handler(fetch)に変える。
+
+### 証拠収集の仕組み（実装済み・活用すること）
+- `src/components/features/FreezeProbe.tsx`（(app)layout常駐）: 1秒心拍をlocalStorageへ。異常終了は次回起動時に検出し、**localStorage `tuat-freeze-reports` に直近5件**（at/path/foundAt）保存＋can_manage_system保持者にトースト表示。
+- 拡張候補: 直前のタッチ対象・開いていたdialogの有無・performance.memoryを心拍に含めると原因特定が速い。オーナーは非エンジニアなので「レポートを画面から見られる/送信できる」導線もあると強い。
+
+### ガクつき（症状2）の調査ポイント
+- Next.js 16 cacheComponents(PPR)のstatic shell→動的コンテンツstream時のスクロール位置復元。`Header large`のcollapse挙動や`scroll-behavior`、`history.scrollRestoration`を確認。
+- 再現はローカルWebKitでもできる可能性が高い（見た目の問題なので）。`scripts/repro-freeze-webkit.mjs`を流用しスクリーンショット連写で確認可。
+
+### やってはいけないこと（今日の教訓・再発防止）
+- `PullToRefresh.tsx`に`useTransition`を再導入しない（isPendingが解消せず固まる回帰を今日起こした。46e79a7→cb0278aの経緯参照）。
+- `next.config.ts`に`experimental.staleTimes`を再導入しない（cacheComponentsと併用の実験的組み合わせ。撤去済み）。
+- `vercel.json`の`"regions": ["hnd1"]`を消さない（消すと関数が米国東海岸に戻り全画面が数秒級に劣化。今日の最大の改善）。
+- 同期・一括更新はスナップショット＋dryRun必須（AGENTS.md厳守ルール）。
+
+### E2E再現ツール（今日整備済み）
+- `npm run build && npm run start`（:3000）→ `npm i --no-save playwright`（＋WebKitは`npx playwright install webkit`）→ `npx tsx --env-file=.env.local scripts/repro-freeze.mjs`（Chromium/Edge）または `repro-freeze-webkit.mjs`（WebKit・タッチ合成pull込み）。
+- ⚠️ 本番authに使い捨てユーザーを作成する（finallyで削除）。**実行前にオーナーの許可を取ること**（2026-07-12に許可実績あり）。
+
+### 本日の変更履歴（コンテキスト）
+AGENTS.md作業ログの2026-07-12各行を参照。要点: 東京リージョン固定（体感大幅改善・オーナー確認済み）／同期の型不一致スキップ＋3日分滞留解消／staleTimes撤去／PullToRefreshのリスナーをタッチ中のみ登録／スプシ由来記録はcreated_at=練習日0時JST（migration 20260712150000でバックフィル済み）。
 
 ## 現在のアクティブ実装バックログ
 
