@@ -307,3 +307,21 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 
 ## 注意：README は人間向けセットアップ用
 `README.md` の「実装状況」欄や `profiles.role='admin'`（旧シングルロール方式）は **古い**。最新の状態は本ファイルと `docs/CLAUDE-HANDOFF.md` を正とする。
+
+## Claude handoff — 2026-07-12 tab lab D result and queued UX work
+
+- Tab Lab D (real schedule <-> real home, inactive DOM unmounted) owner result: 100 switches, average 30ms, worst 64ms, max event-loop stop 24ms. No freeze was reported. The DOM metric value was not included after the `DOM` label.
+- Interpretation: cost rises with the real screen DOM, but the isolated client-owned switch path remains responsive for 100 switches. This supports replacing bottom-tab Next Router transitions with a client tab shell that unmounts inactive screen DOM/state. Codebase line count itself is not the cause; route retention/reactivation and the amount of mounted DOM/work are the relevant variables.
+- Lab commits already pushed: `199d61c` (A/B/C) and `ba46bf7` (D). Do not treat the lab as production navigation yet.
+- Owner explicitly asked Claude to take part of the remaining work because of Codex token limits.
+
+### Next work requested by owner (not implemented yet)
+
+1. Make additions, edits, and deletes of practice records and tweets (and similar mutations where practical) appear immediately in local UI, instead of waiting for `router.refresh()`/server re-render. Use an optimistic/shared client cache and rollback on failure. Ensure both HomeFeed and TimelineView stay coherent, including hidden/restored routes.
+2. Home attendance counts must update immediately. Full `ScheduleCard` already does local state. The confirmed gap is the compact `upcomingSchedules` card in `src/app/(app)/home/page.tsx`: its `present`/`absent` counts are fixed server values and its direct `AttendanceToggle` has no `onChanged`. Extract/use a client card with local status/count state; AttendanceToggle already calls `onChanged` optimistically and again with the previous state on failure.
+3. Splash: make the final blue TUAT scene transition to Home with the same white-flash/brightening feel used between the earlier scenes. Current `SplashIntro.tsx` removes at `FINISH_AFTER_MS=4380` after only 80ms; CSS `.flash` only runs `flash-between`. Add a final flash state/animation, then reveal Home near peak white without layout flash.
+4. Implement and commit these as separate logical tasks, run `npx tsc --noEmit` and `npm run build`, update this log, then push.
+
+### Worktree state at handoff
+
+- Clean. Codex briefly created an untracked draft `UpcomingScheduleCard.tsx`, but removed it before this handoff because it was incomplete. No implementation from the queued work should be assumed present.
