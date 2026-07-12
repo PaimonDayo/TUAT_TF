@@ -337,7 +337,10 @@ function MenuEditor({
       target_user_ids: kind === "people" ? targetIds : [],
       target_menu_id: menu?.id ?? null,
       menu_pace: targetBlock === "middle_long" ? pace.trim() || null : null,
-      menu_remark: targetBlock === "middle_long" ? remark.trim() || null : null,
+      menu_remark:
+        targetBlock === "middle_long" || targetBlock === "short"
+          ? remark.trim() || null
+          : null,
       menu_supplement: targetBlock === "middle_long" ? supplement.trim() || null : null,
     });
 
@@ -512,6 +515,18 @@ function MenuEditor({
           onChange={(event) => setContent(event.target.value)}
         />
       </div>
+
+      {targetBlock === "short" && (
+        <div>
+          <p className="section-label mb-1.5">説明</p>
+          <Textarea
+            rows={5}
+            placeholder="メニューの目的や走り方のポイント"
+            value={remark}
+            onChange={(event) => setRemark(event.target.value)}
+          />
+        </div>
+      )}
 
       {targetBlock === "middle_long" && (
         <>

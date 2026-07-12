@@ -433,7 +433,9 @@ function MenuCard({
       )}
       {menu.remark && (
         <div className="mt-2">
-          <p className="text-[11px] font-semibold text-muted2">補足</p>
+          <p className="text-[11px] font-semibold text-muted2">
+            {menu.target_block === "short" ? "説明" : "補足"}
+          </p>
           <p className="text-[14px] whitespace-pre-wrap">
             <Linkify text={menu.remark} />
           </p>
