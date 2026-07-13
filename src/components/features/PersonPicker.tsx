@@ -7,6 +7,7 @@ import { PeopleFilterButton } from "@/components/features/PeopleFilterButton";
 import { Button } from "@/components/ui/button";
 import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
+import { GRADE_OPTIONS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { AuthorMini, Block } from "@/types";
 
@@ -20,6 +21,7 @@ export function PersonPicker({ people, value, onChange, label = "対象者", exc
   const [grades, setGrades] = useState<string[]>([]);
   const excluded = useMemo(() => new Set(excludeIds), [excludeIds]);
   const included = useMemo(() => new Set(includedIds), [includedIds]);
+  const availableGrades = useMemo(() => { const present = new Set(people.map((person) => person.grade).filter((grade): grade is string => Boolean(grade))); return GRADE_OPTIONS.map((grade) => grade.value).filter((grade) => present.has(grade)); }, [people]);
   const filtered = useMemo(() => people.filter((person) => {
     if (excluded.has(person.id)) return false;
     const q = query.trim().toLowerCase();
@@ -36,7 +38,7 @@ export function PersonPicker({ people, value, onChange, label = "対象者", exc
     <FormModal open={open} onOpenChange={setOpen} title={`${label}を選択`} autoFocus={false}>
       <div className="space-y-3 pb-4">
         <div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="名前で検索" className="pl-9" /></div>
-        <div className="flex h-10 items-center"><PeopleFilterButton blocks={blocks} grades={grades} onBlocksChange={setBlocks} onGradesChange={setGrades} /><span className="ml-auto text-sm font-semibold tabular-nums text-muted">個別選択 {draft.length}人</span></div>
+        <div className="flex h-10 items-center"><PeopleFilterButton blocks={blocks} grades={grades} onBlocksChange={setBlocks} onGradesChange={setGrades} availableGrades={availableGrades} /><span className="ml-auto text-sm font-semibold tabular-nums text-muted">個別選択 {draft.length}人</span></div>
         <div className="space-y-1">{filtered.map((person) => { const explicit = draft.includes(person.id); const byCondition = included.has(person.id); const active = explicit || byCondition; return <button key={person.id} type="button" onClick={() => { if (!byCondition || explicit) toggle(person.id); }} className={cn("flex min-h-12 w-full items-center gap-3 rounded-xl px-2 text-left", active ? "bg-accent/10" : "active:bg-bg")}><Avatar name={person.display_name} avatarUrl={person.avatar_url} blocks={person.blocks} size="sm" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{person.display_name}</span><span className="text-micro text-muted">{explicit ? "個別指定" : byCondition ? "条件で対象" : person.grade ?? "学年未設定"}</span></span>{active && <Check size={18} className="text-accent" />}</button>; })}</div>
       </div>
       <FormModalFooter><Button size="lg" onClick={() => { onChange(draft); setOpen(false); }}>完了（個別 {draft.length}人）</Button></FormModalFooter>

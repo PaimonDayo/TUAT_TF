@@ -19,13 +19,15 @@ export function GradeFilter({
   value: string[];
   onChange: (v: string[]) => void;
   /** 指定すると、この学年（値）だけを選択肢に出す（在籍者がいる学年のみ用途） */
-  availableGrades?: string[];
+  availableGrades: string[];
 }) {
   const [open, setOpen] = useState(false);
   const active = value.length > 0;
   const options = availableGrades
     ? GRADE_OPTIONS.filter((g) => availableGrades.includes(g.value))
     : GRADE_OPTIONS;
+
+  if (options.length === 0) return null;
 
   function toggle(v: string) {
     onChange(value.includes(v) ? value.filter((g) => g !== v) : [...value, v]);
