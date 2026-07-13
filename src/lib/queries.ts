@@ -602,6 +602,17 @@ export async function getThreads(): Promise<ThreadWithAuthor[]> {
   return (data ?? []) as unknown as ThreadWithAuthor[];
 }
 
+/** Threads directly inside a note folder, newest activity first. */
+export async function getThreadsByFolder(folderId: string): Promise<ThreadWithAuthor[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("threads")
+    .select(`*, author:profiles!author_id(id, display_name, avatar_url, blocks, grade), posts:thread_posts(id)`)
+    .eq("folder_id", folderId)
+    .order("updated_at", { ascending: false });
+  return (data ?? []) as unknown as ThreadWithAuthor[];
+}
+
 /** スレッド詳細 */
 export async function getThreadById(id: string): Promise<ThreadWithAuthor | null> {
   const supabase = await createClient();

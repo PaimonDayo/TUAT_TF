@@ -88,7 +88,7 @@ export function ThreadList({
 }
 
 /** スレッド作成フォーム（FABの「スレッド」から開く） */
-export function ThreadComposer({ userId, onDone }: { userId: string; onDone: () => void }) {
+export function ThreadComposer({ userId, folderId, onDone }: { userId: string; folderId: string; onDone: () => void }) {
   const router = useRouter();
   const { showToast } = useToast();
   const [title, setTitle] = useState("");
@@ -100,7 +100,7 @@ export function ThreadComposer({ userId, onDone }: { userId: string; onDone: () 
     setSaving(true);
     const { data, error } = await createClient()
       .from("threads")
-      .insert({ title: trimmed.slice(0, 100), author_id: userId })
+      .insert({ title: trimmed.slice(0, 100), author_id: userId, folder_id: folderId })
       .select("id")
       .single();
     setSaving(false);

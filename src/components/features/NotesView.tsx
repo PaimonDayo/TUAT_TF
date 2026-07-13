@@ -64,7 +64,7 @@ export function NotesView({
             { key: "shared", label: "共有" },
             { key: "personal", label: "個人" },
             { key: "threads", label: "スレッド" },
-          ]}
+          ].filter(({ key }) => key !== "threads")}
           value={scope}
           onChange={(key) => changeScope(key as NotesTab)}
           className="w-full"

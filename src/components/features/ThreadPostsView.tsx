@@ -14,7 +14,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { createClient } from "@/lib/supabase/client";
-import type { ThreadPostWithAuthor } from "@/types";
+import type { AuthorMini, ThreadPostWithAuthor } from "@/types";
 
 /** スレッドの投稿一覧＋返信欄（掲示板スタイル・時系列） */
 export function ThreadPostsView({
@@ -22,30 +22,46 @@ export function ThreadPostsView({
   posts,
   currentUserId,
   isAdmin,
+  currentUser,
 }: {
   threadId: string;
   posts: ThreadPostWithAuthor[];
   currentUserId: string;
   isAdmin: boolean;
+  currentUser: AuthorMini;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
 
+  const [visiblePosts, setVisiblePosts] = useState(posts);
   async function send() {
     const trimmed = body.trim();
     if (!trimmed || sending) return;
+    const submittedBody = trimmed.slice(0, 2000);
+    const optimisticId = `optimistic-${crypto.randomUUID()}`;
+    const now = new Date().toISOString();
+    setVisiblePosts((current) => [...current, {
+      id: optimisticId, thread_id: threadId, author_id: currentUserId,
+      body: submittedBody, created_at: now, updated_at: now, author: currentUser,
+    }]);
+    setBody("");
+
     setSending(true);
-    const { error } = await createClient()
+    const { data, error } = await createClient()
       .from("thread_posts")
-      .insert({ thread_id: threadId, author_id: currentUserId, body: trimmed.slice(0, 2000) });
+      .insert({ thread_id: threadId, author_id: currentUserId, body: submittedBody })
+      .select("id, thread_id, author_id, body, created_at, updated_at")
+      .single();
     setSending(false);
     if (error) {
       showToast("投稿できませんでした");
+      setVisiblePosts((current) => current.filter((post) => post.id !== optimisticId));
+      setBody(submittedBody);
       return;
     }
-    setBody("");
+    setVisiblePosts((current) => current.map((post) => post.id === optimisticId ? { ...post, ...data } : post));
     router.refresh();
   }
 
@@ -61,11 +77,11 @@ export function ThreadPostsView({
 
   return (
     <div className="space-y-4">
-      {posts.length === 0 ? (
+      {visiblePosts.length === 0 ? (
         <EmptyState title="まだ投稿がありません" description="最初のひとことを書いてみましょう。" />
       ) : (
         <div className="space-y-2">
-          {posts.map((post) => (
+          {visiblePosts.map((post) => (
             <Card key={post.id} className="p-3">
               <div className="flex items-start gap-2.5">
                 <Avatar
@@ -83,7 +99,7 @@ export function ThreadPostsView({
                     <Linkify text={post.body} />
                   </div>
                 </div>
-                {(post.author_id === currentUserId || isAdmin) && (
+                {!post.id.startsWith("optimistic-") && (post.author_id === currentUserId || isAdmin) && (
                   <ActionMenu
                     onDelete={() => removePost(post.id)}
                     deleteTitle="投稿を削除しますか？"

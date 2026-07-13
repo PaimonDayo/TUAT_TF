@@ -26,6 +26,7 @@ export default async function ThreadPage({ params }: { params: Promise<{ id: str
           threadId={thread.id}
           posts={posts}
           currentUserId={profile.id}
+          currentUser={{ id: profile.id, display_name: profile.display_name, avatar_url: profile.avatar_url, blocks: profile.blocks, grade: profile.grade }}
           isAdmin={permissionsOf(profile.roles).manageMembers}
         />
       </div>

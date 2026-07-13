@@ -438,6 +438,7 @@ export interface NoteWithRelations extends NoteRow {
 
 export interface ThreadRow {
   id: string;
+  folder_id: string | null;
   author_id: string;
   title: string;
   created_at: string;

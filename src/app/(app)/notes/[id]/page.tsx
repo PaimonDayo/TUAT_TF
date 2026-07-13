@@ -8,12 +8,14 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import Link from "next/link";
 import { NoteList } from "@/components/features/NotesView";
+import { ThreadList } from "@/components/features/ThreadList";
 import {
   getChildNotes,
   getMembersList,
   getNoteAncestors,
   getNoteArticles,
   getNoteById,
+  getThreadsByFolder,
 } from "@/lib/queries";
 import { permissionsOf } from "@/lib/permissions";
 import { getCurrentProfile } from "@/lib/supabase/auth";
@@ -24,12 +26,13 @@ export default async function NoteFolderPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [profile, note, members, articles, childNotes] = await Promise.all([
+  const [profile, note, members, articles, childNotes, threads] = await Promise.all([
     getCurrentProfile(),
     getNoteById(id),
     getMembersList(),
     getNoteArticles(id),
     getChildNotes(id),
+    getThreadsByFolder(id),
   ]);
   if (!note) notFound();
   const ancestors = await getNoteAncestors(note);
@@ -131,6 +134,10 @@ export default async function NoteFolderPage({
               currentUser={currentUser}
             />
           )}
+        </section>
+        <section className="space-y-2">
+          <p className="section-label">????</p>
+          <ThreadList threads={threads} currentUserId={profile.id} isAdmin={isAdmin} />
         </section>
       </div>
     </>

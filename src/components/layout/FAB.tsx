@@ -162,7 +162,7 @@ function ContextualFAB({
     }
     if (isNoteFolder) {
       // サブフォルダを作れる立場なら2択メニュー、そうでなければ従来どおり記事作成へ直行
-      if (folderInfo?.canManage && folderInfo.depth < 3) {
+      if (isNoteFolder || (folderInfo?.canManage && folderInfo.depth < 3)) {
         setSpeedDialOpen((open) => !open);
       } else {
         setDirectForm("article");
@@ -238,6 +238,7 @@ function ContextualFAB({
                 setDirectForm("folder");
               }}
             />
+            {false && (
             <SpeedDialAction
               icon={<MessagesSquare size={19} />}
               label="スレッドを立てる"
@@ -246,6 +247,7 @@ function ContextualFAB({
                 setDirectForm("thread");
               }}
             />
+            )}
           </div>
         )}
 
@@ -267,6 +269,14 @@ function ContextualFAB({
                 setDirectForm("subfolder");
               }}
             />
+            <SpeedDialAction
+              icon={<MessagesSquare size={19} />}
+              label="????????"
+              onClick={() => {
+                setSpeedDialOpen(false);
+                setDirectForm("thread");
+              }}
+            />
           </div>
         )}
 
@@ -277,7 +287,7 @@ function ContextualFAB({
           aria-expanded={isFeed || isNotesRoot || isNoteFolder ? speedDialOpen : undefined}
           className="pointer-events-auto absolute right-5 bottom-[calc(74px+env(safe-area-inset-bottom))] flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-lg shadow-accent/30 active:scale-95 transition-active"
         >
-          {isFeed || isNotesRoot || (isNoteFolder && folderInfo?.canManage && folderInfo.depth < 3) ? (
+          {isFeed || isNotesRoot || isNoteFolder ? (
             <Plus
               size={28}
               strokeWidth={2.5}
@@ -358,7 +368,7 @@ function ContextualFAB({
         onOpenChange={(open) => !open && closeDirectForm()}
         title="スレッドを立てる"
       >
-        <ThreadComposer userId={userId} onDone={closeDirectForm} />
+        {noteId && <ThreadComposer userId={userId} folderId={noteId} onDone={closeDirectForm} />}
       </FormModal>
 
       <FormModal
