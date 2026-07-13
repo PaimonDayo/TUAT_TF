@@ -363,11 +363,13 @@ export interface Notice {
   deadline: string | null;
   pin_home: boolean;
   notify_members: boolean;
-  /** 空配列は全部員。値がある場合は該当ロールの部員だけへ通知する。 */
+  /** 旧通知先ロール列（mentioned_role_idsとの互換用）。 */
   target_role_ids: string[];
   mentioned_all: boolean;
   mentioned_role_ids: string[];
   mentioned_user_ids: string[];
+  mentioned_blocks: Block[];
+  mentioned_grades: string[];
   created_at: string;
 }
 

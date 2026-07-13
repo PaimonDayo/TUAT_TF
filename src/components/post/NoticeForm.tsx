@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { LoaderCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { FormModalFooter } from "@/components/ui/form-modal";
@@ -11,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import { RecipientPicker } from "@/components/features/RecipientPicker";
 import { NOTICE_CATEGORIES } from "@/lib/constants";
-import type { AppRole, AuthorMini, Notice, NoticeCategory } from "@/types";
+import type { AppRole, AuthorMini, Block, Notice, NoticeCategory } from "@/types";
 
 export function NoticeForm({
   initial,
@@ -36,6 +37,8 @@ export function NoticeForm({
     initial?.mentioned_role_ids ?? initial?.target_role_ids ?? [],
   );
   const [mentionedUserIds, setMentionedUserIds] = useState<string[]>(initial?.mentioned_user_ids ?? []);
+  const [mentionedBlocks, setMentionedBlocks] = useState<Block[]>(initial?.mentioned_blocks ?? []);
+  const [mentionedGrades, setMentionedGrades] = useState<string[]>(initial?.mentioned_grades ?? []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,7 +58,7 @@ export function NoticeForm({
     };
   }, []);
 
-  const hasMentions = mentionedAll || mentionedRoleIds.length > 0 || mentionedUserIds.length > 0;
+  const hasMentions = mentionedAll || mentionedRoleIds.length > 0 || mentionedUserIds.length > 0 || mentionedBlocks.length > 0 || mentionedGrades.length > 0;
 
   async function submit() {
     if (!title.trim() || !content.trim()) {
@@ -81,6 +84,8 @@ export function NoticeForm({
           mentioned_all: mentionedAll,
           mentioned_role_ids: mentionedRoleIds,
           mentioned_user_ids: mentionedUserIds,
+          mentioned_blocks: mentionedBlocks,
+          mentioned_grades: mentionedGrades,
         },
         { id: initial!.id },
       );
@@ -113,6 +118,8 @@ export function NoticeForm({
       mentioned_all: mentionedAll,
       mentioned_role_ids: mentionedRoleIds,
       mentioned_user_ids: mentionedUserIds,
+      mentioned_blocks: mentionedBlocks,
+      mentioned_grades: mentionedGrades,
     });
     if (error) {
       setError("投稿に失敗しました");
@@ -168,13 +175,13 @@ export function NoticeForm({
         onChange={() => setPinHome((v) => !v)}
       />
       <RecipientPicker
-        people={members} roles={roles} all={mentionedAll} roleIds={mentionedRoleIds} personIds={mentionedUserIds}
-        onAllChange={setMentionedAll} onRoleIdsChange={setMentionedRoleIds} onPersonIdsChange={setMentionedUserIds}
+        people={members} roles={roles} all={mentionedAll} roleIds={mentionedRoleIds} personIds={mentionedUserIds} blocks={mentionedBlocks} grades={mentionedGrades}
+        onAllChange={setMentionedAll} onRoleIdsChange={setMentionedRoleIds} onPersonIdsChange={setMentionedUserIds} onBlocksChange={setMentionedBlocks} onGradesChange={setMentionedGrades}
       />
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <FormModalFooter>
         <Button size="lg" onClick={submit} disabled={saving}>
-          {saving ? "保存中…" : editing ? "更新する" : "投稿する"}
+          {saving ? <><LoaderCircle size={18} className="animate-spin" />保存しています…</> : editing ? "更新する" : "投稿する"}
         </Button>
       </FormModalFooter>
     </div>
