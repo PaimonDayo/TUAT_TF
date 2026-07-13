@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Activity,
   BellPlus,
   CalendarPlus,
-  ClipboardList,
   FolderPlus,
   MessageCircle,
   MessagesSquare,
@@ -15,7 +14,8 @@ import {
   Trophy,
 } from "lucide-react";
 import { FormModal } from "@/components/ui/form-modal";
-import { MonthlyPlanningEditorV2 } from "@/components/features/MonthlyPlanningEditorV2";
+import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
+import { MonthlyPlanningEditorV2, type MonthlyPlanningEditorHandle } from "@/components/features/MonthlyPlanningEditorV2";
 import { NoteArticleEditor } from "@/components/features/NoteArticleEditor";
 import { ThreadComposer } from "@/components/features/ThreadList";
 import { NoteComposer } from "@/components/features/NoteComposer";
@@ -79,6 +79,10 @@ function ContextualFAB({
   const [recordOpen, setRecordOpen] = useState(false);
   const [tweetOpen, setTweetOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState(false);
+  const planningRef = useRef<MonthlyPlanningEditorHandle>(null);
+  const [planningDirty, setPlanningDirty] = useState(false);
+  const [confirmPlanningClose, setConfirmPlanningClose] = useState(false);
+  const [savingPlanning, setSavingPlanning] = useState(false);
   const [canEditArticles, setCanEditArticles] = useState(false);
   const [folderInfo, setFolderInfo] = useState<{
     scope: "shared" | "personal";
@@ -86,7 +90,7 @@ function ContextualFAB({
     canManage: boolean;
   } | null>(null);
   const [directForm, setDirectForm] = useState<DirectForm>(() => {
-    if (autoOpen && pathname === "/schedule" && can.createSchedule) {
+    if (autoOpen && pathname === "/schedule" && (can.createSchedule || can.createMenu)) {
       return "planning";
     }
     if (autoOpen && pathname === "/notices" && can.createNotice) {
@@ -96,7 +100,7 @@ function ContextualFAB({
   });
 
   const isFeed = pathname === "/home" || pathname === "/timeline";
-  const isSchedule = pathname === "/schedule" && can.createSchedule;
+  const isSchedule = pathname === "/schedule" && (can.createSchedule || can.createMenu);
   const isNotice = pathname === "/notices" && can.createNotice;
   const isNotesRoot = pathname === "/notes";
   const noteFolderMatch = pathname.match(/^\/notes\/([^/]+)$/);
@@ -172,6 +176,8 @@ function ContextualFAB({
   }
 
   function closeDirectForm() {
+    setPlanningDirty(false);
+    setConfirmPlanningClose(false);
     setDirectForm(null);
     if (autoOpen) router.back();
   }
@@ -204,9 +210,6 @@ function ContextualFAB({
       <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 mx-auto h-0 w-full max-w-md">
         {isFeed && speedDialOpen && (
           <div className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-2xl border border-separator bg-card shadow-xl">
-            {(can.createSchedule || can.createMenu) && (
-              <SpeedDialAction icon={<ClipboardList size={19} />} label="予定・メニュー" onClick={() => { setSpeedDialOpen(false); setDirectForm("planning"); }} />
-            )}
             <SpeedDialAction
               icon={<Activity size={19} />}
               label="練習記録"
@@ -227,9 +230,6 @@ function ContextualFAB({
 
         {isNotesRoot && speedDialOpen && (
           <div className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-2xl border border-separator bg-card shadow-xl">
-            {(can.createSchedule || can.createMenu) && (
-              <SpeedDialAction icon={<ClipboardList size={19} />} label="予定・メニュー" onClick={() => { setSpeedDialOpen(false); setDirectForm("planning"); }} />
-            )}
             <SpeedDialAction
               icon={<FolderPlus size={19} />}
               label="フォルダを作成"
@@ -251,9 +251,6 @@ function ContextualFAB({
 
         {isNoteFolder && speedDialOpen && (
           <div className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-2xl border border-separator bg-card shadow-xl">
-            {(can.createSchedule || can.createMenu) && (
-              <SpeedDialAction icon={<ClipboardList size={19} />} label="予定・メニュー" onClick={() => { setSpeedDialOpen(false); setDirectForm("planning"); }} />
-            )}
             <SpeedDialAction
               icon={<NotebookPen size={19} />}
               label="記事を作成"
@@ -323,9 +320,10 @@ function ContextualFAB({
         <ResultForm userId={userId} onDone={() => setResultOpen(false)} />
       </FormModal>
 
-      <FormModal open={directForm === "planning"} onOpenChange={(open) => !open && closeDirectForm()} title="予定・メニューを月間入力">
-        <MonthlyPlanningEditorV2 initialTab={pathname === "/schedule" || !can.createMenu ? "schedule" : "menu"} canSchedule={can.createSchedule} canMenu={can.createMenu} />
+      <FormModal open={directForm === "planning"} onOpenChange={(open) => { if (!open) { if (planningDirty) setConfirmPlanningClose(true); else closeDirectForm(); } }} title="予定・メニューを月間入力">
+        <MonthlyPlanningEditorV2 ref={planningRef} initialTab="schedule" canSchedule={can.createSchedule} canMenu={can.createMenu} onDirtyChange={setPlanningDirty} />
       </FormModal>
+      <UnsavedChangesDialog open={confirmPlanningClose} busy={savingPlanning} onContinue={() => setConfirmPlanningClose(false)} onDiscard={closeDirectForm} onSave={() => { setSavingPlanning(true); void planningRef.current?.save().then((ok) => { setSavingPlanning(false); if (ok) closeDirectForm(); }); }} />
 
       <FormModal
         open={directForm === "schedule"}

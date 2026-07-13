@@ -28,7 +28,7 @@ export function MenuSheetImportManager() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [targetBlock, setTargetBlock] = useState<Block>("middle_long");
-  const [status, setStatus] = useState<"draft" | "published">("draft");
+  const [status, setStatus] = useState<"draft" | "published">("published");
   const [source, setSource] = useState<"url" | "file">("url");
   const [sheetUrl, setSheetUrl] = useState("");
   const [fileName, setFileName] = useState("");

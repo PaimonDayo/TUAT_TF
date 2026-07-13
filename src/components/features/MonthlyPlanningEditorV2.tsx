@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, LoaderCircle, Save, Star } from "lucide-react";
 import { PersonPicker } from "@/components/features/PersonPicker";
 import { Button } from "@/components/ui/button";
+import { FormModalFooter } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { Select } from "@/components/ui/select";
@@ -30,14 +31,16 @@ function readStored<T>(key: string, fallback: T): T {
 function hasScheduleValue(draft?: ScheduleDraft) { return !!draft && !!(draft.time || draft.venue || draft.note); }
 function hasMenuValue(draft?: MenuDraft) { return !!draft && [draft.content, draft.pace, draft.remark, draft.supplement].some((value) => value.trim()); }
 
-export function MonthlyPlanningEditorV2({ initialTab = "schedule", canSchedule = true, canMenu = true }: { initialTab?: "schedule" | "menu"; canSchedule?: boolean; canMenu?: boolean }) {
+export type MonthlyPlanningEditorHandle = { save: () => Promise<boolean> };
+
+export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, { initialTab?: "schedule" | "menu"; canSchedule?: boolean; canMenu?: boolean; onDirtyChange?: (dirty: boolean) => void }>(function MonthlyPlanningEditorV2({ initialTab = "schedule", canSchedule = true, canMenu = true, onDirtyChange }, ref) {
   const now = new Date();
   const [tab, setTab] = useState<"schedule" | "menu">(initialTab === "menu" && !canMenu ? "schedule" : initialTab === "schedule" && !canSchedule ? "menu" : initialTab);
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [block, setBlock] = useState<Block>("middle_long");
   const [targetIds, setTargetIds] = useState<string[]>([]);
-  const [status, setStatus] = useState<"draft" | "published">("draft");
+  const [status, setStatus] = useState<"draft" | "published">("published");
   const [members, setMembers] = useState<AuthorMini[]>([]);
   const [venues, setVenues] = useState<VenueRow[]>([]);
   const [schedules, setSchedules] = useState<Record<string, PracticeSchedule>>({});
@@ -52,6 +55,8 @@ export function MonthlyPlanningEditorV2({ initialTab = "schedule", canSchedule =
   const [presetName, setPresetName] = useState("");
   const [activeDate, setActiveDate] = useState<string | null>(null);
   const [expandedDates, setExpandedDates] = useState<string[]>([]);
+  const [customTimeDates, setCustomTimeDates] = useState<string[]>([]);
+  const [customVenueDates, setCustomVenueDates] = useState<string[]>([]);
 
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
   const localDraftKey = `track-app:monthly-planner:${monthKey}`;
@@ -68,13 +73,13 @@ export function MonthlyPlanningEditorV2({ initialTab = "schedule", canSchedule =
     void Promise.all([
       supabase.from("practice_schedules").select("*").gte("schedule_date", start).lt("schedule_date", end).order("schedule_date"),
       supabase.from("profiles").select("id, display_name, avatar_url, blocks, grade").eq("status", "active").order("display_name"),
-      supabase.from("venues").select("*").eq("pinned", true).order("sort"),
+      supabase.from("venues").select("*").order("pinned", { ascending: false }).order("sort"),
     ]).then(([scheduleResult, memberResult, venueResult]) => {
       if (!active) return;
       const rows = (scheduleResult.data ?? []) as PracticeSchedule[];
       const byDate: Record<string, PracticeSchedule> = {};
       const drafts: Record<string, ScheduleDraft> = {};
-      rows.forEach((row) => { byDate[row.schedule_date] = row; drafts[row.schedule_date] = { id: row.id, time: row.meeting_time?.slice(0, 5) ?? "", venue: row.venue_name ?? "", note: row.note ?? "" }; });
+      rows.forEach((row) => { byDate[row.schedule_date] = row; drafts[row.schedule_date] = { id: row.id, time: row.meeting_time?.slice(0, 5) ?? "", venue: row.venue_name ?? row.location ?? "", note: row.note ?? "" }; });
       const local = readStored<{ schedules?: Record<string, ScheduleDraft> }>(localDraftKey, {});
       setSchedules(byDate); setScheduleDrafts({ ...drafts, ...(local.schedules ?? {}) });
       setMembers((memberResult.data ?? []) as AuthorMini[]); setVenues((venueResult.data ?? []) as VenueRow[]);
@@ -151,14 +156,17 @@ export function MonthlyPlanningEditorV2({ initialTab = "schedule", canSchedule =
     setMenuDrafts((current) => ({ ...current, [date]: { ...current[date], id: data as string } })); setRowStates((current) => ({ ...current, [stateKey("menu", date)]: "saved" })); return true;
   }
 
-  async function saveAll() {
+  async function saveAll(): Promise<boolean> {
     setSavingAll(true); setError(null);
-    const dates = days.map((day) => day.date).filter((date) => rowStates[stateKey(tab, date)] === "dirty" && (tab === "schedule" ? hasScheduleValue(scheduleDrafts[date]) : hasMenuValue(menuDrafts[date])));
+    const scheduleDates = days.map((day) => day.date).filter((date) => rowStates[stateKey("schedule", date)] === "dirty" && hasScheduleValue(scheduleDrafts[date]));
+    const menuDates = days.map((day) => day.date).filter((date) => rowStates[stateKey("menu", date)] === "dirty" && hasMenuValue(menuDrafts[date]));
     let failed = 0;
-    for (const date of dates) { if (tab === "schedule") { if (!await saveSchedule(date)) failed++; } else if (!await saveMenu(date)) failed++; }
+    for (const date of scheduleDates) { if (!await saveSchedule(date)) failed++; }
+    for (const date of menuDates) { if (!await saveMenu(date)) failed++; }
     if (failed) setError(`${failed}件を保存できませんでした。赤い行を確認してください。`);
     else { localStorage.removeItem(localDraftKey); }
     setSavingAll(false);
+    return failed === 0;
   }
 
   function saveMenuPreset() {
@@ -179,27 +187,38 @@ export function MonthlyPlanningEditorV2({ initialTab = "schedule", canSchedule =
     const bPast = b.date < today;
     return aPast === bPast ? a.date.localeCompare(b.date) : aPast ? 1 : -1;
   });
-  const dirtyCount = days.filter(({ date }) => rowStates[stateKey(tab, date)] === "dirty").length;
+  const dirtyCount = Object.values(rowStates).filter((state) => state === "dirty").length;
+  const hasDirtyChanges = Object.values(rowStates).some((state) => state === "dirty");
+  useEffect(() => { onDirtyChange?.(hasDirtyChanges); }, [hasDirtyChanges, onDirtyChange]);
+  useImperativeHandle(ref, () => ({ save: saveAll }));
   function isExpanded(date: string) { return expandedDates.includes(date); }
   function toggleExpanded(date: string) { setExpandedDates((current) => current.includes(date) ? current.filter((item) => item !== date) : [...current, date]); }
 
-  return <div className="space-y-4 pb-20">
+  return <div className="space-y-4">
     <SegmentedControl items={[...(canSchedule ? [{ key: "schedule", label: "予定" }] : []), ...(canMenu ? [{ key: "menu", label: "メニュー" }] : [])]} value={tab} onChange={(value) => setTab(value as "schedule" | "menu")} />
     <div className="flex items-center justify-between rounded-xl bg-bg px-2 py-1"><button type="button" onClick={() => moveMonth(-1)} className="p-2"><ChevronLeft /></button><strong>{year}年{month}月</strong><button type="button" onClick={() => moveMonth(1)} className="p-2"><ChevronRight /></button></div>
-    <div className="flex items-center justify-between">{tab === "schedule" ? <button type="button" onClick={() => setShowActiveOnly((value) => !value)} className="text-xs font-semibold text-accent">{showActiveOnly ? "全日表示" : "入力・予定ありのみ"}</button> : <span className="text-xs text-muted">予定がある日のみ表示</span>}<span className="text-xs text-muted">変更 {dirtyCount}件</span></div>
+    <div className="flex items-center justify-between gap-3">{tab === "schedule" ? <SegmentedControl className="w-52" items={[{ key: "all", label: "すべての日" }, { key: "active", label: "予定あり" }]} value={showActiveOnly ? "active" : "all"} onChange={(value) => setShowActiveOnly(value === "active")} /> : <span className="text-xs text-muted">予定がある日のみ表示</span>}<span className="shrink-0 text-xs text-muted">変更 {dirtyCount}件</span></div>
     {tab === "menu" && <div className="space-y-3 rounded-xl border border-separator bg-card p-3">
       <Select value={block} onValueChange={(value) => setBlock(value as Block)} ariaLabel="ブロック" options={BLOCK_ORDER.map((item) => ({ value: item, label: BLOCKS[item].label }))} />
       <PersonPicker people={members} value={targetIds} onChange={setTargetIds} label="個人指定（空ならブロック全体）" />
-      <SegmentedControl items={[{ key: "draft", label: "下書き" }, { key: "published", label: "公開" }]} value={status} onChange={(value) => setStatus(value as "draft" | "published")} />
+      <div className={`rounded-xl border p-3 ${status === "published" ? "border-accent/30 bg-accent/5" : "border-warning/30 bg-warning/5"}`}><p className="section-label mb-2">保存後の状態</p><SegmentedControl items={[{ key: "published", label: "公開" }, { key: "draft", label: "下書き" }]} value={status} onChange={(value) => setStatus(value as "draft" | "published")} /><p className="mt-2 text-xs text-muted">{status === "published" ? "保存するとすぐに部員へ公開されます" : "作成者だけが確認できる下書きで保存します"}</p></div>
       <div className="grid grid-cols-[1fr_auto] gap-2"><Select value="" onValueChange={applyMenuPreset} ariaLabel="メニュープリセット" placeholder="メニュープリセット" options={menuPresets.map((item) => ({ value: item.key, label: item.name }))} /><Select value="" onValueChange={(key) => { const preset = targetPresets.find((item) => item.key === key); if (preset) setTargetIds(preset.ids.filter((id) => members.some((member) => member.id === id))); }} ariaLabel="対象者セット" placeholder="対象者セット" options={targetPresets.map((item) => ({ value: item.key, label: item.name }))} /></div>
       <div className="grid grid-cols-[1fr_auto_auto] gap-2"><Input value={presetName} onChange={(event) => setPresetName(event.target.value)} placeholder="プリセット名" /><Button variant="outline" onClick={saveMenuPreset}><Star size={15} />内容</Button><Button variant="outline" onClick={saveTargetPreset}><Star size={15} />対象者</Button></div>
     </div>}
     <div className="space-y-2">{visibleDays.map(({ date, day, weekday }) => <section key={date} className={`rounded-xl border bg-card p-3 ${rowStates[stateKey(tab, date)] === "error" ? "border-danger" : "border-separator"}`}><div className="mb-2 flex items-center"><strong className="text-sm">{month}/{day}（{weekday}）</strong><RowStatus state={rowStates[stateKey(tab, date)]} /></div>
       {tab === "schedule" ? (
         <div className="space-y-2">
-          <div className="grid grid-cols-[7rem_1fr] gap-2">
-            <Input type="time" value={scheduleDrafts[date]?.time ?? ""} onChange={(event) => updateSchedule(date, { time: event.target.value })} />
-            <Input list="monthly-venues" placeholder="場所" value={scheduleDrafts[date]?.venue ?? ""} onChange={(event) => updateSchedule(date, { venue: event.target.value })} />
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <p className="section-label mb-1.5">集合時間</p>
+              <Select ariaLabel="集合時間" value={customTimeDates.includes(date) || (!!scheduleDrafts[date]?.time && !["09:00", "17:00"].includes(scheduleDrafts[date]?.time ?? "")) ? "other" : scheduleDrafts[date]?.time ?? ""} onValueChange={(value) => { setCustomTimeDates((current) => value === "other" ? [...new Set([...current, date])] : current.filter((item) => item !== date)); updateSchedule(date, { time: value === "other" ? (["09:00", "17:00"].includes(scheduleDrafts[date]?.time ?? "") ? "" : scheduleDrafts[date]?.time ?? "") : value }); }} placeholder="時間を選択" options={[{ value: "09:00", label: "9:00" }, { value: "17:00", label: "17:00" }, { value: "other", label: "その他" }]} />
+              {(customTimeDates.includes(date) || (!!scheduleDrafts[date]?.time && !["09:00", "17:00"].includes(scheduleDrafts[date]?.time ?? ""))) && <Input className="mt-2" type="time" value={scheduleDrafts[date]?.time ?? ""} onChange={(event) => updateSchedule(date, { time: event.target.value })} />}
+            </div>
+            <div>
+              <p className="section-label mb-1.5">練習場所</p>
+              <Select ariaLabel="練習場所" value={customVenueDates.includes(date) || (!!scheduleDrafts[date]?.venue && !venues.some((venue) => venue.name === scheduleDrafts[date]?.venue)) ? "other" : scheduleDrafts[date]?.venue ?? ""} onValueChange={(value) => { setCustomVenueDates((current) => value === "other" ? [...new Set([...current, date])] : current.filter((item) => item !== date)); updateSchedule(date, { venue: value === "other" ? (venues.some((venue) => venue.name === scheduleDrafts[date]?.venue) ? "" : scheduleDrafts[date]?.venue ?? "") : value }); }} placeholder="場所を選択" options={[...venues.map((venue) => ({ value: venue.name, label: venue.name })), { value: "other", label: "その他" }]} />
+              {(customVenueDates.includes(date) || (!!scheduleDrafts[date]?.venue && !venues.some((venue) => venue.name === scheduleDrafts[date]?.venue))) && <Input className="mt-2" placeholder="場所を入力" value={scheduleDrafts[date]?.venue ?? ""} onChange={(event) => updateSchedule(date, { venue: event.target.value })} />}
+            </div>
           </div>
           <div>
             <p className="section-label mb-1.5">詳細</p>
@@ -234,11 +253,10 @@ export function MonthlyPlanningEditorV2({ initialTab = "schedule", canSchedule =
         </div>
       )}
     </section>)}</div>
-    <datalist id="monthly-venues">{venues.map((venue) => <option key={venue.id} value={venue.name} />)}</datalist>
     {error && <p className="text-center text-caption text-danger">{error}</p>}
-    <div className="sticky bottom-0 border-t border-separator bg-card/95 p-3 backdrop-blur"><Button size="lg" className="w-full" disabled={savingAll || dirtyCount === 0} onClick={() => void saveAll()}>{savingAll ? <><LoaderCircle size={17} className="animate-spin" />保存中…</> : <><Save size={17} />変更をまとめて保存（{dirtyCount}件）</>}</Button></div>
+    <FormModalFooter><Button size="lg" className="w-full" disabled={savingAll || dirtyCount === 0} onClick={() => void saveAll()}>{savingAll ? <><LoaderCircle size={17} className="animate-spin" />保存中…</> : <><Save size={17} />変更をまとめて保存（{dirtyCount}件）</>}</Button></FormModalFooter>
   </div>;
-}
+});
 
 function RowStatus({ state }: { state?: RowState }) {
   if (state === "saving") return <span className="ml-auto inline-flex items-center gap-1 text-xs text-muted"><LoaderCircle size={13} className="animate-spin" />保存中</span>;

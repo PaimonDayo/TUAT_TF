@@ -172,7 +172,7 @@ function MenuEditor({
   const [pace, setPace] = useState(menu?.pace ?? "");
   const [remark, setRemark] = useState(menu?.remark ?? "");
   const [supplement, setSupplement] = useState(menu?.supplement ?? "");
-  const [status, setStatus] = useState<MenuStatus>(menu?.status ?? "draft");
+  const [status, setStatus] = useState<MenuStatus>(menu?.status ?? "published");
   const [history, setHistory] = useState<HistoryMenu[] | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historySearch, setHistorySearch] = useState("");
@@ -511,8 +511,8 @@ function MenuEditor({
         <p className="section-label mb-1.5">公開状態</p>
         <SegmentedControl
           items={[
-            { key: "draft", label: "下書き" },
             { key: "published", label: "公開" },
+            { key: "draft", label: "下書き" },
           ]}
           value={status}
           onChange={(key) => setStatus(key as MenuStatus)}
