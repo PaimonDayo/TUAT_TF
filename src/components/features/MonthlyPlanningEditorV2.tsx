@@ -250,7 +250,7 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
             </div>
             {targetIds.length === 0 && <div>
               <p className="section-label mb-1.5">補強</p>
-              <Textarea rows={2} className="min-h-16" placeholder="補強メニューを改行して入力" value={menuDrafts[date]?.supplement ?? ""} onChange={(event) => updateMenu(date, { supplement: event.target.value })} />
+              <Textarea rows={2} className="min-h-16" placeholder="補強内容を入力" value={menuDrafts[date]?.supplement ?? ""} onChange={(event) => updateMenu(date, { supplement: event.target.value })} />
             </div>}
           </>}
           {block === "short" && isExpanded(date) && <div>
