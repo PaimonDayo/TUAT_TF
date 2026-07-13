@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, LoaderCircle, Save, Star } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, LoaderCircle, Save, Star } from "lucide-react";
 import { PersonPicker } from "@/components/features/PersonPicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +51,7 @@ export function MonthlyPlanningEditorV2({ initialTab = "schedule", canSchedule =
   const [targetPresets, setTargetPresets] = useState<TargetPreset[]>(() => readStored(TARGET_PRESETS_KEY, []));
   const [presetName, setPresetName] = useState("");
   const [activeDate, setActiveDate] = useState<string | null>(null);
+  const [expandedDates, setExpandedDates] = useState<string[]>([]);
 
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
   const localDraftKey = `track-app:monthly-planner:${monthKey}`;
@@ -145,7 +146,7 @@ export function MonthlyPlanningEditorV2({ initialTab = "schedule", canSchedule =
     const draft = menuDrafts[date]; if (!hasMenuValue(draft)) return true;
     setRowStates((current) => ({ ...current, [stateKey("menu", date)]: "saving" }));
     const schedule = await ensureSchedule(date); if (!schedule) { setRowStates((current) => ({ ...current, [stateKey("menu", date)]: "error" })); return false; }
-    const { data, error: saveError } = await createClient().rpc("save_practice_menu", { target_schedule_id: schedule.id, menu_content: draft.content.trim(), menu_status: status, menu_target_block: block, target_user_ids: targetIds, target_menu_id: draft.id ?? null, menu_pace: draft.pace.trim() || null, menu_remark: draft.remark.trim() || null, menu_supplement: draft.supplement.trim() || null });
+    const { data, error: saveError } = await createClient().rpc("save_practice_menu", { target_schedule_id: schedule.id, menu_content: draft.content.trim(), menu_status: status, menu_target_block: block, target_user_ids: targetIds, target_menu_id: draft.id ?? null, menu_pace: draft.pace.trim() || null, menu_remark: draft.remark.trim() || null, menu_supplement: targetIds.length === 0 ? draft.supplement.trim() || null : null });
     if (saveError) { setRowStates((current) => ({ ...current, [stateKey("menu", date)]: "error" })); return false; }
     setMenuDrafts((current) => ({ ...current, [date]: { ...current[date], id: data as string } })); setRowStates((current) => ({ ...current, [stateKey("menu", date)]: "saved" })); return true;
   }
@@ -167,13 +168,25 @@ export function MonthlyPlanningEditorV2({ initialTab = "schedule", canSchedule =
   function saveTargetPreset() { if (!targetIds.length || !presetName.trim()) return; const next = [...targetPresets, { key: crypto.randomUUID(), name: presetName.trim(), ids: targetIds }]; setTargetPresets(next); localStorage.setItem(TARGET_PRESETS_KEY, JSON.stringify(next)); setPresetName(""); }
   function applyMenuPreset(key: string) { const preset = menuPresets.find((item) => item.key === key); if (!preset) return; setBlock(preset.block); const destination = activeDate ?? days.find((day) => !hasMenuValue(menuDrafts[day.date]))?.date ?? days[0]?.date; if (destination) updateMenu(destination, preset); }
 
-  const visibleDays = showActiveOnly ? days.filter(({ date }) => schedules[date] || hasScheduleValue(scheduleDrafts[date]) || hasMenuValue(menuDrafts[date])) : days;
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const visibleDays = (tab === "menu"
+    ? days.filter(({ date }) => !!schedules[date])
+    : showActiveOnly
+      ? days.filter(({ date }) => schedules[date] || hasScheduleValue(scheduleDrafts[date]))
+      : days
+  ).toSorted((a, b) => {
+    const aPast = a.date < today;
+    const bPast = b.date < today;
+    return aPast === bPast ? a.date.localeCompare(b.date) : aPast ? 1 : -1;
+  });
   const dirtyCount = days.filter(({ date }) => rowStates[stateKey(tab, date)] === "dirty").length;
+  function isExpanded(date: string) { return expandedDates.includes(date); }
+  function toggleExpanded(date: string) { setExpandedDates((current) => current.includes(date) ? current.filter((item) => item !== date) : [...current, date]); }
 
   return <div className="space-y-4 pb-20">
     <SegmentedControl items={[...(canSchedule ? [{ key: "schedule", label: "予定" }] : []), ...(canMenu ? [{ key: "menu", label: "メニュー" }] : [])]} value={tab} onChange={(value) => setTab(value as "schedule" | "menu")} />
     <div className="flex items-center justify-between rounded-xl bg-bg px-2 py-1"><button type="button" onClick={() => moveMonth(-1)} className="p-2"><ChevronLeft /></button><strong>{year}年{month}月</strong><button type="button" onClick={() => moveMonth(1)} className="p-2"><ChevronRight /></button></div>
-    <div className="flex items-center justify-between"><button type="button" onClick={() => setShowActiveOnly((value) => !value)} className="text-xs font-semibold text-accent">{showActiveOnly ? "全日表示" : "入力・予定ありのみ"}</button><span className="text-xs text-muted">変更 {dirtyCount}件</span></div>
+    <div className="flex items-center justify-between">{tab === "schedule" ? <button type="button" onClick={() => setShowActiveOnly((value) => !value)} className="text-xs font-semibold text-accent">{showActiveOnly ? "全日表示" : "入力・予定ありのみ"}</button> : <span className="text-xs text-muted">予定がある日のみ表示</span>}<span className="text-xs text-muted">変更 {dirtyCount}件</span></div>
     {tab === "menu" && <div className="space-y-3 rounded-xl border border-separator bg-card p-3">
       <Select value={block} onValueChange={(value) => setBlock(value as Block)} ariaLabel="ブロック" options={BLOCK_ORDER.map((item) => ({ value: item, label: BLOCKS[item].label }))} />
       <PersonPicker people={members} value={targetIds} onChange={setTargetIds} label="個人指定（空ならブロック全体）" />
@@ -190,32 +203,33 @@ export function MonthlyPlanningEditorV2({ initialTab = "schedule", canSchedule =
           </div>
           <div>
             <p className="section-label mb-1.5">詳細</p>
-            <Textarea rows={3} className="min-h-24" placeholder="集合方法、練習内容の概要、連絡事項など" value={scheduleDrafts[date]?.note ?? ""} onChange={(event) => updateSchedule(date, { note: event.target.value })} />
+            <Textarea rows={2} className="min-h-16" placeholder="集合方法、練習内容の概要、連絡事項など" value={scheduleDrafts[date]?.note ?? ""} onChange={(event) => updateSchedule(date, { note: event.target.value })} />
           </div>
         </div>
       ) : (
         <div className="space-y-3">
           <div>
             <p className="section-label mb-1.5">メニュー</p>
-            <Textarea rows={5} className="min-h-32" onFocus={() => setActiveDate(date)} placeholder="メニューを改行して入力" value={menuDrafts[date]?.content ?? ""} onChange={(event) => updateMenu(date, { content: event.target.value })} />
+            <Textarea rows={3} className="min-h-20" onFocus={() => setActiveDate(date)} placeholder="メニューを改行して入力" value={menuDrafts[date]?.content ?? ""} onChange={(event) => updateMenu(date, { content: event.target.value })} />
           </div>
-          {block === "middle_long" && <>
+          {(block === "middle_long" || block === "short") && <button type="button" onClick={() => toggleExpanded(date)} className="inline-flex items-center gap-1 text-xs font-semibold text-accent">{isExpanded(date) ? <ChevronUp size={14} /> : <ChevronDown size={14} />}{isExpanded(date) ? "詳細を閉じる" : "ペース・詳細を入力"}</button>}
+          {block === "middle_long" && isExpanded(date) && <>
             <div>
               <p className="section-label mb-1.5">ペース</p>
-              <Textarea rows={3} className="min-h-24" onFocus={() => setActiveDate(date)} placeholder="距離ごとの設定ペースなど" value={menuDrafts[date]?.pace ?? ""} onChange={(event) => updateMenu(date, { pace: event.target.value })} />
+              <Textarea rows={2} className="min-h-16" onFocus={() => setActiveDate(date)} placeholder="距離ごとの設定ペースなど" value={menuDrafts[date]?.pace ?? ""} onChange={(event) => updateMenu(date, { pace: event.target.value })} />
             </div>
             <div>
               <p className="section-label mb-1.5">補足</p>
-              <Textarea rows={3} className="min-h-24" onFocus={() => setActiveDate(date)} placeholder="変更条件や注意点など" value={menuDrafts[date]?.remark ?? ""} onChange={(event) => updateMenu(date, { remark: event.target.value })} />
+              <Textarea rows={2} className="min-h-16" onFocus={() => setActiveDate(date)} placeholder="変更条件や注意点など" value={menuDrafts[date]?.remark ?? ""} onChange={(event) => updateMenu(date, { remark: event.target.value })} />
             </div>
-            <div>
+            {targetIds.length === 0 && <div>
               <p className="section-label mb-1.5">補強</p>
-              <Textarea rows={4} className="min-h-28" onFocus={() => setActiveDate(date)} placeholder="補強メニューを改行して入力" value={menuDrafts[date]?.supplement ?? ""} onChange={(event) => updateMenu(date, { supplement: event.target.value })} />
-            </div>
+              <Textarea rows={2} className="min-h-16" onFocus={() => setActiveDate(date)} placeholder="補強メニューを改行して入力" value={menuDrafts[date]?.supplement ?? ""} onChange={(event) => updateMenu(date, { supplement: event.target.value })} />
+            </div>}
           </>}
-          {block === "short" && <div>
+          {block === "short" && isExpanded(date) && <div>
             <p className="section-label mb-1.5">説明</p>
-            <Textarea rows={4} className="min-h-28" onFocus={() => setActiveDate(date)} placeholder="目的、走り方、注意点など" value={menuDrafts[date]?.remark ?? ""} onChange={(event) => updateMenu(date, { remark: event.target.value })} />
+            <Textarea rows={2} className="min-h-16" onFocus={() => setActiveDate(date)} placeholder="目的、走り方、注意点など" value={menuDrafts[date]?.remark ?? ""} onChange={(event) => updateMenu(date, { remark: event.target.value })} />
           </div>}
         </div>
       )}
