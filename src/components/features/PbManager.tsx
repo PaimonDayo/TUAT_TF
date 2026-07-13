@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { FormModal } from "@/components/ui/form-modal";
 import { useToast } from "@/components/ui/toast";
 import { ResultsList } from "@/components/features/ResultsList";
-import { ResultForm } from "@/components/post/ResultForm";
+import { ResultForm, type ResultFormHandle } from "@/components/post/ResultForm";
+import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
 import type { PbRecord } from "@/types";
 
 export function PbManager({
@@ -23,6 +24,9 @@ export function PbManager({
   const [items, setItems] = useState<PbRecord[]>(initial);
   const [open, setOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<PbRecord | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const formRef = useRef<ResultFormHandle>(null);
 
   function openAdd() {
     setEditTarget(null);
@@ -60,10 +64,12 @@ export function PbManager({
       {open && (
         <FormModal
           open
-          onOpenChange={setOpen}
+          onOpenChange={(next) => { if (!next) { if (dirty) setConfirmClose(true); else setOpen(false); } }}
           title={editTarget ? "結果を編集" : "大会・記録会の結果を追加"}
         >
           <ResultForm
+            ref={formRef}
+            onDirtyChange={setDirty}
             key={editTarget?.id ?? "new"}
             userId={userId}
             initial={editTarget ?? undefined}
@@ -75,11 +81,13 @@ export function PbManager({
                     : [saved, ...arr],
                 );
               }
+              setDirty(false);
               setOpen(false);
             }}
           />
         </FormModal>
       )}
+      <UnsavedChangesDialog open={confirmClose} busy={false} onContinue={() => setConfirmClose(false)} onDiscard={() => { setDirty(false); setConfirmClose(false); setOpen(false); }} onSave={() => { setConfirmClose(false); formRef.current?.save(); }} />
     </>
   );
 }

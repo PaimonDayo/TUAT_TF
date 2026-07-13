@@ -20,10 +20,10 @@ import { NoteArticleEditor } from "@/components/features/NoteArticleEditor";
 import { ThreadComposer } from "@/components/features/ThreadList";
 import { NoteComposer } from "@/components/features/NoteComposer";
 import { NoticeForm } from "@/components/post/NoticeForm";
-import { RecordForm } from "@/components/post/RecordForm";
-import { ResultForm } from "@/components/post/ResultForm";
+import { RecordForm, type RecordFormHandle } from "@/components/post/RecordForm";
+import { ResultForm, type ResultFormHandle } from "@/components/post/ResultForm";
 import { ScheduleCreatePanel } from "@/components/post/ScheduleForm";
-import { TweetForm } from "@/components/post/TweetForm";
+import { TweetForm, type TweetFormHandle } from "@/components/post/TweetForm";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { AuthorMini, RecordFieldDef } from "@/types";
@@ -79,6 +79,13 @@ function ContextualFAB({
   const [recordOpen, setRecordOpen] = useState(false);
   const [tweetOpen, setTweetOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState(false);
+  const recordRef = useRef<RecordFormHandle>(null);
+  const tweetRef = useRef<TweetFormHandle>(null);
+  const resultRef = useRef<ResultFormHandle>(null);
+  const [recordDirty, setRecordDirty] = useState(false);
+  const [tweetDirty, setTweetDirty] = useState(false);
+  const [resultDirty, setResultDirty] = useState(false);
+  const [pendingTimelineClose, setPendingTimelineClose] = useState<"record" | "tweet" | "result" | null>(null);
   const planningRef = useRef<MonthlyPlanningEditorHandle>(null);
   const [planningDirty, setPlanningDirty] = useState(false);
   const [confirmPlanningClose, setConfirmPlanningClose] = useState(false);
@@ -173,6 +180,22 @@ function ContextualFAB({
   function openFeedForm(setOpen: (open: boolean) => void) {
     setSpeedDialOpen(false);
     setOpen(true);
+  }
+
+
+  function closeTimelineForm(kind: "record" | "tweet" | "result") {
+    if (kind === "record") { setRecordDirty(false); setRecordOpen(false); }
+    if (kind === "tweet") { setTweetDirty(false); setTweetOpen(false); }
+    if (kind === "result") { setResultDirty(false); setResultOpen(false); }
+    setPendingTimelineClose(null);
+  }
+
+  function savePendingTimelineForm() {
+    const kind = pendingTimelineClose;
+    setPendingTimelineClose(null);
+    if (kind === "record") recordRef.current?.save();
+    if (kind === "tweet") tweetRef.current?.save();
+    if (kind === "result") resultRef.current?.save();
   }
 
   function closeDirectForm() {
@@ -308,27 +331,31 @@ function ContextualFAB({
         </button>
       </div>
 
-      <FormModal open={recordOpen} onOpenChange={setRecordOpen} title="練習記録">
+      <FormModal open={recordOpen} onOpenChange={(open) => { if (!open) { if (recordDirty) setPendingTimelineClose("record"); else closeTimelineForm("record"); } }} title="練習記録">
         <RecordForm
+          ref={recordRef}
           userId={userId}
           isMiddleLong={isMiddleLong}
           recordSource={recordSource}
           recordFields={recordFields}
-          onDone={() => setRecordOpen(false)}
+          onDirtyChange={setRecordDirty}
+          onDone={() => closeTimelineForm("record")}
         />
       </FormModal>
 
-      <FormModal open={tweetOpen} onOpenChange={setTweetOpen} title="つぶやき">
-        <TweetForm onDone={() => setTweetOpen(false)} />
+      <FormModal open={tweetOpen} onOpenChange={(open) => { if (!open) { if (tweetDirty) setPendingTimelineClose("tweet"); else closeTimelineForm("tweet"); } }} title="????">
+        <TweetForm ref={tweetRef} onDirtyChange={setTweetDirty} onDone={() => closeTimelineForm("tweet")} />
       </FormModal>
 
       <FormModal
         open={resultOpen}
-        onOpenChange={setResultOpen}
+        onOpenChange={(open) => { if (!open) { if (resultDirty) setPendingTimelineClose("result"); else closeTimelineForm("result"); } }}
         title="大会・記録会の結果"
       >
-        <ResultForm userId={userId} onDone={() => setResultOpen(false)} />
+        <ResultForm ref={resultRef} userId={userId} onDirtyChange={setResultDirty} onDone={() => closeTimelineForm("result")} />
       </FormModal>
+
+      <UnsavedChangesDialog open={pendingTimelineClose !== null} busy={false} onContinue={() => setPendingTimelineClose(null)} onDiscard={() => { if (pendingTimelineClose) closeTimelineForm(pendingTimelineClose); }} onSave={savePendingTimelineForm} />
 
       <FormModal open={directForm === "planning"} onOpenChange={(open) => { if (!open) { if (planningDirty) setConfirmPlanningClose(true); else closeDirectForm(); } }} title="予定・メニューを月間入力">
         <MonthlyPlanningEditorV2 ref={planningRef} initialTab="schedule" canSchedule={can.createSchedule} canMenu={can.createMenu} onDirtyChange={setPlanningDirty} onSaved={closeDirectForm} />

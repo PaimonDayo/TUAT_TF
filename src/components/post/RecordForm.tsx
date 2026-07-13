@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { useRouter } from "next/navigation";
+import { LoaderCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { jstToday } from "@/lib/date";
@@ -40,23 +41,8 @@ const numStr = (n: number) => (n && n > 0 ? String(n) : "");
  * 練習記録フォーム。新規投稿と編集の両対応。
  * record を渡すと編集モード（その記録を更新）になる。
  */
-export function RecordForm({
-  userId,
-  isMiddleLong,
-  record,
-  recordSource = "app",
-  recordFields,
-  onDone,
-}: {
-  userId: string;
-  isMiddleLong: boolean;
-  record?: PracticeRecord;
-  /** 記録の入力元。'sheet'ならスプレッドシートが正のためアプリからの投稿・編集はできない */
-  recordSource?: "app" | "sheet";
-  /** カスタム項目定義。取得済みプロフィールから渡す（省略時のみ内部でフェッチする） */
-  recordFields?: RecordFieldDef[];
-  onDone: () => void;
-}) {
+export type RecordFormHandle = { save: () => void };
+export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddleLong: boolean; record?: PracticeRecord; recordSource?: "app" | "sheet"; recordFields?: RecordFieldDef[]; onDone: () => void; onDirtyChange?: (dirty: boolean) => void }>(function RecordForm({ userId, isMiddleLong, record, recordSource = "app", recordFields, onDone, onDirtyChange }, ref) {
   const router = useRouter();
   const { showToast } = useToast();
   const editing = !!record;
@@ -81,6 +67,9 @@ export function RecordForm({
   const [condition, setCondition] = useState<Condition | null>(record?.condition ?? null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [touched, setTouched] = useState(false);
+  useEffect(() => { onDirtyChange?.(touched); }, [onDirtyChange, touched]);
+  useImperativeHandle(ref, () => ({ save: () => { void submit(); } }));
   // 新規作成モードでその日の記録が既にあるか（1日1記録ルール。見つかったら編集扱いでフォームへ読み込む）
   const [hasExistingSameDay, setHasExistingSameDay] = useState(false);
 
@@ -304,7 +293,7 @@ export function RecordForm({
   }
 
   return (
-    <div className="space-y-4 pb-4">
+    <div className="space-y-4 pb-4" onInputCapture={() => setTouched(true)} onClickCapture={(event) => { if ((event.target as Element).closest("button")) setTouched(true); }}>
       {/* 日付 */}
       <div>
         <p className="section-label mb-1.5">日付</p>
@@ -468,9 +457,9 @@ export function RecordForm({
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <FormModalFooter>
         <Button size="lg" onClick={submit} disabled={saving}>
-          {saving ? "保存中…" : editing || hasExistingSameDay ? "更新する" : "記録する"}
+          {saving ? <><LoaderCircle size={18} className="animate-spin" />保存しています…</> : editing || hasExistingSameDay ? "更新する" : "記録する"}
         </Button>
       </FormModalFooter>
     </div>
   );
-}
+});

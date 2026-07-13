@@ -7,21 +7,17 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Avatar } from "@/components/common/Avatar";
 import { BlockPills } from "@/components/common/BlockPill";
-import { SegmentedControl } from "@/components/ui/segmented";
-import { GradeFilter } from "@/components/features/GradeFilter";
-import { GradeChips } from "@/components/features/GradeChips";
+import { PeopleFilterButton } from "@/components/features/PeopleFilterButton";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
   GRADE_OPTIONS,
-  SIMPLE_BLOCK_ITEMS,
-  matchSimpleBlock,
   gradeShort,
 } from "@/lib/constants";
-import type { AuthorMini } from "@/types";
+import type { AuthorMini, Block } from "@/types";
 
 /** メンバー名簿。中長/短・学年・名前で絞り込みでき、学年ごとに区切って表示する */
 export function MemberDirectory({ members }: { members: AuthorMini[] }) {
-  const [block, setBlock] = useState("all");
+  const [blocks, setBlocks] = useState<Block[]>([]);
   const [grades, setGrades] = useState<string[]>([]);
   const [query, setQuery] = useState("");
 
@@ -35,11 +31,11 @@ export function MemberDirectory({ members }: { members: AuthorMini[] }) {
     const q = query.trim().toLowerCase();
     return members.filter(
       (m) =>
-        matchSimpleBlock(m.blocks, block) &&
+        (blocks.length === 0 || (m.blocks ?? []).some((item) => blocks.includes(item))) &&
         (grades.length === 0 || grades.includes(m.grade ?? "")) &&
         (!q || (m.display_name ?? "").toLowerCase().includes(q)),
     );
-  }, [members, block, grades, query]);
+  }, [members, blocks, grades, query]);
 
   // 学年ごとにグループ化（GRADE_OPTIONS 順。学年未設定は末尾）
   const groups = useMemo(() => {
@@ -56,9 +52,6 @@ export function MemberDirectory({ members }: { members: AuthorMini[] }) {
   return (
     <>
       <div className="px-4 pb-2">
-        <SegmentedControl items={SIMPLE_BLOCK_ITEMS} value={block} onChange={setBlock} />
-      </div>
-      <div className="px-4 pb-2">
         <div className="relative">
           <Search
             size={16}
@@ -74,13 +67,8 @@ export function MemberDirectory({ members }: { members: AuthorMini[] }) {
       </div>
       <div className="px-4 pb-2 flex items-center justify-between">
         <span className="text-caption tabular-nums">{filtered.length}人</span>
-        <GradeFilter value={grades} onChange={setGrades} availableGrades={presentGrades} />
+        <PeopleFilterButton blocks={blocks} grades={grades} onBlocksChange={setBlocks} onGradesChange={setGrades} availableGrades={presentGrades} />
       </div>
-      {grades.length > 0 && (
-        <div className="px-4 pb-2">
-          <GradeChips value={grades} onChange={setGrades} />
-        </div>
-      )}
 
       <div className="px-4 pt-1">
         {groups.length === 0 ? (

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
+import { LoaderCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
@@ -13,15 +14,8 @@ import type { PbRecord } from "@/types";
  * 大会・記録会の結果の入力フォーム（追加・編集 共通）。
  * initial を渡すと編集モード。FAB・マイページの両方から使う。
  */
-export function ResultForm({
-  userId,
-  initial,
-  onDone,
-}: {
-  userId: string;
-  initial?: PbRecord;
-  onDone: (saved?: PbRecord) => void;
-}) {
+export type ResultFormHandle = { save: () => void };
+export const ResultForm = forwardRef<ResultFormHandle, { userId: string; initial?: PbRecord; onDone: (saved?: PbRecord) => void; onDirtyChange?: (dirty: boolean) => void }>(function ResultForm({ userId, initial, onDone, onDirtyChange }, ref) {
   const router = useRouter();
   const editing = !!initial;
   const [eventName, setEventName] = useState(initial?.event_name ?? "");
@@ -33,6 +27,9 @@ export function ResultForm({
   const [isOfficial, setIsOfficial] = useState(initial?.is_official ?? false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [touched, setTouched] = useState(false);
+  useEffect(() => { onDirtyChange?.(touched); }, [onDirtyChange, touched]);
+  useImperativeHandle(ref, () => ({ save: () => { void submit(); } }));
 
   async function submit() {
     if (!eventName.trim() || !record.trim()) {
@@ -66,7 +63,7 @@ export function ResultForm({
   }
 
   return (
-    <div className="space-y-4 pb-4">
+    <div className="space-y-4 pb-4" onInputCapture={() => setTouched(true)} onClickCapture={(event) => { if ((event.target as Element).closest("button")) setTouched(true); }}>
       <div>
         <p className="section-label mb-1.5">種目</p>
         <Input
@@ -99,9 +96,9 @@ export function ResultForm({
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <FormModalFooter>
         <Button size="lg" onClick={submit} disabled={saving}>
-          {saving ? "保存中…" : editing ? "更新する" : "追加する"}
+          {saving ? <><LoaderCircle size={18} className="animate-spin" />保存しています…</> : editing ? "更新する" : "追加する"}
         </Button>
       </FormModalFooter>
     </div>
   );
-}
+});

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
+import { LoaderCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
@@ -11,18 +12,16 @@ import { FormModalFooter } from "@/components/ui/form-modal";
 const MAX = 200;
 
 /** つぶやきフォーム。tweet を渡すと編集モード */
-export function TweetForm({
-  tweet,
-  onDone,
-}: {
-  tweet?: { id: string; content: string };
-  onDone: () => void;
-}) {
+export type TweetFormHandle = { save: () => void };
+export const TweetForm = forwardRef<TweetFormHandle, { tweet?: { id: string; content: string }; onDone: () => void; onDirtyChange?: (dirty: boolean) => void }>(function TweetForm({ tweet, onDone, onDirtyChange }, ref) {
   const router = useRouter();
   const editing = !!tweet;
   const [content, setContent] = useState(tweet?.content ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [touched, setTouched] = useState(false);
+  useEffect(() => { onDirtyChange?.(touched); }, [onDirtyChange, touched]);
+  useImperativeHandle(ref, () => ({ save: () => { void submit(); } }));
 
   async function submit() {
     const text = content.trim();
@@ -61,7 +60,7 @@ export function TweetForm({
   }
 
   return (
-    <div className="space-y-3 pb-4">
+    <div className="space-y-3 pb-4" onInputCapture={() => setTouched(true)}>
       <Textarea
         autoFocus
         rows={4}
@@ -78,9 +77,9 @@ export function TweetForm({
       </div>
       <FormModalFooter>
         <Button size="lg" onClick={submit} disabled={saving || !content.trim()}>
-          {saving ? "保存中…" : editing ? "更新する" : "投稿する"}
+          {saving ? <><LoaderCircle size={18} className="animate-spin" />保存しています…</> : editing ? "更新する" : "投稿する"}
         </Button>
       </FormModalFooter>
     </div>
   );
-}
+});
