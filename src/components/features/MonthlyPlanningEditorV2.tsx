@@ -53,7 +53,7 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
   const [menuPresets, setMenuPresets] = useState<MenuPreset[]>(() => readStored(MENU_PRESETS_KEY, []));
   const [targetPresets, setTargetPresets] = useState<TargetPreset[]>(() => readStored(TARGET_PRESETS_KEY, []));
   const [presetName, setPresetName] = useState("");
-  const [activeDate, setActiveDate] = useState<string | null>(null);
+  const [presetEditor, setPresetEditor] = useState<{ kind: "target" } | { kind: "menu"; date: string } | null>(null);
   const [expandedDates, setExpandedDates] = useState<string[]>([]);
   const [customTimeDates, setCustomTimeDates] = useState<string[]>([]);
   const [customVenueDates, setCustomVenueDates] = useState<string[]>([]);
@@ -169,12 +169,13 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
     return failed === 0;
   }
 
-  function saveMenuPreset() {
-    const sample = activeDate ? menuDrafts[activeDate] : undefined; if (!sample || !presetName.trim()) return;
-    const next = [...menuPresets, { ...sample, id: undefined, key: crypto.randomUUID(), name: presetName.trim(), block }]; setMenuPresets(next); localStorage.setItem(MENU_PRESETS_KEY, JSON.stringify(next)); setPresetName("");
+  function closePresetEditor() { setPresetEditor(null); setPresetName(""); }
+  function saveMenuPreset(date: string) {
+    const sample = menuDrafts[date]; if (!sample || !hasMenuValue(sample) || !presetName.trim()) return;
+    const next = [...menuPresets, { ...sample, id: undefined, key: crypto.randomUUID(), name: presetName.trim(), block }]; setMenuPresets(next); localStorage.setItem(MENU_PRESETS_KEY, JSON.stringify(next)); closePresetEditor();
   }
-  function saveTargetPreset() { if (!targetIds.length || !presetName.trim()) return; const next = [...targetPresets, { key: crypto.randomUUID(), name: presetName.trim(), ids: targetIds }]; setTargetPresets(next); localStorage.setItem(TARGET_PRESETS_KEY, JSON.stringify(next)); setPresetName(""); }
-  function applyMenuPreset(key: string) { const preset = menuPresets.find((item) => item.key === key); if (!preset) return; setBlock(preset.block); const destination = activeDate ?? days.find((day) => !hasMenuValue(menuDrafts[day.date]))?.date ?? days[0]?.date; if (destination) updateMenu(destination, preset); }
+  function saveTargetPreset() { if (!targetIds.length || !presetName.trim()) return; const next = [...targetPresets, { key: crypto.randomUUID(), name: presetName.trim(), ids: targetIds }]; setTargetPresets(next); localStorage.setItem(TARGET_PRESETS_KEY, JSON.stringify(next)); closePresetEditor(); }
+  function applyMenuPreset(key: string, date: string) { const preset = menuPresets.find((item) => item.key === key); if (preset) updateMenu(date, { content: preset.content, pace: preset.pace, remark: preset.remark, supplement: preset.supplement }); }
 
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const visibleDays = (tab === "menu"
@@ -200,10 +201,13 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
     <div className="flex items-center justify-between gap-3">{tab === "schedule" ? <SegmentedControl className="w-52" items={[{ key: "all", label: "すべての日" }, { key: "active", label: "予定あり" }]} value={showActiveOnly ? "active" : "all"} onChange={(value) => setShowActiveOnly(value === "active")} /> : <span className="text-xs text-muted">予定がある日のみ表示</span>}<span className="shrink-0 text-xs text-muted">変更 {dirtyCount}件</span></div>
     {tab === "menu" && <div className="space-y-3 rounded-xl border border-separator bg-card p-3">
       <Select value={block} onValueChange={(value) => setBlock(value as Block)} ariaLabel="ブロック" options={BLOCK_ORDER.map((item) => ({ value: item, label: BLOCKS[item].label }))} />
-      <PersonPicker people={members} value={targetIds} onChange={setTargetIds} label="個人指定（空ならブロック全体）" />
+      <div className="space-y-2">
+        <PersonPicker people={members} value={targetIds} onChange={setTargetIds} label="個人指定（空ならブロック全体）" />
+        {targetPresets.length > 0 && <Select value="" onValueChange={(key) => { const preset = targetPresets.find((item) => item.key === key); if (preset) setTargetIds(preset.ids.filter((id) => members.some((member) => member.id === id))); }} ariaLabel="保存した対象者セットを呼び出す" placeholder="保存した対象者セットを呼び出す" options={targetPresets.map((item) => ({ value: item.key, label: item.name }))} />}
+        {targetIds.length > 0 && presetEditor?.kind !== "target" && <button type="button" onClick={() => { setPresetName(""); setPresetEditor({ kind: "target" }); }} className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent"><Star size={14} />現在の対象者をセットとして保存</button>}
+        {presetEditor?.kind === "target" && <div className="rounded-xl border border-separator bg-bg p-3"><p className="mb-2 text-sm font-semibold">対象者セットの名前</p><div className="grid grid-cols-[1fr_auto] gap-2"><Input autoFocus value={presetName} onChange={(event) => setPresetName(event.target.value)} placeholder="例：駅伝メンバー" /><Button type="button" disabled={!presetName.trim()} onClick={saveTargetPreset}>保存</Button></div><button type="button" onClick={closePresetEditor} className="mt-2 text-xs font-semibold text-muted">キャンセル</button></div>}
+      </div>
       <div className={`rounded-xl border p-3 ${status === "published" ? "border-accent/30 bg-accent/5" : "border-warning/30 bg-warning/5"}`}><p className="section-label mb-2">保存後の状態</p><SegmentedControl items={[{ key: "published", label: "公開" }, { key: "draft", label: "下書き" }]} value={status} onChange={(value) => setStatus(value as "draft" | "published")} /><p className="mt-2 text-xs text-muted">{status === "published" ? "保存するとすぐに部員へ公開されます" : "作成者だけが確認できる下書きで保存します"}</p></div>
-      <div className="grid grid-cols-[1fr_auto] gap-2"><Select value="" onValueChange={applyMenuPreset} ariaLabel="メニュープリセット" placeholder="メニュープリセット" options={menuPresets.map((item) => ({ value: item.key, label: item.name }))} /><Select value="" onValueChange={(key) => { const preset = targetPresets.find((item) => item.key === key); if (preset) setTargetIds(preset.ids.filter((id) => members.some((member) => member.id === id))); }} ariaLabel="対象者セット" placeholder="対象者セット" options={targetPresets.map((item) => ({ value: item.key, label: item.name }))} /></div>
-      <div className="grid grid-cols-[1fr_auto_auto] gap-2"><Input value={presetName} onChange={(event) => setPresetName(event.target.value)} placeholder="プリセット名" /><Button variant="outline" onClick={saveMenuPreset}><Star size={15} />内容</Button><Button variant="outline" onClick={saveTargetPreset}><Star size={15} />対象者</Button></div>
     </div>}
     <div className="space-y-2">{visibleDays.map(({ date, day, weekday }) => <section key={date} className={`rounded-xl border bg-card p-3 ${rowStates[stateKey(tab, date)] === "error" ? "border-danger" : "border-separator"}`}><div className="mb-2 flex items-center"><strong className="text-sm">{month}/{day}（{weekday}）</strong><RowStatus state={rowStates[stateKey(tab, date)]} /></div>
       {tab === "schedule" ? (
@@ -229,26 +233,29 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
         <div className="space-y-3">
           <div>
             <p className="section-label mb-1.5">メニュー</p>
-            <Textarea rows={3} className="min-h-20" onFocus={() => setActiveDate(date)} placeholder="メニューを改行して入力" value={menuDrafts[date]?.content ?? ""} onChange={(event) => updateMenu(date, { content: event.target.value })} />
+            <Textarea rows={3} className="min-h-20" placeholder="メニューを改行して入力" value={menuDrafts[date]?.content ?? ""} onChange={(event) => updateMenu(date, { content: event.target.value })} />
           </div>
+          {menuPresets.some((item) => item.block === block) && <Select value="" onValueChange={(key) => applyMenuPreset(key, date)} ariaLabel={`${month}/${day}に保存済みメニューを入力`} placeholder="保存済みメニューをこの日に入力" options={menuPresets.filter((item) => item.block === block).map((item) => ({ value: item.key, label: item.name }))} />}
+          {hasMenuValue(menuDrafts[date]) && !(presetEditor?.kind === "menu" && presetEditor.date === date) && <button type="button" onClick={() => { setPresetName(""); setPresetEditor({ kind: "menu", date }); }} className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent"><Star size={14} />この日の内容をプリセットとして保存</button>}
+          {presetEditor?.kind === "menu" && presetEditor.date === date && <div className="rounded-xl border border-separator bg-bg p-3"><p className="mb-2 text-sm font-semibold">メニュープリセットの名前</p><div className="grid grid-cols-[1fr_auto] gap-2"><Input autoFocus value={presetName} onChange={(event) => setPresetName(event.target.value)} placeholder="例：400mインターバル" /><Button type="button" disabled={!presetName.trim()} onClick={() => saveMenuPreset(date)}>保存</Button></div><button type="button" onClick={closePresetEditor} className="mt-2 text-xs font-semibold text-muted">キャンセル</button></div>}
           {(block === "middle_long" || block === "short") && <button type="button" onClick={() => toggleExpanded(date)} className="inline-flex items-center gap-1 text-xs font-semibold text-accent">{isExpanded(date) ? <ChevronUp size={14} /> : <ChevronDown size={14} />}{isExpanded(date) ? "詳細を閉じる" : "ペース・詳細を入力"}</button>}
           {block === "middle_long" && isExpanded(date) && <>
             <div>
               <p className="section-label mb-1.5">ペース</p>
-              <Textarea rows={2} className="min-h-16" onFocus={() => setActiveDate(date)} placeholder="距離ごとの設定ペースなど" value={menuDrafts[date]?.pace ?? ""} onChange={(event) => updateMenu(date, { pace: event.target.value })} />
+              <Textarea rows={2} className="min-h-16" placeholder="距離ごとの設定ペースなど" value={menuDrafts[date]?.pace ?? ""} onChange={(event) => updateMenu(date, { pace: event.target.value })} />
             </div>
             <div>
               <p className="section-label mb-1.5">補足</p>
-              <Textarea rows={2} className="min-h-16" onFocus={() => setActiveDate(date)} placeholder="変更条件や注意点など" value={menuDrafts[date]?.remark ?? ""} onChange={(event) => updateMenu(date, { remark: event.target.value })} />
+              <Textarea rows={2} className="min-h-16" placeholder="変更条件や注意点など" value={menuDrafts[date]?.remark ?? ""} onChange={(event) => updateMenu(date, { remark: event.target.value })} />
             </div>
             {targetIds.length === 0 && <div>
               <p className="section-label mb-1.5">補強</p>
-              <Textarea rows={2} className="min-h-16" onFocus={() => setActiveDate(date)} placeholder="補強メニューを改行して入力" value={menuDrafts[date]?.supplement ?? ""} onChange={(event) => updateMenu(date, { supplement: event.target.value })} />
+              <Textarea rows={2} className="min-h-16" placeholder="補強メニューを改行して入力" value={menuDrafts[date]?.supplement ?? ""} onChange={(event) => updateMenu(date, { supplement: event.target.value })} />
             </div>}
           </>}
           {block === "short" && isExpanded(date) && <div>
             <p className="section-label mb-1.5">説明</p>
-            <Textarea rows={2} className="min-h-16" onFocus={() => setActiveDate(date)} placeholder="目的、走り方、注意点など" value={menuDrafts[date]?.remark ?? ""} onChange={(event) => updateMenu(date, { remark: event.target.value })} />
+            <Textarea rows={2} className="min-h-16" placeholder="目的、走り方、注意点など" value={menuDrafts[date]?.remark ?? ""} onChange={(event) => updateMenu(date, { remark: event.target.value })} />
           </div>}
         </div>
       )}
