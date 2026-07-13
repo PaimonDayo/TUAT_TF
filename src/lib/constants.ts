@@ -42,9 +42,9 @@ export const EVENTS_BY_BLOCK: Record<Block, string[]> = {
 
 /** 簡素化したブロック絞り込み（中長 / 短。跳躍・投擲は「短」に含める） */
 export const SIMPLE_BLOCK_ITEMS: { key: string; label: string }[] = [
-  { key: "all", label: "すべて" },
-  { key: "middle_long", label: "中長" },
-  { key: "short", label: "短" },
+  { key: "all", label: "全体" },
+  { key: "middle_long", label: "中長距離" },
+  { key: "short", label: "短距離" },
 ];
 
 /** プロフィールの所属ブロックが、簡素化フィルタ（all/middle_long/short）に合致するか */

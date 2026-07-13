@@ -7,17 +7,20 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Avatar } from "@/components/common/Avatar";
 import { BlockPills } from "@/components/common/BlockPill";
-import { PeopleFilterButton } from "@/components/features/PeopleFilterButton";
+import { SegmentedControl } from "@/components/ui/segmented";
+import { GradeFilter } from "@/components/features/GradeFilter";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
   GRADE_OPTIONS,
+  SIMPLE_BLOCK_ITEMS,
+  matchSimpleBlock,
   gradeShort,
 } from "@/lib/constants";
-import type { AuthorMini, Block } from "@/types";
+import type { AuthorMini } from "@/types";
 
 /** メンバー名簿。中長/短・学年・名前で絞り込みでき、学年ごとに区切って表示する */
 export function MemberDirectory({ members }: { members: AuthorMini[] }) {
-  const [blocks, setBlocks] = useState<Block[]>([]);
+  const [block, setBlock] = useState("all");
   const [grades, setGrades] = useState<string[]>([]);
   const [query, setQuery] = useState("");
 
@@ -31,11 +34,11 @@ export function MemberDirectory({ members }: { members: AuthorMini[] }) {
     const q = query.trim().toLowerCase();
     return members.filter(
       (m) =>
-        (blocks.length === 0 || (m.blocks ?? []).some((item) => blocks.includes(item))) &&
+        matchSimpleBlock(m.blocks, block) &&
         (grades.length === 0 || grades.includes(m.grade ?? "")) &&
         (!q || (m.display_name ?? "").toLowerCase().includes(q)),
     );
-  }, [members, blocks, grades, query]);
+  }, [members, block, grades, query]);
 
   // 学年ごとにグループ化（GRADE_OPTIONS 順。学年未設定は末尾）
   const groups = useMemo(() => {
@@ -51,6 +54,7 @@ export function MemberDirectory({ members }: { members: AuthorMini[] }) {
 
   return (
     <>
+      <div className="px-4 pb-2"><SegmentedControl items={SIMPLE_BLOCK_ITEMS} value={block} onChange={setBlock} /></div>
       <div className="px-4 pb-2">
         <div className="relative">
           <Search
@@ -67,7 +71,7 @@ export function MemberDirectory({ members }: { members: AuthorMini[] }) {
       </div>
       <div className="px-4 pb-2 flex items-center justify-between">
         <span className="text-caption tabular-nums">{filtered.length}人</span>
-        <PeopleFilterButton blocks={blocks} grades={grades} onBlocksChange={setBlocks} onGradesChange={setGrades} availableGrades={presentGrades} />
+        <GradeFilter value={grades} onChange={setGrades} availableGrades={presentGrades} />
       </div>
 
       <div className="px-4 pt-1">

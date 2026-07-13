@@ -6,13 +6,14 @@ import { UserCheck, List } from "lucide-react";
 import { RecordCard } from "@/components/cards/RecordCard";
 import { TweetCard } from "@/components/cards/TweetCard";
 import { Button } from "@/components/ui/button";
-import { PeopleFilterButton } from "@/components/features/PeopleFilterButton";
+import { SegmentedControl } from "@/components/ui/segmented";
+import { GradeFilter } from "@/components/features/GradeFilter";
 import { EmptyState } from "@/components/ui/empty-state";
-import { GRADE_OPTIONS } from "@/lib/constants";
+import { GRADE_OPTIONS, SIMPLE_BLOCK_ITEMS, matchSimpleBlock } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { loadFeed } from "@/app/(app)/timeline/actions";
 import { useFeedDisplay } from "@/hooks/use-feed-display";
-import type { Block, CommentAuthor, FeedItem } from "@/types";
+import type { CommentAuthor, FeedItem } from "@/types";
 
 const PAGE = 30;
 type FeedCursor = {
@@ -55,7 +56,7 @@ export function TimelineView({
   });
   const items = feedQuery.data.pages.flat();
 
-  const [blocks, setBlocks] = useState<Block[]>([]);
+  const [block, setBlock] = useState<string>("all");
   const [grades, setGrades] = useState<string[]>([]);
   const [favOnly, setFavOnly] = useState(false);
   const { compact, toggleCompact, toggleExpanded, isCompact } = useFeedDisplay({
@@ -73,12 +74,12 @@ export function TimelineView({
 
   const filtered = useMemo(() => {
     return items.filter((item) => {
-      if (blocks.length > 0 && !(item.author?.blocks ?? []).some((itemBlock) => blocks.includes(itemBlock))) return false;
+      if (!matchSimpleBlock(item.author?.blocks, block)) return false;
       if (grades.length > 0 && !grades.includes(item.author?.grade ?? "")) return false;
       if (favOnly && !favSet.has(item.author?.id)) return false;
       return true;
     });
-  }, [items, blocks, grades, favOnly, favSet]);
+  }, [items, block, grades, favOnly, favSet]);
 
   function loadMore() { void feedQuery.fetchNextPage(); }
 
@@ -86,7 +87,8 @@ export function TimelineView({
     <>
       <div className="px-4 pt-1 pb-3">
         <div className="flex min-h-9 items-center gap-2">
-          <div className="min-w-0 flex-1"><PeopleFilterButton blocks={blocks} grades={grades} onBlocksChange={setBlocks} onGradesChange={setGrades} availableGrades={presentGrades} /></div>
+          <div className="min-w-0 flex-1"><SegmentedControl items={SIMPLE_BLOCK_ITEMS} value={block} onChange={setBlock} /></div>
+          <GradeFilter value={grades} onChange={setGrades} availableGrades={presentGrades} />
           <button
             onClick={() => setFavOnly((v) => !v)}
             aria-label={favOnly ? "フォロー中のみを解除" : "フォロー中のみ表示"}
