@@ -226,19 +226,19 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
           </div>
           <div>
             <p className="section-label mb-1.5">詳細</p>
-            <Textarea rows={2} className="min-h-16" placeholder="集合方法、練習内容の概要、連絡事項など" value={scheduleDrafts[date]?.note ?? ""} onChange={(event) => updateSchedule(date, { note: event.target.value })} />
+            <Textarea rows={2} className="min-h-16" placeholder="集合方法、持ち物、連絡事項など" value={scheduleDrafts[date]?.note ?? ""} onChange={(event) => updateSchedule(date, { note: event.target.value })} />
           </div>
         </div>
       ) : (
         <div className="space-y-3">
           <div>
             <p className="section-label mb-1.5">メニュー</p>
-            <Textarea rows={3} className="min-h-20" placeholder="メニューを改行して入力" value={menuDrafts[date]?.content ?? ""} onChange={(event) => updateMenu(date, { content: event.target.value })} />
+            <Textarea rows={3} className="min-h-20" placeholder="例：400m×10（つなぎ200m）" value={menuDrafts[date]?.content ?? ""} onChange={(event) => updateMenu(date, { content: event.target.value })} />
           </div>
           {menuPresets.some((item) => item.block === block) && <Select value="" onValueChange={(key) => applyMenuPreset(key, date)} ariaLabel={`${month}/${day}に保存済みメニューを入力`} placeholder="保存済みメニューをこの日に入力" options={menuPresets.filter((item) => item.block === block).map((item) => ({ value: item.key, label: item.name }))} />}
           {hasMenuValue(menuDrafts[date]) && !(presetEditor?.kind === "menu" && presetEditor.date === date) && <button type="button" onClick={() => { setPresetName(""); setPresetEditor({ kind: "menu", date }); }} className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent"><Star size={14} />この日の内容をプリセットとして保存</button>}
           {presetEditor?.kind === "menu" && presetEditor.date === date && <div className="rounded-xl border border-separator bg-bg p-3"><p className="mb-2 text-sm font-semibold">メニュープリセットの名前</p><div className="grid grid-cols-[1fr_auto] gap-2"><Input autoFocus value={presetName} onChange={(event) => setPresetName(event.target.value)} placeholder="例：400mインターバル" /><Button type="button" disabled={!presetName.trim()} onClick={() => saveMenuPreset(date)}>保存</Button></div><button type="button" onClick={closePresetEditor} className="mt-2 text-xs font-semibold text-muted">キャンセル</button></div>}
-          {(block === "middle_long" || block === "short") && <button type="button" onClick={() => toggleExpanded(date)} className="inline-flex items-center gap-1 text-xs font-semibold text-accent">{isExpanded(date) ? <ChevronUp size={14} /> : <ChevronDown size={14} />}{isExpanded(date) ? "詳細を閉じる" : "ペース・詳細を入力"}</button>}
+          {(block === "middle_long" || block === "short") && <button type="button" onClick={() => toggleExpanded(date)} className="inline-flex items-center gap-1 text-xs font-semibold text-accent">{isExpanded(date) ? <ChevronUp size={14} /> : <ChevronDown size={14} />}{isExpanded(date) ? "詳細を閉じる" : block === "middle_long" ? "ペース・補足・補強を入力" : "説明を入力"}</button>}
           {block === "middle_long" && isExpanded(date) && <>
             <div>
               <p className="section-label mb-1.5">ペース</p>
