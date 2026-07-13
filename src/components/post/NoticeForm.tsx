@@ -30,6 +30,7 @@ export function NoticeForm({
   const [pinHome, setPinHome] = useState(initial?.pin_home ?? false);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [members, setMembers] = useState<AuthorMini[]>([]);
+  const [roleAssignments, setRoleAssignments] = useState<{ profile_id: string; role_id: string }[]>([]);
   const [mentionedAll, setMentionedAll] = useState(
     initial?.mentioned_all ?? (initial ? initial.notify_members && initial.target_role_ids.length === 0 : true),
   );
@@ -48,10 +49,12 @@ export function NoticeForm({
     void Promise.all([
       supabase.from("roles").select("*").order("sort_order", { ascending: true }).order("created_at", { ascending: true }),
       supabase.from("profiles").select("id, display_name, avatar_url, blocks, grade").eq("status", "active").order("display_name"),
-    ]).then(([roleResult, memberResult]) => {
+      supabase.from("profile_roles").select("profile_id, role_id"),
+]).then(([roleResult, memberResult, assignmentResult]) => {
       if (!active) return;
       setRoles((roleResult.data ?? []) as AppRole[]);
       setMembers((memberResult.data ?? []) as AuthorMini[]);
+      setRoleAssignments((assignmentResult.data ?? []) as { profile_id: string; role_id: string }[]);
     });
     return () => {
       active = false;
@@ -175,7 +178,7 @@ export function NoticeForm({
         onChange={() => setPinHome((v) => !v)}
       />
       <RecipientPicker
-        people={members} roles={roles} all={mentionedAll} roleIds={mentionedRoleIds} personIds={mentionedUserIds} blocks={mentionedBlocks} grades={mentionedGrades}
+        people={members} roles={roles} roleAssignments={roleAssignments} all={mentionedAll} roleIds={mentionedRoleIds} personIds={mentionedUserIds} blocks={mentionedBlocks} grades={mentionedGrades}
         onAllChange={setMentionedAll} onRoleIdsChange={setMentionedRoleIds} onPersonIdsChange={setMentionedUserIds} onBlocksChange={setMentionedBlocks} onGradesChange={setMentionedGrades}
       />
       {error && <p className="text-caption text-danger text-center">{error}</p>}
