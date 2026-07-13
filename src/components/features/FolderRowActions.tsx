@@ -50,12 +50,25 @@ export function FolderRowActions({
     router.refresh();
     return true;
   }
+  async function togglePin() {
+    const { error } = await createClient()
+      .from("notes")
+      .update({ pinned: !note.pinned })
+      .eq("id", note.id);
+    if (error) {
+      showToast("\u30d4\u30f3\u7559\u3081\u3092\u5909\u66f4\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f");
+      return;
+    }
+    router.refresh();
+  }
 
   return (
     <>
       <ActionMenu
         onEdit={() => void openEdit()}
         onDelete={remove}
+        onPin={togglePin}
+        pinned={note.pinned}
         deleteTitle="フォルダを削除しますか？"
         deleteDescription="フォルダ内のサブフォルダ・記事もすべて削除され、元に戻せません。"
       />

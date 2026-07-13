@@ -271,7 +271,7 @@ function ContextualFAB({
             />
             <SpeedDialAction
               icon={<MessagesSquare size={19} />}
-              label="????????"
+              label={"\u30b9\u30ec\u30c3\u30c9\u3092\u7acb\u3066\u308b"}
               onClick={() => {
                 setSpeedDialOpen(false);
                 setDirectForm("thread");

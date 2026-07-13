@@ -420,6 +420,7 @@ export interface NoteRow {
   parent_id: string | null;
   scope: NoteScope;
   theme_id: string | null;
+  pinned: boolean;
   title: string;
   description: string | null;
   body: string;
@@ -442,6 +443,7 @@ export interface ThreadRow {
   author_id: string;
   title: string;
   created_at: string;
+  pinned: boolean;
   updated_at: string;
 }
 
@@ -462,6 +464,7 @@ export interface ThreadPostWithAuthor {
 
 export interface NoteArticleRow {
   id: string;
+  pinned: boolean;
   note_id: string;
   author_id: string;
   title: string;

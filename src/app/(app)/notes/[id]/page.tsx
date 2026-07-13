@@ -136,8 +136,8 @@ export default async function NoteFolderPage({
           )}
         </section>
         <section className="space-y-2">
-          <p className="section-label">????</p>
-          <ThreadList threads={threads} currentUserId={profile.id} isAdmin={isAdmin} />
+          <p className="section-label">{"\u30b9\u30ec\u30c3\u30c9"}</p>
+          <ThreadList threads={threads} currentUserId={profile.id} isAdmin={isAdmin} canPin={isAdmin} />
         </section>
       </div>
     </>

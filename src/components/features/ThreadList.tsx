@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { ChevronRight, MessagesSquare } from "lucide-react";
+import { ChevronRight, MessagesSquare, Pin } from "lucide-react";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -21,10 +21,12 @@ export function ThreadList({
   threads,
   currentUserId,
   isAdmin,
+  canPin = false,
 }: {
   threads: ThreadWithAuthor[];
   currentUserId: string;
   isAdmin: boolean;
+  canPin?: boolean;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -48,9 +50,20 @@ export function ThreadList({
     return true;
   }
 
+  async function togglePin(thread: ThreadWithAuthor) {
+    const { error } = await createClient()
+      .from("threads")
+      .update({ pinned: !thread.pinned })
+      .eq("id", thread.id);
+    if (error) {
+      showToast("\u30d4\u30f3\u7559\u3081\u3092\u5909\u66f4\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f");
+      return;
+    }
+    router.refresh();
+  }
   return (
     <div className="space-y-2">
-      {threads.map((thread) => (
+      {[...threads].sort((a, b) => Number(b.pinned) - Number(a.pinned)).map((thread) => (
         <Link key={thread.id} href={`/notes/threads/${thread.id}`}>
           <Card className="p-4 active:bg-bg">
             <div className="flex items-start gap-3">
@@ -58,11 +71,12 @@ export function ThreadList({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-headline">{thread.title}</p>
                 <p className="mt-1 text-caption">
+                {thread.pinned && <Pin size={14} className="mt-1 shrink-0 fill-accent text-accent" aria-label={"\u30d4\u30f3\u7559\u3081"} />}
                   {thread.author.display_name}・{thread.posts?.length ?? 0}件の投稿・
                   {format(new Date(thread.updated_at), "M月d日", { locale: ja })}
                 </p>
               </div>
-              {thread.author_id === currentUserId || isAdmin ? (
+              {thread.author_id === currentUserId || isAdmin || canPin ? (
                 <div
                   className="-mr-2 -mt-1 shrink-0"
                   onClick={(event) => {
@@ -74,6 +88,8 @@ export function ThreadList({
                     onDelete={() => remove(thread.id)}
                     deleteTitle="スレッドを削除しますか？"
                     deleteDescription="スレッド内の投稿もすべて削除され、元に戻せません。"
+                    onPin={canPin || thread.author_id === currentUserId ? () => togglePin(thread) : undefined}
+                    pinned={thread.pinned}
                   />
                 </div>
               ) : (

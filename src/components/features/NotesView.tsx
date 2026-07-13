@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, Folder } from "lucide-react";
+import { ChevronRight, Folder, Pin } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
 import { FolderRowActions } from "@/components/features/FolderRowActions";
 import { ThreadList } from "@/components/features/ThreadList";
@@ -52,7 +52,7 @@ export function NotesView({
         if (note.scope !== scope) return false;
         if (!mine && note.status !== "published") return false;
         return true;
-      }),
+      }).sort((a, b) => Number(b.pinned) - Number(a.pinned)),
     [currentUser.id, mine, notes, scope],
   );
 
@@ -108,7 +108,7 @@ export function NoteList({
 
   return (
     <div className="space-y-2">
-      {notes.map((note) => (
+      {[...notes].sort((a, b) => Number(b.pinned) - Number(a.pinned)).map((note) => (
         <Link key={note.id} href={`/notes/${note.id}`}>
           <Card className="p-4 active:bg-bg">
             <div className="flex items-start gap-3">
@@ -118,6 +118,7 @@ export function NoteList({
                   <p className="min-w-0 flex-1 truncate text-headline">{note.title}</p>
                   {note.status === "draft" && <Badge>下書き</Badge>}
                 </div>
+                  {note.pinned && <Pin size={14} className="shrink-0 fill-accent text-accent" aria-label={"\u30d4\u30f3\u7559\u3081"} />}
                 <p className="mt-1 text-caption">
                   {note.articles?.length ?? 0}件の記事
                 </p>

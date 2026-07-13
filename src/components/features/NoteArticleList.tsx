@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { ChevronDown, FileText } from "lucide-react";
+import { ChevronDown, FileText, Pin } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Linkify } from "@/components/common/Linkify";
 import { NoteArticleActions } from "@/components/features/NoteArticleActions";
@@ -34,7 +34,7 @@ export function NoteArticleList({
 
   return (
     <div className="space-y-2">
-      {articles.map((article) => {
+      {[...articles].sort((a, b) => Number(b.pinned) - Number(a.pinned)).map((article) => {
         const open = openId === article.id;
         const isLong = article.body.length > LONG_BODY;
         return (
@@ -52,6 +52,7 @@ export function NoteArticleList({
                   <p className="mt-1 text-caption">
                     {article.author.display_name}・
                     {format(new Date(article.updated_at), "M月d日更新", { locale: ja })}
+                  {article.pinned && <Pin size={14} className="mt-1 shrink-0 fill-accent text-accent" aria-label={"\u30d4\u30f3\u7559\u3081"} />}
                   </p>
                 </div>
               </button>

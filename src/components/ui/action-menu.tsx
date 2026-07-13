@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
 export function ActionMenu({
   onEdit,
+  onPin,
+  pinned = false,
   onDelete,
   editLabel = "編集する",
   deleteLabel = "削除する",
@@ -18,6 +20,8 @@ export function ActionMenu({
 }: {
   onEdit?: () => void;
   onDelete?: () => void | boolean | Promise<void | boolean>;
+  onPin?: () => void | Promise<void>;
+  pinned?: boolean;
   editLabel?: string;
   deleteLabel?: string;
   deleteTitle?: string;
@@ -75,6 +79,19 @@ export function ActionMenu({
               >
                 <Pencil size={20} className="text-accent" />
                 <span className="text-headline">{editLabel}</span>
+              </button>
+            )}
+            {onPin && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  void onPin();
+                }}
+                className="flex w-full items-center gap-3 rounded-xl border border-separator bg-card p-3.5 active:bg-bg"
+              >
+                {pinned ? <PinOff size={20} className="text-accent" /> : <Pin size={20} className="text-accent" />}
+                <span className="text-headline">{pinned ? "\u30d4\u30f3\u7559\u3081\u3092\u5916\u3059" : "\u30d4\u30f3\u7559\u3081\u3059\u308b"}</span>
               </button>
             )}
             {onDelete && (
