@@ -321,7 +321,7 @@ function ContextualFAB({
       </FormModal>
 
       <FormModal open={directForm === "planning"} onOpenChange={(open) => { if (!open) { if (planningDirty) setConfirmPlanningClose(true); else closeDirectForm(); } }} title="予定・メニューを月間入力">
-        <MonthlyPlanningEditorV2 ref={planningRef} initialTab="schedule" canSchedule={can.createSchedule} canMenu={can.createMenu} onDirtyChange={setPlanningDirty} />
+        <MonthlyPlanningEditorV2 ref={planningRef} initialTab="schedule" canSchedule={can.createSchedule} canMenu={can.createMenu} onDirtyChange={setPlanningDirty} onSaved={closeDirectForm} />
       </FormModal>
       <UnsavedChangesDialog open={confirmPlanningClose} busy={savingPlanning} onContinue={() => setConfirmPlanningClose(false)} onDiscard={closeDirectForm} onSave={() => { setSavingPlanning(true); void planningRef.current?.save().then((ok) => { setSavingPlanning(false); if (ok) closeDirectForm(); }); }} />
 

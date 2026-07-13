@@ -33,7 +33,7 @@ function hasMenuValue(draft?: MenuDraft) { return !!draft && [draft.content, dra
 
 export type MonthlyPlanningEditorHandle = { save: () => Promise<boolean> };
 
-export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, { initialTab?: "schedule" | "menu"; canSchedule?: boolean; canMenu?: boolean; onDirtyChange?: (dirty: boolean) => void }>(function MonthlyPlanningEditorV2({ initialTab = "schedule", canSchedule = true, canMenu = true, onDirtyChange }, ref) {
+export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, { initialTab?: "schedule" | "menu"; canSchedule?: boolean; canMenu?: boolean; onDirtyChange?: (dirty: boolean) => void; onSaved?: () => void }>(function MonthlyPlanningEditorV2({ initialTab = "schedule", canSchedule = true, canMenu = true, onDirtyChange, onSaved }, ref) {
   const now = new Date();
   const [tab, setTab] = useState<"schedule" | "menu">(initialTab === "menu" && !canMenu ? "schedule" : initialTab === "schedule" && !canSchedule ? "menu" : initialTab);
   const [year, setYear] = useState(now.getFullYear());
@@ -254,7 +254,7 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
       )}
     </section>)}</div>
     {error && <p className="text-center text-caption text-danger">{error}</p>}
-    <FormModalFooter><Button size="lg" className="w-full" disabled={savingAll || dirtyCount === 0} onClick={() => void saveAll()}>{savingAll ? <><LoaderCircle size={17} className="animate-spin" />保存中…</> : <><Save size={17} />変更をまとめて保存（{dirtyCount}件）</>}</Button></FormModalFooter>
+    <FormModalFooter><Button size="lg" className={`w-full ${savingAll ? "opacity-100" : ""}`} disabled={savingAll || dirtyCount === 0} onClick={() => { void saveAll().then((ok) => { if (ok) onSaved?.(); }); }}>{savingAll ? <><LoaderCircle size={18} className="animate-spin" />保存しています…</> : <><Save size={17} />変更をまとめて保存（{dirtyCount}件）</>}</Button></FormModalFooter>
   </div>;
 });
 
