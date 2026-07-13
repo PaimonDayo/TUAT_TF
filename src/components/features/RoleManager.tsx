@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronRight, Lock, Plus, SlidersHorizontal } from "lucide-react";
+import { Lock, Plus, SlidersHorizontal } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { PersonPicker } from "@/components/features/PersonPicker";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -12,7 +13,6 @@ import { Input } from "@/components/ui/input";
 import { ReorderList } from "@/components/ui/reorder-list";
 import { Toggle } from "@/components/ui/toggle";
 import { useToast } from "@/components/ui/toast";
-import { Avatar } from "@/components/common/Avatar";
 import { PERMISSION_LIST } from "@/lib/permissions";
 import type { AppRole, Permission, Profile } from "@/types";
 
@@ -173,33 +173,21 @@ function RoleRow({
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
-  const [viewingMembers, setViewingMembers] = useState(false);
-  const [query, setQuery] = useState("");
-  const [busyId, setBusyId] = useState<string | null>(null);
   const perms = PERMISSION_LIST.filter((permission) => role[PERM_COLUMN[permission.key]]);
   const assignedCount = members.filter((m) =>
     m.roles.some((r) => r.id === role.id),
   ).length;
 
-  async function toggleMember(member: Profile) {
-    if (busyId) return;
-    setBusyId(member.id);
-    const has = member.roles.some((r) => r.id === role.id);
-    const nextIds = has
-      ? member.roles.filter((r) => r.id !== role.id).map((r) => r.id)
-      : [...member.roles.map((r) => r.id), role.id];
+  async function updateRoleMembers(nextMemberIds: string[]) {
+    const currentIds = members.filter((member) => member.roles.some((item) => item.id === role.id)).map((member) => member.id);
+    const changed = members.filter((member) => currentIds.includes(member.id) !== nextMemberIds.includes(member.id));
     const supabase = createClient();
-    const { error } = await supabase.rpc("set_profile_roles", {
-      target_profile_id: member.id,
-      target_role_ids: nextIds,
-    });
-    if (error) {
-      onError("ロールを更新できませんでした");
-      setBusyId(null);
-      return;
-    }
+    const results = await Promise.all(changed.map((member) => {
+      const nextRoleIds = nextMemberIds.includes(member.id) ? [...member.roles.map((item) => item.id), role.id] : member.roles.filter((item) => item.id !== role.id).map((item) => item.id);
+      return supabase.rpc("set_profile_roles", { target_profile_id: member.id, target_role_ids: [...new Set(nextRoleIds)] });
+    }));
+    if (results.some((result) => result.error)) onError("ロールのメンバーを更新できませんでした");
     router.refresh();
-    setBusyId(null);
   }
 
   async function remove() {
@@ -220,14 +208,12 @@ function RoleRow({
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1 pt-1">
           <span className="flex items-center gap-1 text-[15px] font-semibold">
-            <button
-              type="button"
-              onClick={() => setViewingMembers(true)}
+            <span
               className="inline-flex rounded-full px-2 py-0.5 text-[13px]"
               style={{ color: role.color, backgroundColor: `${role.color}18` }}
             >
               {role.name}
-            </button>
+            </span>
             {role.is_system && (
               <span className="inline-flex shrink-0 items-center gap-0.5 text-micro text-muted">
                 <Lock size={10} /> 組込
@@ -250,15 +236,6 @@ function RoleRow({
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setViewingMembers(true)}
-          aria-label={`${role.name}のメンバーを管理`}
-          className="flex h-9 shrink-0 items-center gap-0.5 rounded-lg pl-2 pr-1 text-[13px] font-semibold text-accent active:opacity-60"
-        >
-          <span className="tabular-nums">{assignedCount}</span>人
-          <ChevronRight size={18} />
-        </button>
 
         <ActionMenu
           onEdit={() => setEditing(true)}
@@ -282,56 +259,9 @@ function RoleRow({
           }}
         />
       )}
-      {viewingMembers && (
-        <FormModal
-          open
-          onOpenChange={(open) => !open && setViewingMembers(false)}
-          title={`${role.name} のメンバー`}
-        >
-          <div className="space-y-3 pb-4">
-            <p className="text-caption">
-              タップで付与・解除できます（{assignedCount}人に付与中）。
-            </p>
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="名前で検索"
-            />
-            <div className="space-y-1">
-              {members
-                .filter((member) => {
-                  const q = query.trim().toLowerCase();
-                  return !q || (member.display_name ?? "").toLowerCase().includes(q);
-                })
-                .map((member) => {
-                  const has = member.roles.some((r) => r.id === role.id);
-                  return (
-                    <button
-                      key={member.id}
-                      type="button"
-                      disabled={busyId === member.id}
-                      onClick={() => void toggleMember(member)}
-                      className={`flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left active:bg-bg disabled:opacity-50 ${
-                        has ? "bg-accent/10" : ""
-                      }`}
-                    >
-                      <Avatar
-                        name={member.display_name || "?"}
-                        avatarUrl={member.avatar_url}
-                        blocks={member.blocks}
-                        size="sm"
-                      />
-                      <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">
-                        {member.display_name || "名前未設定"}
-                      </span>
-                      {has && <Check size={18} className="shrink-0 text-accent" />}
-                    </button>
-                  );
-                })}
-            </div>
-          </div>
-        </FormModal>
-      )}
+      <div className="mt-3">
+        <PersonPicker people={members} value={members.filter((member) => member.roles.some((item) => item.id === role.id)).map((member) => member.id)} onChange={(ids) => void updateRoleMembers(ids)} label={`所属メンバー（${assignedCount}人）`} />
+      </div>
     </Card>
   );
 }

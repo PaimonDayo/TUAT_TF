@@ -6,6 +6,7 @@ import {
   Activity,
   BellPlus,
   CalendarPlus,
+  ClipboardList,
   FolderPlus,
   MessageCircle,
   MessagesSquare,
@@ -14,6 +15,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { FormModal } from "@/components/ui/form-modal";
+import { MonthlyPlanningEditorV2 } from "@/components/features/MonthlyPlanningEditorV2";
 import { NoteArticleEditor } from "@/components/features/NoteArticleEditor";
 import { ThreadComposer } from "@/components/features/ThreadList";
 import { NoteComposer } from "@/components/features/NoteComposer";
@@ -28,11 +30,12 @@ import type { AuthorMini, RecordFieldDef } from "@/types";
 
 export type FabPermissions = {
   createSchedule: boolean;
+  createMenu: boolean;
   createNotice: boolean;
   manageMembers: boolean;
 };
 
-type DirectForm = "schedule" | "notice" | "article" | "folder" | "subfolder" | "thread" | null;
+type DirectForm = "schedule" | "planning" | "notice" | "article" | "folder" | "subfolder" | "thread" | null;
 
 type FabProps = {
   userId: string;
@@ -84,7 +87,7 @@ function ContextualFAB({
   } | null>(null);
   const [directForm, setDirectForm] = useState<DirectForm>(() => {
     if (autoOpen && pathname === "/schedule" && can.createSchedule) {
-      return "schedule";
+      return "planning";
     }
     if (autoOpen && pathname === "/notices" && can.createNotice) {
       return "notice";
@@ -147,7 +150,7 @@ function ContextualFAB({
       setSpeedDialOpen((open) => !open);
       return;
     }
-    if (isSchedule) setDirectForm("schedule");
+    if (isSchedule) setDirectForm("planning");
     if (isNotice) setDirectForm("notice");
     if (isNotesRoot) {
       setSpeedDialOpen((open) => !open);
@@ -201,6 +204,9 @@ function ContextualFAB({
       <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 mx-auto h-0 w-full max-w-md">
         {isFeed && speedDialOpen && (
           <div className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-2xl border border-separator bg-card shadow-xl">
+            {(can.createSchedule || can.createMenu) && (
+              <SpeedDialAction icon={<ClipboardList size={19} />} label="予定・メニュー" onClick={() => { setSpeedDialOpen(false); setDirectForm("planning"); }} />
+            )}
             <SpeedDialAction
               icon={<Activity size={19} />}
               label="練習記録"
@@ -221,6 +227,9 @@ function ContextualFAB({
 
         {isNotesRoot && speedDialOpen && (
           <div className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-2xl border border-separator bg-card shadow-xl">
+            {(can.createSchedule || can.createMenu) && (
+              <SpeedDialAction icon={<ClipboardList size={19} />} label="予定・メニュー" onClick={() => { setSpeedDialOpen(false); setDirectForm("planning"); }} />
+            )}
             <SpeedDialAction
               icon={<FolderPlus size={19} />}
               label="フォルダを作成"
@@ -242,6 +251,9 @@ function ContextualFAB({
 
         {isNoteFolder && speedDialOpen && (
           <div className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-2xl border border-separator bg-card shadow-xl">
+            {(can.createSchedule || can.createMenu) && (
+              <SpeedDialAction icon={<ClipboardList size={19} />} label="予定・メニュー" onClick={() => { setSpeedDialOpen(false); setDirectForm("planning"); }} />
+            )}
             <SpeedDialAction
               icon={<NotebookPen size={19} />}
               label="記事を作成"
@@ -309,6 +321,10 @@ function ContextualFAB({
         title="大会・記録会の結果"
       >
         <ResultForm userId={userId} onDone={() => setResultOpen(false)} />
+      </FormModal>
+
+      <FormModal open={directForm === "planning"} onOpenChange={(open) => !open && closeDirectForm()} title="予定・メニューを月間入力">
+        <MonthlyPlanningEditorV2 initialTab={pathname === "/schedule" || !can.createMenu ? "schedule" : "menu"} canSchedule={can.createSchedule} canMenu={can.createMenu} />
       </FormModal>
 
       <FormModal

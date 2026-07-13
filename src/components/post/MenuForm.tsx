@@ -1,11 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { Check, ChevronRight, Copy, Plus } from "lucide-react";
-import { Avatar } from "@/components/common/Avatar";
+import { Copy, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
@@ -19,8 +17,8 @@ import { useToast } from "@/components/ui/toast";
 import { createClient } from "@/lib/supabase/client";
 import { jstToday } from "@/lib/date";
 import { MenuSheetImportManager } from "@/components/features/MenuSheetImportManager";
+import { PersonPicker } from "@/components/features/PersonPicker";
 import { BLOCK_ORDER, BLOCKS } from "@/lib/constants";
-import { cn } from "@/lib/utils";
 import type {
   AuthorMini,
   Block,
@@ -29,6 +27,7 @@ import type {
 
 type MenuKind = "block" | "people";
 type MenuStatus = "draft" | "published";
+export type MenuSaveResult = Pick<PracticeMenu, "id" | "schedule_id" | "content" | "target_block" | "status" | "pace" | "remark" | "supplement" | "targets">;
 
 // 直近に使った「メニューの種類」（端末単位）。初期表示のチラつき防止に同期的に読む。
 const MENU_LAST_KIND_KEY = "track-app:menu-last-kind";
@@ -94,7 +93,7 @@ function MenuCreatePanel({
   onDone,
 }: {
   scheduleId?: string;
-  onDone: () => void;
+  onDone: (saved?: MenuSaveResult) => void;
 }) {
   const [mode, setMode] = useState<"normal" | "sheets">("normal");
 
@@ -122,11 +121,13 @@ export function MenuEditModal({
   scheduleId,
   open,
   onOpenChange,
+  onSaved,
 }: {
   menu: PracticeMenu;
   scheduleId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSaved?: (menu: PracticeMenu) => void;
 }) {
   if (!open) return null;
   return (
@@ -134,7 +135,7 @@ export function MenuEditModal({
       <MenuEditor
         menu={menu}
         scheduleId={scheduleId}
-        onDone={() => onOpenChange(false)}
+        onDone={(saved) => { if (saved) onSaved?.({ ...menu, ...saved }); onOpenChange(false); }}
       />
     </FormModal>
   );
@@ -147,9 +148,8 @@ function MenuEditor({
 }: {
   scheduleId?: string;
   menu?: PracticeMenu;
-  onDone: () => void;
+  onDone: (saved?: MenuSaveResult) => void;
 }) {
-  const router = useRouter();
   const { showToast } = useToast();
   const initialTargetIds = menu?.targets?.map((target) => target.user_id) ?? [];
   const [schedules, setSchedules] = useState<UpcomingSchedule[] | null>(
@@ -176,9 +176,6 @@ function MenuEditor({
   const [history, setHistory] = useState<HistoryMenu[] | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historySearch, setHistorySearch] = useState("");
-  const [targetSearch, setTargetSearch] = useState("");
-  const [targetBlockFilter, setTargetBlockFilter] = useState<Block | "all">("all");
-  const [targetPickerOpen, setTargetPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -268,13 +265,6 @@ function MenuEditor({
     };
   }, [historyOpen, history, currentUserId]);
 
-  function toggleTarget(userId: string) {
-    setTargetIds((current) =>
-      current.includes(userId)
-        ? current.filter((id) => id !== userId)
-        : [...current, userId],
-    );
-  }
 
   /** 過去に公開したメニュー1件を丸ごと複製（種類・ブロック・対象者・メニュー・ペース・補足・補強） */
   function loadHistoryItem(item: HistoryMenu) {
@@ -328,7 +318,7 @@ function MenuEditor({
     setSaving(true);
     setError(null);
     const supabase = createClient();
-    const { error: saveError } = await supabase.rpc("save_practice_menu", {
+    const { data: savedId, error: saveError } = await supabase.rpc("save_practice_menu", {
       target_schedule_id: scheduleId,
       menu_content: content.trim(),
       menu_status: status,
@@ -353,29 +343,12 @@ function MenuEditor({
     if (typeof window !== "undefined") {
       localStorage.setItem(MENU_LAST_KIND_KEY, kind);
     }
-    router.refresh();
-    onDone();
+    const selectedTargets = kind === "people" ? (members ?? []).filter((member) => targetIds.includes(member.id)).map((member) => ({ menu_id: savedId as string, user_id: member.id, profile: member })) : [];
+    onDone({ id: savedId as string, schedule_id: scheduleId, content: content.trim(), target_block: targetBlock, status, pace: targetBlock === "middle_long" ? pace.trim() || null : null, remark: targetBlock === "middle_long" || targetBlock === "short" ? remark.trim() || null : null, supplement: targetBlock === "middle_long" ? supplement.trim() || null : null, targets: selectedTargets });
   }
 
   const loading = schedules === null || members === null;
 
-  // 対象者リストの検索・ブロック絞り込み
-  const filteredMembers = (members ?? []).filter((member) => {
-    if (
-      targetBlockFilter !== "all" &&
-      !(member.blocks ?? []).includes(targetBlockFilter)
-    ) {
-      return false;
-    }
-    const q = targetSearch.trim().toLowerCase();
-    if (q && !member.display_name.toLowerCase().includes(q)) return false;
-    return true;
-  });
-
-  const selectedNames = (members ?? [])
-    .filter((member) => targetIds.includes(member.id))
-    .map((member) => member.display_name)
-    .join("、");
 
   return (
     <div className="space-y-5 pb-4">
@@ -476,33 +449,7 @@ function MenuEditor({
               })}
             </div>
           </div>
-          <div>
-            <p className="section-label mb-1.5">対象者</p>
-            <button
-              type="button"
-              onClick={() => setTargetPickerOpen(true)}
-              className="flex min-h-11 w-full items-center justify-between gap-2 rounded-xl border border-separator bg-card px-3 py-2 text-left text-base"
-            >
-              <span className="min-w-0">
-                <span
-                  className={cn(
-                    "block",
-                    targetIds.length === 0 && "text-muted",
-                  )}
-                >
-                  {targetIds.length === 0
-                    ? "対象者を選択"
-                    : `${targetIds.length}人を選択中`}
-                </span>
-                {selectedNames && (
-                  <span className="mt-0.5 block truncate text-micro text-muted2">
-                    {selectedNames}
-                  </span>
-                )}
-              </span>
-              <ChevronRight size={17} className="shrink-0 text-muted" />
-            </button>
-          </div>
+          <PersonPicker people={members ?? []} value={targetIds} onChange={setTargetIds} label="対象者" />
         </div>
       )}
 
@@ -585,76 +532,6 @@ function MenuEditor({
           {saving ? "保存中…" : menu ? "更新する" : "保存する"}
         </Button>
       </FormModalFooter>
-      <FormModal
-        open={targetPickerOpen}
-        onOpenChange={setTargetPickerOpen}
-        title="対象者を選択"
-        autoFocus={false}
-      >
-        <div className="space-y-3 pb-4">
-          <Input
-            value={targetSearch}
-            onChange={(event) => setTargetSearch(event.target.value)}
-            placeholder="名前で検索"
-          />
-          <div className="flex flex-wrap gap-1.5">
-            {(["all", ...BLOCK_ORDER] as const).map((key) => {
-              const active = targetBlockFilter === key;
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setTargetBlockFilter(key)}
-                  className={cn(
-                    "h-8 rounded-full border px-3 text-[12px] font-semibold",
-                    active
-                      ? "border-accent bg-accent text-white"
-                      : "border-separator bg-card text-muted",
-                  )}
-                >
-                  {key === "all" ? "全ブロック" : BLOCKS[key].short}
-                </button>
-              );
-            })}
-          </div>
-          {filteredMembers.length === 0 ? (
-            <p className="px-1 py-8 text-center text-caption">該当する部員がいません</p>
-          ) : (
-            <div className="space-y-1">
-              {filteredMembers.map((member) => {
-                const active = targetIds.includes(member.id);
-                return (
-                  <button
-                    key={member.id}
-                    type="button"
-                    onClick={() => toggleTarget(member.id)}
-                    className={cn(
-                      "flex min-h-12 w-full items-center gap-3 rounded-lg px-2 text-left",
-                      active ? "bg-accent/10" : "active:bg-bg",
-                    )}
-                  >
-                    <Avatar
-                      name={member.display_name}
-                      avatarUrl={member.avatar_url}
-                      blocks={member.blocks}
-                      size="sm"
-                    />
-                    <span className="min-w-0 flex-1 truncate text-[14px] font-medium">
-                      {member.display_name}
-                    </span>
-                    {active && <Check size={18} className="shrink-0 text-accent" />}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-        <FormModalFooter>
-          <Button size="lg" onClick={() => setTargetPickerOpen(false)}>
-            完了（{targetIds.length}人）
-          </Button>
-        </FormModalFooter>
-      </FormModal>
 
       <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
         <SheetContent title="過去のメニューから複製" autoFocus={false}>

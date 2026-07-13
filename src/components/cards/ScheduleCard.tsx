@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 import {
@@ -24,7 +23,7 @@ import { BLOCKS, BLOCK_ORDER } from "@/lib/constants";
 import { venueShort } from "@/lib/venues";
 import { cn } from "@/lib/utils";
 import { jstToday } from "@/lib/date";
-import { MenuEditModal, MenuForm } from "@/components/post/MenuForm";
+import { MenuEditModal } from "@/components/post/MenuForm";
 import { ScheduleManageActions } from "@/components/post/ScheduleForm";
 import { AttendanceToggle, LateAttendanceControl, type AttendanceChange, type LateAttendanceChange } from "@/components/features/AttendanceToggle";
 import { AttendeesButton } from "@/components/features/AttendeesButton";
@@ -70,7 +69,6 @@ export function ScheduleCard({
   showAllAttendanceBlocks?: boolean;
   defaultOpen?: boolean;
 }) {
-  const router = useRouter();
   const [open, setOpen] = useState(defaultOpen);
   const [attendeesState, setAttendeesState] = useState(attendees);
   const [attendanceStatus, setAttendanceStatus] = useState(myStatus);
@@ -117,10 +115,11 @@ export function ScheduleCard({
   }, [defaultOpen]);
   const meta = SCHEDULE_TYPES[schedule.schedule_type];
   const date = new Date(schedule.schedule_date + "T00:00:00");
-  const hasMenus = schedule.menus && schedule.menus.length > 0;
+  const [menusState, setMenusState] = useState<PracticeMenu[]>(schedule.menus ?? []);
+  const hasMenus = menusState.length > 0;
   // 並び順は作成日時に依存させない（練習日ごとに入力順が違うと毎回バラつくため）。
   // ブロック全体メニュー→個別メニュー、個別は対象者名の固定順で安定化する。
-  const sortedMenus = [...(schedule.menus ?? [])].sort(menuCompare);
+  const sortedMenus = [...menusState].sort(menuCompare);
   // 所属ブロックごとにメニューをグループ化（自分のブロックを先頭に、全体向けは最後）
   const personalMenus = sortedMenus.filter(
     (menu) => !!userId && (menu.targets?.some((target) => target.user_id === userId) ?? false),
@@ -263,7 +262,7 @@ export function ScheduleCard({
             <Detail icon={<Info size={14} />} label="詳細情報" value={schedule.note} />
           )}
 
-          {(hasMenus || canEditMenu) && (
+          {hasMenus && (
             <div>
               <p className="section-label mb-1.5">練習メニュー</p>
               <div className="space-y-3">
@@ -290,14 +289,13 @@ export function ScheduleCard({
                           isMyBlock={
                             !!m.target_block && viewerBlocks.includes(m.target_block)
                           }
-                          onChanged={() => router.refresh()}
+                          onChanged={(next) => setMenusState((current) => next ? current.map((item) => item.id === next.id ? next : item) : current.filter((item) => item.id !== m.id))}
                         />
                       ))}
                     </div>
                   </div>
                 ))}
               </div>
-              {canEditMenu && <MenuForm scheduleId={schedule.id} />}
             </div>
           )}
 
@@ -342,7 +340,7 @@ function MenuCard({
   canManage: boolean;
   isTargeted?: boolean;
   isMyBlock?: boolean;
-  onChanged: () => void;
+  onChanged: (menu: PracticeMenu | null) => void;
 }) {
   const { showToast } = useToast();
   const [editing, setEditing] = useState(false);
@@ -358,7 +356,7 @@ function MenuCard({
       showToast("練習メニューを削除できませんでした");
       return false;
     }
-    onChanged();
+    onChanged(null);
     return true;
   }
 
@@ -376,7 +374,7 @@ function MenuCard({
       return;
     }
     showToast("メニューを公開しました");
-    onChanged();
+    onChanged({ ...menu, status: "published" });
   }
 
   const hasBadges = menu.status === "draft" || targetNames.length > 0;
@@ -464,6 +462,7 @@ function MenuCard({
         scheduleId={scheduleId}
         open={editing}
         onOpenChange={setEditing}
+        onSaved={(saved) => onChanged(saved)}
       />
     </div>
   );

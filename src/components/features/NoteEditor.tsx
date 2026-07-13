@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Plus } from "lucide-react";
-import { Avatar } from "@/components/common/Avatar";
+
 import { Button } from "@/components/ui/button";
 import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { createClient } from "@/lib/supabase/client";
+import { PersonPicker } from "@/components/features/PersonPicker";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { cn } from "@/lib/utils";
 import type {
@@ -168,11 +169,6 @@ export function NoteEditor({
   })();
   const [error, setError] = useState<string | null>(null);
 
-  function toggleEditor(userId: string) {
-    setEditorIds((ids) =>
-      ids.includes(userId) ? ids.filter((id) => id !== userId) : [...ids, userId],
-    );
-  }
 
   async function submit() {
     if (!title.trim()) {
@@ -324,41 +320,7 @@ export function NoteEditor({
           </div>
 
           {editPolicy === "specified" && (
-            <div>
-              <div className="mb-1.5 flex items-center justify-between">
-                <p className="section-label">編集できる部員</p>
-                <span className="text-caption">{editorIds.length}人選択</span>
-              </div>
-              <div className="max-h-64 space-y-1 overflow-y-auto rounded-xl border border-separator bg-card p-1">
-                {members
-                  .filter((member) => member.id !== currentUser.id)
-                  .map((member) => {
-                    const active = editorIds.includes(member.id);
-                    return (
-                      <button
-                        key={member.id}
-                        type="button"
-                        onClick={() => toggleEditor(member.id)}
-                        className={cn(
-                          "flex min-h-12 w-full items-center gap-3 rounded-lg px-2 text-left",
-                          active ? "bg-accent/10" : "active:bg-bg",
-                        )}
-                      >
-                        <Avatar
-                          name={member.display_name}
-                          avatarUrl={member.avatar_url}
-                          blocks={member.blocks}
-                          size="sm"
-                        />
-                        <span className="min-w-0 flex-1 truncate text-[14px] font-medium">
-                          {member.display_name}
-                        </span>
-                        {active && <Check size={18} className="text-accent" />}
-                      </button>
-                    );
-                  })}
-              </div>
-            </div>
+            <PersonPicker people={members} value={editorIds} onChange={setEditorIds} label="編集できる部員" excludeIds={[currentUser.id]} />
           )}
         </>
       )}

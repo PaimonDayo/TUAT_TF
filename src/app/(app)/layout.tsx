@@ -44,6 +44,7 @@ async function AuthenticatedFab() {
       recordFields={profile.record_fields}
       can={{
         createSchedule: perms.createSchedule,
+        createMenu: perms.createMenu,
         createNotice: perms.createNotice,
         manageMembers: perms.manageMembers,
       }}
