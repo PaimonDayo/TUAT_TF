@@ -182,8 +182,43 @@ export function MonthlyPlanningEditorV2({ initialTab = "schedule", canSchedule =
       <div className="grid grid-cols-[1fr_auto_auto] gap-2"><Input value={presetName} onChange={(event) => setPresetName(event.target.value)} placeholder="プリセット名" /><Button variant="outline" onClick={saveMenuPreset}><Star size={15} />内容</Button><Button variant="outline" onClick={saveTargetPreset}><Star size={15} />対象者</Button></div>
     </div>}
     <div className="space-y-2">{visibleDays.map(({ date, day, weekday }) => <section key={date} className={`rounded-xl border bg-card p-3 ${rowStates[stateKey(tab, date)] === "error" ? "border-danger" : "border-separator"}`}><div className="mb-2 flex items-center"><strong className="text-sm">{month}/{day}（{weekday}）</strong><RowStatus state={rowStates[stateKey(tab, date)]} /></div>
-      {tab === "schedule" ? <div className="space-y-2"><div className="grid grid-cols-[7rem_1fr] gap-2"><Input type="time" value={scheduleDrafts[date]?.time ?? ""} onChange={(event) => updateSchedule(date, { time: event.target.value })} /><Input list="monthly-venues" placeholder="場所" value={scheduleDrafts[date]?.venue ?? ""} onChange={(event) => updateSchedule(date, { venue: event.target.value })} /></div><Input placeholder="詳細（任意）" value={scheduleDrafts[date]?.note ?? ""} onChange={(event) => updateSchedule(date, { note: event.target.value })} /></div>
-      : <div className="space-y-2"><Textarea rows={3} onFocus={() => setActiveDate(date)} placeholder="メニュー" value={menuDrafts[date]?.content ?? ""} onChange={(event) => updateMenu(date, { content: event.target.value })} />{block === "middle_long" && <div className="grid grid-cols-2 gap-2"><Input placeholder="ペース" value={menuDrafts[date]?.pace ?? ""} onChange={(event) => updateMenu(date, { pace: event.target.value })} /><Input placeholder="補足" value={menuDrafts[date]?.remark ?? ""} onChange={(event) => updateMenu(date, { remark: event.target.value })} /></div>}</div>}
+      {tab === "schedule" ? (
+        <div className="space-y-2">
+          <div className="grid grid-cols-[7rem_1fr] gap-2">
+            <Input type="time" value={scheduleDrafts[date]?.time ?? ""} onChange={(event) => updateSchedule(date, { time: event.target.value })} />
+            <Input list="monthly-venues" placeholder="場所" value={scheduleDrafts[date]?.venue ?? ""} onChange={(event) => updateSchedule(date, { venue: event.target.value })} />
+          </div>
+          <div>
+            <p className="section-label mb-1.5">詳細</p>
+            <Textarea rows={3} className="min-h-24" placeholder="集合方法、練習内容の概要、連絡事項など" value={scheduleDrafts[date]?.note ?? ""} onChange={(event) => updateSchedule(date, { note: event.target.value })} />
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div>
+            <p className="section-label mb-1.5">メニュー</p>
+            <Textarea rows={5} className="min-h-32" onFocus={() => setActiveDate(date)} placeholder="メニューを改行して入力" value={menuDrafts[date]?.content ?? ""} onChange={(event) => updateMenu(date, { content: event.target.value })} />
+          </div>
+          {block === "middle_long" && <>
+            <div>
+              <p className="section-label mb-1.5">ペース</p>
+              <Textarea rows={3} className="min-h-24" onFocus={() => setActiveDate(date)} placeholder="距離ごとの設定ペースなど" value={menuDrafts[date]?.pace ?? ""} onChange={(event) => updateMenu(date, { pace: event.target.value })} />
+            </div>
+            <div>
+              <p className="section-label mb-1.5">補足</p>
+              <Textarea rows={3} className="min-h-24" onFocus={() => setActiveDate(date)} placeholder="変更条件や注意点など" value={menuDrafts[date]?.remark ?? ""} onChange={(event) => updateMenu(date, { remark: event.target.value })} />
+            </div>
+            <div>
+              <p className="section-label mb-1.5">補強</p>
+              <Textarea rows={4} className="min-h-28" onFocus={() => setActiveDate(date)} placeholder="補強メニューを改行して入力" value={menuDrafts[date]?.supplement ?? ""} onChange={(event) => updateMenu(date, { supplement: event.target.value })} />
+            </div>
+          </>}
+          {block === "short" && <div>
+            <p className="section-label mb-1.5">説明</p>
+            <Textarea rows={4} className="min-h-28" onFocus={() => setActiveDate(date)} placeholder="目的、走り方、注意点など" value={menuDrafts[date]?.remark ?? ""} onChange={(event) => updateMenu(date, { remark: event.target.value })} />
+          </div>}
+        </div>
+      )}
     </section>)}</div>
     <datalist id="monthly-venues">{venues.map((venue) => <option key={venue.id} value={venue.name} />)}</datalist>
     {error && <p className="text-center text-caption text-danger">{error}</p>}
