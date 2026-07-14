@@ -11,7 +11,7 @@ import { IntensityBar } from "@/components/features/IntensityBar";
 import { PostActions } from "@/components/cards/PostActions";
 import { RecordOwnerMenu } from "@/components/cards/PostOwnerMenu";
 import { CONDITIONS, gradeShort } from "@/lib/constants";
-import { recordFieldLabel } from "@/lib/record-fields";
+import { recordFieldHidden, recordFieldLabel } from "@/lib/record-fields";
 import type { CommentAuthor, RecordWithAuthor } from "@/types";
 
 /** タイムライン用の練習記録カード。compact=簡易表示（テキスト詳細を畳む） */
@@ -30,6 +30,14 @@ export function RecordCard({
   const gradeLabel = gradeShort(author.grade);
   const totalDistance =
     record.dist_low + record.dist_mid + record.dist_high + record.dist_speed;
+  const fieldVisible = (key: Parameters<typeof recordFieldHidden>[1]) =>
+    !recordFieldHidden(author.record_fields, key);
+  const hasVisibleDetails =
+    (fieldVisible("menu_text") && Boolean(record.menu_text)) ||
+    (fieldVisible("focus_text") && Boolean(record.focus_text)) ||
+    (fieldVisible("result_text") && Boolean(record.result_text)) ||
+    (fieldVisible("strength_text") && Boolean(record.strength_text)) ||
+    (fieldVisible("memo") && Boolean(record.memo));
 
   return (
     <Card className="p-4 space-y-3">
@@ -55,7 +63,7 @@ export function RecordCard({
             の練習
           </p>
         </div>
-        {cond && (
+        {cond && fieldVisible("condition") && (
           <span
             className="inline-flex items-center gap-1 text-[13px] font-semibold shrink-0"
             style={{ color: cond.color }}
@@ -94,26 +102,21 @@ export function RecordCard({
             </p>
           )
         : totalDistance > 0 && <IntensityBar record={record} />}
-      {!compact && record.strides > 0 && (
+      {!compact && fieldVisible("strides") && record.strides > 0 && (
         <p className="text-[12px] text-muted2">{recordFieldLabel(author.record_fields, "strides", "流し")} {record.strides}本</p>
       )}
 
       {/* テキスト各種（簡易表示では畳む。存在する項目だけ表示） */}
-      {!compact &&
-        (record.menu_text ||
-          record.focus_text ||
-          record.result_text ||
-          record.strength_text ||
-          record.memo) && (
+      {!compact && hasVisibleDetails && (
           <dl>
-            <KeyValue label={recordFieldLabel(author.record_fields, "menu_text", "メニュー")} value={record.menu_text} />
-            <KeyValue label={recordFieldLabel(author.record_fields, "focus_text", "目的・意識すること")} value={record.focus_text} />
-            <KeyValue
+            {fieldVisible("menu_text") && <KeyValue label={recordFieldLabel(author.record_fields, "menu_text", "メニュー")} value={record.menu_text} />}
+            {fieldVisible("focus_text") && <KeyValue label={recordFieldLabel(author.record_fields, "focus_text", "目的・意識すること")} value={record.focus_text} />}
+            {fieldVisible("result_text") && <KeyValue
               label={recordFieldLabel(author.record_fields, "result_text", record.menu_text || record.focus_text ? "タイム" : "結果")}
               value={record.result_text}
-            />
-            <KeyValue label={recordFieldLabel(author.record_fields, "strength_text", "補強")} value={record.strength_text} />
-            <KeyValue label={recordFieldLabel(author.record_fields, "memo", "感想")} value={record.memo} />
+            />}
+            {fieldVisible("strength_text") && <KeyValue label={recordFieldLabel(author.record_fields, "strength_text", "補強")} value={record.strength_text} />}
+            {fieldVisible("memo") && <KeyValue label={recordFieldLabel(author.record_fields, "memo", "感想")} value={record.memo} />}
           </dl>
         )}
 

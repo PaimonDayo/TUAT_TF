@@ -29,6 +29,12 @@ export function customRecordFields(fields: RecordFieldDef[] | null | undefined):
   return (fields ?? []).filter((field) => !isBuiltinRecordField(field));
 }
 
+export function recordFieldHidden(
+  fields: RecordFieldDef[] | null | undefined,
+  key: BuiltinRecordFieldKey,
+): boolean {
+  return (fields ?? []).find((field) => field.key === key)?.hidden === true;
+}
 export function recordFieldLabel(
   fields: RecordFieldDef[] | null | undefined,
   key: BuiltinRecordFieldKey,

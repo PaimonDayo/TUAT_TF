@@ -89,6 +89,8 @@ export interface RecordFieldDef {
   /** 表示ラベル */
   label: string;
   type: "text" | "number";
+  /** 既定項目を記録フォームとカードから外す。カスタム項目では未使用。 */
+  hidden?: boolean;
 }
 
 /** 投稿カードに埋め込む投稿者の最小情報 */

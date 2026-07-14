@@ -6,7 +6,7 @@ import { LoaderCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { jstToday } from "@/lib/date";
-import { customRecordFields, recordFieldLabel } from "@/lib/record-fields";
+import { customRecordFields, recordFieldHidden, recordFieldLabel } from "@/lib/record-fields";
 import { IntensityInput, type IntensityValues } from "@/components/features/IntensityInput";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -168,23 +168,26 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
       (parseFloat(dist.mid) || 0) +
       (parseFloat(dist.high) || 0) +
       (parseFloat(dist.speed) || 0);
+    const customHasContent = customFields.some((field) => (customValues[field.key] ?? "").trim() !== "");
     const hasContent = isMiddleLong
       ? distTotal > 0 ||
-        (parseInt(strides) || 0) > 0 ||
-        !!resultText.trim() ||
-        !!strengthText.trim() ||
-        !!memo.trim() ||
-        !!condition
-      : !!menuText.trim() ||
-        !!focusText.trim() ||
-        !!resultText.trim() ||
-        !!memo.trim() ||
-        !!condition;
+        (!recordFieldHidden(configuredFields, "strides") && (parseInt(strides) || 0) > 0) ||
+        (!recordFieldHidden(configuredFields, "result_text") && !!resultText.trim()) ||
+        (!recordFieldHidden(configuredFields, "strength_text") && !!strengthText.trim()) ||
+        (!recordFieldHidden(configuredFields, "memo") && !!memo.trim()) ||
+        (!recordFieldHidden(configuredFields, "condition") && !!condition) ||
+        customHasContent
+      : (!recordFieldHidden(configuredFields, "menu_text") && !!menuText.trim()) ||
+        (!recordFieldHidden(configuredFields, "focus_text") && !!focusText.trim()) ||
+        (!recordFieldHidden(configuredFields, "result_text") && !!resultText.trim()) ||
+        (!recordFieldHidden(configuredFields, "memo") && !!memo.trim()) ||
+        (!recordFieldHidden(configuredFields, "condition") && !!condition) ||
+        customHasContent;
     if (!hasContent) {
       setError(
         isMiddleLong
-          ? "距離・タイム・補強・感想のいずれかを入力してください"
-          : "メニュー・目的・タイム・感想のいずれかを入力してください",
+          ? "距離または表示中の項目を入力してください"
+          : "表示中の項目を入力してください",
       );
       return;
     }
@@ -317,7 +320,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
         <div>
           <p className="section-label mb-1.5">強度別距離</p>
           <IntensityInput values={dist} onChange={setDist} />
-          <div className="mt-2 flex items-center gap-2">
+          {!recordFieldHidden(configuredFields, "strides") && <div className="mt-2 flex items-center gap-2">
             <span className="text-[13px] font-medium">{recordFieldLabel(configuredFields, "strides", "流し")}</span>
             <Input
               type="number"
@@ -329,12 +332,12 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
               className="h-9 w-20 text-right"
             />
             <span className="text-caption">本</span>
-          </div>
+          </div>}
         </div>
       )}
 
       {/* メニュー（短距離・跳躍・投擲） */}
-      {!isMiddleLong && (
+      {!isMiddleLong && !recordFieldHidden(configuredFields, "menu_text") && (
         <div>
           <p className="section-label mb-1.5">{recordFieldLabel(configuredFields, "menu_text", "メニュー")}</p>
           <Textarea
@@ -347,7 +350,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
       )}
 
       {/* 目的・意識すること（短距離・跳躍・投擲） */}
-      {!isMiddleLong && (
+      {!isMiddleLong && !recordFieldHidden(configuredFields, "focus_text") && (
         <div>
           <p className="section-label mb-1.5">{recordFieldLabel(configuredFields, "focus_text", "目的・意識すること")}</p>
           <Textarea
@@ -360,7 +363,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
       )}
 
       {/* 結果 */}
-      <div>
+      {!recordFieldHidden(configuredFields, "result_text") && <div>
         <p className="section-label mb-1.5">{recordFieldLabel(configuredFields, "result_text", isMiddleLong ? "結果" : "タイム")}</p>
         <Textarea
           rows={2}
@@ -368,10 +371,10 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
           value={resultText}
           onChange={(e) => setResultText(e.target.value)}
         />
-      </div>
+      </div>}
 
       {/* 補強（中長距離のみ） */}
-      {isMiddleLong && (
+      {isMiddleLong && !recordFieldHidden(configuredFields, "strength_text") && (
         <div>
           <p className="section-label mb-1.5">{recordFieldLabel(configuredFields, "strength_text", "補強")}</p>
           <Textarea
@@ -384,7 +387,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
       )}
 
       {/* 感想 */}
-      <div>
+      {!recordFieldHidden(configuredFields, "memo") && <div>
         <p className="section-label mb-1.5">{recordFieldLabel(configuredFields, "memo", "感想・振り返り")}</p>
         <Textarea
           rows={3}
@@ -392,7 +395,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
           value={memo}
           onChange={(e) => setMemo(e.target.value)}
         />
-      </div>
+      </div>}
 
       {/* カスタム項目（プロフィールで追加したもの） */}
       {customFields.map((f) => (
@@ -421,7 +424,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
       ))}
 
       {/* コンディション */}
-      <div>
+      {!recordFieldHidden(configuredFields, "condition") && <div>
         <p className="section-label mb-1.5">{recordFieldLabel(configuredFields, "condition", "コンディション")}</p>
         <div className="grid grid-cols-3 gap-2">
           {CONDITION_ORDER.map((c) => {
@@ -454,7 +457,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
             );
           })}
         </div>
-      </div>
+      </div>}
 
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <FormModalFooter>

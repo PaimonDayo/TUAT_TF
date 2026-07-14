@@ -57,9 +57,9 @@ export function SheetSyncButton() {
         type="button"
         onClick={sync}
         disabled={busy}
-        className="flex items-center gap-2 text-[15px] text-accent active:opacity-60 disabled:opacity-50"
+        className="flex w-full items-center gap-3 text-headline text-accent active:opacity-60 disabled:opacity-50"
       >
-        <RefreshCw size={18} className={busy ? "animate-spin" : ""} />
+        <RefreshCw size={20} className={busy ? "animate-spin" : ""} />
         {busy ? "同期中…" : "スプレッドシートと同期"}
       </button>
 

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import Papa from "papaparse";
+import * as Papa from "papaparse";
 import type { RecordFieldDef } from "@/types";
 import { customRecordFields } from "@/lib/record-fields";
 
@@ -283,7 +283,9 @@ function resolveFieldMap(header: string[], fields: RecordFieldDef[]): FieldMap {
 
   // 名前変更した既定項目を最優先で完全一致させる。
   for (const item of BUILTINS) {
-    const configuredLabel = fields.find((field) => field.key === item.key)?.label.trim();
+    const configured = fields.find((field) => field.key === item.key);
+    if (configured?.hidden) continue;
+    const configuredLabel = configured?.label.trim();
     if (!configuredLabel) continue;
     const hit = normHeaders.find((candidate) => candidate.n === norm(configuredLabel) && !usedHeaders.has(candidate.raw));
     if (!hit) continue;
@@ -293,7 +295,7 @@ function resolveFieldMap(header: string[], fields: RecordFieldDef[]): FieldMap {
 
   // 未設定・旧設定は従来キーワードへフォールバックする。同じ列を複数項目へ割り当てない。
   for (const item of BUILTINS) {
-    if (builtin.has(item.key)) continue;
+    if (builtin.has(item.key) || fields.find((field) => field.key === item.key)?.hidden) continue;
     const hit = normHeaders.find((candidate) => !usedHeaders.has(candidate.raw) && item.keywords.some((keyword) => candidate.n.includes(norm(keyword))));
     if (!hit) continue;
     builtin.set(item.key, { header: hit.raw, numeric: item.numeric, integer: item.integer });
@@ -446,7 +448,7 @@ export async function pushRecordToSheet(
   // シートに列自体が無く、送信すらされなかった項目（可視化用）
   const unmapped: string[] = [];
   for (const b of BUILTINS) {
-    if (map.builtin.has(b.key)) continue;
+    if (map.builtin.has(b.key) || recordFields.find((field) => field.key === b.key)?.hidden) continue;
     const v = appBuiltin(rec, b.key);
     const nonEmpty = b.numeric ? Number(v) > 0 : (v ?? "").toString().trim() !== "";
     if (nonEmpty) unmapped.push(recordFields.find((field) => field.key === b.key)?.label.trim() || BUILTIN_LABELS[b.key]);

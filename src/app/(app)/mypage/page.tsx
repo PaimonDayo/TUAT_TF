@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { Trophy, ChevronRight, Shield, Bell, CalendarPlus, Users, Target, MapPin, Settings } from "lucide-react";
+import { Trophy, ChevronRight, Shield, Users, Target, MapPin } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -32,8 +32,7 @@ export default async function MyPage({
   const records = (await getUserRecords(profile.id)) as PracticeRecord[];
 
   const perms = permissionsOf(profile.roles);
-  const showAdminMenu =
-    perms.manageMembers || perms.createSchedule || perms.createNotice;
+  const showAdminMenu = perms.manageMembers || perms.createSchedule;
 
   return (
     <>
@@ -122,31 +121,13 @@ export default async function MyPage({
           <section className="space-y-2">
             <p className="section-label">管理メニュー</p>
             <Card className="divide-y divide-separator/70 overflow-hidden">
+              {perms.manageMembers && (
+                <RowLink href="/admin" icon={<Users size={20} className="text-accent" />} label="ロール管理" />
+              )}
               {perms.createSchedule && (
-                <RowLink href="/schedule?compose=1" icon={<CalendarPlus size={20} className="text-accent" />} label="予定を作成" />
+                <RowLink href="/venues" icon={<MapPin size={20} className="text-accent" />} label="練習場所" />
               )}
-              {perms.createNotice && (
-                <RowLink href="/notices?compose=1" icon={<Bell size={20} className="text-warning" />} label="お知らせを作成" />
-              )}
-              {/* その他（めったに触らない設定はここに畳んでおく） */}
-              {(perms.manageMembers || perms.createSchedule) && (
-                <details>
-                  <summary className="flex cursor-pointer list-none items-center gap-3 p-4 active:bg-bg">
-                    <Settings size={20} className="text-muted2" />
-                    <span className="flex-1 text-headline">その他</span>
-                    <ChevronRight size={18} className="text-muted" />
-                  </summary>
-                  <div className="divide-y divide-separator/70 border-t border-separator/70 bg-bg/40">
-                    {perms.manageMembers && (
-                      <RowSubLink href="/admin" icon={<Users size={18} />} label="ロール管理" />
-                    )}
-                    {perms.createSchedule && (
-                      <RowSubLink href="/venues" icon={<MapPin size={18} />} label="練習場所" />
-                    )}
-                    {perms.manageMembers && <SheetSyncButton />}
-                  </div>
-                </details>
-              )}
+              {perms.manageMembers && <SheetSyncButton />}
             </Card>
           </section>
         )}
@@ -211,17 +192,6 @@ function RowLink({ href, icon, label }: { href: string; icon: React.ReactNode; l
       {icon}
       <span className="flex-1 text-headline">{label}</span>
       <ChevronRight size={18} className="text-muted" />
-    </Link>
-  );
-}
-
-/** 「その他」内のサブ行リンク（少しインデント） */
-function RowSubLink({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
-  return (
-    <Link href={href} prefetch className="flex items-center gap-3 py-3 pl-12 pr-4 active:bg-bg">
-      <span className="text-accent">{icon}</span>
-      <span className="flex-1 text-[14px] font-semibold">{label}</span>
-      <ChevronRight size={16} className="text-muted" />
     </Link>
   );
 }
