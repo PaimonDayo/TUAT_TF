@@ -62,7 +62,6 @@ export const TweetForm = forwardRef<TweetFormHandle, { tweet?: { id: string; con
   return (
     <div className="space-y-3 pb-4" onInputCapture={() => setTouched(true)}>
       <Textarea
-        autoFocus
         rows={4}
         maxLength={MAX}
         placeholder="いまどうしてる？"

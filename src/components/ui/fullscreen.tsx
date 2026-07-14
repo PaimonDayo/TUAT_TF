@@ -67,7 +67,18 @@ export function FullScreenContent({
       <Dialog.Overlay className="sheet-overlay fixed inset-0 z-50 bg-black/30" />
       <Dialog.Content
         ref={contentRef}
-        onOpenAutoFocus={autoFocus ? undefined : (e) => e.preventDefault()}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          if (!autoFocus) return;
+
+          // Avoid racing the initial focus with the mobile keyboard viewport resize.
+          requestAnimationFrame(() => {
+            const target = contentRef.current?.querySelector<HTMLElement>(
+              "textarea,input,select,[contenteditable='true']",
+            );
+            target?.focus({ preventScroll: true });
+          });
+        }}
         onCloseAutoFocus={(e) => e.preventDefault()}
         // Select 等の Radix ポップアップや、入れ子の Sheet（Dialog.Root）は
         // Portal で Dialog 外（document.body直下）に描画されるため、その操作を

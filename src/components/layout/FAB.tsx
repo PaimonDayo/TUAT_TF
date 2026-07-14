@@ -350,7 +350,7 @@ function ContextualFAB({
         />
       </FormModal>
 
-      <FormModal open={tweetOpen} onOpenChange={(open) => { if (!open) { if (tweetDirty) setPendingTimelineClose("tweet"); else closeTimelineForm("tweet"); } }} title="????">
+      <FormModal open={tweetOpen} onOpenChange={(open) => { if (!open) { if (tweetDirty) setPendingTimelineClose("tweet"); else closeTimelineForm("tweet"); } }} title={"\u3064\u3076\u3084\u304d"}>
         <TweetForm ref={tweetRef} onDirtyChange={setTweetDirty} onDone={() => closeTimelineForm("tweet")} />
       </FormModal>
 
