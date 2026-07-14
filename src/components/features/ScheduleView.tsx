@@ -86,6 +86,7 @@ export function ScheduleView({
                 )}
                 <div className="mb-3">
                   <ScheduleCard
+                    key={`${s.id}:${(s.menus ?? []).map((menu) => `${menu.id}:${menu.updated_at}`).join(",")}`}
                     schedule={s}
                     viewerBlocks={viewerBlocks}
                     canEditMenu={canEditMenu}

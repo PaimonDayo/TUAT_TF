@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
   BellPlus,
@@ -75,6 +76,7 @@ function ContextualFAB({
   autoOpen: boolean;
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [speedDialOpen, setSpeedDialOpen] = useState(false);
   const [recordOpen, setRecordOpen] = useState(false);
   const [tweetOpen, setTweetOpen] = useState(false);
@@ -196,6 +198,11 @@ function ContextualFAB({
     if (kind === "record") recordRef.current?.save();
     if (kind === "tweet") tweetRef.current?.save();
     if (kind === "result") resultRef.current?.save();
+  }
+
+  function handlePlanningSaved() {
+    closeDirectForm();
+    void queryClient.invalidateQueries({ queryKey: ["schedule", userId] });
   }
 
   function closeDirectForm() {
@@ -358,9 +365,9 @@ function ContextualFAB({
       <UnsavedChangesDialog open={pendingTimelineClose !== null} busy={false} onContinue={() => setPendingTimelineClose(null)} onDiscard={() => { if (pendingTimelineClose) closeTimelineForm(pendingTimelineClose); }} onSave={savePendingTimelineForm} />
 
       <FormModal open={directForm === "planning"} onOpenChange={(open) => { if (!open) { if (planningDirty) setConfirmPlanningClose(true); else closeDirectForm(); } }} title="予定・メニューを月間入力">
-        <MonthlyPlanningEditorV2 ref={planningRef} initialTab="schedule" canSchedule={can.createSchedule} canMenu={can.createMenu} onDirtyChange={setPlanningDirty} onSaved={closeDirectForm} />
+        <MonthlyPlanningEditorV2 ref={planningRef} initialTab="schedule" canSchedule={can.createSchedule} canMenu={can.createMenu} onDirtyChange={setPlanningDirty} onSaved={handlePlanningSaved} />
       </FormModal>
-      <UnsavedChangesDialog open={confirmPlanningClose} busy={savingPlanning} onContinue={() => setConfirmPlanningClose(false)} onDiscard={closeDirectForm} onSave={() => { setSavingPlanning(true); void planningRef.current?.save().then((ok) => { setSavingPlanning(false); if (ok) closeDirectForm(); }); }} />
+      <UnsavedChangesDialog open={confirmPlanningClose} busy={savingPlanning} onContinue={() => setConfirmPlanningClose(false)} onDiscard={closeDirectForm} onSave={() => { setSavingPlanning(true); void planningRef.current?.save().then((ok) => { setSavingPlanning(false); if (ok) handlePlanningSaved(); }); }} />
 
       <FormModal
         open={directForm === "schedule"}

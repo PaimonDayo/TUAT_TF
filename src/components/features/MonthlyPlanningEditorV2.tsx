@@ -16,12 +16,10 @@ import type { AuthorMini, Block, PracticeMenu, PracticeSchedule, VenueRow } from
 type ScheduleDraft = { id?: string; time: string; venue: string; note: string };
 type MenuDraft = { id?: string; content: string; pace: string; remark: string; supplement: string };
 type MenuPreset = MenuDraft & { key: string; name: string; block: Block };
-type TargetPreset = { key: string; name: string; ids: string[] };
 type RowState = "dirty" | "saving" | "saved" | "error";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 const MENU_PRESETS_KEY = "track-app:menu-presets-v1";
-const TARGET_PRESETS_KEY = "track-app:target-presets-v1";
 
 function readStored<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -51,9 +49,8 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
   const [showActiveOnly, setShowActiveOnly] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [menuPresets, setMenuPresets] = useState<MenuPreset[]>(() => readStored(MENU_PRESETS_KEY, []));
-  const [targetPresets, setTargetPresets] = useState<TargetPreset[]>(() => readStored(TARGET_PRESETS_KEY, []));
   const [presetName, setPresetName] = useState("");
-  const [presetEditor, setPresetEditor] = useState<{ kind: "target" } | { kind: "menu"; date: string } | null>(null);
+  const [presetEditor, setPresetEditor] = useState<{ kind: "menu"; date: string } | null>(null);
   const [expandedDates, setExpandedDates] = useState<string[]>([]);
   const [customTimeDates, setCustomTimeDates] = useState<string[]>([]);
   const [customVenueDates, setCustomVenueDates] = useState<string[]>([]);
@@ -174,7 +171,6 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
     const sample = menuDrafts[date]; if (!sample || !hasMenuValue(sample) || !presetName.trim()) return;
     const next = [...menuPresets, { ...sample, id: undefined, key: crypto.randomUUID(), name: presetName.trim(), block }]; setMenuPresets(next); localStorage.setItem(MENU_PRESETS_KEY, JSON.stringify(next)); closePresetEditor();
   }
-  function saveTargetPreset() { if (!targetIds.length || !presetName.trim()) return; const next = [...targetPresets, { key: crypto.randomUUID(), name: presetName.trim(), ids: targetIds }]; setTargetPresets(next); localStorage.setItem(TARGET_PRESETS_KEY, JSON.stringify(next)); closePresetEditor(); }
   function applyMenuPreset(key: string, date: string) { const preset = menuPresets.find((item) => item.key === key); if (preset) updateMenu(date, { content: preset.content, pace: preset.pace, remark: preset.remark, supplement: preset.supplement }); }
 
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -201,12 +197,7 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
     <div className="flex items-center justify-between gap-3">{tab === "schedule" ? <SegmentedControl className="w-52" items={[{ key: "all", label: "すべての日" }, { key: "active", label: "予定あり" }]} value={showActiveOnly ? "active" : "all"} onChange={(value) => setShowActiveOnly(value === "active")} /> : <span className="text-xs text-muted">予定がある日のみ表示</span>}<span className="shrink-0 text-xs text-muted">変更 {dirtyCount}件</span></div>
     {tab === "menu" && <div className="space-y-3 rounded-xl border border-separator bg-card p-3">
       <Select value={block} onValueChange={(value) => setBlock(value as Block)} ariaLabel="ブロック" options={BLOCK_ORDER.map((item) => ({ value: item, label: BLOCKS[item].label }))} />
-      <div className="space-y-2">
-        <PersonPicker people={members} value={targetIds} onChange={setTargetIds} label="個人指定（空ならブロック全体）" />
-        {targetPresets.length > 0 && <Select value="" onValueChange={(key) => { const preset = targetPresets.find((item) => item.key === key); if (preset) setTargetIds(preset.ids.filter((id) => members.some((member) => member.id === id))); }} ariaLabel="保存した対象者セットを呼び出す" placeholder="保存した対象者セットを呼び出す" options={targetPresets.map((item) => ({ value: item.key, label: item.name }))} />}
-        {targetIds.length > 0 && presetEditor?.kind !== "target" && <button type="button" onClick={() => { setPresetName(""); setPresetEditor({ kind: "target" }); }} className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent"><Star size={14} />現在の対象者をセットとして保存</button>}
-        {presetEditor?.kind === "target" && <div className="rounded-xl border border-separator bg-bg p-3"><p className="mb-2 text-sm font-semibold">対象者セットの名前</p><div className="grid grid-cols-[1fr_auto] gap-2"><Input autoFocus value={presetName} onChange={(event) => setPresetName(event.target.value)} placeholder="例：駅伝メンバー" /><Button type="button" disabled={!presetName.trim()} onClick={saveTargetPreset}>保存</Button></div><button type="button" onClick={closePresetEditor} className="mt-2 text-xs font-semibold text-muted">キャンセル</button></div>}
-      </div>
+      <PersonPicker people={members} value={targetIds} onChange={setTargetIds} label="個人指定（空ならブロック全体）" />
       <div className={`rounded-xl border p-3 ${status === "published" ? "border-accent/30 bg-accent/5" : "border-warning/30 bg-warning/5"}`}><p className="section-label mb-2">保存後の状態</p><SegmentedControl items={[{ key: "published", label: "公開" }, { key: "draft", label: "下書き" }]} value={status} onChange={(value) => setStatus(value as "draft" | "published")} /><p className="mt-2 text-xs text-muted">{status === "published" ? "保存するとすぐに部員へ公開されます" : "作成者だけが確認できる下書きで保存します"}</p></div>
     </div>}
     <div className="space-y-2">{visibleDays.map(({ date, day, weekday }) => <section key={date} className={`rounded-xl border bg-card p-3 ${rowStates[stateKey(tab, date)] === "error" ? "border-danger" : "border-separator"}`}><div className="mb-2 flex items-center"><strong className="text-sm">{month}/{day}（{weekday}）</strong><RowStatus state={rowStates[stateKey(tab, date)]} /></div>

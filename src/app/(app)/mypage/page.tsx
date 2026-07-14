@@ -33,7 +33,7 @@ export default async function MyPage({
 
   const perms = permissionsOf(profile.roles);
   const showAdminMenu =
-    perms.manageMembers || perms.createSchedule || perms.createNotice || perms.manageSystem;
+    perms.manageMembers || perms.createSchedule || perms.createNotice;
 
   return (
     <>
@@ -129,7 +129,7 @@ export default async function MyPage({
                 <RowLink href="/notices?compose=1" icon={<Bell size={20} className="text-warning" />} label="お知らせを作成" />
               )}
               {/* その他（めったに触らない設定はここに畳んでおく） */}
-              {(perms.manageMembers || perms.createSchedule || perms.manageSystem) && (
+              {(perms.manageMembers || perms.createSchedule) && (
                 <details>
                   <summary className="flex cursor-pointer list-none items-center gap-3 p-4 active:bg-bg">
                     <Settings size={20} className="text-muted2" />
@@ -142,9 +142,6 @@ export default async function MyPage({
                     )}
                     {perms.createSchedule && (
                       <RowSubLink href="/venues" icon={<MapPin size={18} />} label="練習場所" />
-                    )}
-                    {perms.manageSystem && (
-                      <RowSubLink href="/tab-lab?mode=empty" icon={<Settings size={18} />} label="タブ切替ラボ" />
                     )}
                     {perms.manageMembers && <SheetSyncButton />}
                   </div>
