@@ -19,8 +19,9 @@ export const TweetForm = forwardRef<TweetFormHandle, { tweet?: { id: string; con
   const [content, setContent] = useState(tweet?.content ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [touched, setTouched] = useState(false);
-  useEffect(() => { onDirtyChange?.(touched); }, [onDirtyChange, touched]);
+  const initialContent = tweet?.content ?? "";
+  useEffect(() => { onDirtyChange?.(content !== initialContent); },
+    [content, initialContent, onDirtyChange]);
   useImperativeHandle(ref, () => ({ save: () => { void submit(); } }));
 
   async function submit() {
@@ -60,7 +61,7 @@ export const TweetForm = forwardRef<TweetFormHandle, { tweet?: { id: string; con
   }
 
   return (
-    <div className="space-y-3 pb-4" onInputCapture={() => setTouched(true)}>
+    <div className="space-y-3 pb-4">
       <Textarea
         rows={4}
         maxLength={MAX}
