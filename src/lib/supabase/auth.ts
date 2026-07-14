@@ -72,20 +72,25 @@ export async function fetchRolesByProfileIds(
   const map = new Map<string, AppRole[]>();
   if (ids.length === 0) return map;
 
-  const { data, error } = await supabase
-    .from("profile_roles")
-    .select("profile_id, role:roles(*)")
-    .in("profile_id", ids);
+  const [{ data, error }, { data: everyoneRoles }] = await Promise.all([
+    supabase
+      .from("profile_roles")
+      .select("profile_id, role:roles(*)")
+      .in("profile_id", ids),
+    supabase.from("roles").select("*").eq("is_everyone", true),
+  ]);
 
   if (error || !data) return map;
 
+  const globalRoles = (everyoneRoles ?? []) as AppRole[];
+  for (const id of ids) map.set(id, [...globalRoles]);
+
   for (const row of data as unknown as { profile_id: string; role: AppRole | null }[]) {
-    if (!row.role) continue;
+    if (!row.role || row.role.is_everyone) continue;
     const arr = map.get(row.profile_id) ?? [];
     arr.push(row.role);
     map.set(row.profile_id, arr);
-  }
-  for (const roles of map.values()) {
+  }  for (const roles of map.values()) {
     roles.sort((a, b) => a.sort_order - b.sort_order);
   }
   return map;

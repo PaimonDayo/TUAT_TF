@@ -89,10 +89,10 @@ export function AdminMemberList({
                       <BlockPills blocks={member.blocks} />
                     </div>
                     <div className="mt-1 flex flex-wrap gap-1">
-                      {member.roles.length === 0 ? (
+                      {member.roles.filter((role) => !role.is_everyone).length === 0 ? (
                         <span className="text-micro">ロールなし</span>
                       ) : (
-                        member.roles.map((role) => (
+                        member.roles.filter((role) => !role.is_everyone).map((role) => (
                           <span
                             key={role.id}
                             className="rounded-full px-2 py-0.5 text-micro"
@@ -118,7 +118,7 @@ export function AdminMemberList({
       {selected && (
         <MemberRoleEditor
           member={selected}
-          roles={roles}
+          roles={roles.filter((role) => !role.is_everyone)}
           onClose={() => setSelected(null)}
         />
       )}
@@ -137,7 +137,7 @@ function MemberRoleEditor({
 }) {
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<string[]>(
-    member.roles.map((role) => role.id),
+    member.roles.filter((role) => !role.is_everyone).map((role) => role.id),
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");

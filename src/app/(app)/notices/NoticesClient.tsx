@@ -38,6 +38,16 @@ export function NoticesClient({
     pendingScroll.current = id;
   }
 
+  useEffect(() => {
+    const match = window.location.hash.match(/^#notice-(.+)$/);
+    if (!match) return;
+    const id = window.setTimeout(() => {
+      setTab("notice");
+      setExpanded((current) => new Set(current).add(match[1]));
+      pendingScroll.current = match[1];
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, []);
   // タブ切替・展開反映後に対象カードへスクロール
   useEffect(() => {
     if (tab !== "notice" || !pendingScroll.current) return;

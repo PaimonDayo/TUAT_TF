@@ -25,9 +25,17 @@ export interface AppRole {
   can_create_menu: boolean;
   can_create_notice: boolean;
   is_system: boolean;
+  /** 全ユーザーへ個別割当なしで適用する固定ロール。 */
+  is_everyone: boolean;
   color: string;
   /** 表示上のカテゴリ（フォルダ分け。任意） */
   category: string | null;
+  sort_order: number;
+  created_at: string;
+}
+export interface RoleCategory {
+  id: string;
+  name: string;
   sort_order: number;
   created_at: string;
 }
@@ -90,6 +98,8 @@ export type AuthorMini = Pick<
 > & {
   /** 練習記録カードの編集可否判定に使う。取得していない画面ではundefinedでよい（'app'相当として扱う） */
   record_source?: Profile["record_source"];
+  /** 練習記録の表示ラベル。タイムライン取得時のみ含まれる。 */
+  record_fields?: RecordFieldDef[];
 };
 
 export interface PracticeRecord {

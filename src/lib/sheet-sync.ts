@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import Papa from "papaparse";
 import type { RecordFieldDef } from "@/types";
+import { customRecordFields } from "@/lib/record-fields";
 
 /**
  * TF構造スプレッドシート（部員別シート）と practice_records の同期。
@@ -276,22 +277,40 @@ type FieldMap = {
 };
 
 function resolveFieldMap(header: string[], fields: RecordFieldDef[]): FieldMap {
-  const normHeaders = header.map((h) => ({ raw: h, n: norm(h) }));
+  const normHeaders = header.map((item) => ({ raw: item, n: norm(item) }));
   const builtin = new Map<BuiltinKey, { header: string; numeric: boolean; integer?: boolean }>();
-  for (const b of BUILTINS) {
-    const hit = normHeaders.find((h) => b.keywords.some((k) => h.n.includes(norm(k))));
-    if (hit) builtin.set(b.key, { header: hit.raw, numeric: b.numeric, integer: b.integer });
+  const usedHeaders = new Set<string>();
+
+  // 名前変更した既定項目を最優先で完全一致させる。
+  for (const item of BUILTINS) {
+    const configuredLabel = fields.find((field) => field.key === item.key)?.label.trim();
+    if (!configuredLabel) continue;
+    const hit = normHeaders.find((candidate) => candidate.n === norm(configuredLabel) && !usedHeaders.has(candidate.raw));
+    if (!hit) continue;
+    builtin.set(item.key, { header: hit.raw, numeric: item.numeric, integer: item.integer });
+    usedHeaders.add(hit.raw);
   }
+
+  // 未設定・旧設定は従来キーワードへフォールバックする。同じ列を複数項目へ割り当てない。
+  for (const item of BUILTINS) {
+    if (builtin.has(item.key)) continue;
+    const hit = normHeaders.find((candidate) => !usedHeaders.has(candidate.raw) && item.keywords.some((keyword) => candidate.n.includes(norm(keyword))));
+    if (!hit) continue;
+    builtin.set(item.key, { header: hit.raw, numeric: item.numeric, integer: item.integer });
+    usedHeaders.add(hit.raw);
+  }
+
   const custom = new Map<string, { header: string; type: "text" | "number" }>();
-  for (const f of fields) {
-    const target = f.label.trim();
+  for (const field of customRecordFields(fields)) {
+    const target = field.label.trim();
     if (!target) continue;
-    const hit = normHeaders.find((h) => h.raw.trim() === target);
-    if (hit) custom.set(f.key, { header: hit.raw, type: f.type });
+    const hit = normHeaders.find((candidate) => candidate.raw.trim() === target && !usedHeaders.has(candidate.raw));
+    if (!hit) continue;
+    custom.set(field.key, { header: hit.raw, type: field.type });
+    usedHeaders.add(hit.raw);
   }
   return { builtin, custom };
 }
-
 // ── 値の取り出し（アプリ側 / シート側）と比較 ────────────────────────────────
 export type DbRecord = {
   id: string;
@@ -430,9 +449,9 @@ export async function pushRecordToSheet(
     if (map.builtin.has(b.key)) continue;
     const v = appBuiltin(rec, b.key);
     const nonEmpty = b.numeric ? Number(v) > 0 : (v ?? "").toString().trim() !== "";
-    if (nonEmpty) unmapped.push(BUILTIN_LABELS[b.key]);
+    if (nonEmpty) unmapped.push(recordFields.find((field) => field.key === b.key)?.label.trim() || BUILTIN_LABELS[b.key]);
   }
-  for (const f of recordFields) {
+  for (const f of customRecordFields(recordFields)) {
     if (map.custom.has(f.key)) continue;
     const v = rec.custom?.[f.key];
     if ((v ?? "").toString().trim() !== "") unmapped.push(f.label);

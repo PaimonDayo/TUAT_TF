@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, ChevronRight, List, Plus, Search, Trash2 } from "lucide-react";
+import { Check, ChevronRight, Plus, Search, Trash2, Users } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
 import { PeopleFilterButton } from "@/components/features/PeopleFilterButton";
 import { Button } from "@/components/ui/button";
@@ -34,7 +34,6 @@ export function PersonPicker({ people, value, onChange, label = "対象者", exc
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [grades, setGrades] = useState<string[]>([]);
   const [memberLists, setMemberLists] = useState<MemberList[]>([]);
-  const [memberListsOpen, setMemberListsOpen] = useState(false);
   const [listName, setListName] = useState("");
   const [creatingList, setCreatingList] = useState(false);
   const excluded = useMemo(() => new Set(excludeIds), [excludeIds]);
@@ -54,7 +53,6 @@ export function PersonPicker({ people, value, onChange, label = "対象者", exc
   function launch() {
     setDraft(value);
     setMemberLists(readMemberLists());
-    setMemberListsOpen(false);
     setCreatingList(false);
     setListName("");
     setOpen(true);
@@ -76,7 +74,6 @@ export function PersonPicker({ people, value, onChange, label = "対象者", exc
   function applyMemberList(list: MemberList) {
     const selectable = new Set(people.filter((person) => !excluded.has(person.id)).map((person) => person.id));
     setDraft(list.ids.filter((id) => selectable.has(id)));
-    setMemberListsOpen(false);
   }
 
   return <>
@@ -85,27 +82,23 @@ export function PersonPicker({ people, value, onChange, label = "対象者", exc
     </button>
     <FormModal open={open} onOpenChange={setOpen} title={`${label}を選択`} autoFocus={false}>
       <div className="space-y-3 pb-4">
-        <div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="名前で検索" className="pl-9" /></div>
-        <div className="flex min-h-10 items-center gap-2">
-          <PeopleFilterButton blocks={blocks} grades={grades} onBlocksChange={setBlocks} onGradesChange={setGrades} availableGrades={availableGrades} />
-          <button type="button" onClick={() => { setMemberListsOpen((current) => !current); setCreatingList(false); }} className={cn("inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold", memberListsOpen ? "border-accent bg-accent/10 text-accent" : "border-separator bg-card text-ink")} aria-expanded={memberListsOpen}>
-            <List size={16} />メンバーリスト
-          </button>
-          <span className="ml-auto shrink-0 text-sm font-semibold tabular-nums text-muted">{draft.length}人</span>
-        </div>
-        {memberListsOpen && <div className="space-y-2 rounded-xl border border-separator bg-bg p-3">
-          <div className="flex items-center justify-between gap-2"><p className="text-sm font-semibold">保存したメンバーリスト</p>{draft.length > 0 && !creatingList && <button type="button" onClick={() => setCreatingList(true)} className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-accent"><Plus size={14} />現在の選択を保存</button>}</div>
-          {memberLists.length === 0 && !creatingList && <p className="py-2 text-xs text-muted">保存済みのリストはありません</p>}
+        <div className="space-y-2 rounded-xl border border-separator bg-bg p-3">
+          <div className="flex items-center justify-between gap-2"><p className="inline-flex items-center gap-1.5 text-sm font-semibold"><Users size={16} className="text-accent" />メンバーリスト</p>{draft.length > 0 && !creatingList && <button type="button" onClick={() => setCreatingList(true)} className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-accent"><Plus size={14} />現在の選択を保存</button>}</div>
+          {memberLists.length === 0 && !creatingList && <p className="py-1 text-xs text-muted">部員を選ぶと、この組み合わせをリストとして保存できます</p>}
           {memberLists.map((list) => <div key={list.key} className="flex min-h-11 items-center gap-2 rounded-lg bg-card px-3">
-            <button type="button" onClick={() => applyMemberList(list)} className="min-w-0 flex-1 text-left"><span className="block truncate text-sm font-semibold">{list.name}</span><span className="text-micro text-muted">{list.ids.filter((id) => !excluded.has(id) && people.some((person) => person.id === id)).length}人</span></button>
+            <button type="button" onClick={() => applyMemberList(list)} className="min-w-0 flex-1 text-left"><span className="block truncate text-sm font-semibold">{list.name}</span><span className="text-micro text-muted">{list.ids.filter((id) => !excluded.has(id) && people.some((person) => person.id === id)).length}人を選択</span></button>
             <button type="button" onClick={() => saveMemberLists(memberLists.filter((item) => item.key !== list.key))} aria-label={`${list.name}を削除`} className="rounded-lg p-2 text-muted active:bg-bg"><Trash2 size={16} /></button>
           </div>)}
           {creatingList && <div className="space-y-2 rounded-lg bg-card p-2">
             <Input autoFocus value={listName} onChange={(event) => setListName(event.target.value)} placeholder="例：駅伝メンバー" />
             <div className="flex justify-end gap-2"><button type="button" onClick={() => { setCreatingList(false); setListName(""); }} className="px-3 py-2 text-xs font-semibold text-muted">キャンセル</button><Button type="button" size="sm" disabled={!listName.trim()} onClick={createMemberList}>保存</Button></div>
           </div>}
-        </div>}
-        <div className="space-y-1">{filtered.map((person) => {
+        </div>
+        <div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="名前で検索" className="pl-9" /></div>
+        <div className="flex min-h-10 items-center gap-2">
+          <PeopleFilterButton blocks={blocks} grades={grades} onBlocksChange={setBlocks} onGradesChange={setGrades} availableGrades={availableGrades} />
+          <span className="ml-auto shrink-0 text-sm font-semibold tabular-nums text-muted">個別選択 {draft.length}人</span>
+        </div>        <div className="space-y-1">{filtered.map((person) => {
           const explicit = draft.includes(person.id);
           const byCondition = included.has(person.id);
           const active = explicit || byCondition;

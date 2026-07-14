@@ -3,7 +3,7 @@ import { SubHeader } from "@/components/layout/SubHeader";
 import { RoleManager } from "@/components/features/RoleManager";
 import { AdminMemberList } from "@/components/features/AdminMemberList";
 import { getCurrentProfile } from "@/lib/supabase/auth";
-import { getAllProfiles, getAllRoles } from "@/lib/queries";
+import { getAllProfiles, getAllRoleCategories, getAllRoles } from "@/lib/queries";
 import { permissionsOf } from "@/lib/permissions";
 import type { Profile } from "@/types";
 
@@ -12,9 +12,10 @@ export default async function AdminPage() {
   const permissions = permissionsOf(profile.roles);
   if (!permissions.manageMembers) redirect("/home");
 
-  const [members, roles] = await Promise.all([
+  const [members, roles, categories] = await Promise.all([
     getAllProfiles() as Promise<Profile[]>,
     getAllRoles(),
+    getAllRoleCategories(),
   ]);
 
   return (
@@ -30,6 +31,7 @@ export default async function AdminPage() {
           <RoleManager
             roles={roles}
             members={members}
+            categories={categories}
             canManageSystem={permissions.manageSystem}
           />
         </section>

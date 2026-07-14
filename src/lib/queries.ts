@@ -11,6 +11,7 @@ import type {
   WeeklyRankingRow,
   Block,
   AppRole,
+  RoleCategory,
   AuthorMini,
   Notice,
   NoticeReaction,
@@ -22,7 +23,7 @@ import type {
 } from "@/types";
 
 const AUTHOR_SELECT =
-  "author:profiles!user_id(id, display_name, avatar_url, blocks, grade, record_source)";
+  "author:profiles!user_id(id, display_name, avatar_url, blocks, grade, record_source, record_fields)";
 const NOTICE_REACTIONS: NoticeReaction[] = ["ack", "thanks", "question"];
 
 // 練習記録の表示フィルタ。
@@ -385,6 +386,16 @@ export async function getAllRoles(): Promise<AppRole[]> {
   return (data ?? []) as AppRole[];
 }
 
+/** ロールカテゴリ一覧を取得（管理画面用） */
+export async function getAllRoleCategories(): Promise<RoleCategory[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("role_categories")
+    .select("*")
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+  return (data ?? []) as RoleCategory[];
+}
 /** あるユーザーの投稿（練習記録 + つぶやき）をマージして返す（マイページ用） */
 export async function getUserActivity(
   userId: string,
@@ -451,19 +462,21 @@ export async function getHomeNotices(userId: string): Promise<NoticeWithReaction
   const today = jstToday();
   const tomorrow = jstToday(1);
 
-  const [{ data: notices }, { data: dismissed }] = await Promise.all([
+  const [{ data: notices }, { data: dismissed }, { data: acknowledged }] = await Promise.all([
     supabase
       .from("notices")
       .select("*")
       .or(`deadline.is.null,deadline.gte.${today}`)
       .order("created_at", { ascending: false }),
     supabase.from("notice_dismissals").select("notice_id").eq("user_id", userId),
+    supabase.from("notice_reactions").select("notice_id").eq("user_id", userId).eq("reaction", "ack"),
   ]);
 
-  const dismissedIds = new Set((dismissed ?? []).map((d) => d.notice_id as string));
-  // 重要なお知らせ(pin_home)は消せない＝既読/非表示の対象外で常に表示する
+  const dismissedIds = new Set((dismissed ?? []).map((dismissal) => dismissal.notice_id as string));
+  const acknowledgedIds = new Set((acknowledged ?? []).map((reaction) => reaction.notice_id as string));
+  // 「確認」を付けたお知らせは重要指定を含めホームから除外する。
   const visible = ((notices ?? []) as Notice[]).filter(
-    (notice) => notice.pin_home || !dismissedIds.has(notice.id),
+    (notice) => !acknowledgedIds.has(notice.id) && (notice.pin_home || !dismissedIds.has(notice.id)),
   );
   const important = visible.filter((notice) => notice.pin_home);
   const reminders = visible.filter((notice) => notice.deadline === tomorrow);

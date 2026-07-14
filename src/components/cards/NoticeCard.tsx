@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { NOTICE_CATEGORIES } from "@/lib/constants";
 import { NoticeActions } from "@/components/cards/NoticeActions";
 import { Linkify } from "@/components/common/Linkify";
+import { NoticeReactions } from "@/components/features/NoticeReactions";
 import { cn } from "@/lib/utils";
 import type { NoticeWithReactions } from "@/types";
 
@@ -17,6 +18,7 @@ import type { NoticeWithReactions } from "@/types";
  */
 export function NoticeCard({
   notice,
+  userId,
   canManage = false,
   expanded = false,
   onToggle,
@@ -78,6 +80,7 @@ export function NoticeCard({
               {overdue && "（終了）"}
             </p>
           )}
+          {userId && <NoticeReactions noticeId={notice.id} userId={userId} initialCounts={notice.reaction_counts} initialMine={notice.my_reactions} />}
         </div>
       )}
     </Card>

@@ -1,11 +1,12 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LoaderCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { jstToday } from "@/lib/date";
+import { customRecordFields, recordFieldLabel } from "@/lib/record-fields";
 import { IntensityInput, type IntensityValues } from "@/components/features/IntensityInput";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -75,7 +76,8 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
 
   // カスタム項目（プロフィールで設定したもの）。フォームに動的に追加する。
   // 呼び出し側が取得済みプロフィールから渡していれば、それを使い再フェッチしない。
-  const [customFields, setCustomFields] = useState<RecordFieldDef[]>(recordFields ?? []);
+  const [configuredFields, setConfiguredFields] = useState<RecordFieldDef[]>(recordFields ?? []);
+  const customFields = useMemo(() => customRecordFields(configuredFields), [configuredFields]);
   const [customValues, setCustomValues] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     for (const [k, v] of Object.entries(record?.custom ?? {})) {
@@ -94,7 +96,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
       .maybeSingle()
       .then(({ data }) => {
         const fields = (data?.record_fields ?? []) as RecordFieldDef[];
-        setCustomFields(fields);
+        setConfiguredFields(fields);
       });
   }, [userId, recordFields]);
 
@@ -316,7 +318,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
           <p className="section-label mb-1.5">強度別距離</p>
           <IntensityInput values={dist} onChange={setDist} />
           <div className="mt-2 flex items-center gap-2">
-            <span className="text-[13px] font-medium">流し</span>
+            <span className="text-[13px] font-medium">{recordFieldLabel(configuredFields, "strides", "流し")}</span>
             <Input
               type="number"
               inputMode="numeric"
@@ -334,7 +336,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
       {/* メニュー（短距離・跳躍・投擲） */}
       {!isMiddleLong && (
         <div>
-          <p className="section-label mb-1.5">メニュー</p>
+          <p className="section-label mb-1.5">{recordFieldLabel(configuredFields, "menu_text", "メニュー")}</p>
           <Textarea
             rows={2}
             placeholder="今日取り組んだメニュー"
@@ -347,7 +349,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
       {/* 目的・意識すること（短距離・跳躍・投擲） */}
       {!isMiddleLong && (
         <div>
-          <p className="section-label mb-1.5">目的・意識すること</p>
+          <p className="section-label mb-1.5">{recordFieldLabel(configuredFields, "focus_text", "目的・意識すること")}</p>
           <Textarea
             rows={2}
             placeholder="このメニューの狙い・意識したポイント"
@@ -359,7 +361,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
 
       {/* 結果 */}
       <div>
-        <p className="section-label mb-1.5">{isMiddleLong ? "結果" : "タイム"}</p>
+        <p className="section-label mb-1.5">{recordFieldLabel(configuredFields, "result_text", isMiddleLong ? "結果" : "タイム")}</p>
         <Textarea
           rows={2}
           placeholder={isMiddleLong ? "例: 5000m 16'20\"" : "例: 100m 11.2 (+1.5)"}
@@ -371,7 +373,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
       {/* 補強（中長距離のみ） */}
       {isMiddleLong && (
         <div>
-          <p className="section-label mb-1.5">補強</p>
+          <p className="section-label mb-1.5">{recordFieldLabel(configuredFields, "strength_text", "補強")}</p>
           <Textarea
             rows={2}
             placeholder="腹筋・背筋・体幹 など"
@@ -383,7 +385,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
 
       {/* 感想 */}
       <div>
-        <p className="section-label mb-1.5">感想・振り返り</p>
+        <p className="section-label mb-1.5">{recordFieldLabel(configuredFields, "memo", "感想・振り返り")}</p>
         <Textarea
           rows={3}
           placeholder="今日の練習はどうだった？"
@@ -420,7 +422,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
 
       {/* コンディション */}
       <div>
-        <p className="section-label mb-1.5">コンディション</p>
+        <p className="section-label mb-1.5">{recordFieldLabel(configuredFields, "condition", "コンディション")}</p>
         <div className="grid grid-cols-3 gap-2">
           {CONDITION_ORDER.map((c) => {
             const meta = CONDITIONS[c];

@@ -9,18 +9,20 @@ import { RecordForm, type RecordFormHandle } from "@/components/post/RecordForm"
 import { TweetForm, type TweetFormHandle } from "@/components/post/TweetForm";
 import { useToast } from "@/components/ui/toast";
 import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
-import type { PracticeRecord } from "@/types";
+import type { PracticeRecord, RecordFieldDef } from "@/types";
 
 /** 練習記録の編集・削除メニュー（本人のみ表示） */
 export function RecordOwnerMenu({
   record,
   isMiddleLong,
   recordSource = "app",
+  recordFields,
 }: {
   record: PracticeRecord;
   isMiddleLong: boolean;
   /** 記録のメイン。'sheet'ならスプシ由来(from_sheet)の記録も編集可（write-through） */
   recordSource?: "app" | "sheet";
+  recordFields?: RecordFieldDef[];
 }) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -61,6 +63,7 @@ export function RecordOwnerMenu({
           isMiddleLong={isMiddleLong}
           record={record}
           recordSource={recordSource}
+          recordFields={recordFields}
           onDone={() => { setDirty(false); setEditOpen(false); }}
         />
       </FormModal>

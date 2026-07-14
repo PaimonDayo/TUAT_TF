@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
-import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, LoaderCircle, Save, Star } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, LoaderCircle, Save } from "lucide-react";
 import { PersonPicker } from "@/components/features/PersonPicker";
 import { Button } from "@/components/ui/button";
 import { FormModalFooter } from "@/components/ui/form-modal";
@@ -15,11 +15,9 @@ import type { AuthorMini, Block, PracticeMenu, PracticeSchedule, VenueRow } from
 
 type ScheduleDraft = { id?: string; time: string; venue: string; note: string };
 type MenuDraft = { id?: string; content: string; pace: string; remark: string; supplement: string };
-type MenuPreset = MenuDraft & { key: string; name: string; block: Block };
 type RowState = "dirty" | "saving" | "saved" | "error";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
-const MENU_PRESETS_KEY = "track-app:menu-presets-v1";
 
 function readStored<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -48,9 +46,6 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
   const [savingAll, setSavingAll] = useState(false);
   const [showActiveOnly, setShowActiveOnly] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [menuPresets, setMenuPresets] = useState<MenuPreset[]>(() => readStored(MENU_PRESETS_KEY, []));
-  const [presetName, setPresetName] = useState("");
-  const [presetEditor, setPresetEditor] = useState<{ kind: "menu"; date: string } | null>(null);
   const [expandedDates, setExpandedDates] = useState<string[]>([]);
   const [customTimeDates, setCustomTimeDates] = useState<string[]>([]);
   const [customVenueDates, setCustomVenueDates] = useState<string[]>([]);
@@ -166,12 +161,6 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
     return failed === 0;
   }
 
-  function closePresetEditor() { setPresetEditor(null); setPresetName(""); }
-  function saveMenuPreset(date: string) {
-    const sample = menuDrafts[date]; if (!sample || !hasMenuValue(sample) || !presetName.trim()) return;
-    const next = [...menuPresets, { ...sample, id: undefined, key: crypto.randomUUID(), name: presetName.trim(), block }]; setMenuPresets(next); localStorage.setItem(MENU_PRESETS_KEY, JSON.stringify(next)); closePresetEditor();
-  }
-  function applyMenuPreset(key: string, date: string) { const preset = menuPresets.find((item) => item.key === key); if (preset) updateMenu(date, { content: preset.content, pace: preset.pace, remark: preset.remark, supplement: preset.supplement }); }
 
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const visibleDays = (tab === "menu"
@@ -226,9 +215,6 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
             <p className="section-label mb-1.5">メニュー</p>
             <Textarea rows={3} className="min-h-20" placeholder="例：400m×10（つなぎ200m）" value={menuDrafts[date]?.content ?? ""} onChange={(event) => updateMenu(date, { content: event.target.value })} />
           </div>
-          {menuPresets.some((item) => item.block === block) && <Select value="" onValueChange={(key) => applyMenuPreset(key, date)} ariaLabel={`${month}/${day}に保存済みメニューを入力`} placeholder="保存済みメニューをこの日に入力" options={menuPresets.filter((item) => item.block === block).map((item) => ({ value: item.key, label: item.name }))} />}
-          {hasMenuValue(menuDrafts[date]) && !(presetEditor?.kind === "menu" && presetEditor.date === date) && <button type="button" onClick={() => { setPresetName(""); setPresetEditor({ kind: "menu", date }); }} className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent"><Star size={14} />この日の内容をプリセットとして保存</button>}
-          {presetEditor?.kind === "menu" && presetEditor.date === date && <div className="rounded-xl border border-separator bg-bg p-3"><p className="mb-2 text-sm font-semibold">メニュープリセットの名前</p><div className="grid grid-cols-[1fr_auto] gap-2"><Input autoFocus value={presetName} onChange={(event) => setPresetName(event.target.value)} placeholder="例：400mインターバル" /><Button type="button" disabled={!presetName.trim()} onClick={() => saveMenuPreset(date)}>保存</Button></div><button type="button" onClick={closePresetEditor} className="mt-2 text-xs font-semibold text-muted">キャンセル</button></div>}
           {(block === "middle_long" || block === "short") && <button type="button" onClick={() => toggleExpanded(date)} className="inline-flex items-center gap-1 text-xs font-semibold text-accent">{isExpanded(date) ? <ChevronUp size={14} /> : <ChevronDown size={14} />}{isExpanded(date) ? "詳細を閉じる" : block === "middle_long" ? "ペース・補足・補強を入力" : "説明を入力"}</button>}
           {block === "middle_long" && isExpanded(date) && <>
             <div>

@@ -11,6 +11,7 @@ import { IntensityBar } from "@/components/features/IntensityBar";
 import { PostActions } from "@/components/cards/PostActions";
 import { RecordOwnerMenu } from "@/components/cards/PostOwnerMenu";
 import { CONDITIONS, gradeShort } from "@/lib/constants";
+import { recordFieldLabel } from "@/lib/record-fields";
 import type { CommentAuthor, RecordWithAuthor } from "@/types";
 
 /** タイムライン用の練習記録カード。compact=簡易表示（テキスト詳細を畳む） */
@@ -77,6 +78,7 @@ export function RecordCard({
                   record={record}
                   isMiddleLong={author.blocks?.includes("middle_long") ?? false}
                   recordSource={author.record_source}
+                  recordFields={author.record_fields}
                 />
               </span>
             )}
@@ -93,7 +95,7 @@ export function RecordCard({
           )
         : totalDistance > 0 && <IntensityBar record={record} />}
       {!compact && record.strides > 0 && (
-        <p className="text-[12px] text-muted2">流し {record.strides}本</p>
+        <p className="text-[12px] text-muted2">{recordFieldLabel(author.record_fields, "strides", "流し")} {record.strides}本</p>
       )}
 
       {/* テキスト各種（簡易表示では畳む。存在する項目だけ表示） */}
@@ -104,14 +106,14 @@ export function RecordCard({
           record.strength_text ||
           record.memo) && (
           <dl>
-            <KeyValue label="メニュー" value={record.menu_text} />
-            <KeyValue label="目的・意識すること" value={record.focus_text} />
+            <KeyValue label={recordFieldLabel(author.record_fields, "menu_text", "メニュー")} value={record.menu_text} />
+            <KeyValue label={recordFieldLabel(author.record_fields, "focus_text", "目的・意識すること")} value={record.focus_text} />
             <KeyValue
-              label={record.menu_text || record.focus_text ? "タイム" : "結果"}
+              label={recordFieldLabel(author.record_fields, "result_text", record.menu_text || record.focus_text ? "タイム" : "結果")}
               value={record.result_text}
             />
-            <KeyValue label="補強" value={record.strength_text} />
-            <KeyValue label="感想" value={record.memo} />
+            <KeyValue label={recordFieldLabel(author.record_fields, "strength_text", "補強")} value={record.strength_text} />
+            <KeyValue label={recordFieldLabel(author.record_fields, "memo", "感想")} value={record.memo} />
           </dl>
         )}
 
