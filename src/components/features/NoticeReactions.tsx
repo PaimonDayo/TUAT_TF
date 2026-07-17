@@ -1,20 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Check, CircleHelp, Heart } from "lucide-react";
+import { Check } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { NoticeReaction } from "@/types";
-
-const REACTIONS: {
-  key: NoticeReaction;
-  label: string;
-  icon: typeof Check;
-}[] = [
-  { key: "ack", label: "確認", icon: Check },
-  { key: "thanks", label: "ありがとう", icon: Heart },
-  { key: "question", label: "質問あり", icon: CircleHelp },
-];
 
 export function NoticeReactions({
   noticeId,
@@ -27,76 +17,59 @@ export function NoticeReactions({
   initialCounts: Record<NoticeReaction, number>;
   initialMine: NoticeReaction[];
 }) {
-  const [counts, setCounts] = useState(initialCounts);
-  const [mine, setMine] = useState(() => new Set(initialMine));
-  const [busy, setBusy] = useState<NoticeReaction | null>(null);
+  const [count, setCount] = useState(initialCounts.ack);
+  const [checked, setChecked] = useState(initialMine.includes("ack"));
+  const [busy, setBusy] = useState(false);
 
-  async function toggle(reaction: NoticeReaction) {
+  async function toggle() {
     if (busy) return;
-    const active = mine.has(reaction);
-    setBusy(reaction);
-    setMine((current) => {
-      const next = new Set(current);
-      if (active) next.delete(reaction);
-      else next.add(reaction);
-      return next;
-    });
-    setCounts((current) => ({
-      ...current,
-      [reaction]: Math.max(0, current[reaction] + (active ? -1 : 1)),
-    }));
+
+    const wasChecked = checked;
+    setBusy(true);
+    setChecked(!wasChecked);
+    setCount((current) => Math.max(0, current + (wasChecked ? -1 : 1)));
 
     const supabase = createClient();
-    const result = active
+    const result = wasChecked
       ? await supabase
           .from("notice_reactions")
           .delete()
           .eq("notice_id", noticeId)
           .eq("user_id", userId)
-          .eq("reaction", reaction)
+          .eq("reaction", "ack")
       : await supabase
           .from("notice_reactions")
-          .insert({ notice_id: noticeId, user_id: userId, reaction });
+          .insert({ notice_id: noticeId, user_id: userId, reaction: "ack" });
 
     if (result.error) {
-      setMine((current) => {
-        const next = new Set(current);
-        if (active) next.add(reaction);
-        else next.delete(reaction);
-        return next;
-      });
-      setCounts((current) => ({
-        ...current,
-        [reaction]: Math.max(0, current[reaction] + (active ? 1 : -1)),
-      }));
+      setChecked(wasChecked);
+      setCount((current) => Math.max(0, current + (wasChecked ? 1 : -1)));
     }
-    setBusy(null);
+    setBusy(false);
   }
 
   return (
-    <div className="flex flex-wrap gap-1.5" aria-label="お知らせへのリアクション">
-      {REACTIONS.map(({ key, label, icon: Icon }) => {
-        const active = mine.has(key);
-        return (
-          <button
-            key={key}
-            type="button"
-            onClick={() => toggle(key)}
-            disabled={busy !== null}
-            aria-pressed={active}
-            className={cn(
-              "inline-flex h-8 min-w-[76px] items-center justify-center gap-1 rounded-full border px-2 text-[11px] font-semibold transition-colors disabled:opacity-60",
-              active
-                ? "border-accent bg-accent/10 text-accent"
-                : "border-separator bg-card text-muted2",
-            )}
-          >
-            <Icon size={14} fill={key === "thanks" && active ? "currentColor" : "none"} />
-            <span>{label}</span>
-            <span className="min-w-3 text-center tabular-nums">{counts[key]}</span>
-          </button>
-        );
-      })}
-    </div>
+    <button
+      type="button"
+      onClick={toggle}
+      disabled={busy}
+      aria-pressed={checked}
+      aria-label={checked ? "確認済みを取り消す" : "お知らせを確認済みにする"}
+      className={cn(
+        "inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold transition-colors disabled:opacity-50",
+        checked ? "bg-accent/10 text-accent" : "bg-fill text-muted2 hover:text-foreground",
+      )}
+    >
+      <span
+        className={cn(
+          "grid size-[18px] place-items-center rounded-full border transition-colors",
+          checked ? "border-accent bg-accent text-white" : "border-muted2/60",
+        )}
+      >
+        <Check size={12} strokeWidth={3} className={cn(!checked && "opacity-0")} />
+      </span>
+      <span>{checked ? "確認済み" : "確認"}</span>
+      {count > 0 && <span className="font-medium tabular-nums opacity-65">{count}</span>}
+    </button>
   );
 }
