@@ -1,17 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { NoticeAcknowledgersSheet } from "@/components/features/NoticeAcknowledgersSheet";
 import { cn } from "@/lib/utils";
 import type { NoticeReaction } from "@/types";
 
-export function NoticeReactions({
-  noticeId,
-  userId,
-  initialCounts,
-  initialMine,
-}: {
+export function NoticeReactions({ noticeId, userId, initialCounts, initialMine }: {
   noticeId: string;
   userId: string;
   initialCounts: Record<NoticeReaction, number>;
@@ -20,10 +16,35 @@ export function NoticeReactions({
   const [count, setCount] = useState(initialCounts.ack);
   const [checked, setChecked] = useState(initialMine.includes("ack"));
   const [busy, setBusy] = useState(false);
+  const [peopleOpen, setPeopleOpen] = useState(false);
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressed = useRef(false);
+
+  function startPress() {
+    longPressed.current = false;
+    pressTimer.current = setTimeout(() => {
+      longPressed.current = true;
+      setPeopleOpen(true);
+    }, 450);
+  }
+
+  function cancelPress() {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  }
+
+  function handleClick() {
+    if (longPressed.current) {
+      longPressed.current = false;
+      return;
+    }
+    void toggle();
+  }
 
   async function toggle() {
     if (busy) return;
-
     const wasChecked = checked;
     setBusy(true);
     setChecked(!wasChecked);
@@ -31,15 +52,8 @@ export function NoticeReactions({
 
     const supabase = createClient();
     const result = wasChecked
-      ? await supabase
-          .from("notice_reactions")
-          .delete()
-          .eq("notice_id", noticeId)
-          .eq("user_id", userId)
-          .eq("reaction", "ack")
-      : await supabase
-          .from("notice_reactions")
-          .insert({ notice_id: noticeId, user_id: userId, reaction: "ack" });
+      ? await supabase.from("notice_reactions").delete().eq("notice_id", noticeId).eq("user_id", userId).eq("reaction", "ack")
+      : await supabase.from("notice_reactions").insert({ notice_id: noticeId, user_id: userId, reaction: "ack" });
 
     if (result.error) {
       setChecked(wasChecked);
@@ -49,27 +63,27 @@ export function NoticeReactions({
   }
 
   return (
-    <button
-      type="button"
-      onClick={toggle}
-      disabled={busy}
-      aria-pressed={checked}
-      aria-label={checked ? "確認済みを取り消す" : "お知らせを確認済みにする"}
-      className={cn(
-        "inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold transition-colors disabled:opacity-50",
-        checked ? "bg-accent/10 text-accent" : "bg-fill text-muted2 hover:text-foreground",
-      )}
-    >
-      <span
+    <>
+      <button
+        type="button"
+        onClick={handleClick}
+        onPointerDown={(event) => { event.preventDefault(); startPress(); }}
+        onPointerUp={cancelPress}
+        onPointerLeave={cancelPress}
+        onPointerCancel={cancelPress}
+        onContextMenu={(event) => event.preventDefault()}
+        disabled={busy}
+        aria-pressed={checked}
+        aria-label={checked ? "確認済みを取り消す。長押しで確認した人を表示" : "確認済みにする。長押しで確認した人を表示"}
         className={cn(
-          "grid size-[18px] place-items-center rounded-full border transition-colors",
-          checked ? "border-accent bg-accent text-white" : "border-muted2/60",
+          "flex select-none touch-manipulation items-center gap-1.5 text-[13px] transition-active active:opacity-50 disabled:opacity-50 [-webkit-touch-callout:none]",
+          checked ? "text-accent" : "text-muted",
         )}
       >
-        <Check size={12} strokeWidth={3} className={cn(!checked && "opacity-0")} />
-      </span>
-      <span>{checked ? "確認済み" : "確認"}</span>
-      {count > 0 && <span className="font-medium tabular-nums opacity-65">{count}</span>}
-    </button>
+        <Check size={18} strokeWidth={checked ? 3 : 2} />
+        <span className={cn("inline-block w-5 text-left tabular-nums", count === 0 && "opacity-0")}>{count}</span>
+      </button>
+      <NoticeAcknowledgersSheet noticeId={noticeId} open={peopleOpen} onOpenChange={setPeopleOpen} />
+    </>
   );
 }
