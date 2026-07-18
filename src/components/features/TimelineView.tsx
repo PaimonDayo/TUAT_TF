@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { UserCheck, List } from "lucide-react";
 import { RecordCard } from "@/components/cards/RecordCard";
@@ -8,6 +8,8 @@ import { TweetCard } from "@/components/cards/TweetCard";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { GradeFilter } from "@/components/features/GradeFilter";
+import { FAVORITE_CHANGE_EVENT } from "@/components/features/FavoriteButton";
+import { createClient } from "@/lib/supabase/client";
 import { EmptyState } from "@/components/ui/empty-state";
 import { GRADE_OPTIONS, SIMPLE_BLOCK_ITEMS, matchSimpleBlock } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -59,12 +61,37 @@ export function TimelineView({
   const [block, setBlock] = useState<string>("all");
   const [grades, setGrades] = useState<string[]>([]);
   const [favOnly, setFavOnly] = useState(false);
+  const [currentFavoriteIds, setCurrentFavoriteIds] = useState(favoriteIds);
   const { compact, toggleCompact, toggleExpanded, isCompact } = useFeedDisplay({
     initialCompact,
     cookieName: "timeline-compact",
   });
 
-  const favSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
+  useEffect(() => {
+    let active = true;
+    const supabase = createClient();
+    void supabase
+      .from("favorites")
+      .select("favorite_user_id")
+      .eq("user_id", currentUser.id)
+      .then(({ data }) => {
+        if (active) setCurrentFavoriteIds((data ?? []).map((row) => row.favorite_user_id as string));
+      });
+
+    function handleFavoriteChange(event: Event) {
+      const { targetId, favorited } = (event as CustomEvent<{ targetId: string; favorited: boolean }>).detail;
+      setCurrentFavoriteIds((ids) => favorited
+        ? Array.from(new Set([...ids, targetId]))
+        : ids.filter((id) => id !== targetId));
+    }
+    window.addEventListener(FAVORITE_CHANGE_EVENT, handleFavoriteChange);
+    return () => {
+      active = false;
+      window.removeEventListener(FAVORITE_CHANGE_EVENT, handleFavoriteChange);
+    };
+  }, [currentUser.id]);
+
+  const favSet = useMemo(() => new Set(currentFavoriteIds), [currentFavoriteIds]);
 
   // 投稿者にいる学年だけをフィルタ候補に出す（メンバー一覧と同じ仕様）
   const presentGrades = useMemo(() => {
