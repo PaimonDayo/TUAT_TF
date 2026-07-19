@@ -17,8 +17,8 @@ export function NoticeActions({ notice }: { notice: Notice }) {
 
   async function remove() {
     const supabase = createClient();
-    const { error } = await supabase.from("notices").delete().eq("id", notice.id);
-    if (error) {
+    const { data, error } = await supabase.from("notices").delete().eq("id", notice.id).select("id");
+    if (error || !data || data.length !== 1) {
       showToast("お知らせを削除できませんでした");
       return false;
     }

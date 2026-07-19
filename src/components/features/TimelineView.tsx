@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { UserCheck, List } from "lucide-react";
 import { RecordCard } from "@/components/cards/RecordCard";
 import { TweetCard } from "@/components/cards/TweetCard";
@@ -40,6 +40,7 @@ export function TimelineView({
   /** 簡易表示の初期値（サーバーが cookie から復元して渡す。詳細→簡易のフラッシュ防止） */
   initialCompact?: boolean;
 }) {
+  const queryClient = useQueryClient();
   const feedQuery = useInfiniteQuery({
     queryKey: ["timeline", currentUser.id],
     queryFn: ({ pageParam }) => loadFeed(pageParam ?? {}, PAGE),
@@ -56,6 +57,13 @@ export function TimelineView({
       };
     },
   });
+  useEffect(() => {
+    queryClient.setQueryData(["timeline", currentUser.id], {
+      pages: [initialItems],
+      pageParams: [null],
+    });
+  }, [currentUser.id, initialItems, queryClient]);
+
   const items = feedQuery.data.pages.flat();
 
   const [block, setBlock] = useState<string>("all");

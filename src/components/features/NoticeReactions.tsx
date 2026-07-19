@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { NoticeAcknowledgersSheet } from "@/components/features/NoticeAcknowledgersSheet";
+import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import type { NoticeReaction } from "@/types";
 
@@ -17,6 +18,7 @@ export function NoticeReactions({ noticeId, userId, initialCounts, initialMine }
   const [checked, setChecked] = useState(initialMine.includes("ack"));
   const [busy, setBusy] = useState(false);
   const [peopleOpen, setPeopleOpen] = useState(false);
+  const { showToast } = useToast();
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressed = useRef(false);
 
@@ -52,12 +54,16 @@ export function NoticeReactions({ noticeId, userId, initialCounts, initialMine }
 
     const supabase = createClient();
     const result = wasChecked
-      ? await supabase.from("notice_reactions").delete().eq("notice_id", noticeId).eq("user_id", userId).eq("reaction", "ack")
-      : await supabase.from("notice_reactions").insert({ notice_id: noticeId, user_id: userId, reaction: "ack" });
+      ? await supabase.from("notice_reactions").delete().eq("notice_id", noticeId).eq("user_id", userId).eq("reaction", "ack").select("notice_id")
+      : await supabase.from("notice_reactions").upsert({ notice_id: noticeId, user_id: userId, reaction: "ack" }, { onConflict: "notice_id,user_id,reaction" })
+          .select("notice_id")
+          .single();
 
-    if (result.error) {
+    const deleteFailed = wasChecked && (!Array.isArray(result.data) || result.data.length !== 1);
+    if (result.error || deleteFailed) {
       setChecked(wasChecked);
       setCount((current) => Math.max(0, current + (wasChecked ? 1 : -1)));
+      showToast(wasChecked ? "確認を取り消せませんでした" : "確認を保存できませんでした");
     }
     setBusy(false);
   }

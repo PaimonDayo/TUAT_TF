@@ -113,6 +113,7 @@ export default async function MyPage({
             attendanceViewAll={profile.attendance_view_all_blocks ?? false}
             recordFields={profile.record_fields ?? []}
             isMiddleLong={profile.blocks.includes("middle_long")}
+            canManageSystem={perms.manageSystem}
           />
         </Card>
 

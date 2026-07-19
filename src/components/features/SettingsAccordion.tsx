@@ -6,6 +6,7 @@ import { Settings, ChevronRight } from "lucide-react";
 import { NotificationSettings } from "@/components/features/NotificationSettings";
 import { MenuViewSetting } from "@/components/features/MenuViewSetting";
 import { AttendanceViewSetting } from "@/components/features/AttendanceViewSetting";
+import { SystemSyncStatus } from "@/components/features/SystemSyncStatus";
 import type { RecordFieldDef } from "@/types";
 
 const RecordFieldsSetting = dynamic(
@@ -28,6 +29,7 @@ export function SettingsAccordion({
   attendanceViewAll,
   recordFields,
   isMiddleLong,
+  canManageSystem,
 }: {
   profileId: string;
   initialComment: boolean;
@@ -36,6 +38,7 @@ export function SettingsAccordion({
   attendanceViewAll: boolean;
   recordFields: RecordFieldDef[];
   isMiddleLong: boolean;
+  canManageSystem: boolean;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -62,6 +65,7 @@ export function SettingsAccordion({
           initialComment={initialComment}
           initialNotice={initialNotice}
         />
+        {canManageSystem && <SystemSyncStatus />}
         <RecordFieldsSetting
           profileId={profileId}
           initial={recordFields}

@@ -62,6 +62,15 @@ export function RecordFieldsSetting({ profileId, initial, isMiddleLong }: { prof
     setOpen(true);
   }
 
+  function resetToDefaults() {
+    const defaults = initialLabels([], isMiddleLong);
+    setLabels(defaults);
+    setHiddenKeys([]);
+    setFields([]);
+    setReorderMode(false);
+    setMessage("デフォルトに戻しました。保存すると反映されます");
+  }
+
   function addField() {
     const label = newLabel.trim();
     if (!label) return;
@@ -158,6 +167,12 @@ export function RecordFieldsSetting({ profileId, initial, isMiddleLong }: { prof
           {field.type === "number" ? <Input disabled placeholder="0" /> : <Textarea disabled rows={2} placeholder="入力欄" />}
           <div className="mt-2 flex gap-2">{(["text", "number"] as const).map((type) => <button key={type} type="button" onClick={() => setFields((current) => current.map((item) => item.key === field.key ? { ...item, type } : item))} className={`rounded-full px-3 py-1 text-micro font-semibold ${field.type === type ? "bg-accent text-white" : "bg-bg text-muted"}`}>{type === "text" ? "文章" : "数値"}</button>)}</div>
         </div>} />
+
+        <div className="flex justify-center">
+          <Button type="button" size="sm" variant="outline" onClick={resetToDefaults} disabled={saving}>
+            <RotateCcw size={16} />デフォルトに戻す
+          </Button>
+        </div>
 
         <button type="button" onClick={() => setAddOpen(true)} className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-accent/35 bg-accent/5 text-[14px] font-semibold text-accent active:bg-accent/10"><Plus size={19} />新しい入力項目を追加</button>
         {message && <p className="text-center text-caption text-danger">{message}</p>}

@@ -36,8 +36,8 @@ export function RecordOwnerMenu({
 
   async function remove() {
     const supabase = createClient();
-    const { error } = await supabase.from("practice_records").delete().eq("id", record.id);
-    if (error) {
+    const { data, error } = await supabase.from("practice_records").delete().eq("id", record.id).select("id");
+    if (error || !data || data.length !== 1) {
       showToast("練習記録を削除できませんでした");
       return false;
     }
@@ -83,8 +83,8 @@ export function TweetOwnerMenu({ tweet }: { tweet: { id: string; content: string
 
   async function remove() {
     const supabase = createClient();
-    const { error } = await supabase.from("tweets").delete().eq("id", tweet.id);
-    if (error) {
+    const { data, error } = await supabase.from("tweets").delete().eq("id", tweet.id).select("id");
+    if (error || !data || data.length !== 1) {
       showToast("つぶやきを削除できませんでした");
       return false;
     }

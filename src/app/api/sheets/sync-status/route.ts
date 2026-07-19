@@ -9,14 +9,30 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const roles = await fetchRolesByProfileIds(supabase, [user.id]);
-  if (!permissionsOf(roles.get(user.id)).manageMembers) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const permissions = permissionsOf(roles.get(user.id));
+  if (!permissions.manageSystem && !permissions.manageMembers) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { data, error } = await createAdminClient().from("sheet_sync_runs")
-    .select("status, started_at, finished_at, failed_members")
-    .order("started_at", { ascending: false }).limit(1);
-  if (error) return NextResponse.json({ error: "同期履歴を取得できませんでした" }, { status: 500 });
+  const admin = createAdminClient();
+  const [runsResult, pendingResult, profilesResult] = await Promise.all([
+    admin.from("sheet_sync_runs").select("status, started_at, finished_at, pulled_count, pushed_count, failed_members").order("started_at", { ascending: false }).limit(1),
+    admin.from("practice_records").select("id", { count: "exact", head: true }).eq("pending_sheet_push", true),
+    admin.from("profiles").select("id", { count: "exact", head: true }).eq("record_source", "sheet"),
+  ]);
+  if (runsResult.error || pendingResult.error || profilesResult.error) return NextResponse.json({ error: "同期状態を取得できませんでした" }, { status: 500 });
 
-  const latest = data?.[0] ?? null;
+  const latest = runsResult.data?.[0] ?? null;
   const failedMembers = Array.isArray(latest?.failed_members) ? latest.failed_members : [];
-  return NextResponse.json({ latest: latest && { status: latest.status, startedAt: latest.started_at, finishedAt: latest.finished_at, failedCount: failedMembers.length, hasIssue: latest.status === "error" || failedMembers.length > 0 } });
+  return NextResponse.json({
+    latest: latest && {
+      status: latest.status,
+      startedAt: latest.started_at,
+      finishedAt: latest.finished_at,
+      pulledCount: latest.pulled_count ?? 0,
+      pushedCount: latest.pushed_count ?? 0,
+      failedCount: failedMembers.length,
+      hasIssue: latest.status === "error" || failedMembers.length > 0,
+    },
+    pendingPushCount: pendingResult.count ?? 0,
+    sheetProfileCount: profilesResult.count ?? 0,
+  });
 }

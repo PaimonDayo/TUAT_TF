@@ -143,13 +143,14 @@ export function CommentSection({
   async function remove(comment: CommentWithAuthor) {
     setError("");
     const supabase = createClient();
-    const { error: deleteError } = await supabase
+    const { data, error: deleteError } = await supabase
       .from("comments")
       .delete()
       .eq("id", comment.id)
-      .eq("user_id", currentUser.id);
+      .eq("user_id", currentUser.id)
+      .select("id");
 
-    if (deleteError) {
+    if (deleteError || !data || data.length !== 1) {
       setError("コメントを削除できませんでした");
       return false;
     }

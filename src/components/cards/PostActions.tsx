@@ -5,6 +5,7 @@ import { Heart, MessageCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { CommentSection } from "@/components/cards/CommentSection";
 import { LikersSheet } from "@/components/cards/LikersSheet";
+import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import type { CommentAuthor, TargetType } from "@/types";
 
@@ -31,6 +32,7 @@ export function PostActions({
   const [commentsMounted, setCommentsMounted] = useState(false);
   const [commentCount, setCommentCount] = useState(initialComments);
   const [likersOpen, setLikersOpen] = useState(false);
+  const { showToast } = useToast();
   const updateCommentCount = useCallback((count: number) => setCommentCount(count), []);
 
   // いいねボタンの長押しで「いいねした人」シートを開く
@@ -66,31 +68,42 @@ export function PostActions({
 
   async function toggleLike() {
     if (busy) return;
+    const previousLiked = liked;
+    const previousLikes = likes;
+    const next = !previousLiked;
     setBusy(true);
-    const next = !liked;
     setLiked(next);
-    setLikes((n) => n + (next ? 1 : -1));
+    setLikes(Math.max(0, previousLikes + (next ? 1 : -1)));
 
     const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
+      setLiked(previousLiked);
+      setLikes(previousLikes);
       setBusy(false);
+      showToast("ログイン状態を確認できませんでした");
       return;
     }
 
-    if (next) {
-      await supabase
-        .from("likes")
-        .insert({ user_id: user.id, target_type: targetType, target_id: targetId });
-    } else {
-      await supabase
-        .from("likes")
-        .delete()
-        .eq("user_id", user.id)
-        .eq("target_type", targetType)
-        .eq("target_id", targetId);
+    const result = next
+      ? await supabase
+          .from("likes")
+          .upsert({ user_id: user.id, target_type: targetType, target_id: targetId }, { onConflict: "user_id,target_type,target_id" })
+          .select("target_id")
+          .single()
+      : await supabase
+          .from("likes")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("target_type", targetType)
+          .eq("target_id", targetId)
+          .select("target_id");
+
+    const deleteFailed = !next && (!Array.isArray(result.data) || result.data.length !== 1);
+    if (result.error || deleteFailed) {
+      setLiked(previousLiked);
+      setLikes(previousLikes);
+      showToast(next ? "いいねできませんでした" : "いいねを解除できませんでした");
     }
     setBusy(false);
   }
