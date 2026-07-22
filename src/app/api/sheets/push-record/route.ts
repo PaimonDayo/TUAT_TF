@@ -28,17 +28,14 @@ export async function POST(request: Request) {
 
   const { data: profile, error: pErr } = await admin
     .from("profiles")
-    .select("id, sheet_name, record_source, record_fields")
+    .select("id, sheet_name, record_fields")
     .eq("id", user.id)
     .maybeSingle();
   if (pErr) {
     return NextResponse.json({ error: pErr.message }, { status: 500 });
   }
-  if (!profile || profile.record_source !== "sheet" || !profile.sheet_name) {
-    return NextResponse.json(
-      { error: "記録のメインがスプレッドシートではありません" },
-      { status: 400 },
-    );
+  if (!profile?.sheet_name) {
+    return NextResponse.json({ ok: true, skipped: true });
   }
 
   const { data: rec, error: rErr } = await admin

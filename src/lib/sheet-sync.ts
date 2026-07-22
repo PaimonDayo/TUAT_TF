@@ -2,6 +2,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RecordFieldDef } from "@/types";
 import { customRecordFields } from "@/lib/record-fields";
 import { importedSheetReplies, normalizeSheetReplyText, type RawSheetReply } from "@/lib/sheet-replies";
+import {
+  fetchPublicMember,
+  fetchPublicSheetMembers,
+  type RawMember,
+  type SheetMember,
+} from "@/lib/sheet-public-csv";
 
 /**
  * TF構造スプレッドシート（部員別シート）と practice_records の同期。
@@ -19,14 +25,7 @@ import { importedSheetReplies, normalizeSheetReplyText, type RawSheetReply } fro
  *             シート→アプリの取込はしない。
  */
 
-type RawMember = {
-  name: string;
-  gid?: string;
-  header: string[];
-  records: { date: string; cells: Record<string, string>; replies?: RawSheetReply[] }[];
-};
-
-export type SheetMember = { name: string; gid: string };
+export type { SheetMember } from "@/lib/sheet-public-csv";
 
 export type SyncOptions = {
   dryRun?: boolean;
@@ -134,26 +133,6 @@ function gasConfig() {
   return { url, secret };
 }
 
-async function gasGet<T>(
-  params: Record<string, string>,
-  opts: { timeoutMs?: number } = {},
-): Promise<T> {
-  const { url, secret } = gasConfig();
-  const controller = opts.timeoutMs ? new AbortController() : undefined;
-  const timer = controller ? setTimeout(() => controller.abort(), opts.timeoutMs) : undefined;
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      redirect: "follow",
-      headers: { "Content-Type": "application/json;charset=utf-8" },
-      body: JSON.stringify({ ...params, secret }),
-      signal: controller?.signal,
-    });
-    return await readGasJson<T>(res);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
 
 async function gasPost<T>(body: Record<string, unknown>): Promise<T> {
   const { url, secret } = gasConfig();
@@ -193,8 +172,7 @@ export async function writeSheetReply(
 
 /** プロフィール選択用：部員シート名一覧 */
 export async function fetchSheetMembers(): Promise<SheetMember[]> {
-  const data = await gasGet<{ members: SheetMember[] }>({ action: "listMembers" });
-  return data.members ?? [];
+  return fetchPublicSheetMembers();
 }
 
 type ProtectedFetchResult = {
@@ -203,30 +181,32 @@ type ProtectedFetchResult = {
 };
 
 /**
- * GAS の secret 保護された fetchMember を少数並列で呼ぶ。
- * 公開 CSV export はシート自体のリンク共有を必要とするため使用しない。
- * 1回のGAS実行で全タブを直列走査する方式も避け、Vercelの60秒制限内に収める。
+ * 公開CSVを少数並列で取得する。失敗したタブを空データとして扱わず、
+ * 他の部員だけ同期を継続しつつ failedMembers に残す。
  */
 async function fetchAllRaw(memberNames: string[]): Promise<ProtectedFetchResult> {
-  const wanted = new Set(memberNames.map((name) => name.trim()));
-  const sheetMembers = (await fetchSheetMembers()).filter((member) => wanted.has(member.name.trim()));
+  const allMembers = await fetchSheetMembers();
+  const byName = new Map(allMembers.map((member) => [member.name.normalize("NFC").trim(), member]));
+  const requested = [...new Set(memberNames.map((name) => name.normalize("NFC").trim()))];
+  const sheetMembers = requested.flatMap((name) => {
+    const member = byName.get(name);
+    return member ? [member] : [];
+  });
   const members: RawMember[] = [];
-  const failedMembers: { member: string; reason: string }[] = [];
-  const configuredConcurrency = Number.parseInt(process.env.SHEET_SYNC_CONCURRENCY ?? "8", 10);
+  const foundNames = new Set(sheetMembers.map((member) => member.name.normalize("NFC").trim()));
+  const failedMembers: { member: string; reason: string }[] = requested
+    .filter((name) => !foundNames.has(name))
+    .map((member) => ({ member, reason: "公開シートに部員タブが見つかりません" }));
+  const configuredConcurrency = Number.parseInt(process.env.SHEET_SYNC_CONCURRENCY ?? "4", 10);
   const concurrency = Number.isFinite(configuredConcurrency)
-    ? Math.min(12, Math.max(1, configuredConcurrency))
-    : 8;
+    ? Math.min(8, Math.max(1, configuredConcurrency))
+    : 4;
 
   for (let index = 0; index < sheetMembers.length; index += concurrency) {
     const batch = sheetMembers.slice(index, index + concurrency);
     const fetched = await Promise.allSettled(
       batch.map(async (member) => {
-        const data = await gasGet<{ data: RawMember }>(
-          { action: "fetchMember", memberName: member.name },
-          { timeoutMs: 20_000 },
-        );
-        if (!data.data) throw new Error("GASからデータが返りませんでした");
-        return data.data;
+        return fetchPublicMember(member.name, { timeoutMs: 15_000, members: allMembers });
       }),
     );
     fetched.forEach((item, batchIndex) => {
@@ -235,7 +215,7 @@ async function fetchAllRaw(memberNames: string[]): Promise<ProtectedFetchResult>
       } else {
         failedMembers.push({
           member: batch[batchIndex].name,
-          reason: item.reason instanceof Error ? item.reason.message : "GASから取得できませんでした",
+          reason: item.reason instanceof Error ? item.reason.message : "公開CSVを取得できませんでした",
         });
       }
     });
@@ -255,9 +235,7 @@ async function fetchMemberRaw(
   memberName: string,
   opts: { timeoutMs?: number } = {},
 ): Promise<RawMember> {
-  const data = await gasGet<{ data: RawMember }>({ action: "fetchMember", memberName }, opts);
-  if (!data.data) throw new Error("GASからデータが返りませんでした");
-  return data.data;
+  return fetchPublicMember(memberName, opts);
 }
 
 // ── マッピング解決：このシートの見出しから「アプリ項目→実際の見出し名」を作る ──
@@ -329,11 +307,6 @@ function appBuiltin(rec: DbRecord, key: BuiltinKey): number | string | null {
   return rec[key] ?? null;
 }
 
-function appIsNewer(rec: DbRecord): boolean {
-  if (!rec.synced_at) return true;
-  if (!rec.updated_at) return false;
-  return new Date(rec.updated_at).getTime() > new Date(rec.synced_at).getTime();
-}
 
 /** シートのセルから、アプリへ書き込む値（マップされた項目のみ）を作る */
 function sheetToAppValues(map: FieldMap, cells: Record<string, string>) {
@@ -888,6 +861,7 @@ export async function runSheetSync(
     const appByDate = byUser.get(profile.id)!;
 
     if (profile.record_source === "sheet") {
+      const pendingPushDates = new Set<string>();
       // write-through保存がGAS側の一時失敗等で未反映のまま残っている記録があれば、
       // pullで（古いシート値により）巻き戻される前に非破壊で再送する（タスク16の安全網）。
       // 判定は専用フラグ pending_sheet_push のみを見る（updated_at/synced_atの大小比較=appIsNewer
@@ -897,6 +871,7 @@ export async function runSheetSync(
         if (!inRange(date) || list.length !== 1) continue;
         const app = list[0];
         if (!app.pending_sheet_push) continue;
+        pendingPushDates.add(date);
         const cells = appToCellsNonEmpty(map, app);
         if (Object.keys(cells).length > 0) {
           pushes.push({ id: app.id, memberName: sheetName, date, cells, clearsPending: true });
@@ -913,7 +888,7 @@ export async function runSheetSync(
       const pulled = computeMemberPull(
         profile.id,
         map,
-        member.records,
+        member.records.filter((record) => !pendingPushDates.has(record.date)),
         appByDate,
         inRangeForProfile,
         nowIso,
@@ -924,23 +899,30 @@ export async function runSheetSync(
       result.updated += pulled.updates.length;
       for (const d of pulled.conflicts) result.conflicts.push(`${sheetName} ${d}`); // 複数/日は触らない
     } else {
-      // pushのみ: 前回同期以降にアプリ側が変更された記録を、マップ済み項目まるごとシートへ書き戻す。
+      // pushのみ: 通常保存ではその場でGASへ1回だけ書き込み、ここでは失敗分だけ再送する。
+      // updated_at はいいね数等の同期対象外更新でも変わり得るため、再送判定には使わない。
       for (const [date, list] of appByDate) {
         if (!inRange(date) || list.length !== 1) continue; // 複数/日は触らない
         const app = list[0];
-        if (!appIsNewer(app)) continue;
+        if (!app.pending_sheet_push) continue;
         const cells = appToCellsFull(map, app);
         if (Object.keys(cells).length > 0) {
-          pushes.push({ id: app.id, memberName: sheetName, date, cells });
+          pushes.push({ id: app.id, memberName: sheetName, date, cells, clearsPending: true });
         }
       }
     }
   }
 
+  const configuredPushLimit = Number.parseInt(process.env.SHEET_SYNC_PUSH_LIMIT ?? "25", 10);
+  const pushLimit = Number.isFinite(configuredPushLimit)
+    ? Math.min(100, Math.max(1, configuredPushLimit))
+    : 25;
+  const scheduledPushes = pushes.slice(0, pushLimit);
+
   if (dryRun) {
     result.inserted = inserts.length;
     result.updated = updates.length;
-    result.pushed = pushes.length;
+    result.pushed = scheduledPushes.length;
     return result;
   }
 
@@ -996,7 +978,7 @@ export async function runSheetSync(
     });
   }
 
-  for (const p of pushes) {
+  for (const p of scheduledPushes) {
     try {
       await gasPost({ action: "writeCells", memberName: p.memberName, date: p.date, cells: p.cells });
       const { error } = await admin

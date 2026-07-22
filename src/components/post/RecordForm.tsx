@@ -99,7 +99,7 @@ function serializeRecordDraft(draft: RecordDraftValues): string {
  * record を渡すと編集モード（その記録を更新）になる。
  */
 export type RecordFormHandle = { save: () => void };
-export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddleLong: boolean; record?: PracticeRecord; recordSource?: "app" | "sheet"; recordFields?: RecordFieldDef[]; onDone: () => void; onDirtyChange?: (dirty: boolean) => void }>(function RecordForm({ userId, isMiddleLong, record, recordSource = "app", recordFields, onDone, onDirtyChange }, ref) {
+export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddleLong: boolean; record?: PracticeRecord; recordSource?: "app" | "sheet"; recordFields?: RecordFieldDef[]; onDone: () => void; onDirtyChange?: (dirty: boolean) => void }>(function RecordForm({ userId, isMiddleLong, record, recordFields, onDone, onDirtyChange }, ref) {
   const router = useRouter();
   const { showToast } = useToast();
   const editing = !!record;
@@ -345,22 +345,19 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
       }
     }
 
-    // write-through: 記録のメインがスプシの部員は、保存直後にその場でスプシへ反映する（タスク16）。
-    // アプリへの保存自体はすでに成功しているため、ここでの失敗はデータ消失にはならない
-    // （次回の毎時同期が再送する）。ユーザーには警告として知らせる。
-    if (recordSource === "sheet") {
-      const pushResult = await pushRecordToSheet(savedId);
-      if (!pushResult.ok) {
-        showToast(
-          `記録はアプリに保存されましたが、スプレッドシートへの反映に失敗しました（自動で再試行されます）: ${pushResult.error}`,
-          "error",
-        );
-      } else if (pushResult.unmapped && pushResult.unmapped.length > 0) {
-        showToast(
-          `スプレッドシートに次の項目の列が見つからず反映できませんでした: ${pushResult.unmapped.join("・")}`,
-          "error",
-        );
-      }
+    // write-through: 連携シートがある場合は、保存直後にGASで1回だけ反映する。
+    // 未連携ならAPI側がskippedで返し、失敗時はDBの再送フラグを毎時同期が処理する。
+    const pushResult = await pushRecordToSheet(savedId);
+    if (!pushResult.ok) {
+      showToast(
+        `記録はアプリに保存されましたが、スプレッドシートへの反映に失敗しました（自動で再試行されます）: ${pushResult.error}`,
+        "error",
+      );
+    } else if (pushResult.unmapped && pushResult.unmapped.length > 0) {
+      showToast(
+        `スプレッドシートに次の項目の列が見つからず反映できませんでした: ${pushResult.unmapped.join("・")}`,
+        "error",
+      );
     }
 
     router.refresh();
