@@ -57,6 +57,14 @@ function todayJST(): string {
   }).format(new Date());
 }
 
+/**
+ * Sheet-imported records use the practice date, never the time they were imported.
+ * Otherwise, importing old records incorrectly moves them to the top of the timeline.
+ */
+export function sheetRecordCreatedAt(recordedDate: string): string {
+  return recordedDate + "T00:00:00+09:00";
+}
+
 // ── アプリの組み込みフィールド ⇔ スプシ見出しのキーワード ───────────────────
 type BuiltinKey =
   | "dist_low"
@@ -559,6 +567,7 @@ export async function reconcileOnSwitch(
           const { error } = await admin.from("practice_records").insert({
             user_id: profileId,
             recorded_date: sr.date,
+            created_at: sheetRecordCreatedAt(sr.date),
             synced_at: nowIso,
             updated_at: nowIso,
             from_sheet: true,
@@ -641,7 +650,7 @@ function computeMemberPull(
         recorded_date: sr.date,
         // タイムラインでは「練習日の0時(JST)に投稿された」扱いで並べる
         // (オーナー確定 2026-07-12。取込時刻だとまとめ取込のたびに先頭で団子になる)
-        created_at: `${sr.date}T00:00:00+09:00`,
+        created_at: sheetRecordCreatedAt(sr.date),
         synced_at: nowIso,
         updated_at: nowIso,
         from_sheet: true,
