@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { cookies } from "next/headers";
 import { format, subDays } from "date-fns";
 import { ja } from "date-fns/locale";
 import { ChevronRight, Folder } from "lucide-react";
@@ -181,12 +182,16 @@ async function NotesSection() {
 }
 
 async function FeedSection({ profile }: { profile: Profile }) {
-  const feed = await getFeed(profile.id, 3);
+  const [feed, cookieStore] = await Promise.all([getFeed(profile.id, 3), cookies()]);
+  const showRecordSource =
+    permissionsOf(profile.roles).manageSystem &&
+    cookieStore.get("show-record-source")?.value === "1";
   return (
     <section className="space-y-2">
       <SectionHeading title="タイムライン" href="/timeline" />
       <HomeFeed
         feed={feed}
+        showRecordSource={showRecordSource}
         currentUser={{
           id: profile.id,
           display_name: profile.display_name,

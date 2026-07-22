@@ -38,6 +38,61 @@ async function pushRecordToSheet(recordId: string): Promise<{ ok: boolean; error
 const EMPTY: IntensityValues = { low: "", mid: "", high: "", speed: "" };
 
 const numStr = (n: number) => (n && n > 0 ? String(n) : "");
+type RecordDraftValues = {
+  date: string;
+  dist: IntensityValues;
+  strides: string;
+  resultText: string;
+  strengthText: string;
+  menuText: string;
+  focusText: string;
+  memo: string;
+  condition: Condition | null;
+  customValues: Record<string, string>;
+};
+
+function recordDraftValues(record: PracticeRecord | null | undefined, date: string): RecordDraftValues {
+  const customValues: Record<string, string> = {};
+  for (const [key, value] of Object.entries(record?.custom ?? {})) {
+    customValues[key] = value == null ? "" : String(value);
+  }
+  return {
+    date,
+    dist: record
+      ? {
+          low: numStr(record.dist_low),
+          mid: numStr(record.dist_mid),
+          high: numStr(record.dist_high),
+          speed: numStr(record.dist_speed),
+        }
+      : { ...EMPTY },
+    strides: numStr(record?.strides ?? 0),
+    resultText: record?.result_text ?? "",
+    strengthText: record?.strength_text ?? "",
+    menuText: record?.menu_text ?? "",
+    focusText: record?.focus_text ?? "",
+    memo: record?.memo ?? "",
+    condition: record?.condition ?? null,
+    customValues,
+  };
+}
+
+function serializeRecordDraft(draft: RecordDraftValues): string {
+  return JSON.stringify({
+    ...draft,
+    dist: Object.fromEntries(Object.entries(draft.dist).map(([key, value]) => [key, value.trim()])),
+    strides: draft.strides.trim(),
+    resultText: draft.resultText.trim(),
+    strengthText: draft.strengthText.trim(),
+    menuText: draft.menuText.trim(),
+    focusText: draft.focusText.trim(),
+    memo: draft.memo.trim(),
+    customValues: Object.entries(draft.customValues)
+      .map(([key, value]) => [key, value.trim()])
+      .filter(([, value]) => value !== "")
+      .sort(([a], [b]) => a.localeCompare(b)),
+  });
+}
 
 /**
  * 練習記録フォーム。新規投稿と編集の両対応。
@@ -69,8 +124,6 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
   const [condition, setCondition] = useState<Condition | null>(record?.condition ?? null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [touched, setTouched] = useState(false);
-  useEffect(() => { onDirtyChange?.(touched); }, [onDirtyChange, touched]);
   useImperativeHandle(ref, () => ({ save: () => { void submit(); } }));
   // 新規作成モードでその日の記録が既にあるか（1日1記録ルール。見つかったら編集扱いでフォームへ読み込む）
   const [hasExistingSameDay, setHasExistingSameDay] = useState(false);
@@ -86,6 +139,33 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
     }
     return init;
   });
+  const [baselineSnapshot, setBaselineSnapshot] = useState(() =>
+    serializeRecordDraft(recordDraftValues(record, record?.recorded_date ?? jstToday())),
+  );
+  const currentSnapshot = useMemo(() => serializeRecordDraft({
+    date,
+    dist,
+    strides,
+    resultText,
+    strengthText,
+    menuText,
+    focusText,
+    memo,
+    condition,
+    customValues,
+  }), [condition, customValues, date, dist, focusText, memo, menuText, resultText, strengthText, strides]);
+  const hasMeaningfulContent =
+    Object.values(dist).some((value) => value.trim() !== "") ||
+    strides.trim() !== "" ||
+    resultText.trim() !== "" ||
+    strengthText.trim() !== "" ||
+    menuText.trim() !== "" ||
+    focusText.trim() !== "" ||
+    memo.trim() !== "" ||
+    condition !== null ||
+    Object.values(customValues).some((value) => value.trim() !== "");
+  const dirty = hasMeaningfulContent || record || hasExistingSameDay ? currentSnapshot !== baselineSnapshot : false;
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
 
   useEffect(() => {
     if (recordFields) return;
@@ -121,28 +201,17 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
         if (!active) return;
         const found = data as PracticeRecord | null;
         setHasExistingSameDay(!!found);
-        setDist(
-          found
-            ? {
-                low: numStr(found.dist_low),
-                mid: numStr(found.dist_mid),
-                high: numStr(found.dist_high),
-                speed: numStr(found.dist_speed),
-              }
-            : EMPTY,
-        );
-        setStrides(numStr(found?.strides ?? 0));
-        setResultText(found?.result_text ?? "");
-        setStrengthText(found?.strength_text ?? "");
-        setMenuText(found?.menu_text ?? "");
-        setFocusText(found?.focus_text ?? "");
-        setMemo(found?.memo ?? "");
-        setCondition(found?.condition ?? null);
-        const custom: Record<string, string> = {};
-        for (const [k, v] of Object.entries(found?.custom ?? {})) {
-          custom[k] = v == null ? "" : String(v);
-        }
-        setCustomValues(custom);
+        const nextDraft = recordDraftValues(found, date);
+        setDist(nextDraft.dist);
+        setStrides(nextDraft.strides);
+        setResultText(nextDraft.resultText);
+        setStrengthText(nextDraft.strengthText);
+        setMenuText(nextDraft.menuText);
+        setFocusText(nextDraft.focusText);
+        setMemo(nextDraft.memo);
+        setCondition(nextDraft.condition);
+        setCustomValues(nextDraft.customValues);
+        setBaselineSnapshot(serializeRecordDraft(nextDraft));
       });
     return () => {
       active = false;
@@ -299,7 +368,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
   }
 
   return (
-    <div className="space-y-4 pb-4" onInputCapture={() => setTouched(true)} onClickCapture={(event) => { if ((event.target as Element).closest("button")) setTouched(true); }}>
+    <div className="space-y-4 pb-4">
       {/* 日付 */}
       <div>
         <p className="section-label mb-1.5">日付</p>

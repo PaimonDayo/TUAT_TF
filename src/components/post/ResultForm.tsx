@@ -27,8 +27,15 @@ export const ResultForm = forwardRef<ResultFormHandle, { userId: string; initial
   const [isOfficial, setIsOfficial] = useState(initial?.is_official ?? false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [touched, setTouched] = useState(false);
-  useEffect(() => { onDirtyChange?.(touched); }, [onDirtyChange, touched]);
+  const dirty =
+    eventName.trim() !== (initial?.event_name ?? "").trim() ||
+    record.trim() !== (initial?.record ?? "").trim() ||
+    meetName.trim() !== (initial?.meet_name ?? "").trim() ||
+    recordedOn !== (initial?.recorded_on ?? "") ||
+    isPb !== (initial?.is_pb ?? true) ||
+    isUb !== (initial?.is_ub ?? false) ||
+    isOfficial !== (initial?.is_official ?? false);
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
   useImperativeHandle(ref, () => ({ save: () => { void submit(); } }));
 
   async function submit() {
@@ -63,7 +70,7 @@ export const ResultForm = forwardRef<ResultFormHandle, { userId: string; initial
   }
 
   return (
-    <div className="space-y-4 pb-4" onInputCapture={() => setTouched(true)} onClickCapture={(event) => { if ((event.target as Element).closest("button")) setTouched(true); }}>
+    <div className="space-y-4 pb-4">
       <div>
         <p className="section-label mb-1.5">種目</p>
         <Input

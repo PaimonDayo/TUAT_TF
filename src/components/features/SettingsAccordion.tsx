@@ -7,6 +7,8 @@ import { NotificationSettings } from "@/components/features/NotificationSettings
 import { MenuViewSetting } from "@/components/features/MenuViewSetting";
 import { AttendanceViewSetting } from "@/components/features/AttendanceViewSetting";
 import { SplashIntroSetting } from "@/components/features/SplashIntroSetting";
+import { TimelineCompactSetting } from "@/components/features/TimelineCompactSetting";
+import { RecordSourceSetting } from "@/components/features/RecordSourceSetting";
 import { SystemSyncStatus } from "@/components/features/SystemSyncStatus";
 import type { RecordFieldDef } from "@/types";
 
@@ -29,6 +31,8 @@ export function SettingsAccordion({
   menuViewAll,
   attendanceViewAll,
   recordFields,
+  timelineCompact,
+  showRecordSource,
   isMiddleLong,
   canManageSystem,
 }: {
@@ -39,6 +43,8 @@ export function SettingsAccordion({
   attendanceViewAll: boolean;
   recordFields: RecordFieldDef[];
   isMiddleLong: boolean;
+  timelineCompact: boolean;
+  showRecordSource: boolean;
   canManageSystem: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -60,6 +66,7 @@ export function SettingsAccordion({
           <p className="section-label">表示</p>
           <AttendanceViewSetting userId={profileId} initial={attendanceViewAll} />
           <SplashIntroSetting />
+          <TimelineCompactSetting initial={timelineCompact} />
           <MenuViewSetting userId={profileId} initial={menuViewAll} />
         </div>
         <NotificationSettings
@@ -67,7 +74,13 @@ export function SettingsAccordion({
           initialComment={initialComment}
           initialNotice={initialNotice}
         />
-        {canManageSystem && <SystemSyncStatus />}
+        {canManageSystem && (
+          <div className="space-y-2">
+            <p className="section-label">{"\u30b7\u30b9\u30c6\u30e0"}</p>
+            <RecordSourceSetting initial={showRecordSource} />
+            <SystemSyncStatus />
+          </div>
+        )}
         <RecordFieldsSetting
           profileId={profileId}
           initial={recordFields}

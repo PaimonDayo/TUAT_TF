@@ -18,10 +18,12 @@ export function TweetCard({
   tweet,
   currentUser,
   compact = false,
+  commentsExpanded = false,
 }: {
   tweet: TweetWithAuthor;
   currentUser: CommentAuthor;
   compact?: boolean;
+  commentsExpanded?: boolean;
 }) {
   const { author } = tweet;
   const isOwner = currentUser.id === author.id;
@@ -69,6 +71,7 @@ export function TweetCard({
           initialLiked={tweet.liked_by_me ?? false}
           initialComments={tweet.comments_count ?? 0}
           currentUser={currentUser}
+          commentsExpanded={commentsExpanded}
         />
       </div>
     </Card>

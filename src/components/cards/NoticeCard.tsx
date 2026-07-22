@@ -22,6 +22,8 @@ export function NoticeCard({
   canManage = false,
   expanded = false,
   onToggle,
+  searchTokens = [],
+  searchSnippet,
 }: {
   notice: NoticeWithReactions;
   /** リアクション機能で使用していたが現在は未使用（呼び出し側の互換のため残置） */
@@ -29,6 +31,8 @@ export function NoticeCard({
   canManage?: boolean;
   expanded?: boolean;
   onToggle?: () => void;
+  searchTokens?: string[];
+  searchSnippet?: string | null;
 }) {
   const meta = NOTICE_CATEGORIES[notice.category];
   const deadline = notice.deadline ? new Date(notice.deadline + "T23:59:59") : null;
@@ -39,6 +43,14 @@ export function NoticeCard({
       {/* ヘッダー＋タイトル＝タップで開閉 */}
       <div
         onClick={onToggle}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget || !["Enter", " "].includes(event.key)) return;
+          event.preventDefault();
+          onToggle?.();
+        }}
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
         className="flex cursor-pointer items-start gap-2 active:opacity-60"
       >
         <div className="min-w-0 flex-1">
@@ -48,7 +60,14 @@ export function NoticeCard({
               {format(new Date(notice.created_at), "M月d日", { locale: ja })}
             </span>
           </div>
-          <h3 className={cn("text-headline mt-1.5", !expanded && "truncate")}>{notice.title}</h3>
+          <h3 className={cn("text-headline mt-1.5", !expanded && "truncate")}>
+            <HighlightedText text={notice.title} tokens={searchTokens} />
+          </h3>
+          {!expanded && searchSnippet && (
+            <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-muted2">
+              本文: <HighlightedText text={searchSnippet} tokens={searchTokens} />
+            </p>
+          )}
         </div>
         {canManage && (
           <div onClick={(e) => e.stopPropagation()}>
@@ -84,5 +103,20 @@ export function NoticeCard({
         </div>
       )}
     </Card>
+  );
+}
+
+function HighlightedText({ text, tokens }: { text: string; tokens: string[] }) {
+  if (tokens.length === 0) return text;
+  const escaped = tokens.map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  if (escaped.length === 0) return text;
+
+  const pattern = new RegExp(`(${escaped.join("|")})`, "gi");
+  const normalizedTokens = new Set(tokens.map((token) => token.toLocaleLowerCase("ja")));
+
+  return text.normalize("NFKC").split(pattern).map((part, index) =>
+    normalizedTokens.has(part.toLocaleLowerCase("ja"))
+      ? <mark key={`${part}-${index}`} className="rounded-sm bg-[#fff3b0] px-0.5 text-inherit">{part}</mark>
+      : part,
   );
 }

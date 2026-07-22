@@ -30,6 +30,7 @@ export function PostActions({
   initialLiked,
   initialComments = 0,
   currentUser,
+  commentsExpanded = false,
 }: {
   targetType: TargetType;
   targetId: string;
@@ -37,6 +38,7 @@ export function PostActions({
   initialLiked: boolean;
   initialComments?: number;
   currentUser: CommentAuthor;
+  commentsExpanded?: boolean;
 }) {
   const queryClient = useQueryClient();
   const interactionKey = ["social-like", currentUser.id, targetType, targetId] as const;
@@ -68,6 +70,7 @@ export function PostActions({
   ]);
 
   const [openComments, setOpenComments] = useState(false);
+  const commentsVisible = commentsExpanded || openComments;
   const [commentsMounted, setCommentsMounted] = useState(false);
   const [likersOpen, setLikersOpen] = useState(false);
   const { showToast } = useToast();
@@ -140,6 +143,7 @@ export function PostActions({
   }
 
   function toggleComments() {
+    if (commentsExpanded) return;
     setCommentsMounted(true);
     setOpenComments((open) => !open);
   }
@@ -235,10 +239,10 @@ export function PostActions({
         </button>
         <button
           onClick={toggleComments}
-          aria-expanded={openComments}
+          aria-expanded={commentsVisible}
           className={cn(
             "flex items-center gap-1.5 text-[13px] active:opacity-50",
-            openComments ? "text-accent" : "text-muted",
+            commentsVisible ? "text-accent" : "text-muted",
           )}
         >
           <MessageCircle size={18} strokeWidth={2} />
@@ -248,8 +252,8 @@ export function PostActions({
         </button>
       </div>
 
-      {commentsMounted && (
-        <div className={openComments ? "comment-pop" : "hidden"}>
+      {(commentsExpanded || commentsMounted) && (
+        <div className={commentsVisible ? "comment-pop" : "hidden"}>
           <CommentSection
             targetType={targetType}
             targetId={targetId}

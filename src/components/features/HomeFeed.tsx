@@ -13,9 +13,11 @@ import type { CommentAuthor, FeedItem } from "@/types";
 export function HomeFeed({
   feed,
   currentUser,
+  showRecordSource = false,
 }: {
   feed: FeedItem[];
   currentUser: CommentAuthor;
+  showRecordSource?: boolean;
 }) {
   const { toggleExpanded, isCompact } = useFeedDisplay({ initialCompact: true });
 
@@ -30,7 +32,7 @@ export function HomeFeed({
         const compact = isCompact(key);
         const card =
           item.kind === "record" ? (
-            <RecordCard record={item} currentUser={currentUser} compact={compact} />
+            <RecordCard record={item} currentUser={currentUser} compact={compact} showSource={showRecordSource} />
           ) : (
             <TweetCard tweet={item} currentUser={currentUser} compact={compact} />
           );

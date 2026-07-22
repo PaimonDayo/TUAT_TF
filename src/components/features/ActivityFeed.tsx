@@ -14,9 +14,11 @@ import type { CommentAuthor, FeedItem } from "@/types";
 export function ActivityFeed({
   activity,
   currentUser,
+  showRecordSource = false,
 }: {
   activity: FeedItem[];
   currentUser: CommentAuthor;
+  showRecordSource?: boolean;
 }) {
   const { compact, toggleCompact, toggleExpanded, isCompact } = useFeedDisplay({
     initialCompact: false,
@@ -44,7 +46,7 @@ export function ActivityFeed({
           const effectiveCompact = isCompact(key);
           const card =
             item.kind === "record" ? (
-              <RecordCard record={item} currentUser={currentUser} compact={effectiveCompact} />
+              <RecordCard record={item} currentUser={currentUser} compact={effectiveCompact} showSource={showRecordSource} />
             ) : (
               <TweetCard tweet={item} currentUser={currentUser} compact={effectiveCompact} />
             );

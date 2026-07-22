@@ -70,6 +70,7 @@ export function ScheduleCard({
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const [pressed, setPressed] = useState(false);
   const [attendeesState, setAttendeesState] = useState(attendees);
   const [attendanceStatus, setAttendanceStatus] = useState(myStatus);
   const [lateState, setLateState] = useState({ late: myLate, note: myLateNote });
@@ -163,10 +164,23 @@ export function ScheduleCard({
     canManage;
 
   return (
-    <Card ref={cardRef} className="overflow-hidden scroll-mt-20">
+    <Card
+      ref={cardRef}
+      className={cn(
+        "overflow-hidden scroll-mt-20 transition-[transform,opacity] duration-150",
+        pressed && "scale-[0.99] opacity-90",
+      )}
+    >
       <button
+        type="button"
+        disabled={!hasDetail}
         onClick={() => hasDetail && setOpen((v) => !v)}
-        className="w-full p-4 flex items-center gap-3 text-left active:bg-bg"
+        onPointerDown={() => hasDetail && setPressed(true)}
+        onPointerUp={() => setPressed(false)}
+        onPointerLeave={() => setPressed(false)}
+        onPointerCancel={() => setPressed(false)}
+        aria-expanded={hasDetail ? open : undefined}
+        className="w-full p-4 flex items-center gap-3 text-left disabled:cursor-default"
       >
         <div className="flex flex-col items-center w-12 shrink-0">
           <span className="text-[11px]" style={{ color: meta.color }}>

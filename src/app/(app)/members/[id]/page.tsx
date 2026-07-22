@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { cookies } from "next/headers";
 import { Target } from "lucide-react";
 import { SubHeader } from "@/components/layout/SubHeader";
 import { Card } from "@/components/ui/card";
@@ -23,6 +24,7 @@ import {
   isFavorite,
 } from "@/lib/queries";
 import { gradeShort } from "@/lib/constants";
+import { permissionsOf } from "@/lib/permissions";
 import type { PbRecord, PracticeRecord, Profile, RecordWithAuthor } from "@/types";
 
 export default function MemberPage({
@@ -46,12 +48,16 @@ async function MemberContent({
   const isSelf = viewer.id === id;
   // スプシメインの本人がここ(/members/自分)から記録を見る場合も、毎時同期を待たず最新化する
 
-  const [records, pbs, notes, favorited] = await Promise.all([
+  const [records, pbs, notes, favorited, cookieStore] = await Promise.all([
     getUserRecords(id) as Promise<PracticeRecord[]>,
     getPbRecords(id) as Promise<PbRecord[]>,
     getPublishedPersonalNotes(id),
     isSelf ? Promise.resolve(false) : isFavorite(viewer.id, id),
+    cookies(),
   ]);
+  const showRecordSource =
+    permissionsOf(viewer.roles).manageSystem &&
+    cookieStore.get("show-record-source")?.value === "1";
 
   const authorMini = {
     id: profile.id,
@@ -144,6 +150,7 @@ async function MemberContent({
                   key={r.id}
                   record={{ ...r, author: authorMini } as RecordWithAuthor}
                   currentUser={currentUser}
+                  showSource={showRecordSource}
                 />
               ))}
             </div>

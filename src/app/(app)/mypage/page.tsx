@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { cookies } from "next/headers";
 import { Trophy, Medal, ChevronRight, Shield, ShieldCheck, Users, Target, MapPin } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
@@ -27,6 +28,9 @@ export default async function MyPage({
 }) {
   const { setup } = await searchParams;
   const profile = await getCurrentProfile();
+  const cookieStore = await cookies();
+  const timelineCompact = cookieStore.get("timeline-compact")?.value === "1";
+  const showRecordSource = cookieStore.get("show-record-source")?.value === "1";
   // スプシメインの部員は、毎時同期を待たずここで最新内容をDBミラーへ反映してから読む
   // グラフ用の記録だけ先に取得し、重い「これまでの投稿」は下で Suspense ストリーミング。
   const records = (await getUserRecords(profile.id)) as PracticeRecord[];
@@ -110,6 +114,8 @@ export default async function MyPage({
             initialNotice={profile.notify_notice ?? true}
             menuViewAll={profile.menu_view_all_blocks ?? false}
             attendanceViewAll={profile.attendance_view_all_blocks ?? false}
+            timelineCompact={timelineCompact}
+            showRecordSource={showRecordSource}
             recordFields={profile.record_fields ?? []}
             isMiddleLong={profile.blocks.includes("middle_long")}
             canManageSystem={perms.manageSystem}
@@ -149,6 +155,7 @@ export default async function MyPage({
           <Suspense fallback={<ActivitySkeleton />}>
             <MyActivity
               userId={profile.id}
+              showRecordSource={perms.manageSystem && showRecordSource}
               currentUser={{
                 id: profile.id,
                 display_name: profile.display_name,
@@ -166,15 +173,17 @@ export default async function MyPage({
 async function MyActivity({
   userId,
   currentUser,
+  showRecordSource,
 }: {
   userId: string;
   currentUser: import("@/types").CommentAuthor;
+  showRecordSource: boolean;
 }) {
   const activity = await getUserActivity(userId, userId);
   if (activity.length === 0) {
     return <EmptyState title="まだ投稿がありません" className="min-h-24 py-4" />;
   }
-  return <ActivityFeed activity={activity} currentUser={currentUser} />;
+  return <ActivityFeed activity={activity} currentUser={currentUser} showRecordSource={showRecordSource} />;
 }
 
 function ActivitySkeleton() {

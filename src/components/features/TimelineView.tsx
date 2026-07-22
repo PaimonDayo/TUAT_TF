@@ -33,12 +33,14 @@ export function TimelineView({
   currentUser,
   favoriteIds = [],
   initialCompact = false,
+  showRecordSource = false,
 }: {
   initialItems: FeedItem[];
   currentUser: CommentAuthor;
   favoriteIds?: string[];
   /** 簡易表示の初期値（サーバーが cookie から復元して渡す。詳細→簡易のフラッシュ防止） */
   initialCompact?: boolean;
+  showRecordSource?: boolean;
 }) {
   const feedQuery = useInfiniteQuery({
     queryKey: ["timeline", currentUser.id],
@@ -156,11 +158,12 @@ export function TimelineView({
               const key = `${item.kind}-${item.id}`;
               // 簡易表示は既定。個別にタップで展開でき、もう一度タップで閉じる。
               const effectiveCompact = isCompact(key);
+              const commentsExpanded = compact && !effectiveCompact;
               const card =
                 item.kind === "record" ? (
-                  <RecordCard record={item} currentUser={currentUser} compact={effectiveCompact} />
+                  <RecordCard record={item} currentUser={currentUser} compact={effectiveCompact} commentsExpanded={commentsExpanded} showSource={showRecordSource} />
                 ) : (
-                  <TweetCard tweet={item} currentUser={currentUser} compact={effectiveCompact} />
+                  <TweetCard tweet={item} currentUser={currentUser} compact={effectiveCompact} commentsExpanded={commentsExpanded} />
                 );
               // 簡易表示のときだけ開閉トグルを付ける（詳細表示は常に展開済み）
               return compact ? (

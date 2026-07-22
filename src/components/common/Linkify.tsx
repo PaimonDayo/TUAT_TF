@@ -1,4 +1,7 @@
-import { Fragment, type ReactNode } from "react";
+"use client";
+
+import { Fragment, type MouseEvent, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 
 // [表示文字](url) / [表示文字](<url>) 形式（Discord風）
 const MD_LINK = /\[([^\]]+)\]\(<?(https?:\/\/[^\s)]+)>?\)/g;
@@ -6,8 +9,34 @@ const MD_LINK = /\[([^\]]+)\]\(<?(https?:\/\/[^\s)]+)>?\)/g;
 const URL_RE = /(https?:\/\/[^\s]+)/g;
 
 function Anchor({ href, children }: { href: string; children: ReactNode }) {
+  const router = useRouter();
+
+  function openLink(event: MouseEvent<HTMLAnchorElement>) {
+    if (
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+
+    const url = new URL(href, window.location.origin);
+    if (url.origin !== window.location.origin) return;
+
+    event.preventDefault();
+    router.push(`${url.pathname}${url.search}${url.hash}`);
+  }
+
   return (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="text-accent underline break-all">
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={openLink}
+      className="break-all text-accent underline"
+    >
       {children}
     </a>
   );

@@ -19,10 +19,14 @@ export function RecordCard({
   record,
   currentUser,
   compact = false,
+  commentsExpanded = false,
+  showSource = false,
 }: {
   record: RecordWithAuthor;
   currentUser: CommentAuthor;
   compact?: boolean;
+  commentsExpanded?: boolean;
+  showSource?: boolean;
 }) {
   const { author } = record;
   const cond = record.condition ? CONDITIONS[record.condition] : null;
@@ -73,14 +77,19 @@ export function RecordCard({
             {cond.label}
           </span>
         )}
-        {isOwner && (
+        {(isOwner || showSource) && (
           <div className="flex shrink-0 items-center gap-1.5">
-            {record.from_sheet && (
+            {(showSource || record.from_sheet) && record.from_sheet && (
               <span className="rounded-full bg-bg px-2 py-0.5 text-micro text-muted2">
                 スプシ由来
               </span>
             )}
-            {(author.record_source === "sheet" || !record.from_sheet) && (
+            {showSource && !record.from_sheet && (
+              <span className="rounded-full bg-bg px-2 py-0.5 text-micro text-muted2">
+                {"\u30a2\u30d7\u30ea\u7531\u6765"}
+              </span>
+            )}
+            {isOwner && (author.record_source === "sheet" || !record.from_sheet) && (
               <span onClick={(e) => e.stopPropagation()}>
                 <RecordOwnerMenu
                   record={record}
@@ -129,6 +138,7 @@ export function RecordCard({
           initialLiked={record.liked_by_me ?? false}
           initialComments={record.comments_count ?? 0}
           currentUser={currentUser}
+          commentsExpanded={commentsExpanded}
         />
       </div>
     </Card>
