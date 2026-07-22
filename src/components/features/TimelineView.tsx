@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { UserCheck, List } from "lucide-react";
 import { RecordCard } from "@/components/cards/RecordCard";
 import { TweetCard } from "@/components/cards/TweetCard";
@@ -40,7 +40,6 @@ export function TimelineView({
   /** 簡易表示の初期値（サーバーが cookie から復元して渡す。詳細→簡易のフラッシュ防止） */
   initialCompact?: boolean;
 }) {
-  const queryClient = useQueryClient();
   const feedQuery = useInfiniteQuery({
     queryKey: ["timeline", currentUser.id],
     queryFn: ({ pageParam }) => loadFeed(pageParam ?? {}, PAGE),
@@ -57,12 +56,7 @@ export function TimelineView({
       };
     },
   });
-  useEffect(() => {
-    queryClient.setQueryData(["timeline", currentUser.id], {
-      pages: [initialItems],
-      pageParams: [null],
-    });
-  }, [currentUser.id, initialItems, queryClient]);
+
 
   const items = feedQuery.data.pages.flat();
 
@@ -167,7 +161,20 @@ export function TimelineView({
                 );
               // 簡易表示のときだけ開閉トグルを付ける（詳細表示は常に展開済み）
               return compact ? (
-                <div key={key} onClick={() => toggleExpanded(key)} className="cursor-pointer">
+                <div
+                  key={key}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={"\u6295\u7a3f\u306e\u8a73\u7d30\u3092\u958b\u9589"}
+                  onClick={() => toggleExpanded(key)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      toggleExpanded(key);
+                    }
+                  }}
+                  className="cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                >
                   {card}
                 </div>
               ) : (

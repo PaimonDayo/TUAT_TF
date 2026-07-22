@@ -90,7 +90,7 @@ export default async function NoteFolderPage({
         )}
         <section className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge>{note.scope === "shared" ? "共有" : "個人"}</Badge>
+            <Badge>{note.scope === "shared" ? "共有" : "個人作成"}</Badge>
             {note.status === "draft" && <Badge>下書き</Badge>}
           </div>
           <h1 className="text-title">{note.title}</h1>

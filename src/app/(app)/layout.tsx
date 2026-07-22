@@ -3,7 +3,6 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { FAB } from "@/components/layout/FAB";
 import { SessionKeepAlive } from "@/components/layout/SessionKeepAlive";
 import { VersionWatcher } from "@/components/features/VersionWatcher";
-import { FreezeProbe } from "@/components/features/FreezeProbe";
 import { ToastProvider } from "@/components/ui/toast";
 import { AppQueryProvider } from "@/components/providers/QueryProvider";
 import { getCurrentProfile } from "@/lib/supabase/auth";
@@ -19,7 +18,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <Suspense fallback={null}><AuthenticatedFab /></Suspense>
         <Suspense fallback={null}><BottomNav /></Suspense>
         <VersionWatcher />
-        <FreezeProbe />
       </div>
     </ToastProvider>
     </AppQueryProvider>

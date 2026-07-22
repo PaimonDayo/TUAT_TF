@@ -21,10 +21,8 @@ export type SchedulePageData = {
 export async function getSchedulePageData(): Promise<SchedulePageData> {
   const profile = await getCurrentProfile();
   const perms = permissionsOf(profile.roles);
-  const schedules = (await getUpcomingSchedulesWithAttendances(
-    profile.blocks,
-    perms.createSchedule,
-  )) as unknown as (ScheduleWithMenus & { attendances?: (Attendee & { schedule_id: string })[] })[];
+  const schedules: (ScheduleWithMenus & { attendances?: (Attendee & { schedule_id: string })[] })[] =
+    await getUpcomingSchedulesWithAttendances(profile.blocks, perms.createSchedule);
 
   const attendeesBySchedule: Record<string, Attendee[]> = {};
   const myStatusBySchedule: Record<string, AttendanceStatusOrNone> = {};

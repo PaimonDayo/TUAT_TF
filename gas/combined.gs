@@ -13,18 +13,42 @@
  */
 
 const CACHE_EXPIRATION_SECONDS = 600;
-const SPREADSHEET_ID = '1uAo7E8_rMbUZlml1H0vj119htQeoa2eMWqASUXQTqgg';
-const REACTIONS_SPREADSHEET_ID = '1hsmysg1b5uInd7mPE110hmzn0C2V5o87jRRatn-xhVQ';
 const SHEET_NAME = 'Sheet1';
 
-// secret は使わない（設定し忘れの罠を避けるため撤廃）。URLが推測しにくいので当面これで運用。
+function getRequiredProperty(name) {
+  const value = PropertiesService.getScriptProperties().getProperty(name) || '';
+  if (!value) throw new Error(name + ' not set');
+  return value;
+}
 function getSpreadsheet() {
-  return SpreadsheetApp.openById(SPREADSHEET_ID);
+  return SpreadsheetApp.openById(getRequiredProperty('SPREADSHEET_ID'));
+}
+function getSyncSecret() {
+  return getRequiredProperty('SYNC_SECRET');
+}
+function verifySyncSecret(provided) {
+  if ((provided || '').toString() !== getSyncSecret()) throw new Error('unauthorized');
+}
+function legacyReadsEnabled() {
+  return PropertiesService.getScriptProperties().getProperty('LEGACY_READS_ENABLED') === 'true';
+}
+
+// 管理用（Web公開はしていない）。通常は単体の sync-api.gs を使用する。
+function configurePrivateResources(spreadsheetId, reactionsSpreadsheetId, syncSecret) {
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty('SPREADSHEET_ID', (spreadsheetId || '').toString());
+  props.setProperty('REACTIONS_SPREADSHEET_ID', (reactionsSpreadsheetId || '').toString());
+  props.setProperty('SYNC_SECRET', (syncSecret || '').toString());
+  return 'configured';
 }
 
 function doGet(e) {
   try {
     const action = e && e.parameter ? e.parameter.action : '';
+    const privateLegacyReads = ['fetchAll', 'fetchLatestRecords', 'fetchPractice', 'getRecord', 'fetchReactions'];
+    if (privateLegacyReads.indexOf(action) !== -1 && !legacyReadsEnabled()) {
+      return createJsonResponse({ error: 'legacy reads disabled' });
+    }
 
     if (action === 'fetchAll') {
       return handleFetchAll(e.parameter.bypassCache === 'true');
@@ -46,9 +70,11 @@ function doGet(e) {
     }
     // ── 同期API（secret必須）──
     if (action === 'listMembers') {
+      verifySyncSecret(e.parameter.secret);
       return handleListMembers();
     }
     if (action === 'fetchAllRaw') {
+      verifySyncSecret(e.parameter.secret);
       return handleFetchAllRaw();
     }
 
@@ -68,6 +94,7 @@ function doPost(e) {
 
     // ── 同期API（旧アプリの投稿には影響しない）──
     if (postData.action === 'writeCells') {
+      verifySyncSecret(postData.secret);
       return createJsonResponse(writeCellsRecord(postData));
     }
 
@@ -499,7 +526,7 @@ function addPracticeReply(data) {
 }
 
 function getReactionsSpreadsheet() {
-  return SpreadsheetApp.openById(REACTIONS_SPREADSHEET_ID);
+  return SpreadsheetApp.openById(getRequiredProperty('REACTIONS_SPREADSHEET_ID'));
 }
 
 function getReactionSheetName(date) {

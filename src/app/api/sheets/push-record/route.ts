@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { pushRecordToSheet, type DbRecord } from "@/lib/sheet-sync";
-import type { RecordFieldDef } from "@/types";
+import { recordFieldsFromJson } from "@/lib/profile-normalize";
 
 /**
  * write-through: 記録のメインがスプレッドシートの部員が、アプリで保存した1件を
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
   try {
     const result = await pushRecordToSheet(
       profile.sheet_name,
-      (profile.record_fields as RecordFieldDef[]) ?? [],
+      recordFieldsFromJson(profile.record_fields),
       rec as DbRecord,
     );
     // 成功: pending_sheet_pushをfalseに戻す（毎時同期の再送対象から外す）

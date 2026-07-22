@@ -1,18 +1,23 @@
 /**
- * TUAT T&F アプリ 同期API（単体スクリプト・secretなし）
- * 別プロジェクトに「これだけ」貼ればよい（旧アプリのコードは不要）。
- *   GET  ?action=listMembers
- *   GET  ?action=fetchAllRaw
- *   GET  ?action=fetchMember&memberName=...（1部員のみ。write-through用の軽量版）
- *   POST { action:'writeCells', memberName, date, cells:{見出し:値} }
+ * TUAT T&F app sync API (shared secret required).
+ * All application calls use POST; spreadsheet sharing and permissions stay unchanged.
  */
 
-const SPREADSHEET_ID = '1uAo7E8_rMbUZlml1H0vj119htQeoa2eMWqASUXQTqgg';
-
-function getSpreadsheet() {
-  return SpreadsheetApp.openById(SPREADSHEET_ID);
+function getSpreadsheetId() {
+  const id = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID') || '';
+  if (!id) throw new Error('SPREADSHEET_ID not set');
+  return id;
 }
 
+function getSpreadsheet() {
+  return SpreadsheetApp.openById(getSpreadsheetId());
+}
+
+// Owner-only helper for setting Script Properties manually. Never called by the web app.
+function setSpreadsheetId(id) {
+  PropertiesService.getScriptProperties().setProperty('SPREADSHEET_ID', (id || '').toString());
+  return 'configured=' + Boolean(getSpreadsheetId());
+}
 function createJsonResponse(data) {
   const output = ContentService.createTextOutput(JSON.stringify(data));
   output.setMimeType(ContentService.MimeType.JSON);
@@ -38,82 +43,23 @@ function setSecret(s) {
   return 'len=' + getSyncSecret().length;
 }
 
-// 管理用: 週次バックアップ先APIを設定し、日曜03:00〜04:00のトリガーを作る。
-function setupWeeklyBackup(apiUrl) {
-  const props = PropertiesService.getScriptProperties();
-  props.setProperty('BACKUP_API_URL', (apiUrl || 'https://tuat-tf.vercel.app').toString().replace(/\/$/, ''));
-  ScriptApp.getProjectTriggers()
-    .filter(trigger => trigger.getHandlerFunction() === 'runWeeklyBackup')
-    .forEach(trigger => ScriptApp.deleteTrigger(trigger));
-  ScriptApp.newTrigger('runWeeklyBackup').timeBased().onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(3).create();
+function doGet() {
+  return createJsonResponse({ error: 'POST required' });
 }
-
-// 主要テーブルをDriveの TUAT-TF Backups 配下へ保存し、直近8世代だけ保持する。
-function runWeeklyBackup() {
-  const props = PropertiesService.getScriptProperties();
-  const apiUrl = props.getProperty('BACKUP_API_URL') || 'https://tuat-tf.vercel.app';
-  const secret = getSyncSecret();
-  if (!secret) throw new Error('SYNC_SECRET not set');
-  const response = UrlFetchApp.fetch(apiUrl + '/api/backup', {
-    method: 'post',
-    headers: { Authorization: 'Bearer ' + secret },
-    muteHttpExceptions: true,
-  });
-  if (response.getResponseCode() !== 200) throw new Error('backup API: ' + response.getContentText());
-  const payload = JSON.parse(response.getContentText());
-  const rootIterator = DriveApp.getFoldersByName('TUAT-TF Backups');
-  const root = rootIterator.hasNext() ? rootIterator.next() : DriveApp.createFolder('TUAT-TF Backups');
-  const stamp = Utilities.formatDate(new Date(payload.createdAt), 'Asia/Tokyo', 'yyyy-MM-dd_HHmmss');
-  const folder = root.createFolder(stamp);
-  payload.exports.forEach(item => folder.createFile(item.table + '.csv', item.csv, MimeType.CSV));
-  folder.createFile('manifest.json', JSON.stringify({ createdAt: payload.createdAt, tables: payload.exports.map(item => ({ table: item.table, rowCount: item.rowCount })) }, null, 2), MimeType.PLAIN_TEXT);
-
-  const generations = [];
-  const iterator = root.getFolders();
-  while (iterator.hasNext()) generations.push(iterator.next());
-  generations.sort((a, b) => b.getName().localeCompare(a.getName()));
-  generations.slice(8).forEach(oldFolder => oldFolder.setTrashed(true));
-  return { success: true, folder: stamp, files: payload.exports.length + 1 };
-}
-
-function doGet(e) {
-  try {
-    const action = e && e.parameter ? e.parameter.action : '';
-    if (action === 'listMembers') {
-      verifySyncSecret(e.parameter.secret);
-      return handleListMembers();
-    }
-    if (action === 'fetchAllRaw') {
-      verifySyncSecret(e.parameter.secret);
-      return handleFetchAllRaw();
-    }
-    if (action === 'fetchMember') {
-      verifySyncSecret(e.parameter.secret);
-      return handleFetchMember(e.parameter.memberName);
-    }
-    return createJsonResponse({ error: 'unknown action' });
-  } catch (err) {
-    return createJsonResponse({ error: err.toString() });
-  }
-}
-
 function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
     verifySyncSecret(body.secret);
+    if (body.action === 'listMembers') return handleListMembers();
+    if (body.action === 'fetchAllRaw') return handleFetchAllRaw();
+    if (body.action === 'fetchMember') return handleFetchMember(body.memberName);
     if (body.action === 'writeCells') return createJsonResponse(writeCellsRecord(body));
     if (body.action === 'writeReply') return createJsonResponse(writeReplyRecord(body));
-    if (body.action === 'setupWeeklyBackup') {
-      setupWeeklyBackup(body.apiUrl);
-      return createJsonResponse(runWeeklyBackup());
-    }
-    if (body.action === 'runBackupNow') return createJsonResponse(runWeeklyBackup());
     return createJsonResponse({ error: 'unknown action' });
   } catch (err) {
     return createJsonResponse({ error: err.toString() });
   }
 }
-
 function normalizeHeaderCell(cell) {
   return cell.toString().replace(/\s+/g, '').trim();
 }
@@ -163,12 +109,17 @@ function handleListMembers() {
 // 1シート分をfetchAllRawと同じ形式で読む（部員個別取得の共通部）
 function readMemberSheet(sheet) {
   const name = sheet.getName();
-  const values = sheet.getDataRange().getDisplayValues();
+  const range = sheet.getDataRange();
+  const values = range.getDisplayValues();
+  const notes = range.getNotes();
   const hIdx = findGenericHeaderIndex(values);
   if (hIdx === -1) return null;
   const header = values[hIdx].map(c => c.toString().trim());
+  const commentCol = getCommentColumn(header);
   const records = [];
-  for (const row of values.slice(hIdx + 1)) {
+  for (let rowOffset = 0; rowOffset < values.length - hIdx - 1; rowOffset++) {
+    const row = values[hIdx + 1 + rowOffset];
+    const noteRow = notes[hIdx + 1 + rowOffset] || [];
     const dateRaw = row[0] ? row[0].toString().trim() : '';
     if (!dateRaw || !/^\d{1,2}\/\d{1,2}/.test(dateRaw)) continue;
     const cells = {};
@@ -177,11 +128,25 @@ function readMemberSheet(sheet) {
       if (!key) continue;
       if (cells[key] === undefined) cells[key] = row[c] != null ? row[c].toString() : '';
     }
-    records.push({ date: parseSheetDate(dateRaw), cells: cells });
+    const replies = [];
+    if (commentCol !== -1) {
+      for (let c = commentCol + 1; c < row.length; c++) {
+        if ((header[c] || '').toString().trim()) continue;
+        const text = (row[c] || '').toString().trim();
+        if (!text) continue;
+        const note = (noteRow[c] || '').toString().trim();
+        const marker = note.match(/^TUAT_APP_COMMENT:([A-Za-z0-9_-]+)$/);
+        replies.push({
+          replyIndex: c,
+          content: text,
+          source: marker ? 'app' : 'sheet',
+        });
+      }
+    }
+    records.push({ date: parseSheetDate(dateRaw), cells: cells, replies: replies });
   }
   return { name: name, gid: sheet.getSheetId().toString(), header: header.filter(Boolean), records: records };
 }
-
 function handleFetchAllRaw() {
   const out = [];
   const sheets = getSpreadsheet().getSheets();
@@ -290,11 +255,12 @@ function findNextReplyColumn(sheet, row, header) {
   return nextCol;
 }
 
-// payload: { action:'writeReply', memberName, date, text }
+// payload: { action:'writeReply', memberName, date, text, sourceId? }
 function writeReplyRecord(data) {
   const memberName = data.memberName;
   const date = data.date;
   const text = (data.text || '').toString().trim();
+  const sourceId = (data.sourceId || '').toString().replace(/[^A-Za-z0-9_-]/g, '');
   if (!memberName || !date || !text) throw new Error('memberName, date, text は必須です。');
 
   const sheet = getSpreadsheet().getSheetByName(memberName);
@@ -305,9 +271,11 @@ function writeReplyRecord(data) {
   if (hIdx === -1) throw new Error('見出し行（日付）が見つかりません。');
 
   const rowIdx = findRecordRow(values, hIdx, date);
-  if (rowIdx === -1) return { success: false, action: 'no_row' }; // その日の行が無ければ何もしない
+  if (rowIdx === -1) return { success: false, action: 'no_row' };
 
   const col = findNextReplyColumn(sheet, values[rowIdx], values[hIdx]);
-  sheet.getRange(rowIdx + 1, col + 1).setValue(text);
+  const cell = sheet.getRange(rowIdx + 1, col + 1);
+  cell.setValue(text);
+  if (sourceId) cell.setNote('TUAT_APP_COMMENT:' + sourceId);
   return { success: true, action: 'replied', row: rowIdx + 1, col: col + 1 };
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { refreshMemberFromSheetLive } from "@/lib/sheet-sync";
-import type { RecordFieldDef } from "@/types";
+import { profileRecordSource, recordFieldsFromJson } from "@/lib/profile-normalize";
 
 /** Refresh a sheet-backed member after the page has rendered. */
 export async function POST() {
@@ -18,7 +18,8 @@ export async function POST() {
 
   const result = await refreshMemberFromSheetLive(supabase, {
     ...profile,
-    record_fields: (profile.record_fields as RecordFieldDef[] | null) ?? [],
+    record_source: profileRecordSource(profile.record_source),
+    record_fields: recordFieldsFromJson(profile.record_fields),
   });
   return NextResponse.json({ ok: true, changed: Boolean(result && (result.inserted || result.updated)) });
 }

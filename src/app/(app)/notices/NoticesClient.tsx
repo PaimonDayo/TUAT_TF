@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { NoticeCard } from "@/components/cards/NoticeCard";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Input } from "@/components/ui/input";
 import { NotificationsList } from "./NotificationsList";
 import type { NoticeWithReactions, AppNotificationWithActor, Profile } from "@/types";
 
@@ -20,7 +21,17 @@ export function NoticesClient({
 }) {
   const [tab, setTab] = useState<"notice" | "for_you">("notice");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [query, setQuery] = useState("");
   const pendingScroll = useRef<string | null>(null);
+  const filteredNotices = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase("ja");
+    if (!normalized) return notices;
+    return notices.filter((notice) =>
+      `${notice.title}\n${notice.content}`
+        .toLocaleLowerCase("ja")
+        .includes(normalized),
+    );
+  }, [notices, query]);
 
   function toggleExpand(id: string) {
     setExpanded((prev) => {
@@ -39,6 +50,10 @@ export function NoticesClient({
   }
 
   useEffect(() => {
+    if (window.location.hash === "#notifications") {
+      const id = window.setTimeout(() => setTab("for_you"), 0);
+      return () => window.clearTimeout(id);
+    }
     const match = window.location.hash.match(/^#notice-(.+)$/);
     if (!match) return;
     const id = window.setTimeout(() => {
@@ -73,12 +88,24 @@ export function NoticesClient({
         />
       </div>
 
+      {tab === "notice" && (
+        <div className="px-4">
+          <Input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={"\u304a\u77e5\u3089\u305b\u3092\u691c\u7d22"}
+            aria-label={"\u304a\u77e5\u3089\u305b\u3092\u691c\u7d22"}
+          />
+        </div>
+      )}
+
       <div className="px-4 space-y-3 pb-8">
         {tab === "notice" &&
-          (notices.length === 0 ? (
+          (filteredNotices.length === 0 ? (
             <EmptyState title="お知らせはありません" />
           ) : (
-            notices.map((n) => (
+            filteredNotices.map((n) => (
               <NoticeCard
                 key={n.id}
                 notice={n}

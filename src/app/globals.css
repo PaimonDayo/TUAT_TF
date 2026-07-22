@@ -15,7 +15,7 @@
   --color-ink: #000000;
   --color-muted: #8e8e93;
   --color-muted2: #6c6c70;
-  --color-faint: #aaaaaa;
+  --color-faint: #6c6c70;
 
   /* ブロック別カラー（前景 / 背景） */
   --color-block-ml: #34c759;
@@ -73,7 +73,7 @@ h1, h2, h3, p {
 
 /* セクションラベル（uppercase + tracking） */
 .section-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -95,16 +95,16 @@ h1, h2, h3, p {
   font-weight: 600;
 }
 .text-body {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 400;
 }
 .text-caption {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 400;
   color: var(--color-muted);
 }
 .text-micro {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 400;
   color: var(--color-faint);
 }

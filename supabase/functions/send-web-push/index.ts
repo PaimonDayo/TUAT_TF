@@ -5,6 +5,24 @@ import webPush from "https://esm.sh/web-push@3.6.6";
 const vapidPublicKey = Deno.env.get('NEXT_PUBLIC_VAPID_PUBLIC_KEY') || Deno.env.get('VAPID_PUBLIC_KEY');
 const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY');
 const vapidSubject = Deno.env.get('VAPID_SUBJECT');
+const webhookSecret = Deno.env.get('PUSH_WEBHOOK_SECRET');
+
+async function digest(value: string): Promise<Uint8Array> {
+  return new Uint8Array(
+    await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)),
+  );
+}
+
+async function authorized(req: Request): Promise<boolean> {
+  const provided = req.headers.get('x-push-webhook-secret');
+  if (!webhookSecret || !provided) return false;
+  const [expectedDigest, providedDigest] = await Promise.all([
+    digest(webhookSecret),
+    digest(provided),
+  ]);
+  return expectedDigest.every((byte, index) => byte === providedDigest[index]);
+}
+
 
 if (vapidPublicKey && vapidPrivateKey && vapidSubject) {
   webPush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
@@ -12,6 +30,19 @@ if (vapidPublicKey && vapidPrivateKey && vapidSubject) {
 
 serve(async (req) => {
   try {
+    if (!webhookSecret) {
+      return new Response(JSON.stringify({ error: 'Push webhook secret is not configured' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (!(await authorized(req))) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     if (!vapidPublicKey || !vapidPrivateKey) {
       throw new Error('VAPID keys are not configured');
     }
@@ -50,7 +81,7 @@ serve(async (req) => {
 
     let title = "新しいお知らせ";
     let bodyText = "新しい通知があります";
-    const url = "/notices";
+    let url = "/notices";
 
     if (notification.type === 'comment') {
       title = "新しいコメント";
@@ -58,6 +89,14 @@ serve(async (req) => {
     } else if (notification.type === 'notice') {
       title = "新しいお知らせ";
       bodyText = "お知らせが投稿されました";
+    } else if (notification.type === 'schedule_update') {
+      title = "予定が更新されました";
+      bodyText = "アプリで最新の予定を確認してください";
+      url = "/schedule";
+    } else if (notification.type === 'thread_reply') {
+      title = "スレッドに新しい返信";
+      bodyText = "参加中のスレッドに返信がありました";
+      url = notification.reference_id ? `/notes/threads/${notification.reference_id}` : "/notices#notifications";
     }
 
     const payload = JSON.stringify({

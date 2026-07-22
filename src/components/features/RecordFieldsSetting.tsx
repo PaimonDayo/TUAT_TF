@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowUpDown, Plus, RotateCcw, SlidersHorizontal, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
+import { recordFieldsToJson } from "@/lib/profile-normalize";
 import {
   customRecordFields,
   editableBuiltinRecordFields,
@@ -109,7 +110,7 @@ export function RecordFieldsSetting({ profileId, initial, isMiddleLong }: { prof
         .map((field) => ({ key: field.key, label: field.label.trim(), type: field.type })),
     ];
     try {
-      const result = await safeUpdate(createClient(), "profiles", { record_fields }, { id: profileId });
+      const result = await safeUpdate(createClient(), "profiles", { record_fields: recordFieldsToJson(record_fields) }, { id: profileId });
       if (!result.ok) {
         setMessage(safeUpdateMessage(result.reason));
         return;

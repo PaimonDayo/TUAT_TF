@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import * as Papa from "papaparse";
 import type { RecordFieldDef } from "@/types";
 import { customRecordFields } from "@/lib/record-fields";
+import { importedSheetReplies, normalizeSheetReplyText, type RawSheetReply } from "@/lib/sheet-replies";
 
 /**
  * TF構造スプレッドシート（部員別シート）と practice_records の同期。
@@ -23,12 +23,16 @@ type RawMember = {
   name: string;
   gid?: string;
   header: string[];
-  records: { date: string; cells: Record<string, string> }[];
+  records: { date: string; cells: Record<string, string>; replies?: RawSheetReply[] }[];
 };
 
 export type SheetMember = { name: string; gid: string };
 
-export type SyncOptions = { dryRun?: boolean; onlySheet?: string };
+export type SyncOptions = {
+  dryRun?: boolean;
+  onlySheet?: string;
+  onlySheets?: string[];
+};
 
 export type SyncResult = {
   inserted: number; // スプシ→アプリ 新規取込
@@ -38,6 +42,7 @@ export type SyncResult = {
   skippedMembers: string[];
   /** 部員ごとの失敗（1人の不調で他の部員の同期を止めないための部分失敗設計） */
   failedMembers: { member: string; reason: string }[];
+  sheetReplies: number;
   dryRun: boolean;
 };
 
@@ -132,7 +137,7 @@ async function gasGet<T>(
     const res = await fetch(url, {
       method: "POST",
       redirect: "follow",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      headers: { "Content-Type": "application/json;charset=utf-8" },
       body: JSON.stringify({ ...params, secret }),
       signal: controller?.signal,
     });
@@ -147,7 +152,7 @@ async function gasPost<T>(body: Record<string, unknown>): Promise<T> {
   const res = await fetch(url, {
     method: "POST",
     redirect: "follow",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    headers: { "Content-Type": "application/json;charset=utf-8" },
     body: JSON.stringify({ ...body, secret }),
   });
   return readGasJson<T>(res);
@@ -173,8 +178,9 @@ export async function writeSheetReply(
   memberName: string,
   date: string,
   text: string,
+  sourceId?: string,
 ): Promise<void> {
-  await gasPost({ action: "writeReply", memberName, date, text });
+  await gasPost({ action: "writeReply", memberName, date, text, sourceId });
 }
 
 /** プロフィール選択用：部員シート名一覧 */
@@ -183,72 +189,57 @@ export async function fetchSheetMembers(): Promise<SheetMember[]> {
   return data.members ?? [];
 }
 
-async function fetchAllRaw(): Promise<RawMember[]> {
-  const spreadsheetId =
-    process.env.SHEET_SYNC_SPREADSHEET_ID ?? "1uAo7E8_rMbUZlml1H0vj119htQeoa2eMWqASUXQTqgg";
-  if (spreadsheetId) return fetchAllRawAsCsv(spreadsheetId);
-  const data = await gasGet<{ data: RawMember[] }>({ action: "fetchAllRaw" });
-  return data.data ?? [];
-}
+type ProtectedFetchResult = {
+  members: RawMember[];
+  failedMembers: { member: string; reason: string }[];
+};
 
-function parseCsvDate(raw: string): string {
-  const text = raw.trim().split(/\s/)[0];
-  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
-  const parts = text.split(/[/-]/).map((part) => part.trim());
-  if (parts.length === 2) {
-    return `${new Date().getFullYear()}-${parts[0].padStart(2, "0")}-${parts[1].padStart(2, "0")}`;
-  }
-  if (parts.length === 3) {
-    return `${parts[0]}-${parts[1].padStart(2, "0")}-${parts[2].padStart(2, "0")}`;
-  }
-  return text;
-}
+/**
+ * GAS の secret 保護された fetchMember を少数並列で呼ぶ。
+ * 公開 CSV export はシート自体のリンク共有を必要とするため使用しない。
+ * 1回のGAS実行で全タブを直列走査する方式も避け、Vercelの60秒制限内に収める。
+ */
+async function fetchAllRaw(memberNames: string[]): Promise<ProtectedFetchResult> {
+  const wanted = new Set(memberNames.map((name) => name.trim()));
+  const sheetMembers = (await fetchSheetMembers()).filter((member) => wanted.has(member.name.trim()));
+  const members: RawMember[] = [];
+  const failedMembers: { member: string; reason: string }[] = [];
+  const configuredConcurrency = Number.parseInt(process.env.SHEET_SYNC_CONCURRENCY ?? "8", 10);
+  const concurrency = Number.isFinite(configuredConcurrency)
+    ? Math.min(12, Math.max(1, configuredConcurrency))
+    : 8;
 
-function csvToRawMember(member: SheetMember, csv: string): RawMember | null {
-  if (/^\s*<!doctype html/i.test(csv)) {
-    throw new Error("CSVを取得できません。スプレッドシートの共有設定を確認してください");
-  }
-  const parsed = Papa.parse<string[]>(csv, { delimiter: ",", skipEmptyLines: false });
-  if (parsed.errors.length > 0 && parsed.data.length === 0) {
-    throw new Error(parsed.errors[0]?.message ?? "CSVの解析に失敗しました");
-  }
-  const rows = parsed.data;
-  const headerIndex = rows.slice(0, 15).findIndex((row) =>
-    row.some((cell) => norm(cell) === "日付"),
-  );
-  // GASのhandleFetchAllRawと同じく、記録表ではない部員名形式のタブは対象外。
-  if (headerIndex < 0) return null;
-  const rawHeader = rows[headerIndex].map((cell) => cell.trim());
-  const header = rawHeader.filter(Boolean);
-  const records = rows.slice(headerIndex + 1).flatMap((row) => {
-    const dateRaw = row[0]?.trim() ?? "";
-    if (!/^\d{1,4}[/-]\d{1,2}(?:[/-]\d{1,2})?/.test(dateRaw)) return [];
-    const cells: Record<string, string> = {};
-    rawHeader.forEach((key, index) => {
-      if (key && cells[key] === undefined) cells[key] = row[index]?.trim() ?? "";
+  for (let index = 0; index < sheetMembers.length; index += concurrency) {
+    const batch = sheetMembers.slice(index, index + concurrency);
+    const fetched = await Promise.allSettled(
+      batch.map(async (member) => {
+        const data = await gasGet<{ data: RawMember }>(
+          { action: "fetchMember", memberName: member.name },
+          { timeoutMs: 20_000 },
+        );
+        if (!data.data) throw new Error("GASからデータが返りませんでした");
+        return data.data;
+      }),
+    );
+    fetched.forEach((item, batchIndex) => {
+      if (item.status === "fulfilled") {
+        members.push(item.value);
+      } else {
+        failedMembers.push({
+          member: batch[batchIndex].name,
+          reason: item.reason instanceof Error ? item.reason.message : "GASから取得できませんでした",
+        });
+      }
     });
-    return [{ date: parseCsvDate(dateRaw), cells }];
-  });
-  return { ...member, header, records };
-}
-
-async function fetchMemberCsv(spreadsheetId: string, member: SheetMember): Promise<RawMember | null> {
-  const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}/export?format=csv&gid=${encodeURIComponent(member.gid)}`;
-  const response = await fetch(url, { redirect: "follow", cache: "no-store" });
-  if (!response.ok) throw new Error(`CSV取得 HTTP ${response.status}`);
-  return csvToRawMember(member, await response.text());
-}
-
-async function fetchAllRawAsCsv(spreadsheetId: string): Promise<RawMember[]> {
-  const members = await fetchSheetMembers();
-  const results: RawMember[] = [];
-  // Google側への瞬間的な負荷を抑えつつ、GASの直列70秒問題を避ける。
-  for (let index = 0; index < members.length; index += 12) {
-    const batch = members.slice(index, index + 12);
-    const fetched = await Promise.all(batch.map((member) => fetchMemberCsv(spreadsheetId, member)));
-    results.push(...fetched.filter((member): member is RawMember => member !== null));
   }
-  return results.sort((a, b) => a.name.localeCompare(b.name));
+
+  if (sheetMembers.length > 0 && members.length === 0 && failedMembers.length > 0) {
+    throw new Error(`全ての部員シート取得に失敗しました（${failedMembers.length}件）`);
+  }
+  return {
+    members: members.sort((a, b) => a.name.localeCompare(b.name)),
+    failedMembers,
+  };
 }
 
 /** 部員1人だけを軽量取得（write-through保存直後の確認・個人の記録画面用） */
@@ -256,17 +247,8 @@ async function fetchMemberRaw(
   memberName: string,
   opts: { timeoutMs?: number } = {},
 ): Promise<RawMember> {
-  const spreadsheetId =
-    process.env.SHEET_SYNC_SPREADSHEET_ID ?? "1uAo7E8_rMbUZlml1H0vj119htQeoa2eMWqASUXQTqgg";
-  if (spreadsheetId) {
-    const members = await fetchSheetMembers();
-    const member = members.find((candidate) => candidate.name === memberName);
-    if (!member) throw new Error(`シート「${memberName}」が見つかりません`);
-    const raw = await fetchMemberCsv(spreadsheetId, member);
-    if (!raw) throw new Error("見出し行（日付）が見つかりません");
-    return raw;
-  }
   const data = await gasGet<{ data: RawMember }>({ action: "fetchMember", memberName }, opts);
+  if (!data.data) throw new Error("GASからデータが返りませんでした");
   return data.data;
 }
 
@@ -336,7 +318,7 @@ export type DbRecord = {
 };
 
 function appBuiltin(rec: DbRecord, key: BuiltinKey): number | string | null {
-  return (rec as unknown as Record<string, number | string | null>)[key] ?? null;
+  return rec[key] ?? null;
 }
 
 function appIsNewer(rec: DbRecord): boolean {
@@ -697,6 +679,111 @@ function computeMemberPull(
   return { inserts, updates, conflicts };
 }
 
+type ReplySyncProfile = {
+  id: string;
+  sheet_name: string;
+};
+
+async function reconcileSheetReplies(
+  supabase: SupabaseClient,
+  profiles: ReplySyncProfile[],
+  members: RawMember[],
+  fromDate: string,
+  throughDate: string,
+): Promise<{
+  synced: number;
+  failedMembers: { member: string; reason: string }[];
+}> {
+  const memberByName = new Map(members.map((member) => [member.name.trim(), member]));
+  const supportedProfiles = profiles.filter((profile) => {
+    const member = memberByName.get(profile.sheet_name.trim());
+    return member?.records.some((record) => Array.isArray(record.replies)) === true;
+  });
+  if (supportedProfiles.length === 0) return { synced: 0, failedMembers: [] };
+
+  const profileIds = supportedProfiles.map((profile) => profile.id);
+  const { data: records, error: recordError } = await supabase
+    .from("practice_records")
+    .select("id, user_id, recorded_date")
+    .in("user_id", profileIds)
+    .gte("recorded_date", fromDate)
+    .lte("recorded_date", throughDate);
+  if (recordError) throw recordError;
+
+  const recordsByOwnerDate = new Map<string, { id: string }[]>();
+  for (const record of records ?? []) {
+    const key = record.user_id + ":" + record.recorded_date;
+    const rows = recordsByOwnerDate.get(key) ?? [];
+    rows.push({ id: record.id });
+    recordsByOwnerDate.set(key, rows);
+  }
+
+  const rawRepliesByRecord = new Map<string, RawSheetReply[]>();
+  const sheetNameByRecord = new Map<string, string>();
+  for (const profile of supportedProfiles) {
+    const member = memberByName.get(profile.sheet_name.trim());
+    if (!member) continue;
+    for (const sheetRecord of member.records) {
+      if (sheetRecord.date < fromDate || sheetRecord.date > throughDate) continue;
+      const matching = recordsByOwnerDate.get(profile.id + ":" + sheetRecord.date) ?? [];
+      if (matching.length !== 1) continue;
+      rawRepliesByRecord.set(matching[0].id, sheetRecord.replies ?? []);
+      sheetNameByRecord.set(matching[0].id, profile.sheet_name);
+    }
+  }
+
+  const { data: existingReplies, error: existingError } = await supabase
+    .from("sheet_record_replies")
+    .select("record_id")
+    .in("owner_id", profileIds)
+    .gte("recorded_date", fromDate)
+    .lte("recorded_date", throughDate);
+  if (existingError) throw existingError;
+
+  const targetIds = new Set(rawRepliesByRecord.keys());
+  for (const reply of existingReplies ?? []) targetIds.add(reply.record_id);
+  if (targetIds.size === 0) return { synced: 0, failedMembers: [] };
+
+  const { data: appComments, error: commentError } = await supabase
+    .from("comments")
+    .select("target_id, content, author:profiles!user_id(display_name)")
+    .eq("target_type", "record")
+    .in("target_id", [...targetIds]);
+  if (commentError) throw commentError;
+
+  const exportedByRecord = new Map<string, Set<string>>();
+  for (const comment of appComments ?? []) {
+    const author = Array.isArray(comment.author) ? comment.author[0] : comment.author;
+    const displayName = author?.display_name?.trim() ?? "";
+    if (!displayName) continue;
+    const values = exportedByRecord.get(comment.target_id) ?? new Set<string>();
+    values.add(normalizeSheetReplyText(comment.content + "　" + displayName));
+    exportedByRecord.set(comment.target_id, values);
+  }
+
+  let synced = 0;
+  const failedMembers: { member: string; reason: string }[] = [];
+  for (const recordId of targetIds) {
+    const rows = importedSheetReplies(
+      rawRepliesByRecord.get(recordId) ?? [],
+      exportedByRecord.get(recordId) ?? [],
+    );
+    const { error } = await supabase.rpc("replace_sheet_record_replies", {
+      target_record_id: recordId,
+      reply_rows: rows,
+    });
+    if (error) {
+      failedMembers.push({
+        member: sheetNameByRecord.get(recordId) ?? "(スプシ返信)",
+        reason: "返信の同期: " + error.message,
+      });
+    } else {
+      synced += rows.length;
+    }
+  }
+
+  return { synced, failedMembers };
+}
 // ── 同期本体 ─────────────────────────────────────────────────────────────────
 // 安全方針(docs/SHEETS-SYNC-PLAN.md・事故対策):
 //  - カットオフ(2026-06-22)以前・未来日・空の行は同期しない
@@ -715,6 +802,7 @@ export async function runSheetSync(
     conflicts: [],
     skippedMembers: [],
     failedMembers: [],
+    sheetReplies: 0,
     dryRun,
   };
   const today = todayJST();
@@ -736,11 +824,17 @@ export async function runSheetSync(
   if (options.onlySheet) {
     linked = linked.filter((p) => p.sheet_name.trim() === options.onlySheet!.trim());
   }
+  if (options.onlySheets) {
+    const allowed = new Set(options.onlySheets.map((name) => name.trim()));
+    linked = linked.filter((profile) => allowed.has(profile.sheet_name.trim()));
+  }
   if (linked.length === 0) return result;
 
   const sheetToProfile = new Map(linked.map((p) => [p.sheet_name.trim(), p]));
   const nameById = new Map(linked.map((p) => [p.id, p.sheet_name.trim()]));
-  const members = await fetchAllRaw();
+  const fetched = await fetchAllRaw(linked.map((profile) => profile.sheet_name));
+  result.failedMembers.push(...fetched.failedMembers);
+  const members = fetched.members;
   const memberByName = new Map(members.map((m) => [m.name.trim(), m]));
 
   const userIds = linked.map((p) => p.id);
@@ -876,6 +970,23 @@ export async function runSheetSync(
       });
     }
   }
+  try {
+    const replySync = await reconcileSheetReplies(
+      admin,
+      linked.map((profile) => ({ id: profile.id, sheet_name: profile.sheet_name })),
+      members,
+      SYNC_CUTOFF,
+      today,
+    );
+    result.sheetReplies = replySync.synced;
+    result.failedMembers.push(...replySync.failedMembers);
+  } catch (error) {
+    result.failedMembers.push({
+      member: "(スプシ返信)",
+      reason: error instanceof Error ? error.message : "返信の同期に失敗しました",
+    });
+  }
+
   for (const p of pushes) {
     try {
       await gasPost({ action: "writeCells", memberName: p.memberName, date: p.date, cells: p.cells });
@@ -899,7 +1010,7 @@ export async function runSheetSync(
   return result;
 }
 
-export type LiveRefreshResult = { inserted: number; updated: number };
+export type LiveRefreshResult = { inserted: number; updated: number; sheetReplies: number };
 
 /**
  * 個人の記録画面（マイページ等）を表示する直前に、スプシメイン(record_source='sheet')の
@@ -954,8 +1065,6 @@ export async function refreshMemberFromSheetLive(
       (d) => d >= cutoff && d <= today,
       nowIso,
     );
-    if (inserts.length === 0 && updates.length === 0) return { inserted: 0, updated: 0 };
-
     let inserted = 0;
     let updated = 0;
     if (inserts.length > 0) {
@@ -969,7 +1078,20 @@ export async function refreshMemberFromSheetLive(
         .eq("id", u.id);
       if (!updErr) updated++;
     }
-    return { inserted, updated };
+    let sheetReplies = 0;
+    try {
+      const replySync = await reconcileSheetReplies(
+        supabase,
+        [{ id: profile.id, sheet_name: profile.sheet_name }],
+        [member],
+        cutoff,
+        today,
+      );
+      sheetReplies = replySync.synced;
+    } catch {
+      // Reply synchronization must not prevent the record page from loading.
+    }
+    return { inserted, updated, sheetReplies };
   } catch {
     return null; // GAS不調・タイムアウト等はDBの現状のまま表示（ページを壊さない）
   }

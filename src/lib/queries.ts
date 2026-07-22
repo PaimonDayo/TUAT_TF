@@ -2,12 +2,24 @@ import { createClient } from "@/lib/supabase/server";
 import { fetchRolesByProfileIds } from "@/lib/supabase/auth";
 import { jstToday } from "@/lib/date";
 import { refreshMemberFromSheetLive } from "@/lib/sheet-sync";
+import {
+  normalizeNoteArticleRow,
+  normalizeNoteRow,
+  normalizeNotificationRow,
+  normalizeScheduleRow,
+  normalizeThreadPostRow,
+  normalizeThreadRow,
+} from "@/lib/query-normalize";
+import {
+  normalizeAuthorRow,
+  normalizeProfileRow,
+  normalizeRecordWithAuthor,
+  normalizeTweetWithAuthor,
+} from "@/lib/profile-normalize";
 import type {
   ThreadPostWithAuthor,
   ThreadWithAuthor,
   FeedItem,
-  RecordWithAuthor,
-  TweetWithAuthor,
   WeeklyRankingRow,
   Block,
   AppRole,
@@ -25,6 +37,9 @@ import type {
 const AUTHOR_SELECT =
   "author:profiles!user_id(id, display_name, avatar_url, blocks, grade, record_source, record_fields)";
 const NOTICE_REACTIONS: NoticeReaction[] = ["ack", "thanks", "question"];
+function isPresent<T>(value: T | null): value is T {
+  return value !== null;
+}
 
 // 練習記録の表示フィルタ。
 // タイムライン等のソーシャル表示は「未来日除外・中身あり」。
@@ -129,7 +144,6 @@ export async function getFeed(
     .lte("recorded_date", jstToday())
     .or(RECORD_NONEMPTY_OR)
     .or(SHEET_TIMELINE_OR)
-    .order("recorded_date", { ascending: false })
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(limit);
@@ -154,13 +168,17 @@ export async function getFeed(
     );
   }
 
-  const [{ data: recRows }, { data: twRows }] = await Promise.all([
+  const [recordsResult, tweetsResult] = await Promise.all([
     recordsQuery,
     tweetsQuery,
   ]);
+  if (recordsResult.error) throw new Error(`Failed to load timeline records: ${recordsResult.error.message}`);
+  if (tweetsResult.error) throw new Error(`Failed to load timeline posts: ${tweetsResult.error.message}`);
+  const recRows = recordsResult.data;
+  const twRows = tweetsResult.data;
 
-  const records = (recRows ?? []) as unknown as RecordWithAuthor[];
-  const tweets = (twRows ?? []) as unknown as TweetWithAuthor[];
+  const records = (recRows ?? []).map(normalizeRecordWithAuthor);
+  const tweets = (twRows ?? []).map(normalizeTweetWithAuthor);
 
   const recIds = records.map((r) => r.id);
   const twIds = tweets.map((t) => t.id);
@@ -243,15 +261,16 @@ export async function getUserRecords(userId: string, fromDate?: string) {
 }
 
 /** 今日以降の練習予定（メニュー込み）を取得 */
-function filterSchedulesForViewer<T extends { target_blocks?: Block[] | null }>(
+function filterSchedulesForViewer<T extends { target_blocks?: string[] | null }>(
   schedules: T[],
   viewerBlocks: Block[],
   canManage: boolean,
 ): T[] {
   if (canManage) return schedules;
+  const viewerBlockSet = new Set<string>(viewerBlocks);
   return schedules.filter((schedule) => {
     const targets = schedule.target_blocks ?? [];
-    return targets.length === 0 || targets.some((block) => viewerBlocks.includes(block));
+    return targets.length === 0 || targets.some((block) => viewerBlockSet.has(block));
   });
 }
 
@@ -279,18 +298,22 @@ export async function getUpcomingSchedules(
     .gte("schedule_date", today)
     .order("schedule_date", { ascending: true });
   if (type && type !== "all") q = q.eq("schedule_type", type);
-  const { data } = await q;
-  return filterSchedulesForViewer(data ?? [], viewerBlocks, canManage);
+  const { data, error } = await q;
+  if (error) throw new Error("Failed to load upcoming schedules: " + error.message);
+  return filterSchedulesForViewer(data ?? [], viewerBlocks, canManage)
+    .map(normalizeScheduleRow)
+    .filter(isPresent);
 }
 
 /** 予定一覧用。出欠を同じクエリに含め、一覧初期表示の往復を減らす。 */
 export async function getUpcomingSchedulesWithAttendances(
   viewerBlocks: Block[],
   canManage: boolean,
+  limit = 200,
 ) {
   const supabase = await createClient();
   const today = jstToday();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("practice_schedules")
     .select(`
       *,
@@ -313,8 +336,12 @@ export async function getUpcomingSchedulesWithAttendances(
       )
     `)
     .gte("schedule_date", today)
-    .order("schedule_date", { ascending: true });
-  return filterSchedulesForViewer(data ?? [], viewerBlocks, canManage);
+    .order("schedule_date", { ascending: true })
+    .limit(limit);
+  if (error) throw new Error(`Failed to load upcoming schedules: ${error.message}`);
+  return filterSchedulesForViewer(data ?? [], viewerBlocks, canManage)
+    .map(normalizeScheduleRow)
+    .filter(isPresent);
 }
 
 /** お知らせ一覧（直近200件。無期限の全件取得はしない） */
@@ -342,25 +369,27 @@ export async function getPbRecords(userId: string) {
 /** プロフィール単体取得（他部員ページ用。ロール込み） */
 export async function getProfileById(id: string) {
   const supabase = await createClient();
-  const { data } = await supabase.from("profiles").select("*").eq("id", id).maybeSingle();
+  const { data, error } = await supabase.from("profiles").select("*").eq("id", id).maybeSingle();
+  if (error) throw new Error(`Failed to load profile: ${error.message}`);
   if (!data) return null;
   const rolesMap = await fetchRolesByProfileIds(supabase, [id]);
-  return { ...data, roles: rolesMap.get(id) ?? [] };
+  return normalizeProfileRow(data, rolesMap.get(id) ?? []);
 }
 
 /** 全部員一覧（管理者画面用。ロール込み） */
 export async function getAllProfiles() {
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("profiles")
     .select("*")
     .order("created_at", { ascending: true });
+  if (error) throw new Error(`Failed to load profiles: ${error.message}`);
   const rows = data ?? [];
   const rolesMap = await fetchRolesByProfileIds(
     supabase,
     rows.map((p) => p.id as string),
   );
-  return rows.map((p) => ({ ...p, roles: rolesMap.get(p.id as string) ?? [] }));
+  return rows.map((profile) => normalizeProfileRow(profile, rolesMap.get(profile.id) ?? []));
 }
 
 /** メンバー一覧（在籍中かつ承認済みの部員。名簿表示用） */
@@ -368,11 +397,11 @@ export async function getMembersList(): Promise<AuthorMini[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("profiles")
-    .select("id, display_name, avatar_url, blocks, grade")
+    .select("id, display_name, avatar_url, blocks, grade, record_source, record_fields")
     .eq("status", "active")
     .eq("approved", true)
     .order("display_name", { ascending: true });
-  return (data ?? []) as unknown as AuthorMini[];
+  return (data ?? []).map(normalizeAuthorRow);
 }
 
 /** 全ロール定義を取得（管理画面用） */
@@ -404,7 +433,7 @@ export async function getUserActivity(
 ): Promise<FeedItem[]> {
   const supabase = await createClient();
 
-  const [{ data: recRows }, { data: twRows }] = await Promise.all([
+  const [recordsResult, tweetsResult] = await Promise.all([
     supabase
       .from("practice_records")
       .select(`*, ${AUTHOR_SELECT}`)
@@ -421,9 +450,13 @@ export async function getUserActivity(
       .order("created_at", { ascending: false })
       .limit(limit),
   ]);
+  if (recordsResult.error) throw new Error("Failed to load member records: " + recordsResult.error.message);
+  if (tweetsResult.error) throw new Error("Failed to load member posts: " + tweetsResult.error.message);
+  const recRows = recordsResult.data;
+  const twRows = tweetsResult.data;
 
-  const records = (recRows ?? []) as unknown as RecordWithAuthor[];
-  const tweets = (twRows ?? []) as unknown as TweetWithAuthor[];
+  const records = (recRows ?? []).map(normalizeRecordWithAuthor);
+  const tweets = (twRows ?? []).map(normalizeTweetWithAuthor);
   const recIds = records.map((r) => r.id);
   const twIds = tweets.map((t) => t.id);
 
@@ -499,12 +532,14 @@ export async function getAttendanceSchedules(
 ) {
   const supabase = await createClient();
   const today = jstToday();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("practice_schedules")
     .select("*")
     .gte("schedule_date", today)
     .in("schedule_type", ["practice", "meet", "event"])
-    .order("schedule_date", { ascending: true });
+    .order("schedule_date", { ascending: true })
+    .limit(Math.max(30, limit * 3));
+  if (error) throw new Error(`Failed to load attendance schedules: ${error.message}`);
   return filterSchedulesForViewer(data ?? [], viewerBlocks, canManage).slice(0, limit);
 }
 
@@ -512,18 +547,19 @@ export async function getAttendanceSchedules(
 export async function getAttendancesForSchedules(scheduleIds: string[]) {
   if (scheduleIds.length === 0) return [];
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("attendances")
     .select("schedule_id, user_id, status, is_late, late_note, profile:profiles!user_id(id, display_name, avatar_url, blocks, grade)")
     .in("schedule_id", scheduleIds);
-  return (data ?? []) as unknown as {
-    schedule_id: string;
-    user_id: string;
-    status: "present" | "absent";
-    is_late: boolean;
-    late_note: string | null;
-    profile: import("@/types").AuthorMini;
-  }[];
+  if (error) throw new Error("Failed to load attendances: " + error.message);
+  return (data ?? []).flatMap((row) => {
+    if (row.status !== "present" && row.status !== "absent") return [];
+    return [{
+      ...row,
+      status: row.status as "present" | "absent",
+      profile: normalizeAuthorRow(row.profile),
+    }];
+  });
 }
 
 /** 週間ランキング（中長距離） */
@@ -533,7 +569,25 @@ export async function getWeeklyRanking(): Promise<WeeklyRankingRow[]> {
     .from("weekly_ranking")
     .select("*")
     .order("total_km", { ascending: false });
-  return (data ?? []) as unknown as WeeklyRankingRow[];
+  return (data ?? []).flatMap((row) => {
+    if (!row.id || !row.display_name || !row.period_start || !row.period_end) return [];
+    return [{
+      id: row.id,
+      display_name: row.display_name,
+      grade: row.grade,
+      blocks: (row.blocks ?? []).filter((block): block is Block =>
+        block === "middle_long" || block === "short" || block === "jump" || block === "throw"
+      ),
+      avatar_url: row.avatar_url,
+      km_low: row.km_low ?? 0,
+      km_mid: row.km_mid ?? 0,
+      km_high: row.km_high ?? 0,
+      km_speed: row.km_speed ?? 0,
+      total_km: row.total_km ?? 0,
+      period_start: row.period_start,
+      period_end: row.period_end,
+    }];
+  });
 }
 
 /** 会場一覧（管理用：全件） */
@@ -590,7 +644,7 @@ export async function getNotesData(): Promise<{
     .select(NOTE_SELECT)
     .order("updated_at", { ascending: false });
   return {
-    notes: (notes ?? []) as unknown as NoteWithRelations[],
+    notes: (notes ?? []).map(normalizeNoteRow).filter(isPresent),
   };
 }
 
@@ -602,7 +656,7 @@ export async function getNoteById(id: string): Promise<NoteWithRelations | null>
     .select(NOTE_SELECT)
     .eq("id", id)
     .maybeSingle();
-  return (data as unknown as NoteWithRelations | null) ?? null;
+  return data ? normalizeNoteRow(data) : null;
 }
 
 /** スレッド一覧（新しい返信があった順） */
@@ -612,7 +666,7 @@ export async function getThreads(): Promise<ThreadWithAuthor[]> {
     .from("threads")
     .select(`*, author:profiles!author_id(id, display_name, avatar_url, blocks, grade), posts:thread_posts(id)`)
     .order("updated_at", { ascending: false });
-  return (data ?? []) as unknown as ThreadWithAuthor[];
+  return (data ?? []).map(normalizeThreadRow);
 }
 
 /** Threads directly inside a note folder, newest activity first. */
@@ -623,7 +677,7 @@ export async function getThreadsByFolder(folderId: string): Promise<ThreadWithAu
     .select(`*, author:profiles!author_id(id, display_name, avatar_url, blocks, grade), posts:thread_posts(id)`)
     .eq("folder_id", folderId)
     .order("updated_at", { ascending: false });
-  return (data ?? []) as unknown as ThreadWithAuthor[];
+  return (data ?? []).map(normalizeThreadRow);
 }
 
 /** スレッド詳細 */
@@ -634,7 +688,7 @@ export async function getThreadById(id: string): Promise<ThreadWithAuthor | null
     .select(`*, author:profiles!author_id(id, display_name, avatar_url, blocks, grade)`)
     .eq("id", id)
     .maybeSingle();
-  return (data as unknown as ThreadWithAuthor | null) ?? null;
+  return data ? normalizeThreadRow(data) : null;
 }
 
 /** スレッドの投稿（古い順=会話の流れ） */
@@ -645,7 +699,7 @@ export async function getThreadPosts(threadId: string): Promise<ThreadPostWithAu
     .select(`*, author:profiles!author_id(id, display_name, avatar_url, blocks, grade)`)
     .eq("thread_id", threadId)
     .order("created_at", { ascending: true });
-  return (data ?? []) as unknown as ThreadPostWithAuthor[];
+  return (data ?? []).map(normalizeThreadPostRow);
 }
 
 /** フォルダ直下のサブフォルダ一覧（RLS継承） */
@@ -656,7 +710,7 @@ export async function getChildNotes(parentId: string): Promise<NoteWithRelations
     .select(NOTE_SELECT)
     .eq("parent_id", parentId)
     .order("updated_at", { ascending: false });
-  return (data ?? []) as unknown as NoteWithRelations[];
+  return (data ?? []).map(normalizeNoteRow).filter(isPresent);
 }
 
 /** パンくず用の祖先チェーン（ルート側から順）。深さ上限3のため最大2回辿る */
@@ -692,7 +746,7 @@ export async function getNoteArticles(
     `)
     .eq("note_id", noteId)
     .order("updated_at", { ascending: false });
-  return (data ?? []) as unknown as NoteArticleWithAuthor[];
+  return (data ?? []).map(normalizeNoteArticleRow);
 }
 
 /** 記事詳細。親フォルダのRLSにより閲覧不可ならnull */
@@ -710,7 +764,7 @@ export async function getNoteArticleById(
     .eq("note_id", noteId)
     .eq("id", articleId)
     .maybeSingle();
-  return (data as unknown as NoteArticleWithAuthor | null) ?? null;
+  return data ? normalizeNoteArticleRow(data) : null;
 }
 
 /** ホームに表示する最近の共有ノート（RLSで閲覧可能なもの） */
@@ -725,7 +779,7 @@ export async function getRecentSharedNotes(
     .eq("status", "published")
     .order("updated_at", { ascending: false })
     .limit(limit);
-  return (data ?? []) as unknown as NoteWithRelations[];
+  return (data ?? []).map(normalizeNoteRow).filter(isPresent);
 }
 
 /** プロフィールに表示する公開個人ノート */
@@ -740,7 +794,7 @@ export async function getPublishedPersonalNotes(
     .eq("scope", "personal")
     .eq("status", "published")
     .order("updated_at", { ascending: false });
-  return (data ?? []) as unknown as NoteWithRelations[];
+  return (data ?? []).map(normalizeNoteRow).filter(isPresent);
 }
 
 /** 直近50件（無期限の全件取得はしない） */
@@ -755,7 +809,7 @@ export async function getPersonalNotifications(userId: string): Promise<AppNotif
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(50);
-  return (data ?? []) as unknown as AppNotificationWithActor[];
+  return (data ?? []).map(normalizeNotificationRow).filter(isPresent);
 }
 
 export async function getUnreadNotificationCount(userId: string): Promise<number> {

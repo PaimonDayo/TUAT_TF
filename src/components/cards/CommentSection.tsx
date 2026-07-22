@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { FileSpreadsheet } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Avatar } from "@/components/common/Avatar";
 import { Linkify } from "@/components/common/Linkify";
@@ -10,6 +11,16 @@ import { ActionMenu } from "@/components/ui/action-menu";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { CommentAuthor, CommentWithAuthor, TargetType } from "@/types";
+
+type AppReply = CommentWithAuthor & { kind: "app" };
+type SheetReply = {
+  kind: "sheet";
+  id: string;
+  content: string;
+  reply_index: number;
+  synced_at: string;
+};
+type DisplayReply = AppReply | SheetReply;
 
 export function CommentSection({
   targetType,
@@ -22,7 +33,7 @@ export function CommentSection({
   currentUser: CommentAuthor;
   onCountChange: (count: number) => void;
 }) {
-  const [comments, setComments] = useState<CommentWithAuthor[]>([]);
+  const [comments, setComments] = useState<DisplayReply[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [text, setText] = useState("");
@@ -36,21 +47,41 @@ export function CommentSection({
 
     async function load() {
       const supabase = createClient();
-      const { data, error: loadError } = await supabase
+      const commentsResult = await supabase
         .from("comments")
         .select("*, author:profiles(id, display_name, avatar_url)")
         .eq("target_type", targetType)
         .eq("target_id", targetId)
         .order("created_at", { ascending: true });
 
+      const sheetResult = targetType === "record"
+        ? await supabase
+            .from("sheet_record_replies")
+            .select("id, content, reply_index, synced_at")
+            .eq("record_id", targetId)
+            .order("reply_index", { ascending: true })
+        : { data: [], error: null };
+
       if (!active) return;
-      if (loadError) {
+      if (commentsResult.error || sheetResult.error) {
         setError("コメントを読み込めませんでした");
         setLoading(false);
         return;
       }
 
-      const rows = (data ?? []) as unknown as CommentWithAuthor[];
+      const appRows: AppReply[] = (commentsResult.data ?? []).flatMap((row) => {
+        if (row.target_type !== "record" && row.target_type !== "tweet") return [];
+        return [{
+          ...row,
+          target_type: row.target_type as TargetType,
+          kind: "app" as const,
+        }];
+      });
+      const sheetRows: SheetReply[] = (sheetResult.data ?? []).map((row) => ({
+        ...row,
+        kind: "sheet" as const,
+      }));
+      const rows: DisplayReply[] = [...appRows, ...sheetRows];
       setComments(rows);
       onCountChange(rows.length);
       setLoading(false);
@@ -86,7 +117,12 @@ export function CommentSection({
       return;
     }
 
-    const added = { ...data, author: currentUser } as CommentWithAuthor;
+    const added: AppReply = {
+      ...data,
+      target_type: targetType,
+      author: currentUser,
+      kind: "app",
+    };
     setComments((items) => {
       const next = [...items, added];
       onCountChange(next.length);
@@ -97,7 +133,7 @@ export function CommentSection({
       fetch("/api/sheets/reply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recordId: targetId, text: content }),
+        body: JSON.stringify({ recordId: targetId, commentId: data.id, text: content }),
       }).catch(() => {});
     }
     setText("");
@@ -133,7 +169,9 @@ export function CommentSection({
     }
 
     setComments((items) =>
-      items.map((item) => (item.id === comment.id ? { ...item, ...data } : item)),
+      items.map((item) =>
+        item.kind === "app" && item.id === comment.id ? { ...item, ...data } : item,
+      ),
     );
     setEditingId(null);
     setEditText("");
@@ -182,6 +220,24 @@ export function CommentSection({
           <EmptyState title="まだコメントはありません" className="min-h-20 py-4" />
         ) : (
           comments.map((comment) => {
+            if (comment.kind === "sheet") {
+              return (
+                <div key={comment.id} className="flex gap-2.5">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-success/10 text-success">
+                    <FileSpreadsheet size={16} aria-hidden="true" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-h-7 items-center">
+                      <p className="text-[13px] font-semibold">スプレッドシートからの返信</p>
+                    </div>
+                    <p className="text-[14px] whitespace-pre-wrap break-words">
+                      <Linkify text={comment.content} />
+                    </p>
+                  </div>
+                </div>
+              );
+            }
+
             const editing = editingId === comment.id;
             const edited = new Date(comment.updated_at).getTime() > new Date(comment.created_at).getTime() + 1000;
 

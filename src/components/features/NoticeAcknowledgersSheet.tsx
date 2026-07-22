@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { normalizeAuthorRow } from "@/lib/profile-normalize";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Avatar } from "@/components/common/Avatar";
 import { gradeShort } from "@/lib/constants";
@@ -36,9 +37,9 @@ export function NoticeAcknowledgersSheet({ noticeId, open, onOpenChange }: {
       .order("created_at", { ascending: false })
       .then(({ data }) => {
         if (!active) return;
-        const list = ((data ?? []) as unknown as { profiles: Acknowledger | null }[])
-          .map((row) => row.profiles)
-          .filter((profile): profile is Acknowledger => Boolean(profile));
+        const list = (data ?? []).flatMap((row) =>
+          row.profiles ? [normalizeAuthorRow(row.profiles)] : []
+        );
         setPeople(list);
       });
     return () => { active = false; };

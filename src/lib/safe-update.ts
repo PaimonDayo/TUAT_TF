@@ -1,47 +1,40 @@
+import type { Database } from "@/types/database";
 import type { createClient } from "@/lib/supabase/client";
 
 type BrowserClient = ReturnType<typeof createClient>;
+type PublicTables = Database["public"]["Tables"];
+type PublicTableName = keyof PublicTables;
+type PublicUpdate = PublicTables[PublicTableName]["Update"];
 
 export type SafeUpdateResult =
   | { ok: true }
   | { ok: false; reason: "error" | "blocked" };
 
 /**
- * 「エラー無し・0件」の無言失敗（RLS/セッション切れ）を検出して再試行する更新。
- *
- * - `.select("id")` で更新件数を確認する。
- * - 0件なら `auth.refreshSession()` してから一度だけ再試行する。
- * - それでも0件なら `blocked`（権限/セッション）を返す。`error` はクエリ自体の失敗。
- *
- * 重要な更新（お知らせ・目標・プロフィール・予定・ノート 等）はこれを使い、
- * 画面ごとに更新の堅牢さがバラつかないようにする。
+ * RLSや期限切れセッションで更新が0件になった場合に、一度だけ再認証して再試行する。
+ * 更新後にidを返し、実際に対象行が更新されたことまで確認する。
  */
 export async function safeUpdate(
   supabase: BrowserClient,
-  table: string,
-  values: Record<string, unknown>,
-  match: Record<string, unknown>,
+  table: PublicTableName,
+  values: PublicUpdate,
+  match: Record<string, string | number | boolean | null>,
 ): Promise<SafeUpdateResult> {
-  const run = () => {
-    let query = supabase.from(table).update(values);
-    for (const [key, value] of Object.entries(match)) {
-      query = query.eq(key, value);
-    }
-    return query.select("id");
-  };
+  const run = () => supabase.from(table).update(values).match(match).select("id");
 
   let { data, error } = await run();
   if (!error && (!data || data.length === 0)) {
     await supabase.auth.refreshSession();
     ({ data, error } = await run());
   }
+
   if (error || !data || data.length === 0) {
     return { ok: false, reason: error ? "error" : "blocked" };
   }
   return { ok: true };
 }
 
-/** 無言失敗時の標準メッセージ */
+/** 更新失敗時に利用者へ表示する共通メッセージ。 */
 export function safeUpdateMessage(reason: "error" | "blocked"): string {
   return reason === "error"
     ? "更新に失敗しました"

@@ -8,6 +8,7 @@ import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { jstToday } from "@/lib/date";
 import { customRecordFields, recordFieldHidden, recordFieldLabel } from "@/lib/record-fields";
 import { IntensityInput, type IntensityValues } from "@/components/features/IntensityInput";
+import { recordFieldsFromJson } from "@/lib/profile-normalize";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -95,7 +96,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
       .eq("id", userId)
       .maybeSingle()
       .then(({ data }) => {
-        const fields = (data?.record_fields ?? []) as RecordFieldDef[];
+        const fields = recordFieldsFromJson(data?.record_fields ?? null);
         setConfiguredFields(fields);
       });
   }, [userId, recordFields]);

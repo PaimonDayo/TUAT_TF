@@ -22,30 +22,62 @@ export function SheetSyncButton() {
     setBusy(true);
     setMessage(null);
     try {
-      const res = await fetch("/api/sheets/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      const data = await res.json();
-      if (!res.ok || data.ok === false) {
-        setMessage(`失敗: ${data.error ?? res.status}`);
-        setHasIssue(true);
-        return;
+      let resetCycle = true;
+      let cycleComplete = false;
+      let processed = 0;
+      let total = 0;
+      let inserted = 0;
+      let updated = 0;
+      let pushed = 0;
+      let sheetReplies = 0;
+      const failedMembers: string[] = [];
+      let conflictCount = 0;
+
+      for (let requestCount = 0; requestCount < 20 && !cycleComplete; requestCount++) {
+        setMessage(total > 0 ? `${processed}/${total}人を同期中…` : "同期対象を準備中…");
+        const res = await fetch("/api/sheets/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resetCycle }),
+        });
+        resetCycle = false;
+        const data = await res.json();
+        if (!res.ok || data.ok === false) {
+          throw new Error(data.error ?? `HTTP ${res.status}`);
+        }
+
+        inserted += Number(data.inserted ?? 0);
+        updated += Number(data.updated ?? 0);
+        pushed += Number(data.pushed ?? 0);
+        sheetReplies += Number(data.sheetReplies ?? 0);
+        conflictCount += Array.isArray(data.conflicts) ? data.conflicts.length : 0;
+        if (Array.isArray(data.failedMembers)) {
+          failedMembers.push(
+            ...data.failedMembers.map((failure: { member?: string }) => failure.member ?? "不明"),
+          );
+        }
+
+        if (!data.chunk) throw new Error("同期の進捗情報がありません");
+        processed = Number(data.chunk.endOffset ?? 0);
+        total = Number(data.chunk.totalMembers ?? 0);
+        cycleComplete = data.chunk.cycleComplete === true;
       }
-      setHasIssue(data.failedMembers?.length > 0);
+
+      if (!cycleComplete) throw new Error("同期対象が多いため20回で中断しました");
+      setHasIssue(failedMembers.length > 0);
       setMessage(
-        `同期しました：取込 ${data.inserted} / 更新 ${data.updated} / 書き戻し ${data.pushed}` +
-          (data.conflicts?.length ? ` / 競合スキップ ${data.conflicts.length}` : "") +
-          (data.failedMembers?.length
-            ? ` / 失敗 ${data.failedMembers.length}件（${data.failedMembers
-                .map((f: { member: string }) => f.member)
-                .join("、")}）`
+        `全${total}人を同期しました：取込 ${inserted} / 更新 ${updated} / 書き戻し ${pushed}` +
+          (sheetReplies ? " / スプシ返信 " + sheetReplies : "") +
+          (conflictCount ? ` / 競合スキップ ${conflictCount}` : "") +
+          (failedMembers.length
+            ? ` / 失敗 ${failedMembers.length}件（${failedMembers.join("、")}）`
             : ""),
       );
       router.refresh();
-    } catch {
-      setMessage("通信エラーで失敗しました");
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "通信エラー";
+      setMessage(`失敗: ${detail}`);
+      setHasIssue(true);
     } finally {
       setBusy(false);
     }

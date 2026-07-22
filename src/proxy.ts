@@ -16,6 +16,6 @@ export const config = {
      *   ここを認証ガードに通すと未ログイン時に /login へリダイレクトされ、
      *   アイコンが取得できず真っ白になる）
      */
-    "/((?!_next/static|_next/image|favicon.ico|apple-icon|icon|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw.js|apple-icon|icon|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

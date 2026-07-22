@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { APP_NAME, APP_DESCRIPTION } from "@/lib/app";
 import SplashIntro from "@/components/SplashIntro";
+import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://tuat-tf.vercel.app"),
@@ -42,7 +43,6 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
   viewportFit: "cover",
   themeColor: "#f2f2f7",
   // キーボード表示時にビューポートを縮め、下からせり上がる入力欄が
@@ -67,6 +67,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full">
         {children}
+        <ServiceWorkerRegistrar />
         <SplashIntro />
       </body>
     </html>

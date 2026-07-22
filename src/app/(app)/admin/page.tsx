@@ -5,7 +5,6 @@ import { AdminMemberList } from "@/components/features/AdminMemberList";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getAllProfiles, getAllRoleCategories, getAllRoles } from "@/lib/queries";
 import { permissionsOf } from "@/lib/permissions";
-import type { Profile } from "@/types";
 
 export default async function AdminPage() {
   const profile = await getCurrentProfile();
@@ -13,7 +12,7 @@ export default async function AdminPage() {
   if (!permissions.manageMembers) redirect("/home");
 
   const [members, roles, categories] = await Promise.all([
-    getAllProfiles() as Promise<Profile[]>,
+    getAllProfiles(),
     getAllRoles(),
     getAllRoleCategories(),
   ]);

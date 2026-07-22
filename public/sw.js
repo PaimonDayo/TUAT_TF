@@ -1,62 +1,45 @@
-const CACHE_NAME = 'tuat-tf-shell-v1';
-const APP_SHELL = ['/', '/login', '/branding/summer-icon-192.png'];
+const CACHE_PREFIX = 'tuat-tf-';
+const OFFLINE_CACHE = 'tuat-tf-public-offline-v1';
+const OFFLINE_ASSETS = ['/offline', '/branding/summer-icon-192.png'];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
+  event.waitUntil(caches.open(OFFLINE_CACHE).then((cache) => cache.addAll(OFFLINE_ASSETS)));
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => Promise.all(
-      keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)),
+      keys
+        .filter((key) => key.startsWith(CACHE_PREFIX) && key !== OFFLINE_CACHE)
+        .map((key) => caches.delete(key)),
     )),
   );
   self.clients.claim();
 });
 
+// Never cache authenticated HTML, RSC payloads, or API responses.
+// For failed navigations, serve only the public offline explanation page.
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
-  const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
-
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-          return response;
-        })
-        .catch(async () => (await caches.match(event.request)) || caches.match('/')),
-    );
-    return;
-  }
-
+  if (event.request.method !== 'GET' || event.request.mode !== 'navigate') return;
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request).then((response) => {
-      if (response.ok) {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-      }
-      return response;
-    })),
+    fetch(event.request).catch(async () =>
+      (await caches.match('/offline')) || Response.error(),
+    ),
   );
 });
-
 self.addEventListener('push', (event) => {
   if (!event.data) return;
-  
+
   try {
     const data = event.data.json();
     const options = {
       body: data.body,
-      icon: '/icon.png',
-      data: data.data || {}
+      icon: '/branding/summer-icon-192.png',
+      data: data.data || {},
     };
     event.waitUntil(self.registration.showNotification(data.title || '新しい通知', options));
   } catch {
-    // text fallback
     event.waitUntil(self.registration.showNotification(event.data.text()));
   }
 });

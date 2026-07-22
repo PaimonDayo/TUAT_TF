@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { UserPlus, UserCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/toast";
@@ -9,23 +9,29 @@ import { cn } from "@/lib/utils";
 export const FAVORITE_CHANGE_EVENT = "favorite-change";
 
 export function FavoriteButton({ targetId, initial }: { targetId: string; initial: boolean }) {
-  const [fav, setFav] = useState(initial);
-  const [busy, setBusy] = useState(false);
+  const queryClient = useQueryClient();
+  const stateKey = ["social-favorite", targetId] as const;
+  const { data: state } = useQuery({
+    queryKey: stateKey,
+    queryFn: async () => ({ favorited: initial, busy: false }),
+    initialData: { favorited: initial, busy: false },
+    staleTime: Infinity,
+    enabled: false,
+  });
+  const fav = state.favorited;
+  const busy = state.busy;
   const { showToast } = useToast();
-
 
   async function toggle() {
     if (busy) return;
-    const previous = fav;
-    const next = !previous;
-    setBusy(true);
-    setFav(next);
+    const previous = { favorited: fav, busy: false };
+    const next = !fav;
+    queryClient.setQueryData(stateKey, { favorited: next, busy: true });
 
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      setFav(previous);
-      setBusy(false);
+      queryClient.setQueryData(stateKey, previous);
       showToast("ログイン状態を確認できませんでした");
       return;
     }
@@ -33,7 +39,10 @@ export function FavoriteButton({ targetId, initial }: { targetId: string; initia
     const result = next
       ? await supabase
           .from("favorites")
-          .upsert({ user_id: user.id, favorite_user_id: targetId }, { onConflict: "user_id,favorite_user_id" })
+          .upsert(
+            { user_id: user.id, favorite_user_id: targetId },
+            { onConflict: "user_id,favorite_user_id" },
+          )
           .select("favorite_user_id")
           .single()
       : await supabase
@@ -44,16 +53,16 @@ export function FavoriteButton({ targetId, initial }: { targetId: string; initia
           .select("favorite_user_id");
 
     if (result.error || (!next && (!Array.isArray(result.data) || result.data.length !== 1))) {
-      setFav(previous);
+      queryClient.setQueryData(stateKey, previous);
       showToast(next ? "フォローできませんでした" : "フォローを解除できませんでした");
-    } else {
-      window.dispatchEvent(new CustomEvent(FAVORITE_CHANGE_EVENT, {
-        detail: { targetId, favorited: next },
-      }));
+      return;
     }
-    setBusy(false);
-  }
 
+    queryClient.setQueryData(stateKey, { favorited: next, busy: false });
+    window.dispatchEvent(new CustomEvent(FAVORITE_CHANGE_EVENT, {
+      detail: { targetId, favorited: next },
+    }));
+  }
   return (
     <button
       onClick={toggle}

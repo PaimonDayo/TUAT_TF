@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import type { Database } from "@/types/database";
 
 /**
  * リクエストごとにセッションを更新し、未認証ユーザーを /login へ誘導する。
@@ -8,7 +9,7 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
-  const supabase = createServerClient(
+  const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -41,8 +42,8 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/auth") ||
     // 同期APIは route 側で独自に認証（cron=Bearer / 手動=管理者）。
     // 未ログイン(cron)を /login にリダイレクトすると叩けないので素通りさせる。
+    pathname.startsWith("/offline") ||
     pathname.startsWith("/api/sheets/sync") ||
-    pathname.startsWith("/api/backup") ||
     pathname.startsWith("/api/schedule-sheets/cron-sync");
 
   // Supabase の認証クッキー（sb-<ref>-auth-token[.n]）が存在するか。

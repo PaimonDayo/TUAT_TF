@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Heart, MessageCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { CommentSection } from "@/components/cards/CommentSection";
@@ -8,6 +9,13 @@ import { LikersSheet } from "@/components/cards/LikersSheet";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import type { CommentAuthor, TargetType } from "@/types";
+
+type InteractionState = {
+  liked: boolean;
+  likes: number;
+  commentCount: number;
+  busy: boolean;
+};
 
 /** いいね + コメント の操作行 */
 export function PostActions({
@@ -25,15 +33,42 @@ export function PostActions({
   initialComments?: number;
   currentUser: CommentAuthor;
 }) {
-  const [liked, setLiked] = useState(initialLiked);
-  const [likes, setLikes] = useState(initialLikes);
-  const [busy, setBusy] = useState(false);
+  const queryClient = useQueryClient();
+  const interactionKey = ["social-like", currentUser.id, targetType, targetId] as const;
+  const { data: interaction } = useQuery({
+    queryKey: interactionKey,
+    queryFn: async () => ({ liked: initialLiked, likes: initialLikes, commentCount: initialComments, busy: false }),
+    initialData: { liked: initialLiked, likes: initialLikes, commentCount: initialComments, busy: false },
+    staleTime: Infinity,
+    enabled: false,
+  });
+  const { liked, likes, commentCount, busy } = interaction;
   const [openComments, setOpenComments] = useState(false);
   const [commentsMounted, setCommentsMounted] = useState(false);
-  const [commentCount, setCommentCount] = useState(initialComments);
   const [likersOpen, setLikersOpen] = useState(false);
   const { showToast } = useToast();
-  const updateCommentCount = useCallback((count: number) => setCommentCount(count), []);
+  const updateCommentCount = useCallback((count: number) => {
+    queryClient.setQueryData(
+      ["social-like", currentUser.id, targetType, targetId],
+      (previous: InteractionState | undefined) => ({
+        ...(previous ?? {
+          liked: initialLiked,
+          likes: initialLikes,
+          commentCount: initialComments,
+          busy: false,
+        }),
+        commentCount: count,
+      }),
+    );
+  }, [
+    currentUser.id,
+    initialComments,
+    initialLiked,
+    initialLikes,
+    queryClient,
+    targetId,
+    targetType,
+  ]);
 
   // いいねボタンの長押しで「いいねした人」シートを開く
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -68,19 +103,20 @@ export function PostActions({
 
   async function toggleLike() {
     if (busy) return;
-    const previousLiked = liked;
-    const previousLikes = likes;
-    const next = !previousLiked;
-    setBusy(true);
-    setLiked(next);
-    setLikes(Math.max(0, previousLikes + (next ? 1 : -1)));
+    const previous = { ...interaction, busy: false };
+    const next = !liked;
+    const optimistic = {
+      ...interaction,
+      liked: next,
+      likes: Math.max(0, likes + (next ? 1 : -1)),
+      busy: true,
+    };
+    queryClient.setQueryData(interactionKey, optimistic);
 
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      setLiked(previousLiked);
-      setLikes(previousLikes);
-      setBusy(false);
+      queryClient.setQueryData(interactionKey, previous);
       showToast("ログイン状態を確認できませんでした");
       return;
     }
@@ -88,7 +124,10 @@ export function PostActions({
     const result = next
       ? await supabase
           .from("likes")
-          .upsert({ user_id: user.id, target_type: targetType, target_id: targetId }, { onConflict: "user_id,target_type,target_id" })
+          .upsert(
+            { user_id: user.id, target_type: targetType, target_id: targetId },
+            { onConflict: "user_id,target_type,target_id" },
+          )
           .select("target_id")
           .single()
       : await supabase
@@ -101,13 +140,13 @@ export function PostActions({
 
     const deleteFailed = !next && (!Array.isArray(result.data) || result.data.length !== 1);
     if (result.error || deleteFailed) {
-      setLiked(previousLiked);
-      setLikes(previousLikes);
+      queryClient.setQueryData(interactionKey, previous);
       showToast(next ? "いいねできませんでした" : "いいねを解除できませんでした");
+      return;
     }
-    setBusy(false);
-  }
 
+    queryClient.setQueryData(interactionKey, { ...optimistic, busy: false });
+  }
   return (
     <>
       <div className="flex select-none items-center gap-5 pt-1">

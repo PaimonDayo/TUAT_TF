@@ -79,6 +79,24 @@ export function ProfileEditForm({
   async function signOut() {
     setSigningOut(true);
     const supabase = createClient();
+    try {
+      if ("serviceWorker" in navigator && "PushManager" in window) {
+        const registration = await navigator.serviceWorker.getRegistration();
+        const subscription = await registration?.pushManager.getSubscription();
+        if (subscription) {
+          const endpoint = subscription.endpoint;
+          const { error: deleteError } = await supabase
+            .from("push_subscriptions")
+            .delete()
+            .eq("endpoint", endpoint)
+            .eq("user_id", profile.id);
+          if (deleteError) throw deleteError;
+          await subscription.unsubscribe();
+        }
+      }
+    } catch (pushCleanupError) {
+      console.error("Failed to remove push subscription during sign out", pushCleanupError);
+    }
     await clearPersistedQueries();
     await supabase.auth.signOut();
     window.location.assign("/login");

@@ -168,10 +168,10 @@ export function MenuSheetImportManager() {
         menu_status: status,
         menu_target_block: row.targetBlock,
         target_user_ids: [],
-        target_menu_id: row.existingMenuId,
-        menu_pace: row.pace,
-        menu_remark: row.remark,
-        menu_supplement: row.supplement,
+        target_menu_id: row.existingMenuId ?? undefined,
+        menu_pace: row.pace ?? undefined,
+        menu_remark: row.remark ?? undefined,
+        menu_supplement: row.supplement ?? undefined,
       });
       if (saveError) failedRowNumbers.add(row.rowNumber);
     }

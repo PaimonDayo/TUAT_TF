@@ -31,8 +31,8 @@ export default function SplashIntro() {
       playedThisLaunch ||
       window.matchMedia("(prefers-reduced-motion: reduce)").matches
     ) {
-      setDone(true);
-      return;
+      const doneTimer = window.setTimeout(() => setDone(true), 0);
+      return () => window.clearTimeout(doneTimer);
     }
 
     // Record immediately so reloading during this PWA launch does not restart it.
@@ -57,10 +57,13 @@ export default function SplashIntro() {
   }, [router]);
 
   if (done) return null;
+  function skipIntro() {
+    setDone(true);
+  }
+
 
   return (
     <div
-      aria-hidden="true"
       className={`${styles.overlay} ${exiting ? styles.exiting : ""} tuat-splash-root`}
       style={{
         position: "fixed",
@@ -71,7 +74,14 @@ export default function SplashIntro() {
         background: exiting ? "transparent" : "#f5f4ee",
       }}
     >
-      <main className={styles.stage} style={{ width: "100%", height: "100%", background: "#f5f4ee" }}>
+      <button
+        type="button"
+        onClick={skipIntro}
+        className="absolute right-4 top-[calc(env(safe-area-inset-top)+12px)] z-20 min-h-11 rounded-full bg-black/40 px-4 text-[13px] font-semibold text-white"
+      >
+        {"\u30b9\u30ad\u30c3\u30d7"}
+      </button>
+      <main aria-hidden="true" onClick={skipIntro} className={styles.stage} style={{ width: "100%", height: "100%", background: "#f5f4ee" }}>
         <section className={`${styles.scene} ${styles.film}`} />
         <section className={`${styles.scene} ${styles.center}`}>
           <div className={styles.wordRow}>

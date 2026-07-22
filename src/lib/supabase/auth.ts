@@ -2,6 +2,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole, Profile } from "@/types";
+import { normalizeProfileRow } from "@/lib/profile-normalize";
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>;
 
@@ -24,12 +25,15 @@ export const getCurrentProfile = cache(async (): Promise<Profile> => {
 
   // ロール取得とは切り離してプロフィール本体を取得する。
   // （roles テーブル未適用などでロール取得に失敗しても、名前等は表示できるように）
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .maybeSingle();
 
+  if (profileError) {
+    throw new Error(`Failed to load current profile: ${profileError.message}`);
+  }
   // トリガー未作成等で行が無い場合の保険
   if (!profile) {
     return {
@@ -58,7 +62,7 @@ export const getCurrentProfile = cache(async (): Promise<Profile> => {
   }
 
   const rolesMap = await fetchRolesByProfileIds(supabase, [user.id]);
-  return { ...profile, roles: rolesMap.get(user.id) ?? [] } as Profile;
+  return normalizeProfileRow(profile, rolesMap.get(user.id) ?? []);
 });
 
 /**
@@ -85,7 +89,7 @@ export async function fetchRolesByProfileIds(
   const globalRoles = (everyoneRoles ?? []) as AppRole[];
   for (const id of ids) map.set(id, [...globalRoles]);
 
-  for (const row of data as unknown as { profile_id: string; role: AppRole | null }[]) {
+  for (const row of data) {
     if (!row.role || row.role.is_everyone) continue;
     const arr = map.get(row.profile_id) ?? [];
     arr.push(row.role);

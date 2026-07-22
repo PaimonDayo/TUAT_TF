@@ -258,7 +258,18 @@ function MenuEditor({
       .order("created_at", { ascending: false })
       .limit(30)
       .then(({ data }) => {
-        if (active) setHistory((data ?? []) as unknown as HistoryMenu[]);
+        if (!active) return;
+        const normalized: HistoryMenu[] = (data ?? []).flatMap((row) => {
+          const targetBlock =
+            row.target_block === "middle_long" ||
+            row.target_block === "short" ||
+            row.target_block === "jump" ||
+            row.target_block === "throw"
+              ? row.target_block
+              : null;
+          return [{ ...row, target_block: targetBlock }];
+        });
+        setHistory(normalized);
       });
     return () => {
       active = false;
@@ -325,13 +336,13 @@ function MenuEditor({
       // 個別メニューにもブロックを持たせる（同ブロックの部員が閲覧できるように）
       menu_target_block: targetBlock,
       target_user_ids: kind === "people" ? targetIds : [],
-      target_menu_id: menu?.id ?? null,
-      menu_pace: targetBlock === "middle_long" ? pace.trim() || null : null,
+      target_menu_id: menu?.id ?? undefined,
+      menu_pace: targetBlock === "middle_long" ? pace.trim() || undefined : undefined,
       menu_remark:
         targetBlock === "middle_long" || targetBlock === "short"
-          ? remark.trim() || null
-          : null,
-      menu_supplement: targetBlock === "middle_long" ? supplement.trim() || null : null,
+          ? remark.trim() || undefined
+          : undefined,
+      menu_supplement: targetBlock === "middle_long" ? supplement.trim() || undefined : undefined,
     });
 
     if (saveError) {

@@ -31,7 +31,7 @@ export function InstallPrompt() {
 
     const standalone =
       window.matchMedia("(display-mode: standalone)").matches ||
-      (window.navigator as unknown as { standalone?: boolean }).standalone === true;
+      (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
     if (standalone) return;
 
     const dismissedAt = Number(localStorage.getItem(DISMISS_KEY) || 0);

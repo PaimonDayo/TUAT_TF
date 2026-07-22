@@ -143,7 +143,7 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
     const draft = menuDrafts[date]; if (!hasMenuValue(draft)) return true;
     setRowStates((current) => ({ ...current, [stateKey("menu", date)]: "saving" }));
     const schedule = await ensureSchedule(date); if (!schedule) { setRowStates((current) => ({ ...current, [stateKey("menu", date)]: "error" })); return false; }
-    const { data, error: saveError } = await createClient().rpc("save_practice_menu", { target_schedule_id: schedule.id, menu_content: draft.content.trim(), menu_status: status, menu_target_block: block, target_user_ids: targetIds, target_menu_id: draft.id ?? null, menu_pace: draft.pace.trim() || null, menu_remark: draft.remark.trim() || null, menu_supplement: targetIds.length === 0 ? draft.supplement.trim() || null : null });
+    const { data, error: saveError } = await createClient().rpc("save_practice_menu", { target_schedule_id: schedule.id, menu_content: draft.content.trim(), menu_status: status, menu_target_block: block, target_user_ids: targetIds, target_menu_id: draft.id ?? undefined, menu_pace: draft.pace.trim() || undefined, menu_remark: draft.remark.trim() || undefined, menu_supplement: targetIds.length === 0 ? draft.supplement.trim() || undefined : undefined });
     if (saveError) { setRowStates((current) => ({ ...current, [stateKey("menu", date)]: "error" })); return false; }
     setMenuDrafts((current) => ({ ...current, [date]: { ...current[date], id: data as string } })); setRowStates((current) => ({ ...current, [stateKey("menu", date)]: "saved" })); return true;
   }

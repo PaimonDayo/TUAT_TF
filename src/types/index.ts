@@ -65,7 +65,7 @@ export interface Profile {
   /** 付与されているロール一覧（複数可） */
   roles: AppRole[];
   status: ProfileStatus;
-  /** 旧・利用承認フラグ（承認ゲートは廃止済みで常にtrue。列は互換のため残置） */
+  /** 大学ドメイン認証済みユーザーは自動承認。列は互換性のため保持。 */
   approved: boolean;
   notify_comment: boolean;
   notify_notice: boolean;
@@ -496,8 +496,8 @@ export type FeedItem =
   | ({ kind: "record" } & RecordWithAuthor)
   | ({ kind: "tweet" } & TweetWithAuthor);
 
-export type NotificationType = "comment" | "notice";
-export type NotificationReferenceType = "record" | "tweet" | "notice";
+export type NotificationType = "comment" | "notice" | "schedule_update" | "sync_failure" | "thread_reply";
+export type NotificationReferenceType = "record" | "tweet" | "schedule" | "notice" | "thread";
 
 export interface AppNotification {
   id: string;

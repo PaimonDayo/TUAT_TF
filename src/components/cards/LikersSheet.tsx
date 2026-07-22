@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { normalizeAuthorRow } from "@/lib/profile-normalize";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Avatar } from "@/components/common/Avatar";
 import { gradeShort } from "@/lib/constants";
@@ -44,9 +45,9 @@ export function LikersSheet({
       .order("created_at", { ascending: false })
       .then(({ data }) => {
         if (!active) return;
-        const list = ((data ?? []) as unknown as { profiles: Liker | null }[])
-          .map((row) => row.profiles)
-          .filter((p): p is Liker => Boolean(p));
+        const list = (data ?? []).flatMap((row) =>
+          row.profiles ? [normalizeAuthorRow(row.profiles)] : []
+        );
         setLikers(list);
       });
     return () => {

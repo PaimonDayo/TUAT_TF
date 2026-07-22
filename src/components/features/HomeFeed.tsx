@@ -38,7 +38,20 @@ export function HomeFeed({
         // カードのどこをタップしても開閉する（もう一度タップで閉じる）。
         // いいね・コメント・⋯・名前リンクはカード側で伝播を止めてあるので誤爆しない。
         return (
-          <div key={key} onClick={() => toggleExpanded(key)} className="cursor-pointer">
+          <div
+            key={key}
+            role="button"
+            tabIndex={0}
+            aria-label={"\u6295\u7a3f\u306e\u8a73\u7d30\u3092\u958b\u9589"}
+            onClick={() => toggleExpanded(key)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                toggleExpanded(key);
+              }
+            }}
+            className="cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
             {card}
           </div>
         );

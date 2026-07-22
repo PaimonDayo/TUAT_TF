@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Toggle } from "@/components/ui/toggle";
+import { useToast } from "@/components/ui/toast";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { createClient } from "@/lib/supabase/client";
 
@@ -29,6 +30,7 @@ export function NotificationSettings({
   initialComment: boolean;
   initialNotice: boolean;
 }) {
+  const { showToast } = useToast();
   const [comment, setComment] = useState(initialComment);
   const [notice, setNotice] = useState(initialNotice);
   
@@ -46,7 +48,7 @@ export function NotificationSettings({
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setPushStatus(Notification.permission);
       
-      navigator.serviceWorker.register('/sw.js').then(reg => {
+      navigator.serviceWorker.ready.then(reg => {
         reg.pushManager.getSubscription().then(sub => {
           setIsSubscribed(!!sub);
         });
@@ -64,7 +66,7 @@ export function NotificationSettings({
     const result = await safeUpdate(supabase, "profiles", { [field]: value }, { id: profileId });
     if (!result.ok) {
       setter(!value);
-      alert(safeUpdateMessage(result.reason));
+      showToast(safeUpdateMessage(result.reason));
     }
   };
 
@@ -77,14 +79,14 @@ export function NotificationSettings({
         if (permission !== 'granted') return;
       }
       if (pushStatus === 'denied') {
-        alert('ブラウザの設定から通知を許可してください');
+        showToast('ブラウザの設定から通知を許可してください');
         return;
       }
       
       const reg = await navigator.serviceWorker.ready;
       const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
       if (!vapidPublicKey) {
-        alert('VAPID公開鍵が設定されていません');
+        showToast('VAPID公開鍵が設定されていません');
         return;
       }
 
@@ -95,16 +97,18 @@ export function NotificationSettings({
 
       const subData = subscription.toJSON();
       
-      const { error } = await supabase.from('push_subscriptions').insert({
-        user_id: profileId,
-        endpoint: subData.endpoint,
-        p256dh: subData.keys?.p256dh,
-        auth: subData.keys?.auth
+      if (!subData.endpoint || !subData.keys?.p256dh || !subData.keys?.auth) {
+        throw new Error("Invalid push subscription");
+      }
+      const { error } = await supabase.rpc('register_push_subscription', {
+        subscription_endpoint: subData.endpoint,
+        subscription_p256dh: subData.keys.p256dh,
+        subscription_auth: subData.keys.auth,
       });
 
-      if (error && error.code !== '23505') {
+      if (error) {
         console.error(error);
-        alert('登録に失敗しました');
+        showToast('登録に失敗しました');
         return;
       }
       
@@ -112,7 +116,7 @@ export function NotificationSettings({
       setPushStatus('granted');
     } catch (e) {
       console.error(e);
-      alert('エラーが発生しました');
+      showToast('エラーが発生しました');
     } finally {
       setIsProcessing(false);
     }
@@ -133,7 +137,7 @@ export function NotificationSettings({
       setIsSubscribed(false);
     } catch (e) {
       console.error(e);
-      alert('解除に失敗しました');
+      showToast('解除に失敗しました');
     } finally {
       setIsProcessing(false);
     }
@@ -178,7 +182,7 @@ export function NotificationSettings({
               <p className="text-micro text-muted2">受け取る種類</p>
               <Toggle
                 label="コメント"
-                description="自分の投稿にコメントがついたとき"
+                description="投稿へのコメントや参加中スレッドへの返信"
                 checked={comment}
                 onChange={() => handleChange("notify_comment", !comment, setComment)}
               />

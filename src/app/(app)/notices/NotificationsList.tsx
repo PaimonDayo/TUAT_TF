@@ -31,6 +31,12 @@ export function NotificationsList({
         return `${actorName}さんがあなたの投稿にコメントしました`;
       case "notice":
         return `${actorName}さんがお知らせを投稿しました`;
+      case "schedule_update":
+        return "予定が更新されました";
+      case "sync_failure":
+        return "練習記録の同期が3回連続で失敗しています";
+      case "thread_reply":
+        return `${actorName}さんがスレッドに返信しました`;
       default:
         return "新しい通知があります";
     }
@@ -44,6 +50,10 @@ export function NotificationsList({
         return `/timeline#${n.reference_type}-${n.reference_id}`;
       case "notice":
         return `/notices#notice-${n.reference_id}`;
+      case "schedule":
+        return "/schedule";
+      case "thread":
+        return `/notes/threads/${n.reference_id}`;
       default:
         return null;
     }

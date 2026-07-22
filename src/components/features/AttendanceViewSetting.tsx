@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Toggle } from "@/components/ui/toggle";
+import { useToast } from "@/components/ui/toast";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { createClient } from "@/lib/supabase/client";
 
 export function AttendanceViewSetting({ userId, initial }: { userId: string; initial: boolean }) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [on, setOn] = useState(initial);
   const [busy, setBusy] = useState(false);
 
@@ -25,7 +27,7 @@ export function AttendanceViewSetting({ userId, initial }: { userId: string; ini
     setBusy(false);
     if (!result.ok) {
       setOn(!next);
-      alert(safeUpdateMessage(result.reason));
+      showToast(safeUpdateMessage(result.reason));
       return;
     }
     router.refresh();

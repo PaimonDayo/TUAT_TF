@@ -5,7 +5,6 @@ import { ja } from "date-fns/locale";
 import { ChevronRight, Folder } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { HomeSkeleton } from "@/components/ui/page-skeletons";
 import { HomeFeed } from "@/components/features/HomeFeed";
 import { HomeNotices } from "@/components/features/HomeNotices";
@@ -213,28 +212,5 @@ function SectionHeading({ title, href }: { title: string; href: string }) {
         すべて見る <ChevronRight size={15} />
       </Link>
     </div>
-  );
-}
-
-function SummarySkeleton() {
-  return (
-    <section className="space-y-2">
-      <Skeleton className="h-3 w-36" />
-      <div className="grid grid-cols-2 gap-3">
-        <Skeleton className="h-24 rounded-2xl" />
-        <Skeleton className="h-24 rounded-2xl" />
-      </div>
-    </section>
-  );
-}
-
-function SectionSkeleton({ title, rows }: { title?: string; rows: number }) {
-  return (
-    <section className="space-y-2">
-      {title && <p className="section-label">{title}</p>}
-      {Array.from({ length: rows }, (_, index) => (
-        <Skeleton key={index} className="h-20 rounded-2xl" />
-      ))}
-    </section>
   );
 }

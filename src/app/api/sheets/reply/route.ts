@@ -18,6 +18,11 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const recordId = typeof body?.recordId === "string" ? body.recordId : "";
   const text = (body?.text ?? "").toString().trim();
+  const commentId =
+    typeof body?.commentId === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.commentId)
+      ? body.commentId
+      : undefined;
   if (!recordId || !text) {
     return NextResponse.json({ ok: false, error: "bad request" }, { status: 400 });
   }
@@ -52,7 +57,7 @@ export async function POST(request: Request) {
   const replyText = name ? `${text}　${name}` : text;
 
   try {
-    await writeSheetReply(author.sheet_name, rec.recorded_date, replyText);
+    await writeSheetReply(author.sheet_name, rec.recorded_date, replyText, commentId);
     return NextResponse.json({ ok: true });
   } catch (err) {
     return NextResponse.json(

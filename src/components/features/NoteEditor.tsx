@@ -260,7 +260,7 @@ export function NoteEditor({
           <SegmentedControl
             items={[
               { key: "shared", label: "共有" },
-              { key: "personal", label: "個人" },
+              { key: "personal", label: "個人作成" },
             ]}
             value={scope}
             onChange={(value) => {
@@ -268,7 +268,11 @@ export function NoteEditor({
               // 種類を切り替えたら移動先は一旦ルートへ（別scopeの親に残さない）
               if (note) setParentIdValue(null);
             }}
-          />
+          />          {scope === "personal" && (
+            <p className="mt-1.5 text-micro text-muted2">
+              個人作成でも「公開」にすると、プロフィール経由で全部員が閲覧できます。
+            </p>
+          )}
         </div>
       )}
 
