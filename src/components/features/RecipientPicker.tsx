@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { Check, Users } from "lucide-react";
 import { PersonPicker } from "@/components/features/PersonPicker";
 import { Disclosure } from "@/components/ui/disclosure";
-import { BLOCK_ORDER, BLOCKS, GRADE_OPTIONS } from "@/lib/constants";
+import { BLOCKS, EDITABLE_BLOCK_ORDER, GRADE_OPTIONS, matchSimpleBlock } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { AppRole, AuthorMini, Block } from "@/types";
 
@@ -15,7 +15,7 @@ export function RecipientPicker({ people, roles, roleAssignments, all, roleIds, 
   onAllChange: (value: boolean) => void; onRoleIdsChange: (ids: string[]) => void; onPersonIdsChange: (ids: string[]) => void; onBlocksChange: (blocks: Block[]) => void; onGradesChange: (grades: string[]) => void;
 }) {
   function toggleRole(id: string) { onRoleIdsChange(roleIds.includes(id) ? roleIds.filter((item) => item !== id) : [...roleIds, id]); }
-  const conditionSelectedIds = useMemo(() => people.filter((person) => all || (person.blocks ?? []).some((block) => blocks.includes(block)) || grades.includes(person.grade ?? "") || roleAssignments.some((assignment) => assignment.profile_id === person.id && roleIds.includes(assignment.role_id))).map((person) => person.id), [all, blocks, grades, people, roleAssignments, roleIds]);
+  const conditionSelectedIds = useMemo(() => people.filter((person) => all || blocks.some((block) => matchSimpleBlock(person.blocks, block)) || grades.includes(person.grade ?? "") || roleAssignments.some((assignment) => assignment.profile_id === person.id && roleIds.includes(assignment.role_id))).map((person) => person.id), [all, blocks, grades, people, roleAssignments, roleIds]);
   const uniqueRecipientCount = new Set([...conditionSelectedIds, ...personIds]).size;
   const availableGrades = useMemo(() => { const present = new Set(people.map((person) => person.grade).filter((grade): grade is string => Boolean(grade))); return GRADE_OPTIONS.filter((grade) => present.has(grade.value)); }, [people]);
 
@@ -26,7 +26,7 @@ export function RecipientPicker({ people, roles, roleAssignments, all, roleIds, 
       <div className="space-y-1">{roles.filter((role) => !role.is_everyone).map((role) => { const active = roleIds.includes(role.id); return <button key={role.id} type="button" onClick={() => toggleRole(role.id)} className={cn("flex min-h-11 w-full items-center gap-3 rounded-xl px-2 text-left", active ? "bg-accent/10" : "active:bg-bg")}><span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/10 text-accent"><Users size={15} /></span><span className="flex-1 text-sm font-semibold">{role.name}</span>{active && <Check size={18} className="text-accent" />}</button>; })}</div>
     </Disclosure>
     <Disclosure title={<span>ブロック{blocks.length > 0 && <span className="ml-2 text-xs text-accent">{blocks.length}件</span>}</span>}>
-      <div className="space-y-1">{BLOCK_ORDER.map((block) => <FilterRow key={block} label={BLOCKS[block].label} checked={blocks.includes(block)} onClick={() => onBlocksChange(blocks.includes(block) ? blocks.filter((item) => item !== block) : [...blocks, block])} />)}</div>
+      <div className="space-y-1">{EDITABLE_BLOCK_ORDER.map((block) => <FilterRow key={block} label={BLOCKS[block].label} checked={blocks.includes(block)} onClick={() => onBlocksChange(blocks.includes(block) ? blocks.filter((item) => item !== block) : [...blocks, block])} />)}</div>
     </Disclosure>
     {availableGrades.length > 0 && <Disclosure title={<span>学年{grades.length > 0 && <span className="ml-2 text-xs text-accent">{grades.length}件</span>}</span>}>
       <div className="space-y-1">{availableGrades.map((grade) => <FilterRow key={grade.value} label={grade.short} checked={grades.includes(grade.value)} onClick={() => onGradesChange(grades.includes(grade.value) ? grades.filter((item) => item !== grade.value) : [...grades, grade.value])} />)}</div>

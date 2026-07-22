@@ -2,7 +2,7 @@
 
 import { Check, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { BLOCK_ORDER, BLOCKS, GRADE_OPTIONS } from "@/lib/constants";
+import { BLOCKS, EDITABLE_BLOCK_ORDER, GRADE_OPTIONS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { Block } from "@/types";
 import { useState } from "react";
@@ -18,7 +18,7 @@ export function PeopleFilterButton({ blocks, grades, onBlocksChange, onGradesCha
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetContent title="部員を絞り込み" autoFocus={false}>
         <div className="space-y-5 pb-5">
-          <section><p className="section-label mb-2">ブロック（複数選択可）</p><div className="space-y-1">{BLOCK_ORDER.map((block) => <FilterRow key={block} label={BLOCKS[block].label} checked={blocks.includes(block)} onClick={() => onBlocksChange(blocks.includes(block) ? blocks.filter((item) => item !== block) : [...blocks, block])} />)}</div></section>
+          <section><p className="section-label mb-2">ブロック（複数選択可）</p><div className="space-y-1">{EDITABLE_BLOCK_ORDER.map((block) => <FilterRow key={block} label={BLOCKS[block].label} checked={blocks.includes(block)} onClick={() => onBlocksChange(blocks.includes(block) ? blocks.filter((item) => item !== block) : [...blocks, block])} />)}</div></section>
           {gradeOptions.length > 0 && <section><p className="section-label mb-2">学年（複数選択可）</p><div className="space-y-1">{gradeOptions.map((grade) => <FilterRow key={grade.value} label={grade.short} checked={grades.includes(grade.value)} onClick={() => onGradesChange(grades.includes(grade.value) ? grades.filter((item) => item !== grade.value) : [...grades, grade.value])} />)}</div></section>}
           <button type="button" onClick={() => { onBlocksChange([]); onGradesChange([]); }} className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted"><RotateCcw size={15} />絞り込みを解除</button>
         </div>

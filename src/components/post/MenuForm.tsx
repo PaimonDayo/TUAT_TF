@@ -18,7 +18,7 @@ import { createClient } from "@/lib/supabase/client";
 import { jstToday } from "@/lib/date";
 import { MenuSheetImportManager } from "@/components/features/MenuSheetImportManager";
 import { PersonPicker } from "@/components/features/PersonPicker";
-import { BLOCK_ORDER, BLOCKS } from "@/lib/constants";
+import { BLOCKS, EDITABLE_BLOCK_ORDER, normalizeBlock } from "@/lib/constants";
 import type {
   AuthorMini,
   Block,
@@ -165,7 +165,7 @@ function MenuEditor({
     return readLastMenuKind();
   });
   const [targetBlock, setTargetBlock] = useState<Block>(
-    menu?.target_block ?? "middle_long",
+    menu?.target_block ? normalizeBlock(menu.target_block) : "middle_long",
   );
   const [targetIds, setTargetIds] = useState<string[]>(initialTargetIds);
   const [content, setContent] = useState(menu?.content ?? "");
@@ -265,7 +265,7 @@ function MenuEditor({
             row.target_block === "short" ||
             row.target_block === "jump" ||
             row.target_block === "throw"
-              ? row.target_block
+              ? normalizeBlock(row.target_block)
               : null;
           return [{ ...row, target_block: targetBlock }];
         });
@@ -412,7 +412,7 @@ function MenuEditor({
         <div>
           <p className="section-label mb-1.5">ブロック</p>
           <div className="grid grid-cols-2 gap-2">
-            {BLOCK_ORDER.map((block) => {
+            {EDITABLE_BLOCK_ORDER.map((block) => {
               const meta = BLOCKS[block];
               const active = targetBlock === block;
               return (
@@ -439,7 +439,7 @@ function MenuEditor({
             <p className="section-label mb-1.5">ブロック</p>
             <p className="text-micro mb-1.5">同じブロックの部員もこの個別メニューを閲覧できます。</p>
             <div className="grid grid-cols-2 gap-2">
-              {BLOCK_ORDER.map((block) => {
+              {EDITABLE_BLOCK_ORDER.map((block) => {
                 const meta = BLOCKS[block];
                 const active = targetBlock === block;
                 return (

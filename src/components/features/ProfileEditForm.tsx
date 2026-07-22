@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { FormModalFooter } from "@/components/ui/form-modal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar } from "@/components/common/Avatar";
-import { BLOCK_ORDER, BLOCKS, EVENTS_BY_BLOCK, GRADE_OPTIONS } from "@/lib/constants";
+import { BLOCKS, EVENTS_BY_BLOCK, GRADE_OPTIONS, PROFILE_BLOCK_ORDER, normalizeProfileBlocks } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { Block, Profile } from "@/types";
 
@@ -38,7 +38,7 @@ export function ProfileEditForm({
 }) {
   const router = useRouter();
   const [name, setName] = useState(profile.display_name ?? "");
-  const [blocks, setBlocks] = useState<Block[]>(profile.blocks ?? []);
+  const [blocks, setBlocks] = useState<Block[]>(normalizeProfileBlocks(profile.blocks));
   const [events, setEvents] = useState<string[]>(profile.events ?? []);
   const [grade, setGrade] = useState<string | null>(profile.grade);
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url ?? "");
@@ -111,8 +111,10 @@ export function ProfileEditForm({
   }
 
   // 選択中ブロックに対応する種目だけ出す（重複排除・ブロック順）
-  const eventOptions = BLOCK_ORDER.filter((b) => blocks.includes(b)).flatMap(
-    (b) => EVENTS_BY_BLOCK[b],
+  const eventOptions = PROFILE_BLOCK_ORDER.filter((b) => blocks.includes(b)).flatMap(
+    (b) => b === "short"
+      ? [...EVENTS_BY_BLOCK.short, ...EVENTS_BY_BLOCK.jump, ...EVENTS_BY_BLOCK.throw]
+      : EVENTS_BY_BLOCK[b],
   );
 
   async function save() {
@@ -152,7 +154,7 @@ export function ProfileEditForm({
       "profiles",
       {
         display_name: name.trim(),
-        blocks,
+        blocks: normalizeProfileBlocks(blocks),
         // 選択ブロックに無い種目は保存しない（ブロックを外したら自動で外れる）
         events: events.filter((ev) => eventOptions.includes(ev)),
         grade,
@@ -210,7 +212,7 @@ export function ProfileEditForm({
       <div>
         <p className="section-label mb-1.5">ブロック（複数選択可）</p>
         <div className="grid grid-cols-2 gap-2">
-          {BLOCK_ORDER.map((b) => {
+          {PROFILE_BLOCK_ORDER.map((b) => {
             const meta = BLOCKS[b];
             const active = blocks.includes(b);
             return (

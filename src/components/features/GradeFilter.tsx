@@ -51,7 +51,9 @@ export function GradeFilter({
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent title="学年でしぼり込み">
           <div className="max-h-[60vh] overflow-y-auto pb-4">
-            <Row label="すべて" checked={value.length === 0} onClick={() => onChange([])} />
+            <p className="px-1 pb-3 text-micro">
+              {"\u672a\u9078\u629e\u306e\u5834\u5408\u306f\u3059\u3079\u3066\u8868\u793a\u3057\u307e\u3059"}
+            </p>
             {options.map((g) => (
               <Row
                 key={g.value}

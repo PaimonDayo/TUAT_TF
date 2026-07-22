@@ -33,5 +33,5 @@ export function AttendanceViewSetting({ userId, initial }: { userId: string; ini
     router.refresh();
   }
 
-  return <Toggle label="他ブロックの出欠も表示" checked={on} onChange={toggle} />;
+  return <Toggle label={"\u51fa\u6b20\u3092\u958b\u3044\u305f\u3068\u304d\u5168\u4f53\u3092\u8868\u793a"} checked={on} onChange={toggle} />;
 }

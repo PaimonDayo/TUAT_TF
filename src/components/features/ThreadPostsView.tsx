@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
@@ -34,6 +34,7 @@ export function ThreadPostsView({
   const { showToast } = useToast();
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [visiblePosts, setVisiblePosts] = useState(posts);
   async function send() {
@@ -48,6 +49,7 @@ export function ThreadPostsView({
     }]);
     setBody("");
 
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
     setSending(true);
     const { data, error } = await createClient()
       .from("thread_posts")
@@ -65,6 +67,11 @@ export function ThreadPostsView({
     router.refresh();
   }
 
+  function resizeComposer(textarea: HTMLTextAreaElement) {
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 128)}px`;
+  }
+
   async function removePost(id: string) {
     const { error } = await createClient().from("thread_posts").delete().eq("id", id);
     if (error) {
@@ -76,7 +83,7 @@ export function ThreadPostsView({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-20">
       {visiblePosts.length === 0 ? (
         <EmptyState title="まだ投稿がありません" description="最初のひとことを書いてみましょう。" />
       ) : (
@@ -112,19 +119,39 @@ export function ThreadPostsView({
         </div>
       )}
 
-      <div className="space-y-2" data-no-pull-refresh>
-        <Textarea
-          value={body}
-          onChange={(event) => setBody(event.target.value)}
-          maxLength={2000}
-          rows={3}
-          placeholder="返信を書く"
-        />
-        <Button type="button" className="w-full" disabled={!body.trim() || sending} onClick={send}>
-          <Send size={16} />
-          投稿する
-        </Button>
-      </div>
+      <form
+        className="fixed inset-x-0 bottom-[calc(52px+env(safe-area-inset-bottom))] z-30 mx-auto w-full max-w-md border-t border-separator bg-bg/90 px-3 py-2 backdrop-blur-xl"
+        data-no-pull-refresh
+        onSubmit={(event) => {
+          event.preventDefault();
+          void send();
+        }}
+      >
+        <div className="flex items-end gap-2">
+          <Textarea
+            ref={textareaRef}
+            value={body}
+            onChange={(event) => {
+              setBody(event.target.value);
+              resizeComposer(event.currentTarget);
+            }}
+            maxLength={2000}
+            rows={1}
+            placeholder="返信を書く"
+            aria-label="返信を書く"
+            className="min-h-11 max-h-32 flex-1 overflow-y-auto rounded-[22px] bg-card px-4 py-2.5 leading-6"
+          />
+          <Button
+            type="submit"
+            size="icon"
+            className="h-11 w-11 shrink-0 rounded-full"
+            disabled={!body.trim() || sending}
+            aria-label="返信を送信"
+          >
+            <Send size={18} />
+          </Button>
+        </div>
+      </form>
     </div>
   );
 }

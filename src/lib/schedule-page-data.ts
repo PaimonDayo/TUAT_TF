@@ -30,11 +30,6 @@ export async function getSchedulePageData(): Promise<SchedulePageData> {
   const myLateNoteBySchedule: Record<string, string | null> = {};
   for (const schedule of schedules) {
     for (const attendee of schedule.attendances ?? []) {
-      if (
-        attendee.user_id !== profile.id &&
-        !profile.attendance_view_all_blocks &&
-        !attendee.profile.blocks?.some((block) => profile.blocks.includes(block))
-      ) continue;
       (attendeesBySchedule[attendee.schedule_id] ??= []).push(attendee);
       if (attendee.user_id === profile.id) {
         myStatusBySchedule[attendee.schedule_id] = attendee.status;

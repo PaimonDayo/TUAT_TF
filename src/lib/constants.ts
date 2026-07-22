@@ -13,6 +13,37 @@ export const BLOCKS: Record<
 
 export const BLOCK_ORDER: Block[] = ["middle_long", "short", "jump", "throw"];
 
+/** Blocks that can be selected in profile editing. Jump and throw are legacy values. */
+export const EDITABLE_BLOCK_ORDER: Block[] = ["middle_long", "short"];
+export const PROFILE_BLOCK_ORDER = EDITABLE_BLOCK_ORDER;
+
+export type SimpleBlock = "middle_long" | "short";
+
+/** Convert one legacy membership to the active short-distance block. */
+export function normalizeBlock(block: Block): SimpleBlock {
+  return block === "jump" || block === "throw" ? "short" : block;
+}
+
+/** Treat legacy jump/throw memberships as short-distance membership. */
+export function normalizeProfileBlocks(
+  blocks: Block[] | undefined | null,
+): Block[] {
+  const normalized = (blocks ?? []).map(normalizeBlock);
+  return Array.from(new Set(normalized));
+}
+
+/** One stable attendance group per member, based on the first membership. */
+export function primarySimpleBlock(
+  blocks: Block[] | undefined | null,
+): SimpleBlock | null {
+  const primary = blocks?.[0];
+  if (primary === "middle_long") return "middle_long";
+  if (primary === "short" || primary === "jump" || primary === "throw") {
+    return "short";
+  }
+  return null;
+}
+
 /** 専門種目の選択肢（ブロック別）。プロフィールの「専門種目」入力に使う。 */
 export const EVENTS_BY_BLOCK: Record<Block, string[]> = {
   middle_long: [
@@ -41,7 +72,9 @@ export const EVENTS_BY_BLOCK: Record<Block, string[]> = {
 };
 
 /** 簡素化したブロック絞り込み（中長 / 短。跳躍・投擲は「短」に含める） */
-export const SIMPLE_BLOCK_ITEMS: { key: string; label: string }[] = [
+export type SimpleBlockFilter = "all" | SimpleBlock;
+
+export const SIMPLE_BLOCK_ITEMS: { key: SimpleBlockFilter; label: string }[] = [
   { key: "all", label: "全体" },
   { key: "middle_long", label: "中長距離" },
   { key: "short", label: "短距離" },

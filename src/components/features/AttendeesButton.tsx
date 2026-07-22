@@ -4,14 +4,15 @@ import { useState } from "react";
 import { Users } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Avatar } from "@/components/common/Avatar";
-import { BLOCKS, BLOCK_ORDER, GRADE_OPTIONS, gradeShort } from "@/lib/constants";
+import { SegmentedControl } from "@/components/ui/segmented";
+import { BLOCKS, GRADE_OPTIONS, PROFILE_BLOCK_ORDER, SIMPLE_BLOCK_ITEMS, gradeShort, matchSimpleBlock, primarySimpleBlock } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { Attendee, Block } from "@/types";
 
 /** 所属ブロック→学年→名前の順に並べる（見やすさのため） */
 function sortAttendees(list: Attendee[]): Attendee[] {
   const blockIdx = (a: Attendee) => {
-    const i = BLOCK_ORDER.indexOf(a.profile.blocks?.[0]);
+    const i = PROFILE_BLOCK_ORDER.indexOf(primarySimpleBlock(a.profile.blocks) ?? "short");
     return i < 0 ? 99 : i;
   };
   const gradeIdx = (a: Attendee) => {
@@ -37,11 +38,12 @@ export function AttendeesButton({
   showAllBlocks?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const visible = showAllBlocks
-    ? attendees
-    : attendees.filter((attendee) =>
-        attendee.profile.blocks?.some((block) => viewerBlocks.includes(block)),
-      );
+  const [block, setBlock] = useState<"all" | "middle_long" | "short">(
+    showAllBlocks ? "all" : primarySimpleBlock(viewerBlocks) ?? "all",
+  );
+  const visible = attendees.filter((attendee) =>
+    matchSimpleBlock(attendee.profile.blocks, block),
+  );
   const present = sortAttendees(visible.filter((a) => a.status === "present"));
   const absent = sortAttendees(visible.filter((a) => a.status === "absent"));
 
@@ -66,9 +68,12 @@ export function AttendeesButton({
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent title="出欠">
+          <div className="pb-3">
+            <SegmentedControl items={SIMPLE_BLOCK_ITEMS} value={block} onChange={setBlock} />
+          </div>
           <div className="pb-4 space-y-4 max-h-[60vh] overflow-y-auto">
-            <Group title={`出席 ${present.length}`} color="#34c759" list={present} />
-            {absent.length > 0 && <Group title={`欠席 ${absent.length}`} color="#ff3b30" list={absent} />}
+            <Group title={`出席 ${present.length}`} color="#34c759" list={present} selectedBlock={block} />
+            {absent.length > 0 && <Group title={`欠席 ${absent.length}`} color="#ff3b30" list={absent} selectedBlock={block} />}
             {visible.length === 0 && (
               <p className="text-caption text-center py-6">まだ誰も出欠を登録していません</p>
             )}
@@ -79,13 +84,16 @@ export function AttendeesButton({
   );
 }
 
-function Group({ title, color, list }: { title: string; color: string; list: Attendee[] }) {
+function Group({ title, color, list, selectedBlock }: { title: string; color: string; list: Attendee[]; selectedBlock: "all" | "middle_long" | "short" }) {
+  const blocks = selectedBlock === "all" ? PROFILE_BLOCK_ORDER : [selectedBlock];
   if (list.length === 0) return null;
   return (
     <div className="space-y-3">
       <p className="section-label" style={{ color }}>{title}</p>
-      {BLOCK_ORDER.map((block) => {
-        const blockMembers = list.filter((attendee) => attendee.profile.blocks?.[0] === block);
+      {blocks.map((block) => {
+        const blockMembers = selectedBlock === "all"
+          ? list.filter((attendee) => primarySimpleBlock(attendee.profile.blocks) === block)
+          : list;
         if (blockMembers.length === 0) return null;
         return (
           <div key={block} className="rounded-xl bg-bg/60 px-3 py-2">

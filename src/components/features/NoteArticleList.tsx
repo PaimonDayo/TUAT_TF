@@ -21,11 +21,13 @@ const LONG_BODY = 600;
 export function NoteArticleList({
   noteId,
   articles,
+  canShare = true,
   canEdit = false,
   currentUser,
 }: {
   noteId: string;
   articles: NoteArticleWithAuthor[];
+  canShare?: boolean;
   canEdit?: boolean;
   currentUser: AuthorMini;
 }) {
@@ -56,10 +58,12 @@ export function NoteArticleList({
                   </p>
                 </div>
               </button>
-              {canEdit && (
-                <div onClick={(e) => e.stopPropagation()}>
+              {(canEdit || canShare) && (
+                <div className="flex shrink-0 items-center" onClick={(e) => e.stopPropagation()}>
                   <NoteArticleActions
                     noteId={noteId}
+                    canEdit={canEdit}
+                    canShare={canShare}
                     article={article}
                     currentUser={currentUser}
                   />

@@ -11,14 +11,14 @@ import { SegmentedControl } from "@/components/ui/segmented";
 import { Select } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
 import { MENU_IMPORT_COLUMNS } from "@/lib/menu-import";
-import { BLOCK_ORDER, BLOCKS } from "@/lib/constants";
+import { BLOCKS, EDITABLE_BLOCK_ORDER } from "@/lib/constants";
 import type {
   Block,
   MenuImportEditableRow,
   MenuImportPreview,
 } from "@/types";
 
-const BLOCK_OPTIONS = BLOCK_ORDER.map((block) => ({
+const BLOCK_OPTIONS = EDITABLE_BLOCK_ORDER.map((block) => ({
   value: block,
   label: BLOCKS[block].label,
 }));

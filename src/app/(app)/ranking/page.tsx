@@ -10,7 +10,7 @@ export default async function RankingPage() {
 
   return (
     <>
-      <SubHeader title="ランキング" backHref="/home" />
+      <SubHeader title="走行距離ランキング" backHref="/mypage" />
       <div className="px-4 pb-3 space-y-2">
         <p className="text-body text-muted">直近7日間の走行距離 ・ 中長距離ブロック</p>
         <div className="flex flex-wrap gap-x-3 gap-y-0.5">

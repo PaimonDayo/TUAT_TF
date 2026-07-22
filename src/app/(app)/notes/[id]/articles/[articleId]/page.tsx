@@ -46,13 +46,13 @@ export default async function NoteArticlePage({
         title={note.title}
         backHref={`/notes/${note.id}`}
         right={
-          canEdit ? (
-            <NoteArticleActions
-              noteId={note.id}
-              article={article}
-              currentUser={currentUser}
-            />
-          ) : undefined
+          <NoteArticleActions
+            noteId={note.id}
+            article={article}
+            currentUser={currentUser}
+            canEdit={canEdit}
+            canShare={note.status === "published"}
+          />
         }
       />
       <article className="px-4 pt-1">

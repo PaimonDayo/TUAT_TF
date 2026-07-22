@@ -38,8 +38,6 @@ const BLOCK_OPTIONS: { value: ScheduleSheetBlock; label: string }[] = [
   { value: "all", label: "全体" },
   { value: "middle_long", label: "中長距離" },
   { value: "short", label: "短距離" },
-  { value: "jump", label: "跳躍" },
-  { value: "throw", label: "投擲" },
 ];
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];

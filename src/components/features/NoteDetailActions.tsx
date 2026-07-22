@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ShareButton } from "@/components/common/ShareButton";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { NoteEditor } from "@/components/features/NoteEditor";
 import { FormModal } from "@/components/ui/form-modal";
@@ -42,12 +43,22 @@ export function NoteDetailActions({
 
   return (
     <>
-      <ActionMenu
-        onEdit={canEdit ? () => setEditing(true) : undefined}
-        onDelete={canDelete ? remove : undefined}
+      {note.status === "published" && (
+        <ShareButton
+          title={note.title}
+          text={`${note.title}\uFF5C\u30ce\u30fc\u30c8`}
+          path={`/notes/${note.id}`}
+          label={"\u3053\u306e\u30ce\u30fc\u30c8\u3092\u5171\u6709\u3059\u308b"}
+        />
+      )}
+      {(canEdit || canDelete) && (
+        <ActionMenu
+          onEdit={canEdit ? () => setEditing(true) : undefined}
+          onDelete={canDelete ? remove : undefined}
         deleteTitle="ノートフォルダを削除しますか？"
         deleteDescription="フォルダ内のサブフォルダ・記事もすべて削除され、元に戻せません。"
-      />
+        />
+      )}
       {editing && (
         <FormModal
           open

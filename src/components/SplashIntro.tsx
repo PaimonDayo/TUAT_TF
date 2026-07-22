@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import styles from "./SplashIntro.module.css";
 
 const SESSION_KEY = "tuat-splash-played";
+const DISABLED_KEY = "tuat-splash-disabled";
 // 終了もシーン間と同じ「白フラッシュで明転」: flash-exit-in が 3.98s→4.28s で白ピークに
 // 達するので、ピークでステージを消してホームを白の下に出し、白を450msでフェードアウトする。
 const EXIT_PEAK_MS = 4280;
@@ -21,13 +22,16 @@ export default function SplashIntro() {
   const [exiting, setExiting] = useState(false);
 
   useEffect(() => {
+    let disabled = false;
     let playedThisLaunch = false;
     try {
       playedThisLaunch = sessionStorage.getItem(SESSION_KEY) === "1";
+      disabled = localStorage.getItem(DISABLED_KEY) === "1";
     } catch {
       // Storage may be unavailable in a restricted browser context.
     }
     if (
+      disabled ||
       playedThisLaunch ||
       window.matchMedia("(prefers-reduced-motion: reduce)").matches
     ) {
@@ -64,6 +68,11 @@ export default function SplashIntro() {
 
   return (
     <div
+      onClick={skipIntro}
+      onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") skipIntro(); }}
+      aria-label={"\u8d77\u52d5\u753b\u9762\u3092\u30b9\u30ad\u30c3\u30d7"}
+      role="button"
+      tabIndex={0}
       className={`${styles.overlay} ${exiting ? styles.exiting : ""} tuat-splash-root`}
       style={{
         position: "fixed",
@@ -74,14 +83,7 @@ export default function SplashIntro() {
         background: exiting ? "transparent" : "#f5f4ee",
       }}
     >
-      <button
-        type="button"
-        onClick={skipIntro}
-        className="absolute right-4 top-[calc(env(safe-area-inset-top)+12px)] z-20 min-h-11 rounded-full bg-black/40 px-4 text-[13px] font-semibold text-white"
-      >
-        {"\u30b9\u30ad\u30c3\u30d7"}
-      </button>
-      <main aria-hidden="true" onClick={skipIntro} className={styles.stage} style={{ width: "100%", height: "100%", background: "#f5f4ee" }}>
+      <main aria-hidden="true" className={styles.stage} style={{ width: "100%", height: "100%", background: "#f5f4ee" }}>
         <section className={`${styles.scene} ${styles.film}`} />
         <section className={`${styles.scene} ${styles.center}`}>
           <div className={styles.wordRow}>

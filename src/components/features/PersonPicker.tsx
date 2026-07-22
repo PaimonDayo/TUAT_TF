@@ -7,7 +7,7 @@ import { PeopleFilterButton } from "@/components/features/PeopleFilterButton";
 import { Button } from "@/components/ui/button";
 import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
-import { GRADE_OPTIONS } from "@/lib/constants";
+import { GRADE_OPTIONS, matchSimpleBlock } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { AuthorMini, Block } from "@/types";
 
@@ -46,7 +46,7 @@ export function PersonPicker({ people, value, onChange, label = "対象者", exc
     if (excluded.has(person.id)) return false;
     const q = query.trim().toLowerCase();
     return (!q || person.display_name.toLowerCase().includes(q))
-      && (blocks.length === 0 || (person.blocks ?? []).some((block) => blocks.includes(block)))
+      && (blocks.length === 0 || blocks.some((block) => matchSimpleBlock(person.blocks, block)))
       && (grades.length === 0 || grades.includes(person.grade ?? ""));
   }), [blocks, excluded, grades, people, query]);
 

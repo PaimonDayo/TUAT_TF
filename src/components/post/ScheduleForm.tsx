@@ -16,10 +16,11 @@ import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import { ScheduleSheetsManager } from "@/components/features/ScheduleSheetsManager";
 import {
-  BLOCK_ORDER,
+  EDITABLE_BLOCK_ORDER,
   BLOCKS,
   ENTRY_PERIOD_TYPES,
   SCHEDULE_TYPE_OPTIONS,
+  normalizeProfileBlocks,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { Block, PracticeSchedule, ScheduleType, VenueRow } from "@/types";
@@ -71,7 +72,7 @@ export function ScheduleForm({
   const [entryEnd, setEntryEnd] = useState(schedule?.entry_end ?? "");
   const [useDetail, setUseDetail] = useState(!!schedule?.note);
   const [detail, setDetail] = useState(schedule?.note ?? "");
-  const [targetBlocks, setTargetBlocks] = useState<Block[]>(schedule?.target_blocks ?? []);
+  const [targetBlocks, setTargetBlocks] = useState<Block[]>(normalizeProfileBlocks(schedule?.target_blocks));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const meetingTimeTouched = useRef(false);
@@ -215,7 +216,7 @@ export function ScheduleForm({
           >
             全体
           </button>
-          {BLOCK_ORDER.map((block) => {
+          {EDITABLE_BLOCK_ORDER.map((block) => {
             const meta = BLOCKS[block];
             const active = targetBlocks.includes(block);
             return (

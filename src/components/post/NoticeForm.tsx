@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import { RecipientPicker } from "@/components/features/RecipientPicker";
-import { NOTICE_CATEGORIES } from "@/lib/constants";
+import { NOTICE_CATEGORIES, normalizeProfileBlocks } from "@/lib/constants";
 import type { AppRole, AuthorMini, Block, Notice, NoticeCategory } from "@/types";
 
 export function NoticeForm({
@@ -38,7 +38,7 @@ export function NoticeForm({
     initial?.mentioned_role_ids ?? initial?.target_role_ids ?? [],
   );
   const [mentionedUserIds, setMentionedUserIds] = useState<string[]>(initial?.mentioned_user_ids ?? []);
-  const [mentionedBlocks, setMentionedBlocks] = useState<Block[]>(initial?.mentioned_blocks ?? []);
+  const [mentionedBlocks, setMentionedBlocks] = useState<Block[]>(normalizeProfileBlocks(initial?.mentioned_blocks));
   const [mentionedGrades, setMentionedGrades] = useState<string[]>(initial?.mentioned_grades ?? []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

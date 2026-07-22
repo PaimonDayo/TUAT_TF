@@ -10,7 +10,7 @@ import { SegmentedControl } from "@/components/ui/segmented";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
-import { BLOCK_ORDER, BLOCKS } from "@/lib/constants";
+import { BLOCKS, EDITABLE_BLOCK_ORDER } from "@/lib/constants";
 import type { AuthorMini, Block, PracticeMenu, PracticeSchedule, VenueRow } from "@/types";
 
 type ScheduleDraft = { id?: string; time: string; venue: string; note: string };
@@ -185,7 +185,7 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
     <div className="flex items-center justify-between rounded-xl bg-bg px-2 py-1"><button type="button" onClick={() => moveMonth(-1)} className="p-2"><ChevronLeft /></button><strong>{year}年{month}月</strong><button type="button" onClick={() => moveMonth(1)} className="p-2"><ChevronRight /></button></div>
     <div className="flex items-center justify-between gap-3">{tab === "schedule" ? <SegmentedControl className="w-52" items={[{ key: "all", label: "すべての日" }, { key: "active", label: "予定あり" }]} value={showActiveOnly ? "active" : "all"} onChange={(value) => setShowActiveOnly(value === "active")} /> : <span className="text-xs text-muted">予定がある日のみ表示</span>}<span className="shrink-0 text-xs text-muted">変更 {dirtyCount}件</span></div>
     {tab === "menu" && <div className="space-y-3 rounded-xl border border-separator bg-card p-3">
-      <Select value={block} onValueChange={(value) => setBlock(value as Block)} ariaLabel="ブロック" options={BLOCK_ORDER.map((item) => ({ value: item, label: BLOCKS[item].label }))} />
+      <Select value={block} onValueChange={(value) => setBlock(value as Block)} ariaLabel="ブロック" options={EDITABLE_BLOCK_ORDER.map((item) => ({ value: item, label: BLOCKS[item].label }))} />
       <PersonPicker people={members} value={targetIds} onChange={setTargetIds} label="個人指定（空ならブロック全体）" />
       <div className={`rounded-xl border p-3 ${status === "published" ? "border-accent/30 bg-accent/5" : "border-warning/30 bg-warning/5"}`}><p className="section-label mb-2">保存後の状態</p><SegmentedControl items={[{ key: "published", label: "公開" }, { key: "draft", label: "下書き" }]} value={status} onChange={(value) => setStatus(value as "draft" | "published")} /><p className="mt-2 text-xs text-muted">{status === "published" ? "保存するとすぐに部員へ公開されます" : "作成者だけが確認できる下書きで保存します"}</p></div>
     </div>}

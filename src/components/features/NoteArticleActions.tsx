@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ShareButton } from "@/components/common/ShareButton";
 import { NoteArticleEditor } from "@/components/features/NoteArticleEditor";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { FormModal } from "@/components/ui/form-modal";
@@ -13,10 +14,14 @@ export function NoteArticleActions({
   noteId,
   article,
   currentUser,
+  canEdit = true,
+  canShare = true,
 }: {
   noteId: string;
   article: NoteArticleWithAuthor;
   currentUser: AuthorMini;
+  canEdit?: boolean;
+  canShare?: boolean;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -53,14 +58,24 @@ export function NoteArticleActions({
 
   return (
     <>
-      <ActionMenu
-        onEdit={() => setEditing(true)}
-        onPin={togglePin}
-        pinned={article.pinned}
-        onDelete={remove}
+      {canShare && (
+        <ShareButton
+          title={article.title}
+          text={`${article.title}\uFF5C\u30ce\u30fc\u30c8\u306e\u8a18\u4e8b`}
+          path={`/notes/${noteId}/articles/${article.id}`}
+          label={"\u3053\u306e\u8a18\u4e8b\u3092\u5171\u6709\u3059\u308b"}
+        />
+      )}
+      {canEdit && (
+        <ActionMenu
+          onEdit={() => setEditing(true)}
+          onPin={togglePin}
+          pinned={article.pinned}
+          onDelete={remove}
         deleteTitle="記事を削除しますか？"
         deleteDescription="削除した記事は元に戻せません。"
-      />
+        />
+      )}
       {editing && (
         <FormModal open onOpenChange={setEditing} title="記事を編集">
           <NoteArticleEditor

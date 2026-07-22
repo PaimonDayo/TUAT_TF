@@ -6,6 +6,7 @@ import { Settings, ChevronRight } from "lucide-react";
 import { NotificationSettings } from "@/components/features/NotificationSettings";
 import { MenuViewSetting } from "@/components/features/MenuViewSetting";
 import { AttendanceViewSetting } from "@/components/features/AttendanceViewSetting";
+import { SplashIntroSetting } from "@/components/features/SplashIntroSetting";
 import { SystemSyncStatus } from "@/components/features/SystemSyncStatus";
 import type { RecordFieldDef } from "@/types";
 
@@ -58,6 +59,7 @@ export function SettingsAccordion({
         <div className="space-y-2">
           <p className="section-label">表示</p>
           <AttendanceViewSetting userId={profileId} initial={attendanceViewAll} />
+          <SplashIntroSetting />
           <MenuViewSetting userId={profileId} initial={menuViewAll} />
         </div>
         <NotificationSettings

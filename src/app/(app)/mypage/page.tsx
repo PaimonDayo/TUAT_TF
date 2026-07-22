@@ -104,7 +104,6 @@ export default async function MyPage({
           <GoalEditor userId={profile.id} goal={profile.goal} />
           <RowLink href="/mypage/pb" icon={<Trophy size={20} className="text-warning" />} label="大会・記録会の結果" />
           <RowLink href="/members" icon={<Users size={20} className="text-accent" />} label="メンバー一覧" />
-          <RowLink href="/ranking" icon={<Trophy size={20} className="text-muted2" />} label="ランキング" />
           <SettingsAccordion
             profileId={profile.id}
             initialComment={profile.notify_comment ?? true}
@@ -116,6 +115,17 @@ export default async function MyPage({
             canManageSystem={perms.manageSystem}
           />
         </Card>
+
+        <section className="space-y-2">
+          <p className="section-label">中長距離</p>
+          <Card className="divide-y divide-separator/70 overflow-hidden">
+            <RowLink
+              href="/ranking"
+              icon={<Trophy size={20} className="text-warning" />}
+              label="走行距離ランキング"
+            />
+          </Card>
+        </section>
 
         {/* 管理メニュー（権限に応じて表示） */}
         {showAdminMenu && (

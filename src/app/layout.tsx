@@ -60,7 +60,7 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{if(sessionStorage.getItem("tuat-splash-played")==="1")document.documentElement.dataset.tuatSplashSkip="1"}catch(e){}`,
+            __html: `try{if(sessionStorage.getItem("tuat-splash-played")==="1"||localStorage.getItem("tuat-splash-disabled")==="1")document.documentElement.dataset.tuatSplashSkip="1"}catch(e){}`,
           }}
         />
         <style>{`html[data-tuat-splash-skip="1"] .tuat-splash-root{display:none!important}`}</style>

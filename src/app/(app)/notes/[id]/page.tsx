@@ -60,16 +60,14 @@ export default async function NoteFolderPage({
         title="ノート"
         backHref={ancestors.length > 0 ? `/notes/${ancestors[ancestors.length - 1].id}` : "/notes"}
         right={
-          canManageFolder || canDelete ? (
-            <NoteDetailActions
-              note={note}
-              currentUser={currentUser}
-              members={members}
-              isAdmin={isAdmin}
-              canEdit={canManageFolder}
-              canDelete={canDelete}
-            />
-          ) : undefined
+          <NoteDetailActions
+            note={note}
+            currentUser={currentUser}
+            members={members}
+            isAdmin={isAdmin}
+            canEdit={canManageFolder}
+            canDelete={canDelete}
+          />
         }
       />
       <div className="space-y-4 px-4 pt-1">
@@ -131,6 +129,7 @@ export default async function NoteFolderPage({
               noteId={note.id}
               articles={articles}
               canEdit={canEdit}
+              canShare={note.status === "published"}
               currentUser={currentUser}
             />
           )}
