@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 
 const THRESHOLD = 68;
@@ -17,6 +18,7 @@ const REFRESH_SPIN_MS = 900;
 /** 画面最上部から下へ引いたとき、現在のServer Componentsを再取得する。 */
 export function PullToRefresh() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const start = useRef<{ x: number; y: number } | null>(null);
   const distanceRef = useRef(0);
   const refreshTimer = useRef<number | null>(null);
@@ -80,6 +82,7 @@ export function PullToRefresh() {
         refreshingRef.current = true;
         setIsRefreshing(true);
         router.refresh();
+        void queryClient.invalidateQueries();
         if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
         refreshTimer.current = window.setTimeout(() => {
           refreshingRef.current = false;
@@ -95,7 +98,7 @@ export function PullToRefresh() {
       detachGesture();
       if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
     };
-  }, [router]);
+  }, [queryClient, router]);
 
   const visible = distance > 4 || isRefreshing;
   const progress = Math.min(1, distance / THRESHOLD);
