@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Heart, MessageCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -8,7 +8,7 @@ import { CommentSection } from "@/components/cards/CommentSection";
 import { LikersSheet } from "@/components/cards/LikersSheet";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
-import type { CommentAuthor, TargetType } from "@/types";
+import type { CommentAuthor, FeedItem, TargetType } from "@/types";
 
 type InteractionState = {
   liked: boolean;
@@ -16,6 +16,11 @@ type InteractionState = {
   commentCount: number;
   busy: boolean;
 };
+type TimelineCache = {
+  pages: FeedItem[][];
+  pageParams: unknown[];
+};
+
 
 /** いいね + コメント の操作行 */
 export function PostActions({
@@ -43,6 +48,25 @@ export function PostActions({
     enabled: false,
   });
   const { liked, likes, commentCount, busy } = interaction;
+  const mutationBusy = useRef(false);
+
+  useEffect(() => {
+    queryClient.setQueryData(
+      ["social-like", currentUser.id, targetType, targetId],
+      (previous: InteractionState | undefined) => {
+        if (previous?.busy) return previous;
+        return {
+          liked: initialLiked,
+          likes: initialLikes,
+          commentCount: initialComments,
+          busy: false,
+        };
+      },
+    );
+  }, [
+    currentUser.id, initialComments, initialLiked, initialLikes, queryClient, targetId, targetType,
+  ]);
+
   const [openComments, setOpenComments] = useState(false);
   const [commentsMounted, setCommentsMounted] = useState(false);
   const [likersOpen, setLikersOpen] = useState(false);
@@ -69,6 +93,25 @@ export function PostActions({
     targetId,
     targetType,
   ]);
+
+  function updateTimelineLikeState(nextLiked: boolean, nextLikes: number) {
+    queryClient.setQueryData(
+      ["timeline", currentUser.id],
+      (data: TimelineCache | undefined): TimelineCache | undefined => {
+        if (!data) return data;
+        return {
+          ...data,
+          pages: data.pages.map((page) =>
+            page.map((item) =>
+              item.kind === targetType && item.id === targetId
+                ? { ...item, liked_by_me: nextLiked, likes_count: nextLikes }
+                : item,
+            ),
+          ),
+        };
+      },
+    );
+  }
 
   // いいねボタンの長押しで「いいねした人」シートを開く
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -102,7 +145,8 @@ export function PostActions({
   }
 
   async function toggleLike() {
-    if (busy) return;
+    if (busy || mutationBusy.current) return;
+    mutationBusy.current = true;
     const previous = { ...interaction, busy: false };
     const next = !liked;
     const optimistic = {
@@ -114,10 +158,13 @@ export function PostActions({
     queryClient.setQueryData(interactionKey, optimistic);
 
     const supabase = createClient();
+    updateTimelineLikeState(next, optimistic.likes);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       queryClient.setQueryData(interactionKey, previous);
       showToast("ログイン状態を確認できませんでした");
+      updateTimelineLikeState(previous.liked, previous.likes);
+      mutationBusy.current = false;
       return;
     }
 
@@ -142,10 +189,25 @@ export function PostActions({
     if (result.error || deleteFailed) {
       queryClient.setQueryData(interactionKey, previous);
       showToast(next ? "いいねできませんでした" : "いいねを解除できませんでした");
+      updateTimelineLikeState(previous.liked, previous.likes);
+      mutationBusy.current = false;
       return;
     }
 
-    queryClient.setQueryData(interactionKey, { ...optimistic, busy: false });
+    const { count, error: countError } = await supabase
+      .from("likes")
+      .select("id", { count: "exact", head: true })
+      .eq("target_type", targetType)
+      .eq("target_id", targetId);
+    const confirmedLikes = countError || count == null ? optimistic.likes : count;
+    const confirmed = {
+      ...optimistic,
+      likes: confirmedLikes,
+      busy: false,
+    };
+    queryClient.setQueryData(interactionKey, confirmed);
+    updateTimelineLikeState(next, confirmedLikes);
+    mutationBusy.current = false;
   }
   return (
     <>

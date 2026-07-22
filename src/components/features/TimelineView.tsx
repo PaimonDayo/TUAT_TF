@@ -45,6 +45,9 @@ export function TimelineView({
     queryFn: ({ pageParam }) => loadFeed(pageParam ?? {}, PAGE),
     initialPageParam: null as FeedCursor,
     initialData: { pages: [initialItems], pageParams: [null as FeedCursor] },
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
     getNextPageParam: (lastPage): FeedCursor | undefined => {
       if (lastPage.length < PAGE) return undefined;
       const lastRecord = lastPage.findLast((item) => item.kind === "record");
