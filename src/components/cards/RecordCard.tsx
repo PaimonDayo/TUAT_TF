@@ -79,7 +79,7 @@ export function RecordCard({
         )}
         {(isOwner || showSource) && (
           <div className="flex shrink-0 items-center gap-1.5">
-            {(showSource || record.from_sheet) && record.from_sheet && (
+            {record.from_sheet && (
               <span className="rounded-full bg-bg px-2 py-0.5 text-micro text-muted2">
                 スプシ由来
               </span>

@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Toggle } from "@/components/ui/toggle";
 
 export const RECORD_SOURCE_COOKIE = "show-record-source";
 const ONE_YEAR = 31_536_000;
 
 export function RecordSourceSetting({ initial }: { initial: boolean }) {
+  const router = useRouter();
   const [showSource, setShowSource] = useState(initial);
 
   function toggle() {
@@ -18,6 +20,7 @@ export function RecordSourceSetting({ initial }: { initial: boolean }) {
       "max-age=" + ONE_YEAR,
       "samesite=lax",
     ].join(";");
+    router.refresh();
   }
 
   return (
