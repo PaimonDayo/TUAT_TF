@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { Trophy, ChevronRight, Shield, Users, Target, MapPin } from "lucide-react";
+import { Trophy, Medal, ChevronRight, Shield, ShieldCheck, Users, Target, MapPin } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -102,7 +102,7 @@ export default async function MyPage({
         {/* リンク（1枚にまとめた区切り線リスト） */}
         <Card className="divide-y divide-separator/70 overflow-hidden">
           <GoalEditor userId={profile.id} goal={profile.goal} />
-          <RowLink href="/mypage/pb" icon={<Trophy size={20} className="text-warning" />} label="大会・記録会の結果" />
+          <RowLink href="/mypage/pb" icon={<Medal size={20} className="text-warning" />} label="大会・記録会の結果" />
           <RowLink href="/members" icon={<Users size={20} className="text-accent" />} label="メンバー一覧" />
           <SettingsAccordion
             profileId={profile.id}
@@ -133,7 +133,7 @@ export default async function MyPage({
             <p className="section-label">管理メニュー</p>
             <Card className="divide-y divide-separator/70 overflow-hidden">
               {perms.manageMembers && (
-                <RowLink href="/admin" icon={<Users size={20} className="text-accent" />} label="ロール管理" />
+                <RowLink href="/admin" icon={<ShieldCheck size={20} className="text-accent" />} label="ロール管理" />
               )}
               {perms.createSchedule && (
                 <RowLink href="/venues" icon={<MapPin size={20} className="text-accent" />} label="練習場所" />
