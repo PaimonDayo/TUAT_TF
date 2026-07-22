@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ExternalLink, Link2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ja } from "date-fns/locale";
 import { Avatar } from "@/components/common/Avatar";
@@ -9,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { PostActions } from "@/components/cards/PostActions";
 import { Linkify } from "@/components/common/Linkify";
 import { TweetOwnerMenu } from "@/components/cards/PostOwnerMenu";
+import { tweetContentUrls, tweetUrlHost } from "@/lib/tweet-content";
 import { cn } from "@/lib/utils";
 import { gradeShort } from "@/lib/constants";
 import type { CommentAuthor, TweetWithAuthor } from "@/types";
@@ -28,19 +30,21 @@ export function TweetCard({
   const { author } = tweet;
   const isOwner = currentUser.id === author.id;
   const gradeLabel = gradeShort(author.grade);
+  const urls = tweetContentUrls(tweet.content);
+  const primaryUrl = urls[0];
 
   return (
-    <Card className="p-4 space-y-2.5">
-      <div className="flex items-center gap-2.5">
-        <Link href={`/members/${author.id}`} onClick={(e) => e.stopPropagation()}>
+    <Card className="overflow-hidden border-separator/60 bg-card p-0 shadow-[0_8px_28px_rgba(0,0,0,0.035)]">
+      <div className="flex items-center gap-2.5 px-4 pt-4">
+        <Link href={`/members/${author.id}`} onClick={(event) => event.stopPropagation()}>
           <Avatar name={author.display_name} blocks={author.blocks} avatarUrl={author.avatar_url} size="sm" />
         </Link>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
             <Link
               href={`/members/${author.id}`}
-              onClick={(e) => e.stopPropagation()}
-              className="text-[14px] font-semibold truncate"
+              onClick={(event) => event.stopPropagation()}
+              className="truncate text-[14px] font-semibold"
             >
               {author.display_name || "名無し"}
             </Link>
@@ -49,21 +53,52 @@ export function TweetCard({
           </div>
           <p className="text-micro">
             {formatDistanceToNow(new Date(tweet.created_at), { addSuffix: true, locale: ja })}
+            <span aria-hidden="true"> · </span>
+            つぶやき
           </p>
         </div>
         {isOwner && (
-          <span onClick={(e) => e.stopPropagation()}>
+          <span className="shrink-0" onClick={(event) => event.stopPropagation()}>
             <TweetOwnerMenu tweet={{ id: tweet.id, content: tweet.content }} />
           </span>
         )}
       </div>
 
-      <p className={cn("text-[15px] break-words", compact ? "line-clamp-2" : "whitespace-pre-wrap")}>
-        <Linkify text={tweet.content} />
-      </p>
+      <div className="px-4 pb-3 pt-3">
+        <p
+          className={cn(
+            "break-words text-[15px] leading-7 text-ink",
+            compact ? "line-clamp-2" : "whitespace-pre-wrap",
+          )}
+        >
+          <Linkify text={tweet.content} />
+        </p>
 
-      {/* いいね・返信は簡易表示でも直接押せるよう常に表示。タップで展開しないよう伝播を止める */}
-      <div onClick={(e) => e.stopPropagation()}>
+        {!compact && primaryUrl && (
+          <a
+            href={primaryUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(event) => event.stopPropagation()}
+            className="mt-3 flex items-center gap-3 rounded-2xl border border-accent/15 bg-accent/5 px-3.5 py-3 transition-active active:scale-[0.99]"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-card text-accent shadow-sm">
+              <Link2 size={17} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13px] font-semibold text-ink">
+                {tweetUrlHost(primaryUrl)}
+              </span>
+              <span className="block text-[11px] text-muted2">
+                {urls.length > 1 ? `リンクを開く・ほか${urls.length - 1}件` : "リンクを開く"}
+              </span>
+            </span>
+            <ExternalLink size={15} className="shrink-0 text-accent" />
+          </a>
+        )}
+      </div>
+
+      <div className="border-t border-separator/60 bg-bg/35 px-4 pb-3 pt-2" onClick={(event) => event.stopPropagation()}>
         <PostActions
           targetType="tweet"
           targetId={tweet.id}
