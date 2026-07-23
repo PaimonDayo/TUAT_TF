@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
-import { Link2, LoaderCircle, MessageCircle, Send } from "lucide-react";
+import { Link2, LoaderCircle, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
@@ -11,7 +11,6 @@ import {
   tweetContentLength,
   tweetContentRemaining,
   tweetContentUrls,
-  tweetUrlHost,
 } from "@/lib/tweet-content";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -86,46 +85,35 @@ export const TweetForm = forwardRef<
   }
 
   return (
-    <div className="space-y-4 pb-4">
-      <section className="overflow-hidden rounded-[22px] border border-separator/80 bg-card shadow-[0_10px_35px_rgba(0,0,0,0.04)] transition-shadow focus-within:border-accent/50 focus-within:shadow-[0_12px_40px_rgba(0,122,255,0.10)]">
-        <div className="flex items-center gap-3 border-b border-separator/70 bg-bg/55 px-4 py-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent">
-            <MessageCircle size={18} strokeWidth={2.2} />
-          </span>
-          <div className="min-w-0">
-            <p className="text-headline">{editing ? "内容を整える" : "みんなに共有"}</p>
-            <p className="text-caption">練習の気づき、連絡、参考リンクなどを自由に</p>
-          </div>
-        </div>
-
+    <div className="space-y-3 pb-4">
+      <section className="overflow-hidden rounded-[16px] border border-separator/80 bg-card transition-colors focus-within:border-accent/50">
         <Textarea
           aria-label="つぶやき本文"
-          aria-describedby="tweet-length-help"
-          rows={8}
+          rows={7}
           maxLength={TWEET_RAW_MAX_LENGTH}
-          placeholder={"今日はどんな一日でしたか？\nリンクもそのまま貼れます"}
+          placeholder="つぶやきを入力"
           value={content}
           onChange={(event) => {
             setContent(event.target.value);
             if (error) setError(null);
           }}
-          className="min-h-[210px] rounded-none border-0 bg-transparent px-4 py-4 text-[16px] leading-7 placeholder:text-muted/75 focus:border-transparent"
+          className="min-h-[180px] rounded-none border-0 bg-transparent px-4 py-4 text-[16px] leading-7 placeholder:text-muted/75 focus:border-transparent"
         />
 
-        <div className="border-t border-separator/70 bg-bg/45">
-          <div className="flex items-center justify-between gap-3 px-4 py-3">
-            <div className="flex min-w-0 items-center gap-2 text-[12px] font-medium text-muted2">
-              <Link2 size={15} className={urls.length > 0 ? "text-accent" : "text-muted"} />
-              <span>{urls.length > 0 ? `${urls.length}件のリンクを検出` : "URLは自動でリンク化"}</span>
+        <div className="border-t border-separator/70 bg-bg/35">
+          <div className="flex min-h-11 items-center justify-between gap-3 px-4 py-2.5">
+            <div className="min-w-0 text-[12px] text-muted2">
+              {urls.length > 0 && (
+                <span className="flex items-center gap-1.5">
+                  <Link2 size={14} className="text-accent" />
+                  URL {urls.length}件 · 1件23文字換算
+                </span>
+              )}
             </div>
             <span
               className={cn(
-                "shrink-0 rounded-full px-2.5 py-1 text-[12px] font-semibold tabular-nums",
-                overLimit
-                  ? "bg-danger/10 text-danger"
-                  : remaining <= 100
-                    ? "bg-warning/10 text-warning"
-                    : "bg-card text-muted2",
+                "shrink-0 text-[12px] font-semibold tabular-nums",
+                overLimit ? "text-danger" : remaining <= 100 ? "text-warning" : "text-muted2",
               )}
             >
               {effectiveLength.toLocaleString()} / {TWEET_MAX_LENGTH.toLocaleString()}
@@ -140,30 +128,8 @@ export const TweetForm = forwardRef<
               style={{ width: `${progress}%` }}
             />
           </div>
-          {urls.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 border-t border-separator/60 px-4 py-2.5">
-              {urls.slice(0, 4).map((url) => (
-                <span
-                  key={url}
-                  className="inline-flex max-w-full items-center gap-1 rounded-full bg-accent/8 px-2.5 py-1 text-[11px] font-medium text-accent"
-                >
-                  <Link2 size={12} />
-                  <span className="truncate">{tweetUrlHost(url)}</span>
-                </span>
-              ))}
-              {urls.length > 4 && (
-                <span className="rounded-full bg-card px-2.5 py-1 text-[11px] font-medium text-muted2">
-                  +{urls.length - 4}
-                </span>
-              )}
-            </div>
-          )}
         </div>
       </section>
-
-      <p id="tweet-length-help" className="px-1 text-[12px] leading-5 text-muted2">
-        URLは長さにかかわらず1件23文字として数えます。改行や絵文字も使えます。
-      </p>
 
       {error && (
         <p role="alert" className="rounded-xl bg-danger/8 px-3 py-2.5 text-[13px] text-danger">
