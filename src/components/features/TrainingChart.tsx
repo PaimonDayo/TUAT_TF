@@ -82,16 +82,43 @@ export function TrainingChart({
   const recentSummary = useMemo(() => {
     const from = jstToday(-6);
     const through = jstToday();
+    const previousFrom = jstToday(-13);
+    const previousThrough = jstToday(-7);
     const by: Record<Intensity, number> = { low: 0, mid: 0, high: 0, speed: 0 };
+    const trainingDates = new Set<string>();
+    let previousTotal = 0;
     for (const record of records) {
-      if (record.recorded_date < from || record.recorded_date > through) continue;
-      by.low += record.dist_low ?? 0;
-      by.mid += record.dist_mid ?? 0;
-      by.high += record.dist_high ?? 0;
-      by.speed += record.dist_speed ?? 0;
+      const distances: Record<Intensity, number> = {
+        low: record.dist_low ?? 0,
+        mid: record.dist_mid ?? 0,
+        high: record.dist_high ?? 0,
+        speed: record.dist_speed ?? 0,
+      };
+      const recordTotal = INTENSITY_ORDER.reduce(
+        (sum, intensity) => sum + distances[intensity],
+        0,
+      );
+      if (record.recorded_date >= from && record.recorded_date <= through) {
+        INTENSITY_ORDER.forEach((intensity) => {
+          by[intensity] += distances[intensity];
+        });
+        if (recordTotal > 0) trainingDates.add(record.recorded_date);
+      } else if (
+        record.recorded_date >= previousFrom &&
+        record.recorded_date <= previousThrough
+      ) {
+        previousTotal += recordTotal;
+      }
     }
     const total = INTENSITY_ORDER.reduce((sum, intensity) => sum + by[intensity], 0);
-    return { by, total };
+    return {
+      by,
+      total,
+      previousTotal,
+      trainingDays: trainingDates.size,
+      from,
+      through,
+    };
   }, [records]);
 
   const max = Math.max(...buckets.map((b) => b.total), 1);
@@ -308,24 +335,65 @@ function formatDistance(value: number): string {
 function IntensitySummary({
   summary,
 }: {
-  summary: { by: Record<Intensity, number>; total: number };
+  summary: {
+    by: Record<Intensity, number>;
+    total: number;
+    previousTotal: number;
+    trainingDays: number;
+    from: string;
+    through: string;
+  };
 }) {
+  const difference = summary.total - summary.previousTotal;
+  const comparison =
+    summary.previousTotal === 0
+      ? summary.total > 0
+        ? "前の7日は記録なし"
+        : null
+      : Math.abs(difference) < 0.05
+        ? "前の7日と同じ"
+        : `前の7日より ${difference > 0 ? "+" : ""}${formatDistance(difference)}km`;
+  const dateRange = `${format(new Date(`${summary.from}T00:00:00`), "M/d")}–${format(
+    new Date(`${summary.through}T00:00:00`),
+    "M/d",
+  )}`;
+
   return (
     <div className="rounded-xl bg-bg p-3">
-      <div className="flex items-end justify-between gap-3">
-        <div>
-          <p className="section-label">直近7日の走行サマリー</p>
-          <p className="mt-0.5 text-micro">記録した距離を強度別に集計</p>
-        </div>
-        <p className="text-xl font-bold tabular-nums">
-          {formatDistance(summary.total)}
-          <span className="ml-0.5 text-caption">km</span>
-        </p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="section-label">走行サマリー</p>
+        <p className="text-micro tabular-nums">{dateRange}</p>
       </div>
 
-      {summary.total > 0 ? (
+      <div className="mt-2">
+        <p className="text-2xl font-bold leading-none tabular-nums">
+          {formatDistance(summary.total)}
+          <span className="ml-1 text-caption">km</span>
+        </p>
+        {summary.total > 0 || comparison ? (
+          <p className="mt-1.5 text-caption tabular-nums">
+            {comparison && (
+              <>
+                {comparison}
+                <span className="mx-1.5 text-muted" aria-hidden="true">
+                  ・
+                </span>
+              </>
+            )}
+            走行{summary.trainingDays}日
+          </p>
+        ) : (
+          <p className="mt-1.5 text-caption">この期間の走行記録はありません</p>
+        )}
+      </div>
+
+      {summary.total > 0 && (
         <>
-          <div className="mt-2.5 flex h-2.5 overflow-hidden rounded-full bg-separator/60">
+          <div
+            className="mt-3 flex h-2.5 overflow-hidden rounded-full bg-separator/60"
+            role="img"
+            aria-label="強度別の走行距離割合"
+          >
             {INTENSITY_ORDER.map((intensity) =>
               summary.by[intensity] > 0 ? (
                 <div
@@ -358,8 +426,6 @@ function IntensitySummary({
             })}
           </div>
         </>
-      ) : (
-        <p className="mt-2.5 text-caption">直近7日間の走行記録はありません</p>
       )}
     </div>
   );
