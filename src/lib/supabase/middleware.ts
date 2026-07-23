@@ -43,6 +43,8 @@ export async function updateSession(request: NextRequest) {
     // 同期APIは route 側で独自に認証（cron=Bearer / 手動=管理者）。
     // 未ログイン(cron)を /login にリダイレクトすると叩けないので素通りさせる。
     pathname.startsWith("/offline") ||
+    // GETはroute内でシステム管理権限を確認し、POSTは旧アプリの署名トークンを検証する。
+    pathname.startsWith("/api/legacy-access") ||
     pathname.startsWith("/api/sheets/sync") ||
     pathname.startsWith("/api/schedule-sheets/cron-sync");
 
