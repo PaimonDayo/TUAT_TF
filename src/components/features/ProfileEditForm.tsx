@@ -12,11 +12,11 @@ import { Button } from "@/components/ui/button";
 import { FormModalFooter } from "@/components/ui/form-modal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar } from "@/components/common/Avatar";
+import { AvatarCropEditor } from "@/components/features/AvatarCropEditor";
 import { BLOCKS, EVENTS_BY_BLOCK, GRADE_OPTIONS, PROFILE_BLOCK_ORDER, normalizeProfileBlocks } from "@/lib/constants";
 import {
   AVATAR_BUCKET,
   avatarStoragePathFromPublicUrl,
-  prepareAvatarImage,
 } from "@/lib/avatar-image";
 import { cn } from "@/lib/utils";
 import type { Block, Profile } from "@/types";
@@ -47,8 +47,7 @@ export function ProfileEditForm({
   const [events, setEvents] = useState<string[]>(profile.events ?? []);
   const [grade, setGrade] = useState<string | null>(profile.grade);
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url ?? "");
-  const [pendingAvatar, setPendingAvatar] = useState<Blob | null>(null);
-  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+  const [avatarCropFile, setAvatarCropFile] = useState<File | null>(null);
   const [processingAvatar, setProcessingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [sheetName, setSheetName] = useState<string>(profile.sheet_name ?? "");
@@ -63,12 +62,6 @@ export function ProfileEditForm({
   const [error, setError] = useState<string | null>(null);
 
   const valid = name.trim() && blocks.length > 0 && grade;
-
-  useEffect(() => {
-    return () => {
-      if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
-    };
-  }, [avatarPreviewUrl]);
 
   // スプシ連携用：部員シート名の候補を取得（失敗しても編集は続行できる）
   useEffect(() => {
@@ -125,31 +118,95 @@ export function ProfileEditForm({
     setEvents((cur) => (cur.includes(ev) ? cur.filter((x) => x !== ev) : [...cur, ev]));
   }
 
-  async function selectAvatar(file: File | undefined) {
+  function selectAvatar(file: File | undefined) {
     if (!file) return;
+    setError(null);
+    setAvatarCropFile(file);
+    if (avatarInputRef.current) avatarInputRef.current.value = "";
+  }
+
+  async function uploadCroppedAvatar(prepared: Blob) {
     setProcessingAvatar(true);
     setError(null);
+    const supabase = createClient();
+    const uploadedPath = `${profile.id}/${crypto.randomUUID()}.webp`;
     try {
-      const prepared = await prepareAvatarImage(file);
-      setPendingAvatar(prepared);
-      setAvatarPreviewUrl(URL.createObjectURL(prepared));
-    } catch (avatarError) {
-      setError(
-        avatarError instanceof Error
-          ? avatarError.message
-          : "画像を読み込めませんでした",
+      const { error: uploadError } = await supabase.storage
+        .from(AVATAR_BUCKET)
+        .upload(uploadedPath, prepared, {
+          cacheControl: "31536000",
+          contentType: "image/webp",
+          upsert: false,
+        });
+      if (uploadError) {
+        throw new Error("画像をアップロードできませんでした。もう一度お試しください");
+      }
+
+      const nextAvatarUrl = supabase.storage
+        .from(AVATAR_BUCKET)
+        .getPublicUrl(uploadedPath).data.publicUrl;
+      const result = await safeUpdate(
+        supabase,
+        "profiles",
+        { avatar_url: nextAvatarUrl },
+        { id: profile.id },
       );
+      if (!result.ok) {
+        await supabase.storage.from(AVATAR_BUCKET).remove([uploadedPath]);
+        throw new Error(safeUpdateMessage(result.reason));
+      }
+
+      const previousPath = avatarStoragePathFromPublicUrl(
+        avatarUrl,
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        profile.id,
+      );
+      setAvatarUrl(nextAvatarUrl);
+      router.refresh();
+      if (previousPath && previousPath !== uploadedPath) {
+        const { error: removeError } = await supabase.storage
+          .from(AVATAR_BUCKET)
+          .remove([previousPath]);
+        if (removeError) console.warn("Failed to remove the previous avatar", removeError);
+      }
     } finally {
       setProcessingAvatar(false);
-      if (avatarInputRef.current) avatarInputRef.current.value = "";
     }
   }
 
-  function removeAvatar() {
-    setPendingAvatar(null);
-    setAvatarPreviewUrl(null);
-    setAvatarUrl("");
+  async function removeAvatar() {
+    if (!avatarUrl || processingAvatar) return;
+    setProcessingAvatar(true);
     setError(null);
+    const supabase = createClient();
+    try {
+      const result = await safeUpdate(
+        supabase,
+        "profiles",
+        { avatar_url: null },
+        { id: profile.id },
+      );
+      if (!result.ok) {
+        setError(safeUpdateMessage(result.reason));
+        return;
+      }
+
+      const previousPath = avatarStoragePathFromPublicUrl(
+        avatarUrl,
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        profile.id,
+      );
+      setAvatarUrl("");
+      router.refresh();
+      if (previousPath) {
+        const { error: removeError } = await supabase.storage
+          .from(AVATAR_BUCKET)
+          .remove([previousPath]);
+        if (removeError) console.warn("Failed to remove the previous avatar", removeError);
+      }
+    } finally {
+      setProcessingAvatar(false);
+    }
   }
 
   // 選択中ブロックに対応する種目だけ出す（重複排除・ブロック順）
@@ -191,26 +248,7 @@ export function ProfileEditForm({
     }
 
     const supabase = createClient();
-    let uploadedAvatarPath: string | null = null;
-    let nextAvatarUrl = avatarUrl.trim() || null;
-    if (pendingAvatar) {
-      uploadedAvatarPath = `${profile.id}/${crypto.randomUUID()}.webp`;
-      const { error: uploadError } = await supabase.storage
-        .from(AVATAR_BUCKET)
-        .upload(uploadedAvatarPath, pendingAvatar, {
-          cacheControl: "31536000",
-          contentType: "image/webp",
-          upsert: false,
-        });
-      if (uploadError) {
-        setError("画像をアップロードできませんでした。もう一度お試しください");
-        setSaving(false);
-        return;
-      }
-      nextAvatarUrl = supabase.storage
-        .from(AVATAR_BUCKET)
-        .getPublicUrl(uploadedAvatarPath).data.publicUrl;
-    }
+    const nextAvatarUrl = avatarUrl.trim() || null;
 
     const result = await safeUpdate(
       supabase,
@@ -229,26 +267,9 @@ export function ProfileEditForm({
     );
 
     if (!result.ok) {
-      if (uploadedAvatarPath) {
-        await supabase.storage.from(AVATAR_BUCKET).remove([uploadedAvatarPath]);
-      }
       setError(safeUpdateMessage(result.reason));
       setSaving(false);
       return;
-    }
-
-    const previousAvatarPath = avatarStoragePathFromPublicUrl(
-      profile.avatar_url,
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      profile.id,
-    );
-    if (previousAvatarPath && previousAvatarPath !== uploadedAvatarPath) {
-      const { error: removeError } = await supabase.storage
-        .from(AVATAR_BUCKET)
-        .remove([previousAvatarPath]);
-      if (removeError) {
-        console.warn("Failed to remove the previous avatar", removeError);
-      }
     }
     router.refresh();
     onDone();
@@ -276,7 +297,7 @@ export function ProfileEditForm({
           <Avatar
             name={name || "?"}
             blocks={blocks}
-            avatarUrl={avatarPreviewUrl ?? (avatarUrl.trim() || null)}
+            avatarUrl={avatarUrl.trim() || null}
             size="lg"
           />
           <div className="min-w-0 flex-1">
@@ -296,16 +317,16 @@ export function ProfileEditForm({
                 onClick={() => avatarInputRef.current?.click()}
               >
                 <Camera size={16} />
-                {processingAvatar ? "画像を準備中…" : "写真を選ぶ"}
+                {processingAvatar ? "画像を保存中…" : "写真を選ぶ"}
               </Button>
-              {(avatarPreviewUrl || avatarUrl.trim()) && (
+              {avatarUrl.trim() && (
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   className="text-danger"
                   disabled={saving || processingAvatar}
-                  onClick={removeAvatar}
+                  onClick={() => void removeAvatar()}
                 >
                   <Trash2 size={16} />
                   削除
@@ -313,7 +334,7 @@ export function ProfileEditForm({
               )}
             </div>
             <p className="mt-1 text-micro">
-              中央を正方形に切り抜いて保存します。JPG・PNG・WebP、12MBまで。
+              写真の位置と大きさを調整できます。確定すると画像だけすぐに保存されます。
             </p>
           </div>
         </div>
@@ -478,6 +499,15 @@ export function ProfileEditForm({
           ログアウト
         </button>
       )}
+
+      <AvatarCropEditor
+        file={avatarCropFile}
+        open={Boolean(avatarCropFile)}
+        onOpenChange={(next) => {
+          if (!next) setAvatarCropFile(null);
+        }}
+        onApply={uploadCroppedAvatar}
+      />
 
       <ConfirmDialog
         open={confirmSignOut}

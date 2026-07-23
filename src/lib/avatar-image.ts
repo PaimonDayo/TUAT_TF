@@ -16,6 +16,13 @@ export type SquareCrop = {
   sourceSize: number;
 };
 
+export type AvatarCropTransform = {
+  viewportSize: number;
+  zoom: number;
+  offsetX: number;
+  offsetY: number;
+};
+
 export function calculateSquareCrop(width: number, height: number): SquareCrop {
   const sourceSize = Math.min(width, height);
   return {
@@ -23,6 +30,49 @@ export function calculateSquareCrop(width: number, height: number): SquareCrop {
     sourceY: (height - sourceSize) / 2,
     sourceSize,
   };
+}
+
+export function calculateAvatarCrop(
+  width: number,
+  height: number,
+  transform?: AvatarCropTransform,
+): SquareCrop {
+  if (!transform) return calculateSquareCrop(width, height);
+
+  const viewportSize = Math.max(1, transform.viewportSize);
+  const zoom = Math.max(1, transform.zoom);
+  const baseScale = Math.max(viewportSize / width, viewportSize / height);
+  const sourceSize = Math.min(
+    width,
+    height,
+    viewportSize / (baseScale * zoom),
+  );
+  const sourcePixelsPerViewportPixel = sourceSize / viewportSize;
+  const centerX =
+    width / 2 - transform.offsetX * sourcePixelsPerViewportPixel;
+  const centerY =
+    height / 2 - transform.offsetY * sourcePixelsPerViewportPixel;
+
+  return {
+    sourceX: Math.min(
+      width - sourceSize,
+      Math.max(0, centerX - sourceSize / 2),
+    ),
+    sourceY: Math.min(
+      height - sourceSize,
+      Math.max(0, centerY - sourceSize / 2),
+    ),
+    sourceSize,
+  };
+}
+
+export function validateAvatarFile(file: File): void {
+  if (!AVATAR_INPUT_TYPES.has(file.type.toLowerCase())) {
+    throw new Error("JPG・PNG・WebP・HEICの画像を選んでください");
+  }
+  if (file.size > AVATAR_MAX_INPUT_BYTES) {
+    throw new Error("画像は12MB以下のものを選んでください");
+  }
 }
 
 function canvasToWebp(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
@@ -41,14 +91,12 @@ function canvasToWebp(canvas: HTMLCanvasElement, quality: number): Promise<Blob>
   });
 }
 
-/** 選択画像の中央を正方形に切り抜き、EXIFを含まない512px WebPへ変換する。 */
-export async function prepareAvatarImage(file: File): Promise<Blob> {
-  if (!AVATAR_INPUT_TYPES.has(file.type.toLowerCase())) {
-    throw new Error("JPG・PNG・WebPの画像を選んでください");
-  }
-  if (file.size > AVATAR_MAX_INPUT_BYTES) {
-    throw new Error("画像は12MB以下のものを選んでください");
-  }
+/** 選択範囲を正方形に切り抜き、EXIFを含まない512px WebPへ変換する。 */
+export async function prepareAvatarImage(
+  file: File,
+  transform?: AvatarCropTransform,
+): Promise<Blob> {
+  validateAvatarFile(file);
 
   const objectUrl = URL.createObjectURL(file);
   try {
@@ -72,7 +120,7 @@ export async function prepareAvatarImage(file: File): Promise<Blob> {
     const context = canvas.getContext("2d");
     if (!context) throw new Error("画像を変換できませんでした");
 
-    const crop = calculateSquareCrop(width, height);
+    const crop = calculateAvatarCrop(width, height, transform);
     context.drawImage(
       image,
       crop.sourceX,
