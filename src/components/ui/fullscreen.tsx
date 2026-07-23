@@ -64,7 +64,10 @@ export function FullScreenContent({
   useViewportSync(contentRef);
   return (
     <Dialog.Portal>
-      <Dialog.Overlay className="sheet-overlay fixed inset-0 z-50 bg-black/30" />
+      <Dialog.Overlay className="sheet-overlay fixed inset-0 z-50 bg-black/30">
+        {/* visualViewport でフォーム本体が移動しても、ステータスバー領域を透かさない。 */}
+        <div aria-hidden="true" className="mx-auto h-full w-full max-w-md bg-bg" />
+      </Dialog.Overlay>
       <Dialog.Content
         ref={contentRef}
         onOpenAutoFocus={(event) => {
@@ -103,7 +106,7 @@ export function FullScreenContent({
         )}
       >
         {/* 固定ヘッダー */}
-        <div className="h-12 px-2 flex items-center justify-between border-b border-separator shrink-0 pt-[env(safe-area-inset-top)] box-content">
+        <div className="h-12 shrink-0 box-content flex items-center justify-between border-b border-separator bg-bg px-2 pt-[env(safe-area-inset-top)]">
           <Dialog.Close
             aria-label="閉じる"
             className="h-9 w-9 flex items-center justify-center text-muted active:opacity-50"
