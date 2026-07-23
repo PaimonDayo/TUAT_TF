@@ -1,7 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RecordFieldDef } from "@/types";
 import { customRecordFields } from "@/lib/record-fields";
-import { importedSheetReplies, normalizeSheetReplyText, type RawSheetReply } from "@/lib/sheet-replies";
+import {
+  importedSheetReplies,
+  matchAppReplyIndexes,
+  normalizeSheetReplyText,
+  type AppReplyIndexCandidate,
+  type RawSheetReply,
+} from "@/lib/sheet-replies";
 import {
   fetchPublicMember,
   fetchPublicSheetMembers,
@@ -166,8 +172,15 @@ export async function writeSheetReply(
   date: string,
   text: string,
   sourceId?: string,
-): Promise<void> {
-  await gasPost({ action: "writeReply", memberName, date, text, sourceId });
+): Promise<number | null> {
+  const result = await gasPost<{ success?: boolean; col?: number }>({
+    action: "writeReply",
+    memberName,
+    date,
+    text,
+    sourceId,
+  });
+  return result.success && Number.isInteger(result.col) ? Number(result.col) - 1 : null;
 }
 
 /** プロフィール選択用：部員シート名一覧 */
@@ -672,6 +685,7 @@ async function reconcileSheetReplies(
   members: RawMember[],
   fromDate: string,
   throughDate: string,
+  dryRun = false,
 ): Promise<{
   synced: number;
   failedMembers: { member: string; reason: string }[];
@@ -728,28 +742,62 @@ async function reconcileSheetReplies(
 
   const { data: appComments, error: commentError } = await supabase
     .from("comments")
-    .select("target_id, content, author:profiles!user_id(display_name)")
+    .select("id, target_id, content, created_at, sheet_reply_index, author:profiles!user_id(display_name)")
     .eq("target_type", "record")
     .in("target_id", [...targetIds]);
   if (commentError) throw commentError;
 
   const exportedByRecord = new Map<string, Set<string>>();
+  const appRepliesByRecord = new Map<string, AppReplyIndexCandidate[]>();
   for (const comment of appComments ?? []) {
     const author = Array.isArray(comment.author) ? comment.author[0] : comment.author;
     const displayName = author?.display_name?.trim() ?? "";
-    if (!displayName) continue;
+    const exportedText = displayName ? `${comment.content}　${displayName}` : comment.content;
     const values = exportedByRecord.get(comment.target_id) ?? new Set<string>();
-    values.add(normalizeSheetReplyText(comment.content + "　" + displayName));
+    values.add(normalizeSheetReplyText(exportedText));
     exportedByRecord.set(comment.target_id, values);
-  }
 
+    const candidates = appRepliesByRecord.get(comment.target_id) ?? [];
+    candidates.push({
+      id: comment.id,
+      content: comment.content,
+      authorName: displayName,
+      createdAt: comment.created_at,
+      sheetReplyIndex: comment.sheet_reply_index,
+    });
+    appRepliesByRecord.set(comment.target_id, candidates);
+  }
   let synced = 0;
   const failedMembers: { member: string; reason: string }[] = [];
   for (const recordId of targetIds) {
+    const rawReplies = rawRepliesByRecord.get(recordId) ?? [];
+    const indexMatches = matchAppReplyIndexes(
+      rawReplies,
+      appRepliesByRecord.get(recordId) ?? [],
+    );
     const rows = importedSheetReplies(
-      rawRepliesByRecord.get(recordId) ?? [],
+      rawReplies,
       exportedByRecord.get(recordId) ?? [],
     );
+    if (dryRun) {
+      synced += indexMatches.length + rows.length;
+      continue;
+    }
+
+    for (const match of indexMatches) {
+      const { error: indexError } = await supabase
+        .from("comments")
+        .update({ sheet_reply_index: match.replyIndex })
+        .eq("id", match.commentId);
+      if (indexError) {
+        failedMembers.push({
+          member: sheetNameByRecord.get(recordId) ?? "(スプシ返信)",
+          reason: "返信順の同期: " + indexError.message,
+        });
+      } else {
+        synced++;
+      }
+    }
     const { error } = await supabase.rpc("replace_sheet_record_replies", {
       target_record_id: recordId,
       reply_rows: rows,
@@ -923,6 +971,23 @@ export async function runSheetSync(
     result.inserted = inserts.length;
     result.updated = updates.length;
     result.pushed = scheduledPushes.length;
+    try {
+      const replySync = await reconcileSheetReplies(
+        admin,
+        linked.map((profile) => ({ id: profile.id, sheet_name: profile.sheet_name })),
+        members,
+        SYNC_CUTOFF,
+        today,
+        true,
+      );
+      result.sheetReplies = replySync.synced;
+      result.failedMembers.push(...replySync.failedMembers);
+    } catch (error) {
+      result.failedMembers.push({
+        member: "(スプシ返信)",
+        reason: error instanceof Error ? error.message : "返信の同期確認に失敗しました",
+      });
+    }
     return result;
   }
 

@@ -57,8 +57,21 @@ export async function POST(request: Request) {
   const replyText = name ? `${text}　${name}` : text;
 
   try {
-    await writeSheetReply(author.sheet_name, rec.recorded_date, replyText, commentId);
-    return NextResponse.json({ ok: true });
+    const replyIndex = await writeSheetReply(
+      author.sheet_name,
+      rec.recorded_date,
+      replyText,
+      commentId,
+    );
+    if (commentId && replyIndex != null) {
+      await admin
+        .from("comments")
+        .update({ sheet_reply_index: replyIndex })
+        .eq("id", commentId)
+        .eq("target_type", "record")
+        .eq("target_id", recordId);
+    }
+    return NextResponse.json({ ok: true, replyIndex });
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "失敗しました" },

@@ -22,6 +22,24 @@ type SheetReply = {
 };
 type DisplayReply = AppReply | SheetReply;
 
+function spreadsheetReplyIndex(reply: DisplayReply): number | null {
+  return reply.kind === "sheet" ? reply.reply_index : reply.sheet_reply_index ?? null;
+}
+
+function sortRepliesFromLeftToRight(replies: DisplayReply[]): DisplayReply[] {
+  return [...replies].sort((a, b) => {
+    const aIndex = spreadsheetReplyIndex(a);
+    const bIndex = spreadsheetReplyIndex(b);
+    if (aIndex != null && bIndex != null) return aIndex - bIndex;
+    if (aIndex != null) return -1;
+    if (bIndex != null) return 1;
+    if (a.kind === "app" && b.kind === "app") {
+      return a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id);
+    }
+    return a.id.localeCompare(b.id);
+  });
+}
+
 export function CommentSection({
   targetType,
   targetId,
@@ -81,7 +99,7 @@ export function CommentSection({
         ...row,
         kind: "sheet" as const,
       }));
-      const rows: DisplayReply[] = [...appRows, ...sheetRows];
+      const rows = sortRepliesFromLeftToRight([...appRows, ...sheetRows]);
       setComments(rows);
       onCountChange(rows.length);
       setLoading(false);
@@ -108,7 +126,7 @@ export function CommentSection({
         target_id: targetId,
         content,
       })
-      .select("id, user_id, target_type, target_id, content, created_at, updated_at")
+      .select("id, user_id, target_type, target_id, content, sheet_reply_index, created_at, updated_at")
       .single();
 
     if (insertError || !data) {
@@ -124,17 +142,33 @@ export function CommentSection({
       kind: "app",
     };
     setComments((items) => {
-      const next = [...items, added];
+      const next = sortRepliesFromLeftToRight([...items, added]);
       onCountChange(next.length);
       return next;
     });
     // 記録へのコメントは、作者がシート連携していればスプシのリプライ列にも書く（失敗しても投稿は成立）
     if (targetType === "record") {
-      fetch("/api/sheets/reply", {
+      void fetch("/api/sheets/reply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ recordId: targetId, commentId: data.id, text: content }),
-      }).catch(() => {});
+      })
+        .then(async (response) => {
+          if (!response.ok) return;
+          const result = await response.json().catch(() => null);
+          const replyIndex = Number(result?.replyIndex);
+          if (!Number.isInteger(replyIndex) || replyIndex < 0) return;
+          setComments((items) =>
+            sortRepliesFromLeftToRight(
+              items.map((item) =>
+                item.kind === "app" && item.id === data.id
+                  ? { ...item, sheet_reply_index: replyIndex }
+                  : item,
+              ),
+            ),
+          );
+        })
+        .catch(() => {});
     }
     setText("");
     setSaving(false);

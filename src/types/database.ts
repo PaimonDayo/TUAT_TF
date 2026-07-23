@@ -72,6 +72,7 @@ export type Database = {
       comments: {
         Row: {
           content: string
+          sheet_reply_index: number | null
           created_at: string
           id: string
           target_id: string
@@ -81,6 +82,7 @@ export type Database = {
         }
         Insert: {
           content: string
+          sheet_reply_index?: number | null
           created_at?: string
           id?: string
           target_id: string
@@ -90,6 +92,7 @@ export type Database = {
         }
         Update: {
           content?: string
+          sheet_reply_index?: number | null
           created_at?: string
           id?: string
           target_id?: string
