@@ -21,6 +21,9 @@ type TimelineCache = {
   pageParams: unknown[];
 };
 
+function clearNativeSelection() {
+  window.getSelection()?.removeAllRanges();
+}
 
 /** いいね + コメント の操作行 */
 export function PostActions({
@@ -109,19 +112,35 @@ export function PostActions({
     const actions = actionsRef.current;
     if (!actions) return;
 
-    const preventTextSelection = (event: Event) => event.preventDefault();
-    actions.addEventListener("selectstart", preventTextSelection);
-    return () => actions.removeEventListener("selectstart", preventTextSelection);
+    const preventNativeSelection = (event: Event) => {
+      event.preventDefault();
+      clearNativeSelection();
+    };
+    actions.addEventListener("selectstart", preventNativeSelection);
+    actions.addEventListener("contextmenu", preventNativeSelection);
+    actions.addEventListener("dragstart", preventNativeSelection);
+    return () => {
+      actions.removeEventListener("selectstart", preventNativeSelection);
+      actions.removeEventListener("contextmenu", preventNativeSelection);
+      actions.removeEventListener("dragstart", preventNativeSelection);
+      document.removeEventListener("selectionchange", clearNativeSelection);
+    };
   }, []);
 
   function startPress() {
     longPressed.current = false;
+    clearNativeSelection();
+    document.addEventListener("selectionchange", clearNativeSelection);
     pressTimer.current = setTimeout(() => {
       longPressed.current = true;
+      clearNativeSelection();
+      document.removeEventListener("selectionchange", clearNativeSelection);
       setLikersOpen(true);
     }, 450);
   }
   function cancelPress() {
+    document.removeEventListener("selectionchange", clearNativeSelection);
+    clearNativeSelection();
     if (pressTimer.current) {
       clearTimeout(pressTimer.current);
       pressTimer.current = null;
@@ -211,7 +230,7 @@ export function PostActions({
     <>
       <div
         ref={actionsRef}
-        className="flex select-none items-center gap-5 pt-1 [-webkit-user-select:none]"
+        className="flex select-none items-center gap-5 pt-1 [-webkit-touch-callout:none] [-webkit-user-select:none]"
       >
         <button
           onClick={handleLikeClick}
@@ -224,7 +243,7 @@ export function PostActions({
           onPointerCancel={cancelPress}
           onContextMenu={(e) => e.preventDefault()}
           className={cn(
-            "flex select-none touch-manipulation items-center gap-1.5 text-[13px] active:opacity-50 transition-active [-webkit-touch-callout:none]",
+            "flex touch-none select-none items-center gap-1.5 text-[13px] active:opacity-50 transition-active [-webkit-touch-callout:none] [-webkit-user-select:none] [&_*]:select-none [&_*]:[-webkit-user-select:none]",
             liked ? "text-danger" : "text-muted",
           )}
         >

@@ -253,6 +253,7 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 
 ## 作業ログ（着手前に追記・新しいものを上へ）
 <!-- 形式: YYYY-MM-DD / エージェント / 触る範囲 → 結果(commit・要点) -->
+- 2026-07-23 / Codex / iOSでいいね長押し時に残る青い選択UIを追加修正。操作対象をtouch-action:noneにし、子要素までWebKit user-select/touch-calloutを無効化。長押し中はselectstart/contextmenu/dragstart/selectionchangeを抑止して既存選択範囲も消去し、通常タップ・指外れキャンセル・いいねした人表示は維持。生成CSSでtouch-action/calloutを確認、tsc・対象eslint・59テスト・diff check・build成功、実機確認待ち → (このcommit)
 - 2026-07-23 / Codex / 中長距離向け走行サマリーを改善。直近7日の実日付範囲、前の7日との差、走行日数を追加し、総距離→比較文脈→強度構成の順に再設計。増減を良し悪しの色で評価せず、当期間0kmでも前期間との差を表示。強度バーに読み上げラベルを追加。tsc・対象eslint・59テスト・diff check・build成功、認証後の実機確認は未実施 → (このcommit)
 - 2026-07-23 / Codex / 他部員ページでは空のノート欄を省略。記録カードのいいね状態を閲覧者付きで取得し、画面間の共有キャッシュを初期値で上書きしないよう修正。練習量グラフの各棒に距離値を表示し、中長距離プロフィールに直近7日間の総距離・強度別割合/距離サマリーを追加。旧アプリと関連研究を確認し、固定の理想比率は示さず事実ベースの構成表示を採用。tsc・対象eslint・59テスト・diff check・build成功、認証後の実機確認は未実施 → (このcommit)
 - 2026-07-23 / Codex / 予定カードの押下時スケール演出を廃止し、背景色の短い変化へ変更。共通Button・出欠・FAB・お知らせカテゴリ・コンディション・プロフィール選択に残っていたactive:scaleも濃度変化へ統一し、共通transitionはtransformを外して0.12秒、prefers-reduced-motion時は無効化。tsc・対象eslint・active:scale全件検索・diff check・build成功。ローカル共通ボタンでcomputed transform:noneを確認、認証が必要な予定画面の実機確認は未実施 → (このcommit)
