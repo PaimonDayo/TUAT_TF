@@ -117,8 +117,18 @@ export function PostActions({
   }
 
   // いいねボタンの長押しで「いいねした人」シートを開く
+  const actionsRef = useRef<HTMLDivElement>(null);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressed = useRef(false);
+
+  useEffect(() => {
+    const actions = actionsRef.current;
+    if (!actions) return;
+
+    const preventTextSelection = (event: Event) => event.preventDefault();
+    actions.addEventListener("selectstart", preventTextSelection);
+    return () => actions.removeEventListener("selectstart", preventTextSelection);
+  }, []);
 
   function startPress() {
     longPressed.current = false;
@@ -215,7 +225,10 @@ export function PostActions({
   }
   return (
     <>
-      <div className="flex select-none items-center gap-5 pt-1">
+      <div
+        ref={actionsRef}
+        className="flex select-none items-center gap-5 pt-1 [-webkit-user-select:none]"
+      >
         <button
           onClick={handleLikeClick}
           onPointerDown={(event) => {
