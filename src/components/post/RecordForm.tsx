@@ -502,7 +502,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
                 key={c}
                 type="button"
                 onClick={() => setCondition(active ? null : c)}
-                className="h-14 rounded-xl border flex flex-col items-center justify-center gap-0.5 transition-active active:scale-[0.98]"
+                className="h-14 rounded-xl border flex flex-col items-center justify-center gap-0.5 transition-active active:opacity-[0.78]"
                 style={{
                   borderColor: active ? meta.color : "#e5e5ea",
                   backgroundColor: active ? meta.color + "14" : "#fff",

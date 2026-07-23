@@ -84,7 +84,7 @@ export function AttendanceToggle({
       onClick={toggle}
       disabled={busy}
       className={cn(
-        "inline-flex h-8 w-[116px] shrink-0 items-center justify-center gap-1 rounded-full border px-3 text-[13px] font-semibold transition-active active:scale-95 disabled:opacity-60",
+        "inline-flex h-8 w-[116px] shrink-0 items-center justify-center gap-1 rounded-full border px-3 text-[13px] font-semibold transition-active active:opacity-[0.78] disabled:opacity-60",
         style.cls,
       )}
     >

@@ -133,7 +133,13 @@ h1, h2, h3, p {
 
 /* ボタン押下フィードバック */
 .transition-active {
-  transition: transform 0.08s ease-out, opacity 0.15s ease-out;
+  transition: opacity 0.12s ease-out, background-color 0.12s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .transition-active {
+    transition: none;
+  }
 }
 
 /* フェードイン（タブ切替などの差し替え時） */

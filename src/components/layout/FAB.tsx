@@ -315,7 +315,7 @@ function ContextualFAB({
           onClick={handleMainAction}
           aria-label={label}
           aria-expanded={isFeed || isNotesRoot || isNoteFolder ? speedDialOpen : undefined}
-          className="pointer-events-auto absolute right-5 bottom-[calc(74px+env(safe-area-inset-bottom))] flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-lg shadow-accent/30 active:scale-95 transition-active"
+          className="pointer-events-auto absolute right-5 bottom-[calc(74px+env(safe-area-inset-bottom))] flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-lg shadow-accent/30 active:opacity-[0.78] transition-active"
         >
           {isFeed || isNotesRoot || isNoteFolder ? (
             <Plus
