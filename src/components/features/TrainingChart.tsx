@@ -17,13 +17,16 @@ import { Disclosure } from "@/components/ui/disclosure";
 import { KeyValue } from "@/components/ui/key-value";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { INTENSITY_ORDER, INTENSITY_LABELS, CONDITIONS } from "@/lib/constants";
+import { jstToday } from "@/lib/date";
 import { cn } from "@/lib/utils";
 import type { PracticeRecord, Intensity } from "@/types";
 
 type Period = "day" | "week" | "month";
 
 const COUNTS: Record<Period, number> = { day: 35, week: 16, month: 12 };
-const AREA = 96;
+const AREA = 84;
+const VALUE_AREA = 16;
+const CHART_HEIGHT = AREA + VALUE_AREA;
 
 interface Bucket {
   start: Date;
@@ -39,7 +42,13 @@ function bucketStart(d: Date, period: Period): Date {
 }
 
 /** 練習量の推移。日/週/月を切り替え、横スライドで過去を遡れる。棒タップで内訳。 */
-export function TrainingChart({ records }: { records: PracticeRecord[] }) {
+export function TrainingChart({
+  records,
+  showIntensitySummary = false,
+}: {
+  records: PracticeRecord[];
+  showIntensitySummary?: boolean;
+}) {
   const [period, setPeriod] = useState<Period>("day");
   const [selected, setSelected] = useState<number | null>(null);
   const [showDetail, setShowDetail] = useState(false);
@@ -70,6 +79,21 @@ export function TrainingChart({ records }: { records: PracticeRecord[] }) {
     return arr;
   }, [records, period]);
 
+  const recentSummary = useMemo(() => {
+    const from = jstToday(-6);
+    const through = jstToday();
+    const by: Record<Intensity, number> = { low: 0, mid: 0, high: 0, speed: 0 };
+    for (const record of records) {
+      if (record.recorded_date < from || record.recorded_date > through) continue;
+      by.low += record.dist_low ?? 0;
+      by.mid += record.dist_mid ?? 0;
+      by.high += record.dist_high ?? 0;
+      by.speed += record.dist_speed ?? 0;
+    }
+    const total = INTENSITY_ORDER.reduce((sum, intensity) => sum + by[intensity], 0);
+    return { by, total };
+  }, [records]);
+
   const max = Math.max(...buckets.map((b) => b.total), 1);
   // 期間切替直後は前の選択番号が範囲外になりうるので必ず範囲内へ収める
   const rawIndex = selected ?? buckets.length - 1;
@@ -98,6 +122,7 @@ export function TrainingChart({ records }: { records: PracticeRecord[] }) {
 
   return (
     <Card className="p-4 space-y-3">
+      {showIntensitySummary && <IntensitySummary summary={recentSummary} />}
       <div className="flex items-center justify-between">
         <p className="section-label">練習量の推移</p>
         <div className="w-36">
@@ -118,8 +143,8 @@ export function TrainingChart({ records }: { records: PracticeRecord[] }) {
         <div className="relative w-max">
           {/* 目盛り線 */}
           <div
-            className="absolute left-0 right-0 top-0 flex flex-col justify-between pointer-events-none"
-            style={{ height: `${AREA}px` }}
+            className="pointer-events-none absolute left-0 right-0 flex flex-col justify-between"
+            style={{ height: `${AREA}px`, top: `${VALUE_AREA}px` }}
           >
             {[0, 1, 2, 3].map((i) => (
               <div key={i} className="border-t border-separator/40" />
@@ -127,7 +152,7 @@ export function TrainingChart({ records }: { records: PracticeRecord[] }) {
           </div>
 
           {/* 棒 */}
-          <div className="relative flex items-end gap-2" style={{ height: `${AREA}px` }}>
+          <div className="relative flex items-end gap-2" style={{ height: `${CHART_HEIGHT}px` }}>
             {buckets.map((b, i) => {
               const barH = b.total > 0 ? Math.max((b.total / max) * AREA, 6) : 0;
               const isSel = i === selIndex;
@@ -138,30 +163,41 @@ export function TrainingChart({ records }: { records: PracticeRecord[] }) {
                     setSelected(i);
                     setShowDetail(false);
                   }}
-                  className="shrink-0 w-6 h-full flex items-end justify-center"
+                  className="relative h-full w-6 shrink-0"
                 >
                   {barH > 0 ? (
-                    <div
-                      className={cn(
-                        "w-full rounded-t-[4px] overflow-hidden flex flex-col-reverse border shadow-sm transition-all",
-                        isSel ? "border-accent ring-2 ring-inset ring-accent/60" : "border-separator/70 opacity-95",
-                      )}
-                      style={{ height: `${barH}px` }}
-                    >
-                      {INTENSITY_ORDER.map((k) =>
-                        b.by[k] > 0 ? (
-                          <div
-                            key={k}
-                            style={{
-                              height: `${(b.by[k] / b.total) * 100}%`,
-                              backgroundColor: INTENSITY_LABELS[k].color,
-                            }}
-                          />
-                        ) : null,
-                      )}
-                    </div>
+                    <>
+                      <span
+                        className={cn(
+                          "absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-[8px] font-semibold tabular-nums",
+                          isSel ? "text-accent" : "text-muted2",
+                        )}
+                        style={{ bottom: `${barH + 3}px` }}
+                      >
+                        {formatDistance(b.total)}
+                      </span>
+                      <div
+                        className={cn(
+                          "absolute bottom-0 left-0 flex w-full flex-col-reverse overflow-hidden rounded-t-[4px] border shadow-sm transition-all",
+                          isSel ? "border-accent ring-2 ring-inset ring-accent/60" : "border-separator/70 opacity-95",
+                        )}
+                        style={{ height: `${barH}px` }}
+                      >
+                        {INTENSITY_ORDER.map((k) =>
+                          b.by[k] > 0 ? (
+                            <div
+                              key={k}
+                              style={{
+                                height: `${(b.by[k] / b.total) * 100}%`,
+                                backgroundColor: INTENSITY_LABELS[k].color,
+                              }}
+                            />
+                          ) : null,
+                        )}
+                      </div>
+                    </>
                   ) : (
-                    <div className="w-full h-1 rounded-t-[3px] bg-separator/60" />
+                    <div className="absolute bottom-0 h-1 w-full rounded-t-[3px] bg-separator/60" />
                   )}
                 </button>
               );
@@ -261,5 +297,70 @@ export function TrainingChart({ records }: { records: PracticeRecord[] }) {
         );
       })()}
     </Card>
+  );
+}
+
+function formatDistance(value: number): string {
+  const rounded = Math.round(value * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
+function IntensitySummary({
+  summary,
+}: {
+  summary: { by: Record<Intensity, number>; total: number };
+}) {
+  return (
+    <div className="rounded-xl bg-bg p-3">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <p className="section-label">直近7日の走行サマリー</p>
+          <p className="mt-0.5 text-micro">記録した距離を強度別に集計</p>
+        </div>
+        <p className="text-xl font-bold tabular-nums">
+          {formatDistance(summary.total)}
+          <span className="ml-0.5 text-caption">km</span>
+        </p>
+      </div>
+
+      {summary.total > 0 ? (
+        <>
+          <div className="mt-2.5 flex h-2.5 overflow-hidden rounded-full bg-separator/60">
+            {INTENSITY_ORDER.map((intensity) =>
+              summary.by[intensity] > 0 ? (
+                <div
+                  key={intensity}
+                  style={{
+                    width: `${(summary.by[intensity] / summary.total) * 100}%`,
+                    backgroundColor: INTENSITY_LABELS[intensity].color,
+                  }}
+                />
+              ) : null,
+            )}
+          </div>
+          <div className="mt-2.5 grid grid-cols-2 gap-x-4 gap-y-1.5">
+            {INTENSITY_ORDER.map((intensity) => {
+              const value = summary.by[intensity];
+              const percent = Math.round((value / summary.total) * 100);
+              return (
+                <div key={intensity} className="flex min-w-0 items-center gap-1.5 text-[11px]">
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: INTENSITY_LABELS[intensity].color }}
+                  />
+                  <span className="truncate text-muted2">{INTENSITY_LABELS[intensity].label}</span>
+                  <span className="ml-auto shrink-0 font-semibold tabular-nums">
+                    {percent}%
+                    <span className="ml-1 font-normal text-muted">{formatDistance(value)}km</span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <p className="mt-2.5 text-caption">直近7日間の走行記録はありません</p>
+      )}
+    </div>
   );
 }

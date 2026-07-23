@@ -18,14 +18,14 @@ import { NoteList } from "@/components/features/NotesView";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import {
   getProfileById,
-  getUserRecords,
+  getUserRecordsWithSocialState,
   getPbRecords,
   getPublishedPersonalNotes,
   isFavorite,
 } from "@/lib/queries";
 import { gradeShort } from "@/lib/constants";
 import { permissionsOf } from "@/lib/permissions";
-import type { PbRecord, PracticeRecord, Profile, RecordWithAuthor } from "@/types";
+import type { PbRecord, Profile, RecordWithAuthor } from "@/types";
 
 export default function MemberPage({
   params,
@@ -49,7 +49,7 @@ async function MemberContent({
   // スプシメインの本人がここ(/members/自分)から記録を見る場合も、毎時同期を待たず最新化する
 
   const [records, pbs, notes, favorited, cookieStore] = await Promise.all([
-    getUserRecords(id) as Promise<PracticeRecord[]>,
+    getUserRecordsWithSocialState(id, viewer.id),
     getPbRecords(id) as Promise<PbRecord[]>,
     getPublishedPersonalNotes(id),
     isSelf ? Promise.resolve(false) : isFavorite(viewer.id, id),
@@ -125,12 +125,14 @@ async function MemberContent({
           </div>
         </Card>
 
-        <TrainingChart records={records} />
+        <TrainingChart records={records} showIntensitySummary={profile.blocks.includes("middle_long")} />
 
-        <section className="space-y-2">
-          <p className="section-label">{profile.display_name || "部員"}のノート</p>
-          <NoteList notes={notes} currentUser={{ id: viewer.id, display_name: viewer.display_name, avatar_url: viewer.avatar_url, blocks: viewer.blocks, grade: viewer.grade }} />
-        </section>
+        {(isSelf || notes.length > 0) && (
+          <section className="space-y-2">
+            <p className="section-label">{profile.display_name || "部員"}のノート</p>
+            <NoteList notes={notes} currentUser={{ id: viewer.id, display_name: viewer.display_name, avatar_url: viewer.avatar_url, blocks: viewer.blocks, grade: viewer.grade }} />
+          </section>
+        )}
 
         {pbs.length > 0 && (
           <section className="space-y-2">

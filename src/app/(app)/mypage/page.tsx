@@ -101,7 +101,11 @@ export default async function MyPage({
         </Card>
 
         {/* 練習量の推移（日/週/月・横スライド） */}
-        <MyTrainingChartCached userId={profile.id} initialRecords={records} />
+        <MyTrainingChartCached
+          userId={profile.id}
+          initialRecords={records}
+          showIntensitySummary={profile.blocks.includes("middle_long")}
+        />
 
         {/* リンク（1枚にまとめた区切り線リスト） */}
         <Card className="divide-y divide-separator/70 overflow-hidden">

@@ -32,6 +32,7 @@ import type {
   NoteWithRelations,
   AppNotificationWithActor,
   Profile,
+  PracticeRecord,
 } from "@/types";
 
 const AUTHOR_SELECT =
@@ -258,6 +259,25 @@ export async function getUserRecords(userId: string, fromDate?: string) {
     .order("recorded_date", { ascending: false });
   const { data } = await q;
   return data ?? [];
+}
+
+/** 他部員ページ用。記録に閲覧者本人のいいね状態とコメント数を付与する。 */
+export async function getUserRecordsWithSocialState(
+  userId: string,
+  currentUserId: string,
+): Promise<PracticeRecord[]> {
+  const records = (await getUserRecords(userId)) as PracticeRecord[];
+  const ids = records.map((record) => record.id);
+  const supabase = await createClient();
+  const [liked, comments] = await Promise.all([
+    fetchMyLikedIds(supabase, currentUserId, "record", ids),
+    fetchCommentCounts(supabase, "record", ids),
+  ]);
+  return records.map((record) => ({
+    ...record,
+    liked_by_me: liked.has(record.id),
+    comments_count: comments.get(record.id) ?? 0,
+  }));
 }
 
 /** 今日以降の練習予定（メニュー込み）を取得 */

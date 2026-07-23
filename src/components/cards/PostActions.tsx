@@ -52,22 +52,6 @@ export function PostActions({
   const { liked, likes, commentCount, busy } = interaction;
   const mutationBusy = useRef(false);
 
-  useEffect(() => {
-    queryClient.setQueryData(
-      ["social-like", currentUser.id, targetType, targetId],
-      (previous: InteractionState | undefined) => {
-        if (previous?.busy) return previous;
-        return {
-          liked: initialLiked,
-          likes: initialLikes,
-          commentCount: initialComments,
-          busy: false,
-        };
-      },
-    );
-  }, [
-    currentUser.id, initialComments, initialLiked, initialLikes, queryClient, targetId, targetType,
-  ]);
 
   const [openComments, setOpenComments] = useState(false);
   const commentsVisible = commentsExpanded || openComments;

@@ -253,6 +253,7 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 
 ## 作業ログ（着手前に追記・新しいものを上へ）
 <!-- 形式: YYYY-MM-DD / エージェント / 触る範囲 → 結果(commit・要点) -->
+- 2026-07-23 / Codex / 他部員ページでは空のノート欄を省略。記録カードのいいね状態を閲覧者付きで取得し、画面間の共有キャッシュを初期値で上書きしないよう修正。練習量グラフの各棒に距離値を表示し、中長距離プロフィールに直近7日間の総距離・強度別割合/距離サマリーを追加。旧アプリと関連研究を確認し、固定の理想比率は示さず事実ベースの構成表示を採用。tsc・対象eslint・59テスト・diff check・build成功、認証後の実機確認は未実施 → (このcommit)
 - 2026-07-23 / Codex / 予定カードの押下時スケール演出を廃止し、背景色の短い変化へ変更。共通Button・出欠・FAB・お知らせカテゴリ・コンディション・プロフィール選択に残っていたactive:scaleも濃度変化へ統一し、共通transitionはtransformを外して0.12秒、prefers-reduced-motion時は無効化。tsc・対象eslint・active:scale全件検索・diff check・build成功。ローカル共通ボタンでcomputed transform:noneを確認、認証が必要な予定画面の実機確認は未実施 → (このcommit)
 - 2026-07-23 / Codex / いいね長押し時の文字選択表示を修正。PostActionsの操作行でselectstartをネイティブに抑止し、WebKit向けuser-select:noneも明示。通常タップと長押し一覧の挙動は維持。tsc・対象eslint・diff check・build成功、実機確認は未実施 → (このcommit)
 - 2026-07-13 / Claude Code (Fable 5) / **タスク17-b（スレッド）＋17-c（FABメニュー化）実装・本番反映**。migration 20260713150000（threads/thread_posts新設・RLS=閲覧authenticated全員/作成本人名義/更新本人/削除本人or管理者・返信でthreads.updated_atを更新するトリガー。オーナー承認済み）。UI: ノートタブに3タブ目「スレッド」（ThreadList、cookieのタブ保持もthreads対応）、スレッド詳細 `/notes/threads/[id]`（時系列投稿＋返信欄＋本人/管理者の投稿削除・ThreadPostsView）、FABは/notesで「フォルダを作成/スレッドを立てる」の2択メニュー（**当初案の3択のうち「ノート(記事)」は入れていない**: 記事作成はフォルダ内FABが既に担い、ルートからだと保存先フォルダ選択を挟んで複雑になるため。オーナーが3択を望むなら次のエージェントがフォルダピッカー付きで追加）。週次バックアップ対象にthreads/thread_postsを追加。**残: 返信時の参加者通知（既存notifications基盤に'thread_reply'типеを足す場合は通知一覧UIの対応も必要）**。tsc/build成功・**実機確認は未実施** → (このcommit)

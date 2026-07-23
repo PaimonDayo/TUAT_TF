@@ -6,7 +6,15 @@ import { TrainingChart } from "@/components/features/TrainingChart";
 import { loadMyTrainingRecords } from "@/app/(app)/mypage/actions";
 import type { PracticeRecord } from "@/types";
 
-export function MyTrainingChartCached({ userId, initialRecords }: { userId: string; initialRecords: PracticeRecord[] }) {
+export function MyTrainingChartCached({
+  userId,
+  initialRecords,
+  showIntensitySummary = false,
+}: {
+  userId: string;
+  initialRecords: PracticeRecord[];
+  showIntensitySummary?: boolean;
+}) {
   const queryClient = useQueryClient();
   const queryKey = ["my-training-records", userId];
   const { data } = useQuery({
@@ -22,5 +30,5 @@ export function MyTrainingChartCached({ userId, initialRecords }: { userId: stri
     queryClient.setQueryData(queryKey, initialRecords);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialRecords, queryClient]);
-  return <TrainingChart records={data} />;
+  return <TrainingChart records={data} showIntensitySummary={showIntensitySummary} />;
 }
