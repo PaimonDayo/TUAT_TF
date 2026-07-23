@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { Camera, LogOut, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { clearPersistedQueries } from "@/lib/client/query-persistence";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
@@ -13,6 +13,11 @@ import { FormModalFooter } from "@/components/ui/form-modal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar } from "@/components/common/Avatar";
 import { BLOCKS, EVENTS_BY_BLOCK, GRADE_OPTIONS, PROFILE_BLOCK_ORDER, normalizeProfileBlocks } from "@/lib/constants";
+import {
+  AVATAR_BUCKET,
+  avatarStoragePathFromPublicUrl,
+  prepareAvatarImage,
+} from "@/lib/avatar-image";
 import { cn } from "@/lib/utils";
 import type { Block, Profile } from "@/types";
 
@@ -42,6 +47,10 @@ export function ProfileEditForm({
   const [events, setEvents] = useState<string[]>(profile.events ?? []);
   const [grade, setGrade] = useState<string | null>(profile.grade);
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url ?? "");
+  const [pendingAvatar, setPendingAvatar] = useState<Blob | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+  const [processingAvatar, setProcessingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [sheetName, setSheetName] = useState<string>(profile.sheet_name ?? "");
   const [recordSource, setRecordSource] = useState<"app" | "sheet">(
     profile.record_source ?? "app",
@@ -54,6 +63,12 @@ export function ProfileEditForm({
   const [error, setError] = useState<string | null>(null);
 
   const valid = name.trim() && blocks.length > 0 && grade;
+
+  useEffect(() => {
+    return () => {
+      if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+    };
+  }, [avatarPreviewUrl]);
 
   // スプシ連携用：部員シート名の候補を取得（失敗しても編集は続行できる）
   useEffect(() => {
@@ -110,6 +125,33 @@ export function ProfileEditForm({
     setEvents((cur) => (cur.includes(ev) ? cur.filter((x) => x !== ev) : [...cur, ev]));
   }
 
+  async function selectAvatar(file: File | undefined) {
+    if (!file) return;
+    setProcessingAvatar(true);
+    setError(null);
+    try {
+      const prepared = await prepareAvatarImage(file);
+      setPendingAvatar(prepared);
+      setAvatarPreviewUrl(URL.createObjectURL(prepared));
+    } catch (avatarError) {
+      setError(
+        avatarError instanceof Error
+          ? avatarError.message
+          : "画像を読み込めませんでした",
+      );
+    } finally {
+      setProcessingAvatar(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = "";
+    }
+  }
+
+  function removeAvatar() {
+    setPendingAvatar(null);
+    setAvatarPreviewUrl(null);
+    setAvatarUrl("");
+    setError(null);
+  }
+
   // 選択中ブロックに対応する種目だけ出す（重複排除・ブロック順）
   const eventOptions = PROFILE_BLOCK_ORDER.filter((b) => blocks.includes(b)).flatMap(
     (b) => b === "short"
@@ -149,6 +191,27 @@ export function ProfileEditForm({
     }
 
     const supabase = createClient();
+    let uploadedAvatarPath: string | null = null;
+    let nextAvatarUrl = avatarUrl.trim() || null;
+    if (pendingAvatar) {
+      uploadedAvatarPath = `${profile.id}/${crypto.randomUUID()}.webp`;
+      const { error: uploadError } = await supabase.storage
+        .from(AVATAR_BUCKET)
+        .upload(uploadedAvatarPath, pendingAvatar, {
+          cacheControl: "31536000",
+          contentType: "image/webp",
+          upsert: false,
+        });
+      if (uploadError) {
+        setError("画像をアップロードできませんでした。もう一度お試しください");
+        setSaving(false);
+        return;
+      }
+      nextAvatarUrl = supabase.storage
+        .from(AVATAR_BUCKET)
+        .getPublicUrl(uploadedAvatarPath).data.publicUrl;
+    }
+
     const result = await safeUpdate(
       supabase,
       "profiles",
@@ -158,7 +221,7 @@ export function ProfileEditForm({
         // 選択ブロックに無い種目は保存しない（ブロックを外したら自動で外れる）
         events: events.filter((ev) => eventOptions.includes(ev)),
         grade,
-        avatar_url: avatarUrl.trim() || null,
+        avatar_url: nextAvatarUrl,
         sheet_name: sheetName.trim() || null,
         record_source: sheetName.trim() ? recordSource : "app",
       },
@@ -166,9 +229,26 @@ export function ProfileEditForm({
     );
 
     if (!result.ok) {
+      if (uploadedAvatarPath) {
+        await supabase.storage.from(AVATAR_BUCKET).remove([uploadedAvatarPath]);
+      }
       setError(safeUpdateMessage(result.reason));
       setSaving(false);
       return;
+    }
+
+    const previousAvatarPath = avatarStoragePathFromPublicUrl(
+      profile.avatar_url,
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      profile.id,
+    );
+    if (previousAvatarPath && previousAvatarPath !== uploadedAvatarPath) {
+      const { error: removeError } = await supabase.storage
+        .from(AVATAR_BUCKET)
+        .remove([previousAvatarPath]);
+      if (removeError) {
+        console.warn("Failed to remove the previous avatar", removeError);
+      }
     }
     router.refresh();
     onDone();
@@ -191,19 +271,49 @@ export function ProfileEditForm({
       </div>
 
       <div>
-        <p className="section-label mb-1.5">アイコン画像URL（任意）</p>
+        <p className="section-label mb-1.5">アイコン（任意）</p>
         <div className="flex items-center gap-3">
-          <Avatar name={name || "?"} blocks={blocks} avatarUrl={avatarUrl.trim() || null} size="lg" />
-          <div className="flex-1 min-w-0">
-            <Input
-              placeholder="https://… 画像のURL"
-              value={avatarUrl}
-              onChange={(e) => setAvatarUrl(e.target.value)}
-              inputMode="url"
+          <Avatar
+            name={name || "?"}
+            blocks={blocks}
+            avatarUrl={avatarPreviewUrl ?? (avatarUrl.trim() || null)}
+            size="lg"
+          />
+          <div className="min-w-0 flex-1">
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+              className="hidden"
+              onChange={(event) => void selectAvatar(event.target.files?.[0])}
             />
-            <p className="text-micro mt-1">
-              画像URLを貼ると円形（中央基準）で表示されます。空欄ならイニシャル表示。
-              読み込みに失敗した場合はイニシャル表示に戻ります（Googleドライブ等の共有リンクは直接画像を指すURLではないため読み込めません）。
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={saving || processingAvatar}
+                onClick={() => avatarInputRef.current?.click()}
+              >
+                <Camera size={16} />
+                {processingAvatar ? "画像を準備中…" : "写真を選ぶ"}
+              </Button>
+              {(avatarPreviewUrl || avatarUrl.trim()) && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-danger"
+                  disabled={saving || processingAvatar}
+                  onClick={removeAvatar}
+                >
+                  <Trash2 size={16} />
+                  削除
+                </Button>
+              )}
+            </div>
+            <p className="mt-1 text-micro">
+              中央を正方形に切り抜いて保存します。JPG・PNG・WebP、12MBまで。
             </p>
           </div>
         </div>
@@ -353,7 +463,7 @@ export function ProfileEditForm({
 
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <FormModalFooter>
-        <Button size="lg" onClick={save} disabled={saving || !valid}>
+        <Button size="lg" onClick={save} disabled={saving || processingAvatar || !valid}>
           {saving ? "保存中…" : isSetup ? "はじめる" : "保存する"}
         </Button>
       </FormModalFooter>
