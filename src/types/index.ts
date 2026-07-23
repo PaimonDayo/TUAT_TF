@@ -359,6 +359,8 @@ export interface PracticeMenu {
   updated_at: string;
   author?: { id?: string; display_name: string } | null;
   targets?: PracticeMenuTarget[];
+  /** DB保存ではなく月別スプレッドシートから直接表示しているメニュー */
+  source?: "sheet";
 }
 
 export interface PracticeMenuTarget {

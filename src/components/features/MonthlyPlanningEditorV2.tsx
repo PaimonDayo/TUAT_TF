@@ -56,6 +56,7 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
     const date = `${monthKey}-${String(index + 1).padStart(2, "0")}`;
     return { date, day: index + 1, weekday: WEEKDAYS[new Date(year, month - 1, index + 1).getDay()] };
   }), [month, monthKey, year]);
+  const sheetBackedCommonMenu = block === "middle_long" && targetIds.length === 0;
 
   useEffect(() => {
     let active = true;
@@ -81,24 +82,75 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
 
   useEffect(() => {
     let active = true;
-    const scheduleIds = Object.values(schedules).map((schedule) => schedule.id);
+    const scheduleRows = Object.values(schedules);
+    const scheduleIds = scheduleRows.map((schedule) => schedule.id);
     if (!scheduleIds.length) return;
-    void createClient().from("practice_menus").select("*, targets:practice_menu_targets(user_id)").in("schedule_id", scheduleIds).eq("target_block", block).then(({ data }) => {
-      if (!active) return;
-      const dateById = new Map(Object.values(schedules).map((schedule) => [schedule.id, schedule.schedule_date]));
+
+    async function loadMenus() {
       const drafts: Record<string, MenuDraft> = {};
-      for (const menu of (data ?? []) as PracticeMenu[]) {
-        const targets = menu.targets?.map((target) => target.user_id) ?? [];
-        if ([...targets].sort().join(",") !== [...targetIds].sort().join(",")) continue;
-        const date = dateById.get(menu.schedule_id); if (!date) continue;
-        drafts[date] = { id: menu.id, content: menu.content ?? "", pace: menu.pace ?? "", remark: menu.remark ?? "", supplement: menu.supplement ?? "" };
+      if (sheetBackedCommonMenu) {
+        const response = await fetch(`/api/middle-long-menus?months=${month}`, { cache: "no-store" });
+        if (response.ok) {
+          const snapshot = await response.json() as {
+            rows: Array<{
+              exactDate: string | null;
+              monthDay: string;
+              sourceMonth: number;
+              content: string;
+              pace: string;
+              remark: string;
+              supplement: string;
+            }>;
+          };
+          for (const schedule of scheduleRows) {
+            const row = snapshot.rows.find((item) =>
+              item.sourceMonth === month &&
+              (item.exactDate === schedule.schedule_date ||
+                (item.exactDate === null && item.monthDay === schedule.schedule_date.slice(5)))
+            );
+            if (!row) continue;
+            drafts[schedule.schedule_date] = {
+              content: row.content,
+              pace: row.pace,
+              remark: row.remark,
+              supplement: row.supplement,
+            };
+          }
+        }
+      } else {
+        const { data } = await createClient()
+          .from("practice_menus")
+          .select("*, targets:practice_menu_targets(user_id)")
+          .in("schedule_id", scheduleIds)
+          .eq("target_block", block);
+        const dateById = new Map(scheduleRows.map((schedule) => [schedule.id, schedule.schedule_date]));
+        for (const menu of (data ?? []) as PracticeMenu[]) {
+          const targets = menu.targets?.map((target) => target.user_id) ?? [];
+          if ([...targets].sort().join(",") !== [...targetIds].sort().join(",")) continue;
+          const date = dateById.get(menu.schedule_id);
+          if (!date) continue;
+          drafts[date] = {
+            id: menu.id,
+            content: menu.content ?? "",
+            pace: menu.pace ?? "",
+            remark: menu.remark ?? "",
+            supplement: menu.supplement ?? "",
+          };
+        }
       }
+      if (!active) return;
       const local = readStored<{ menus?: Record<string, MenuDraft> }>(localDraftKey, {});
       setMenuDrafts({ ...drafts, ...(local.menus ?? {}) });
-    });
-    return () => { active = false; };
-  }, [block, localDraftKey, schedules, targetIds]);
+      if (sheetBackedCommonMenu) {
+        setExpandedDates(Object.entries(drafts)
+          .filter(([, draft]) => !!(draft.pace || draft.remark || draft.supplement))
+          .map(([date]) => date));
+      }
+    }
 
+    void loadMenus();
+    return () => { active = false; };
+  }, [block, localDraftKey, month, schedules, sheetBackedCommonMenu, targetIds]);
   useEffect(() => {
     if (!Object.values(rowStates).some((state) => state === "dirty")) return;
     const timer = window.setTimeout(() => {
@@ -140,18 +192,58 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
   }
 
   async function saveMenu(date: string) {
-    const draft = menuDrafts[date]; if (!hasMenuValue(draft)) return true;
+    const draft = menuDrafts[date];
+    if (!draft || (!hasMenuValue(draft) && !sheetBackedCommonMenu)) return true;
     setRowStates((current) => ({ ...current, [stateKey("menu", date)]: "saving" }));
-    const schedule = await ensureSchedule(date); if (!schedule) { setRowStates((current) => ({ ...current, [stateKey("menu", date)]: "error" })); return false; }
-    const { data, error: saveError } = await createClient().rpc("save_practice_menu", { target_schedule_id: schedule.id, menu_content: draft.content.trim(), menu_status: status, menu_target_block: block, target_user_ids: targetIds, target_menu_id: draft.id ?? undefined, menu_pace: draft.pace.trim() || undefined, menu_remark: draft.remark.trim() || undefined, menu_supplement: targetIds.length === 0 ? draft.supplement.trim() || undefined : undefined });
-    if (saveError) { setRowStates((current) => ({ ...current, [stateKey("menu", date)]: "error" })); return false; }
-    setMenuDrafts((current) => ({ ...current, [date]: { ...current[date], id: data as string } })); setRowStates((current) => ({ ...current, [stateKey("menu", date)]: "saved" })); return true;
-  }
+    const schedule = await ensureSchedule(date);
+    if (!schedule) {
+      setRowStates((current) => ({ ...current, [stateKey("menu", date)]: "error" }));
+      return false;
+    }
 
+    if (sheetBackedCommonMenu) {
+      const response = await fetch("/api/middle-long-menus", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scheduleId: schedule.id,
+          content: draft.content,
+          pace: draft.pace,
+          remark: draft.remark,
+          supplement: draft.supplement,
+        }),
+      });
+      if (!response.ok) {
+        setRowStates((current) => ({ ...current, [stateKey("menu", date)]: "error" }));
+        return false;
+      }
+      setRowStates((current) => ({ ...current, [stateKey("menu", date)]: "saved" }));
+      return true;
+    }
+
+    const { data, error: saveError } = await createClient().rpc("save_practice_menu", {
+      target_schedule_id: schedule.id,
+      menu_content: draft.content.trim(),
+      menu_status: status,
+      menu_target_block: block,
+      target_user_ids: targetIds,
+      target_menu_id: draft.id ?? undefined,
+      menu_pace: draft.pace.trim() || undefined,
+      menu_remark: draft.remark.trim() || undefined,
+      menu_supplement: targetIds.length === 0 ? draft.supplement.trim() || undefined : undefined,
+    });
+    if (saveError) {
+      setRowStates((current) => ({ ...current, [stateKey("menu", date)]: "error" }));
+      return false;
+    }
+    setMenuDrafts((current) => ({ ...current, [date]: { ...current[date], id: data as string } }));
+    setRowStates((current) => ({ ...current, [stateKey("menu", date)]: "saved" }));
+    return true;
+  }
   async function saveAll(): Promise<boolean> {
     setSavingAll(true); setError(null);
     const scheduleDates = days.map((day) => day.date).filter((date) => rowStates[stateKey("schedule", date)] === "dirty" && hasScheduleValue(scheduleDrafts[date]));
-    const menuDates = days.map((day) => day.date).filter((date) => rowStates[stateKey("menu", date)] === "dirty" && hasMenuValue(menuDrafts[date]));
+    const menuDates = days.map((day) => day.date).filter((date) => rowStates[stateKey("menu", date)] === "dirty" && (sheetBackedCommonMenu || hasMenuValue(menuDrafts[date])));
     let failed = 0;
     for (const date of scheduleDates) { if (!await saveSchedule(date)) failed++; }
     for (const date of menuDates) { if (!await saveMenu(date)) failed++; }
@@ -187,7 +279,13 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
     {tab === "menu" && <div className="space-y-3 rounded-xl border border-separator bg-card p-3">
       <Select value={block} onValueChange={(value) => setBlock(value as Block)} ariaLabel="ブロック" options={EDITABLE_BLOCK_ORDER.map((item) => ({ value: item, label: BLOCKS[item].label }))} />
       <PersonPicker people={members} value={targetIds} onChange={setTargetIds} label="個人指定（空ならブロック全体）" />
-      <div className={`rounded-xl border p-3 ${status === "published" ? "border-accent/30 bg-accent/5" : "border-warning/30 bg-warning/5"}`}><p className="section-label mb-2">保存後の状態</p><SegmentedControl items={[{ key: "published", label: "公開" }, { key: "draft", label: "下書き" }]} value={status} onChange={(value) => setStatus(value as "draft" | "published")} /><p className="mt-2 text-xs text-muted">{status === "published" ? "保存するとすぐに部員へ公開されます" : "作成者だけが確認できる下書きで保存します"}</p></div>
+      {sheetBackedCommonMenu ? (
+        <p className="rounded-xl bg-accent/5 px-3 py-2 text-xs text-muted">
+          中長距離のブロック全体メニューは、GASを通して月別スプレッドシートへ保存します。
+        </p>
+      ) : (
+        <div className={`rounded-xl border p-3 ${status === "published" ? "border-accent/30 bg-accent/5" : "border-warning/30 bg-warning/5"}`}><p className="section-label mb-2">保存後の状態</p><SegmentedControl items={[{ key: "published", label: "公開" }, { key: "draft", label: "下書き" }]} value={status} onChange={(value) => setStatus(value as "draft" | "published")} /><p className="mt-2 text-xs text-muted">{status === "published" ? "保存するとすぐに部員へ公開されます" : "作成者だけが確認できる下書きで保存します"}</p></div>
+      )}
     </div>}
     <div className="space-y-2">{visibleDays.map(({ date, day, weekday }) => <section key={date} className={`rounded-xl border bg-card p-3 ${rowStates[stateKey(tab, date)] === "error" ? "border-danger" : "border-separator"}`}><div className="mb-2 flex items-center"><strong className="text-sm">{month}/{day}（{weekday}）</strong><RowStatus state={rowStates[stateKey(tab, date)]} /></div>
       {tab === "schedule" ? (
@@ -206,33 +304,33 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
           </div>
           <div>
             <p className="section-label mb-1.5">詳細</p>
-            <Textarea rows={2} className="min-h-16" placeholder="集合方法、持ち物、連絡事項など" value={scheduleDrafts[date]?.note ?? ""} onChange={(event) => updateSchedule(date, { note: event.target.value })} />
+            <Textarea autoGrow rows={2} className="min-h-16" placeholder="集合方法、持ち物、連絡事項など" value={scheduleDrafts[date]?.note ?? ""} onChange={(event) => updateSchedule(date, { note: event.target.value })} />
           </div>
         </div>
       ) : (
         <div className="space-y-3">
           <div>
             <p className="section-label mb-1.5">メニュー</p>
-            <Textarea rows={3} className="min-h-20" placeholder="例：400m×10（つなぎ200m）" value={menuDrafts[date]?.content ?? ""} onChange={(event) => updateMenu(date, { content: event.target.value })} />
+            <Textarea autoGrow rows={3} className="min-h-20" placeholder="例：400m×10（つなぎ200m）" value={menuDrafts[date]?.content ?? ""} onChange={(event) => updateMenu(date, { content: event.target.value })} />
           </div>
           {(block === "middle_long" || block === "short") && <button type="button" onClick={() => toggleExpanded(date)} className="inline-flex items-center gap-1 text-xs font-semibold text-accent">{isExpanded(date) ? <ChevronUp size={14} /> : <ChevronDown size={14} />}{isExpanded(date) ? "詳細を閉じる" : block === "middle_long" ? "ペース・補足・補強を入力" : "説明を入力"}</button>}
           {block === "middle_long" && isExpanded(date) && <>
             <div>
               <p className="section-label mb-1.5">ペース</p>
-              <Textarea rows={2} className="min-h-16" placeholder="距離ごとの設定ペースなど" value={menuDrafts[date]?.pace ?? ""} onChange={(event) => updateMenu(date, { pace: event.target.value })} />
+              <Textarea autoGrow rows={2} className="min-h-16" placeholder="距離ごとの設定ペースなど" value={menuDrafts[date]?.pace ?? ""} onChange={(event) => updateMenu(date, { pace: event.target.value })} />
             </div>
             <div>
               <p className="section-label mb-1.5">補足</p>
-              <Textarea rows={2} className="min-h-16" placeholder="変更条件や注意点など" value={menuDrafts[date]?.remark ?? ""} onChange={(event) => updateMenu(date, { remark: event.target.value })} />
+              <Textarea autoGrow rows={2} className="min-h-16" placeholder="変更条件や注意点など" value={menuDrafts[date]?.remark ?? ""} onChange={(event) => updateMenu(date, { remark: event.target.value })} />
             </div>
             {targetIds.length === 0 && <div>
               <p className="section-label mb-1.5">補強</p>
-              <Textarea rows={2} className="min-h-16" placeholder="補強内容を入力" value={menuDrafts[date]?.supplement ?? ""} onChange={(event) => updateMenu(date, { supplement: event.target.value })} />
+              <Textarea autoGrow rows={2} className="min-h-16" placeholder="補強内容を入力" value={menuDrafts[date]?.supplement ?? ""} onChange={(event) => updateMenu(date, { supplement: event.target.value })} />
             </div>}
           </>}
           {block === "short" && isExpanded(date) && <div>
             <p className="section-label mb-1.5">説明</p>
-            <Textarea rows={2} className="min-h-16" placeholder="目的、走り方、注意点など" value={menuDrafts[date]?.remark ?? ""} onChange={(event) => updateMenu(date, { remark: event.target.value })} />
+            <Textarea autoGrow rows={2} className="min-h-16" placeholder="目的、走り方、注意点など" value={menuDrafts[date]?.remark ?? ""} onChange={(event) => updateMenu(date, { remark: event.target.value })} />
           </div>}
         </div>
       )}

@@ -1,10 +1,14 @@
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getUpcomingSchedulesWithAttendances } from "@/lib/queries";
 import { permissionsOf } from "@/lib/permissions";
+import { applyMiddleLongMenuSnapshot, middleLongMenuMonths } from "@/lib/middle-long-menu-data";
+import { fetchMiddleLongMenuSnapshot } from "@/lib/middle-long-menu-sheet";
+import type { MiddleLongMenuSnapshot } from "@/lib/middle-long-menu-data";
 import type { Attendee, AttendanceStatusOrNone, AuthorMini, ScheduleWithMenus } from "@/types";
 
 export type SchedulePageData = {
   schedules: ScheduleWithMenus[];
+  middleLongMenuSnapshot: MiddleLongMenuSnapshot | null;
   userId: string;
   myProfile: AuthorMini;
   viewerBlocks: import("@/types").Block[];
@@ -21,8 +25,13 @@ export type SchedulePageData = {
 export async function getSchedulePageData(): Promise<SchedulePageData> {
   const profile = await getCurrentProfile();
   const perms = permissionsOf(profile.roles);
-  const schedules: (ScheduleWithMenus & { attendances?: (Attendee & { schedule_id: string })[] })[] =
+  let schedules: (ScheduleWithMenus & { attendances?: (Attendee & { schedule_id: string })[] })[] =
     await getUpcomingSchedulesWithAttendances(profile.blocks, perms.createSchedule);
+  let middleLongMenuSnapshot: MiddleLongMenuSnapshot | null = null;
+  if (profile.blocks.includes("middle_long") || profile.menu_view_all_blocks) {
+    middleLongMenuSnapshot = await fetchMiddleLongMenuSnapshot(middleLongMenuMonths(schedules));
+    schedules = applyMiddleLongMenuSnapshot(schedules, middleLongMenuSnapshot);
+  }
 
   const attendeesBySchedule: Record<string, Attendee[]> = {};
   const myStatusBySchedule: Record<string, AttendanceStatusOrNone> = {};
@@ -42,6 +51,7 @@ export async function getSchedulePageData(): Promise<SchedulePageData> {
   return {
     schedules,
     userId: profile.id,
+    middleLongMenuSnapshot,
     myProfile: profile,
     viewerBlocks: profile.blocks,
     canEditMenu: perms.createMenu,

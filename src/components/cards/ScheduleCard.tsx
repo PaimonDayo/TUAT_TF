@@ -11,6 +11,10 @@ import {
   CalendarRange,
   ExternalLink,
   Info,
+  ListChecks,
+  Timer,
+  StickyNote,
+  Dumbbell,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +27,7 @@ import { BLOCKS, BLOCK_ORDER } from "@/lib/constants";
 import { venueShort } from "@/lib/venues";
 import { cn } from "@/lib/utils";
 import { jstToday } from "@/lib/date";
-import { MenuEditModal } from "@/components/post/MenuForm";
+import { MenuEditModal, SheetMenuEditModal } from "@/components/post/MenuForm";
 import { ScheduleManageActions } from "@/components/post/ScheduleForm";
 import { AttendanceToggle, LateAttendanceControl, type AttendanceChange, type LateAttendanceChange } from "@/components/features/AttendanceToggle";
 import { AttendeesButton } from "@/components/features/AttendeesButton";
@@ -284,7 +288,9 @@ export function ScheduleCard({
                           menu={m}
                           scheduleId={schedule.id}
                           canManage={
-                            canManageAllMenus || (!!userId && m.author?.id === userId)
+                            m.source === "sheet"
+                              ? canEditMenu
+                              : canManageAllMenus || (!!userId && m.author?.id === userId)
                           }
                           isTargeted={
                             !!userId && (m.targets?.some((t) => t.user_id === userId) ?? false)
@@ -351,6 +357,10 @@ function MenuCard({
     menu.targets?.map((target) => target.profile?.display_name).filter(Boolean) ?? [];
 
   const [publishing, setPublishing] = useState(false);
+
+  if (menu.source === "sheet") {
+    return <SheetMenuCard menu={menu} scheduleId={scheduleId} canManage={canManage} onChanged={onChanged} />;
+  }
 
   async function remove() {
     const supabase = createClient();
@@ -467,6 +477,98 @@ function MenuCard({
         onOpenChange={setEditing}
         onSaved={(saved) => onChanged(saved)}
       />
+    </div>
+  );
+}
+
+function SheetMenuCard({
+  menu,
+  scheduleId,
+  canManage,
+  onChanged,
+}: {
+  menu: PracticeMenu;
+  scheduleId: string;
+  canManage: boolean;
+  onChanged: (menu: PracticeMenu | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  return (
+    <div className="relative space-y-2">
+      <p className={cn("text-[10px] font-semibold text-muted2", canManage && "pr-8")}>
+        スプレッドシートから最新表示
+      </p>
+      {canManage && (
+        <div className="absolute -right-1.5 -top-1.5">
+          <ActionMenu
+            onEdit={() => setEditing(true)}
+            triggerLabel="中長距離メニューの操作"
+          />
+        </div>
+      )}
+      {menu.content && (
+        <SheetMenuSection
+          icon={<ListChecks size={14} />}
+          label="練習メニュー"
+          text={menu.content}
+          className="border-blue-200/70 bg-blue-50/70 text-blue-700"
+        />
+      )}
+      {menu.pace && (
+        <SheetMenuSection
+          icon={<Timer size={14} />}
+          label="ペース目安"
+          text={menu.pace}
+          className="border-emerald-200/70 bg-emerald-50/70 text-emerald-700"
+        />
+      )}
+      {menu.remark && (
+        <SheetMenuSection
+          icon={<StickyNote size={14} />}
+          label="補足・メモ"
+          text={menu.remark}
+          className="border-amber-200/70 bg-amber-50/70 text-amber-700"
+        />
+      )}
+      {menu.supplement && (
+        <SheetMenuSection
+          icon={<Dumbbell size={14} />}
+          label="補強"
+          text={menu.supplement}
+          className="border-violet-200/70 bg-violet-50/70 text-violet-700"
+        />
+      )}
+      {editing && (
+        <SheetMenuEditModal
+          menu={menu}
+          scheduleId={scheduleId}
+          onOpenChange={setEditing}
+          onSaved={onChanged}
+        />
+      )}
+    </div>
+  );
+}
+function SheetMenuSection({
+  icon,
+  label,
+  text,
+  className,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  text: string;
+  className: string;
+}) {
+  return (
+    <div className={cn("rounded-xl border p-3", className)}>
+      <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold">
+        {icon}
+        {label}
+      </p>
+      <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-ink">
+        <Linkify text={text} />
+      </p>
     </div>
   );
 }

@@ -54,6 +54,7 @@ function doPost(e) {
     if (body.action === 'fetchAllRaw') return handleFetchAllRaw();
     if (body.action === 'fetchMember') return handleFetchMember(body.memberName);
     if (body.action === 'writeCells') return createJsonResponse(writeCellsRecord(body));
+    if (body.action === 'writeMiddleLongMenu') return createJsonResponse(writeMiddleLongMenuRecord(body));
     if (body.action === 'writeReply') return createJsonResponse(writeReplyRecord(body));
     return createJsonResponse({ error: 'unknown action' });
   } catch (err) {
@@ -223,6 +224,44 @@ function writeCellsRecord(data) {
   };
 }
 
+
+// ── 中長距離の月別メニュー（E:H = メニュー・ペース・補足・補強）──────────
+function writeMiddleLongMenuRecord(data) {
+  const date = (data.date || '').toString().trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('date は yyyy-MM-dd 形式で必須です。');
+
+  const month = Number(date.slice(5, 7));
+  const sheetName = month + '月メニュー';
+  const sheet = getSpreadsheet().getSheetByName(sheetName);
+  if (!sheet) throw new Error('シート「' + sheetName + '」が見つかりません。');
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) throw new Error('別の保存処理中です。少し待って再試行してください。');
+  try {
+    const values = sheet.getDataRange().getValues();
+    const targetMonthDay = date.slice(5);
+    let rowIdx = -1;
+    for (let i = 0; i < values.length; i++) {
+      const raw = values[i][0];
+      if (!raw) continue;
+      const parsed = parseSheetDate(raw);
+      if (parsed === date || parsed.slice(5) === targetMonthDay) {
+        rowIdx = i;
+        break;
+      }
+    }
+    if (rowIdx === -1) throw new Error(date + ' の行が「' + sheetName + '」に見つかりません。');
+
+    const cells = [data.content, data.pace, data.remark, data.supplement].map(function(value) {
+      return value == null ? '' : value.toString().trim();
+    });
+    sheet.getRange(rowIdx + 1, 5, 1, 4).setValues([cells]);
+    SpreadsheetApp.flush();
+    return { success: true, sheet: sheetName, row: rowIdx + 1 };
+  } finally {
+    lock.releaseLock();
+  }
+}
 // ── リプライ（旧TFと同じ：感想列より右の「列名なし」列に左から書き足す）─────────
 function findHeaderCol(header, keywords) {
   const normalized = header.map(normalizeHeaderCell);

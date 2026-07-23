@@ -183,7 +183,30 @@ export async function writeSheetReply(
   return result.success && Number.isInteger(result.col) ? Number(result.col) - 1 : null;
 }
 
+
+export type MiddleLongMenuSheetWrite = {
+  content: string;
+  pace: string;
+  remark: string;
+  supplement: string;
+};
+
+/** 中長距離の月別メニュー行（E:H）をGAS経由で更新する。 */
+export async function writeMiddleLongMenuToSheet(
+  date: string,
+  menu: MiddleLongMenuSheetWrite,
+): Promise<{ success: boolean; sheet: string; row: number }> {
+  return gasPost({
+    action: "writeMiddleLongMenu",
+    date,
+    content: menu.content,
+    pace: menu.pace,
+    remark: menu.remark,
+    supplement: menu.supplement,
+  });
+}
 /** プロフィール選択用：部員シート名一覧 */
+
 export async function fetchSheetMembers(): Promise<SheetMember[]> {
   return fetchPublicSheetMembers();
 }

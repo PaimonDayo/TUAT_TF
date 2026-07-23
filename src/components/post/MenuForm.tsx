@@ -3,17 +3,17 @@
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { Copy, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
-import { Input } from "@/components/ui/input";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+
+
 import { SegmentedControl } from "@/components/ui/segmented";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/components/ui/toast";
+
 import { createClient } from "@/lib/supabase/client";
 import { jstToday } from "@/lib/date";
 import { MenuSheetImportManager } from "@/components/features/MenuSheetImportManager";
@@ -43,18 +43,6 @@ type UpcomingSchedule = {
   title: string | null;
   venue_name: string | null;
   schedule_type: string;
-};
-
-/** 「過去メニューから複製」ピッカーに出す1件 */
-type HistoryMenu = {
-  id: string;
-  content: string;
-  pace: string | null;
-  remark: string | null;
-  supplement: string | null;
-  target_block: Block | null;
-  created_at: string;
-  targets: { user_id: string }[];
 };
 
 /** 予定カードから練習メニューを追加する */
@@ -150,13 +138,13 @@ function MenuEditor({
   menu?: PracticeMenu;
   onDone: (saved?: MenuSaveResult) => void;
 }) {
-  const { showToast } = useToast();
+
   const initialTargetIds = menu?.targets?.map((target) => target.user_id) ?? [];
   const [schedules, setSchedules] = useState<UpcomingSchedule[] | null>(
     fixedScheduleId ? [] : null,
   );
   const [members, setMembers] = useState<AuthorMini[] | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
   const [scheduleId, setScheduleId] = useState(fixedScheduleId ?? menu?.schedule_id ?? "");
   const [kind, setKind] = useState<MenuKind>(() => {
     if (initialTargetIds.length > 0) return "people";
@@ -173,9 +161,9 @@ function MenuEditor({
   const [remark, setRemark] = useState(menu?.remark ?? "");
   const [supplement, setSupplement] = useState(menu?.supplement ?? "");
   const [status, setStatus] = useState<MenuStatus>(menu?.status ?? "published");
-  const [history, setHistory] = useState<HistoryMenu[] | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [historySearch, setHistorySearch] = useState("");
+
+
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -222,7 +210,7 @@ function MenuEditor({
       setMembers(memberRows);
 
       if (user) {
-        setCurrentUserId(user.id);
+
         // 直近値の自動初期値（対象者引き継ぎ）: 新規作成時だけ、直前に作った
         // 個別メニューの対象者をプリロードする。
         if (!menu) {
@@ -242,72 +230,6 @@ function MenuEditor({
       active = false;
     };
   }, [fixedScheduleId, menu]);
-
-  // 過去のメニュー履歴はシートを開いたときだけ取得する
-  useEffect(() => {
-    if (!historyOpen || history !== null || !currentUserId) return;
-    let active = true;
-    const supabase = createClient();
-    void supabase
-      .from("practice_menus")
-      .select(
-        "id, content, pace, remark, supplement, target_block, created_at, targets:practice_menu_targets(user_id)",
-      )
-      .eq("author_id", currentUserId)
-      .eq("status", "published")
-      .order("created_at", { ascending: false })
-      .limit(30)
-      .then(({ data }) => {
-        if (!active) return;
-        const normalized: HistoryMenu[] = (data ?? []).flatMap((row) => {
-          const targetBlock =
-            row.target_block === "middle_long" ||
-            row.target_block === "short" ||
-            row.target_block === "jump" ||
-            row.target_block === "throw"
-              ? normalizeBlock(row.target_block)
-              : null;
-          return [{ ...row, target_block: targetBlock }];
-        });
-        setHistory(normalized);
-      });
-    return () => {
-      active = false;
-    };
-  }, [historyOpen, history, currentUserId]);
-
-
-  /** 過去に公開したメニュー1件を丸ごと複製（種類・ブロック・対象者・メニュー・ペース・補足・補強） */
-  function loadHistoryItem(item: HistoryMenu) {
-    const ids = item.targets?.map((target) => target.user_id) ?? [];
-    setKind(ids.length > 0 ? "people" : "block");
-    if (item.target_block) setTargetBlock(item.target_block);
-    setTargetIds(ids);
-    setContent(item.content ?? "");
-    setPace(item.pace ?? "");
-    setRemark(item.remark ?? "");
-    setSupplement(item.supplement ?? "");
-    setHistoryOpen(false);
-    showToast("過去のメニューを読み込みました", "success");
-  }
-
-  /** 履歴一覧の1行要約 */
-  function historySummary(item: HistoryMenu): string {
-    const scope =
-      item.targets.length > 0
-        ? `個人${item.targets.length}人`
-        : item.target_block
-          ? BLOCKS[item.target_block].label
-          : "ブロック";
-    const firstLine = item.content?.split("\n").find((line) => line.trim());
-    return firstLine ? `${scope}・${firstLine}` : scope;
-  }
-
-  const filteredHistory = (history ?? []).filter((item) => {
-    const q = historySearch.trim().toLowerCase();
-    if (!q) return true;
-    return item.content.toLowerCase().includes(q);
-  });
 
   async function submit() {
     if (!scheduleId) {
@@ -388,14 +310,6 @@ function MenuEditor({
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={() => setHistoryOpen(true)}
-        className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-accent/50 py-2.5 text-[13px] font-semibold text-accent active:bg-accent/5"
-      >
-        <Copy size={16} /> 過去のメニューから複製
-      </button>
-
       <div>
         <p className="section-label mb-1.5">メニューの種類</p>
         <SegmentedControl
@@ -466,7 +380,7 @@ function MenuEditor({
 
       <div>
         <p className="section-label mb-1.5">メニュー</p>
-        <Textarea
+        <Textarea autoGrow
           rows={8}
           placeholder={"例:\nW-up 2km\n本練習 1000m×5 (R3')\nD-down 2km"}
           value={content}
@@ -477,7 +391,7 @@ function MenuEditor({
       {targetBlock === "short" && (
         <div>
           <p className="section-label mb-1.5">説明</p>
-          <Textarea
+          <Textarea autoGrow
             rows={5}
             placeholder="メニューの目的や走り方のポイント"
             value={remark}
@@ -490,7 +404,7 @@ function MenuEditor({
         <>
           <div>
             <p className="section-label mb-1.5">ペース</p>
-            <Textarea
+            <Textarea autoGrow
               rows={3}
               placeholder={"例: 1000mを3'30〜3'40"}
               value={pace}
@@ -499,7 +413,7 @@ function MenuEditor({
           </div>
           <div>
             <p className="section-label mb-1.5">補足</p>
-            <Textarea
+            <Textarea autoGrow
               rows={3}
               placeholder={"例: 雨天時は室内メニューに変更"}
               value={remark}
@@ -508,7 +422,7 @@ function MenuEditor({
           </div>
           <div>
             <p className="section-label mb-1.5">補強</p>
-            <Textarea
+            <Textarea autoGrow
               rows={4}
               placeholder={"例: 体幹サーキット×3セット"}
               value={supplement}
@@ -544,52 +458,88 @@ function MenuEditor({
         </Button>
       </FormModalFooter>
 
-      <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
-        <SheetContent title="過去のメニューから複製" autoFocus={false}>
-          <div className="space-y-3 pb-2">
-            <Input
-              value={historySearch}
-              onChange={(event) => setHistorySearch(event.target.value)}
-              placeholder="内容で検索"
-            />
-            {history === null ? (
-              <div className="space-y-2">
-                <Skeleton className="h-14 w-full" />
-                <Skeleton className="h-14 w-full" />
-                <Skeleton className="h-14 w-full" />
-              </div>
-            ) : filteredHistory.length === 0 ? (
-              <EmptyState
-                title="過去に公開したメニューがありません"
-                className="min-h-24 py-4"
-              />
-            ) : (
-              <ul className="max-h-[55vh] space-y-1 overflow-y-auto">
-                {filteredHistory.map((item) => (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      onClick={() => loadHistoryItem(item)}
-                      className="flex min-h-14 w-full flex-col items-start gap-0.5 rounded-lg px-3 py-2 text-left active:bg-bg"
-                    >
-                      <span className="block w-full truncate text-[14px] font-medium">
-                        {historySummary(item)}
-                      </span>
-                      <span className="block text-micro text-muted2">
-                        {format(new Date(item.created_at), "M/d(E)", { locale: ja })}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
     </div>
   );
 }
 
+export function SheetMenuEditModal({
+  menu,
+  scheduleId,
+  onOpenChange,
+  onSaved,
+}: {
+  menu: PracticeMenu;
+  scheduleId: string;
+  onOpenChange: (open: boolean) => void;
+  onSaved: (menu: PracticeMenu) => void;
+}) {
+  const [content, setContent] = useState(menu.content ?? "");
+  const [pace, setPace] = useState(menu.pace ?? "");
+  const [remark, setRemark] = useState(menu.remark ?? "");
+  const [supplement, setSupplement] = useState(menu.supplement ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/middle-long-menus", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scheduleId, content, pace, remark, supplement }),
+      });
+      const result = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) throw new Error(result?.error || "スプレッドシートを更新できませんでした");
+      onSaved({
+        ...menu,
+        content: content.trim(),
+        pace: pace.trim() || null,
+        remark: remark.trim() || null,
+        supplement: supplement.trim() || null,
+        updated_at: new Date().toISOString(),
+      });
+      onOpenChange(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "スプレッドシートを更新できませんでした");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <FormModal open onOpenChange={onOpenChange} title="中長距離メニューを編集">
+      <div className="space-y-4 pb-4">
+        <p className="rounded-xl bg-accent/5 px-3 py-2 text-xs text-muted">
+          保存するとGASを通して月別スプレッドシートへ反映されます。
+        </p>
+        <div>
+          <p className="section-label mb-1.5">メニュー</p>
+          <Textarea autoGrow rows={4} value={content} onChange={(event) => setContent(event.target.value)} />
+        </div>
+        <div>
+          <p className="section-label mb-1.5">ペース</p>
+          <Textarea autoGrow rows={2} value={pace} onChange={(event) => setPace(event.target.value)} />
+        </div>
+        <div>
+          <p className="section-label mb-1.5">補足</p>
+          <Textarea autoGrow rows={2} value={remark} onChange={(event) => setRemark(event.target.value)} />
+        </div>
+        <div>
+          <p className="section-label mb-1.5">補強</p>
+          <Textarea autoGrow rows={2} value={supplement} onChange={(event) => setSupplement(event.target.value)} />
+        </div>
+        {error && <p className="text-center text-caption text-danger">{error}</p>}
+        <FormModalFooter>
+          <Button size="lg" onClick={() => void save()} disabled={saving}>
+            {saving ? "スプレッドシートへ保存中…" : "更新する"}
+          </Button>
+        </FormModalFooter>
+      </div>
+    </FormModal>
+  );
+}
 function scheduleLabel(schedule: UpcomingSchedule): string {
   const date = format(new Date(`${schedule.schedule_date}T00:00:00`), "M/d(E)", {
     locale: ja,

@@ -203,6 +203,7 @@ function ContextualFAB({
   function handlePlanningSaved() {
     closeDirectForm();
     void queryClient.invalidateQueries({ queryKey: ["schedule", userId] });
+    void queryClient.invalidateQueries({ queryKey: ["middle-long-menu-csv", userId] });
   }
 
   function closeDirectForm() {
