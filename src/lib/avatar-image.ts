@@ -163,20 +163,48 @@ export async function prepareAvatarImage(
   }
 }
 
-export function avatarStoragePathFromPublicUrl(
+export function isSafeAvatarStoragePath(path: string): boolean {
+  const segments = path.split("/");
+  return (
+    segments.length === 2 &&
+    /^[A-Za-z0-9_-]+$/.test(segments[0]) &&
+    /^[A-Za-z0-9_-]+\.(?:webp|jpe?g)$/i.test(segments[1])
+  );
+}
+
+export function avatarStoragePathFromUrl(
   avatarUrl: string | null | undefined,
   supabaseUrl: string,
-  userId: string,
 ): string | null {
   if (!avatarUrl) return null;
+  if (isSafeAvatarStoragePath(avatarUrl)) return avatarUrl;
+
   try {
     const avatar = new URL(avatarUrl);
     const project = new URL(supabaseUrl);
     const prefix = `/storage/v1/object/public/${AVATAR_BUCKET}/`;
     if (avatar.origin !== project.origin || !avatar.pathname.startsWith(prefix)) return null;
     const path = decodeURIComponent(avatar.pathname.slice(prefix.length));
-    return path.startsWith(`${userId}/`) ? path : null;
+    return isSafeAvatarStoragePath(path) ? path : null;
   } catch {
     return null;
   }
+}
+
+export function avatarDisplayUrl(
+  avatarUrl: string | null | undefined,
+): string | null {
+  if (!avatarUrl) return null;
+  return isSafeAvatarStoragePath(avatarUrl)
+    ? `/api/avatar/image?path=${encodeURIComponent(avatarUrl)}`
+    : avatarUrl;
+}
+
+export function avatarStoragePathFromPublicUrl(
+  avatarUrl: string | null | undefined,
+  supabaseUrl: string,
+  userId: string,
+): string | null {
+  const path = avatarStoragePathFromUrl(avatarUrl, supabaseUrl);
+  return path?.startsWith(`${userId}/`) ? path : null;
 }

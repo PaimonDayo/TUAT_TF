@@ -59,12 +59,9 @@ export async function POST(request: Request) {
       });
     if (uploadError) throw uploadError;
 
-    const avatarUrl = supabase.storage
-      .from(AVATAR_BUCKET)
-      .getPublicUrl(uploadedPath).data.publicUrl;
     const { data: updated, error: updateError } = await supabase
       .from("profiles")
-      .update({ avatar_url: avatarUrl })
+      .update({ avatar_url: uploadedPath })
       .eq("id", user.id)
       .select("id")
       .maybeSingle();
@@ -85,7 +82,7 @@ export async function POST(request: Request) {
       if (removeError) console.warn("Failed to remove the previous avatar", removeError);
     }
 
-    return NextResponse.json({ ok: true, avatarUrl });
+    return NextResponse.json({ ok: true, avatarUrl: uploadedPath });
   } catch (error) {
     console.error("Failed to save avatar", error);
     return NextResponse.json(

@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   encodeAvatarCanvas,
+  avatarDisplayUrl,
   avatarStoragePathFromPublicUrl,
+  avatarStoragePathFromUrl,
   calculateAvatarCrop,
   calculateSquareCrop,
 } from "@/lib/avatar-image";
@@ -132,5 +134,30 @@ describe("avatar image helpers", () => {
         "user-1",
       ),
     ).toBeNull();
+  });
+
+  it("accepts stored avatar paths and legacy public URLs", () => {
+    const projectUrl = "https://example.supabase.co";
+    expect(
+      avatarStoragePathFromUrl("user-1/avatar.webp", projectUrl),
+    ).toBe("user-1/avatar.webp");
+    expect(
+      avatarStoragePathFromUrl(
+        `${projectUrl}/storage/v1/object/public/avatars/user-1/avatar.jpg`,
+        projectUrl,
+      ),
+    ).toBe("user-1/avatar.jpg");
+    expect(
+      avatarStoragePathFromUrl("../private/avatar.webp", projectUrl),
+    ).toBeNull();
+  });
+
+  it("routes private avatars through the authenticated image endpoint", () => {
+    expect(avatarDisplayUrl("user-1/avatar.webp")).toBe(
+      "/api/avatar/image?path=user-1%2Favatar.webp",
+    );
+    expect(
+      avatarDisplayUrl("https://images.example.com/avatar.webp"),
+    ).toBe("https://images.example.com/avatar.webp");
   });
 });

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { cn, initials } from "@/lib/utils";
 import { BLOCKS } from "@/lib/constants";
+import { avatarDisplayUrl } from "@/lib/avatar-image";
 import type { Block } from "@/types";
 
 const SIZES = {
@@ -37,15 +38,19 @@ export function Avatar({
     setImgError(false);
   }, [avatarUrl]);
 
+  const displayUrl = avatarDisplayUrl(
+    avatarUrl,
+  );
+
   const primary = blocks && blocks.length > 0 ? blocks[0] : null;
   const color = primary ? BLOCKS[primary].color : "#8e8e93";
   const bg = primary ? BLOCKS[primary].bg : "#e5e5ea";
 
-  if (avatarUrl && !imgError) {
+  if (displayUrl && !imgError) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={avatarUrl}
+        src={displayUrl}
         alt={name}
         onError={() => setImgError(true)}
         className={cn("rounded-full object-cover", SIZES[size], className)}
