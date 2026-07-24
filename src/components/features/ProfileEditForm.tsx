@@ -18,6 +18,7 @@ import {
   AVATAR_BUCKET,
   avatarStoragePathFromPublicUrl,
 } from "@/lib/avatar-image";
+import { uploadAvatarWithSessionRetry } from "@/lib/avatar-storage";
 import { cn } from "@/lib/utils";
 import type { Block, Profile } from "@/types";
 
@@ -131,16 +132,12 @@ export function ProfileEditForm({
     const supabase = createClient();
     const uploadedPath = `${profile.id}/${crypto.randomUUID()}.webp`;
     try {
-      const { error: uploadError } = await supabase.storage
-        .from(AVATAR_BUCKET)
-        .upload(uploadedPath, prepared, {
-          cacheControl: "31536000",
-          contentType: "image/webp",
-          upsert: false,
-        });
-      if (uploadError) {
-        throw new Error("画像をアップロードできませんでした。もう一度お試しください");
-      }
+      await uploadAvatarWithSessionRetry(
+        supabase,
+        AVATAR_BUCKET,
+        uploadedPath,
+        prepared,
+      );
 
       const nextAvatarUrl = supabase.storage
         .from(AVATAR_BUCKET)
