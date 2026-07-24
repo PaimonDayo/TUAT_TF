@@ -8,10 +8,13 @@ import { TweetCard } from "@/components/cards/TweetCard";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { GradeFilter } from "@/components/features/GradeFilter";
+import { CompactFeedRow } from "@/components/features/CompactFeedRow";
 import { FAVORITE_CHANGE_EVENT } from "@/components/features/FavoriteButton";
 import { createClient } from "@/lib/supabase/client";
 import { EmptyState } from "@/components/ui/empty-state";
 import { GRADE_OPTIONS, SIMPLE_BLOCK_ITEMS, matchSimpleBlock } from "@/lib/constants";
+import { jstToday } from "@/lib/date";
+import { feedDateLabel, feedItemDate } from "@/lib/feed-date";
 import { cn } from "@/lib/utils";
 import { loadFeed } from "@/app/(app)/timeline/actions";
 import { useFeedDisplay } from "@/hooks/use-feed-display";
@@ -115,7 +118,35 @@ export function TimelineView({
     });
   }, [items, block, grades, favOnly, favSet]);
 
+  const compactGroups = useMemo(() => {
+    const groups: { date: string; items: FeedItem[] }[] = [];
+    for (const item of filtered) {
+      const date = feedItemDate(item);
+      const last = groups.at(-1);
+      if (last?.date === date) last.items.push(item);
+      else groups.push({ date, items: [item] });
+    }
+    return groups;
+  }, [filtered]);
+
   function loadMore() { void feedQuery.fetchNextPage(); }
+
+  function renderDetailedItem(item: FeedItem, commentsExpanded: boolean) {
+    return item.kind === "record" ? (
+      <RecordCard
+        record={item}
+        currentUser={currentUser}
+        commentsExpanded={commentsExpanded}
+        showSource={showRecordSource}
+      />
+    ) : (
+      <TweetCard
+        tweet={item}
+        currentUser={currentUser}
+        commentsExpanded={commentsExpanded}
+      />
+    );
+  }
 
   return (
     <>
@@ -154,39 +185,60 @@ export function TimelineView({
           <EmptyState title="条件に合う投稿がありません" />
         ) : (
           <div className="space-y-3">
-            {filtered.map((item) => {
-              const key = `${item.kind}-${item.id}`;
-              // 簡易表示は既定。個別にタップで展開でき、もう一度タップで閉じる。
-              const effectiveCompact = isCompact(key);
-              const commentsExpanded = compact && !effectiveCompact;
-              const card =
-                item.kind === "record" ? (
-                  <RecordCard record={item} currentUser={currentUser} compact={effectiveCompact} commentsExpanded={commentsExpanded} showSource={showRecordSource} />
-                ) : (
-                  <TweetCard tweet={item} currentUser={currentUser} compact={effectiveCompact} commentsExpanded={commentsExpanded} />
-                );
-              // 簡易表示のときだけ開閉トグルを付ける（詳細表示は常に展開済み）
-              return compact ? (
-                <div
-                  key={key}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={"\u6295\u7a3f\u306e\u8a73\u7d30\u3092\u958b\u9589"}
-                  onClick={() => toggleExpanded(key)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      toggleExpanded(key);
-                    }
-                  }}
-                  className="cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                >
-                  {card}
+            {compact ? (
+              compactGroups.map((group) => (
+                <section key={group.date} aria-labelledby={`feed-date-${group.date}`}>
+                  <div className="mb-1.5 flex items-center gap-1.5 px-1">
+                    <h2
+                      id={`feed-date-${group.date}`}
+                      className="text-[12px] font-semibold text-muted2"
+                    >
+                      {feedDateLabel(group.date, jstToday(), jstToday(-1))}
+                    </h2>
+                    <span className="text-[10px] text-muted">・{group.items.length}件</span>
+                  </div>
+                  <div className="divide-y divide-separator/70 overflow-hidden rounded-[16px] border border-separator/70 bg-card">
+                    {group.items.map((item) => {
+                      const key = `${item.kind}-${item.id}`;
+                      const collapsed = isCompact(key);
+                      const commentsExpanded =
+                        !collapsed && (item.comments_count ?? 0) > 0;
+                      return (
+                        <div
+                          key={key}
+                          role="button"
+                          tabIndex={0}
+                          aria-label="投稿の詳細を開閉"
+                          onClick={() => toggleExpanded(key)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              toggleExpanded(key);
+                            }
+                          }}
+                          className={cn(
+                            "cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent",
+                            !collapsed && "bg-bg p-2",
+                          )}
+                        >
+                          {collapsed ? (
+                            <CompactFeedRow item={item} />
+                          ) : (
+                            renderDetailedItem(item, commentsExpanded)
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))
+            ) : (
+              filtered.map((item) => (
+                <div key={`${item.kind}-${item.id}`}>
+                  {renderDetailedItem(item, false)}
                 </div>
-              ) : (
-                <div key={key}>{card}</div>
-              );
-            })}
+              ))
+            )}
 
             {feedQuery.hasNextPage && (
               <div className="pt-1 pb-2">
