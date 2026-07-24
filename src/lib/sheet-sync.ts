@@ -27,8 +27,8 @@ import {
  *   'sheet' → pullのみ（シート→アプリ）。シートを正とするが、**空でないシート項目だけ**取り込む
  *             （シートの空欄でアプリの既存内容を消さない。非破壊）。
  *             シートに行が無い日は触らない（安全側）。アプリ→シートの書き戻しはしない。
- *   'app'   → pushのみ（アプリ→シート）。マップ済みセルはアプリの内容で常に上書きする（シート＝写し）。
- *             シート→アプリの取込はしない。
+ *   'app'   -> push app records to the sheet, and import CSV-only dates.
+ *              Existing app dates remain authoritative and are never overwritten from CSV.
  */
 
 export type { SheetMember } from "@/lib/sheet-public-csv";
@@ -629,13 +629,16 @@ type MemberPullComputation = {
  * 1部員分の「シート→アプリ」非破壊pullを計算する（runSheetSyncのpull-onlyブランチと
  * refreshMemberFromSheetLive の共通ロジック）。副作用なし（DB書き込みは呼び出し側が行う）。
  */
-function computeMemberPull(
+export type ExistingSheetRecordPolicy = "merge" | "preserve";
+
+export function computeMemberPull(
   profileId: string,
   map: FieldMap,
   sheetRecords: RawMember["records"],
   appByDate: Map<string, DbRecord[]>,
   inRangeForProfile: (date: string) => boolean,
   nowIso: string,
+  existingRecordPolicy: ExistingSheetRecordPolicy = "merge",
 ): MemberPullComputation {
   const inserts: Record<string, unknown>[] = [];
   const updates: { id: string; patch: Record<string, unknown> }[] = [];
@@ -649,8 +652,11 @@ function computeMemberPull(
       conflicts.push(sr.date); // 複数/日は触らない
       continue;
     }
-    const { builtin, custom } = sheetToAppValues(map, sr.cells);
     const app = appList[0];
+    // App-main members keep existing DB dates authoritative. CSV only fills missing dates.
+    if (app && existingRecordPolicy === "preserve") continue;
+
+    const { builtin, custom } = sheetToAppValues(map, sr.cells);
 
     if (!app) {
       if (valuesEmpty(builtin, custom)) continue; // 空の行は新規に取り込まない
@@ -977,7 +983,7 @@ export async function runSheetSync(
       result.updated += pulled.updates.length;
       for (const d of pulled.conflicts) result.conflicts.push(`${sheetName} ${d}`); // 複数/日は触らない
     } else {
-      // pushのみ: 通常保存ではその場でGASへ1回だけ書き込み、ここでは失敗分だけ再送する。
+      // App-main: retry failed pushes, then import only dates missing from the DB.
       // updated_at はいいね数等の同期対象外更新でも変わり得るため、再送判定には使わない。
       for (const [date, list] of appByDate) {
         if (!inRange(date) || list.length !== 1) continue; // 複数/日は触らない
@@ -988,6 +994,24 @@ export async function runSheetSync(
           pushes.push({ id: app.id, memberName: sheetName, date, cells, clearsPending: true });
         }
       }
+
+      // App-main still imports dates that exist only in the linked CSV. Existing dates are never overwritten.
+      const cutoff =
+        profile.sheet_linked_at && profile.sheet_linked_at > SYNC_CUTOFF
+          ? profile.sheet_linked_at
+          : SYNC_CUTOFF;
+      const pulled = computeMemberPull(
+        profile.id,
+        map,
+        member.records,
+        appByDate,
+        (date) => date >= cutoff && date <= today,
+        nowIso,
+        "preserve",
+      );
+      inserts.push(...pulled.inserts);
+      result.inserted += pulled.inserts.length;
+      for (const date of pulled.conflicts) result.conflicts.push(`${sheetName} ${date}`);
     }
   }
 
@@ -1099,7 +1123,7 @@ export async function runSheetSync(
 export type LiveRefreshResult = { inserted: number; updated: number; sheetReplies: number };
 
 /**
- * 個人の記録画面（マイページ等）を表示する直前に、スプシメイン(record_source='sheet')の
+ * Before rendering a linked member's own record page, refresh CSV-only dates into the DB mirror.
  * 本人の記録を毎時同期を待たずその場でDB(Supabaseミラー)へ非破壊で反映する（タスク16残作業）。
  * fetchMember 1回＋既存ロジック(computeMemberPull)の使い回しで、100人規模でもfetchAllRawを
  * 引かずに済む。GAS不調・タイムアウト時はDBの現状のまま表示させるため例外を投げず null を返す
@@ -1115,7 +1139,7 @@ export async function refreshMemberFromSheetLive(
     sheet_linked_at: string | null;
   },
 ): Promise<LiveRefreshResult | null> {
-  if (profile.record_source !== "sheet" || !profile.sheet_name) return null;
+  if (!profile.sheet_name) return null;
 
   try {
     const member = await fetchMemberRaw(profile.sheet_name, { timeoutMs: 5000 });
@@ -1150,6 +1174,7 @@ export async function refreshMemberFromSheetLive(
       byDate,
       (d) => d >= cutoff && d <= today,
       nowIso,
+      profile.record_source === "app" ? "preserve" : "merge",
     );
     let inserted = 0;
     let updated = 0;

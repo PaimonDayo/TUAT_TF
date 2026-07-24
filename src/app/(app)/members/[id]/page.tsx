@@ -74,7 +74,7 @@ async function MemberContent({
 
   return (
     <>
-      <SheetLiveRefresh enabled={isSelf && viewer.record_source === "sheet" && Boolean(viewer.sheet_name)} />
+      <SheetLiveRefresh enabled={isSelf && Boolean(viewer.sheet_name)} />
       <SubHeader
         title={profile.display_name || "部員"}
         right={!isSelf ? <FavoriteButton targetId={id} initial={favorited} /> : undefined}

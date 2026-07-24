@@ -40,7 +40,7 @@ export default async function MyPage({
 
   return (
     <>
-      <SheetLiveRefresh enabled={profile.record_source === "sheet" && Boolean(profile.sheet_name)} />
+      <SheetLiveRefresh enabled={Boolean(profile.sheet_name)} />
       <Header
         title="マイページ"
         large
