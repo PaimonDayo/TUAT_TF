@@ -9,7 +9,6 @@ import { ActionMenu } from "@/components/ui/action-menu";
 import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import { Select } from "@/components/ui/select";
@@ -70,8 +69,6 @@ export function ScheduleForm({
   const [useEntry, setUseEntry] = useState(!!(schedule?.entry_start || schedule?.entry_end));
   const [entryStart, setEntryStart] = useState(schedule?.entry_start ?? "");
   const [entryEnd, setEntryEnd] = useState(schedule?.entry_end ?? "");
-  const [useDetail, setUseDetail] = useState(!!schedule?.note);
-  const [detail, setDetail] = useState(schedule?.note ?? "");
   const [targetBlocks, setTargetBlocks] = useState<Block[]>(normalizeProfileBlocks(schedule?.target_blocks));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -163,7 +160,6 @@ export function ScheduleForm({
       end_date: !isPractice && useEndDate && endDate ? endDate : null,
       entry_start: canEntry && useEntry && entryStart ? entryStart : null,
       entry_end: canEntry && useEntry && entryEnd ? entryEnd : null,
-      note: useDetail && detail.trim() ? detail.trim() : null,
       target_blocks: targetBlocks,
     };
 
@@ -372,28 +368,6 @@ export function ScheduleForm({
             )}
           </div>
         )}
-
-        {/* 詳細情報（任意）— エントリーフォームのリンクや補足情報など */}
-        <div>
-          <Toggle
-            label="詳細情報を追加する"
-            checked={useDetail}
-            onChange={() => setUseDetail((v) => !v)}
-          />
-          {useDetail && (
-            <div className="mt-2">
-              <Textarea
-                rows={4}
-                placeholder={"エントリーフォームや補足情報など\n例: [エントリーはこちら](https://...)"}
-                value={detail}
-                onChange={(e) => setDetail(e.target.value)}
-              />
-              <p className="text-micro mt-1">
-                URLはそのまま貼ってもリンクになります。[文字](URL) で文字にリンクも貼れます。
-              </p>
-            </div>
-          )}
-        </div>
       </div>
 
       {error && <p className="text-caption text-danger text-center">{error}</p>}
