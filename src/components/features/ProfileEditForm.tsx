@@ -47,9 +47,6 @@ export function ProfileEditForm({
   const [processingAvatar, setProcessingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [sheetName, setSheetName] = useState<string>(profile.sheet_name ?? "");
-  const [recordSource, setRecordSource] = useState<"app" | "sheet">(
-    profile.record_source ?? "app",
-  );
   const [sheetOptions, setSheetOptions] = useState<string[] | null>(null);
   const [sheetNameMissing, setSheetNameMissing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -185,14 +182,15 @@ export function ProfileEditForm({
     // 入力元を切り替える場合は、方向を固定する前に一度だけ両側を揃える
     // （2026-07-03のデータ消失インシデントの再発防止・オーナー確定 2026-07-04）。
     // 揃えに失敗したら切替自体を中止する。
+    const nextRecordSource = sheetName.trim() ? "sheet" : "app";
     const switchingSource =
-      sheetName.trim() && recordSource !== (profile.record_source ?? "app");
+      sheetName.trim() && nextRecordSource !== (profile.record_source ?? "app");
     if (switchingSource) {
       const response = await fetch("/api/sheets/reconcile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          direction: recordSource === "sheet" ? "to_sheet" : "to_app",
+          direction: "to_sheet",
         }),
       });
       const reconcileResult = await response.json();
@@ -219,7 +217,7 @@ export function ProfileEditForm({
         grade,
         avatar_url: nextAvatarUrl,
         sheet_name: sheetName.trim() || null,
-        record_source: sheetName.trim() ? recordSource : "app",
+        record_source: nextRecordSource,
       },
       { id: profile.id },
     );
@@ -405,39 +403,9 @@ export function ProfileEditForm({
       )}
 
       {sheetName.trim() && (
-        <div>
-          <p className="section-label mb-1.5">記録の保存先</p>
-          <div className="grid grid-cols-2 gap-2">
-            {(
-              [
-                { value: "app", label: "アプリ" },
-                { value: "sheet", label: "スプレッドシート" },
-              ] as const
-            ).map((option) => {
-              const active = recordSource === option.value;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setRecordSource(option.value)}
-                  className={cn(
-                    "h-11 rounded-xl border text-[14px] font-semibold transition-active active:opacity-[0.78]",
-                    active
-                      ? "border-accent bg-accent text-white"
-                      : "border-separator bg-card text-muted",
-                  )}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
-          <p className="text-micro mt-1">
-            {recordSource === "sheet"
-              ? "ふだんはスプレッドシートに記録します。アプリで記録したときも、その内容がスプレッドシートに自動で書き込まれます。"
-              : "ふだんはアプリに記録します。記録した内容は、スプレッドシートにも自動で書き込まれます。"}
-          </p>
-        </div>
+        <p className="text-micro -mt-3">
+          連携中はスプレッドシートが記録の入力元になります。アプリで保存した内容もスプレッドシートへ自動で書き込まれます。
+        </p>
       )}
 
       {error && <p className="text-caption text-danger text-center">{error}</p>}
