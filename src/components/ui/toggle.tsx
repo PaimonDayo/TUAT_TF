@@ -22,7 +22,7 @@ export function Toggle({
       onClick={onChange}
       disabled={disabled}
       className={cn(
-        "w-full flex items-center justify-between rounded-xl bg-card border border-separator p-3.5 active:bg-bg disabled:cursor-not-allowed disabled:opacity-50",
+        "w-full flex items-center justify-between rounded-xl bg-card border border-separator p-3.5 active:bg-bg disabled:cursor-not-allowed disabled:opacity-50 lg:rounded-lg lg:px-3 lg:py-2.5",
         className,
       )}
     >

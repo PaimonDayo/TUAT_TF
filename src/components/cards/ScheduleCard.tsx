@@ -55,7 +55,7 @@ export function ScheduleCard({
   myLate = false,
   myLateNote = null,
   attendees = [],
-  showAllAttendanceBlocks = false,
+  attendanceDefaultBlock = "all",
   defaultOpen = false,
 }: {
   schedule: ScheduleWithMenus;
@@ -70,7 +70,7 @@ export function ScheduleCard({
   myLate?: boolean;
   myLateNote?: string | null;
   attendees?: Attendee[];
-  showAllAttendanceBlocks?: boolean;
+  attendanceDefaultBlock?: import("@/types").AttendanceDefaultBlock;
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -173,13 +173,13 @@ export function ScheduleCard({
         disabled={!hasDetail}
         onClick={() => hasDetail && setOpen((v) => !v)}
         aria-expanded={hasDetail ? open : undefined}
-        className="w-full p-4 flex items-center gap-3 text-left transition-colors duration-100 enabled:active:bg-bg disabled:cursor-default motion-reduce:transition-none"
+        className="w-full p-4 flex items-center gap-3 text-left transition-colors duration-100 enabled:active:bg-bg disabled:cursor-default motion-reduce:transition-none lg:gap-2.5 lg:p-3"
       >
-        <div className="flex flex-col items-center w-12 shrink-0">
+        <div className="flex flex-col items-center w-12 shrink-0 lg:w-10">
           <span className="text-[11px]" style={{ color: meta.color }}>
             {format(date, "EEE", { locale: ja })}
           </span>
-          <span className="text-2xl font-bold leading-tight tabular-nums">{format(date, "d")}</span>
+          <span className="text-2xl font-bold leading-tight tabular-nums lg:text-xl">{format(date, "d")}</span>
           <span className="text-micro">{format(date, "M月", { locale: ja })}</span>
         </div>
 
@@ -239,10 +239,10 @@ export function ScheduleCard({
 
       {/* 出欠行 */}
       {showAttendance && (
-        <div className="-mt-1 space-y-2 px-4 pb-3">
+        <div className="-mt-1 space-y-2 px-4 pb-3 lg:px-3 lg:pb-2.5">
           <div className="flex flex-wrap items-center gap-2">
             <AttendanceToggle scheduleId={schedule.id} userId={userId!} initial={myStatus} onChanged={handleAttendanceChanged} />
-            <AttendeesButton attendees={attendeesState} viewerBlocks={viewerBlocks} showAllBlocks={showAllAttendanceBlocks} />
+            <AttendeesButton attendees={attendeesState} defaultBlock={attendanceDefaultBlock} />
           </div>
           {schedule.schedule_date === jstToday() && attendanceStatus === "present" && (
             <LateAttendanceControl
@@ -257,7 +257,7 @@ export function ScheduleCard({
       )}
 
       {open && hasDetail && (
-        <div className="px-4 pb-4 pt-1 space-y-3 border-t border-separator">
+        <div className="px-4 pb-4 pt-1 space-y-3 border-t border-separator lg:px-3 lg:pb-3 lg:space-y-2.5">
           {hasEntry && (
             <Detail
               icon={<CalendarRange size={14} />}

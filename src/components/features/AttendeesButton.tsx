@@ -7,7 +7,7 @@ import { Avatar } from "@/components/common/Avatar";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { BLOCKS, GRADE_OPTIONS, PROFILE_BLOCK_ORDER, SIMPLE_BLOCK_ITEMS, gradeShort, matchSimpleBlock, primarySimpleBlock } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import type { Attendee, Block } from "@/types";
+import type { AttendanceDefaultBlock, Attendee } from "@/types";
 
 /** 所属ブロック→学年→名前の順に並べる（見やすさのため） */
 function sortAttendees(list: Attendee[]): Attendee[] {
@@ -30,17 +30,13 @@ function sortAttendees(list: Attendee[]): Attendee[] {
 /** 「出席◯」表示。タップで出席者・欠席者一覧 */
 export function AttendeesButton({
   attendees,
-  viewerBlocks,
-  showAllBlocks = false,
+  defaultBlock,
 }: {
   attendees: Attendee[];
-  viewerBlocks: Block[];
-  showAllBlocks?: boolean;
+  defaultBlock: AttendanceDefaultBlock;
 }) {
   const [open, setOpen] = useState(false);
-  const [block, setBlock] = useState<"all" | "middle_long" | "short">(
-    showAllBlocks ? "all" : primarySimpleBlock(viewerBlocks) ?? "all",
-  );
+  const [block, setBlock] = useState<AttendanceDefaultBlock>(defaultBlock);
   const visible = attendees.filter((attendee) =>
     matchSimpleBlock(attendee.profile.blocks, block),
   );
@@ -51,6 +47,7 @@ export function AttendeesButton({
     <>
       <button
         onClick={(e) => {
+          setBlock(defaultBlock);
           e.stopPropagation();
           setOpen(true);
         }}
@@ -67,11 +64,15 @@ export function AttendeesButton({
       </button>
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent title="出欠">
-          <div className="pb-3">
+        <SheetContent
+          title="出欠"
+          className="flex h-[calc(100dvh-12px)] flex-col"
+          bodyClassName="flex min-h-0 flex-1 flex-col"
+        >
+          <div className="shrink-0 pb-3">
             <SegmentedControl items={SIMPLE_BLOCK_ITEMS} value={block} onChange={setBlock} />
           </div>
-          <div className="pb-4 space-y-4 max-h-[60vh] overflow-y-auto">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pb-4">
             <Group title={`出席 ${present.length}`} color="#34c759" list={present} selectedBlock={block} />
             {absent.length > 0 && <Group title={`欠席 ${absent.length}`} color="#ff3b30" list={absent} selectedBlock={block} />}
             {visible.length === 0 && (
@@ -84,7 +85,7 @@ export function AttendeesButton({
   );
 }
 
-function Group({ title, color, list, selectedBlock }: { title: string; color: string; list: Attendee[]; selectedBlock: "all" | "middle_long" | "short" }) {
+function Group({ title, color, list, selectedBlock }: { title: string; color: string; list: Attendee[]; selectedBlock: AttendanceDefaultBlock }) {
   const blocks = selectedBlock === "all" ? PROFILE_BLOCK_ORDER : [selectedBlock];
   if (list.length === 0) return null;
   return (

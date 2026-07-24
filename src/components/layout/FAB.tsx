@@ -238,9 +238,9 @@ function ContextualFAB({
         />
       )}
 
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 mx-auto h-0 w-full max-w-md">
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 mx-auto h-0 w-full max-w-md lg:inset-x-auto lg:right-[max(0px,calc((100vw-1160px)/2))] lg:w-0 lg:max-w-none">
         {isFeed && speedDialOpen && (
-          <div className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-2xl border border-separator bg-card shadow-xl">
+          <div className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-2xl border border-separator bg-card shadow-xl lg:bottom-24 lg:right-8">
             <SpeedDialAction
               icon={<Activity size={19} />}
               label="練習記録"
@@ -260,7 +260,7 @@ function ContextualFAB({
         )}
 
         {isNotesRoot && speedDialOpen && (
-          <div className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-2xl border border-separator bg-card shadow-xl">
+          <div className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-2xl border border-separator bg-card shadow-xl lg:bottom-24 lg:right-8">
             <SpeedDialAction
               icon={<FolderPlus size={19} />}
               label="フォルダを作成"
@@ -283,7 +283,7 @@ function ContextualFAB({
         )}
 
         {isNoteFolder && speedDialOpen && (
-          <div className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-2xl border border-separator bg-card shadow-xl">
+          <div className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-2xl border border-separator bg-card shadow-xl lg:bottom-24 lg:right-8">
             <SpeedDialAction
               icon={<NotebookPen size={19} />}
               label="記事を作成"
@@ -316,7 +316,7 @@ function ContextualFAB({
           onClick={handleMainAction}
           aria-label={label}
           aria-expanded={isFeed || isNotesRoot || isNoteFolder ? speedDialOpen : undefined}
-          className="pointer-events-auto absolute right-5 bottom-[calc(74px+env(safe-area-inset-bottom))] flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-lg shadow-accent/30 active:opacity-[0.78] transition-active"
+          className="pointer-events-auto absolute right-5 bottom-[calc(74px+env(safe-area-inset-bottom))] flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-lg shadow-accent/30 active:opacity-[0.78] transition-active lg:bottom-8 lg:right-8 lg:h-12 lg:w-12"
         >
           {isFeed || isNotesRoot || isNoteFolder ? (
             <Plus

@@ -1,4 +1,4 @@
-import type { AppRole, AuthorMini, Block, Profile, RecordFieldDef, RecordWithAuthor, Role, TweetWithAuthor } from "@/types";
+import type { AppRole, AttendanceDefaultBlock, AuthorMini, Block, Profile, RecordFieldDef, RecordWithAuthor, Role, TweetWithAuthor } from "@/types";
 import type { Database, Json } from "@/types/database";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
@@ -41,6 +41,10 @@ export function recordFieldsToJson(fields: RecordFieldDef[]): Json {
 
 export function profileRecordSource(value: string): "app" | "sheet" {
   return value === "sheet" ? "sheet" : "app";
+}
+
+export function attendanceDefaultBlock(value: string): AttendanceDefaultBlock {
+  return value === "middle_long" || value === "short" ? value : "all";
 }
 
 export function normalizeAuthorRow(row: AuthorRow): AuthorMini {
@@ -98,6 +102,7 @@ export function normalizeProfileRow(row: ProfileRow, roles: AppRole[] = []): Pro
     blocks: row.blocks.filter((block): block is Block => BLOCK_VALUES.has(block as Block)),
     role: ROLE_VALUES.has(row.role as Role) ? (row.role as Role) : "member",
     status: row.status === "graduated" ? "graduated" : "active",
+    attendance_default_block: attendanceDefaultBlock(row.attendance_default_block),
     record_source: profileRecordSource(row.record_source ?? "app"),
     record_fields: recordFieldsFromJson(row.record_fields ?? null),
     roles,

@@ -10,7 +10,7 @@ import { SplashIntroSetting } from "@/components/features/SplashIntroSetting";
 import { TimelineCompactSetting } from "@/components/features/TimelineCompactSetting";
 import { RecordSourceSetting } from "@/components/features/RecordSourceSetting";
 import { SystemSyncStatus } from "@/components/features/SystemSyncStatus";
-import type { RecordFieldDef } from "@/types";
+import type { AttendanceDefaultBlock, RecordFieldDef } from "@/types";
 
 const RecordFieldsSetting = dynamic(
   () =>
@@ -29,7 +29,7 @@ export function SettingsAccordion({
   initialComment,
   initialNotice,
   menuViewAll,
-  attendanceViewAll,
+  attendanceDefaultBlock,
   recordFields,
   timelineCompact,
   showRecordSource,
@@ -40,7 +40,7 @@ export function SettingsAccordion({
   initialComment: boolean;
   initialNotice: boolean;
   menuViewAll: boolean;
-  attendanceViewAll: boolean;
+  attendanceDefaultBlock: AttendanceDefaultBlock;
   recordFields: RecordFieldDef[];
   isMiddleLong: boolean;
   timelineCompact: boolean;
@@ -64,7 +64,7 @@ export function SettingsAccordion({
       {open && <div className="space-y-6 border-t border-separator/70 bg-bg/40 p-4">
         <div className="space-y-2">
           <p className="section-label">表示</p>
-          <AttendanceViewSetting userId={profileId} initial={attendanceViewAll} />
+          <AttendanceViewSetting userId={profileId} initial={attendanceDefaultBlock} />
           <SplashIntroSetting />
           <TimelineCompactSetting initial={timelineCompact} />
           <MenuViewSetting userId={profileId} initial={menuViewAll} />

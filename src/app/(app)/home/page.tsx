@@ -22,6 +22,8 @@ import {
   getRecentSharedNotes,
   getUserRecords,
 } from "@/lib/queries";
+import { applyMiddleLongMenuSnapshot, middleLongMenuMonths } from "@/lib/middle-long-menu-data";
+import { fetchMiddleLongMenuSnapshot } from "@/lib/middle-long-menu-sheet";
 import { permissionsOf } from "@/lib/permissions";
 import type {
   Attendee,
@@ -101,11 +103,16 @@ async function WeeklySummary({ userId, nowJst }: { userId: string; nowJst: Date 
 async function SchedulesSection({ profile }: { profile: Profile }) {
   const perms = permissionsOf(profile.roles);
   const today = jstToday();
-  const schedules = (await getAttendanceSchedules(
+  let schedules = (await getAttendanceSchedules(
     profile.blocks,
     perms.createSchedule,
     10,
   )) as ScheduleWithMenus[];
+  schedules = schedules.map((schedule) => ({ ...schedule, menus: schedule.menus ?? [] }));
+  if (profile.blocks.includes("middle_long") || profile.menu_view_all_blocks) {
+    const snapshot = await fetchMiddleLongMenuSnapshot(middleLongMenuMonths(schedules));
+    schedules = applyMiddleLongMenuSnapshot(schedules, snapshot);
+  }
   const todaySchedules = schedules.filter((schedule) => schedule.schedule_date === today);
   const upcomingSchedules = schedules.filter((schedule) => schedule.schedule_date > today).slice(0, 3);
   const displayed = [...todaySchedules, ...upcomingSchedules];
@@ -126,7 +133,7 @@ async function SchedulesSection({ profile }: { profile: Profile }) {
           {todaySchedules.map((schedule) => {
             const attendees = attendeesBySchedule.get(schedule.id) ?? [];
             const mine = attendees.find((attendee) => attendee.user_id === profile.id);
-            return <ScheduleCard key={schedule.id} schedule={{ ...schedule, menus: schedule.menus ?? [] }} viewerBlocks={profile.blocks} userId={profile.id} myProfile={profile} myStatus={mine?.status ?? "none"} myLate={mine?.is_late ?? false} myLateNote={mine?.late_note ?? null} attendees={attendees} showAllAttendanceBlocks={profile.attendance_view_all_blocks ?? false} />;
+            return <ScheduleCard key={schedule.id} schedule={{ ...schedule, menus: schedule.menus ?? [] }} viewerBlocks={profile.blocks} userId={profile.id} myProfile={profile} myStatus={mine?.status ?? "none"} myLate={mine?.is_late ?? false} myLateNote={mine?.late_note ?? null} attendees={attendees} attendanceDefaultBlock={profile.attendance_default_block} />;
           })}
         </div>
       </section>
