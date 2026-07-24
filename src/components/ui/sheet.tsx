@@ -18,7 +18,7 @@ export function SheetContent({
   className,
   bodyClassName,
   autoFocus = true,
-  swipeToClose = false,
+  swipeToClose = true,
 }: {
   title?: string;
   children: React.ReactNode;
