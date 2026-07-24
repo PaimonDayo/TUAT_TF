@@ -4,7 +4,7 @@ import { permissionsOf } from "@/lib/permissions";
 import { applyMiddleLongMenuSnapshot, middleLongMenuMonths } from "@/lib/middle-long-menu-data";
 import { fetchMiddleLongMenuSnapshot } from "@/lib/middle-long-menu-sheet";
 import type { MiddleLongMenuSnapshot } from "@/lib/middle-long-menu-data";
-import type { Attendee, AttendanceStatusOrNone, AuthorMini, ScheduleWithMenus } from "@/types";
+import type { Attendee, AttendanceDefaultBlock, AttendanceStatusOrNone, AuthorMini, ScheduleWithMenus } from "@/types";
 
 export type SchedulePageData = {
   schedules: ScheduleWithMenus[];
@@ -19,7 +19,7 @@ export type SchedulePageData = {
   myStatusBySchedule: Record<string, AttendanceStatusOrNone>;
   myLateBySchedule: Record<string, boolean>;
   myLateNoteBySchedule: Record<string, string | null>;
-  showAllAttendanceBlocks: boolean;
+  attendanceDefaultBlock: AttendanceDefaultBlock;
 };
 
 export async function getSchedulePageData(): Promise<SchedulePageData> {
@@ -61,6 +61,6 @@ export async function getSchedulePageData(): Promise<SchedulePageData> {
     myStatusBySchedule,
     myLateBySchedule,
     myLateNoteBySchedule,
-    showAllAttendanceBlocks: profile.attendance_view_all_blocks ?? false,
+    attendanceDefaultBlock: profile.attendance_default_block,
   };
 }

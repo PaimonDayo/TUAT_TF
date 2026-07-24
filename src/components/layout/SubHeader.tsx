@@ -15,8 +15,8 @@ export function SubHeader({
   right?: React.ReactNode;
 }) {
   return (
-    <header className="sticky top-0 z-30 bg-bg/80 backdrop-blur-xl pt-[env(safe-area-inset-top)]">
-      <div className="h-12 px-2 grid grid-cols-[1fr_auto_1fr] items-center">
+    <header className="sticky top-0 z-30 bg-bg/80 backdrop-blur-xl pt-[env(safe-area-inset-top)] lg:pt-0">
+      <div className="h-12 px-2 grid grid-cols-[1fr_auto_1fr] items-center lg:h-16 lg:px-4">
         <BackButton fallback={backHref ?? "/home"} />
         <h1 className="text-title text-center whitespace-nowrap">{title}</h1>
         <div className="justify-self-end flex items-center pr-1">{right}</div>

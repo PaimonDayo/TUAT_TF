@@ -26,6 +26,11 @@ describe("uploadAvatarWithSessionRetry", () => {
     await uploadAvatarWithSessionRetry(client, "avatars", "user/avatar.webp", image);
 
     expect(upload).toHaveBeenCalledTimes(1);
+    expect(upload).toHaveBeenCalledWith(
+      "user/avatar.webp",
+      image,
+      expect.objectContaining({ contentType: "image/webp" }),
+    );
     expect(refreshSession).not.toHaveBeenCalled();
   });
 

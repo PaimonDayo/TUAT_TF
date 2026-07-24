@@ -17,7 +17,10 @@ export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md border-t border-separator bg-card/90 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]">
+    <nav
+      aria-label="メインナビゲーション"
+      className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md border-t border-separator bg-card/90 backdrop-blur-xl pb-[env(safe-area-inset-bottom)] lg:hidden"
+    >
       <div className="h-[52px] flex items-stretch">
         {ITEMS.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
@@ -25,6 +28,7 @@ export function BottomNav() {
             <Link
               key={href}
               href={href}
+              aria-current={active ? "page" : undefined}
               className={cn(
                 "flex-1 flex flex-col items-center justify-center gap-0.5",
                 active ? "text-accent" : "text-muted",

@@ -46,6 +46,7 @@ export type NoticeCategory = "fee" | "entry" | "info" | "rule";
 export type NoticeReaction = "ack" | "thanks" | "question";
 export type TargetType = "record" | "tweet";
 export type AttendanceStatus = "present" | "absent";
+export type AttendanceDefaultBlock = "all" | "middle_long" | "short";
 export type NoteScope = "shared" | "personal";
 export type NoteStatus = "draft" | "published";
 export type NoteEditPolicy = "everyone" | "specified" | "author";
@@ -71,6 +72,7 @@ export interface Profile {
   notify_notice: boolean;
   menu_view_all_blocks: boolean;
   attendance_view_all_blocks: boolean;
+  attendance_default_block: AttendanceDefaultBlock;
   /** スプレッドシート同期で使う、自分のシート名（例: B2駒井）。未設定なら同期対象外 */
   sheet_name: string | null;
   /** シート連携した日(JST)。新規連携時は同期側でこれ以降のみ取り込む個別カットオフに使う */

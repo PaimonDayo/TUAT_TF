@@ -31,7 +31,7 @@ export async function uploadAvatarWithSessionRetry(
   const upload = () =>
     supabase.storage.from(bucket).upload(path, image, {
       cacheControl: "31536000",
-      contentType: "image/webp",
+      contentType: image.type,
       upsert: false,
     });
 

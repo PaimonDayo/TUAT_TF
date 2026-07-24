@@ -109,8 +109,8 @@ export function NotesView({
   }, [normalizedQuery]);
 
   return (
-    <div className="space-y-4 px-4 pt-1">
-      <div className="flex min-h-9 items-center">
+    <div className="space-y-4 px-4 pt-1 lg:space-y-3 lg:px-6">
+      <div className="flex min-h-9 items-center lg:min-h-8">
         <SegmentedControl
           items={[
             { key: "shared", label: "共有" },
@@ -119,7 +119,7 @@ export function NotesView({
           ].filter(({ key }) => key !== "threads")}
           value={scope}
           onChange={(key) => changeScope(key as NotesTab)}
-          className="w-full"
+          className="w-full lg:max-w-[360px]"
         />
       </div>
       <Input
@@ -177,7 +177,7 @@ export function NoteList({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="grid gap-2 lg:grid-cols-2 lg:gap-3">
       {[...notes].sort((a, b) => Number(b.pinned) - Number(a.pinned)).map((note) => (
         <Link key={note.id} href={`/notes/${note.id}`}>
           <Card className="p-4 active:bg-bg">

@@ -16,11 +16,13 @@ export function SheetContent({
   title,
   children,
   className,
+  bodyClassName,
   autoFocus = true,
 }: {
   title?: string;
   children: React.ReactNode;
   className?: string;
+  bodyClassName?: string;
   /** false にすると開いた瞬間に入力欄へフォーカスしない（キーボードが勝手に出ない） */
   autoFocus?: boolean;
 }) {
@@ -44,7 +46,7 @@ export function SheetContent({
           </Dialog.Title>
         )}
         {!title && <Dialog.Title className="sr-only">メニュー</Dialog.Title>}
-        <div className="px-4 pt-1">{children}</div>
+        <div className={cn("px-4 pt-1", bodyClassName)}>{children}</div>
       </Dialog.Content>
     </Dialog.Portal>
   );

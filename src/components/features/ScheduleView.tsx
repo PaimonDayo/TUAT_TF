@@ -6,7 +6,7 @@ import { SegmentedControl } from "@/components/ui/segmented";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ScheduleCard } from "@/components/cards/ScheduleCard";
 import { SCHEDULE_TYPE_OPTIONS } from "@/lib/constants";
-import type { ScheduleWithMenus, Attendee, AttendanceStatusOrNone, AuthorMini, Block } from "@/types";
+import type { ScheduleWithMenus, Attendee, AttendanceDefaultBlock, AttendanceStatusOrNone, AuthorMini, Block } from "@/types";
 
 /**
  * 練習予定の一覧＋種別タブ。
@@ -25,7 +25,7 @@ export function ScheduleView({
   myStatusBySchedule,
   myLateBySchedule,
   myLateNoteBySchedule,
-  showAllAttendanceBlocks,
+  attendanceDefaultBlock,
   openId,
 }: {
   schedules: ScheduleWithMenus[];
@@ -39,7 +39,7 @@ export function ScheduleView({
   myStatusBySchedule: Record<string, AttendanceStatusOrNone>;
   myLateBySchedule: Record<string, boolean>;
   myLateNoteBySchedule: Record<string, string | null>;
-  showAllAttendanceBlocks: boolean;
+  attendanceDefaultBlock: AttendanceDefaultBlock;
   openId?: string;
 }) {
   const [type, setType] = useState("all");
@@ -62,13 +62,13 @@ export function ScheduleView({
 
   return (
     <>
-      <div className="px-4 pt-1 pb-3">
-        <div className="flex min-h-9 items-center">
-          <SegmentedControl items={items} value={type} onChange={setType} className="w-full" />
+      <div className="px-4 pt-1 pb-3 lg:px-6 lg:pb-2">
+        <div className="flex min-h-9 items-center lg:min-h-8">
+          <SegmentedControl items={items} value={type} onChange={setType} className="w-full lg:max-w-[520px]" />
         </div>
       </div>
 
-      <div className="px-4 pt-1">
+      <div className="px-4 pt-1 lg:grid lg:grid-cols-2 lg:gap-x-3 lg:px-6">
         {filtered.length === 0 ? (
           <EmptyState title="今後の予定はまだ登録されていません" />
         ) : (
@@ -80,11 +80,11 @@ export function ScheduleView({
             return (
               <Fragment key={s.id}>
                 {startsMonth && (
-                  <h2 className={index === 0 ? "section-label mb-2" : "section-label mb-2 mt-7"}>
+                  <h2 className={index === 0 ? "section-label mb-2 lg:col-span-2" : "section-label mb-2 mt-7 lg:col-span-2 lg:mt-4"}>
                     {format(new Date(`${s.schedule_date}T00:00:00`), "yyyy年M月")}
                   </h2>
                 )}
-                <div className="mb-3">
+                <div className="mb-3 min-w-0">
                   <ScheduleCard
                     key={`${s.id}:${(s.menus ?? []).map((menu) => `${menu.id}:${menu.updated_at}`).join(",")}`}
                     schedule={s}
@@ -98,7 +98,7 @@ export function ScheduleView({
                     myLate={myLateBySchedule[s.id] ?? false}
                     myLateNote={myLateNoteBySchedule[s.id] ?? null}
                     attendees={attendeesBySchedule[s.id] ?? []}
-                    showAllAttendanceBlocks={showAllAttendanceBlocks}
+                    attendanceDefaultBlock={attendanceDefaultBlock}
                     defaultOpen={s.id === openId}
                   />
                 </div>

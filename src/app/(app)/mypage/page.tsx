@@ -117,7 +117,7 @@ export default async function MyPage({
             initialComment={profile.notify_comment ?? true}
             initialNotice={profile.notify_notice ?? true}
             menuViewAll={profile.menu_view_all_blocks ?? false}
-            attendanceViewAll={profile.attendance_view_all_blocks ?? false}
+            attendanceDefaultBlock={profile.attendance_default_block}
             timelineCompact={timelineCompact}
             showRecordSource={showRecordSource}
             recordFields={profile.record_fields ?? []}

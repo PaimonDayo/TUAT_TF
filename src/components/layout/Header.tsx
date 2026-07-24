@@ -23,8 +23,8 @@ export async function Header({
   }
 
   return (
-    <header className="sticky top-0 z-30 bg-bg/80 backdrop-blur-xl pt-[env(safe-area-inset-top)]">
-      <div className="h-12 px-4 flex items-center justify-between">
+    <header className="sticky top-0 z-30 bg-bg/80 backdrop-blur-xl pt-[env(safe-area-inset-top)] lg:pt-0">
+      <div className="h-12 px-4 flex items-center justify-between lg:h-16 lg:px-6">
         <h1 className={large ? "text-large-title" : "text-title"}>{title}</h1>
         <div className="flex items-center gap-1">
           {right}

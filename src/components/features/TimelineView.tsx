@@ -156,9 +156,9 @@ export function TimelineView({
 
   return (
     <>
-      <div className="px-4 pt-1 pb-3">
-        <div className="flex min-h-9 items-center gap-2">
-          <div className="min-w-0 flex-1"><SegmentedControl items={SIMPLE_BLOCK_ITEMS} value={block} onChange={setBlock} /></div>
+      <div className="px-4 pt-1 pb-3 lg:px-6 lg:pb-2">
+        <div className="flex min-h-9 items-center gap-2 lg:min-h-8">
+          <div className="min-w-0 flex-1 lg:max-w-[420px]"><SegmentedControl items={SIMPLE_BLOCK_ITEMS} value={block} onChange={setBlock} /></div>
           <GradeFilter value={grades} onChange={setGrades} availableGrades={presentGrades} />
           <button
             onClick={() => setFavOnly((v) => !v)}
@@ -188,11 +188,11 @@ export function TimelineView({
       </div>
 
 
-      <div className="px-4 pt-1">
+      <div className="px-4 pt-1 lg:px-6">
         {filtered.length === 0 ? (
           <EmptyState title="条件に合う投稿がありません" />
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-3 lg:space-y-2">
             {compact ? (
               compactGroups.map((group) => (
                 <section key={group.date} aria-labelledby={`feed-date-${group.date}`}>

@@ -2,36 +2,66 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Toggle } from "@/components/ui/toggle";
+import { SegmentedControl } from "@/components/ui/segmented";
 import { useToast } from "@/components/ui/toast";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { createClient } from "@/lib/supabase/client";
+import type { AttendanceDefaultBlock } from "@/types";
 
-export function AttendanceViewSetting({ userId, initial }: { userId: string; initial: boolean }) {
+const ITEMS: { key: AttendanceDefaultBlock; label: string }[] = [
+  { key: "all", label: "全体" },
+  { key: "middle_long", label: "中長距離" },
+  { key: "short", label: "短距離" },
+];
+
+export function AttendanceViewSetting({
+  userId,
+  initial,
+}: {
+  userId: string;
+  initial: AttendanceDefaultBlock;
+}) {
   const router = useRouter();
   const { showToast } = useToast();
-  const [on, setOn] = useState(initial);
+  const [selected, setSelected] = useState(initial);
   const [busy, setBusy] = useState(false);
 
-  async function toggle() {
-    if (busy) return;
-    const next = !on;
-    setOn(next);
+  async function select(next: AttendanceDefaultBlock) {
+    if (busy || next === selected) return;
+    const previous = selected;
+    setSelected(next);
     setBusy(true);
     const result = await safeUpdate(
       createClient(),
       "profiles",
-      { attendance_view_all_blocks: next },
+      {
+        attendance_default_block: next,
+        // 旧クライアントとの互換用。新しい画面では attendance_default_block を参照する。
+        attendance_view_all_blocks: next === "all",
+      },
       { id: userId },
     );
     setBusy(false);
     if (!result.ok) {
-      setOn(!next);
+      setSelected(previous);
       showToast(safeUpdateMessage(result.reason));
       return;
     }
     router.refresh();
   }
 
-  return <Toggle label={"\u51fa\u6b20\u3092\u958b\u3044\u305f\u3068\u304d\u5168\u4f53\u3092\u8868\u793a"} checked={on} onChange={toggle} />;
+  return (
+    <div className="rounded-xl bg-card px-3 py-3">
+      <p className="text-body font-semibold text-ink">出欠一覧の初期表示</p>
+      <p className="mb-2.5 mt-0.5 text-micro text-muted">
+        出欠一覧を開いたときに最初に表示するタブ
+      </p>
+      <SegmentedControl
+        items={ITEMS}
+        value={selected}
+        onChange={select}
+        className={busy ? "pointer-events-none opacity-60" : undefined}
+      />
+    </div>
+  );
 }
