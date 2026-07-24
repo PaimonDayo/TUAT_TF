@@ -238,7 +238,7 @@ export async function getSchedulesOn(date: string) {
 export async function refreshOwnSheetRecords(
   profile: Pick<Profile, "id" | "sheet_name" | "record_source" | "record_fields" | "sheet_linked_at">,
 ) {
-  if (profile.record_source !== "sheet" || !profile.sheet_name) return;
+  if (!profile.sheet_name) return;
   const supabase = await createClient();
   await refreshMemberFromSheetLive(supabase, profile);
 }
