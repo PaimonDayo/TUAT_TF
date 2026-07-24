@@ -1,11 +1,53 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  encodeAvatarCanvas,
   avatarStoragePathFromPublicUrl,
   calculateAvatarCrop,
   calculateSquareCrop,
 } from "@/lib/avatar-image";
 
 describe("avatar image helpers", () => {
+  it("uses WebP when the browser can encode it", async () => {
+    const webp = new Blob(["webp"], { type: "image/webp" });
+    const canvas = {
+      toBlob: vi.fn((callback: BlobCallback) => callback(webp)),
+    } as unknown as HTMLCanvasElement;
+    const createCanvas = vi.fn();
+
+    await expect(encodeAvatarCanvas(canvas, createCanvas)).resolves.toBe(webp);
+    expect(createCanvas).not.toHaveBeenCalled();
+  });
+
+  it("falls back to JPEG when Safari cannot encode WebP", async () => {
+    const jpeg = new Blob(["jpeg"], { type: "image/jpeg" });
+    const sourceCanvas = {
+      width: 512,
+      height: 512,
+      toBlob: vi.fn((callback: BlobCallback) =>
+        callback(new Blob(["png"], { type: "image/png" })),
+      ),
+    } as unknown as HTMLCanvasElement;
+    const context = {
+      fillStyle: "",
+      fillRect: vi.fn(),
+      drawImage: vi.fn(),
+    };
+    const jpegCanvas = {
+      width: 0,
+      height: 0,
+      getContext: vi.fn(() => context),
+      toBlob: vi.fn((callback: BlobCallback) => callback(jpeg)),
+    } as unknown as HTMLCanvasElement;
+
+    await expect(
+      encodeAvatarCanvas(sourceCanvas, () => jpegCanvas),
+    ).resolves.toBe(jpeg);
+    expect(jpegCanvas.width).toBe(512);
+    expect(jpegCanvas.height).toBe(512);
+    expect(context.fillRect).toHaveBeenCalledWith(0, 0, 512, 512);
+    expect(context.drawImage).toHaveBeenCalledWith(sourceCanvas, 0, 0);
+  });
+
   it("crops a landscape image from the center", () => {
     expect(calculateSquareCrop(1600, 1200)).toEqual({
       sourceX: 200,

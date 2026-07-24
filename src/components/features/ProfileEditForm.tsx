@@ -14,11 +14,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar } from "@/components/common/Avatar";
 import { AvatarCropEditor } from "@/components/features/AvatarCropEditor";
 import { BLOCKS, EVENTS_BY_BLOCK, GRADE_OPTIONS, PROFILE_BLOCK_ORDER, normalizeProfileBlocks } from "@/lib/constants";
-import {
-  AVATAR_BUCKET,
-  avatarStoragePathFromPublicUrl,
-} from "@/lib/avatar-image";
-import { uploadAvatarWithSessionRetry } from "@/lib/avatar-storage";
 import { cn } from "@/lib/utils";
 import type { Block, Profile } from "@/types";
 
@@ -129,43 +124,21 @@ export function ProfileEditForm({
   async function uploadCroppedAvatar(prepared: Blob) {
     setProcessingAvatar(true);
     setError(null);
-    const supabase = createClient();
-    const uploadedPath = `${profile.id}/${crypto.randomUUID()}.webp`;
     try {
-      await uploadAvatarWithSessionRetry(
-        supabase,
-        AVATAR_BUCKET,
-        uploadedPath,
-        prepared,
-      );
-
-      const nextAvatarUrl = supabase.storage
-        .from(AVATAR_BUCKET)
-        .getPublicUrl(uploadedPath).data.publicUrl;
-      const result = await safeUpdate(
-        supabase,
-        "profiles",
-        { avatar_url: nextAvatarUrl },
-        { id: profile.id },
-      );
-      if (!result.ok) {
-        await supabase.storage.from(AVATAR_BUCKET).remove([uploadedPath]);
-        throw new Error(safeUpdateMessage(result.reason));
+      const response = await fetch("/api/avatar", {
+        method: "POST",
+        headers: { "Content-Type": prepared.type },
+        body: prepared,
+      });
+      const result = (await response.json()) as {
+        avatarUrl?: string;
+        error?: string;
+      };
+      if (!response.ok || !result.avatarUrl) {
+        throw new Error(result.error ?? "画像を保存できませんでした。もう一度お試しください");
       }
-
-      const previousPath = avatarStoragePathFromPublicUrl(
-        avatarUrl,
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        profile.id,
-      );
-      setAvatarUrl(nextAvatarUrl);
+      setAvatarUrl(result.avatarUrl);
       router.refresh();
-      if (previousPath && previousPath !== uploadedPath) {
-        const { error: removeError } = await supabase.storage
-          .from(AVATAR_BUCKET)
-          .remove([previousPath]);
-        if (removeError) console.warn("Failed to remove the previous avatar", removeError);
-      }
     } finally {
       setProcessingAvatar(false);
     }
@@ -175,32 +148,20 @@ export function ProfileEditForm({
     if (!avatarUrl || processingAvatar) return;
     setProcessingAvatar(true);
     setError(null);
-    const supabase = createClient();
     try {
-      const result = await safeUpdate(
-        supabase,
-        "profiles",
-        { avatar_url: null },
-        { id: profile.id },
-      );
-      if (!result.ok) {
-        setError(safeUpdateMessage(result.reason));
-        return;
+      const response = await fetch("/api/avatar", { method: "DELETE" });
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(result.error ?? "画像を削除できませんでした。もう一度お試しください");
       }
-
-      const previousPath = avatarStoragePathFromPublicUrl(
-        avatarUrl,
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        profile.id,
-      );
       setAvatarUrl("");
       router.refresh();
-      if (previousPath) {
-        const { error: removeError } = await supabase.storage
-          .from(AVATAR_BUCKET)
-          .remove([previousPath]);
-        if (removeError) console.warn("Failed to remove the previous avatar", removeError);
-      }
+    } catch (removeError) {
+      setError(
+        removeError instanceof Error
+          ? removeError.message
+          : "画像を削除できませんでした。もう一度お試しください",
+      );
     } finally {
       setProcessingAvatar(false);
     }

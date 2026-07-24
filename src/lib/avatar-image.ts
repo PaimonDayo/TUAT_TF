@@ -75,23 +75,48 @@ export function validateAvatarFile(file: File): void {
   }
 }
 
-function canvasToWebp(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (!blob || blob.type !== "image/webp") {
-          reject(new Error("この端末では画像を変換できませんでした"));
-          return;
-        }
-        resolve(blob);
-      },
-      "image/webp",
-      quality,
-    );
+function canvasToBlob(
+  canvas: HTMLCanvasElement,
+  type: "image/webp" | "image/jpeg",
+  quality: number,
+): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    try {
+      canvas.toBlob(
+        (blob) => {
+          resolve(blob?.type === type ? blob : null);
+        },
+        type,
+        quality,
+      );
+    } catch {
+      resolve(null);
+    }
   });
 }
 
-/** 選択範囲を正方形に切り抜き、EXIFを含まない512px WebPへ変換する。 */
+export async function encodeAvatarCanvas(
+  canvas: HTMLCanvasElement,
+  createCanvas: () => HTMLCanvasElement = () => document.createElement("canvas"),
+): Promise<Blob> {
+  const webp = await canvasToBlob(canvas, "image/webp", 0.82);
+  if (webp) return webp;
+
+  const jpegCanvas = createCanvas();
+  jpegCanvas.width = canvas.width;
+  jpegCanvas.height = canvas.height;
+  const context = jpegCanvas.getContext("2d");
+  if (!context) throw new Error("画像を変換できませんでした");
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, jpegCanvas.width, jpegCanvas.height);
+  context.drawImage(canvas, 0, 0);
+
+  const jpeg = await canvasToBlob(jpegCanvas, "image/jpeg", 0.86);
+  if (jpeg) return jpeg;
+  throw new Error("この端末では画像を変換できませんでした");
+}
+
+/** 選択範囲を正方形に切り抜き、EXIFを含まない512px画像へ変換する。 */
 export async function prepareAvatarImage(
   file: File,
   transform?: AvatarCropTransform,
@@ -132,7 +157,7 @@ export async function prepareAvatarImage(
       AVATAR_OUTPUT_SIZE,
       AVATAR_OUTPUT_SIZE,
     );
-    return canvasToWebp(canvas, 0.82);
+    return encodeAvatarCanvas(canvas);
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
