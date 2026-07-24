@@ -68,6 +68,7 @@ export function AttendeesButton({
           title="出欠"
           className="flex h-[calc(100dvh-12px)] flex-col"
           bodyClassName="flex min-h-0 flex-1 flex-col"
+          swipeToClose
         >
           <div className="shrink-0 pb-3">
             <SegmentedControl items={SIMPLE_BLOCK_ITEMS} value={block} onChange={setBlock} />
