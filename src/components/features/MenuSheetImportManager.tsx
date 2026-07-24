@@ -183,7 +183,7 @@ export function MenuSheetImportManager() {
         additions: [],
         updates: [],
       });
-      setError(`${failedRowNumbers.size}件の反映に失敗しました`);
+      setError(`${failedRowNumbers.size}件を登録できませんでした`);
     } else {
       setPreview(null);
       setCsv("");
@@ -328,7 +328,7 @@ export function MenuSheetImportManager() {
         <section className="space-y-4">
           <div className="flex items-center gap-2">
             <Step number={4} />
-            <p className="text-headline">確認してメニューへ反映</p>
+            <p className="text-headline">確認してメニューに登録</p>
           </div>
           <Card className="grid grid-cols-3 divide-x divide-separator overflow-hidden">
             <SummaryCount label="取込可能" value={applicable} />
@@ -352,14 +352,14 @@ export function MenuSheetImportManager() {
             onClick={apply}
           >
             {applying
-              ? "反映中..."
+              ? "登録中..."
               : dirtyCount > 0
-                ? "再確認して正常行を反映"
-                : `${applicable}件をメニューに反映`}
+                ? "もう一度確認して、問題のない行を登録"
+                : `${applicable}件をメニューに登録`}
           </Button>
           {errorCount > 0 && (
             <p className="text-caption text-danger">
-              エラー行は反映せず画面に残ります。正常行だけ先に反映できます。
+              エラーのある行は登録せず画面に残ります。問題のない行だけ先に登録できます。
             </p>
           )}
         </section>

@@ -34,7 +34,7 @@ export function SheetSyncButton() {
       let conflictCount = 0;
 
       for (let requestCount = 0; requestCount < 20 && !cycleComplete; requestCount++) {
-        setMessage(total > 0 ? `${processed}/${total}人を同期中…` : "同期対象を準備中…");
+        setMessage(total > 0 ? `${processed}/${total}人を連携中…` : "準備中…");
         const res = await fetch("/api/sheets/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -57,26 +57,26 @@ export function SheetSyncButton() {
           );
         }
 
-        if (!data.chunk) throw new Error("同期の進捗情報がありません");
+        if (!data.chunk) throw new Error("うまくいきませんでした。時間をおいてお試しください");
         processed = Number(data.chunk.endOffset ?? 0);
         total = Number(data.chunk.totalMembers ?? 0);
         cycleComplete = data.chunk.cycleComplete === true;
       }
 
-      if (!cycleComplete) throw new Error("同期対象が多いため20回で中断しました");
+      if (!cycleComplete) throw new Error("対象が多いため途中で止まりました。もう一度お試しください");
       setHasIssue(failedMembers.length > 0);
       setMessage(
-        `全${total}人を同期しました：取込 ${inserted} / 更新 ${updated} / 書き戻し ${pushed}` +
-          (sheetReplies ? " / スプシ返信 " + sheetReplies : "") +
-          (conflictCount ? ` / 競合スキップ ${conflictCount}` : "") +
+        `全${total}人ぶん完了しました：取り込み ${inserted}件 / 更新 ${updated}件 / 書き込み ${pushed}件` +
+          (sheetReplies ? " / 返信 " + sheetReplies + "件" : "") +
+          (conflictCount ? ` / 重複のため見送り ${conflictCount}件` : "") +
           (failedMembers.length
-            ? ` / 失敗 ${failedMembers.length}件（${failedMembers.join("、")}）`
+            ? ` / うまくいかなかった人 ${failedMembers.length}件（${failedMembers.join("、")}）`
             : ""),
       );
       router.refresh();
     } catch (error) {
       const detail = error instanceof Error ? error.message : "通信エラー";
-      setMessage(`失敗: ${detail}`);
+      setMessage(`うまくいきませんでした：${detail}`);
       setHasIssue(true);
     } finally {
       setBusy(false);
@@ -92,11 +92,11 @@ export function SheetSyncButton() {
         className="flex w-full items-center gap-3 text-headline text-accent active:opacity-60 disabled:opacity-50"
       >
         <RefreshCw size={20} className={busy ? "animate-spin" : ""} />
-        {busy ? "同期中…" : "スプレッドシートと同期"}
+        {busy ? "連携中…" : "スプレッドシートと連携"}
       </button>
 
       {message && <p className="text-micro text-muted2">{message}</p>}
-      {hasIssue && !message && <p className="text-micro text-danger">前回の同期に確認が必要な項目があります</p>}
+      {hasIssue && !message && <p className="text-micro text-danger">前回の連携で確認が必要な項目があります</p>}
     </div>
   );
 }

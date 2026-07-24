@@ -34,7 +34,7 @@ export function NotificationsList({
       case "schedule_update":
         return "予定が更新されました";
       case "sync_failure":
-        return "練習記録の同期が3回連続で失敗しています";
+        return "スプレッドシートとの連携でエラーが続いています。設定を確認してください";
       case "thread_reply":
         return `${actorName}さんがスレッドに返信しました`;
       default:

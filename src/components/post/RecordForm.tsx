@@ -27,11 +27,11 @@ async function pushRecordToSheet(recordId: string): Promise<{ ok: boolean; error
     });
     const json = await res.json();
     if (!res.ok || !json.ok) {
-      return { ok: false, error: json.error ?? "スプレッドシートへの反映に失敗しました" };
+      return { ok: false, error: json.error ?? "スプレッドシートに書き込めませんでした" };
     }
     return { ok: true, unmapped: json.unmapped ?? [] };
   } catch {
-    return { ok: false, error: "スプレッドシートへの反映に失敗しました（通信エラー）" };
+    return { ok: false, error: "スプレッドシートに書き込めませんでした（通信エラー）" };
   }
 }
 
@@ -350,12 +350,12 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
     const pushResult = await pushRecordToSheet(savedId);
     if (!pushResult.ok) {
       showToast(
-        `記録はアプリに保存されましたが、スプレッドシートへの反映に失敗しました（自動で再試行されます）: ${pushResult.error}`,
+        `記録は保存できました。スプレッドシートへの書き込みは、あとでもう一度自動で試します: ${pushResult.error}`,
         "error",
       );
     } else if (pushResult.unmapped && pushResult.unmapped.length > 0) {
       showToast(
-        `スプレッドシートに次の項目の列が見つからず反映できませんでした: ${pushResult.unmapped.join("・")}`,
+        `スプレッドシートに次の項目の欄がなかったので、その項目だけ書き込めませんでした: ${pushResult.unmapped.join("・")}`,
         "error",
       );
     }

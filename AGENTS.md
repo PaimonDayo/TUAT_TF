@@ -78,6 +78,7 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 - `docs/UX-ISSUES-2026-06.md` … **UX問題台帳＋確定方針**（文脈FAB・ガクつき禁止・スワイプ編集削除・記録ブロック別・ノート再設計 等。根拠つき）
 - `docs/UI-UNIFICATION.md` … UI・操作・システムの **統一規約**（書く=全画面 / 選ぶ=シート、**編集削除=スワイプ＋長押し**、ガクつき禁止、共通部品、取得=queries.ts、キャッシュ方針）
 - `docs/UI-AUDIT.md` … ガラパゴス棚卸し＋ **FAB再設計案**（残課題と確定方針）
+- `docs/WORDING-GUIDELINES.md` … **文言ガイドライン**（部員向けの言葉づかい統一。開発用語→平易語の対応表・エラー文の型・適用チェックリスト）
 - `docs/SCHEDULE-MENU-PLAN.md` … 予定のブロック対象化＋メニュー刷新
 - `docs/NOTES-PLAN.md` … ノート機能
 - `docs/SHEETS-IMPORT-PLAN.md` … 予定のスプレッドシート一括入力

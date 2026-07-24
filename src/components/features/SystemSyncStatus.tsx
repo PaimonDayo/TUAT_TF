@@ -41,21 +41,21 @@ export function SystemSyncStatus() {
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <p className="section-label">システム</p>
-        <button type="button" onClick={() => { setError(false); setHealth(null); setRefreshKey((key) => key + 1); }} className="p-1 text-muted active:opacity-50" aria-label="同期状態を再確認">
+        <button type="button" onClick={() => { setError(false); setHealth(null); setRefreshKey((key) => key + 1); }} className="p-1 text-muted active:opacity-50" aria-label="連携状態を再確認">
           <RefreshCw size={15} />
         </button>
       </div>
       <div className="rounded-xl border border-separator bg-card p-3">
         <div className="flex items-center gap-2">
           {error ? <AlertTriangle size={18} className="text-danger" /> : issue ? <AlertTriangle size={18} className="text-warning" /> : <CheckCircle2 size={18} className="text-success" />}
-          <span className="text-[14px] font-semibold">{error ? "状態を取得できません" : !health ? "確認中…" : issue ? "確認が必要です" : "同期は正常です"}</span>
+          <span className="text-[14px] font-semibold">{error ? "状態を取得できません" : !health ? "確認中…" : issue ? "確認が必要です" : "連携は正常です"}</span>
         </div>
         {health && <div className="mt-3 grid grid-cols-3 gap-2 text-center">
           <Metric label="スプシ利用" value={`${health.sheetProfileCount}人`} />
-          <Metric label="未出力" value={`${health.pendingPushCount}件`} danger={health.pendingPushCount > 0} />
-          <Metric label="前回失敗" value={`${health.latest?.failedCount ?? 0}人`} danger={(health.latest?.failedCount ?? 0) > 0} />
+          <Metric label="未書き込み" value={`${health.pendingPushCount}件`} danger={health.pendingPushCount > 0} />
+          <Metric label="前回エラー" value={`${health.latest?.failedCount ?? 0}人`} danger={(health.latest?.failedCount ?? 0) > 0} />
         </div>}
-        {health?.latest && <p className="mt-3 flex items-center gap-1 text-micro text-muted"><Activity size={12} />最終確認 {new Date(health.latest.finishedAt ?? health.latest.startedAt).toLocaleString("ja-JP")}　取込 {health.latest.pulledCount} / 出力 {health.latest.pushedCount}</p>}
+        {health?.latest && <p className="mt-3 flex items-center gap-1 text-micro text-muted"><Activity size={12} />最終確認 {new Date(health.latest.finishedAt ?? health.latest.startedAt).toLocaleString("ja-JP")}　取り込み {health.latest.pulledCount} / 書き込み {health.latest.pushedCount}</p>}
       </div>
     </div>
   );

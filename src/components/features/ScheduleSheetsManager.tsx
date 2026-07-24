@@ -189,7 +189,7 @@ export function ScheduleSheetsManager() {
     const result = await response.json();
     if (!response.ok) {
       popup?.close();
-      setError(result.error ?? "スプレッドシートを発行できませんでした");
+      setError(result.error ?? "スプレッドシートを作れませんでした");
       setIssuing(false);
       return;
     }
@@ -299,7 +299,7 @@ export function ScheduleSheetsManager() {
       import_rows: rows,
     });
     if (applyError) {
-      setError("予定へ反映できませんでした");
+      setError("予定に登録できませんでした");
       setApplying(false);
       return;
     }
@@ -585,9 +585,9 @@ export function ScheduleSheetsManager() {
 
       <section className="space-y-3">
         <div>
-          <p className="text-headline">Googleスプレッドシートを発行</p>
+          <p className="text-headline">Googleスプレッドシートを作る</p>
           <p className="mt-1 text-caption">
-            マイドライブに作成し、場所と対象ブロックのプルダウンを自動設定します。
+            あなたのGoogleドライブに、入力用のシートを作ります。場所と対象ブロックの選択欄もあらかじめ用意します。
           </p>
         </div>
         {googleConnected === false ? (
@@ -665,7 +665,7 @@ export function ScheduleSheetsManager() {
               disabled={issuing || googleConnected === null}
               onClick={issueSpreadsheet}
             >
-              {issuing ? "発行中..." : "シートを発行"}
+              {issuing ? "作成中..." : "シートを作る"}
             </Button>
           </>
         )}
@@ -673,7 +673,7 @@ export function ScheduleSheetsManager() {
           <Button type="button" variant="outline" size="lg" asChild>
             <a href={sheetUrl} target="_blank" rel="noreferrer">
               <ExternalLink size={17} />
-              発行したシートを開く
+              作ったシートを開く
             </a>
           </Button>
         )}
@@ -776,7 +776,7 @@ export function ScheduleSheetsManager() {
         <section className="space-y-4">
           <div className="flex items-center gap-2">
             <Step number={4} />
-            <p className="text-headline">確認して予定へ反映</p>
+            <p className="text-headline">確認して予定に登録</p>
           </div>
           <Card className="grid grid-cols-3 divide-x divide-separator overflow-hidden">
             <SummaryCount label="取込可能" value={applicable} />
@@ -817,14 +817,14 @@ export function ScheduleSheetsManager() {
             onClick={apply}
           >
             {applying
-              ? "反映中..."
+              ? "登録中..."
               : dirtyCount > 0
-                ? "再確認して正常行を反映"
-                : `${applicable}件を予定に反映`}
+                ? "もう一度確認して、問題のない行を登録"
+                : `${applicable}件を予定に登録`}
           </Button>
           {errorCount > 0 && (
             <p className="text-caption text-danger">
-              エラー行は反映せず画面に残ります。正常行だけ先に反映できます。
+              エラーのある行は登録せず画面に残ります。問題のない行だけ先に登録できます。
             </p>
           )}
         </section>

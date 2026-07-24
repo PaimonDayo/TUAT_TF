@@ -37,6 +37,6 @@ export async function safeUpdate(
 /** 更新失敗時に利用者へ表示する共通メッセージ。 */
 export function safeUpdateMessage(reason: "error" | "blocked"): string {
   return reason === "error"
-    ? "更新に失敗しました"
-    : "更新できませんでした。ページを再読み込みしてからお試しください";
+    ? "保存できませんでした。もう一度お試しください"
+    : "保存できませんでした。画面を開き直してから、もう一度お試しください";
 }

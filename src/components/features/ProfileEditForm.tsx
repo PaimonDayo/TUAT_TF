@@ -198,7 +198,7 @@ export function ProfileEditForm({
       const reconcileResult = await response.json();
       if (!response.ok || !reconcileResult.ok) {
         setError(
-          reconcileResult.error ?? "入力元の切替前の同期に失敗しました。もう一度お試しください",
+          reconcileResult.error ?? "設定の変更に失敗しました。もう一度お試しください",
         );
         setSaving(false);
         return;
@@ -395,7 +395,7 @@ export function ProfileEditForm({
             </select>
           )}
           <p className="text-micro mt-1">
-            選ぶと、そのシートと練習記録が1時間ごとに自動で同期されます。
+            選ぶと、練習記録とスプレッドシートが1時間ごとに自動で連携されます。
           </p>
         </div>
       )}
@@ -406,7 +406,7 @@ export function ProfileEditForm({
 
       {sheetName.trim() && (
         <div>
-          <p className="section-label mb-1.5">記録の入力元</p>
+          <p className="section-label mb-1.5">記録の保存先</p>
           <div className="grid grid-cols-2 gap-2">
             {(
               [
@@ -434,8 +434,8 @@ export function ProfileEditForm({
           </div>
           <p className="text-micro mt-1">
             {recordSource === "sheet"
-              ? "スプレッドシートが正になります。アプリからも入力でき、保存すると即座にスプシへ反映されます（スプシの既存内容は上書きされます）。"
-              : "アプリが正となり、記録はスプレッドシートへ自動で書き戻されます。"}
+              ? "ふだんはスプレッドシートに記録します。アプリで記録したときも、その内容がスプレッドシートに自動で書き込まれます。"
+              : "ふだんはアプリに記録します。記録した内容は、スプレッドシートにも自動で書き込まれます。"}
           </p>
         </div>
       )}
