@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FileSpreadsheet } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { sheetRepliesWithoutAppDuplicates } from "@/lib/sheet-replies";
 import { Avatar } from "@/components/common/Avatar";
 import { Linkify } from "@/components/common/Linkify";
 import { Textarea } from "@/components/ui/textarea";
@@ -95,7 +96,22 @@ export function CommentSection({
           kind: "app" as const,
         }];
       });
-      const sheetRows: SheetReply[] = (sheetResult.data ?? []).map((row) => ({
+      const exportedAppTexts = appRows.map((row) => {
+        const authorName = row.author.display_name.trim();
+        return authorName ? `${row.content}　${authorName}` : row.content;
+      });
+      const exportedAppIndexes = appRows.flatMap((row) =>
+        row.sheet_reply_index != null ? [row.sheet_reply_index] : [],
+      );
+      const sheetRows: SheetReply[] = sheetRepliesWithoutAppDuplicates(
+        (sheetResult.data ?? []).map((row) => ({
+          row,
+          replyIndex: row.reply_index,
+          content: row.content,
+        })),
+        exportedAppTexts,
+        exportedAppIndexes,
+      ).map(({ row }) => ({
         ...row,
         kind: "sheet" as const,
       }));

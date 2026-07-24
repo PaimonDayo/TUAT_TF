@@ -13,13 +13,38 @@ export function normalizeSheetReplyText(value: string): string {
   return value.replace(/[\s\u3000]+/g, " ").trim();
 }
 
+/**
+ * アプリ返信のスプレッドシート写しを表示・取込対象から外す。
+ * 新しい返信は列位置、旧返信は「本文＋投稿者名」の正規化文字列で照合する。
+ */
+export function sheetRepliesWithoutAppDuplicates<
+  T extends { replyIndex: number; content: string },
+>(
+  replies: T[],
+  exportedAppReplies: Iterable<string>,
+  exportedAppReplyIndexes: Iterable<number> = [],
+): T[] {
+  const exportedTexts = new Set(
+    Array.from(exportedAppReplies, normalizeSheetReplyText).filter(Boolean),
+  );
+  const exportedIndexes = new Set(
+    Array.from(exportedAppReplyIndexes).filter(
+      (index) => Number.isInteger(index) && index >= 0,
+    ),
+  );
+
+  return replies.filter(
+    (reply) =>
+      !exportedIndexes.has(reply.replyIndex) &&
+      !exportedTexts.has(normalizeSheetReplyText(reply.content)),
+  );
+}
+
 export function importedSheetReplies(
   replies: RawSheetReply[],
   exportedAppReplies: Iterable<string>,
+  exportedAppReplyIndexes: Iterable<number> = [],
 ): ImportedSheetReply[] {
-  const exported = new Set(
-    Array.from(exportedAppReplies, normalizeSheetReplyText).filter(Boolean),
-  );
   const byIndex = new Map<number, ImportedSheetReply>();
 
   for (const reply of replies) {
@@ -29,16 +54,20 @@ export function importedSheetReplies(
       !Number.isInteger(reply.replyIndex) ||
       reply.replyIndex < 0 ||
       !content ||
-      content.length > 2000 ||
-      exported.has(normalizeSheetReplyText(content))
+      content.length > 2000
     ) {
       continue;
     }
     byIndex.set(reply.replyIndex, { replyIndex: reply.replyIndex, content });
   }
 
-  return [...byIndex.values()].sort((a, b) => a.replyIndex - b.replyIndex);
+  return sheetRepliesWithoutAppDuplicates(
+    [...byIndex.values()].sort((a, b) => a.replyIndex - b.replyIndex),
+    exportedAppReplies,
+    exportedAppReplyIndexes,
+  );
 }
+
 export type AppReplyIndexCandidate = {
   id: string;
   content: string;

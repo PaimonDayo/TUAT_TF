@@ -3,6 +3,7 @@ import {
   importedSheetReplies,
   matchAppReplyIndexes,
   normalizeSheetReplyText,
+  sheetRepliesWithoutAppDuplicates,
 } from "@/lib/sheet-replies";
 
 describe("sheet replies", () => {
@@ -19,6 +20,25 @@ describe("sheet replies", () => {
     ], ["了解 山田"])).toEqual([]);
   });
 
+  it("does not import an app reply mirror when its column is known", () => {
+    expect(importedSheetReplies([
+      { replyIndex: 5, content: "表示名変更前の返信", source: "sheet" },
+      { replyIndex: 6, content: "シートだけの返信", source: "sheet" },
+    ], [], [5])).toEqual([
+      { replyIndex: 6, content: "シートだけの返信" },
+    ]);
+  });
+
+  it("deduplicates display replies by column before normalized text", () => {
+    expect(sheetRepliesWithoutAppDuplicates([
+      { replyIndex: 4, content: "名前が変わって本文照合できない写し" },
+      { replyIndex: 5, content: "了解　 山田" },
+      { replyIndex: 6, content: "シート返信" },
+    ], ["了解 山田"], [4])).toEqual([
+      { replyIndex: 6, content: "シート返信" },
+    ]);
+  });
+
   it("deduplicates a repeated column index and ignores invalid values", () => {
     expect(importedSheetReplies([
       { replyIndex: -1, content: "invalid", source: "sheet" },
@@ -31,6 +51,7 @@ describe("sheet replies", () => {
   it("normalizes regular and Japanese spaces for comparison", () => {
     expect(normalizeSheetReplyText("  了解　　山田 ")).toBe("了解 山田");
   });
+
   it("matches app replies to spreadsheet columns from left to right", () => {
     expect(matchAppReplyIndexes([
       { replyIndex: 4, content: "先です　山田", source: "sheet" },

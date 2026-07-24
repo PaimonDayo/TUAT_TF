@@ -771,6 +771,7 @@ async function reconcileSheetReplies(
   if (commentError) throw commentError;
 
   const exportedByRecord = new Map<string, Set<string>>();
+  const exportedIndexesByRecord = new Map<string, Set<number>>();
   const appRepliesByRecord = new Map<string, AppReplyIndexCandidate[]>();
   for (const comment of appComments ?? []) {
     const author = Array.isArray(comment.author) ? comment.author[0] : comment.author;
@@ -779,6 +780,11 @@ async function reconcileSheetReplies(
     const values = exportedByRecord.get(comment.target_id) ?? new Set<string>();
     values.add(normalizeSheetReplyText(exportedText));
     exportedByRecord.set(comment.target_id, values);
+    if (comment.sheet_reply_index != null) {
+      const indexes = exportedIndexesByRecord.get(comment.target_id) ?? new Set<number>();
+      indexes.add(comment.sheet_reply_index);
+      exportedIndexesByRecord.set(comment.target_id, indexes);
+    }
 
     const candidates = appRepliesByRecord.get(comment.target_id) ?? [];
     candidates.push({
@@ -801,6 +807,7 @@ async function reconcileSheetReplies(
     const rows = importedSheetReplies(
       rawReplies,
       exportedByRecord.get(recordId) ?? [],
+      exportedIndexesByRecord.get(recordId) ?? [],
     );
     if (dryRun) {
       synced += indexMatches.length + rows.length;
