@@ -172,7 +172,9 @@ export function TimelineView({
             <UserCheck size={14} />
           </button>
           <button
+            type="button"
             onClick={toggleCompact}
+            aria-pressed={compact}
             aria-label={compact ? "詳細表示にする" : "簡易表示にする"}
             title={compact ? "詳細表示" : "簡易表示"}
             className={cn(

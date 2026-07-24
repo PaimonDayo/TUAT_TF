@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useBooleanPreference } from "@/hooks/use-boolean-preference";
 
 export function useFeedDisplay({
   initialCompact,
@@ -9,18 +10,12 @@ export function useFeedDisplay({
   initialCompact: boolean;
   cookieName?: string;
 }) {
-  const [compact, setCompact] = useState(initialCompact);
+  const [compact, setCompact] = useBooleanPreference(initialCompact, cookieName);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   function toggleCompact() {
     setExpanded(new Set());
-    setCompact((current) => {
-      const next = !current;
-      if (cookieName) {
-        document.cookie = `${cookieName}=${next ? "1" : "0"};path=/;max-age=31536000;samesite=lax`;
-      }
-      return next;
-    });
+    setCompact((current) => !current);
   }
 
   function toggleExpanded(key: string) {

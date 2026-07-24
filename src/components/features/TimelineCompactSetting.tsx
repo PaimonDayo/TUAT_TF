@@ -1,23 +1,15 @@
 "use client";
 
-import { useState } from "react";
 import { Toggle } from "@/components/ui/toggle";
+import { useBooleanPreference } from "@/hooks/use-boolean-preference";
 
 const COOKIE_NAME = "timeline-compact";
-const ONE_YEAR = 31_536_000;
 
 export function TimelineCompactSetting({ initial }: { initial: boolean }) {
-  const [compact, setCompact] = useState(initial);
+  const [compact, setCompact] = useBooleanPreference(initial, COOKIE_NAME);
 
   function toggle() {
-    const next = !compact;
-    setCompact(next);
-    document.cookie = [
-      COOKIE_NAME + "=" + (next ? "1" : "0"),
-      "path=/",
-      "max-age=" + ONE_YEAR,
-      "samesite=lax",
-    ].join(";");
+    setCompact((current) => !current);
   }
 
   return (
