@@ -19,18 +19,25 @@ export function TweetCard({
   currentUser,
   compact = false,
   commentsExpanded = false,
+  embedded = false,
 }: {
   tweet: TweetWithAuthor;
   currentUser: CommentAuthor;
   compact?: boolean;
   commentsExpanded?: boolean;
+  embedded?: boolean;
 }) {
   const { author } = tweet;
   const isOwner = currentUser.id === author.id;
   const gradeLabel = gradeShort(author.grade);
 
   return (
-    <Card className="space-y-3 p-4">
+    <Card
+      className={cn(
+        "space-y-3 p-4",
+        embedded && "rounded-none border-0",
+      )}
+    >
       <div className="flex items-center gap-2.5">
         <Link href={`/members/${author.id}`} onClick={(event) => event.stopPropagation()}>
           <Avatar name={author.display_name} blocks={author.blocks} avatarUrl={author.avatar_url} />

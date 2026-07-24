@@ -13,12 +13,14 @@ export function useFeedDisplay({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   function toggleCompact() {
-    const next = !compact;
-    setCompact(next);
     setExpanded(new Set());
-    if (cookieName) {
-      document.cookie = `${cookieName}=${next ? "1" : "0"};path=/;max-age=31536000;samesite=lax`;
-    }
+    setCompact((current) => {
+      const next = !current;
+      if (cookieName) {
+        document.cookie = `${cookieName}=${next ? "1" : "0"};path=/;max-age=31536000;samesite=lax`;
+      }
+      return next;
+    });
   }
 
   function toggleExpanded(key: string) {

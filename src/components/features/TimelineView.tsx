@@ -131,19 +131,25 @@ export function TimelineView({
 
   function loadMore() { void feedQuery.fetchNextPage(); }
 
-  function renderDetailedItem(item: FeedItem, commentsExpanded: boolean) {
+  function renderDetailedItem(
+    item: FeedItem,
+    commentsExpanded: boolean,
+    embedded = false,
+  ) {
     return item.kind === "record" ? (
       <RecordCard
         record={item}
         currentUser={currentUser}
         commentsExpanded={commentsExpanded}
         showSource={showRecordSource}
+        embedded={embedded}
       />
     ) : (
       <TweetCard
         tweet={item}
         currentUser={currentUser}
         commentsExpanded={commentsExpanded}
+        embedded={embedded}
       />
     );
   }
@@ -218,13 +224,12 @@ export function TimelineView({
                           }}
                           className={cn(
                             "cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent",
-                            !collapsed && "bg-bg p-2",
                           )}
                         >
                           {collapsed ? (
                             <CompactFeedRow item={item} />
                           ) : (
-                            renderDetailedItem(item, commentsExpanded)
+                            renderDetailedItem(item, commentsExpanded, true)
                           )}
                         </div>
                       );

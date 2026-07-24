@@ -21,12 +21,14 @@ export function RecordCard({
   compact = false,
   commentsExpanded = false,
   showSource = false,
+  embedded = false,
 }: {
   record: RecordWithAuthor;
   currentUser: CommentAuthor;
   compact?: boolean;
   commentsExpanded?: boolean;
   showSource?: boolean;
+  embedded?: boolean;
 }) {
   const { author } = record;
   const cond = record.condition ? CONDITIONS[record.condition] : null;
@@ -44,7 +46,11 @@ export function RecordCard({
     (fieldVisible("memo") && Boolean(record.memo));
 
   return (
-    <Card className="p-4 space-y-3">
+    <Card
+      className={
+        embedded ? "space-y-3 rounded-none border-0 p-4" : "space-y-3 p-4"
+      }
+    >
       {/* ヘッダー */}
       <div className="flex items-center gap-2.5">
         <Link href={`/members/${author.id}`} onClick={(e) => e.stopPropagation()}>
