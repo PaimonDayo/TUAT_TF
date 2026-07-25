@@ -23,7 +23,8 @@ const SHORT_DEFAULT_HEADERS = new Set([
 ]);
 
 export function isIgnoredSheetColumn(label: string): boolean {
-  return ["日付", "曜日"].includes(normalize(label));
+  const value = normalize(label);
+  return ["日付", "曜日"].includes(value) || value.includes("週合計");
 }
 
 export function sheetHeaderSignature(columns: SheetHeaderColumn[]): string {

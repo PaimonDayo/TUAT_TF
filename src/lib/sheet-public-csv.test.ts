@@ -68,8 +68,7 @@ describe("commentColumn", () => {
     expect(commentColumn(["日付", "状態", "練習の感想", "感想"])).toBe(3);
   });
 
-  it("falls back to a header containing 感想, then legacy names", () => {
-    expect(commentColumn(["日付", "状態", "今日の感想"])).toBe(2);
-    expect(commentColumn(["日付", "状態", "補足"])).toBe(1);
+  it("does not use partial or legacy headers", () => {
+    expect(commentColumn(["日付", "状態", "今日の感想", "コメント"])).toBe(-1);
   });
 });

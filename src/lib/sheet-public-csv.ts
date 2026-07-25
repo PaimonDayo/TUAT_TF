@@ -90,16 +90,7 @@ export function parsePublicSheetDate(raw: string, defaultYear = currentYearJst()
 const normalizeHeader = (value: string) => value.replace(/\s+/g, "").trim();
 
 export function commentColumn(header: string[]): number {
-  const normalized = header.map(normalizeHeader);
-  const exactMemo = normalized.findIndex((cell) => cell === "感想");
-  if (exactMemo !== -1) return exactMemo;
-  const containingMemo = normalized.findIndex((cell) => cell.includes("感想"));
-  if (containingMemo !== -1) return containingMemo;
-  for (const keyword of ["コメント", "反省", "状態"]) {
-    const exact = normalized.findIndex((cell) => cell === keyword);
-    if (exact !== -1) return exact;
-  }
-  return normalized.findIndex((cell) => ["コメント", "反省", "状態"].some((keyword) => cell.includes(keyword)));
+  return header.map(normalizeHeader).findIndex((cell) => cell === "感想");
 }
 
 /** 1タブ分の公開CSVを、従来のGAS readMemberSheetと同じ形へ変換する。 */

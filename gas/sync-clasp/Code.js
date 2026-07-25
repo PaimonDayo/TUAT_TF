@@ -272,16 +272,7 @@ function findHeaderCol(header, keywords) {
 
 function getCommentColumn(header) {
   const normalized = header.map(normalizeHeaderCell);
-  let index = normalized.findIndex(function (cell) { return cell === '感想'; });
-  if (index !== -1) return index;
-  index = normalized.findIndex(function (cell) { return cell.indexOf('感想') !== -1; });
-  if (index !== -1) return index;
-  const legacy = ['コメント', '反省', '状態'];
-  for (let i = 0; i < legacy.length; i++) {
-    index = normalized.findIndex(function (cell) { return cell === legacy[i]; });
-    if (index !== -1) return index;
-  }
-  return normalized.findIndex(function (cell) { return legacy.some(function (keyword) { return cell.indexOf(keyword) !== -1; }); });
+  return normalized.findIndex(function (cell) { return cell === '感想'; });
 }
 
 function findNextReplyColumn(sheet, row, header) {

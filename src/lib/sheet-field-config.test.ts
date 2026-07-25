@@ -22,6 +22,8 @@ const middleColumns = [
   { index: 11, label: "感想" },
   { index: 12, label: "感想（大会）" },
   { index: 13, label: "睡眠時間" },
+  { index: 14, label: "週合計" },
+  { index: 15, label: "低強度 週合計" },
 ];
 
 const shortColumns = [
@@ -59,9 +61,9 @@ describe("sheet field configuration", () => {
     expect(fields.find((field) => field.sourceColumn === 13)?.showInTimeline).toBe(false);
   });
 
-  it("omits date, weekday and missing default slots", () => {
+  it("omits date, weekday, computed weekly totals and missing default slots", () => {
     const fields = buildSheetRecordFields({
-      columns: [{ index: 0, label: "日付" }, { index: 1, label: "自由記述" }],
+      columns: [{ index: 0, label: "日付" }, { index: 1, label: "曜日" }, { index: 2, label: "週合計" }, { index: 3, label: "低強度 週合計" }, { index: 4, label: "自由記述" }],
       selectedColumns: [],
       timelineColumns: [],
       types: {},

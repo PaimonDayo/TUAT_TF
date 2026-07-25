@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RecordFieldDef } from "@/types";
 import { customRecordFields } from "@/lib/record-fields";
-import { sheetHeaderSignature } from "@/lib/sheet-field-config";
+import { relevantSheetHeaderSignature } from "@/lib/sheet-field-config";
 import {
   importedSheetReplies,
   matchAppReplyIndexes,
@@ -97,7 +97,7 @@ const BUILTINS: { key: BuiltinKey; keywords: string[]; numeric: boolean; integer
   { key: "strides", keywords: ["流し"], numeric: true, integer: true },
   { key: "strength_text", keywords: ["補強"], numeric: false },
   { key: "result_text", keywords: ["結果", "ペース", "タイム"], numeric: false },
-  { key: "memo", keywords: ["感想", "コメント"], numeric: false },
+  { key: "memo", keywords: ["感想"], numeric: false },
   { key: "menu_text", keywords: ["メニュー"], numeric: false },
   { key: "focus_text", keywords: ["目的", "意識"], numeric: false },
 ];
@@ -298,7 +298,9 @@ function resolveFieldMap(
   for (const item of BUILTINS) {
     const configured = fields.find((field) => field.key === item.key);
     if (configured?.hidden || (item.key === "dist_actual" && !options.enableActualDistance)) continue;
-    const hit = headers.find((candidate) => !usedColumns.has(candidate.column) && (
+    const hit = headers.find((candidate) => !usedColumns.has(candidate.column)
+      && (item.key !== "memo" || candidate.n === "感想")
+      && (
       (configured?.sourceColumn === candidate.column && norm(configured.sourceHeader ?? candidate.raw) === candidate.n) ||
       (configured?.sourceHeader && norm(configured.sourceHeader) === candidate.n) ||
       (configured?.label && norm(configured.label) === candidate.n)
@@ -316,9 +318,7 @@ function resolveFieldMap(
     const available = headers.filter((candidate) => !usedColumns.has(candidate.column));
     let hit: HeaderCandidate | undefined;
     if (item.key === "memo") {
-      hit = available.find((candidate) => candidate.n === "感想") ?? available.find((candidate) => candidate.n.includes("感想"));
-      for (const keyword of ["コメント", "反省", "状態"]) hit ??= available.find((candidate) => candidate.n === keyword);
-      hit ??= available.find((candidate) => ["コメント", "反省", "状態"].some((keyword) => candidate.n.includes(keyword)));
+      hit = available.find((candidate) => candidate.n === "感想");
     } else {
       hit = available.find((candidate) => item.keywords.some((keyword) => candidate.n.includes(norm(keyword))));
     }
@@ -994,8 +994,11 @@ export async function runSheetSync(
       result.skippedMembers.push(sheetName);
       continue;
     }
-    const currentHeaderSignature = sheetHeaderSignature(
+    const profileFields = profile.record_fields ?? [];
+    const currentHeaderSignature = relevantSheetHeaderSignature(
       member.columns ?? member.header.map((label, index) => ({ index, label })),
+      profileFields,
+      profileFields.some((field) => field.key.startsWith("dist_")),
     );
     const stagedSheetFlow =
       process.env.SHEET_FORM_V2_APPLY_ENABLED === "true" &&
@@ -1211,7 +1214,12 @@ export async function refreshMemberFromSheetLive(
 
   try {
     const member = await fetchMemberRaw(profile.sheet_name, { timeoutMs: 5000 });
-    const currentHeaderSignature = sheetHeaderSignature(member.columns ?? member.header.map((label, index) => ({ index, label })));
+    const profileFields = profile.record_fields ?? [];
+    const currentHeaderSignature = relevantSheetHeaderSignature(
+      member.columns ?? member.header.map((label, index) => ({ index, label })),
+      profileFields,
+      profileFields.some((field) => field.key.startsWith("dist_")),
+    );
     if (options.enforceHeaderSignature && profile.sheet_header_signature && profile.sheet_header_signature !== currentHeaderSignature) {
       return null;
     }
