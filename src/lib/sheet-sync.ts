@@ -383,7 +383,12 @@ function sheetToAppValues(map: FieldMap, record: RawMember["records"][number]) {
   const custom: Record<string, string | number | null> = {};
   for (const [key, m] of map.custom) {
     const value = valueAt(m.header, m.column);
-    custom[key] = m.type === "number" ? Math.round(parseSheetNum(value) * 10) / 10 : txt(value);
+    const textValue = txt(value);
+    custom[key] = m.type === "number"
+      ? textValue === null
+        ? null
+        : Math.round(parseSheetNum(value) * 10) / 10
+      : textValue;
   }
   return { builtin, custom };
 }

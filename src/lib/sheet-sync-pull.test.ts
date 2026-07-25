@@ -65,4 +65,20 @@ describe("computeMemberPull", () => {
       { id: "record-2026-07-23", patch: { memo: null, synced_at: "2026-07-24T15:00:00.000Z" } },
     ]);
   });
+  it("does not create a record from an empty numeric custom cell", () => {
+    const numericCustomMap = {
+      builtin: new Map(),
+      custom: new Map([["sleep_hours", { header: "sleep", column: 0, type: "number" }]]),
+    } as Parameters<typeof computeMemberPull>[1];
+    const result = computeMemberPull(
+      "user-1",
+      numericCustomMap,
+      [{ date: "2026-07-24", cells: { sleep: "" }, values: [""] }],
+      new Map(),
+      () => true,
+      "2026-07-24T15:00:00.000Z",
+      "replace_mapped",
+    );
+    expect(result.inserts).toEqual([]);
+  });
 });
