@@ -82,6 +82,7 @@ export interface Profile {
   record_source: "app" | "sheet";
   /** 記録フォームのカスタム項目定義（短距離など独自列の人向け） */
   record_fields: RecordFieldDef[];
+  record_fields_version: number;
   created_at: string;
 }
 
@@ -98,6 +99,8 @@ export interface RecordFieldDef {
   sourceHeader?: string;
   /** 0始まりの列位置。重複見出しを区別するため保持する。 */
   sourceColumn?: number;
+  /** Whether this field is shown on timeline cards. */
+  showInTimeline?: boolean;
 }
 
 /** 投稿カードに埋め込む投稿者の最小情報 */
@@ -138,6 +141,9 @@ export interface PracticeRecord {
   synced_at?: string | null;
   /** カスタム項目の値（key→値） */
   custom?: Record<string, string | number | null>;
+  /** Field configuration captured when this record was created. */
+  record_fields_snapshot?: RecordFieldDef[];
+  record_fields_version?: number | null;
   /** スプシ同期で取り込んだ記録か（true ならソーシャルなタイムラインには出さない） */
   from_sheet?: boolean;
 }
@@ -182,7 +188,7 @@ export interface Comment {
   updated_at: string;
 }
 
-export type CommentAuthor = Pick<Profile, "id" | "display_name" | "avatar_url">;
+export type CommentAuthor = Pick<Profile, "id" | "display_name" | "avatar_url"> & { systemRecordForm?: boolean };
 
 export interface CommentWithAuthor extends Comment {
   author: CommentAuthor;

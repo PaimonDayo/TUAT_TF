@@ -44,6 +44,7 @@ type FabProps = {
   isMiddleLong: boolean;
   recordSource: "app" | "sheet";
   recordFields: RecordFieldDef[];
+  systemRecordForm: boolean;
   can: FabPermissions;
 };
 
@@ -68,6 +69,7 @@ function ContextualFAB({
   isMiddleLong,
   recordSource,
   recordFields,
+  systemRecordForm,
   can,
   pathname,
   autoOpen,
@@ -346,6 +348,7 @@ function ContextualFAB({
           isMiddleLong={isMiddleLong}
           recordSource={recordSource}
           recordFields={recordFields}
+          systemRecordForm={systemRecordForm}
           onDirtyChange={setRecordDirty}
           onDone={() => closeTimelineForm("record")}
         />

@@ -50,6 +50,7 @@ async function AuthenticatedFab() {
       isMiddleLong={profile.blocks?.includes("middle_long") ?? false}
       recordSource={profile.record_source}
       recordFields={profile.record_fields}
+      systemRecordForm={perms.manageSystem && Boolean(profile.sheet_name)}
       can={{
         createSchedule: perms.createSchedule,
         createMenu: perms.createMenu,
@@ -69,6 +70,7 @@ async function AuthenticatedSheetHeaderGuard() {
       sheetName={profile.sheet_name}
       signature={profile.sheet_header_signature}
       isMiddleLong={profile.blocks.includes("middle_long")}
+      recordFields={profile.record_fields}
     />
   );
 }

@@ -3,7 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { fetchRolesByProfileIds } from "@/lib/supabase/auth";
 import { permissionsOf } from "@/lib/permissions";
 import { fetchPublicMember } from "@/lib/sheet-public-csv";
-import { memoHeaderCandidates, sheetHeaderSignature } from "@/lib/sheet-field-config";
+import { memoHeaderCandidates, relevantSheetHeaderSignature } from "@/lib/sheet-field-config";
+import { recordFieldsFromJson } from "@/lib/profile-normalize";
 
 export const maxDuration = 15;
 
@@ -17,6 +18,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "システム管理権限が必要です" }, { status: 403 });
   }
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("blocks, record_fields")
+    .eq("id", user.id)
+    .single();
+  const isMiddleLong = (profile?.blocks ?? []).includes("middle_long");
+  const recordFields = recordFieldsFromJson(profile?.record_fields ?? null);
+
   const sheetName = new URL(request.url).searchParams.get("sheetName")?.trim();
   if (!sheetName) return NextResponse.json({ error: "シートを選択してください" }, { status: 400 });
 
@@ -28,7 +37,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       sheetName: member.name,
       columns,
-      signature: sheetHeaderSignature(columns),
+      signature: relevantSheetHeaderSignature(columns, recordFields, isMiddleLong),
       memoCandidates: memoHeaderCandidates(columns).map((column) => column.index),
     });
   } catch (error) {

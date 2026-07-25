@@ -41,6 +41,7 @@ const numStr = (n: number) => (n && n > 0 ? String(n) : "");
 type RecordDraftValues = {
   date: string;
   dist: IntensityValues;
+  actualDistance: string;
   strides: string;
   resultText: string;
   strengthText: string;
@@ -66,6 +67,7 @@ function recordDraftValues(record: PracticeRecord | null | undefined, date: stri
           speed: numStr(record.dist_speed),
         }
       : { ...EMPTY },
+    actualDistance: numStr(record?.dist_actual ?? 0),
     strides: numStr(record?.strides ?? 0),
     resultText: record?.result_text ?? "",
     strengthText: record?.strength_text ?? "",
@@ -81,6 +83,7 @@ function serializeRecordDraft(draft: RecordDraftValues): string {
   return JSON.stringify({
     ...draft,
     dist: Object.fromEntries(Object.entries(draft.dist).map(([key, value]) => [key, value.trim()])),
+    actualDistance: draft.actualDistance.trim(),
     strides: draft.strides.trim(),
     resultText: draft.resultText.trim(),
     strengthText: draft.strengthText.trim(),
@@ -99,7 +102,7 @@ function serializeRecordDraft(draft: RecordDraftValues): string {
  * record を渡すと編集モード（その記録を更新）になる。
  */
 export type RecordFormHandle = { save: () => void };
-export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddleLong: boolean; record?: PracticeRecord; recordSource?: "app" | "sheet"; recordFields?: RecordFieldDef[]; onDone: () => void; onDirtyChange?: (dirty: boolean) => void }>(function RecordForm({ userId, isMiddleLong, record, recordFields, onDone, onDirtyChange }, ref) {
+export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddleLong: boolean; record?: PracticeRecord; recordSource?: "app" | "sheet"; recordFields?: RecordFieldDef[]; systemRecordForm?: boolean; onDone: () => void; onDirtyChange?: (dirty: boolean) => void }>(function RecordForm({ userId, isMiddleLong, record, recordFields, systemRecordForm = false, onDone, onDirtyChange }, ref) {
   const router = useRouter();
   const { showToast } = useToast();
   const editing = !!record;
@@ -115,6 +118,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
         }
       : EMPTY,
   );
+  const [actualDistance, setActualDistance] = useState(numStr(record?.dist_actual ?? 0));
   const [strides, setStrides] = useState(numStr(record?.strides ?? 0));
   const [resultText, setResultText] = useState(record?.result_text ?? "");
   const [strengthText, setStrengthText] = useState(record?.strength_text ?? "");
@@ -130,8 +134,15 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
 
   // カスタム項目（プロフィールで設定したもの）。フォームに動的に追加する。
   // 呼び出し側が取得済みプロフィールから渡していれば、それを使い再フェッチしない。
-  const [configuredFields, setConfiguredFields] = useState<RecordFieldDef[]>(recordFields ?? []);
+  const historicalFields = systemRecordForm && record?.record_fields_version != null ? (record.record_fields_snapshot ?? []) : null;
+  const [configuredFields, setConfiguredFields] = useState<RecordFieldDef[]>(historicalFields ?? recordFields ?? []);
+  const fieldEnabled = (key: Parameters<typeof recordFieldHidden>[1]) => systemRecordForm
+    ? configuredFields.some((field) => field.key === key && !field.hidden)
+    : !recordFieldHidden(configuredFields, key);
   const customFields = useMemo(() => customRecordFields(configuredFields), [configuredFields]);
+  const visibleIntensities = systemRecordForm
+    ? (["low", "mid", "high", "speed"] as const).filter((key) => fieldEnabled(`dist_${key}` as Parameters<typeof recordFieldHidden>[1]))
+    : undefined;
   const [customValues, setCustomValues] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     for (const [k, v] of Object.entries(record?.custom ?? {})) {
@@ -145,6 +156,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
   const currentSnapshot = useMemo(() => serializeRecordDraft({
     date,
     dist,
+    actualDistance,
     strides,
     resultText,
     strengthText,
@@ -153,9 +165,10 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
     memo,
     condition,
     customValues,
-  }), [condition, customValues, date, dist, focusText, memo, menuText, resultText, strengthText, strides]);
+  }), [actualDistance, condition, customValues, date, dist, focusText, memo, menuText, resultText, strengthText, strides]);
   const hasMeaningfulContent =
     Object.values(dist).some((value) => value.trim() !== "") ||
+    actualDistance.trim() !== "" ||
     strides.trim() !== "" ||
     resultText.trim() !== "" ||
     strengthText.trim() !== "" ||
@@ -203,6 +216,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
         setHasExistingSameDay(!!found);
         const nextDraft = recordDraftValues(found, date);
         setDist(nextDraft.dist);
+        setActualDistance(nextDraft.actualDistance);
         setStrides(nextDraft.strides);
         setResultText(nextDraft.resultText);
         setStrengthText(nextDraft.strengthText);
@@ -211,12 +225,13 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
         setMemo(nextDraft.memo);
         setCondition(nextDraft.condition);
         setCustomValues(nextDraft.customValues);
+        if (systemRecordForm && found?.record_fields_version != null) setConfiguredFields(found.record_fields_snapshot ?? []);
         setBaselineSnapshot(serializeRecordDraft(nextDraft));
       });
     return () => {
       active = false;
     };
-  }, [date, editing, userId]);
+  }, [date, editing, systemRecordForm, userId]);
 
   function buildCustom(): Record<string, string | number | null> {
     const out: Record<string, string | number | null> = { ...(record?.custom ?? {}) };
@@ -238,20 +253,21 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
       (parseFloat(dist.mid) || 0) +
       (parseFloat(dist.high) || 0) +
       (parseFloat(dist.speed) || 0);
+    const actualHasContent = fieldEnabled("dist_actual") && (parseFloat(actualDistance) || 0) > 0;
     const customHasContent = customFields.some((field) => (customValues[field.key] ?? "").trim() !== "");
     const hasContent = isMiddleLong
-      ? distTotal > 0 ||
-        (!recordFieldHidden(configuredFields, "strides") && (parseInt(strides) || 0) > 0) ||
-        (!recordFieldHidden(configuredFields, "result_text") && !!resultText.trim()) ||
-        (!recordFieldHidden(configuredFields, "strength_text") && !!strengthText.trim()) ||
-        (!recordFieldHidden(configuredFields, "memo") && !!memo.trim()) ||
-        (!recordFieldHidden(configuredFields, "condition") && !!condition) ||
+      ? distTotal > 0 || actualHasContent ||
+        (fieldEnabled("strides") && (parseInt(strides) || 0) > 0) ||
+        (fieldEnabled("result_text") && !!resultText.trim()) ||
+        (fieldEnabled("strength_text") && !!strengthText.trim()) ||
+        (fieldEnabled("memo") && !!memo.trim()) ||
+        (fieldEnabled("condition") && !!condition) ||
         customHasContent
-      : (!recordFieldHidden(configuredFields, "menu_text") && !!menuText.trim()) ||
-        (!recordFieldHidden(configuredFields, "focus_text") && !!focusText.trim()) ||
-        (!recordFieldHidden(configuredFields, "result_text") && !!resultText.trim()) ||
-        (!recordFieldHidden(configuredFields, "memo") && !!memo.trim()) ||
-        (!recordFieldHidden(configuredFields, "condition") && !!condition) ||
+      : (fieldEnabled("menu_text") && !!menuText.trim()) ||
+        (fieldEnabled("focus_text") && !!focusText.trim()) ||
+        (fieldEnabled("result_text") && !!resultText.trim()) ||
+        (fieldEnabled("memo") && !!memo.trim()) ||
+        (fieldEnabled("condition") && !!condition) ||
         customHasContent;
     if (!hasContent) {
       setError(
@@ -276,7 +292,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
           dist_mid: parseFloat(dist.mid) || 0,
           dist_high: parseFloat(dist.high) || 0,
           dist_speed: parseFloat(dist.speed) || 0,
-          dist_actual: 0,
+          dist_actual: parseFloat(actualDistance) || 0,
           strides: parseInt(strides) || 0,
           result_text: resultText.trim() || null,
           strength_text: strengthText.trim() || null,
@@ -388,8 +404,12 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
       {isMiddleLong && (
         <div>
           <p className="section-label mb-1.5">強度別距離</p>
-          <IntensityInput values={dist} onChange={setDist} />
-          {!recordFieldHidden(configuredFields, "strides") && <div className="mt-2 flex items-center gap-2">
+          {(!systemRecordForm || (visibleIntensities?.length ?? 0) > 0) && <IntensityInput values={dist} onChange={setDist} visible={visibleIntensities} />}
+          {systemRecordForm && fieldEnabled("dist_actual") && <div className="mt-2">
+            <p className="section-label mb-1.5">{recordFieldLabel(configuredFields, "dist_actual", "実際の距離")}</p>
+            <div className="flex items-center gap-2"><Input type="number" inputMode="decimal" min={0} step="0.1" placeholder="0" value={actualDistance} onChange={(event) => setActualDistance(event.target.value)} className="text-right" /><span className="text-caption">km</span></div>
+          </div>}
+          {fieldEnabled("strides") && <div className="mt-2 flex items-center gap-2">
             <span className="text-[13px] font-medium">{recordFieldLabel(configuredFields, "strides", "流し")}</span>
             <Input
               type="number"
@@ -405,8 +425,29 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
         </div>
       )}
 
+      {systemRecordForm && configuredFields.filter((field) => !field.hidden).map((field) => {
+        if (["dist_low", "dist_mid", "dist_high", "dist_speed", "dist_actual", "strides", "condition"].includes(field.key)) return null;
+        const value = field.key === "menu_text" ? menuText
+          : field.key === "focus_text" ? focusText
+          : field.key === "result_text" ? resultText
+          : field.key === "strength_text" ? strengthText
+          : field.key === "memo" ? memo
+          : customValues[field.key] ?? "";
+        const setValue = (next: string) => {
+          if (field.key === "menu_text") setMenuText(next);
+          else if (field.key === "focus_text") setFocusText(next);
+          else if (field.key === "result_text") setResultText(next);
+          else if (field.key === "strength_text") setStrengthText(next);
+          else if (field.key === "memo") setMemo(next);
+          else setCustomValues((current) => ({ ...current, [field.key]: next }));
+        };
+        return <div key={field.key}>
+          <p className="section-label mb-1.5">{field.label}</p>
+          {field.type === "number" ? <Input type="number" inputMode="decimal" placeholder="0" value={value} onChange={(event) => setValue(event.target.value)} /> : <Textarea rows={field.key === "memo" ? 3 : 2} value={value} onChange={(event) => setValue(event.target.value)} />}
+        </div>;
+      })}
       {/* メニュー（短距離・跳躍・投擲） */}
-      {!isMiddleLong && !recordFieldHidden(configuredFields, "menu_text") && (
+      {!systemRecordForm && !isMiddleLong && fieldEnabled("menu_text") && (
         <div>
           <p className="section-label mb-1.5">{recordFieldLabel(configuredFields, "menu_text", "メニュー")}</p>
           <Textarea
@@ -419,7 +460,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
       )}
 
       {/* 目的・意識すること（短距離・跳躍・投擲） */}
-      {!isMiddleLong && !recordFieldHidden(configuredFields, "focus_text") && (
+      {!systemRecordForm && !isMiddleLong && fieldEnabled("focus_text") && (
         <div>
           <p className="section-label mb-1.5">{recordFieldLabel(configuredFields, "focus_text", "目的・意識すること")}</p>
           <Textarea
@@ -432,7 +473,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
       )}
 
       {/* 結果 */}
-      {!recordFieldHidden(configuredFields, "result_text") && <div>
+      {!systemRecordForm && fieldEnabled("result_text") && <div>
         <p className="section-label mb-1.5">{recordFieldLabel(configuredFields, "result_text", isMiddleLong ? "結果" : "タイム")}</p>
         <Textarea
           rows={2}
@@ -443,7 +484,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
       </div>}
 
       {/* 補強（中長距離のみ） */}
-      {isMiddleLong && !recordFieldHidden(configuredFields, "strength_text") && (
+      {!systemRecordForm && isMiddleLong && fieldEnabled("strength_text") && (
         <div>
           <p className="section-label mb-1.5">{recordFieldLabel(configuredFields, "strength_text", "補強")}</p>
           <Textarea
@@ -456,7 +497,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
       )}
 
       {/* 感想 */}
-      {!recordFieldHidden(configuredFields, "memo") && <div>
+      {!systemRecordForm && fieldEnabled("memo") && <div>
         <p className="section-label mb-1.5">{recordFieldLabel(configuredFields, "memo", "感想・振り返り")}</p>
         <Textarea
           rows={3}
@@ -467,7 +508,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
       </div>}
 
       {/* カスタム項目（プロフィールで追加したもの） */}
-      {customFields.map((f) => (
+      {!systemRecordForm && customFields.map((f) => (
         <div key={f.key}>
           <p className="section-label mb-1.5">{f.label}</p>
           {f.type === "number" ? (
@@ -493,7 +534,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
       ))}
 
       {/* コンディション */}
-      {!recordFieldHidden(configuredFields, "condition") && <div>
+      {!systemRecordForm && fieldEnabled("condition") && <div>
         <p className="section-label mb-1.5">{recordFieldLabel(configuredFields, "condition", "コンディション")}</p>
         <div className="grid grid-cols-3 gap-2">
           {CONDITION_ORDER.map((c) => {

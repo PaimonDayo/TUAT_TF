@@ -3,19 +3,19 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SheetHeaderSetupDialog, type SheetHeaderData } from "@/components/features/SheetHeaderSetupDialog";
-import { createClient } from "@/lib/supabase/client";
 import { recordFieldsToJson } from "@/lib/profile-normalize";
-import { safeUpdate } from "@/lib/safe-update";
+import type { RecordFieldDef } from "@/types";
 
 export function SheetHeaderGuard({
-  profileId,
   sheetName,
   signature,
+  recordFields,
   isMiddleLong,
 }: {
   profileId: string;
   sheetName: string | null;
   signature: string | null;
+  recordFields: RecordFieldDef[];
   isMiddleLong: boolean;
 }) {
   const router = useRouter();
@@ -34,16 +34,15 @@ export function SheetHeaderGuard({
     return () => { active = false; };
   }, [sheetName, signature]);
 
-  async function confirm(fields: Parameters<NonNullable<React.ComponentProps<typeof SheetHeaderSetupDialog>["onConfirm"]>>[0], nextSignature: string) {
+  async function confirm(fields: RecordFieldDef[], nextSignature: string) {
     setBusy(true);
-    const result = await safeUpdate(
-      createClient(),
-      "profiles",
-      { record_fields: recordFieldsToJson(fields), sheet_header_signature: nextSignature },
-      { id: profileId },
-    );
+    const response = await fetch("/api/record-form-config", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ fields: recordFieldsToJson(fields), signature: nextSignature }),
+    });
     setBusy(false);
-    if (!result.ok) return;
+    if (!response.ok) return;
     setData(null);
     router.refresh();
   }
@@ -53,6 +52,7 @@ export function SheetHeaderGuard({
       key={data.signature}
       open
       data={data}
+      initialFields={recordFields}
       isMiddleLong={isMiddleLong}
       busy={busy}
       onCancel={() => setData(null)}

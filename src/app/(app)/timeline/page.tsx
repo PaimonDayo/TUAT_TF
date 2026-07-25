@@ -37,6 +37,7 @@ async function TimelineContent() {
         id: profile.id,
         display_name: profile.display_name,
         avatar_url: profile.avatar_url,
+        systemRecordForm: permissionsOf(profile.roles).manageSystem,
       }}
       favoriteIds={favoriteIds}
       initialCompact={initialCompact}

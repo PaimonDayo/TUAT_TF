@@ -13,7 +13,18 @@ import { RecordOwnerMenu } from "@/components/cards/PostOwnerMenu";
 import { CONDITIONS, gradeShort } from "@/lib/constants";
 import { recordFieldHidden, recordFieldLabel } from "@/lib/record-fields";
 import { displayedDistance } from "@/lib/record-distance";
-import type { CommentAuthor, RecordWithAuthor } from "@/types";
+import type { CommentAuthor, RecordFieldDef, RecordWithAuthor } from "@/types";
+
+const NON_DETAIL_KEYS = new Set(["dist_low", "dist_mid", "dist_high", "dist_speed", "dist_actual", "strides", "condition"]);
+
+function recordValue(record: RecordWithAuthor, key: string): string | number | null | undefined {
+  if (key === "menu_text") return record.menu_text;
+  if (key === "focus_text") return record.focus_text;
+  if (key === "result_text") return record.result_text;
+  if (key === "strength_text") return record.strength_text;
+  if (key === "memo") return record.memo;
+  return record.custom?.[key];
+}
 
 /** タイムライン用の練習記録カード。compact=簡易表示（テキスト詳細を畳む） */
 export function RecordCard({
@@ -32,120 +43,63 @@ export function RecordCard({
   embedded?: boolean;
 }) {
   const { author } = record;
+  const recordFields = record.record_fields_version !== null && record.record_fields_version !== undefined
+    ? (record.record_fields_snapshot ?? [])
+    : (author.record_fields ?? []);
+  const hasTimelineConfig = recordFields.some((field) => typeof field.showInTimeline === "boolean");
   const cond = record.condition ? CONDITIONS[record.condition] : null;
   const isOwner = currentUser.id === author.id;
   const gradeLabel = gradeShort(author.grade);
   const totalDistance = displayedDistance(record);
-  const fieldVisible = (key: Parameters<typeof recordFieldHidden>[1]) =>
-    !recordFieldHidden(author.record_fields, key);
-  const hasVisibleDetails =
-    (fieldVisible("menu_text") && Boolean(record.menu_text)) ||
-    (fieldVisible("focus_text") && Boolean(record.focus_text)) ||
-    (fieldVisible("result_text") && Boolean(record.result_text)) ||
-    (fieldVisible("strength_text") && Boolean(record.strength_text)) ||
-    (fieldVisible("memo") && Boolean(record.memo));
+  const fieldVisible = (key: Parameters<typeof recordFieldHidden>[1]) => hasTimelineConfig
+    ? recordFields.some((field) => field.key === key && field.showInTimeline === true && !field.hidden)
+    : !recordFieldHidden(recordFields, key);
+  const distanceVisible = hasTimelineConfig
+    ? recordFields.some((field) => field.key.startsWith("dist_") && field.showInTimeline === true && !field.hidden)
+    : true;
+  const configuredDetails = hasTimelineConfig
+    ? recordFields.filter((field) => field.showInTimeline === true && !field.hidden && !NON_DETAIL_KEYS.has(field.key))
+    : [];
+  const legacyDetails: RecordFieldDef[] = hasTimelineConfig ? [] : [
+    { key: "menu_text", label: recordFieldLabel(recordFields, "menu_text", "メニュー"), type: "text", hidden: !fieldVisible("menu_text") },
+    { key: "focus_text", label: recordFieldLabel(recordFields, "focus_text", "目的・意識すること"), type: "text", hidden: !fieldVisible("focus_text") },
+    { key: "result_text", label: recordFieldLabel(recordFields, "result_text", record.menu_text || record.focus_text ? "タイム" : "結果"), type: "text", hidden: !fieldVisible("result_text") },
+    { key: "strength_text", label: recordFieldLabel(recordFields, "strength_text", "補強"), type: "text", hidden: !fieldVisible("strength_text") },
+    { key: "memo", label: recordFieldLabel(recordFields, "memo", "感想"), type: "text", hidden: !fieldVisible("memo") },
+  ];
+  const details = [...configuredDetails, ...legacyDetails].filter((field) => !field.hidden && recordValue(record, field.key) !== null && recordValue(record, field.key) !== undefined && recordValue(record, field.key) !== "");
 
   return (
-    <Card
-      className={
-        embedded ? "space-y-3 rounded-none border-0 p-4" : "space-y-3 p-4"
-      }
-    >
-      {/* ヘッダー */}
+    <Card className={embedded ? "space-y-3 rounded-none border-0 p-4" : "space-y-3 p-4"}>
       <div className="flex items-center gap-2.5">
-        <Link href={`/members/${author.id}`} onClick={(e) => e.stopPropagation()}>
+        <Link href={`/members/${author.id}`} onClick={(event) => event.stopPropagation()}>
           <Avatar name={author.display_name} blocks={author.blocks} avatarUrl={author.avatar_url} />
         </Link>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <Link
-              href={`/members/${author.id}`}
-              onClick={(e) => e.stopPropagation()}
-              className="text-headline truncate"
-            >
-              {author.display_name || "名無し"}
-            </Link>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Link href={`/members/${author.id}`} onClick={(event) => event.stopPropagation()} className="text-headline truncate">{author.display_name || "名無し"}</Link>
             <BlockPills blocks={author.blocks} />
             {gradeLabel && <span className="text-micro">{gradeLabel}</span>}
           </div>
-          <p className="text-caption">
-            {format(new Date(record.recorded_date + "T00:00:00"), "M月d日(E)", { locale: ja })}
-            の練習
-          </p>
+          <p className="text-caption">{format(new Date(record.recorded_date + "T00:00:00"), "M月d日(E)", { locale: ja })}の練習</p>
         </div>
-        {cond && fieldVisible("condition") && (
-          <span
-            className="inline-flex items-center gap-1 text-[13px] font-semibold shrink-0"
-            style={{ color: cond.color }}
-            title={cond.label}
-          >
-            <span className="text-[16px] leading-none">{cond.symbol}</span>
-            {cond.label}
-          </span>
-        )}
-        {(isOwner || showSource) && (
-          <div className="flex shrink-0 items-center gap-1.5">
-            {record.from_sheet && (
-              <span className="rounded-full bg-bg px-2 py-0.5 text-micro text-muted2">
-                スプシ由来
-              </span>
-            )}
-            {showSource && !record.from_sheet && (
-              <span className="rounded-full bg-bg px-2 py-0.5 text-micro text-muted2">
-                {"\u30a2\u30d7\u30ea\u7531\u6765"}
-              </span>
-            )}
-            {isOwner && (author.record_source === "sheet" || !record.from_sheet) && (
-              <span onClick={(e) => e.stopPropagation()}>
-                <RecordOwnerMenu
-                  record={record}
-                  isMiddleLong={author.blocks?.includes("middle_long") ?? false}
-                  recordSource={author.record_source}
-                  recordFields={author.record_fields}
-                />
-              </span>
-            )}
-          </div>
-        )}
+        {cond && fieldVisible("condition") && <span className="inline-flex shrink-0 items-center gap-1 text-[13px] font-semibold" style={{ color: cond.color }} title={cond.label}><span className="text-[16px] leading-none">{cond.symbol}</span>{cond.label}</span>}
+        {(isOwner || showSource) && <div className="flex shrink-0 items-center gap-1.5">
+          {record.from_sheet && <span className="rounded-full bg-bg px-2 py-0.5 text-micro text-muted2">スプシ由来</span>}
+          {showSource && !record.from_sheet && <span className="rounded-full bg-bg px-2 py-0.5 text-micro text-muted2">アプリ由来</span>}
+          {isOwner && (author.record_source === "sheet" || !record.from_sheet) && <span onClick={(event) => event.stopPropagation()}><RecordOwnerMenu record={record} isMiddleLong={author.blocks?.includes("middle_long") ?? false} recordSource={author.record_source} recordFields={recordFields} systemRecordForm={currentUser.systemRecordForm === true && hasTimelineConfig} /></span>}
+        </div>}
       </div>
 
-      {/* 距離（中長距離。データがある時だけ表示） */}
       {compact
-        ? totalDistance > 0 && (
-            <p className="text-[13px] font-semibold text-muted2 tabular-nums">
-              走行距離 {Math.round(totalDistance * 10) / 10}km
-            </p>
-          )
-        : totalDistance > 0 && <IntensityBar record={record} />}
-      {!compact && fieldVisible("strides") && record.strides > 0 && (
-        <p className="text-[12px] text-muted2">{recordFieldLabel(author.record_fields, "strides", "流し")} {record.strides}本</p>
-      )}
+        ? distanceVisible && totalDistance > 0 && <p className="text-[13px] font-semibold tabular-nums text-muted2">走行距離 {Math.round(totalDistance * 10) / 10}km</p>
+        : distanceVisible && totalDistance > 0 && <IntensityBar record={record} />}
+      {!compact && fieldVisible("strides") && record.strides > 0 && <p className="text-[12px] text-muted2">{recordFieldLabel(recordFields, "strides", "流し")} {record.strides}本</p>}
 
-      {/* テキスト各種（簡易表示では畳む。存在する項目だけ表示） */}
-      {!compact && hasVisibleDetails && (
-          <dl>
-            {fieldVisible("menu_text") && <KeyValue label={recordFieldLabel(author.record_fields, "menu_text", "メニュー")} value={record.menu_text} />}
-            {fieldVisible("focus_text") && <KeyValue label={recordFieldLabel(author.record_fields, "focus_text", "目的・意識すること")} value={record.focus_text} />}
-            {fieldVisible("result_text") && <KeyValue
-              label={recordFieldLabel(author.record_fields, "result_text", record.menu_text || record.focus_text ? "タイム" : "結果")}
-              value={record.result_text}
-            />}
-            {fieldVisible("strength_text") && <KeyValue label={recordFieldLabel(author.record_fields, "strength_text", "補強")} value={record.strength_text} />}
-            {fieldVisible("memo") && <KeyValue label={recordFieldLabel(author.record_fields, "memo", "感想")} value={record.memo} />}
-          </dl>
-        )}
+      {!compact && details.length > 0 && <dl>{details.map((field) => <KeyValue key={field.key} label={field.label} value={recordValue(record, field.key)} collapsible />)}</dl>}
 
-      {/* いいね・返信は簡易表示でも直接押せるよう常に表示。タップで展開しないよう伝播を止める */}
-      <div onClick={(e) => e.stopPropagation()}>
-        <PostActions
-          targetType="record"
-          targetId={record.id}
-          initialLikes={record.likes_count}
-          initialLiked={record.liked_by_me ?? false}
-          initialComments={record.comments_count ?? 0}
-          currentUser={currentUser}
-          commentsExpanded={commentsExpanded}
-        />
+      <div onClick={(event) => event.stopPropagation()}>
+        <PostActions targetType="record" targetId={record.id} initialLikes={record.likes_count} initialLiked={record.liked_by_me ?? false} initialComments={record.comments_count ?? 0} currentUser={currentUser} commentsExpanded={commentsExpanded} />
       </div>
     </Card>
   );

@@ -926,6 +926,8 @@ export type Database = {
           memo: string | null
           menu_text: string | null
           pending_sheet_push: boolean
+          record_fields_snapshot: Json | null
+          record_fields_version: number | null
           recorded_date: string
           result_text: string | null
           strength_text: string | null
@@ -950,6 +952,8 @@ export type Database = {
           memo?: string | null
           menu_text?: string | null
           pending_sheet_push?: boolean
+          record_fields_snapshot?: Json | null
+          record_fields_version?: number | null
           recorded_date: string
           result_text?: string | null
           strength_text?: string | null
@@ -974,6 +978,8 @@ export type Database = {
           memo?: string | null
           menu_text?: string | null
           pending_sheet_push?: boolean
+          record_fields_snapshot?: Json | null
+          record_fields_version?: number | null
           recorded_date?: string
           result_text?: string | null
           strength_text?: string | null
@@ -1142,6 +1148,7 @@ export type Database = {
           notify_comment: boolean
           notify_notice: boolean
           record_fields: Json
+          record_fields_version: number
           record_source: string
           role: string
           sheet_header_signature: string | null
@@ -1166,6 +1173,7 @@ export type Database = {
           notify_comment?: boolean
           notify_notice?: boolean
           record_fields?: Json
+          record_fields_version?: number
           record_source?: string
           role?: string
           sheet_header_signature?: string | null
@@ -1190,6 +1198,7 @@ export type Database = {
           notify_comment?: boolean
           notify_notice?: boolean
           record_fields?: Json
+          record_fields_version?: number
           record_source?: string
           role?: string
           sheet_header_signature?: string | null

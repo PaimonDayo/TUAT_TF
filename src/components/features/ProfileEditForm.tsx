@@ -466,6 +466,7 @@ export function ProfileEditForm({
         key={headerData.signature}
         open
         data={headerData}
+        initialFields={profile.record_fields}
         isMiddleLong={blocks.includes("middle_long")}
         busy={saving}
         onCancel={() => setHeaderData(null)}

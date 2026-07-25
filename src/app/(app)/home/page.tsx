@@ -203,6 +203,7 @@ async function FeedSection({ profile }: { profile: Profile }) {
           id: profile.id,
           display_name: profile.display_name,
           avatar_url: profile.avatar_url,
+          systemRecordForm: permissionsOf(profile.roles).manageSystem,
         }}
       />
     </section>

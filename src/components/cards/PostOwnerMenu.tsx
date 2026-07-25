@@ -17,12 +17,14 @@ export function RecordOwnerMenu({
   isMiddleLong,
   recordSource = "app",
   recordFields,
+  systemRecordForm = false,
 }: {
   record: PracticeRecord;
   isMiddleLong: boolean;
   /** 記録のメイン。'sheet'ならスプシ由来(from_sheet)の記録も編集可（write-through） */
   recordSource?: "app" | "sheet";
   recordFields?: RecordFieldDef[];
+  systemRecordForm?: boolean;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -64,6 +66,7 @@ export function RecordOwnerMenu({
           record={record}
           recordSource={recordSource}
           recordFields={recordFields}
+          systemRecordForm={systemRecordForm}
           onDone={() => { setDirty(false); setEditOpen(false); }}
         />
       </FormModal>

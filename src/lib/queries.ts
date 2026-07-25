@@ -13,7 +13,7 @@ import {
 import {
   normalizeAuthorRow,
   normalizeProfileRow,
-  normalizeRecordWithAuthor,
+  normalizePracticeRecord, normalizeRecordWithAuthor,
   normalizeTweetWithAuthor,
 } from "@/lib/profile-normalize";
 import type {
@@ -258,7 +258,7 @@ export async function getUserRecords(userId: string, fromDate?: string) {
     .gte("recorded_date", fromDate ?? defaultFromDate.toISOString().slice(0, 10))
     .order("recorded_date", { ascending: false });
   const { data } = await q;
-  return data ?? [];
+  return (data ?? []).map(normalizePracticeRecord);
 }
 
 /** 他部員ページ用。記録に閲覧者本人のいいね状態とコメント数を付与する。 */

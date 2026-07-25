@@ -20,6 +20,10 @@ const RecordFieldsSetting = dynamic(
   { loading: () => <div className="h-16 animate-pulse rounded-xl bg-separator/60" /> },
 );
 
+const SheetRecordFormSetting = dynamic(
+  () => import("@/components/features/SheetRecordFormSetting").then((module) => module.SheetRecordFormSetting),
+  { loading: () => <div className="h-16 animate-pulse rounded-xl bg-separator/60" /> },
+);
 /**
  * マイページの「設定」行。押すと展開（details）して、通知・メニュー表示・記録項目をまとめて編集できる。
  * 全画面モーダルではなくその場で展開するタイプ（項目数が少ないため）。
@@ -35,6 +39,7 @@ export function SettingsAccordion({
   showRecordSource,
   isMiddleLong,
   canManageSystem,
+  sheetName,
 }: {
   profileId: string;
   initialComment: boolean;
@@ -46,6 +51,7 @@ export function SettingsAccordion({
   timelineCompact: boolean;
   showRecordSource: boolean;
   canManageSystem: boolean;
+  sheetName: string | null;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -98,11 +104,15 @@ export function SettingsAccordion({
             </a>
           </div>
         )}
-        <RecordFieldsSetting
+        {canManageSystem && sheetName ? <SheetRecordFormSetting
+          sheetName={sheetName}
+          initial={recordFields}
+          isMiddleLong={isMiddleLong}
+        /> : <RecordFieldsSetting
           profileId={profileId}
           initial={recordFields}
           isMiddleLong={isMiddleLong}
-        />
+        />}
       </div>}
     </details>
   );

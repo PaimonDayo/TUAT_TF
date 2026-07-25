@@ -126,6 +126,7 @@ export default async function MyPage({
             recordFields={profile.record_fields ?? []}
             isMiddleLong={profile.blocks.includes("middle_long")}
             canManageSystem={perms.manageSystem}
+            sheetName={profile.sheet_name}
           />
         </Card>
 
@@ -167,6 +168,7 @@ export default async function MyPage({
                 id: profile.id,
                 display_name: profile.display_name,
                 avatar_url: profile.avatar_url,
+                systemRecordForm: perms.manageSystem,
               }}
             />
           </Suspense>
