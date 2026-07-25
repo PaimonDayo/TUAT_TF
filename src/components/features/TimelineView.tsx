@@ -187,9 +187,9 @@ export function TimelineView({
 
   return (
     <>
-      <div className="px-4 pt-1 pb-3 lg:px-6 lg:pb-2">
+      <div className="px-4 pt-1 pb-3 md:px-6 lg:pb-2">
         <div className="flex min-h-9 items-center gap-2 lg:min-h-8">
-          <div className="min-w-0 flex-1 lg:max-w-[420px]"><SegmentedControl items={SIMPLE_BLOCK_ITEMS} value={block} onChange={setBlock} /></div>
+          <div className="min-w-0 flex-1 md:max-w-[420px]"><SegmentedControl items={SIMPLE_BLOCK_ITEMS} value={block} onChange={setBlock} /></div>
           <GradeFilter value={grades} onChange={setGrades} availableGrades={presentGrades} />
           <button
             onClick={() => setFavOnly((v) => !v)}
@@ -219,7 +219,7 @@ export function TimelineView({
       </div>
 
 
-      <div className="px-4 pt-1 lg:px-6">
+      <div className="px-4 pt-1 md:px-6">
         {filtered.length === 0 ? (
           <EmptyState title="条件に合う投稿がありません" />
         ) : (

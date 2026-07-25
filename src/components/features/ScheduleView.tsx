@@ -62,13 +62,13 @@ export function ScheduleView({
 
   return (
     <>
-      <div className="px-4 pt-1 pb-3 lg:px-6 lg:pb-2">
+      <div className="px-4 pt-1 pb-3 md:px-6 lg:pb-2">
         <div className="flex min-h-9 items-center lg:min-h-8">
-          <SegmentedControl items={items} value={type} onChange={setType} className="w-full lg:max-w-[520px]" />
+          <SegmentedControl items={items} value={type} onChange={setType} className="w-full md:max-w-[520px]" />
         </div>
       </div>
 
-      <div className="px-4 pt-1 lg:grid lg:grid-cols-2 lg:gap-x-3 lg:px-6">
+      <div className="px-4 pt-1 md:grid md:grid-cols-2 md:gap-x-3 md:px-6">
         {filtered.length === 0 ? (
           <EmptyState title="今後の予定はまだ登録されていません" />
         ) : (
@@ -80,7 +80,7 @@ export function ScheduleView({
             return (
               <Fragment key={s.id}>
                 {startsMonth && (
-                  <h2 className={index === 0 ? "section-label mb-2 lg:col-span-2" : "section-label mb-2 mt-7 lg:col-span-2 lg:mt-4"}>
+                  <h2 className={index === 0 ? "section-label mb-2 md:col-span-2" : "section-label mb-2 mt-7 md:col-span-2 lg:mt-4"}>
                     {format(new Date(`${s.schedule_date}T00:00:00`), "yyyy年M月")}
                   </h2>
                 )}

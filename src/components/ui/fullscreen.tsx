@@ -66,7 +66,7 @@ export function FullScreenContent({
     <Dialog.Portal>
       <Dialog.Overlay className="sheet-overlay fixed inset-0 z-50 bg-black/30">
         {/* visualViewport でフォーム本体が移動しても、ステータスバー領域を透かさない。 */}
-        <div aria-hidden="true" className="mx-auto h-full w-full max-w-md bg-bg" />
+        <div aria-hidden="true" className="mx-auto h-full w-full max-w-md bg-bg md:max-w-2xl" />
       </Dialog.Overlay>
       <Dialog.Content
         ref={contentRef}
@@ -101,7 +101,7 @@ export function FullScreenContent({
         className={cn(
           // 既定は dvh で全画面。キーボード表示時は viewportStyle が高さを上書きし、
           // ヘッダー(閉じる)・スクロール領域・フッター(投稿)を可視領域内に収める。
-          "sheet-content fixed inset-x-0 top-0 z-50 mx-auto h-dvh w-full max-w-md bg-bg flex flex-col outline-none",
+          "sheet-content fixed inset-x-0 top-0 z-50 mx-auto h-dvh w-full max-w-md bg-bg flex flex-col outline-none md:max-w-2xl",
           className,
         )}
       >

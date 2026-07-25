@@ -240,7 +240,7 @@ function ContextualFAB({
         />
       )}
 
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 mx-auto h-0 w-full max-w-md lg:inset-x-auto lg:right-[max(0px,calc((100vw-1160px)/2))] lg:w-0 lg:max-w-none">
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 mx-auto h-0 w-full max-w-md md:inset-x-auto md:right-3 md:w-0 md:max-w-none lg:right-[max(0px,calc((100vw-1160px)/2))]">
         {isFeed && speedDialOpen && (
           <div className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-2xl border border-separator bg-card shadow-xl lg:bottom-24 lg:right-8">
             <SpeedDialAction

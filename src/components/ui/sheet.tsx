@@ -94,7 +94,7 @@ export function SheetContent({
         onOpenAutoFocus={autoFocus ? undefined : (e) => e.preventDefault()}
         onCloseAutoFocus={(e) => e.preventDefault()}
         className={cn(
-          "sheet-content fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-md rounded-t-[20px] bg-bg pb-[max(env(safe-area-inset-bottom),16px)] outline-none",
+          "sheet-content fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-md rounded-t-[20px] bg-bg pb-[max(env(safe-area-inset-bottom),16px)] outline-none md:max-w-xl",
           className,
         )}
       >
