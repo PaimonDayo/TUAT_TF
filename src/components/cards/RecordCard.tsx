@@ -96,7 +96,7 @@ export function RecordCard({
         : distanceVisible && totalDistance > 0 && <IntensityBar record={record} />}
       {!compact && fieldVisible("strides") && record.strides > 0 && <p className="text-[12px] text-muted2">{recordFieldLabel(recordFields, "strides", "流し")} {record.strides}本</p>}
 
-      {!compact && details.length > 0 && <dl>{details.map((field) => <KeyValue key={field.key} label={field.label} value={recordValue(record, field.key)} collapsible />)}</dl>}
+      {!compact && details.length > 0 && <dl>{details.map((field) => <KeyValue key={field.key} label={field.label} value={recordValue(record, field.key)} />)}</dl>}
 
       <div onClick={(event) => event.stopPropagation()}>
         <PostActions targetType="record" targetId={record.id} initialLikes={record.likes_count} initialLiked={record.liked_by_me ?? false} initialComments={record.comments_count ?? 0} currentUser={currentUser} commentsExpanded={commentsExpanded} />
