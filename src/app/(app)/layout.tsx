@@ -62,7 +62,7 @@ async function AuthenticatedFab() {
 
 async function AuthenticatedSheetHeaderGuard() {
   const profile = await getCurrentProfile();
-  if (!profile.sheet_name) return null;
+  if (!profile.sheet_name || !permissionsOf(profile.roles).manageSystem) return null;
   return (
     <SheetHeaderGuard
       profileId={profile.id}

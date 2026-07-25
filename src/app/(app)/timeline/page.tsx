@@ -41,6 +41,7 @@ async function TimelineContent() {
       favoriteIds={favoriteIds}
       initialCompact={initialCompact}
       showRecordSource={showRecordSource}
+      enableCsvRefresh={permissionsOf(profile.roles).manageSystem}
     />
   );
 }

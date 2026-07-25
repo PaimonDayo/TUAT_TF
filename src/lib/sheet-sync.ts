@@ -285,7 +285,11 @@ type FieldMap = {
 
 type HeaderCandidate = { raw: string; n: string; column: number };
 
-function resolveFieldMap(member: Pick<RawMember, "header" | "columns">, fields: RecordFieldDef[]): FieldMap {
+function resolveFieldMap(
+  member: Pick<RawMember, "header" | "columns">,
+  fields: RecordFieldDef[],
+  options: { enableActualDistance?: boolean } = {},
+): FieldMap {
   const sourceColumns = member.columns?.length ? member.columns : member.header.map((label, index) => ({ index, label }));
   const headers: HeaderCandidate[] = sourceColumns.map((item) => ({ raw: item.label, n: norm(item.label), column: item.index }));
   const builtin: FieldMap["builtin"] = new Map();
@@ -293,7 +297,7 @@ function resolveFieldMap(member: Pick<RawMember, "header" | "columns">, fields: 
 
   for (const item of BUILTINS) {
     const configured = fields.find((field) => field.key === item.key);
-    if (configured?.hidden) continue;
+    if (configured?.hidden || (item.key === "dist_actual" && !options.enableActualDistance)) continue;
     const hit = headers.find((candidate) => !usedColumns.has(candidate.column) && (
       (configured?.sourceColumn === candidate.column && norm(configured.sourceHeader ?? candidate.raw) === candidate.n) ||
       (configured?.sourceHeader && norm(configured.sourceHeader) === candidate.n) ||
@@ -305,7 +309,10 @@ function resolveFieldMap(member: Pick<RawMember, "header" | "columns">, fields: 
   }
 
   for (const item of BUILTINS) {
-    if (builtin.has(item.key) || fields.find((field) => field.key === item.key)?.hidden) continue;
+    const configured = fields.find((field) => field.key === item.key);
+    if (builtin.has(item.key) || configured?.hidden || (item.key === "dist_actual" && !options.enableActualDistance)) continue;
+    // 実距離はフォーム設定で明示対応したユーザーだけ取り込む。
+    if (item.key === "dist_actual" && configured?.sourceColumn == null && !configured?.sourceHeader) continue;
     const available = headers.filter((candidate) => !usedColumns.has(candidate.column));
     let hit: HeaderCandidate | undefined;
     if (item.key === "memo") {
@@ -459,7 +466,9 @@ export async function pushRecordToSheet(
   rec: DbRecord,
 ): Promise<PushRecordResult> {
   const member = await fetchMemberRaw(sheetName);
-  const map = resolveFieldMap(member, recordFields);
+  const map = resolveFieldMap(member, recordFields, {
+    enableActualDistance: recordFields.some((field) => field.key === "dist_actual" && !field.hidden),
+  });
   const cells = appToCellsNonEmpty(map, rec);
 
   // シートに列自体が無く、送信すらされなかった項目（可視化用）
@@ -647,7 +656,7 @@ type MemberPullComputation = {
  * 1部員分の「シート→アプリ」pullを計算する（runSheetSyncのpull-onlyブランチと
  * refreshMemberFromSheetLive の共通ロジック）。副作用なし（DB書き込みは呼び出し側が行う）。
  */
-export type ExistingSheetRecordPolicy = "merge" | "preserve";
+export type ExistingSheetRecordPolicy = "merge_nonempty" | "replace_mapped" | "preserve";
 
 export function computeMemberPull(
   profileId: string,
@@ -656,7 +665,7 @@ export function computeMemberPull(
   appByDate: Map<string, DbRecord[]>,
   inRangeForProfile: (date: string) => boolean,
   nowIso: string,
-  existingRecordPolicy: ExistingSheetRecordPolicy = "merge",
+  existingRecordPolicy: ExistingSheetRecordPolicy = "merge_nonempty",
 ): MemberPullComputation {
   const inserts: Record<string, unknown>[] = [];
   const updates: { id: string; patch: Record<string, unknown> }[] = [];
@@ -693,18 +702,21 @@ export function computeMemberPull(
       continue;
     }
 
-    // シート連携者はシートが正。確認済みの列は空欄も含めて反映する。
-    // マッピングされていない列には触れないため、列変更時は先に再確認する。
+    // 段階リリース中はシステム管理ロールだけ、確認済み列の空欄も意図した削除として反映する。
+    // 一般部員は従来どおり空でない値だけを取り込み、既存運用を変えない。
+    const replaceMapped = existingRecordPolicy === "replace_mapped";
     const patch: Record<string, unknown> = {};
-    for (const [key] of map.builtin) {
+    for (const [key, mapping] of map.builtin) {
       const v = builtin[key];
-      if (v !== appBuiltin(app, key as BuiltinKey)) patch[key] = v;
+      const shouldApply = replaceMapped || (mapping.numeric ? Number(v) > 0 : (v ?? "").toString().trim() !== "");
+      if (shouldApply && v !== appBuiltin(app, key as BuiltinKey)) patch[key] = v;
     }
     const customPatch: Record<string, string | number | null> = { ...(app.custom ?? {}) };
     let customChanged = false;
-    for (const [key] of map.custom) {
+    for (const [key, mapping] of map.custom) {
       const v = custom[key];
-      if (v !== (app.custom?.[key] ?? null)) {
+      const shouldApply = replaceMapped || (mapping.type === "number" ? Number(v) > 0 : (v ?? "").toString().trim() !== "");
+      if (shouldApply && v !== (app.custom?.[key] ?? null)) {
         customPatch[key] = v;
         customChanged = true;
       }
@@ -866,6 +878,22 @@ async function reconcileSheetReplies(
 
   return { synced, failedMembers };
 }
+async function stagedSheetProfileIds(admin: SupabaseClient, profileIds: string[]): Promise<Set<string>> {
+  if (profileIds.length === 0) return new Set();
+  const { data: roles, error: roleError } = await admin
+    .from("roles")
+    .select("id")
+    .eq("can_manage_system", true);
+  if (roleError || !roles?.length) return new Set();
+  const { data: assignments, error: assignmentError } = await admin
+    .from("profile_roles")
+    .select("profile_id")
+    .in("profile_id", profileIds)
+    .in("role_id", roles.map((role) => role.id));
+  if (assignmentError) return new Set();
+  return new Set((assignments ?? []).map((assignment) => assignment.profile_id));
+}
+
 // ── 同期本体 ─────────────────────────────────────────────────────────────────
 // 安全方針(docs/SHEETS-SYNC-PLAN.md・事故対策):
 //  - カットオフ(2026-06-22)以前・未来日・空の行は同期しない
@@ -921,6 +949,9 @@ export async function runSheetSync(
   const memberByName = new Map(members.map((m) => [m.name.trim(), m]));
 
   const userIds = linked.map((p) => p.id);
+  const stagedProfileIds = process.env.SHEET_FORM_V2_APPLY_ENABLED === "true"
+    ? await stagedSheetProfileIds(admin, userIds)
+    : new Set<string>();
   const { data: existing, error: rErr } = await admin
     .from("practice_records")
     .select(
@@ -961,12 +992,16 @@ export async function runSheetSync(
     const currentHeaderSignature = sheetHeaderSignature(
       member.columns ?? member.header.map((label, index) => ({ index, label })),
     );
-    if (profile.sheet_header_signature && profile.sheet_header_signature !== currentHeaderSignature) {
+    const stagedSheetFlow =
+      process.env.SHEET_FORM_V2_APPLY_ENABLED === "true" &&
+      stagedProfileIds.has(profile.id) &&
+      Boolean(profile.sheet_header_signature);
+    if (stagedSheetFlow && profile.sheet_header_signature && profile.sheet_header_signature !== currentHeaderSignature) {
       result.skippedMembers.push(sheetName);
       result.failedMembers.push({ member: sheetName, reason: "見出しが変更されています。アプリで入力項目を再確認してください" });
       continue;
     }
-    const map = resolveFieldMap(member, profile.record_fields ?? []);
+    const map = resolveFieldMap(member, profile.record_fields ?? [], { enableActualDistance: stagedSheetFlow });
     const appByDate = byUser.get(profile.id)!;
 
     if (profile.record_source === "sheet") {
@@ -1001,6 +1036,7 @@ export async function runSheetSync(
         appByDate,
         inRangeForProfile,
         nowIso,
+        stagedSheetFlow ? "replace_mapped" : "merge_nonempty",
       );
       inserts.push(...pulled.inserts);
       updates.push(...pulled.updates);
@@ -1164,16 +1200,18 @@ export async function refreshMemberFromSheetLive(
     sheet_linked_at: string | null;
     sheet_header_signature?: string | null;
   },
+  options: { replaceMappedBlanks?: boolean; enforceHeaderSignature?: boolean } = {},
 ): Promise<LiveRefreshResult | null> {
   if (!profile.sheet_name) return null;
 
   try {
     const member = await fetchMemberRaw(profile.sheet_name, { timeoutMs: 5000 });
     const currentHeaderSignature = sheetHeaderSignature(member.columns ?? member.header.map((label, index) => ({ index, label })));
-    if (profile.sheet_header_signature && profile.sheet_header_signature !== currentHeaderSignature) {
+    if (options.enforceHeaderSignature && profile.sheet_header_signature && profile.sheet_header_signature !== currentHeaderSignature) {
       return null;
     }
-    const map = resolveFieldMap(member, profile.record_fields ?? []);
+    const stagedSheetFlow = options.replaceMappedBlanks === true;
+    const map = resolveFieldMap(member, profile.record_fields ?? [], { enableActualDistance: stagedSheetFlow });
     const today = todayJST();
     const cutoff =
       profile.sheet_linked_at && profile.sheet_linked_at > SYNC_CUTOFF
@@ -1204,7 +1242,11 @@ export async function refreshMemberFromSheetLive(
       byDate,
       (d) => d >= cutoff && d <= today,
       nowIso,
-      profile.record_source === "app" ? "preserve" : "merge",
+      profile.record_source === "app"
+        ? "preserve"
+        : options.replaceMappedBlanks
+          ? "replace_mapped"
+          : "merge_nonempty",
     );
     let inserted = 0;
     let updated = 0;

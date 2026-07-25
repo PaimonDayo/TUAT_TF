@@ -37,6 +37,7 @@ export function TimelineView({
   favoriteIds = [],
   initialCompact = false,
   showRecordSource = false,
+  enableCsvRefresh = false,
 }: {
   initialItems: FeedItem[];
   currentUser: CommentAuthor;
@@ -44,6 +45,7 @@ export function TimelineView({
   /** 簡易表示の初期値（サーバーが cookie から復元して渡す。詳細→簡易のフラッシュ防止） */
   initialCompact?: boolean;
   showRecordSource?: boolean;
+  enableCsvRefresh?: boolean;
 }) {
   const feedQuery = useInfiniteQuery({
     queryKey: ["timeline", currentUser.id],
@@ -102,6 +104,7 @@ export function TimelineView({
   }, [currentUser.id]);
 
   useEffect(() => {
+    if (!enableCsvRefresh) return;
     const refreshKey = `timeline-csv-refresh:${currentUser.id}`;
     const lastRefresh = Number(sessionStorage.getItem(refreshKey) ?? "0");
     if (Date.now() - lastRefresh < 15_000) return;
@@ -109,8 +112,8 @@ export function TimelineView({
     let active = true;
 
     void (async () => {
-      // 初期表示はDBだけで即時に行い、その後CSVチャンクを順次同期する。
-      // 変更があったチャンクごとにタイムラインを自動再取得する。
+      // 初期表示はDBだけで即時に行い、その後システム管理者本人のCSVを同期する。
+      // 変更があればタイムラインを自動再取得する。
       for (let attempt = 0; active && attempt < 12; attempt++) {
         try {
           const response = await fetch("/api/sheets/timeline-refresh", { method: "POST", cache: "no-store" });
@@ -127,7 +130,7 @@ export function TimelineView({
     return () => {
       active = false;
     };
-  }, [currentUser.id, feedQuery]);
+  }, [currentUser.id, enableCsvRefresh, feedQuery]);
 
   const favSet = useMemo(() => new Set(currentFavoriteIds), [currentFavoriteIds]);
 

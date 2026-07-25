@@ -59,6 +59,7 @@ export default async function MyPage({
               sheet_header_signature: profile.sheet_header_signature,
             }}
             autoOpen={setup === "1"}
+            enableSheetHeaderSetup={perms.manageSystem}
           />
         }
       />

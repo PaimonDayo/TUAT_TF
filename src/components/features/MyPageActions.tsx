@@ -9,6 +9,7 @@ import type { Profile } from "@/types";
 export function EditProfileButton({
   profile,
   autoOpen = false,
+  enableSheetHeaderSetup = false,
 }: {
   profile: Pick<
     Profile,
@@ -24,6 +25,7 @@ export function EditProfileButton({
     | "record_source"
   >;
   autoOpen?: boolean;
+  enableSheetHeaderSetup?: boolean;
 }) {
   const [open, setOpen] = useState(autoOpen);
 
@@ -41,6 +43,7 @@ export function EditProfileButton({
         <ProfileEditForm
           profile={profile}
           isSetup={autoOpen}
+          enableSheetHeaderSetup={enableSheetHeaderSetup}
           onDone={() => setOpen(false)}
         />
       </FormModal>

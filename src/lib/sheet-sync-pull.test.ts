@@ -31,9 +31,23 @@ describe("computeMemberPull", () => {
   });
 
   it("keeps sheet-main merge behavior for an existing date", () => {
-    const result = computeMemberPull("user-1", fieldMap, sheetRecords, existing, () => true, "2026-07-24T15:00:00.000Z", "merge");
+    const result = computeMemberPull("user-1", fieldMap, sheetRecords, existing, () => true, "2026-07-24T15:00:00.000Z", "merge_nonempty");
     expect(result.updates).toEqual([{ id: "record-2026-07-23", patch: { memo: "sheet value", synced_at: "2026-07-24T15:00:00.000Z" } }]);
     expect(result.inserts).toHaveLength(1);
+  });
+
+  it("keeps the existing value for non-system users when the sheet cell is blank", () => {
+    const blankSheet = [{ date: "2026-07-23", cells: { memo: "" }, values: [""] }];
+    const result = computeMemberPull(
+      "user-1",
+      fieldMap,
+      blankSheet,
+      existing,
+      () => true,
+      "2026-07-24T15:00:00.000Z",
+      "merge_nonempty",
+    );
+    expect(result.updates).toEqual([]);
   });
 
   it("clears a mapped DB value when the sheet-authoritative cell is blank", () => {
@@ -45,7 +59,7 @@ describe("computeMemberPull", () => {
       existing,
       () => true,
       "2026-07-24T15:00:00.000Z",
-      "merge",
+      "replace_mapped",
     );
     expect(result.updates).toEqual([
       { id: "record-2026-07-23", patch: { memo: null, synced_at: "2026-07-24T15:00:00.000Z" } },

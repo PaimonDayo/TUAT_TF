@@ -1,59 +1,48 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchRolesByProfileIds } from "@/lib/supabase/auth";
+import { permissionsOf } from "@/lib/permissions";
 import { runSheetSync } from "@/lib/sheet-sync";
-import { sheetSyncChunkSize } from "@/lib/sheet-sync-chunk";
 
-export const maxDuration = 60;
+export const maxDuration = 30;
 
-type Chunk = {
-  sheetNames: string[];
-  startOffset: number;
-  endOffset: number;
-  totalMembers: number;
-  cycleComplete: boolean;
-};
-
-function parseChunk(data: unknown): Chunk {
-  if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("同期範囲を取得できませんでした");
-  const value = data as Record<string, unknown>;
-  return {
-    sheetNames: Array.isArray(value.sheetNames) ? value.sheetNames.filter((name): name is string => typeof name === "string") : [],
-    startOffset: Number(value.startOffset) || 0,
-    endOffset: Number(value.endOffset) || 0,
-    totalMembers: Number(value.totalMembers) || 0,
-    cycleComplete: value.cycleComplete === true,
-  };
-}
-
-/** DB表示後に呼ぶ軽量CSV同期。1回は小さいチャンクだけ処理し、クライアントが順次継続する。 */
+/** システム管理ロールの検証中だけ使う、本人1シート分の軽量CSV同期。 */
 export async function POST() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
+
+  const roles = await fetchRolesByProfileIds(supabase, [user.id]);
+  if (!permissionsOf(roles.get(user.id)).manageSystem) {
+    return NextResponse.json({ error: "システム管理権限が必要です" }, { status: 403 });
+  }
   if (process.env.SHEET_SYNC_ENABLED !== "true") {
     return NextResponse.json({ ok: true, skipped: true, changed: false, cycleComplete: true });
   }
 
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("sheet_name")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (profileError) {
+    return NextResponse.json({ ok: false, error: "プロフィールを取得できませんでした" }, { status: 500 });
+  }
+  const sheetName = profile?.sheet_name?.trim();
+  if (!sheetName) {
+    return NextResponse.json({ ok: true, skipped: true, changed: false, cycleComplete: true });
+  }
+
   try {
-    const admin = createAdminClient();
-    const { data, error } = await admin.rpc("claim_sheet_sync_chunk", {
-      requested_chunk_size: sheetSyncChunkSize(),
-      reset_cycle: false,
-    });
-    if (error) throw error;
-    const chunk = parseChunk(data);
-    if (chunk.sheetNames.length === 0) {
-      return NextResponse.json({ ok: true, changed: false, ...chunk });
-    }
-    const result = await runSheetSync(admin, { onlySheets: chunk.sheetNames });
+    const result = await runSheetSync(createAdminClient(), { onlySheet: sheetName });
     return NextResponse.json({
       ok: true,
       changed: result.inserted + result.updated + result.sheetReplies > 0,
       inserted: result.inserted,
       updated: result.updated,
       failedMembers: result.failedMembers,
-      ...chunk,
+      cycleComplete: true,
     });
   } catch (error) {
     return NextResponse.json(

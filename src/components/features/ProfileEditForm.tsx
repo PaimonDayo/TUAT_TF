@@ -24,6 +24,7 @@ export function ProfileEditForm({
   profile,
   onDone,
   isSetup = false,
+  enableSheetHeaderSetup = false,
 }: {
   profile: Pick<
     Profile,
@@ -40,6 +41,7 @@ export function ProfileEditForm({
   >;
   onDone: () => void;
   isSetup?: boolean;
+  enableSheetHeaderSetup?: boolean;
 }) {
   const router = useRouter();
   const [name, setName] = useState(profile.display_name ?? "");
@@ -196,7 +198,7 @@ export function ProfileEditForm({
     setSaving(true);
     setError(null);
 
-    if (sheetName.trim()) {
+    if (enableSheetHeaderSetup && sheetName.trim()) {
       const currentHeader = await fetchHeader();
       if (!currentHeader) {
         setSaving(false);
@@ -425,7 +427,9 @@ export function ProfileEditForm({
             </select>
           )}
           <p className="text-micro mt-1">
-            選ぶとスプレッドシートが記録の入力元になり、タイムライン表示後にもCSVで最新化します。
+            {enableSheetHeaderSetup
+              ? "選ぶとスプレッドシートが記録の入力元になり、タイムライン表示後にもCSVで最新化します。"
+              : "選ぶと、練習記録とスプレッドシートが自動で連携されます。"}
           </p>
         </div>
       )}
@@ -434,7 +438,7 @@ export function ProfileEditForm({
         <p className="-mt-3 text-micro text-danger">現在選ばれているシートが見つかりません。正しいシートを選び直してください。</p>
       )}
 
-      {sheetName.trim() && (
+      {enableSheetHeaderSetup && sheetName.trim() && (
         <p className="text-micro -mt-3">
           列名が変わったときは、同期前にアプリで入力項目を再確認します。
         </p>
@@ -458,7 +462,7 @@ export function ProfileEditForm({
         </button>
       )}
 
-      {headerData && <SheetHeaderSetupDialog
+      {enableSheetHeaderSetup && headerData && <SheetHeaderSetupDialog
         key={headerData.signature}
         open
         data={headerData}
