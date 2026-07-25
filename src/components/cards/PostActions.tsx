@@ -105,8 +105,13 @@ export function PostActions({
 
   // いいねボタンの長押しで「いいねした人」シートを開く
   const actionsRef = useRef<HTMLDivElement>(null);
+  const likeButtonRef = useRef<HTMLButtonElement>(null);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressed = useRef(false);
+  const touchMoved = useRef(false);
+  const touchOrigin = useRef({ x: 0, y: 0 });
+  const lastTouchEndAt = useRef(0);
+  const toggleLikeRef = useRef<() => void>(() => undefined);
 
   useEffect(() => {
     const actions = actionsRef.current;
@@ -127,6 +132,60 @@ export function PostActions({
     };
   }, []);
 
+  useEffect(() => {
+    const button = likeButtonRef.current;
+    if (!button) return;
+
+    // Safari requires a native non-passive listener to suppress its selection callout.
+    const handleTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1) return;
+      event.preventDefault();
+      touchMoved.current = false;
+      touchOrigin.current = {
+        x: event.touches[0].clientX,
+        y: event.touches[0].clientY,
+      };
+      startPress();
+    };
+    const handleTouchMove = (event: TouchEvent) => {
+      event.preventDefault();
+      const touch = event.touches[0];
+      if (!touch) return;
+      if (
+        Math.abs(touch.clientX - touchOrigin.current.x) > 10 ||
+        Math.abs(touch.clientY - touchOrigin.current.y) > 10
+      ) {
+        touchMoved.current = true;
+        cancelPress();
+      }
+    };
+    const handleTouchEnd = (event: TouchEvent) => {
+      event.preventDefault();
+      const wasLongPress = longPressed.current;
+      const wasMoved = touchMoved.current;
+      lastTouchEndAt.current = Date.now();
+      cancelPress();
+      if (!wasLongPress && !wasMoved) toggleLikeRef.current();
+      longPressed.current = false;
+    };
+    const handleTouchCancel = (event: TouchEvent) => {
+      event.preventDefault();
+      touchMoved.current = true;
+      cancelPress();
+      longPressed.current = false;
+    };
+
+    button.addEventListener("touchstart", handleTouchStart, { passive: false });
+    button.addEventListener("touchmove", handleTouchMove, { passive: false });
+    button.addEventListener("touchend", handleTouchEnd, { passive: false });
+    button.addEventListener("touchcancel", handleTouchCancel, { passive: false });
+    return () => {
+      button.removeEventListener("touchstart", handleTouchStart);
+      button.removeEventListener("touchmove", handleTouchMove);
+      button.removeEventListener("touchend", handleTouchEnd);
+      button.removeEventListener("touchcancel", handleTouchCancel);
+    };
+  }, []);
   function startPress() {
     longPressed.current = false;
     clearNativeSelection();
@@ -226,6 +285,10 @@ export function PostActions({
     updateTimelineLikeState(next, confirmedLikes);
     mutationBusy.current = false;
   }
+  useEffect(() => {
+    toggleLikeRef.current = toggleLike;
+  });
+
   return (
     <>
       <div
@@ -233,17 +296,34 @@ export function PostActions({
         className="flex select-none items-center gap-5 pt-1 [-webkit-touch-callout:none] [-webkit-user-select:none]"
       >
         <button
-          onClick={handleLikeClick}
+          ref={likeButtonRef}
+          type="button"
+          aria-label={
+            liked
+              ? `\u3044\u3044\u306d\u3092\u89e3\u9664\u3001\u73fe\u5728${likes}\u4ef6`
+              : `\u3044\u3044\u306d\u3001\u73fe\u5728${likes}\u4ef6`
+          }
+          onClick={(event) => {
+            if (event.detail > 0 && Date.now() - lastTouchEndAt.current < 700) return;
+            handleLikeClick();
+          }}
           onPointerDown={(event) => {
+            if (event.pointerType === "touch") return;
             event.preventDefault();
             startPress();
           }}
-          onPointerUp={cancelPress}
-          onPointerLeave={cancelPress}
-          onPointerCancel={cancelPress}
+          onPointerUp={(event) => {
+            if (event.pointerType !== "touch") cancelPress();
+          }}
+          onPointerLeave={(event) => {
+            if (event.pointerType !== "touch") cancelPress();
+          }}
+          onPointerCancel={(event) => {
+            if (event.pointerType !== "touch") cancelPress();
+          }}
           onContextMenu={(e) => e.preventDefault()}
           className={cn(
-            "flex touch-none select-none items-center gap-1.5 text-[13px] active:opacity-50 transition-active [-webkit-touch-callout:none] [-webkit-user-select:none] [&_*]:select-none [&_*]:[-webkit-user-select:none]",
+            "no-native-callout flex touch-none select-none items-center gap-1.5 text-[13px] active:opacity-50 transition-active",
             liked ? "text-danger" : "text-muted",
           )}
         >

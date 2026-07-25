@@ -136,6 +136,14 @@ h1, h2, h3, p {
   transition: opacity 0.12s ease-out, background-color 0.12s ease-out;
 }
 
+/* iOS Safari: prevent a long press on an action from selecting its card. */
+.no-native-callout,
+.no-native-callout * {
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .transition-active {
     transition: none;
