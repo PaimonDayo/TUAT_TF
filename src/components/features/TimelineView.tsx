@@ -101,6 +101,34 @@ export function TimelineView({
     };
   }, [currentUser.id]);
 
+  useEffect(() => {
+    const refreshKey = `timeline-csv-refresh:${currentUser.id}`;
+    const lastRefresh = Number(sessionStorage.getItem(refreshKey) ?? "0");
+    if (Date.now() - lastRefresh < 15_000) return;
+    sessionStorage.setItem(refreshKey, String(Date.now()));
+    let active = true;
+
+    void (async () => {
+      // 初期表示はDBだけで即時に行い、その後CSVチャンクを順次同期する。
+      // 変更があったチャンクごとにタイムラインを自動再取得する。
+      for (let attempt = 0; active && attempt < 12; attempt++) {
+        try {
+          const response = await fetch("/api/sheets/timeline-refresh", { method: "POST", cache: "no-store" });
+          const result = await response.json() as { ok?: boolean; changed?: boolean; cycleComplete?: boolean };
+          if (!active || !response.ok || !result.ok) return;
+          if (result.changed) await feedQuery.refetch();
+          if (result.cycleComplete) return;
+        } catch {
+          return;
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [currentUser.id, feedQuery]);
+
   const favSet = useMemo(() => new Set(currentFavoriteIds), [currentFavoriteIds]);
 
   // 投稿者にいる学年だけをフィルタ候補に出す（メンバー一覧と同じ仕様）

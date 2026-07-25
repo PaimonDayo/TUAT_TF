@@ -4,8 +4,9 @@ import type { RawSheetReply } from "@/lib/sheet-replies";
 export type RawMember = {
   name: string;
   gid?: string;
+  columns?: { index: number; label: string }[];
   header: string[];
-  records: { date: string; cells: Record<string, string>; replies?: RawSheetReply[] }[];
+  records: { date: string; cells: Record<string, string>; values?: string[]; replies?: RawSheetReply[] }[];
 };
 
 export type SheetMember = { name: string; gid: string };
@@ -88,9 +89,17 @@ export function parsePublicSheetDate(raw: string, defaultYear = currentYearJst()
 
 const normalizeHeader = (value: string) => value.replace(/\s+/g, "").trim();
 
-function commentColumn(header: string[]): number {
-  const keywords = ["感想", "コメント", "反省", "状態"];
-  return header.findIndex((cell) => keywords.some((keyword) => normalizeHeader(cell).includes(keyword)));
+export function commentColumn(header: string[]): number {
+  const normalized = header.map(normalizeHeader);
+  const exactMemo = normalized.findIndex((cell) => cell === "感想");
+  if (exactMemo !== -1) return exactMemo;
+  const containingMemo = normalized.findIndex((cell) => cell.includes("感想"));
+  if (containingMemo !== -1) return containingMemo;
+  for (const keyword of ["コメント", "反省", "状態"]) {
+    const exact = normalized.findIndex((cell) => cell === keyword);
+    if (exact !== -1) return exact;
+  }
+  return normalized.findIndex((cell) => ["コメント", "反省", "状態"].some((keyword) => cell.includes(keyword)));
 }
 
 /** 1タブ分の公開CSVを、従来のGAS readMemberSheetと同じ形へ変換する。 */
@@ -105,11 +114,12 @@ export function parseMemberCsv(member: SheetMember, csv: string, defaultYear = c
   if (headerIndex === -1) throw new Error("見出し行（日付）が見つかりません");
 
   const fullHeader = rows[headerIndex].map((cell) => cell.trim());
+  const dateColumn = fullHeader.findIndex((cell) => normalizeHeader(cell) === "日付");
   const replyStart = commentColumn(fullHeader);
   const records: RawMember["records"] = [];
 
   for (const row of rows.slice(headerIndex + 1)) {
-    const date = parsePublicSheetDate(row[0] ?? "", defaultYear);
+    const date = parsePublicSheetDate(row[dateColumn] ?? "", defaultYear);
     if (!date) continue;
     const cells: Record<string, string> = {};
     for (let column = 0; column < fullHeader.length; column++) {
@@ -124,12 +134,13 @@ export function parseMemberCsv(member: SheetMember, csv: string, defaultYear = c
         if (content) replies.push({ replyIndex: column, content, source: "sheet" });
       }
     }
-    records.push({ date, cells, replies });
+    records.push({ date, cells, values: row, replies });
   }
 
   return {
     name: member.name,
     gid: member.gid,
+    columns: fullHeader.map((label, index) => ({ index, label })).filter((column) => Boolean(column.label)),
     header: fullHeader.filter(Boolean),
     records,
   };

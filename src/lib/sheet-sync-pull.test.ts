@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { computeMemberPull, type DbRecord } from "./sheet-sync";
 
 const fieldMap = {
-  builtin: new Map([["memo", { header: "memo", numeric: false }]]),
+  builtin: new Map([["memo", { header: "memo", column: 0, numeric: false }]]),
   custom: new Map(),
 } as Parameters<typeof computeMemberPull>[1];
 
@@ -10,6 +10,7 @@ function dbRecord(date: string, memo: string): DbRecord {
   return {
     id: `record-${date}`, user_id: "user-1", recorded_date: date,
     dist_low: 0, dist_mid: 0, dist_high: 0, dist_speed: 0, strides: 0,
+    dist_actual: 0,
     strength_text: null, result_text: null, memo, menu_text: null, focus_text: null,
     custom: {}, updated_at: null, synced_at: null,
   };
@@ -33,5 +34,21 @@ describe("computeMemberPull", () => {
     const result = computeMemberPull("user-1", fieldMap, sheetRecords, existing, () => true, "2026-07-24T15:00:00.000Z", "merge");
     expect(result.updates).toEqual([{ id: "record-2026-07-23", patch: { memo: "sheet value", synced_at: "2026-07-24T15:00:00.000Z" } }]);
     expect(result.inserts).toHaveLength(1);
+  });
+
+  it("clears a mapped DB value when the sheet-authoritative cell is blank", () => {
+    const blankSheet = [{ date: "2026-07-23", cells: { memo: "" }, values: [""] }];
+    const result = computeMemberPull(
+      "user-1",
+      fieldMap,
+      blankSheet,
+      existing,
+      () => true,
+      "2026-07-24T15:00:00.000Z",
+      "merge",
+    );
+    expect(result.updates).toEqual([
+      { id: "record-2026-07-23", patch: { memo: null, synced_at: "2026-07-24T15:00:00.000Z" } },
+    ]);
   });
 });

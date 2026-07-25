@@ -1,6 +1,11 @@
 import type { RecordFieldDef } from "@/types";
 
 export type BuiltinRecordFieldKey =
+  | "dist_low"
+  | "dist_mid"
+  | "dist_high"
+  | "dist_speed"
+  | "dist_actual"
   | "strides"
   | "result_text"
   | "strength_text"
@@ -10,6 +15,11 @@ export type BuiltinRecordFieldKey =
   | "condition";
 
 export const BUILTIN_RECORD_FIELD_KEYS: BuiltinRecordFieldKey[] = [
+  "dist_low",
+  "dist_mid",
+  "dist_high",
+  "dist_speed",
+  "dist_actual",
   "strides",
   "result_text",
   "strength_text",

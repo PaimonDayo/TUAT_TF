@@ -77,6 +77,7 @@ export interface Profile {
   sheet_name: string | null;
   /** シート連携した日(JST)。新規連携時は同期側でこれ以降のみ取り込む個別カットオフに使う */
   sheet_linked_at: string | null;
+  sheet_header_signature: string | null;
   /** 記録のメインDB。'sheet'ならスプシが正でアプリからの保存は即write-through、'app'ならアプリが正でスプシへ書き戻す */
   record_source: "app" | "sheet";
   /** 記録フォームのカスタム項目定義（短距離など独自列の人向け） */
@@ -93,6 +94,10 @@ export interface RecordFieldDef {
   type: "text" | "number";
   /** 既定項目を記録フォームとカードから外す。カスタム項目では未使用。 */
   hidden?: boolean;
+  /** スプレッドシート上の元見出し。表示名を変えても同期列を見失わないため保持する。 */
+  sourceHeader?: string;
+  /** 0始まりの列位置。重複見出しを区別するため保持する。 */
+  sourceColumn?: number;
 }
 
 /** 投稿カードに埋め込む投稿者の最小情報 */
@@ -115,6 +120,8 @@ export interface PracticeRecord {
   dist_high: number;
   dist_speed: number;
   strides: number;
+  /** 強度別がすべて0のときだけ合計表示に使う、シートの「実際の距離」。 */
+  dist_actual: number;
   result_text: string | null;
   strength_text: string | null;
   memo: string | null;

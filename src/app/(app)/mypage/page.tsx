@@ -55,6 +55,8 @@ export default async function MyPage({
               avatar_url: profile.avatar_url,
               sheet_name: profile.sheet_name,
               record_source: profile.record_source,
+              record_fields: profile.record_fields,
+              sheet_header_signature: profile.sheet_header_signature,
             }}
             autoOpen={setup === "1"}
           />

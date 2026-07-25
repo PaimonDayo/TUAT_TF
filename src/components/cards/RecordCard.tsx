@@ -12,6 +12,7 @@ import { PostActions } from "@/components/cards/PostActions";
 import { RecordOwnerMenu } from "@/components/cards/PostOwnerMenu";
 import { CONDITIONS, gradeShort } from "@/lib/constants";
 import { recordFieldHidden, recordFieldLabel } from "@/lib/record-fields";
+import { displayedDistance } from "@/lib/record-distance";
 import type { CommentAuthor, RecordWithAuthor } from "@/types";
 
 /** タイムライン用の練習記録カード。compact=簡易表示（テキスト詳細を畳む） */
@@ -34,8 +35,7 @@ export function RecordCard({
   const cond = record.condition ? CONDITIONS[record.condition] : null;
   const isOwner = currentUser.id === author.id;
   const gradeLabel = gradeShort(author.grade);
-  const totalDistance =
-    record.dist_low + record.dist_mid + record.dist_high + record.dist_speed;
+  const totalDistance = displayedDistance(record);
   const fieldVisible = (key: Parameters<typeof recordFieldHidden>[1]) =>
     !recordFieldHidden(author.record_fields, key);
   const hasVisibleDetails =

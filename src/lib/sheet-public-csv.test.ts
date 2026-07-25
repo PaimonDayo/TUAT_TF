@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  commentColumn,
   parseMemberCsv,
   parsePublicSheetDate,
   parseSheetMetadataHtml,
@@ -58,5 +59,17 @@ describe("parseMemberCsv", () => {
     expect(() => parseMemberCsv({ name: "B2駒井", gid: "123" }, "名前,値\nA,1", 2026)).toThrow(
       "見出し行（日付）が見つかりません",
     );
+  });
+});
+
+
+describe("commentColumn", () => {
+  it("prefers exact 感想 over a 状態 column that appears earlier", () => {
+    expect(commentColumn(["日付", "状態", "練習の感想", "感想"])).toBe(3);
+  });
+
+  it("falls back to a header containing 感想, then legacy names", () => {
+    expect(commentColumn(["日付", "状態", "今日の感想"])).toBe(2);
+    expect(commentColumn(["日付", "状態", "補足"])).toBe(1);
   });
 });

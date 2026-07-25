@@ -104,10 +104,12 @@ export function RecordFieldsSetting({ profileId, initial, isMiddleLong }: { prof
         label: labels[field.key]?.trim() || field.label,
         type: field.type,
         hidden: hiddenKeys.includes(field.key),
+        sourceHeader: initial.find((item) => item.key === field.key)?.sourceHeader,
+        sourceColumn: initial.find((item) => item.key === field.key)?.sourceColumn,
       })),
       ...fields
         .filter((field) => field.label.trim())
-        .map((field) => ({ key: field.key, label: field.label.trim(), type: field.type })),
+        .map((field) => ({ key: field.key, label: field.label.trim(), type: field.type, sourceHeader: field.sourceHeader, sourceColumn: field.sourceColumn })),
     ];
     try {
       const result = await safeUpdate(createClient(), "profiles", { record_fields: recordFieldsToJson(record_fields) }, { id: profileId });

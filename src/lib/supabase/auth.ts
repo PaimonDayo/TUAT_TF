@@ -56,6 +56,7 @@ export const getCurrentProfile = cache(async (): Promise<Profile> => {
       attendance_default_block: "all",
       sheet_name: null,
       sheet_linked_at: null,
+      sheet_header_signature: null,
       record_source: "app",
       record_fields: [],
       created_at: new Date().toISOString(),

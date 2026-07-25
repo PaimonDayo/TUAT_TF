@@ -1,3 +1,4 @@
+- 2026-07-25 / Codex / テスト環境向けに、タイムラインのDB即時表示後CSVバックグラウンド同期、スプシ初回連携・見出し変更時のフォーム項目チェック/型選択、感想列の完全一致→部分一致→旧見出し優先、確認済み列の空欄反映、中長距離の強度別優先・全強度0時のみ実際の距離フォールバックを実装。全89テスト・tsc・eslint・diff check・build成功、ローカルサーバー起動とログイン画面200を確認。接続中DBには新規列未適用で、GAS・本番DB・本番アプリは未変更。認証後の実動作確認はテストDBへのmigration適用後に実施する → (このcommit)
 - 2026-07-24 / Codex / Safariでアイコン切り抜き確定時にWebP変換できない場合はJPEGへフォールバックし、認証済みサーバーAPIで検証・512px WebPへ再変換して保存する経路を追加。Storage形式はWebPのまま維持。Safari相当2テスト・対象11テスト・全74テスト・tsc・eslint・diff check・build成功 → (このcommit)
 - 2026-07-24 / Codex / アプリ返信とスプレッドシート返信の二重表示・二重カウントを解消。ユーザー名変更で本文照合が外れても、保存済みのスプレッドシート列位置で同一返信を判定。表示・同期取込・件数RPCを統一し、既存データは削除せず本番重複7件を件数から除外（89→82を検証）。対象8テスト・全69テスト・tsc・eslint・diff check・build成功 → (このcommit)
 - 2026-07-24 / Codex / プロフィール画像にドラッグ・ピンチ・拡大スライダー付き切り抜き調整を追加。切り抜き確定時に画像だけ即時保存・即時反映し、通常のプロフィール保存で既存画像を誤削除し得る処理も修正。画像座標6テスト・全67テスト・tsc・対象eslint・スマホ幅目視確認・build成功 → (このcommit)
@@ -126,8 +127,8 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 ### 2. スプシ同期を「部員ごとの方向固定」へ（最重要）
 - migration: `profiles.record_source TEXT NOT NULL DEFAULT 'app' CHECK (record_source IN ('app','sheet'))`。バックフィル: **sheet_name 連携済みの部員は 'sheet'、未連携は 'app'**（従来のスプシ取込を切らさないための初期値。部員には切替方法を周知）。
 - `src/lib/sheet-sync.ts` を再構成:
-  - record_source='sheet' の部員 → **pull のみ**（シート→アプリ、from_sheet=true）。**空でないシート項目だけ取り込む（非破壊。空欄でアプリの値を消さない）**。シートに行が無い日は触らない。アプリ→シート書き戻しはしない。
-  - ⚠️ **2026-07-03 インシデント**: 当初仕様「シートの空欄も反映してよい」（Fable 5起案）で実装した結果、17:00 UTCのcron同期でアプリ側にだけあった6レコードの内容がヌルクリアされた（部員2名、復元不能=PITR/バックアップ無しをCLIで確認済み）。5de45d5で非破壊に修正済み。**非破壊pullが恒久仕様。以後どの方向でも「空で相手の値を消す」実装は禁止。**
+  - record_source='sheet' の部員 → **pull のみ**（シート→アプリ、from_sheet=true）。**2026-07-25以降は、ユーザーが確認した対応列について空欄も意図した削除として取り込む**。未マップ列とシートに行が無い日は触らない。アプリ→シート書き戻しはしない。
+  - ⚠️ **2026-07-03 インシデント**: 当初仕様「シートの空欄も反映してよい」（Fable 5起案）で実装した結果、17:00 UTCのcron同期でアプリ側にだけあった6レコードの内容がヌルクリアされた（部員2名、復元不能=PITR/バックアップ無しをCLIで確認済み）。5de45d5で非破壊に修正済み。この事故履歴は保持する。ただし2026-07-25にオーナーが、全連携者をスプシ入力へ統一し、アプリもCSV既存値を編集する前提なら空欄保存は意図した削除であると明示したため、**確認済み対応列に限って空欄反映へ方針変更**。列変更時の再確認と本番前スナップショット・dry-runを安全条件とする。
   - record_source='app' の部員 → **push のみ**（アプリ→シート）。シート側のマップ済みセルは同期が上書きしてよい（シート＝写し）。シート→アプリ取込はしない。
   - これに伴い LWW（appIsNewer / updated_at・synced_at 比較）、同日複数記録の conflict スキップ、双方向前提の空値保護ロジックを撤去・簡素化。SYNC_CUTOFF・未来日除外・dryRun・sheet_sync_runs ログ・手動同期ボタンは維持。
   - practice_records の読み込みに `.gte("recorded_date", SYNC_CUTOFF)` を付ける（下記 5-P3 と同時解消）。
@@ -221,8 +222,8 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 - **GAS拡張**: `fetchMember`アクション追加（1部員だけ軽量取得。個人の記録画面・write-through確認用。100人規模でも毎回fetchAllRawを引かずに済む）。`writeCells`が書けなかった見出し(`unmapped`)を返すよう変更（未マップ項目の可視化。旧タスク15の教訓を反映）。clasp pushで本番反映済み（deployment `AKfycbyXUDkqE9BdgdNJmb9sGSZK6CTKt_J7OTyLuLvKXwZC3tPexS-i_XkndjuluQ33D7UK @6`）。
 - **記録カード（RecordCard/PostOwnerMenu）の編集可否**: 記録のメインが'sheet'の部員は、from_sheet=trueの過去記録（過去のpull由来）も含めて自分の記録を編集可能にした（従来は from_sheet=true を一律「編集不可・閲覧のみ」にしていた）。`AuthorMini`に`record_source`（optional）を追加し`queries.ts`のAUTHOR_SELECTで取得。
 - **⚠️ dry-runで実際に問題を発見・修正済み**: 当初、毎時同期側の「write-through失敗時の再送」を既存の`appIsNewer`（updated_at>synced_at比較）で判定する設計にしたところ、本番dry-runで**write-through導入前からの無関係なタイムスタンプのズレ**（'sheet'部員6名・8件、原因不明の過去データ）を「再送対象」に誤検知し、部員がスプシへ直接入力した内容を古いアプリ値で上書きしかねないことが判明。専用フラグ`pending_sheet_push`（write-through失敗時のみtrue、成功でfalseに戻す）に設計変更し、再dry-runで`pushed:0`（誤検知解消）を確認してから本番migration適用・push。**厳守ルールのdry-run確認がまさにこの事故を防いだ実例**。
-- **Supabaseミラー（内部配管）**: 既存のpull-onlyロジック（非破壊）をそのまま維持。'sheet'部員の記録もこれまでどおり毎時cronで取り込まれ、いいね・コメント・タイムライン・週間集計のキーとして機能する。
-- **個人の記録画面の即時反映（2026-07-10実装）**: マイページ・自分の`/members/[id]`表示時に`refreshOwnSheetRecords`（`queries.ts`）→`refreshMemberFromSheetLive`（`sheet-sync.ts`）が`fetchMember`で本人1人分だけ軽量取得し、毎時cronを待たずその場でDBミラーへ非破壊pullしてから記録を読む。cronのpull-onlyロジックは`computeMemberPull`として共通化（cron本体の挙動は不変・純粋な抽出）。GAS呼び出しは5秒タイムアウトで失敗しても例外を投げず、DBの現状のまま表示する（ページを壊さない）。他人の記録閲覧時（isSelf=false）は呼ばない（RLSで書けないうえ無駄なGAS呼び出しになるため）。
+- **Supabaseミラー（内部配管）**: pull-onlyを維持し、2026-07-25以降はユーザー確認済みの対応列を空欄も含めて反映する。'sheet'部員の記録は毎時cronと画面表示後のCSV更新で取り込まれ、いいね・コメント・タイムライン・週間集計のキーとして機能する。
+- **個人の記録画面の即時反映（2026-07-10実装）**: マイページ・自分の`/members/[id]`表示時に`refreshOwnSheetRecords`（`queries.ts`）→`refreshMemberFromSheetLive`（`sheet-sync.ts`）が`fetchMember`で本人1人分だけ軽量取得し、毎時cronを待たずその場でシート正の内容をDBミラーへ反映してから記録を読む。cronのpull-onlyロジックは`computeMemberPull`として共通化（cron本体の挙動は不変・純粋な抽出）。GAS呼び出しは5秒タイムアウトで失敗しても例外を投げず、DBの現状のまま表示する（ページを壊さない）。他人の記録閲覧時（isSelf=false）は呼ばない（RLSで書けないうえ無駄なGAS呼び出しになるため）。
 - **1日1記録の制約**: 既存のRecordForm「同じ日の記録があれば新規ではなく更新」ロジック（重複防止）がそのまま適用されるため追加実装不要だった。
 
 **残作業（次のエージェントが着手する場合はここから）:**

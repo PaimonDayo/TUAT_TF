@@ -13,6 +13,8 @@ import { FormModalFooter } from "@/components/ui/form-modal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar } from "@/components/common/Avatar";
 import { AvatarCropEditor } from "@/components/features/AvatarCropEditor";
+import { SheetHeaderSetupDialog, type SheetHeaderData } from "@/components/features/SheetHeaderSetupDialog";
+import { recordFieldsToJson } from "@/lib/profile-normalize";
 import { BLOCKS, EVENTS_BY_BLOCK, GRADE_OPTIONS, PROFILE_BLOCK_ORDER, normalizeProfileBlocks } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { Block, Profile } from "@/types";
@@ -33,6 +35,8 @@ export function ProfileEditForm({
     | "avatar_url"
     | "sheet_name"
     | "record_source"
+    | "record_fields"
+    | "sheet_header_signature"
   >;
   onDone: () => void;
   isSetup?: boolean;
@@ -49,6 +53,7 @@ export function ProfileEditForm({
   const [sheetName, setSheetName] = useState<string>(profile.sheet_name ?? "");
   const [sheetOptions, setSheetOptions] = useState<string[] | null>(null);
   const [sheetNameMissing, setSheetNameMissing] = useState(false);
+  const [headerData, setHeaderData] = useState<SheetHeaderData | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -171,6 +176,18 @@ export function ProfileEditForm({
       : EVENTS_BY_BLOCK[b],
   );
 
+  async function fetchHeader(): Promise<SheetHeaderData | null> {
+    const response = await fetch(`/api/sheets/header?sheetName=${encodeURIComponent(sheetName.trim())}`, {
+      cache: "no-store",
+    });
+    const result = await response.json() as SheetHeaderData & { error?: string };
+    if (!response.ok) {
+      setError(result.error ?? "スプレッドシートの見出しを取得できませんでした");
+      return null;
+    }
+    return result;
+  }
+
   async function save() {
     if (!valid) {
       setError("すべての項目を入力してください");
@@ -179,45 +196,58 @@ export function ProfileEditForm({
     setSaving(true);
     setError(null);
 
-    // 入力元を切り替える場合は、方向を固定する前に一度だけ両側を揃える
-    // （2026-07-03のデータ消失インシデントの再発防止・オーナー確定 2026-07-04）。
-    // 揃えに失敗したら切替自体を中止する。
-    const nextRecordSource = sheetName.trim() ? "sheet" : "app";
-    const switchingSource =
-      sheetName.trim() && nextRecordSource !== (profile.record_source ?? "app");
-    if (switchingSource) {
-      const response = await fetch("/api/sheets/reconcile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          direction: "to_sheet",
-        }),
-      });
-      const reconcileResult = await response.json();
-      if (!response.ok || !reconcileResult.ok) {
-        setError(
-          reconcileResult.error ?? "設定の変更に失敗しました。もう一度お試しください",
-        );
+    if (sheetName.trim()) {
+      const currentHeader = await fetchHeader();
+      if (!currentHeader) {
+        setSaving(false);
+        return;
+      }
+      if (
+        profile.sheet_name !== sheetName.trim() ||
+        profile.sheet_header_signature !== currentHeader.signature
+      ) {
+        setHeaderData(currentHeader);
         setSaving(false);
         return;
       }
     }
 
-    const supabase = createClient();
-    const nextAvatarUrl = avatarUrl.trim() || null;
+    await persistProfile(profile.record_fields, sheetName.trim() ? profile.sheet_header_signature : null);
+  }
+
+  async function persistProfile(recordFields: Profile["record_fields"], headerSignature: string | null) {
+    setSaving(true);
+    setError(null);
+    const nextRecordSource = sheetName.trim() ? "sheet" : "app";
+    const switchingSource = Boolean(sheetName.trim()) && nextRecordSource !== (profile.record_source ?? "app");
+
+    if (switchingSource && profile.sheet_name) {
+      const response = await fetch("/api/sheets/reconcile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ direction: "to_sheet" }),
+      });
+      const reconcileResult = await response.json();
+      if (!response.ok || !reconcileResult.ok) {
+        setError(reconcileResult.error ?? "設定の変更に失敗しました。もう一度お試しください");
+        setSaving(false);
+        return;
+      }
+    }
 
     const result = await safeUpdate(
-      supabase,
+      createClient(),
       "profiles",
       {
         display_name: name.trim(),
         blocks: normalizeProfileBlocks(blocks),
-        // 選択ブロックに無い種目は保存しない（ブロックを外したら自動で外れる）
         events: events.filter((ev) => eventOptions.includes(ev)),
         grade,
-        avatar_url: nextAvatarUrl,
+        avatar_url: avatarUrl.trim() || null,
         sheet_name: sheetName.trim() || null,
+        sheet_header_signature: headerSignature,
         record_source: nextRecordSource,
+        record_fields: recordFieldsToJson(recordFields),
       },
       { id: profile.id },
     );
@@ -227,6 +257,8 @@ export function ProfileEditForm({
       setSaving(false);
       return;
     }
+    setHeaderData(null);
+    setSaving(false);
     router.refresh();
     onDone();
   }
@@ -393,7 +425,7 @@ export function ProfileEditForm({
             </select>
           )}
           <p className="text-micro mt-1">
-            選ぶと、練習記録とスプレッドシートが1時間ごとに自動で連携されます。
+            選ぶとスプレッドシートが記録の入力元になり、タイムライン表示後にもCSVで最新化します。
           </p>
         </div>
       )}
@@ -404,7 +436,7 @@ export function ProfileEditForm({
 
       {sheetName.trim() && (
         <p className="text-micro -mt-3">
-          連携中はスプレッドシートが記録の入力元になります。アプリで保存した内容もスプレッドシートへ自動で書き込まれます。
+          列名が変わったときは、同期前にアプリで入力項目を再確認します。
         </p>
       )}
 
@@ -425,6 +457,18 @@ export function ProfileEditForm({
           ログアウト
         </button>
       )}
+
+      {headerData && <SheetHeaderSetupDialog
+        key={headerData.signature}
+        open
+        data={headerData}
+        isMiddleLong={blocks.includes("middle_long")}
+        busy={saving}
+        onCancel={() => setHeaderData(null)}
+        onConfirm={(fields, signature) => {
+          void persistProfile(fields, signature);
+        }}
+      />}
 
       <AvatarCropEditor
         file={avatarCropFile}

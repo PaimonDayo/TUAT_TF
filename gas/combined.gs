@@ -191,7 +191,7 @@ function getColumns(header) {
     speedCol: findHeaderCol(header, ['解糖系']),
     stridesCol: findHeaderCol(header, ['流し']),
     reinforceCol: findHeaderCol(header, ['補強']),
-    commentCol: findHeaderCol(header, ['感想', 'コメント', '反省', '状態']),
+    commentCol: getCommentColumn(header),
     resultCol: findHeaderCol(header, ['結果', 'ペース'])
   };
 
@@ -608,7 +608,17 @@ function togglePracticeReaction(data) {
 }
 
 function getCommentColumn(header) {
-  return findHeaderCol(header, ['感想', 'コメント', '反省', '状態']);
+  const normalized = header.map(normalizeHeaderCell);
+  let index = normalized.findIndex(function (cell) { return cell === '感想'; });
+  if (index !== -1) return index;
+  index = normalized.findIndex(function (cell) { return cell.indexOf('感想') !== -1; });
+  if (index !== -1) return index;
+  const legacy = ['コメント', '反省', '状態'];
+  for (let i = 0; i < legacy.length; i++) {
+    index = normalized.findIndex(function (cell) { return cell === legacy[i]; });
+    if (index !== -1) return index;
+  }
+  return normalized.findIndex(function (cell) { return legacy.some(function (keyword) { return cell.indexOf(keyword) !== -1; }); });
 }
 
 function readPracticeReplies(row, header) {

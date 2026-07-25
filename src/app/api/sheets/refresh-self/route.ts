@@ -11,7 +11,7 @@ export async function POST() {
 
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("id, sheet_name, record_source, record_fields, sheet_linked_at")
+    .select("id, sheet_name, record_source, record_fields, sheet_linked_at, sheet_header_signature")
     .eq("id", user.id)
     .maybeSingle();
   if (error || !profile) return NextResponse.json({ error: "Profile not found" }, { status: 404 });

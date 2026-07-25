@@ -19,6 +19,7 @@ import { SegmentedControl } from "@/components/ui/segmented";
 import { INTENSITY_ORDER, INTENSITY_LABELS, CONDITIONS } from "@/lib/constants";
 import { jstToday } from "@/lib/date";
 import { cn } from "@/lib/utils";
+import { displayedDistance, unclassifiedDistance } from "@/lib/record-distance";
 import type { PracticeRecord, Intensity } from "@/types";
 
 type Period = "day" | "week" | "month";
@@ -31,6 +32,7 @@ const CHART_HEIGHT = AREA + VALUE_AREA;
 interface Bucket {
   start: Date;
   by: Record<Intensity, number>;
+  unclassified: number;
   total: number;
   records: PracticeRecord[];
 }
@@ -61,7 +63,7 @@ export function TrainingChart({
     for (let i = count - 1; i >= 0; i--) {
       const base =
         period === "day" ? subDays(now, i) : period === "week" ? subWeeks(now, i) : subMonths(now, i);
-      arr.push({ start: bucketStart(base, period), by: { low: 0, mid: 0, high: 0, speed: 0 }, total: 0, records: [] });
+      arr.push({ start: bucketStart(base, period), by: { low: 0, mid: 0, high: 0, speed: 0 }, unclassified: 0, total: 0, records: [] });
     }
     for (const r of records) {
       const start = bucketStart(new Date(r.recorded_date + "T00:00:00"), period);
@@ -71,10 +73,11 @@ export function TrainingChart({
       b.by.mid += r.dist_mid;
       b.by.high += r.dist_high;
       b.by.speed += r.dist_speed;
+      b.unclassified += unclassifiedDistance(r);
       b.records.push(r);
     }
     for (const b of arr) {
-      b.total = Math.round((b.by.low + b.by.mid + b.by.high + b.by.speed) * 10) / 10;
+      b.total = Math.round((b.by.low + b.by.mid + b.by.high + b.by.speed + b.unclassified) * 10) / 10;
     }
     return arr;
   }, [records, period]);
@@ -86,6 +89,7 @@ export function TrainingChart({
     const previousThrough = jstToday(-7);
     const by: Record<Intensity, number> = { low: 0, mid: 0, high: 0, speed: 0 };
     const trainingDates = new Set<string>();
+    let unclassified = 0;
     let previousTotal = 0;
     for (const record of records) {
       const distances: Record<Intensity, number> = {
@@ -94,14 +98,12 @@ export function TrainingChart({
         high: record.dist_high ?? 0,
         speed: record.dist_speed ?? 0,
       };
-      const recordTotal = INTENSITY_ORDER.reduce(
-        (sum, intensity) => sum + distances[intensity],
-        0,
-      );
+      const recordTotal = displayedDistance(record);
       if (record.recorded_date >= from && record.recorded_date <= through) {
         INTENSITY_ORDER.forEach((intensity) => {
           by[intensity] += distances[intensity];
         });
+        unclassified += unclassifiedDistance(record);
         if (recordTotal > 0) trainingDates.add(record.recorded_date);
       } else if (
         record.recorded_date >= previousFrom &&
@@ -110,9 +112,10 @@ export function TrainingChart({
         previousTotal += recordTotal;
       }
     }
-    const total = INTENSITY_ORDER.reduce((sum, intensity) => sum + by[intensity], 0);
+    const total = INTENSITY_ORDER.reduce((sum, intensity) => sum + by[intensity], unclassified);
     return {
       by,
+      unclassified,
       total,
       previousTotal,
       trainingDays: trainingDates.size,
@@ -221,6 +224,9 @@ export function TrainingChart({
                             />
                           ) : null,
                         )}
+                        {b.unclassified > 0 && (
+                          <div aria-label={`強度内訳なし ${formatDistance(b.unclassified)}km`} className="bg-muted/35" style={{ height: `${(b.unclassified / b.total) * 100}%` }} />
+                        )}
                       </div>
                     </>
                   ) : (
@@ -275,6 +281,12 @@ export function TrainingChart({
                         {INTENSITY_LABELS[k].label} {Math.round(sel.by[k] * 10) / 10}km
                       </span>
                     ) : null,
+                  )}
+                  {sel.unclassified > 0 && (
+                    <span className="flex items-center gap-1 text-[12px] text-muted2">
+                      <span className="h-2 w-2 rounded-full bg-muted/35" />
+                      強度内訳なし {formatDistance(sel.unclassified)}km
+                    </span>
                   )}
                 </div>
               ) : (
@@ -337,6 +349,7 @@ function IntensitySummary({
 }: {
   summary: {
     by: Record<Intensity, number>;
+    unclassified: number;
     total: number;
     previousTotal: number;
     trainingDays: number;
@@ -405,6 +418,9 @@ function IntensitySummary({
                 />
               ) : null,
             )}
+            {summary.unclassified > 0 && (
+              <div aria-label={`強度内訳なし ${formatDistance(summary.unclassified)}km`} className="bg-muted/35" style={{ width: `${(summary.unclassified / summary.total) * 100}%` }} />
+            )}
           </div>
           <div className="mt-2.5 grid grid-cols-2 gap-x-4 gap-y-1.5">
             {INTENSITY_ORDER.map((intensity) => {
@@ -424,6 +440,13 @@ function IntensitySummary({
                 </div>
               );
             })}
+            {summary.unclassified > 0 && (
+              <div className="flex min-w-0 items-center gap-1.5 text-[11px]">
+                <span className="h-2 w-2 shrink-0 rounded-full bg-muted/35" />
+                <span className="truncate text-muted2">強度内訳なし</span>
+                <span className="ml-auto shrink-0 font-semibold tabular-nums">{Math.round((summary.unclassified / summary.total) * 100)}%<span className="ml-1 font-normal text-muted">{formatDistance(summary.unclassified)}km</span></span>
+              </div>
+            )}
           </div>
         </>
       )}

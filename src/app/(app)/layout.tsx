@@ -5,6 +5,7 @@ import { FAB } from "@/components/layout/FAB";
 import { SessionKeepAlive } from "@/components/layout/SessionKeepAlive";
 import { PullToRefresh } from "@/components/layout/PullToRefresh";
 import { VersionWatcher } from "@/components/features/VersionWatcher";
+import { SheetHeaderGuard } from "@/components/features/SheetHeaderGuard";
 import { ToastProvider } from "@/components/ui/toast";
 import { AppQueryProvider } from "@/components/providers/QueryProvider";
 import { getCurrentProfile } from "@/lib/supabase/auth";
@@ -24,6 +25,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <Suspense fallback={null}><AuthenticatedFab /></Suspense>
             <Suspense fallback={null}><BottomNav /></Suspense>
             <VersionWatcher />
+            <Suspense fallback={null}><AuthenticatedSheetHeaderGuard /></Suspense>
           </div>
         </div>
       </div>
@@ -54,6 +56,19 @@ async function AuthenticatedFab() {
         createNotice: perms.createNotice,
         manageMembers: perms.manageMembers,
       }}
+    />
+  );
+}
+
+async function AuthenticatedSheetHeaderGuard() {
+  const profile = await getCurrentProfile();
+  if (!profile.sheet_name) return null;
+  return (
+    <SheetHeaderGuard
+      profileId={profile.id}
+      sheetName={profile.sheet_name}
+      signature={profile.sheet_header_signature}
+      isMiddleLong={profile.blocks.includes("middle_long")}
     />
   );
 }

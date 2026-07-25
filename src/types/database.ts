@@ -914,6 +914,7 @@ export type Database = {
           condition: string | null
           created_at: string
           custom: Json
+          dist_actual: number
           dist_high: number | null
           dist_low: number | null
           dist_mid: number | null
@@ -937,6 +938,7 @@ export type Database = {
           condition?: string | null
           created_at?: string
           custom?: Json
+          dist_actual?: number
           dist_high?: number | null
           dist_low?: number | null
           dist_mid?: number | null
@@ -960,6 +962,7 @@ export type Database = {
           condition?: string | null
           created_at?: string
           custom?: Json
+          dist_actual?: number
           dist_high?: number | null
           dist_low?: number | null
           dist_mid?: number | null
@@ -1141,6 +1144,7 @@ export type Database = {
           record_fields: Json
           record_source: string
           role: string
+          sheet_header_signature: string | null
           sheet_linked_at: string | null
           sheet_name: string | null
           status: string
@@ -1164,6 +1168,7 @@ export type Database = {
           record_fields?: Json
           record_source?: string
           role?: string
+          sheet_header_signature?: string | null
           sheet_linked_at?: string | null
           sheet_name?: string | null
           status?: string
@@ -1187,6 +1192,7 @@ export type Database = {
           record_fields?: Json
           record_source?: string
           role?: string
+          sheet_header_signature?: string | null
           sheet_linked_at?: string | null
           sheet_name?: string | null
           status?: string

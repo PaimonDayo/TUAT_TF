@@ -50,7 +50,7 @@ const SHEET_TIMELINE_CUTOFF = "2026-07-04";
 const SHEET_TIMELINE_OR = `from_sheet.eq.false,and(from_sheet.eq.true,recorded_date.gte.${SHEET_TIMELINE_CUTOFF})`;
 // 中身が空でない（距離いずれか>0、または各テキストが非null）
 const RECORD_NONEMPTY_OR =
-  "dist_low.gt.0,dist_mid.gt.0,dist_high.gt.0,dist_speed.gt.0,strides.gt.0," +
+  "dist_low.gt.0,dist_mid.gt.0,dist_high.gt.0,dist_speed.gt.0,dist_actual.gt.0,strides.gt.0," +
   "result_text.not.is.null,strength_text.not.is.null,memo.not.is.null," +
   "menu_text.not.is.null,focus_text.not.is.null";
 

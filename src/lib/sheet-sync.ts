@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RecordFieldDef } from "@/types";
 import { customRecordFields } from "@/lib/record-fields";
+import { sheetHeaderSignature } from "@/lib/sheet-field-config";
 import {
   importedSheetReplies,
   matchAppReplyIndexes,
@@ -24,9 +25,9 @@ import {
  * ユーザー追加のカスタム項目＝アプリ上の項目名）。項目名とシート列名が一致する項目だけ同期する。
  *
  * 同期方向は部員ごとに固定（profiles.record_source）:
- *   'sheet' → pullのみ（シート→アプリ）。シートを正とするが、**空でないシート項目だけ**取り込む
- *             （シートの空欄でアプリの既存内容を消さない。非破壊）。
- *             シートに行が無い日は触らない（安全側）。アプリ→シートの書き戻しはしない。
+ *   'sheet' → pullのみ（シート→アプリ）。確認済みの対応列は空欄も含めて反映し、
+ *             シートを唯一の正とする。シートに行が無い日は触らない（安全側）。
+ *             アプリ→シートの書き戻しはしない。
  *   'app'   -> push app records to the sheet, and import CSV-only dates.
  *              Existing app dates remain authoritative and are never overwritten from CSV.
  */
@@ -76,6 +77,7 @@ type BuiltinKey =
   | "dist_mid"
   | "dist_high"
   | "dist_speed"
+  | "dist_actual"
   | "strides"
   | "strength_text"
   | "result_text"
@@ -88,6 +90,7 @@ const BUILTINS: { key: BuiltinKey; keywords: string[]; numeric: boolean; integer
   { key: "dist_mid", keywords: ["中強度"], numeric: true },
   { key: "dist_high", keywords: ["高強度"], numeric: true },
   { key: "dist_speed", keywords: ["解糖系"], numeric: true },
+  { key: "dist_actual", keywords: ["実際の距離", "実距離", "走行距離", "総距離"], numeric: true },
   // strides はDBがINT型。シートに小数（例: 0.3）が入っていても丸めて取り込み、
   // insert全体を巻き込んで失敗させない（2026-07-09〜12、この型不一致で毎時同期の
   // 新規取込が3日間全滅した実例あり）。
@@ -276,44 +279,57 @@ async function fetchMemberRaw(
 
 // ── マッピング解決：このシートの見出しから「アプリ項目→実際の見出し名」を作る ──
 type FieldMap = {
-  builtin: Map<BuiltinKey, { header: string; numeric: boolean; integer?: boolean }>;
-  custom: Map<string, { header: string; type: "text" | "number" }>; // key -> header
+  builtin: Map<BuiltinKey, { header: string; column: number; numeric: boolean; integer?: boolean }>;
+  custom: Map<string, { header: string; column: number; type: "text" | "number" }>;
 };
 
-function resolveFieldMap(header: string[], fields: RecordFieldDef[]): FieldMap {
-  const normHeaders = header.map((item) => ({ raw: item, n: norm(item) }));
-  const builtin = new Map<BuiltinKey, { header: string; numeric: boolean; integer?: boolean }>();
-  const usedHeaders = new Set<string>();
+type HeaderCandidate = { raw: string; n: string; column: number };
 
-  // 名前変更した既定項目を最優先で完全一致させる。
+function resolveFieldMap(member: Pick<RawMember, "header" | "columns">, fields: RecordFieldDef[]): FieldMap {
+  const sourceColumns = member.columns?.length ? member.columns : member.header.map((label, index) => ({ index, label }));
+  const headers: HeaderCandidate[] = sourceColumns.map((item) => ({ raw: item.label, n: norm(item.label), column: item.index }));
+  const builtin: FieldMap["builtin"] = new Map();
+  const usedColumns = new Set<number>();
+
   for (const item of BUILTINS) {
     const configured = fields.find((field) => field.key === item.key);
     if (configured?.hidden) continue;
-    const configuredLabel = configured?.label.trim();
-    if (!configuredLabel) continue;
-    const hit = normHeaders.find((candidate) => candidate.n === norm(configuredLabel) && !usedHeaders.has(candidate.raw));
+    const hit = headers.find((candidate) => !usedColumns.has(candidate.column) && (
+      (configured?.sourceColumn === candidate.column && norm(configured.sourceHeader ?? candidate.raw) === candidate.n) ||
+      (configured?.sourceHeader && norm(configured.sourceHeader) === candidate.n) ||
+      (configured?.label && norm(configured.label) === candidate.n)
+    ));
     if (!hit) continue;
-    builtin.set(item.key, { header: hit.raw, numeric: item.numeric, integer: item.integer });
-    usedHeaders.add(hit.raw);
+    builtin.set(item.key, { header: hit.raw, column: hit.column, numeric: item.numeric, integer: item.integer });
+    usedColumns.add(hit.column);
   }
 
-  // 未設定・旧設定は従来キーワードへフォールバックする。同じ列を複数項目へ割り当てない。
   for (const item of BUILTINS) {
     if (builtin.has(item.key) || fields.find((field) => field.key === item.key)?.hidden) continue;
-    const hit = normHeaders.find((candidate) => !usedHeaders.has(candidate.raw) && item.keywords.some((keyword) => candidate.n.includes(norm(keyword))));
+    const available = headers.filter((candidate) => !usedColumns.has(candidate.column));
+    let hit: HeaderCandidate | undefined;
+    if (item.key === "memo") {
+      hit = available.find((candidate) => candidate.n === "感想") ?? available.find((candidate) => candidate.n.includes("感想"));
+      for (const keyword of ["コメント", "反省", "状態"]) hit ??= available.find((candidate) => candidate.n === keyword);
+      hit ??= available.find((candidate) => ["コメント", "反省", "状態"].some((keyword) => candidate.n.includes(keyword)));
+    } else {
+      hit = available.find((candidate) => item.keywords.some((keyword) => candidate.n.includes(norm(keyword))));
+    }
     if (!hit) continue;
-    builtin.set(item.key, { header: hit.raw, numeric: item.numeric, integer: item.integer });
-    usedHeaders.add(hit.raw);
+    builtin.set(item.key, { header: hit.raw, column: hit.column, numeric: item.numeric, integer: item.integer });
+    usedColumns.add(hit.column);
   }
 
-  const custom = new Map<string, { header: string; type: "text" | "number" }>();
+  const custom: FieldMap["custom"] = new Map();
   for (const field of customRecordFields(fields)) {
-    const target = field.label.trim();
-    if (!target) continue;
-    const hit = normHeaders.find((candidate) => candidate.raw.trim() === target && !usedHeaders.has(candidate.raw));
+    const hit = headers.find((candidate) => !usedColumns.has(candidate.column) && (
+      (field.sourceColumn === candidate.column && norm(field.sourceHeader ?? candidate.raw) === candidate.n) ||
+      (field.sourceHeader && norm(field.sourceHeader) === candidate.n) ||
+      norm(field.label) === candidate.n
+    ));
     if (!hit) continue;
-    custom.set(field.key, { header: hit.raw, type: field.type });
-    usedHeaders.add(hit.raw);
+    custom.set(field.key, { header: hit.raw, column: hit.column, type: field.type });
+    usedColumns.add(hit.column);
   }
   return { builtin, custom };
 }
@@ -326,6 +342,7 @@ export type DbRecord = {
   dist_mid: number;
   dist_high: number;
   dist_speed: number;
+  dist_actual: number;
   strides: number;
   strength_text: string | null;
   result_text: string | null;
@@ -345,21 +362,21 @@ function appBuiltin(rec: DbRecord, key: BuiltinKey): number | string | null {
 
 
 /** シートのセルから、アプリへ書き込む値（マップされた項目のみ）を作る */
-function sheetToAppValues(map: FieldMap, cells: Record<string, string>) {
+function sheetToAppValues(map: FieldMap, record: RawMember["records"][number]) {
+  const valueAt = (header: string, column: number) => record.values?.[column] ?? record.cells[header] ?? "";
   const builtin: Record<string, number | string | null> = {};
   for (const [key, m] of map.builtin) {
+    const value = valueAt(m.header, m.column);
     builtin[key] = m.numeric
       ? m.integer
-        ? Math.round(parseSheetNum(cells[m.header]))
-        : Math.round(parseSheetNum(cells[m.header]) * 10) / 10
-      : txt(cells[m.header]);
+        ? Math.round(parseSheetNum(value))
+        : Math.round(parseSheetNum(value) * 10) / 10
+      : txt(value);
   }
   const custom: Record<string, string | number | null> = {};
   for (const [key, m] of map.custom) {
-    custom[key] =
-      m.type === "number"
-        ? Math.round(parseSheetNum(cells[m.header]) * 10) / 10
-        : txt(cells[m.header]);
+    const value = valueAt(m.header, m.column);
+    custom[key] = m.type === "number" ? Math.round(parseSheetNum(value) * 10) / 10 : txt(value);
   }
   return { builtin, custom };
 }
@@ -416,6 +433,7 @@ const BUILTIN_LABELS: Record<BuiltinKey, string> = {
   dist_mid: "中強度",
   dist_high: "高強度",
   dist_speed: "解糖系",
+  dist_actual: "実際の距離",
   strides: "流し",
   strength_text: "補強",
   result_text: "結果",
@@ -441,7 +459,7 @@ export async function pushRecordToSheet(
   rec: DbRecord,
 ): Promise<PushRecordResult> {
   const member = await fetchMemberRaw(sheetName);
-  const map = resolveFieldMap(member.header, recordFields);
+  const map = resolveFieldMap(member, recordFields);
   const cells = appToCellsNonEmpty(map, rec);
 
   // シートに列自体が無く、送信すらされなかった項目（可視化用）
@@ -518,12 +536,12 @@ export async function reconcileOnSwitch(
     result.skipped.push(`シート「${profile.sheet_name}」が見つかりません`);
     return result;
   }
-  const map = resolveFieldMap(member.header, (profile.record_fields as RecordFieldDef[]) ?? []);
+  const map = resolveFieldMap(member, (profile.record_fields as RecordFieldDef[]) ?? []);
 
   const { data: existing, error: rErr } = await admin
     .from("practice_records")
     .select(
-      "id, user_id, recorded_date, dist_low, dist_mid, dist_high, dist_speed, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at, pending_sheet_push",
+      "id, user_id, recorded_date, dist_low, dist_mid, dist_high, dist_speed, dist_actual, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at, pending_sheet_push",
     )
     .eq("user_id", profileId)
     .gte("recorded_date", SYNC_CUTOFF);
@@ -566,7 +584,7 @@ export async function reconcileOnSwitch(
         result.skipped.push(`${sr.date}（同日に複数記録）`);
         continue;
       }
-      const { builtin, custom } = sheetToAppValues(map, sr.cells);
+      const { builtin, custom } = sheetToAppValues(map, sr);
       if (valuesEmpty(builtin, custom)) continue;
       const app = appList[0];
 
@@ -626,7 +644,7 @@ type MemberPullComputation = {
 };
 
 /**
- * 1部員分の「シート→アプリ」非破壊pullを計算する（runSheetSyncのpull-onlyブランチと
+ * 1部員分の「シート→アプリ」pullを計算する（runSheetSyncのpull-onlyブランチと
  * refreshMemberFromSheetLive の共通ロジック）。副作用なし（DB書き込みは呼び出し側が行う）。
  */
 export type ExistingSheetRecordPolicy = "merge" | "preserve";
@@ -656,7 +674,7 @@ export function computeMemberPull(
     // App-main members keep existing DB dates authoritative. CSV only fills missing dates.
     if (app && existingRecordPolicy === "preserve") continue;
 
-    const { builtin, custom } = sheetToAppValues(map, sr.cells);
+    const { builtin, custom } = sheetToAppValues(map, sr);
 
     if (!app) {
       if (valuesEmpty(builtin, custom)) continue; // 空の行は新規に取り込まない
@@ -675,20 +693,18 @@ export function computeMemberPull(
       continue;
     }
 
-    // 既存行はシートが正。ただし**空でないシート項目だけ**取り込む
-    // （シートの空欄でアプリに直接入力された内容を消さないため。実際に
-    // シートの空欄で既存の記録内容が消える事故が発生したため非破壊に戻した）。
+    // シート連携者はシートが正。確認済みの列は空欄も含めて反映する。
+    // マッピングされていない列には触れないため、列変更時は先に再確認する。
     const patch: Record<string, unknown> = {};
-    for (const [key, m] of map.builtin) {
+    for (const [key] of map.builtin) {
       const v = builtin[key];
-      const nonEmpty = m.numeric ? Number(v) > 0 : (v ?? "").toString().trim() !== "";
-      if (nonEmpty && v !== appBuiltin(app, key as BuiltinKey)) patch[key] = v;
+      if (v !== appBuiltin(app, key as BuiltinKey)) patch[key] = v;
     }
     const customPatch: Record<string, string | number | null> = { ...(app.custom ?? {}) };
     let customChanged = false;
     for (const [key] of map.custom) {
       const v = custom[key];
-      if ((v ?? "").toString().trim() !== "" && v !== (app.custom?.[key] ?? null)) {
+      if (v !== (app.custom?.[key] ?? null)) {
         customPatch[key] = v;
         customChanged = true;
       }
@@ -853,7 +869,7 @@ async function reconcileSheetReplies(
 // ── 同期本体 ─────────────────────────────────────────────────────────────────
 // 安全方針(docs/SHEETS-SYNC-PLAN.md・事故対策):
 //  - カットオフ(2026-06-22)以前・未来日・空の行は同期しない
-//  - 非破壊: シートが空の項目でアプリを空にしない／空のアプリ値でシートを潰さない
+//  - シート連携者: 確認済みの列は空欄も反映。未マップ列とシートに存在しない日は触らない
 //  - 同日に複数記録がある日付は曖昧なのでスキップ（conflictとして報告）
 //  - dryRun で「何が起きるか」だけ確認できる
 export async function runSheetSync(
@@ -876,7 +892,7 @@ export async function runSheetSync(
 
   const { data: profiles, error: pErr } = await admin
     .from("profiles")
-    .select("id, sheet_name, record_fields, record_source, sheet_linked_at")
+    .select("id, sheet_name, record_fields, record_source, sheet_linked_at, sheet_header_signature")
     .not("sheet_name", "is", null);
   if (pErr) throw pErr;
 
@@ -886,6 +902,7 @@ export async function runSheetSync(
     record_fields: RecordFieldDef[] | null;
     record_source: "app" | "sheet";
     sheet_linked_at: string | null;
+    sheet_header_signature: string | null;
   }[];
   if (options.onlySheet) {
     linked = linked.filter((p) => p.sheet_name.trim() === options.onlySheet!.trim());
@@ -907,7 +924,7 @@ export async function runSheetSync(
   const { data: existing, error: rErr } = await admin
     .from("practice_records")
     .select(
-      "id, user_id, recorded_date, dist_low, dist_mid, dist_high, dist_speed, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at, pending_sheet_push",
+      "id, user_id, recorded_date, dist_low, dist_mid, dist_high, dist_speed, dist_actual, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at, pending_sheet_push",
     )
     .in("user_id", userIds)
     .gte("recorded_date", SYNC_CUTOFF);
@@ -941,7 +958,15 @@ export async function runSheetSync(
       result.skippedMembers.push(sheetName);
       continue;
     }
-    const map = resolveFieldMap(member.header, profile.record_fields ?? []);
+    const currentHeaderSignature = sheetHeaderSignature(
+      member.columns ?? member.header.map((label, index) => ({ index, label })),
+    );
+    if (profile.sheet_header_signature && profile.sheet_header_signature !== currentHeaderSignature) {
+      result.skippedMembers.push(sheetName);
+      result.failedMembers.push({ member: sheetName, reason: "見出しが変更されています。アプリで入力項目を再確認してください" });
+      continue;
+    }
+    const map = resolveFieldMap(member, profile.record_fields ?? []);
     const appByDate = byUser.get(profile.id)!;
 
     if (profile.record_source === "sheet") {
@@ -1124,7 +1149,7 @@ export type LiveRefreshResult = { inserted: number; updated: number; sheetReplie
 
 /**
  * Before rendering a linked member's own record page, refresh CSV-only dates into the DB mirror.
- * 本人の記録を毎時同期を待たずその場でDB(Supabaseミラー)へ非破壊で反映する（タスク16残作業）。
+ * 本人の記録を毎時同期を待たず、その場でシートを正としてDB(Supabaseミラー)へ反映する。
  * fetchMember 1回＋既存ロジック(computeMemberPull)の使い回しで、100人規模でもfetchAllRawを
  * 引かずに済む。GAS不調・タイムアウト時はDBの現状のまま表示させるため例外を投げず null を返す
  * （呼び出し側＝Server Componentのレンダリングを絶対に壊さないため）。
@@ -1137,13 +1162,18 @@ export async function refreshMemberFromSheetLive(
     record_source: "app" | "sheet";
     record_fields: RecordFieldDef[] | null;
     sheet_linked_at: string | null;
+    sheet_header_signature?: string | null;
   },
 ): Promise<LiveRefreshResult | null> {
   if (!profile.sheet_name) return null;
 
   try {
     const member = await fetchMemberRaw(profile.sheet_name, { timeoutMs: 5000 });
-    const map = resolveFieldMap(member.header, profile.record_fields ?? []);
+    const currentHeaderSignature = sheetHeaderSignature(member.columns ?? member.header.map((label, index) => ({ index, label })));
+    if (profile.sheet_header_signature && profile.sheet_header_signature !== currentHeaderSignature) {
+      return null;
+    }
+    const map = resolveFieldMap(member, profile.record_fields ?? []);
     const today = todayJST();
     const cutoff =
       profile.sheet_linked_at && profile.sheet_linked_at > SYNC_CUTOFF
@@ -1153,7 +1183,7 @@ export async function refreshMemberFromSheetLive(
     const { data: existing, error } = await supabase
       .from("practice_records")
       .select(
-        "id, user_id, recorded_date, dist_low, dist_mid, dist_high, dist_speed, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at, pending_sheet_push",
+        "id, user_id, recorded_date, dist_low, dist_mid, dist_high, dist_speed, dist_actual, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at, pending_sheet_push",
       )
       .eq("user_id", profile.id)
       .gte("recorded_date", cutoff);

@@ -26,6 +26,8 @@ export function recordFieldsFromJson(value: Json | null): RecordFieldDef[] {
       label,
       type,
       ...(typeof item.hidden === "boolean" ? { hidden: item.hidden } : {}),
+      ...(typeof item.sourceHeader === "string" ? { sourceHeader: item.sourceHeader } : {}),
+      ...(typeof item.sourceColumn === "number" ? { sourceColumn: item.sourceColumn } : {}),
     } satisfies RecordFieldDef];
   });
 }
@@ -36,6 +38,8 @@ export function recordFieldsToJson(fields: RecordFieldDef[]): Json {
     label: field.label,
     type: field.type,
     ...(typeof field.hidden === "boolean" ? { hidden: field.hidden } : {}),
+    ...(typeof field.sourceHeader === "string" ? { sourceHeader: field.sourceHeader } : {}),
+    ...(typeof field.sourceColumn === "number" ? { sourceColumn: field.sourceColumn } : {}),
   }));
 }
 
@@ -76,6 +80,7 @@ export function normalizeRecordWithAuthor(
     dist_low: row.dist_low ?? 0,
     dist_mid: row.dist_mid ?? 0,
     dist_high: row.dist_high ?? 0,
+    dist_actual: row.dist_actual ?? 0,
     dist_speed: row.dist_speed ?? 0,
     strides: row.strides ?? 0,
     condition:
