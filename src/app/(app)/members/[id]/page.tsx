@@ -70,7 +70,7 @@ async function MemberContent({
     id: viewer.id,
     display_name: viewer.display_name,
     avatar_url: viewer.avatar_url,
-    systemRecordForm: permissionsOf(viewer.roles).manageSystem,
+    systemRecordForm: Boolean(viewer.sheet_name),
   };
 
   return (

@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { fetchRolesByProfileIds } from "@/lib/supabase/auth";
-import { permissionsOf } from "@/lib/permissions";
 import { recordFieldsFromJson, recordFieldsToJson } from "@/lib/profile-normalize";
 import type { Json } from "@/types/database";
 import { isFixedSheetColumn, timelineFieldLimit } from "@/lib/sheet-field-config";
@@ -10,10 +8,6 @@ export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
-  const roles = await fetchRolesByProfileIds(supabase, [user.id]);
-  if (!permissionsOf(roles.get(user.id)).manageSystem) {
-    return NextResponse.json({ error: "システム管理権限が必要です" }, { status: 403 });
-  }
 
   const body = await request.json().catch(() => null) as { fields?: unknown; signature?: unknown } | null;
   const fields = recordFieldsFromJson((body?.fields ?? null) as Json);

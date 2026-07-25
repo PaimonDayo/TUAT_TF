@@ -59,7 +59,7 @@ export default async function MyPage({
               sheet_header_signature: profile.sheet_header_signature,
             }}
             autoOpen={setup === "1"}
-            enableSheetHeaderSetup={perms.manageSystem}
+            enableSheetHeaderSetup
           />
         }
       />
@@ -168,7 +168,7 @@ export default async function MyPage({
                 id: profile.id,
                 display_name: profile.display_name,
                 avatar_url: profile.avatar_url,
-                systemRecordForm: perms.manageSystem,
+                systemRecordForm: Boolean(profile.sheet_name),
               }}
             />
           </Suspense>

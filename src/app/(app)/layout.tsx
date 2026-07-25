@@ -50,7 +50,7 @@ async function AuthenticatedFab() {
       isMiddleLong={profile.blocks?.includes("middle_long") ?? false}
       recordSource={profile.record_source}
       recordFields={profile.record_fields}
-      systemRecordForm={perms.manageSystem && Boolean(profile.sheet_name)}
+      systemRecordForm={Boolean(profile.sheet_name)}
       can={{
         createSchedule: perms.createSchedule,
         createMenu: perms.createMenu,
@@ -63,7 +63,7 @@ async function AuthenticatedFab() {
 
 async function AuthenticatedSheetHeaderGuard() {
   const profile = await getCurrentProfile();
-  if (!profile.sheet_name || !permissionsOf(profile.roles).manageSystem) return null;
+  if (!profile.sheet_name) return null;
   return (
     <SheetHeaderGuard
       profileId={profile.id}

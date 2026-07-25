@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { fetchRolesByProfileIds } from "@/lib/supabase/auth";
-import { permissionsOf } from "@/lib/permissions";
 import { fetchPublicMember } from "@/lib/sheet-public-csv";
 import { memoHeaderCandidates, relevantSheetHeaderSignature } from "@/lib/sheet-field-config";
 import { recordFieldsFromJson } from "@/lib/profile-normalize";
@@ -13,10 +11,6 @@ export async function GET(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
-  const roles = await fetchRolesByProfileIds(supabase, [user.id]);
-  if (!permissionsOf(roles.get(user.id)).manageSystem) {
-    return NextResponse.json({ error: "システム管理権限が必要です" }, { status: 403 });
-  }
 
   const { data: profile } = await supabase
     .from("profiles")

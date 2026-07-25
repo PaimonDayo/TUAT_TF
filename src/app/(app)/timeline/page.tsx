@@ -37,12 +37,12 @@ async function TimelineContent() {
         id: profile.id,
         display_name: profile.display_name,
         avatar_url: profile.avatar_url,
-        systemRecordForm: permissionsOf(profile.roles).manageSystem,
+        systemRecordForm: Boolean(profile.sheet_name),
       }}
       favoriteIds={favoriteIds}
       initialCompact={initialCompact}
       showRecordSource={showRecordSource}
-      enableCsvRefresh={permissionsOf(profile.roles).manageSystem}
+      enableCsvRefresh={Boolean(profile.sheet_name)}
     />
   );
 }

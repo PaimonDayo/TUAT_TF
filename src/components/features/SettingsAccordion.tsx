@@ -104,7 +104,7 @@ export function SettingsAccordion({
             </a>
           </div>
         )}
-        {canManageSystem && sheetName ? <SheetRecordFormSetting
+        {sheetName ? <SheetRecordFormSetting
           sheetName={sheetName}
           initial={recordFields}
           isMiddleLong={isMiddleLong}
