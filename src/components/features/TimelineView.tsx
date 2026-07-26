@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { UserCheck, List } from "lucide-react";
 import { RecordCard } from "@/components/cards/RecordCard";
@@ -25,6 +25,7 @@ import { useFeedDisplay } from "@/hooks/use-feed-display";
 import type { CommentAuthor, FeedItem } from "@/types";
 
 const PAGE = 30;
+const FILTER_AUTOLOAD_PAGES = 5;
 type FeedCursor = {
   record?: { createdAt: string; id: string };
   tweet?: { createdAt: string; id: string };
@@ -86,6 +87,7 @@ export function TimelineView({
   const [grades, setGrades] = useState<string[]>([]);
   const [favOnly, setFavOnly] = useState(false);
   const [currentFavoriteIds, setCurrentFavoriteIds] = useState(favoriteIds);
+  const filterAutoLoadCount = useRef(0);
   const { compact, toggleCompact, toggleExpanded, isCompact } = useFeedDisplay({
     initialCompact,
     cookieName: "timeline-compact",
@@ -207,6 +209,29 @@ export function TimelineView({
     () => groupFeedItemsByDate(filtered),
     [filtered],
   );
+
+  const hasActiveFilter = block !== "all" || grades.length > 0 || favOnly;
+
+  useEffect(() => {
+    filterAutoLoadCount.current = 0;
+  }, [block, grades, favOnly]);
+
+  useEffect(() => {
+    if (
+      !hasActiveFilter ||
+      filtered.length >= PAGE ||
+      !feedQuery.hasNextPage ||
+      feedQuery.isFetchingNextPage ||
+      filterAutoLoadCount.current >= FILTER_AUTOLOAD_PAGES
+    ) return;
+
+    filterAutoLoadCount.current += 1;
+    void feedQuery.fetchNextPage();
+  }, [
+    feedQuery,
+    filtered.length,
+    hasActiveFilter,
+  ]);
 
   function loadMore() { void feedQuery.fetchNextPage(); }
 
