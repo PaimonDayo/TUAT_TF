@@ -6,7 +6,7 @@ import { LoaderCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { jstToday } from "@/lib/date";
-import { customRecordFields, recordFieldHidden, recordFieldLabel } from "@/lib/record-fields";
+import { canSaveRecord, customRecordFields, recordFieldHidden, recordFieldLabel } from "@/lib/record-fields";
 import { IntensityInput, type IntensityValues } from "@/components/features/IntensityInput";
 import { recordFieldsFromJson } from "@/lib/profile-normalize";
 import { Textarea } from "@/components/ui/textarea";
@@ -269,7 +269,8 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
         (fieldEnabled("memo") && !!memo.trim()) ||
         (fieldEnabled("condition") && !!condition) ||
         customHasContent;
-    if (!hasContent) {
+    const updatingExisting = editing || hasExistingSameDay;
+    if (!canSaveRecord(hasContent, updatingExisting)) {
       setError(
         isMiddleLong
           ? "距離または表示中の項目を入力してください"

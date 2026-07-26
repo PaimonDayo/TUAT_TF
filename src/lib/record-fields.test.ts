@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { customRecordFields, editableBuiltinRecordFields, isBuiltinRecordField, recordFieldHidden, recordFieldLabel } from "./record-fields";
+import { canSaveRecord, customRecordFields, editableBuiltinRecordFields, isBuiltinRecordField, recordFieldHidden, recordFieldLabel } from "./record-fields";
 import type { RecordFieldDef } from "@/types";
 
 const builtin: RecordFieldDef = { key: "memo", label: "Memo", type: "text" };
@@ -16,5 +16,9 @@ describe("record field helpers", () => {
   it("uses different built-ins for middle-long and sprint groups", () => {
     expect(editableBuiltinRecordFields(true).some((field) => field.key === "strides")).toBe(true);
     expect(editableBuiltinRecordFields(false).some((field) => field.key === "menu_text")).toBe(true);
+  });
+  it("allows an existing record to be updated after its last field is cleared", () => {
+    expect(canSaveRecord(false, true)).toBe(true);
+    expect(canSaveRecord(false, false)).toBe(false);
   });
 });

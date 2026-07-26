@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeMemberPull, type DbRecord } from "./sheet-sync";
+import { appToCellsFull, computeMemberPull, type DbRecord, type FieldMap } from "./sheet-sync";
 
 const fieldMap = {
   builtin: new Map([["memo", { header: "memo", column: 0, numeric: false }]]),
@@ -80,5 +80,27 @@ describe("computeMemberPull", () => {
       "replace_mapped",
     );
     expect(result.inserts).toEqual([]);
+  });
+});
+
+describe("appToCellsFull", () => {
+  it("sends empty mapped values so an edit can clear spreadsheet cells", () => {
+    const map = {
+      builtin: new Map([
+        ["memo", { header: "感想", column: 0, numeric: false }],
+        ["dist_low", { header: "低強度", column: 1, numeric: true }],
+      ]),
+      custom: new Map([
+        ["sleep", { header: "睡眠", column: 2, type: "text" }],
+      ]),
+    } as FieldMap;
+    const record = dbRecord("2026-07-26", "");
+    record.custom = { sleep: null };
+
+    expect(appToCellsFull(map, record)).toEqual({
+      感想: "",
+      低強度: 0,
+      睡眠: "",
+    });
   });
 });

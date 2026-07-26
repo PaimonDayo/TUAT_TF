@@ -278,7 +278,7 @@ async function fetchMemberRaw(
 }
 
 // ── マッピング解決：このシートの見出しから「アプリ項目→実際の見出し名」を作る ──
-type FieldMap = {
+export type FieldMap = {
   builtin: Map<BuiltinKey, { header: string; column: number; numeric: boolean; integer?: boolean }>;
   custom: Map<string, { header: string; column: number; type: "text" | "number" }>;
 };
@@ -408,7 +408,7 @@ function valuesEmpty(
 }
 
 /** アプリのレコードから、スプシへ送る cells（マップされた項目を全て。シート＝アプリの写しにする） */
-function appToCellsFull(map: FieldMap, rec: DbRecord): Record<string, string | number> {
+export function appToCellsFull(map: FieldMap, rec: DbRecord): Record<string, string | number> {
   const cells: Record<string, string | number> = {};
   for (const [key, m] of map.builtin) {
     const v = appBuiltin(rec, key);
@@ -474,7 +474,7 @@ export async function pushRecordToSheet(
   const map = resolveFieldMap(member, recordFields, {
     enableActualDistance: recordFields.some((field) => field.key === "dist_actual" && !field.hidden),
   });
-  const cells = appToCellsNonEmpty(map, rec);
+  const cells = appToCellsFull(map, rec);
 
   // シートに列自体が無く、送信すらされなかった項目（可視化用）
   const unmapped: string[] = [];

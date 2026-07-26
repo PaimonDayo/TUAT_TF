@@ -53,6 +53,10 @@ export function recordFieldLabel(
   return (fields ?? []).find((field) => field.key === key)?.label?.trim() || fallback;
 }
 
+export function canSaveRecord(hasContent: boolean, updatingExisting: boolean): boolean {
+  return hasContent || updatingExisting;
+}
+
 export function editableBuiltinRecordFields(isMiddleLong: boolean): { key: BuiltinRecordFieldKey; label: string; type: "text" | "number" }[] {
   return isMiddleLong
     ? [

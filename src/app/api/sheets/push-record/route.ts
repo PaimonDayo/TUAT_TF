@@ -41,7 +41,7 @@ export async function POST(request: Request) {
   const { data: rec, error: rErr } = await admin
     .from("practice_records")
     .select(
-      "id, user_id, recorded_date, dist_low, dist_mid, dist_high, dist_speed, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at",
+      "id, user_id, recorded_date, dist_low, dist_mid, dist_high, dist_speed, dist_actual, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at",
     )
     .eq("id", recordId)
     .maybeSingle();
