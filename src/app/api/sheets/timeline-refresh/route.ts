@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { fetchRolesByProfileIds } from "@/lib/supabase/auth";
-import { permissionsOf } from "@/lib/permissions";
 import { runSheetSync } from "@/lib/sheet-sync";
 
 export const maxDuration = 30;
@@ -13,10 +11,6 @@ export async function POST() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
 
-  const roles = await fetchRolesByProfileIds(supabase, [user.id]);
-  if (!permissionsOf(roles.get(user.id)).manageSystem) {
-    return NextResponse.json({ error: "システム管理権限が必要です" }, { status: 403 });
-  }
   if (process.env.SHEET_SYNC_ENABLED !== "true") {
     return NextResponse.json({ ok: true, skipped: true, changed: false, cycleComplete: true });
   }

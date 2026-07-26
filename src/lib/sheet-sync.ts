@@ -883,21 +883,6 @@ async function reconcileSheetReplies(
 
   return { synced, failedMembers };
 }
-async function stagedSheetProfileIds(admin: SupabaseClient, profileIds: string[]): Promise<Set<string>> {
-  if (profileIds.length === 0) return new Set();
-  const { data: roles, error: roleError } = await admin
-    .from("roles")
-    .select("id")
-    .eq("can_manage_system", true);
-  if (roleError || !roles?.length) return new Set();
-  const { data: assignments, error: assignmentError } = await admin
-    .from("profile_roles")
-    .select("profile_id")
-    .in("profile_id", profileIds)
-    .in("role_id", roles.map((role) => role.id));
-  if (assignmentError) return new Set();
-  return new Set((assignments ?? []).map((assignment) => assignment.profile_id));
-}
 
 // ── 同期本体 ─────────────────────────────────────────────────────────────────
 // 安全方針(docs/SHEETS-SYNC-PLAN.md・事故対策):
@@ -954,9 +939,6 @@ export async function runSheetSync(
   const memberByName = new Map(members.map((m) => [m.name.trim(), m]));
 
   const userIds = linked.map((p) => p.id);
-  const stagedProfileIds = process.env.SHEET_FORM_V2_APPLY_ENABLED === "true"
-    ? await stagedSheetProfileIds(admin, userIds)
-    : new Set<string>();
   const { data: existing, error: rErr } = await admin
     .from("practice_records")
     .select(
@@ -1000,10 +982,7 @@ export async function runSheetSync(
       profileFields,
       profileFields.some((field) => field.key.startsWith("dist_")),
     );
-    const stagedSheetFlow =
-      process.env.SHEET_FORM_V2_APPLY_ENABLED === "true" &&
-      stagedProfileIds.has(profile.id) &&
-      Boolean(profile.sheet_header_signature);
+    const stagedSheetFlow = Boolean(profile.sheet_header_signature);
     if (stagedSheetFlow && profile.sheet_header_signature && profile.sheet_header_signature !== currentHeaderSignature) {
       result.skippedMembers.push(sheetName);
       result.failedMembers.push({ member: sheetName, reason: "見出しが変更されています。アプリで入力項目を再確認してください" });
