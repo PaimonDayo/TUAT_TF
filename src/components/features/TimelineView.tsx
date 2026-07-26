@@ -14,7 +14,11 @@ import { createClient } from "@/lib/supabase/client";
 import { EmptyState } from "@/components/ui/empty-state";
 import { GRADE_OPTIONS, SIMPLE_BLOCK_ITEMS, matchSimpleBlock } from "@/lib/constants";
 import { jstToday } from "@/lib/date";
-import { feedDateLabel, feedItemDate } from "@/lib/feed-date";
+import {
+  feedDateLabel,
+  groupFeedItemsByDate,
+  uniqueFeedItems,
+} from "@/lib/feed-date";
 import { cn } from "@/lib/utils";
 import { loadFeed } from "@/app/(app)/timeline/actions";
 import { useFeedDisplay } from "@/hooks/use-feed-display";
@@ -68,7 +72,11 @@ export function TimelineView({
   });
 
 
-  const items = feedQuery.data.pages.flat();
+  const items = useMemo(
+    () => uniqueFeedItems(feedQuery.data.pages.flat()),
+    [feedQuery.data.pages],
+  );
+  const refetchFeed = feedQuery.refetch;
 
   const [block, setBlock] = useState<string>("all");
   const [grades, setGrades] = useState<string[]>([]);
@@ -119,7 +127,7 @@ export function TimelineView({
           const response = await fetch("/api/sheets/timeline-refresh", { method: "POST", cache: "no-store" });
           const result = await response.json() as { ok?: boolean; changed?: boolean; cycleComplete?: boolean };
           if (!active || !response.ok || !result.ok) return;
-          if (result.changed) await feedQuery.refetch();
+          if (result.changed) await refetchFeed();
           if (result.cycleComplete) return;
         } catch {
           return;
@@ -130,7 +138,7 @@ export function TimelineView({
     return () => {
       active = false;
     };
-  }, [currentUser.id, enableCsvRefresh, feedQuery]);
+  }, [currentUser.id, enableCsvRefresh, refetchFeed]);
 
   const favSet = useMemo(() => new Set(currentFavoriteIds), [currentFavoriteIds]);
 
@@ -149,16 +157,10 @@ export function TimelineView({
     });
   }, [items, block, grades, favOnly, favSet]);
 
-  const compactGroups = useMemo(() => {
-    const groups: { date: string; items: FeedItem[] }[] = [];
-    for (const item of filtered) {
-      const date = feedItemDate(item);
-      const last = groups.at(-1);
-      if (last?.date === date) last.items.push(item);
-      else groups.push({ date, items: [item] });
-    }
-    return groups;
-  }, [filtered]);
+  const compactGroups = useMemo(
+    () => groupFeedItemsByDate(filtered),
+    [filtered],
+  );
 
   function loadMore() { void feedQuery.fetchNextPage(); }
 
