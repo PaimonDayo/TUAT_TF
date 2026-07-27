@@ -49,16 +49,22 @@ export function ScheduleCreatePanel({ onDone }: { onDone: () => void }) {
 
 export function ScheduleForm({
   schedule,
+  initialType,
+  showTypeSelector = true,
   onDone,
 }: {
   schedule?: PracticeSchedule;
+  initialType?: ScheduleType;
+  showTypeSelector?: boolean;
   onDone: () => void;
 }) {
   const router = useRouter();
   const editing = !!schedule;
 
   const [venues, setVenues] = useState<VenueRow[]>([]);
-  const [type, setType] = useState<ScheduleType>(schedule?.schedule_type ?? "practice");
+  const [type, setType] = useState<ScheduleType>(
+    schedule?.schedule_type ?? initialType ?? "practice",
+  );
   const [date, setDate] = useState(schedule?.schedule_date ?? "");
   const [meetingTime, setMeetingTime] = useState(schedule?.meeting_time?.slice(0, 5) ?? "");
   const [venueKey, setVenueKey] = useState<string>(schedule?.venue_name ? OTHER : "");
@@ -191,11 +197,13 @@ export function ScheduleForm({
 
   return (
     <div className="space-y-4 pb-4">
-      <SegmentedControl
-        items={SCHEDULE_TYPE_OPTIONS}
-        value={type}
-        onChange={(k) => setType(k as ScheduleType)}
-      />
+      {showTypeSelector && (
+        <SegmentedControl
+          items={SCHEDULE_TYPE_OPTIONS}
+          value={type}
+          onChange={(k) => setType(k as ScheduleType)}
+        />
+      )}
 
       <div>
         <p className="section-label mb-1.5">対象ブロック</p>

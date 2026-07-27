@@ -15,6 +15,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { FormModal } from "@/components/ui/form-modal";
+import { SegmentedControl } from "@/components/ui/segmented";
 import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
 import { MonthlyPlanningEditorV2, type MonthlyPlanningEditorHandle } from "@/components/features/MonthlyPlanningEditorV2";
 import { NoteArticleEditor } from "@/components/features/NoteArticleEditor";
@@ -23,11 +24,11 @@ import { NoteComposer } from "@/components/features/NoteComposer";
 import { NoticeForm } from "@/components/post/NoticeForm";
 import { RecordForm, type RecordFormHandle } from "@/components/post/RecordForm";
 import { ResultForm, type ResultFormHandle } from "@/components/post/ResultForm";
-import { ScheduleCreatePanel } from "@/components/post/ScheduleForm";
+import { ScheduleCreatePanel, ScheduleForm } from "@/components/post/ScheduleForm";
 import { TweetForm, type TweetFormHandle } from "@/components/post/TweetForm";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import type { AuthorMini, RecordFieldDef } from "@/types";
+import type { AuthorMini, RecordFieldDef, ScheduleType } from "@/types";
 
 export type FabPermissions = {
   createSchedule: boolean;
@@ -92,6 +93,9 @@ function ContextualFAB({
   const [pendingTimelineClose, setPendingTimelineClose] = useState<"record" | "tweet" | "result" | null>(null);
   const planningRef = useRef<MonthlyPlanningEditorHandle>(null);
   const [planningDirty, setPlanningDirty] = useState(false);
+  const [scheduleType, setScheduleType] = useState<
+    Extract<ScheduleType, "practice" | "meet" | "time_trial">
+  >("practice");
   const [confirmPlanningClose, setConfirmPlanningClose] = useState(false);
   const [savingPlanning, setSavingPlanning] = useState(false);
   const [canEditArticles, setCanEditArticles] = useState(false);
@@ -209,6 +213,7 @@ function ContextualFAB({
   }
 
   function closeDirectForm() {
+    setScheduleType("practice");
     setPlanningDirty(false);
     setConfirmPlanningClose(false);
     setDirectForm(null);
@@ -368,8 +373,28 @@ function ContextualFAB({
 
       <UnsavedChangesDialog open={pendingTimelineClose !== null} busy={false} onContinue={() => setPendingTimelineClose(null)} onDiscard={() => { if (pendingTimelineClose) closeTimelineForm(pendingTimelineClose); }} onSave={savePendingTimelineForm} />
 
-      <FormModal open={directForm === "planning"} onOpenChange={(open) => { if (!open) { if (planningDirty) setConfirmPlanningClose(true); else closeDirectForm(); } }} title="予定・メニューを月間入力">
-        <MonthlyPlanningEditorV2 ref={planningRef} initialTab="schedule" canSchedule={can.createSchedule} canMenu={can.createMenu} onDirtyChange={setPlanningDirty} onSaved={handlePlanningSaved} />
+      <FormModal open={directForm === "planning"} onOpenChange={(open) => { if (!open) { if (scheduleType === "practice" && planningDirty) setConfirmPlanningClose(true); else closeDirectForm(); } }} title="予定を作成">
+        <div className="space-y-5">
+          <SegmentedControl
+            items={[
+              { key: "practice", label: "練習" },
+              { key: "meet", label: "大会・行事" },
+              { key: "time_trial", label: "記録会" },
+            ]}
+            value={scheduleType}
+            onChange={(key) => setScheduleType(key as typeof scheduleType)}
+          />
+          {scheduleType === "practice" ? (
+            <MonthlyPlanningEditorV2 ref={planningRef} initialTab="schedule" canSchedule={can.createSchedule} canMenu={can.createMenu} onDirtyChange={setPlanningDirty} onSaved={handlePlanningSaved} />
+          ) : (
+            <ScheduleForm
+              key={scheduleType}
+              initialType={scheduleType}
+              showTypeSelector={false}
+              onDone={handlePlanningSaved}
+            />
+          )}
+        </div>
       </FormModal>
       <UnsavedChangesDialog open={confirmPlanningClose} busy={savingPlanning} onContinue={() => setConfirmPlanningClose(false)} onDiscard={closeDirectForm} onSave={() => { setSavingPlanning(true); void planningRef.current?.save().then((ok) => { setSavingPlanning(false); if (ok) handlePlanningSaved(); }); }} />
 
