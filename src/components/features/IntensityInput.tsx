@@ -1,6 +1,7 @@
 "use client";
 
 import { INTENSITY_ORDER, INTENSITY_LABELS } from "@/lib/constants";
+import { formatKm } from "@/lib/utils";
 import type { Intensity } from "@/types";
 
 export type IntensityValues = Record<Intensity, string>;
@@ -30,7 +31,7 @@ export function IntensityInput({
               <span className="text-micro">{meta.sub}</span>
             </div>
             <div className="flex items-baseline gap-1">
-              <input type="number" inputMode="decimal" min={0} step="0.1" placeholder="0" value={values[key]} onChange={(event) => onChange({ ...values, [key]: event.target.value })} className="w-full bg-transparent text-right text-[20px] font-bold tabular-nums outline-none" />
+              <input type="number" inputMode="decimal" min={0} step="0.01" placeholder="0" value={values[key]} onChange={(event) => onChange({ ...values, [key]: event.target.value })} className="w-full bg-transparent text-right text-[20px] font-bold tabular-nums outline-none" />
               <span className="text-caption">km</span>
             </div>
           </div>;
@@ -38,7 +39,7 @@ export function IntensityInput({
       </div>
       <div className="flex items-baseline justify-between px-1">
         <span className="section-label">合計</span>
-        <span className="text-headline">{Math.round(total * 10) / 10}<span className="ml-0.5 text-caption">km</span></span>
+        <span className="text-headline">{formatKm(total)}<span className="ml-0.5 text-caption">km</span></span>
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RecordFieldDef } from "@/types";
 import { customRecordFields } from "@/lib/record-fields";
 import { relevantSheetHeaderSignature } from "@/lib/sheet-field-config";
+import { roundKm } from "@/lib/utils";
 import {
   importedSheetReplies,
   matchAppReplyIndexes,
@@ -101,6 +102,8 @@ const BUILTINS: { key: BuiltinKey; keywords: string[]; numeric: boolean; integer
   { key: "menu_text", keywords: ["メニュー"], numeric: false },
   { key: "focus_text", keywords: ["目的", "意識"], numeric: false },
 ];
+
+const DISTANCE_KEYS = new Set<BuiltinKey>(["dist_low", "dist_mid", "dist_high", "dist_speed"]);
 
 const norm = (s: string) => (s ?? "").toString().replace(/\s+/g, "").trim();
 
@@ -383,7 +386,9 @@ function sheetToAppValues(map: FieldMap, record: RawMember["records"][number]) {
     builtin[key] = m.numeric
       ? m.integer
         ? Math.round(parseSheetNum(value))
-        : Math.round(parseSheetNum(value) * 10) / 10
+        : DISTANCE_KEYS.has(key)
+          ? roundKm(parseSheetNum(value))
+          : Math.round(parseSheetNum(value) * 10) / 10
       : txt(value);
   }
   const custom: Record<string, string | number | null> = {};

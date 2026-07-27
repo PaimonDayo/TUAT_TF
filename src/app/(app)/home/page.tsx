@@ -14,6 +14,7 @@ import { ScheduleCard } from "@/components/cards/ScheduleCard";
 import { UpcomingScheduleCard } from "@/components/cards/UpcomingScheduleCard";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { jstNow, jstToday } from "@/lib/date";
+import { formatKm } from "@/lib/utils";
 import {
   getAttendanceSchedules,
   getAttendancesForSchedules,
@@ -84,7 +85,7 @@ async function WeeklySummary({ userId, nowJst }: { userId: string; nowJst: Date 
         <Card className="p-4">
           <p className="text-caption">直近7日間の走行距離</p>
           <p className="mt-1 text-large-title tabular-nums">
-            {Math.round(weekKm * 10) / 10}
+            {formatKm(weekKm)}
             <span className="ml-1 text-body text-muted">km</span>
           </p>
         </Card>

@@ -12,7 +12,18 @@ export function initials(name: string): string {
   return trimmed ? trimmed[0] : "?";
 }
 
-/** 数値を 0.1km 単位で整形（"12.5"） */
+const KM_FORMATTER = new Intl.NumberFormat("ja-JP", {
+  maximumFractionDigits: 2,
+  minimumFractionDigits: 0,
+  useGrouping: false,
+});
+
+/** 距離を小数第2位に丸める */
+export function roundKm(km: number): number {
+  return Math.round((km + Number.EPSILON) * 100) / 100;
+}
+
+/** 数値を小数第2位までのkm表記に整形（"12" / "12.5" / "12.34"） */
 export function formatKm(km: number): string {
-  return (Math.round(km * 10) / 10).toString();
+  return KM_FORMATTER.format(km);
 }

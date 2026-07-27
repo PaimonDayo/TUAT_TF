@@ -1,5 +1,6 @@
 import { INTENSITY_ORDER, INTENSITY_LABELS } from "@/lib/constants";
 import { intensityDistance } from "@/lib/record-distance";
+import { formatKm } from "@/lib/utils";
 import type { PracticeRecord } from "@/types";
 
 /** 強度別距離を積み上げ横バーで表示 */
@@ -19,7 +20,7 @@ export function IntensityBar({ record }: { record: Pick<PracticeRecord, "dist_lo
       <div className="flex items-baseline justify-between">
         <span className="section-label">走行距離</span>
         <span className="text-headline tabular-nums">
-          {Math.round(total * 10) / 10}
+          {formatKm(total)}
           <span className="text-caption ml-0.5">km</span>
         </span>
       </div>

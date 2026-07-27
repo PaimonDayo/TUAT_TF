@@ -8,6 +8,7 @@ import { BlockPills } from "@/components/common/BlockPill";
 import { Card } from "@/components/ui/card";
 import { KeyValue } from "@/components/ui/key-value";
 import { IntensityBar } from "@/components/features/IntensityBar";
+import { formatKm } from "@/lib/utils";
 import { PostActions } from "@/components/cards/PostActions";
 import { RecordOwnerMenu } from "@/components/cards/PostOwnerMenu";
 import { CONDITIONS, gradeShort } from "@/lib/constants";
@@ -92,7 +93,7 @@ export function RecordCard({
       </div>
 
       {compact
-        ? distanceVisible && totalDistance > 0 && <p className="text-[13px] font-semibold tabular-nums text-muted2">走行距離 {Math.round(totalDistance * 10) / 10}km</p>
+        ? distanceVisible && totalDistance > 0 && <p className="text-[13px] font-semibold tabular-nums text-muted2">走行距離 {formatKm(totalDistance)}km</p>
         : distanceVisible && totalDistance > 0 && <IntensityBar record={record} />}
       {!compact && fieldVisible("strides") && record.strides > 0 && <p className="text-[12px] text-muted2">{recordFieldLabel(recordFields, "strides", "流し")} {record.strides}本</p>}
 

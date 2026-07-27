@@ -18,7 +18,7 @@ import { KeyValue } from "@/components/ui/key-value";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { INTENSITY_ORDER, INTENSITY_LABELS, CONDITIONS } from "@/lib/constants";
 import { jstToday } from "@/lib/date";
-import { cn } from "@/lib/utils";
+import { cn, formatKm, roundKm } from "@/lib/utils";
 import { displayedDistance, unclassifiedDistance } from "@/lib/record-distance";
 import type { PracticeRecord, Intensity } from "@/types";
 
@@ -77,7 +77,7 @@ export function TrainingChart({
       b.records.push(r);
     }
     for (const b of arr) {
-      b.total = Math.round((b.by.low + b.by.mid + b.by.high + b.by.speed + b.unclassified) * 10) / 10;
+      b.total = roundKm(b.by.low + b.by.mid + b.by.high + b.by.speed + b.unclassified);
     }
     return arr;
   }, [records, period]);
@@ -278,7 +278,7 @@ export function TrainingChart({
                     sel.by[k] > 0 ? (
                       <span key={k} className="flex items-center gap-1 text-[12px] text-muted2">
                         <span className="h-2 w-2 rounded-full" style={{ backgroundColor: INTENSITY_LABELS[k].color }} />
-                        {INTENSITY_LABELS[k].label} {Math.round(sel.by[k] * 10) / 10}km
+                        {INTENSITY_LABELS[k].label} {formatKm(sel.by[k])}km
                       </span>
                     ) : null,
                   )}
@@ -340,8 +340,7 @@ export function TrainingChart({
 }
 
 function formatDistance(value: number): string {
-  const rounded = Math.round(value * 10) / 10;
-  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  return formatKm(value);
 }
 
 function IntensitySummary({

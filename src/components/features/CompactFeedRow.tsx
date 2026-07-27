@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Heart, MessageCircle } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
 import { BLOCKS, CONDITIONS, gradeShort } from "@/lib/constants";
-import { cn } from "@/lib/utils";
+import { cn, formatKm } from "@/lib/utils";
 import type { FeedItem } from "@/types";
 
 function compactRecordSummary(item: Extract<FeedItem, { kind: "record" }>) {
@@ -21,7 +21,7 @@ function compactRecordSummary(item: Extract<FeedItem, { kind: "record" }>) {
     );
 
   return {
-    distance: totalDistance > 0 ? String(Math.round(totalDistance * 10) / 10) + "km" : null,
+    distance: totalDistance > 0 ? formatKm(totalDistance) + "km" : null,
     detail: detail ? String(detail) : "練習記録",
   };
 }

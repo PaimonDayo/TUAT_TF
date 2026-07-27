@@ -81,6 +81,23 @@ describe("computeMemberPull", () => {
     );
     expect(result.inserts).toEqual([]);
   });
+
+  it("preserves spreadsheet distances to two decimal places", () => {
+    const distanceMap = {
+      builtin: new Map([["dist_low", { header: "low", column: 0, numeric: true }]]),
+      custom: new Map(),
+    } as Parameters<typeof computeMemberPull>[1];
+    const result = computeMemberPull(
+      "user-1",
+      distanceMap,
+      [{ date: "2026-07-24", cells: { low: "12.345" }, values: ["12.345"] }],
+      new Map(),
+      () => true,
+      "2026-07-24T15:00:00.000Z",
+      "replace_mapped",
+    );
+    expect(result.inserts[0]).toMatchObject({ dist_low: 12.35 });
+  });
 });
 
 describe("appToCellsFull", () => {
