@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appToCellsFull, computeMemberPull, resolveFieldMap, type DbRecord, type FieldMap } from "./sheet-sync";
+import { appToCellsFull, computeMemberPull, resolveFieldMap, sheetRecordsWithoutPendingPushes, type DbRecord, type FieldMap } from "./sheet-sync";
 
 const fieldMap = {
   builtin: new Map([["memo", { header: "memo", column: 0, numeric: false }]]),
@@ -141,5 +141,17 @@ describe("resolveFieldMap", () => {
       column: 5,
       type: "text",
     });
+  });
+});
+
+describe("sheetRecordsWithoutPendingPushes", () => {
+  it("keeps an old sheet row from overwriting an app update waiting to be pushed", () => {
+    const records = [
+      { date: "2026-07-26", cells: { memo: "old sheet value" } },
+      { date: "2026-07-27", cells: { memo: "new sheet value" } },
+    ];
+
+    expect(sheetRecordsWithoutPendingPushes(records, new Set(["2026-07-26"])))
+      .toEqual([records[1]]);
   });
 });

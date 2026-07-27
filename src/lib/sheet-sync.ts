@@ -667,6 +667,13 @@ type MemberPullComputation = {
  * refreshMemberFromSheetLive の共通ロジック）。副作用なし（DB書き込みは呼び出し側が行う）。
  */
 export type ExistingSheetRecordPolicy = "merge_nonempty" | "replace_mapped" | "preserve";
+export function sheetRecordsWithoutPendingPushes(
+  records: RawMember["records"],
+  pendingPushDates: Set<string>,
+): RawMember["records"] {
+  return records.filter((record) => !pendingPushDates.has(record.date));
+}
+
 
 export function computeMemberPull(
   profileId: string,
@@ -1024,7 +1031,7 @@ export async function runSheetSync(
       const pulled = computeMemberPull(
         profile.id,
         map,
-        member.records.filter((record) => !pendingPushDates.has(record.date)),
+        sheetRecordsWithoutPendingPushes(member.records, pendingPushDates),
         appByDate,
         inRangeForProfile,
         nowIso,
@@ -1037,18 +1044,20 @@ export async function runSheetSync(
       for (const d of pulled.conflicts) result.conflicts.push(`${sheetName} ${d}`); // 複数/日は触らない
     } else {
       // App-main: retry failed pushes, then import only dates missing from the DB.
+      const pendingPushDates = new Set<string>();
       // updated_at はいいね数等の同期対象外更新でも変わり得るため、再送判定には使わない。
       for (const [date, list] of appByDate) {
         if (!inRange(date) || list.length !== 1) continue; // 複数/日は触らない
         const app = list[0];
         if (!app.pending_sheet_push) continue;
+        pendingPushDates.add(date);
         const cells = appToCellsFull(map, app);
         if (Object.keys(cells).length > 0) {
           pushes.push({ id: app.id, memberName: sheetName, date, cells, clearsPending: true });
         }
       }
 
-      // App-main still imports dates that exist only in the linked CSV. Existing dates are never overwritten.
+      // Non-empty sheet edits win after pending app pushes are safely excluded.
       const cutoff =
         profile.sheet_linked_at && profile.sheet_linked_at > SYNC_CUTOFF
           ? profile.sheet_linked_at
@@ -1056,11 +1065,11 @@ export async function runSheetSync(
       const pulled = computeMemberPull(
         profile.id,
         map,
-        member.records,
+        sheetRecordsWithoutPendingPushes(member.records, pendingPushDates),
         appByDate,
         (date) => date >= cutoff && date <= today,
         nowIso,
-        "preserve",
+        "merge_nonempty",
       );
       inserts.push(...pulled.inserts);
       result.inserted += pulled.inserts.length;
@@ -1224,9 +1233,11 @@ export async function refreshMemberFromSheetLive(
     if (error || !existing) return null;
 
     const byDate = new Map<string, DbRecord[]>();
+    const pendingPushDates = new Set<string>();
     for (const r of existing as DbRecord[]) {
       const arr = byDate.get(r.recorded_date) ?? [];
       arr.push(r);
+      if (r.pending_sheet_push) pendingPushDates.add(r.recorded_date);
       byDate.set(r.recorded_date, arr);
     }
 
@@ -1234,15 +1245,13 @@ export async function refreshMemberFromSheetLive(
     const { inserts, updates } = computeMemberPull(
       profile.id,
       map,
-      member.records,
+      sheetRecordsWithoutPendingPushes(member.records, pendingPushDates),
       byDate,
       (d) => d >= cutoff && d <= today,
       nowIso,
-      profile.record_source === "app"
-        ? "preserve"
-        : options.replaceMappedBlanks
-          ? "replace_mapped"
-          : "merge_nonempty",
+      profile.record_source === "sheet" && options.replaceMappedBlanks
+        ? "replace_mapped"
+        : "merge_nonempty",
     );
     let inserted = 0;
     let updated = 0;
