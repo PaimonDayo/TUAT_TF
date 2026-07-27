@@ -11,6 +11,7 @@ import {
   isFixedSheetColumn,
   isIgnoredSheetColumn,
   relevantSheetHeaderSignature,
+  sheetBuiltinKey,
   timelineFieldLimit,
   type SheetHeaderColumn,
 } from "@/lib/sheet-field-config";
@@ -41,7 +42,7 @@ export function SheetHeaderSetupDialog({
   onConfirm: (fields: RecordFieldDef[], signature: string) => void;
 }) {
   const fixed = useMemo(
-    () => data.columns.filter((column) => !isIgnoredSheetColumn(column.label) && isFixedSheetColumn(column.label, isMiddleLong)),
+    () => data.columns.filter((column) => !isIgnoredSheetColumn(column.label) && isFixedSheetColumn(column.label, isMiddleLong) && sheetBuiltinKey(column.label, { isMiddleLong }, column.index) !== "dist_actual"),
     [data, isMiddleLong],
   );
   const selectable = useMemo(

@@ -136,9 +136,12 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
   // 呼び出し側が取得済みプロフィールから渡していれば、それを使い再フェッチしない。
   const historicalFields = systemRecordForm && record?.record_fields_version != null ? (record.record_fields_snapshot ?? []) : null;
   const [configuredFields, setConfiguredFields] = useState<RecordFieldDef[]>(historicalFields ?? recordFields ?? []);
-  const fieldEnabled = (key: Parameters<typeof recordFieldHidden>[1]) => systemRecordForm
-    ? configuredFields.some((field) => field.key === key && !field.hidden)
-    : !recordFieldHidden(configuredFields, key);
+  const fieldEnabled = (key: Parameters<typeof recordFieldHidden>[1]) => {
+    if (isMiddleLong && key === "dist_actual") return false;
+    return systemRecordForm
+      ? configuredFields.some((field) => field.key === key && !field.hidden)
+      : !recordFieldHidden(configuredFields, key);
+  };
   const customFields = useMemo(() => customRecordFields(configuredFields), [configuredFields]);
   const visibleIntensities = systemRecordForm
     ? (["low", "mid", "high", "speed"] as const).filter((key) => fieldEnabled(`dist_${key}` as Parameters<typeof recordFieldHidden>[1]))

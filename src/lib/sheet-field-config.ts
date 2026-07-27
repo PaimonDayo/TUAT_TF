@@ -122,6 +122,7 @@ export function buildSheetRecordFields(options: {
     if (isIgnoredSheetColumn(column.label)) return [];
     const fixed = isFixedSheetColumn(column.label, options.isMiddleLong);
     const builtin = sheetBuiltinKey(column.label, options, column.index);
+    if (builtin === "dist_actual") return [];
     const type = builtin?.startsWith("dist_") || builtin === "strides"
       ? "number"
       : (options.types[column.index] ?? "text");

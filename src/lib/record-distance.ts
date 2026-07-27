@@ -2,7 +2,7 @@ import type { PracticeRecord } from "@/types";
 
 type DistanceRecord = Pick<
   PracticeRecord,
-  "dist_low" | "dist_mid" | "dist_high" | "dist_speed" | "dist_actual"
+  "dist_low" | "dist_mid" | "dist_high" | "dist_speed"
 >;
 
 export function intensityDistance(record: DistanceRecord): number {
@@ -14,12 +14,11 @@ export function intensityDistance(record: DistanceRecord): number {
   );
 }
 
-/** 強度別がある日はその合計を優先し、全て0の日だけ実距離へフォールバックする。 */
+/** Distance is always the sum of the four intensity fields. */
 export function displayedDistance(record: DistanceRecord): number {
-  const intensity = intensityDistance(record);
-  return intensity > 0 ? intensity : (record.dist_actual ?? 0);
+  return intensityDistance(record);
 }
 
-export function unclassifiedDistance(record: DistanceRecord): number {
-  return intensityDistance(record) > 0 ? 0 : (record.dist_actual ?? 0);
+export function unclassifiedDistance(): number {
+  return 0;
 }

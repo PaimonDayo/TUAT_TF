@@ -23,7 +23,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "スプシ連携が設定されていません" }, { status: 400 });
   }
   const isMiddleLong = (profile.blocks ?? []).includes("middle_long");
-  const displayedOptional = fields.filter((field) =>
+  const persistedFields = isMiddleLong ? fields.filter((field) => field.key !== "dist_actual") : fields;
+  const displayedOptional = persistedFields.filter((field) =>
     field.showInTimeline === true && !isFixedSheetColumn(field.sourceHeader ?? field.label, isMiddleLong));
   if (displayedOptional.length > timelineFieldLimit(isMiddleLong)) {
     return NextResponse.json({ error: "タイムライン表示項目が上限を超えています" }, { status: 400 });
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
 
   const { data, error } = await supabase
     .from("profiles")
-    .update({ record_fields: recordFieldsToJson(fields), sheet_header_signature: signature })
+    .update({ record_fields: recordFieldsToJson(persistedFields), sheet_header_signature: signature })
     .eq("id", user.id)
     .select("record_fields_version")
     .single();

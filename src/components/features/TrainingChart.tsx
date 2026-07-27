@@ -73,7 +73,7 @@ export function TrainingChart({
       b.by.mid += r.dist_mid;
       b.by.high += r.dist_high;
       b.by.speed += r.dist_speed;
-      b.unclassified += unclassifiedDistance(r);
+      b.unclassified += unclassifiedDistance();
       b.records.push(r);
     }
     for (const b of arr) {
@@ -103,7 +103,7 @@ export function TrainingChart({
         INTENSITY_ORDER.forEach((intensity) => {
           by[intensity] += distances[intensity];
         });
-        unclassified += unclassifiedDistance(record);
+        unclassified += unclassifiedDistance();
         if (recordTotal > 0) trainingDates.add(record.recorded_date);
       } else if (
         record.recorded_date >= previousFrom &&

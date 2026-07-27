@@ -285,19 +285,27 @@ export type FieldMap = {
 
 type HeaderCandidate = { raw: string; n: string; column: number };
 
-function resolveFieldMap(
+export function resolveFieldMap(
   member: Pick<RawMember, "header" | "columns">,
   fields: RecordFieldDef[],
-  options: { enableActualDistance?: boolean } = {},
 ): FieldMap {
   const sourceColumns = member.columns?.length ? member.columns : member.header.map((label, index) => ({ index, label }));
   const headers: HeaderCandidate[] = sourceColumns.map((item) => ({ raw: item.label, n: norm(item.label), column: item.index }));
   const builtin: FieldMap["builtin"] = new Map();
   const usedColumns = new Set<number>();
+  // Reserve explicitly configured custom columns before builtin keyword fallbacks.
+  // Otherwise a custom label containing the builtin keyword is consumed by that fallback.
+  const customSourceColumns = new Set(customRecordFields(fields)
+    .filter((field) => !field.hidden && field.sourceColumn != null)
+    .filter((field) => headers.some((candidate) => candidate.column === field.sourceColumn && (
+      !field.sourceHeader || norm(field.sourceHeader) === candidate.n
+    )))
+    .map((field) => field.sourceColumn as number));
+
 
   for (const item of BUILTINS) {
     const configured = fields.find((field) => field.key === item.key);
-    if (configured?.hidden || (item.key === "dist_actual" && !options.enableActualDistance)) continue;
+    if (configured?.hidden || item.key === "dist_actual") continue;
     const hit = headers.find((candidate) => !usedColumns.has(candidate.column)
       && (item.key !== "memo" || candidate.n === "感想")
       && (
@@ -312,10 +320,8 @@ function resolveFieldMap(
 
   for (const item of BUILTINS) {
     const configured = fields.find((field) => field.key === item.key);
-    if (builtin.has(item.key) || configured?.hidden || (item.key === "dist_actual" && !options.enableActualDistance)) continue;
-    // 実距離はフォーム設定で明示対応したユーザーだけ取り込む。
-    if (item.key === "dist_actual" && configured?.sourceColumn == null && !configured?.sourceHeader) continue;
-    const available = headers.filter((candidate) => !usedColumns.has(candidate.column));
+    if (builtin.has(item.key) || configured?.hidden || item.key === "dist_actual") continue;
+    const available = headers.filter((candidate) => !usedColumns.has(candidate.column) && !customSourceColumns.has(candidate.column));
     let hit: HeaderCandidate | undefined;
     if (item.key === "memo") {
       hit = available.find((candidate) => candidate.n === "感想");
@@ -471,14 +477,13 @@ export async function pushRecordToSheet(
   rec: DbRecord,
 ): Promise<PushRecordResult> {
   const member = await fetchMemberRaw(sheetName);
-  const map = resolveFieldMap(member, recordFields, {
-    enableActualDistance: recordFields.some((field) => field.key === "dist_actual" && !field.hidden),
-  });
+  const map = resolveFieldMap(member, recordFields);
   const cells = appToCellsFull(map, rec);
 
   // シートに列自体が無く、送信すらされなかった項目（可視化用）
   const unmapped: string[] = [];
   for (const b of BUILTINS) {
+    if (b.key === "dist_actual") continue;
     if (map.builtin.has(b.key) || recordFields.find((field) => field.key === b.key)?.hidden) continue;
     const v = appBuiltin(rec, b.key);
     const nonEmpty = b.numeric ? Number(v) > 0 : (v ?? "").toString().trim() !== "";
@@ -988,7 +993,7 @@ export async function runSheetSync(
       result.failedMembers.push({ member: sheetName, reason: "見出しが変更されています。アプリで入力項目を再確認してください" });
       continue;
     }
-    const map = resolveFieldMap(member, profile.record_fields ?? [], { enableActualDistance: stagedSheetFlow });
+    const map = resolveFieldMap(member, profile.record_fields ?? []);
     const appByDate = byUser.get(profile.id)!;
 
     if (profile.record_source === "sheet") {
@@ -1202,8 +1207,7 @@ export async function refreshMemberFromSheetLive(
     if (options.enforceHeaderSignature && profile.sheet_header_signature && profile.sheet_header_signature !== currentHeaderSignature) {
       return null;
     }
-    const stagedSheetFlow = options.replaceMappedBlanks === true;
-    const map = resolveFieldMap(member, profile.record_fields ?? [], { enableActualDistance: stagedSheetFlow });
+    const map = resolveFieldMap(member, profile.record_fields ?? []);
     const today = todayJST();
     const cutoff =
       profile.sheet_linked_at && profile.sheet_linked_at > SYNC_CUTOFF

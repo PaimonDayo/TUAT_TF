@@ -55,7 +55,7 @@ describe("sheet field configuration", () => {
       isMiddleLong: true,
       memoColumn: 11,
     });
-    expect(fields.map((field) => field.sourceColumn)).toEqual([2, 3, 4, 5, 6, 7, 8, 9, 11, 13]);
+    expect(fields.map((field) => field.sourceColumn)).toEqual([2, 3, 4, 5, 7, 8, 9, 11, 13]);
     expect(fields.find((field) => field.key === "result_text")?.showInTimeline).toBe(true);
     expect(fields.find((field) => field.key === "memo")?.showInTimeline).toBe(true);
     expect(fields.find((field) => field.sourceColumn === 13)?.showInTimeline).toBe(false);
@@ -90,16 +90,16 @@ describe("sheet field configuration", () => {
   });
 });
 
-describe("actual distance fallback", () => {
+describe("intensity-only distance", () => {
   it("uses intensity sum when any intensity exists", () => {
     const record = { dist_low: 5, dist_mid: 2, dist_high: 0, dist_speed: 0, dist_actual: 12 };
     expect(displayedDistance(record)).toBe(7);
-    expect(unclassifiedDistance(record)).toBe(0);
+    expect(unclassifiedDistance()).toBe(0);
   });
 
-  it("uses actual distance only when every intensity is zero", () => {
+  it("ignores actual distance when every intensity is zero", () => {
     const record = { dist_low: 0, dist_mid: 0, dist_high: 0, dist_speed: 0, dist_actual: 12 };
-    expect(displayedDistance(record)).toBe(12);
-    expect(unclassifiedDistance(record)).toBe(12);
+    expect(displayedDistance(record)).toBe(0);
+    expect(unclassifiedDistance()).toBe(0);
   });
 });
