@@ -26,7 +26,7 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
   }
 
   return <>
-    <SubHeader title="ブログ" backHref="/mypage" />
+    <SubHeader title="ブログ" backHref="/mypage" forceBackHref />
     <main className="space-y-4 px-4 pb-6 pt-1 md:px-6">
       <div><p className="text-headline">東京農工大学陸上競技部ブログ</p><p className="mt-0.5 text-caption text-muted">公式ブログの記事一覧</p></div>
       {unavailable ? <Card className="p-4"><EmptyState icon={<Rss size={28} />} title="ブログを読み込めませんでした" description="時間をおいて、もう一度開いてください。" className="min-h-36" /></Card>

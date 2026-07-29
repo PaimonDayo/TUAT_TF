@@ -8,16 +8,18 @@ import { BackButton } from "@/components/layout/BackButton";
 export function SubHeader({
   title,
   backHref,
+  forceBackHref = false,
   right,
 }: {
   title: string;
   backHref?: string;
+  forceBackHref?: boolean;
   right?: React.ReactNode;
 }) {
   return (
     <header className="sticky top-0 z-30 bg-bg/80 backdrop-blur-xl pt-[env(safe-area-inset-top)] lg:pt-0">
       <div className="h-12 px-2 grid grid-cols-[1fr_auto_1fr] items-center md:px-4 lg:h-16">
-        <BackButton fallback={backHref ?? "/home"} />
+        <BackButton fallback={backHref ?? "/home"} forceFallback={forceBackHref} />
         <h1 className="text-title text-center whitespace-nowrap">{title}</h1>
         <div className="justify-self-end flex items-center pr-1">{right}</div>
       </div>

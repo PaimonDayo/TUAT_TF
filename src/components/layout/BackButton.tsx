@@ -7,13 +7,19 @@ import { ChevronLeft } from "lucide-react";
 export function BackButton({
   label = "戻る",
   fallback = "/home",
+  forceFallback = false,
 }: {
   label?: string;
   fallback?: string;
+  forceFallback?: boolean;
 }) {
   const router = useRouter();
 
   function back() {
+    if (forceFallback) {
+      router.push(fallback);
+      return;
+    }
     if (typeof window !== "undefined" && window.history.length > 1) {
       // router.back() は standalone PWA 等で稀に無反応になる。
       // 一定時間 URL が変わらなければ fallback へ確実に戻す。
