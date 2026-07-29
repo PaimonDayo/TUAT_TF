@@ -77,12 +77,17 @@ function safeMediaUrl(value: string): string | null {
 export function sanitizeBlogArticleHtml(value: string): string {
   const clean = value.replace(/<(script|style|iframe|object|embed|form|button)[^>]*>[\s\S]*?<\/\1\s*>/gi, "").replace(/<(script|style|iframe|object|embed|form|button)\b[^>]*\/?>/gi, "");
   const allowed = new Set(["p", "br", "div", "span", "b", "strong", "i", "em", "u", "s", "del", "h2", "h3", "h4", "ul", "ol", "li", "blockquote", "img", "a"]);
-  return clean.replace(/<\/?([a-z][\w-]*)(?:\s[^>]*)?>/gi, (tag, rawName: string) => {
+  const sanitized = clean.replace(/<\/?([a-z][\w-]*)(?:\s[^>]*)?>/gi, (tag, rawName: string) => {
     const name = rawName.toLowerCase(); if (!allowed.has(name)) return ""; if (tag.startsWith("</")) return `</${name}>`; if (name === "br") return "<br>";
     if (name === "img") { const src = safeMediaUrl(attributeOf(tag, "src")); if (!src) return ""; const alt = attributeOf(tag, "alt").replace(/[<>"']/g, ""); return `<img src="${src}" alt="${alt}" loading="lazy" decoding="async">`; }
     if (name === "a") { const href = safeBlogUrl(attributeOf(tag, "href")); return href ? `<a href="${href}">` : "<span>"; }
     return `<${name}>`;
   });
+  return sanitized
+    .replace(/<p>(?:\s|<br>)*<\/p>/gi, "")
+    .replace(/<\/p>\s*<p>/gi, "<br>")
+    .replace(/(?:<br>\s*){3,}/gi, "<br><br>")
+    .trim();
 }
 
 export function parseBlogArticle(html: string, expectedId: string): BlogArticle | null {
@@ -118,6 +123,30 @@ export async function getBlogFeed(): Promise<BlogFeedItem[]> {
   });
   if (!response.ok) throw new Error(`Blog feed request failed: ${response.status}`);
   return parseBlogFeed(await response.text());
+}
+function plainText(value: string): string {
+  return decodeEntities(value.replace(/<br\s*\/?>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+}
+
+export function parseBlogIndex(html: string): BlogFeedItem[] {
+  return Array.from(html.matchAll(/<article\b[\s\S]*?<\/article>/gi)).flatMap((match) => {
+    const article = match[0];
+    const titleBlock = article.match(/<h1[^>]*class=["'][^"']*\barticle-title\b[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i)?.[1] ?? "";
+    const linkTag = titleBlock.match(/<a\b[^>]*>/i)?.[0] ?? "";
+    const url = safeBlogUrl(attributeOf(linkTag, "href"));
+    const title = plainText(titleBlock);
+    const timeTag = article.match(/<time\b[^>]*itemprop=["']datePublished["'][^>]*>/i)?.[0] ?? "";
+    const body = article.match(/<div[^>]*class=["'][^"']*\barticle-body-inner\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/i)?.[1] ?? "";
+    if (!url || !title || !blogArticleId(url)) return [];
+    return [{ title, url, description: plainText(body.replace(/<span[^>]*class=["'][^"']*\barticle-continue\b[^"']*["'][^>]*>[\s\S]*$/i, "")), publishedAt: attributeOf(timeTag, "datetime"), category: null, author: null }];
+  });
+}
+
+export async function getBlogPage(page: number): Promise<BlogFeedItem[]> {
+  if (!Number.isInteger(page) || page < 1) return [];
+  const response = await fetch(`${BLOG_HOME_URL}?p=${page}`, { headers: { Accept: "text/html;charset=UTF-8" }, next: { revalidate: 15 * 60 } });
+  if (!response.ok) throw new Error(`Blog page request failed: ${response.status}`);
+  return parseBlogIndex(await response.text());
 }
 export async function getBlogArticle(id: string): Promise<BlogArticle | null> {
   if (!/^\d+$/.test(id)) return null;
