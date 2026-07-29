@@ -71,6 +71,11 @@ export const EVENTS_BY_BLOCK: Record<Block, string[]> = {
   throw: ["砲丸投", "円盤投", "ハンマー投", "やり投"],
 };
 
+/** All profile events, including options outside the selected block. */
+export const ALL_PROFILE_EVENTS = Array.from(
+  new Set(BLOCK_ORDER.flatMap((block) => EVENTS_BY_BLOCK[block])),
+);
+
 /** 簡素化したブロック絞り込み（中長 / 短。跳躍・投擲は「短」に含める） */
 export type SimpleBlockFilter = "all" | SimpleBlock;
 

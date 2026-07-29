@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
-import { Trophy, Medal, ChevronRight, Shield, ShieldCheck, Users, Target, MapPin } from "lucide-react";
+import { Trophy, Medal, ChevronRight, Shield, ShieldCheck, Users, Target, MapPin, Rss } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -115,6 +115,9 @@ export default async function MyPage({
           <GoalEditor userId={profile.id} goal={profile.goal} />
           <RowLink href="/mypage/pb" icon={<Medal size={20} className="text-warning" />} label="大会・記録会の結果" />
           <RowLink href="/members" icon={<Users size={20} className="text-accent" />} label="メンバー一覧" />
+          {perms.manageSystem && (
+            <RowLink href="/blog" icon={<Rss size={20} className="text-accent" />} label="ブログ" />
+          )}
           <SettingsAccordion
             profileId={profile.id}
             initialComment={profile.notify_comment ?? true}

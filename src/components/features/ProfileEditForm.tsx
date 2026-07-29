@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, LogOut, Trash2 } from "lucide-react";
+import { Camera, ChevronDown, LogOut, SlidersHorizontal, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { clearPersistedQueries } from "@/lib/client/query-persistence";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
@@ -15,7 +15,7 @@ import { Avatar } from "@/components/common/Avatar";
 import { AvatarCropEditor } from "@/components/features/AvatarCropEditor";
 import { SheetHeaderSetupDialog, type SheetHeaderData } from "@/components/features/SheetHeaderSetupDialog";
 import { recordFieldsToJson } from "@/lib/profile-normalize";
-import { BLOCKS, EVENTS_BY_BLOCK, GRADE_OPTIONS, PROFILE_BLOCK_ORDER, normalizeProfileBlocks } from "@/lib/constants";
+import { ALL_PROFILE_EVENTS, BLOCKS, EVENTS_BY_BLOCK, GRADE_OPTIONS, PROFILE_BLOCK_ORDER, normalizeProfileBlocks } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { Block, Profile } from "@/types";
 
@@ -56,6 +56,7 @@ export function ProfileEditForm({
   const [sheetOptions, setSheetOptions] = useState<string[] | null>(null);
   const [sheetNameMissing, setSheetNameMissing] = useState(false);
   const [headerData, setHeaderData] = useState<SheetHeaderData | null>(null);
+  const [loadingHeader, setLoadingHeader] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -171,12 +172,18 @@ export function ProfileEditForm({
     }
   }
 
-  // 選択中ブロックに対応する種目だけ出す（重複排除・ブロック順）
-  const eventOptions = PROFILE_BLOCK_ORDER.filter((b) => blocks.includes(b)).flatMap(
-    (b) => b === "short"
-      ? [...EVENTS_BY_BLOCK.short, ...EVENTS_BY_BLOCK.jump, ...EVENTS_BY_BLOCK.throw]
-      : EVENTS_BY_BLOCK[b],
-  );
+  // 所属ブロックの種目を先に表示し、ブロック外種目は「その他」にまとめる。
+  const primaryEventOptions = Array.from(new Set(
+    PROFILE_BLOCK_ORDER.filter((block) => blocks.includes(block)).flatMap(
+      (block) => block === "short"
+        ? [...EVENTS_BY_BLOCK.short, ...EVENTS_BY_BLOCK.jump, ...EVENTS_BY_BLOCK.throw]
+        : EVENTS_BY_BLOCK[block],
+    ),
+  ));
+  const otherEventOptions = blocks.length > 0
+    ? ALL_PROFILE_EVENTS.filter((event) => !primaryEventOptions.includes(event))
+    : [];
+  const eventOptions = [...primaryEventOptions, ...otherEventOptions];
 
   async function fetchHeader(): Promise<SheetHeaderData | null> {
     const response = await fetch(`/api/sheets/header?sheetName=${encodeURIComponent(sheetName.trim())}`, {
@@ -188,6 +195,15 @@ export function ProfileEditForm({
       return null;
     }
     return result;
+  }
+
+  async function openHeaderEditor() {
+    if (!sheetName.trim() || loadingHeader) return;
+    setLoadingHeader(true);
+    setError(null);
+    const currentHeader = await fetchHeader();
+    setLoadingHeader(false);
+    if (currentHeader) setHeaderData(currentHeader);
   }
 
   async function save() {
@@ -359,7 +375,7 @@ export function ProfileEditForm({
         <div>
           <p className="section-label mb-1.5">専門種目（任意・複数可）</p>
           <div className="flex flex-wrap gap-2">
-            {eventOptions.map((ev) => {
+            {primaryEventOptions.map((ev) => {
               const active = events.includes(ev);
               return (
                 <button
@@ -378,6 +394,41 @@ export function ProfileEditForm({
               );
             })}
           </div>
+          {otherEventOptions.length > 0 && (
+            <details className="group mt-3 rounded-xl border border-separator bg-card">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-[14px] font-semibold text-muted2">
+                <span className="flex-1">
+                  その他
+                  {events.some((event) => otherEventOptions.includes(event)) && (
+                    <span className="ml-2 text-micro text-accent">
+                      {events.filter((event) => otherEventOptions.includes(event)).length}件選択
+                    </span>
+                  )}
+                </span>
+                <ChevronDown size={17} className="transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="flex flex-wrap gap-2 border-t border-separator/70 p-3">
+                {otherEventOptions.map((event) => {
+                  const active = events.includes(event);
+                  return (
+                    <button
+                      key={event}
+                      type="button"
+                      onClick={() => toggleEvent(event)}
+                      className={cn(
+                        "h-9 rounded-full border px-3.5 text-[13px] font-semibold transition-active active:opacity-[0.78]",
+                        active
+                          ? "border-accent bg-accent text-white"
+                          : "border-separator bg-card text-muted",
+                      )}
+                    >
+                      {event}
+                    </button>
+                  );
+                })}
+              </div>
+            </details>
+          )}
         </div>
       )}
 
@@ -431,6 +482,22 @@ export function ProfileEditForm({
               ? "選ぶとスプレッドシートが記録の入力元になり、タイムライン表示後にもCSVで最新化します。"
               : "選ぶと、練習記録とスプレッドシートが自動で連携されます。"}
           </p>
+          {enableSheetHeaderSetup && sheetName.trim() && (
+            <button
+              type="button"
+              onClick={() => void openHeaderEditor()}
+              disabled={loadingHeader || saving}
+              className="mt-2 flex min-h-11 w-full items-center gap-3 rounded-xl border border-separator bg-card px-3 text-left active:bg-bg disabled:opacity-60"
+            >
+              <SlidersHorizontal size={18} className="shrink-0 text-accent" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[14px] font-semibold">入力フォーム・タイムライン表示項目</span>
+                <span className="block text-micro text-muted">
+                  {loadingHeader ? "シートの見出しを取得中…" : "自分のシートの列から変更"}
+                </span>
+              </span>
+            </button>
+          )}
         </div>
       )}
 

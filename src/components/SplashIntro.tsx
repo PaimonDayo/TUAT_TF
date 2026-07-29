@@ -13,7 +13,7 @@ const REMOVE_AFTER_MS = 4780;
 
 const TAB_ROUTES = [
   "/home", "/schedule", "/timeline", "/notes", "/mypage",
-  "/members", "/notices", "/ranking", "/venues",
+  "/members", "/notices", "/ranking", "/venues", "/blog",
 ];
 
 export default function SplashIntro() {
