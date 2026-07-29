@@ -187,3 +187,13 @@ input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="time"]::-webkit-calendar-picker-indicator {
   margin-left: auto;
 }
+
+.blog-article-body { padding-top: 20px; font-size: 15px; line-height: 1.9; color: var(--color-ink); }
+.blog-article-body p, .blog-article-body div { margin: 0 0 0.8em; }
+.blog-article-body h2, .blog-article-body h3, .blog-article-body h4 { margin: 1.6em 0 0.65em; font-weight: 700; line-height: 1.45; }
+.blog-article-body img { display: block; width: 100%; height: auto; margin: 18px auto; border-radius: 12px; background: var(--color-bg); }
+.blog-article-body ul, .blog-article-body ol { margin: 0.8em 0; padding-left: 1.5em; }
+.blog-article-body ul { list-style: disc; }
+.blog-article-body ol { list-style: decimal; }
+.blog-article-body blockquote { margin: 1em 0; border-left: 3px solid var(--color-separator); padding-left: 1em; color: var(--color-muted2); }
+.blog-article-body a { color: var(--color-accent); text-decoration: underline; }
