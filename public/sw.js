@@ -52,29 +52,47 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil((async () => {
     const target = new URL(raw, self.location.origin);
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    for (const client of windows) {
-      if (new URL(client.url).origin !== target.origin) continue;
+    const sameOrigin = windows.filter((client) => {
       try {
-        if ('navigate' in client) {
-          const navigated = await client.navigate(target.href);
-          if (navigated && 'focus' in navigated) {
-            await navigated.focus();
-            return;
-          }
-        }
-        await client.focus();
+        return new URL(client.url).origin === target.origin;
+      } catch {
+        return false;
+      }
+    });
+
+    // ①開いているウィンドウをその場で目的のページへ移動できたら、それが一番よい。
+    for (const client of sameOrigin) {
+      try {
+        if (!('navigate' in client)) continue;
+        const navigated = await client.navigate(target.href);
+        const focusable = navigated || client;
+        if ('focus' in focusable) await focusable.focus();
         return;
       } catch {
-        // WindowClient.navigate() が未実装・拒否される環境（一部のiOS）向けの保険。
-        try {
-          await client.focus();
-          return;
-        } catch {
-          // このウィンドウは使えないので次の候補へ。
-        }
+        // WindowClient.navigate() は一部のiOSで失敗する。次の手段へ。
       }
     }
-    await self.clients.openWindow(target.href);
+
+    // ②移動できなければ新しく開く。ここで諦めて既存ウィンドウにfocusするだけだと、
+    //   通知をタップしても目的の投稿へ行けない（前に見ていた画面のまま）。
+    try {
+      const opened = await self.clients.openWindow(target.href);
+      if (opened) return;
+    } catch {
+      // openWindow も拒否される場合がある。
+    }
+
+    // ③最後の手段。目的のページへは行けないが、少なくともアプリを前面に出す。
+    for (const client of sameOrigin) {
+      try {
+        if ('focus' in client) {
+          await client.focus();
+          return;
+        }
+      } catch {
+        // このウィンドウは使えないので次の候補へ。
+      }
+    }
   })());
 });
 
