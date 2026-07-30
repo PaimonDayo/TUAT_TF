@@ -1,18 +1,15 @@
 import { ChevronLeft, ChevronRight, Rss } from "lucide-react";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { SubHeader } from "@/components/layout/SubHeader";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { blogArticleId, getBlogPage } from "@/lib/blog-feed";
-import { permissionsOf } from "@/lib/permissions";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 
 const dateFormatter = new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric" });
 
 export default async function BlogPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
-  const profile = await getCurrentProfile();
-  if (!permissionsOf(profile.roles).manageSystem) redirect("/mypage");
+  await getCurrentProfile();
   const requestedPage = Number.parseInt((await searchParams).page ?? "1", 10);
   const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   let items: Awaited<ReturnType<typeof getBlogPage>> = [];

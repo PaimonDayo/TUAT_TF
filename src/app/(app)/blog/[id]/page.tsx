@@ -1,15 +1,13 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { ScrollAwareSubHeader } from "@/components/layout/ScrollAwareSubHeader";
 import { Card } from "@/components/ui/card";
 import { getBlogArticle } from "@/lib/blog-feed";
-import { permissionsOf } from "@/lib/permissions";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 
 const dateFormatter = new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric" });
 
 export default async function BlogArticlePage({ params }: { params: Promise<{ id: string }> }) {
-  const profile = await getCurrentProfile();
-  if (!permissionsOf(profile.roles).manageSystem) redirect("/mypage");
+  await getCurrentProfile();
   const { id } = await params;
   const article = await getBlogArticle(id);
   if (!article) notFound();
