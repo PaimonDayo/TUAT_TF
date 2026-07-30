@@ -22,7 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { loadFeed } from "@/app/(app)/timeline/actions";
 import { useFeedDisplay } from "@/hooks/use-feed-display";
-import type { CommentAuthor, FeedItem } from "@/types";
+import type { BlockViewDefault, CommentAuthor, FeedItem } from "@/types";
 
 const PAGE = 30;
 const FILTER_AUTOLOAD_PAGES = 5;
@@ -41,6 +41,7 @@ export function TimelineView({
   currentUser,
   favoriteIds = [],
   initialCompact = false,
+  initialBlock = "all",
   showRecordSource = false,
   enableCsvRefresh = false,
 }: {
@@ -49,6 +50,8 @@ export function TimelineView({
   favoriteIds?: string[];
   /** 簡易表示の初期値（サーバーが cookie から復元して渡す。詳細→簡易のフラッシュ防止） */
   initialCompact?: boolean;
+  /** 最初に表示するブロックタブ（マイページの「タイムラインの初期表示」） */
+  initialBlock?: BlockViewDefault;
   showRecordSource?: boolean;
   enableCsvRefresh?: boolean;
 }) {
@@ -83,7 +86,7 @@ export function TimelineView({
     [items],
   );
 
-  const [block, setBlock] = useState<string>("all");
+  const [block, setBlock] = useState<string>(initialBlock);
   const [grades, setGrades] = useState<string[]>([]);
   const [favOnly, setFavOnly] = useState(false);
   const [currentFavoriteIds, setCurrentFavoriteIds] = useState(favoriteIds);

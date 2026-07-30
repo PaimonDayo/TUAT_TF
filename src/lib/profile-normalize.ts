@@ -1,4 +1,4 @@
-import type { AppRole, AttendanceDefaultBlock, AuthorMini, Block, Profile, PracticeRecord, RecordFieldDef, RecordWithAuthor, Role, TweetWithAuthor } from "@/types";
+import type { AppRole, AttendanceDefaultBlock, AuthorMini, Block, BlockViewDefault, Profile, PracticeRecord, RecordFieldDef, RecordWithAuthor, Role, TweetWithAuthor } from "@/types";
 import type { Database, Json } from "@/types/database";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
@@ -50,6 +50,11 @@ export function profileRecordSource(value: string): "app" | "sheet" {
 }
 
 export function attendanceDefaultBlock(value: string): AttendanceDefaultBlock {
+  return value === "middle_long" || value === "short" ? value : "all";
+}
+
+/** 列が未適用でも壊れないよう、未知の値と null は "all" に倒す */
+export function blockViewDefault(value: string | null | undefined): BlockViewDefault {
   return value === "middle_long" || value === "short" ? value : "all";
 }
 
@@ -127,6 +132,7 @@ export function normalizeProfileRow(row: ProfileRow, roles: AppRole[] = []): Pro
     role: ROLE_VALUES.has(row.role as Role) ? (row.role as Role) : "member",
     status: row.status === "graduated" ? "graduated" : "active",
     attendance_default_block: attendanceDefaultBlock(row.attendance_default_block),
+    timeline_default_block: blockViewDefault(row.timeline_default_block),
     record_source: profileRecordSource(row.record_source ?? "app"),
     record_fields: recordFieldsFromJson(row.record_fields ?? null),
     roles,

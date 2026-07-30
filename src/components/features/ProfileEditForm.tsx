@@ -261,14 +261,24 @@ export function ProfileEditForm({
       }
     }
 
+    // 出欠一覧の初期表示は設定画面で本人が選ぶ項目なので、ここでは触らない。
+    // ブロックを変えたときだけ、新しいブロックに合わせた初期値を入れ直す。
+    const previousPrimaryBlock = profile.blocks[0];
+    const blockChanged = selectedBlock !== previousPrimaryBlock;
+    const attendanceDefaults = blockChanged
+      ? {
+          attendance_default_block: selectedBlock === "manager" ? "all" : selectedBlock,
+          attendance_view_all_blocks: selectedBlock === "manager",
+        }
+      : {};
+
     const result = await safeUpdate(
       createClient(),
       "profiles",
       {
         display_name: name.trim(),
         blocks: normalizeProfileBlocks(blocks),
-        attendance_default_block: selectedBlock === "manager" ? "all" : selectedBlock,
-        attendance_view_all_blocks: selectedBlock === "manager",
+        ...attendanceDefaults,
         events: events.filter((ev) => eventOptions.includes(ev)),
         grade,
         avatar_url: avatarUrl.trim() || null,

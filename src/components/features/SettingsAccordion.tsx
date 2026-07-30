@@ -6,11 +6,12 @@ import { Settings, ChevronRight, ExternalLink } from "lucide-react";
 import { NotificationSettings } from "@/components/features/NotificationSettings";
 import { MenuViewSetting } from "@/components/features/MenuViewSetting";
 import { AttendanceViewSetting } from "@/components/features/AttendanceViewSetting";
+import { TimelineViewSetting } from "@/components/features/TimelineViewSetting";
 import { SplashIntroSetting } from "@/components/features/SplashIntroSetting";
 import { TimelineCompactSetting } from "@/components/features/TimelineCompactSetting";
 import { RecordSourceSetting } from "@/components/features/RecordSourceSetting";
 import { SystemSyncStatus } from "@/components/features/SystemSyncStatus";
-import type { AttendanceDefaultBlock, RecordFieldDef } from "@/types";
+import type { AttendanceDefaultBlock, RecordFieldDef, TimelineDefaultBlock } from "@/types";
 
 const RecordFieldsSetting = dynamic(
   () =>
@@ -34,6 +35,7 @@ export function SettingsAccordion({
   initialNotice,
   menuViewAll,
   attendanceDefaultBlock,
+  timelineDefaultBlock,
   recordFields,
   timelineCompact,
   showRecordSource,
@@ -46,6 +48,7 @@ export function SettingsAccordion({
   initialNotice: boolean;
   menuViewAll: boolean;
   attendanceDefaultBlock: AttendanceDefaultBlock;
+  timelineDefaultBlock: TimelineDefaultBlock;
   recordFields: RecordFieldDef[];
   isMiddleLong: boolean;
   timelineCompact: boolean;
@@ -71,6 +74,7 @@ export function SettingsAccordion({
         <div className="space-y-2">
           <p className="section-label">表示</p>
           <AttendanceViewSetting userId={profileId} initial={attendanceDefaultBlock} />
+          <TimelineViewSetting userId={profileId} initial={timelineDefaultBlock} />
           <SplashIntroSetting />
           <TimelineCompactSetting initial={timelineCompact} />
           <MenuViewSetting userId={profileId} initial={menuViewAll} />

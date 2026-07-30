@@ -1137,6 +1137,7 @@ export type Database = {
         Row: {
           approved: boolean
           attendance_default_block: string
+          timeline_default_block: string
           attendance_view_all_blocks: boolean
           avatar_url: string | null
           blocks: string[]
@@ -1162,6 +1163,7 @@ export type Database = {
         Insert: {
           approved?: boolean
           attendance_default_block?: string
+          timeline_default_block?: string
           attendance_view_all_blocks?: boolean
           avatar_url?: string | null
           blocks?: string[]
@@ -1187,6 +1189,7 @@ export type Database = {
         Update: {
           approved?: boolean
           attendance_default_block?: string
+          timeline_default_block?: string
           attendance_view_all_blocks?: boolean
           avatar_url?: string | null
           blocks?: string[]

@@ -54,6 +54,7 @@ export const getCurrentProfile = cache(async (): Promise<Profile> => {
       menu_view_all_blocks: false,
       attendance_view_all_blocks: false,
       attendance_default_block: "all",
+      timeline_default_block: "all",
       sheet_name: null,
       sheet_linked_at: null,
       sheet_header_signature: null,

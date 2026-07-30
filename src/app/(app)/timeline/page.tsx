@@ -41,6 +41,7 @@ async function TimelineContent() {
       }}
       favoriteIds={favoriteIds}
       initialCompact={initialCompact}
+      initialBlock={profile.timeline_default_block}
       showRecordSource={showRecordSource}
       enableCsvRefresh={Boolean(profile.sheet_name)}
     />
