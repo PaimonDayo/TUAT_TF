@@ -1220,6 +1220,7 @@ export type Database = {
           created_at: string
           endpoint: string
           id: string
+          last_seen_at: string
           p256dh: string
           user_id: string
         }
@@ -1228,6 +1229,7 @@ export type Database = {
           created_at?: string
           endpoint: string
           id?: string
+          last_seen_at?: string
           p256dh: string
           user_id: string
         }
@@ -1236,6 +1238,7 @@ export type Database = {
           created_at?: string
           endpoint?: string
           id?: string
+          last_seen_at?: string
           p256dh?: string
           user_id?: string
         }
@@ -1739,6 +1742,7 @@ export type Database = {
         Args: { subscription_endpoint: string; subscription_p256dh: string; subscription_auth: string }
         Returns: undefined
       }
+      send_test_push: { Args: never; Returns: Json }
       replace_sheet_record_replies: {
         Args: { reply_rows: Json; target_record_id: string }
         Returns: undefined

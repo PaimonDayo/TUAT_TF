@@ -5,6 +5,7 @@ import { FAB } from "@/components/layout/FAB";
 import { SessionKeepAlive } from "@/components/layout/SessionKeepAlive";
 import { PullToRefresh } from "@/components/layout/PullToRefresh";
 import { VersionWatcher } from "@/components/features/VersionWatcher";
+import { PushSubscriptionSync } from "@/components/features/PushSubscriptionSync";
 import { SheetHeaderGuard } from "@/components/features/SheetHeaderGuard";
 import { ToastProvider } from "@/components/ui/toast";
 import { AppQueryProvider } from "@/components/providers/QueryProvider";
@@ -25,6 +26,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <Suspense fallback={null}><AuthenticatedFab /></Suspense>
             <Suspense fallback={null}><BottomNav /></Suspense>
             <VersionWatcher />
+            <PushSubscriptionSync />
             <Suspense fallback={null}><AuthenticatedSheetHeaderGuard /></Suspense>
           </div>
         </div>

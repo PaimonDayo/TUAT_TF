@@ -2,24 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { Toggle } from "@/components/ui/toggle";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { createClient } from "@/lib/supabase/client";
-
-const urlBase64ToUint8Array = (base64String: string) => {
-  const padding = '='.repeat((4 - base64String.length % 4) % 4);
-  const base64 = (base64String + padding)
-    .replace(/\-/g, '+')
-    .replace(/_/g, '/');
-
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
-  return outputArray;
-};
+import {
+  reconcilePushSubscription,
+  registerPushSubscription,
+  urlBase64ToUint8Array,
+} from "@/lib/push";
 
 export function NotificationSettings({
   profileId,
@@ -39,6 +30,7 @@ export function NotificationSettings({
   const [isIos, setIsIos] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
 
   const supabase = createClient();
 
@@ -48,10 +40,12 @@ export function NotificationSettings({
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setPushStatus(Notification.permission);
       
-      navigator.serviceWorker.ready.then(reg => {
-        reg.pushManager.getSubscription().then(sub => {
-          setIsSubscribed(!!sub);
-        });
+      // 端末の購読とサーバー側の登録がそろって初めて「オン」と表示する。
+      // 端末に購読が残っていてもサーバー側の登録が消えていると通知は届かないので、
+      // ここで登録し直し、直せなかったときは「オフ」と正直に表示する。
+      const client = createClient();
+      reconcilePushSubscription(client).then((result) => {
+        setIsSubscribed(result === "registered" || result === "resubscribed");
       });
     }
 
@@ -90,24 +84,22 @@ export function NotificationSettings({
         return;
       }
 
+      // 端末に購読が残っていれば、鍵の確認とサーバー登録まで自己修復でそろえる。
+      const healed = await reconcilePushSubscription(supabase);
+      if (healed === "registered" || healed === "resubscribed") {
+        setIsSubscribed(true);
+        setPushStatus('granted');
+        return;
+      }
+
       const subscription = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
       });
 
-      const subData = subscription.toJSON();
-      
-      if (!subData.endpoint || !subData.keys?.p256dh || !subData.keys?.auth) {
-        throw new Error("Invalid push subscription");
-      }
-      const { error } = await supabase.rpc('register_push_subscription', {
-        subscription_endpoint: subData.endpoint,
-        subscription_p256dh: subData.keys.p256dh,
-        subscription_auth: subData.keys.auth,
-      });
-
-      if (error) {
-        console.error(error);
+      // サーバーへの登録まで成功したときだけ「オン」にする。
+      const registered = await registerPushSubscription(supabase, subscription);
+      if (!registered) {
         showToast('通知をオンにできませんでした');
         return;
       }
@@ -140,6 +132,22 @@ export function NotificationSettings({
       showToast('通知をオフにできませんでした');
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  // 実際にこの端末へ通知を1件送ってみる。届いたかどうかは端末の画面で確認してもらう。
+  const handleTestPush = async () => {
+    if (isTesting) return;
+    setIsTesting(true);
+    try {
+      const res = await fetch('/api/push/test', { method: 'POST' });
+      const data = (await res.json().catch(() => ({}))) as { message?: string };
+      showToast(data.message ?? 'テスト通知を送れませんでした。時間をおいてお試しください');
+    } catch (e) {
+      console.error(e);
+      showToast('テスト通知を送れませんでした。時間をおいてお試しください');
+    } finally {
+      setIsTesting(false);
     }
   };
 
@@ -192,6 +200,16 @@ export function NotificationSettings({
                 checked={notice}
                 onChange={() => handleChange("notify_notice", !notice, setNotice)}
               />
+            </div>
+          )}
+
+          {/* 届くかどうかをその場で確かめる（「通知が来ない」相談の切り分け用） */}
+          {isSubscribed && (
+            <div className="space-y-1 pt-1">
+              <Button variant="outline" size="sm" onClick={handleTestPush} disabled={isTesting}>
+                {isTesting ? "送信中…" : "通知が届くか試す"}
+              </Button>
+              <p className="text-micro text-muted2">この端末に通知を1件送って確かめます。</p>
             </div>
           )}
         </>

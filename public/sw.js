@@ -77,3 +77,45 @@ self.addEventListener('notificationclick', (event) => {
     await self.clients.openWindow(target.href);
   })());
 });
+
+// ブラウザの都合で購読が作り直された（endpointが変わった）ときに、
+// 新しい購読でサーバーへ登録し直す。これを受け取り損ねると、その端末は
+// 見た目は通知オンのまま二度と配信されない。
+// iOSでは発火しないことがあるので、本体はアプリ側の PushSubscriptionSync が担う保険。
+function swUrlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i += 1) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil((async () => {
+    try {
+      let subscription = event.newSubscription || null;
+      if (!subscription) {
+        const res = await fetch('/api/push/vapid', { cache: 'no-store' });
+        if (!res.ok) return;
+        const { key } = await res.json();
+        if (!key) return;
+        subscription = await self.registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: swUrlBase64ToUint8Array(key),
+        });
+      }
+      const json = subscription.toJSON();
+      if (!json.endpoint || !json.keys || !json.keys.p256dh || !json.keys.auth) return;
+      await fetch('/api/push/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
+      });
+    } catch {
+      // 未ログイン・通信不調などはここでは直せない。次にアプリを開いたときに直る。
+    }
+  })());
+});

@@ -100,6 +100,11 @@ serve(async (req) => {
       title = "予定が更新されました";
       bodyText = "アプリで最新の予定を確認してください";
       url = "/schedule";
+    } else if (notification.type === 'test') {
+      // 「通知が届くか試す」ボタン（send_test_push）から届く確認用の1件。
+      title = "通知テスト";
+      bodyText = "この通知が見えていれば、通知は届いています";
+      url = "/mypage";
     } else if (notification.type === 'thread_reply') {
       title = "スレッドに新しい返信";
       bodyText = "参加中のスレッドに返信がありました";
