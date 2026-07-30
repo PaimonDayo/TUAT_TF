@@ -55,6 +55,13 @@ export function PostActions({
   const { liked, likes, commentCount, busy } = interaction;
   const mutationBusy = useRef(false);
 
+  useEffect(() => {
+    if (mutationBusy.current) return;
+    queryClient.setQueryData(interactionKey, (previous: InteractionState | undefined) => ({ liked: initialLiked, likes: initialLikes, commentCount: previous?.commentCount ?? initialComments, busy: false }));
+  // interactionKey is fully represented by the primitive dependencies below.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialComments, initialLiked, initialLikes, queryClient, targetId, targetType, currentUser.id]);
+
 
   const [openComments, setOpenComments] = useState(false);
   const commentsVisible = commentsExpanded || openComments;

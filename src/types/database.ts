@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       attendances: {
         Row: {
+          absence_note: string | null
           created_at: string
           id: string
           is_late: boolean
@@ -26,6 +27,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          absence_note?: string | null
           created_at?: string
           id?: string
           is_late?: boolean
@@ -36,6 +38,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          absence_note?: string | null
           created_at?: string
           id?: string
           is_late?: boolean

@@ -25,6 +25,7 @@ export function ScheduleView({
   myStatusBySchedule,
   myLateBySchedule,
   myLateNoteBySchedule,
+  myAbsenceNoteBySchedule,
   attendanceDefaultBlock,
   openId,
 }: {
@@ -39,6 +40,7 @@ export function ScheduleView({
   myStatusBySchedule: Record<string, AttendanceStatusOrNone>;
   myLateBySchedule: Record<string, boolean>;
   myLateNoteBySchedule: Record<string, string | null>;
+  myAbsenceNoteBySchedule: Record<string, string | null>;
   attendanceDefaultBlock: AttendanceDefaultBlock;
   openId?: string;
 }) {
@@ -70,7 +72,7 @@ export function ScheduleView({
 
       <div className="px-4 pt-1 md:grid md:grid-cols-2 md:gap-x-3 md:px-6">
         {filtered.length === 0 ? (
-          <EmptyState title="今後の予定はまだ登録されていません" />
+          <EmptyState title="まだ今後の予定はありません" />
         ) : (
           filtered.map((s, index) => {
             const monthKey = s.schedule_date.slice(0, 7);
@@ -86,7 +88,7 @@ export function ScheduleView({
                 )}
                 <div className="mb-3 min-w-0">
                   <ScheduleCard
-                    key={`${s.id}:${(s.menus ?? []).map((menu) => `${menu.id}:${menu.updated_at}`).join(",")}`}
+                    key={[s.id, (s.menus ?? []).map((menu) => `${menu.id}:${menu.updated_at}`).join(","), myStatusBySchedule[s.id] ?? "none", myLateNoteBySchedule[s.id] ?? "", myAbsenceNoteBySchedule[s.id] ?? "", (attendeesBySchedule[s.id] ?? []).map((a) => [a.user_id, a.status, a.is_late, a.late_note, a.absence_note].join(":")).join(",")].join("|")}
                     schedule={s}
                     viewerBlocks={viewerBlocks}
                     canEditMenu={canEditMenu}
@@ -97,6 +99,7 @@ export function ScheduleView({
                     myStatus={myStatusBySchedule[s.id] ?? "none"}
                     myLate={myLateBySchedule[s.id] ?? false}
                     myLateNote={myLateNoteBySchedule[s.id] ?? null}
+                    myAbsenceNote={myAbsenceNoteBySchedule[s.id] ?? null}
                     attendees={attendeesBySchedule[s.id] ?? []}
                     attendanceDefaultBlock={attendanceDefaultBlock}
                     defaultOpen={s.id === openId}

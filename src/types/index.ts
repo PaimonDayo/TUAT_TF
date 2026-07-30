@@ -338,6 +338,7 @@ export interface Attendance {
   status: AttendanceStatus;
   is_late: boolean;
   late_note: string | null;
+  absence_note: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -348,6 +349,7 @@ export interface Attendee {
   status: AttendanceStatus;
   is_late: boolean;
   late_note: string | null;
+  absence_note: string | null;
   profile: AuthorMini;
 }
 

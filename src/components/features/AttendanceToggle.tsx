@@ -26,6 +26,7 @@ export type AttendanceChange = {
   status: AttendanceStatusOrNone;
   isLate: boolean;
   lateNote: string | null;
+  absenceNote: string | null;
 };
 
 export type LateAttendanceChange = {
@@ -59,20 +60,20 @@ export function AttendanceToggle({
     const next = NEXT[status];
     setStatus(next);
     setBusy(true);
-    onChanged?.({ status: next, isLate: false, lateNote: null });
+    onChanged?.({ status: next, isLate: false, lateNote: null, absenceNote: null });
     const supabase = createClient();
     const result =
       next === "none"
         ? await supabase.from("attendances").delete().eq("schedule_id", scheduleId).eq("user_id", userId).select("id")
         : await supabase.from("attendances").upsert(
-            { schedule_id: scheduleId, user_id: userId, status: next, is_late: false, late_note: null, updated_at: new Date().toISOString() },
+            { schedule_id: scheduleId, user_id: userId, status: next, is_late: false, late_note: null, absence_note: null, updated_at: new Date().toISOString() },
             { onConflict: "schedule_id,user_id" },
-          ).select("status, is_late, late_note").single();
+          ).select("status, is_late, late_note, absence_note").single();
     setBusy(false);
     if (result.error || (next !== "none" && !result.data)) {
       setStatus(prev);
-      onChanged?.({ status: prev, isLate: false, lateNote: null });
-      showToast("出欠を送信できませんでした。もう一度お試しください", "error");
+      onChanged?.({ status: prev, isLate: false, lateNote: null, absenceNote: null });
+      showToast("出欠を送信できませんでした", "error");
       return;
     }
     if (refreshOnChange) router.refresh();
@@ -200,7 +201,7 @@ export function LateAttendanceControl({
             onChange={(event) => changeNote(event.target.value)}
             onBlur={blurNote}
             maxLength={60}
-            placeholder="連絡事項（任意）"
+            placeholder="連絡事項を入力（任意）"
             className={cn("w-full pr-10", noteState === "error" && "border-danger/50")}
           />
           <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" aria-live="polite">
@@ -211,4 +212,22 @@ export function LateAttendanceControl({
       )}
     </div>
   );
+}
+
+
+export function AbsenceAttendanceControl({ scheduleId, userId, initialNote, onChanged }: { scheduleId: string; userId: string; initialNote: string | null; onChanged?: (note: string | null) => void; }) {
+  const { showToast } = useToast();
+  const [note, setNote] = useState(initialNote ?? "");
+  const [noteState, setNoteState] = useState<SaveState>(initialNote ? "saved" : "idle");
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
+  async function persist(value: string) {
+    const normalized = value.trim() || null; setNoteState("saving");
+    const { data, error } = await createClient().from("attendances").update({ absence_note: normalized, updated_at: new Date().toISOString() }).eq("schedule_id", scheduleId).eq("user_id", userId).eq("status", "absent").select("absence_note").maybeSingle();
+    if (error || !data) { setNoteState("error"); showToast("連絡事項を送信できませんでした", "error"); return; }
+    setNoteState("saved"); onChanged?.(normalized);
+  }
+  function changeNote(value: string) { setNote(value); setNoteState("idle"); if (saveTimer.current) clearTimeout(saveTimer.current); saveTimer.current = setTimeout(() => { saveTimer.current = null; void persist(value); }, 700); }
+  function blurNote() { if (!saveTimer.current) return; clearTimeout(saveTimer.current); saveTimer.current = null; void persist(note); }
+  return <div className="relative w-full" onClick={(event) => event.stopPropagation()}><Input value={note} onChange={(event) => changeNote(event.target.value)} onBlur={blurNote} maxLength={60} placeholder={"\u6b20\u5e2d\u306e\u9023\u7d61\u4e8b\u9805\uff08\u4efb\u610f\uff09"} className={cn("w-full pr-10", noteState === "error" && "border-danger/50")} /><span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" aria-live="polite">{noteState === "saving" && <Loader2 size={17} className="animate-spin text-muted2" />}{noteState === "saved" && <CircleCheck size={18} className="text-success" />}</span></div>;
 }

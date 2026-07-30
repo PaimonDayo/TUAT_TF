@@ -122,7 +122,7 @@ async function SchedulesSection({ profile }: { profile: Profile }) {
   const attendeesBySchedule = new Map<string, Attendee[]>();
   for (const row of attendance) {
     const rows = attendeesBySchedule.get(row.schedule_id) ?? [];
-    rows.push({ user_id: row.user_id, status: row.status, is_late: row.is_late, late_note: row.late_note, profile: row.profile });
+    rows.push({ user_id: row.user_id, status: row.status, is_late: row.is_late, late_note: row.late_note, absence_note: row.absence_note, profile: row.profile });
     attendeesBySchedule.set(row.schedule_id, rows);
   }
 
@@ -134,7 +134,7 @@ async function SchedulesSection({ profile }: { profile: Profile }) {
           {todaySchedules.map((schedule) => {
             const attendees = attendeesBySchedule.get(schedule.id) ?? [];
             const mine = attendees.find((attendee) => attendee.user_id === profile.id);
-            return <ScheduleCard key={schedule.id} schedule={{ ...schedule, menus: schedule.menus ?? [] }} viewerBlocks={profile.blocks} userId={profile.id} myProfile={profile} myStatus={mine?.status ?? "none"} myLate={mine?.is_late ?? false} myLateNote={mine?.late_note ?? null} attendees={attendees} attendanceDefaultBlock={profile.attendance_default_block} />;
+            return <ScheduleCard key={schedule.id} schedule={{ ...schedule, menus: schedule.menus ?? [] }} viewerBlocks={profile.blocks} userId={profile.id} myProfile={profile} myStatus={mine?.status ?? "none"} myLate={mine?.is_late ?? false} myLateNote={mine?.late_note ?? null} myAbsenceNote={mine?.absence_note ?? null} attendees={attendees} attendanceDefaultBlock={profile.attendance_default_block} />;
           })}
         </div>
       </section>

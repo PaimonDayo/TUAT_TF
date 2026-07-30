@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils";
 import { jstToday } from "@/lib/date";
 import { MenuEditModal, SheetMenuEditModal } from "@/components/post/MenuForm";
 import { ScheduleManageActions } from "@/components/post/ScheduleForm";
-import { AttendanceToggle, LateAttendanceControl, type AttendanceChange, type LateAttendanceChange } from "@/components/features/AttendanceToggle";
+import { AbsenceAttendanceControl, AttendanceToggle, LateAttendanceControl, type AttendanceChange, type LateAttendanceChange } from "@/components/features/AttendanceToggle";
 import { AttendeesButton } from "@/components/features/AttendeesButton";
 import { Linkify } from "@/components/common/Linkify";
 import { createClient } from "@/lib/supabase/client";
@@ -54,6 +54,7 @@ export function ScheduleCard({
   myStatus = "none",
   myLate = false,
   myLateNote = null,
+  myAbsenceNote = null,
   attendees = [],
   attendanceDefaultBlock = "all",
   defaultOpen = false,
@@ -69,6 +70,7 @@ export function ScheduleCard({
   myStatus?: AttendanceStatusOrNone;
   myLate?: boolean;
   myLateNote?: string | null;
+  myAbsenceNote?: string | null;
   attendees?: Attendee[];
   attendanceDefaultBlock?: import("@/types").AttendanceDefaultBlock;
   defaultOpen?: boolean;
@@ -77,12 +79,14 @@ export function ScheduleCard({
   const [attendeesState, setAttendeesState] = useState(attendees);
   const [attendanceStatus, setAttendanceStatus] = useState(myStatus);
   const [lateState, setLateState] = useState({ late: myLate, note: myLateNote });
+  const [absenceNote, setAbsenceNote] = useState(myAbsenceNote);
   const cardRef = useRef<HTMLDivElement>(null);
 
   // 自分の出欠変更をサーバー往復なしで即座に一覧へ反映する
   function handleAttendanceChanged(change: AttendanceChange) {
     setAttendanceStatus(change.status);
     setLateState({ late: change.isLate, note: change.lateNote });
+    setAbsenceNote(change.absenceNote);
     setAttendeesState((prev) => {
       const others = prev.filter((a) => a.user_id !== userId);
       if (change.status === "none" || !userId) return others;
@@ -93,6 +97,7 @@ export function ScheduleCard({
         status: change.status,
         is_late: change.isLate,
         late_note: change.lateNote,
+        absence_note: change.absenceNote,
         profile: mineProfile,
       };
       return [...others, mine];
@@ -112,6 +117,8 @@ export function ScheduleCard({
   }
 
   // ホームの「予定」からタップで来たときは、対象カードまでスクロールする
+  function handleAbsenceNoteChanged(note: string | null) { setAbsenceNote(note); setAttendeesState((previous) => previous.map((attendee) => attendee.user_id === userId && attendee.status === "absent" ? { ...attendee, absence_note: note } : attendee)); }
+
   useEffect(() => {
     if (defaultOpen) {
       cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -245,6 +252,7 @@ export function ScheduleCard({
             <AttendanceToggle scheduleId={schedule.id} userId={userId!} initial={myStatus} onChanged={handleAttendanceChanged} />
             <AttendeesButton attendees={attendeesState} defaultBlock={attendanceDefaultBlock} />
           </div>
+          {attendanceStatus === "absent" && <AbsenceAttendanceControl scheduleId={schedule.id} userId={userId!} initialNote={absenceNote} onChanged={handleAbsenceNoteChanged} />}
           {schedule.schedule_date === jstToday() && attendanceStatus === "present" && (
             <LateAttendanceControl
               scheduleId={schedule.id}

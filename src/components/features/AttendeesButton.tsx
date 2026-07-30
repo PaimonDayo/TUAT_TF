@@ -118,6 +118,9 @@ function Group({ title, color, list, selectedBlock }: { title: string; color: st
                           {attendee.is_late && attendee.late_note && (
                             <p className="mt-0.5 whitespace-pre-wrap break-words text-[12px] leading-5 text-muted2">{attendee.late_note}</p>
                           )}
+                          {attendee.status === "absent" && attendee.absence_note && (
+                            <p className="mt-0.5 whitespace-pre-wrap break-words text-[12px] leading-5 text-muted2">{attendee.absence_note}</p>
+                          )}
                         </div>
                       </div>
                     ))}

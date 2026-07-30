@@ -19,6 +19,7 @@ export type SchedulePageData = {
   myStatusBySchedule: Record<string, AttendanceStatusOrNone>;
   myLateBySchedule: Record<string, boolean>;
   myLateNoteBySchedule: Record<string, string | null>;
+  myAbsenceNoteBySchedule: Record<string, string | null>;
   attendanceDefaultBlock: AttendanceDefaultBlock;
 };
 
@@ -37,6 +38,7 @@ export async function getSchedulePageData(): Promise<SchedulePageData> {
   const myStatusBySchedule: Record<string, AttendanceStatusOrNone> = {};
   const myLateBySchedule: Record<string, boolean> = {};
   const myLateNoteBySchedule: Record<string, string | null> = {};
+  const myAbsenceNoteBySchedule: Record<string, string | null> = {};
   for (const schedule of schedules) {
     for (const attendee of schedule.attendances ?? []) {
       (attendeesBySchedule[attendee.schedule_id] ??= []).push(attendee);
@@ -44,6 +46,7 @@ export async function getSchedulePageData(): Promise<SchedulePageData> {
         myStatusBySchedule[attendee.schedule_id] = attendee.status;
         myLateBySchedule[attendee.schedule_id] = attendee.is_late;
         myLateNoteBySchedule[attendee.schedule_id] = attendee.late_note;
+        myAbsenceNoteBySchedule[attendee.schedule_id] = attendee.absence_note;
       }
     }
   }
@@ -61,6 +64,7 @@ export async function getSchedulePageData(): Promise<SchedulePageData> {
     myStatusBySchedule,
     myLateBySchedule,
     myLateNoteBySchedule,
+    myAbsenceNoteBySchedule,
     attendanceDefaultBlock: profile.attendance_default_block,
   };
 }

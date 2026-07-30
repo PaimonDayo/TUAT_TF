@@ -36,8 +36,8 @@ export function ScheduleCachedView({ initialData, openId }: { initialData: Sched
     queryKey,
     queryFn: ({ signal }) => loadSchedulePageData(signal),
     initialData,
-    staleTime: 30_000,
-    refetchOnMount: false,
+    staleTime: 0,
+    refetchOnMount: "always",
     retry: false,
   });
   // サーバーが新しいデータを返したらセッションキャッシュにも反映する

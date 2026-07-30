@@ -353,6 +353,7 @@ export async function getUpcomingSchedulesWithAttendances(
         status,
         is_late,
         late_note,
+        absence_note,
         profile:profiles!user_id(id, display_name, avatar_url, blocks, grade)
       )
     `)
@@ -570,7 +571,7 @@ export async function getAttendancesForSchedules(scheduleIds: string[]) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("attendances")
-    .select("schedule_id, user_id, status, is_late, late_note, profile:profiles!user_id(id, display_name, avatar_url, blocks, grade)")
+    .select("schedule_id, user_id, status, is_late, late_note, absence_note, profile:profiles!user_id(id, display_name, avatar_url, blocks, grade)")
     .in("schedule_id", scheduleIds);
   if (error) throw new Error("Failed to load attendances: " + error.message);
   return (data ?? []).flatMap((row) => {

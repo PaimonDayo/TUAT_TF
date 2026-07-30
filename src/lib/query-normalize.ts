@@ -127,7 +127,7 @@ type ScheduleQueryRow = Row<"practice_schedules"> & {
   attendances?: Array<
     Pick<
       Row<"attendances">,
-      "schedule_id" | "user_id" | "status" | "is_late" | "late_note"
+      "schedule_id" | "user_id" | "status" | "is_late" | "late_note" | "absence_note"
     > & { profile: AuthorInput }
   >;
 };
