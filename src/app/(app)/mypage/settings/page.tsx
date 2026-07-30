@@ -4,7 +4,6 @@ import { SubHeader } from "@/components/layout/SubHeader";
 import { Card } from "@/components/ui/card";
 import { AttendanceViewSetting } from "@/components/features/AttendanceViewSetting";
 import { TimelineViewSetting } from "@/components/features/TimelineViewSetting";
-import { TimelineCompactSetting } from "@/components/features/TimelineCompactSetting";
 import { MenuViewSetting } from "@/components/features/MenuViewSetting";
 import { SplashIntroSetting } from "@/components/features/SplashIntroSetting";
 import { NotificationSettings } from "@/components/features/NotificationSettings";
@@ -23,7 +22,6 @@ import { permissionsOf } from "@/lib/permissions";
 export default async function SettingsPage() {
   const profile = await getCurrentProfile();
   const cookieStore = await cookies();
-  const timelineCompact = cookieStore.get("timeline-compact")?.value === "1";
   const showRecordSource = cookieStore.get("show-record-source")?.value === "1";
   const perms = permissionsOf(profile.roles);
 
@@ -35,7 +33,6 @@ export default async function SettingsPage() {
         <Section title="表示">
           <AttendanceViewSetting userId={profile.id} initial={profile.attendance_default_block} />
           <TimelineViewSetting userId={profile.id} initial={profile.timeline_default_block} />
-          <TimelineCompactSetting initial={timelineCompact} />
           <MenuViewSetting userId={profile.id} initial={profile.menu_view_all_blocks ?? false} />
           <SplashIntroSetting />
         </Section>
