@@ -2,7 +2,7 @@
 // 全型定義
 // ─────────────────────────────────────────────
 
-export type Block = "middle_long" | "short" | "jump" | "throw";
+export type Block = "middle_long" | "short" | "manager" | "jump" | "throw";
 /** 旧・単一ロール（profiles.role 列。互換目的で残置） */
 export type Role = "admin" | "menu_staff" | "member";
 export type ProfileStatus = "active" | "graduated";

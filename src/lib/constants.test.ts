@@ -3,15 +3,13 @@ import {
   matchSimpleBlock,
   normalizeProfileBlocks,
   primarySimpleBlock,
+  viewerCompetitionBlocks,
 } from "@/lib/constants";
 
 describe("block normalization", () => {
   it("merges jump and throw memberships into short distance", () => {
     expect(normalizeProfileBlocks(["jump", "throw"])).toEqual(["short"]);
-    expect(normalizeProfileBlocks(["middle_long", "jump", "short"])).toEqual([
-      "middle_long",
-      "short",
-    ]);
+    expect(normalizeProfileBlocks(["middle_long", "jump", "short"])).toEqual(["middle_long"]);
   });
 
   it("uses the short-distance attendance tab for legacy memberships", () => {
@@ -19,6 +17,14 @@ describe("block normalization", () => {
     expect(matchSimpleBlock(["throw"], "short")).toBe(true);
     expect(primarySimpleBlock(["jump"])).toBe("short");
     expect(primarySimpleBlock(["throw"])).toBe("short");
+  });
+
+  it("treats managers as both blocks in filters", () => {
+    expect(normalizeProfileBlocks(["manager", "short"])).toEqual(["manager"]);
+    expect(matchSimpleBlock(["manager"], "middle_long")).toBe(true);
+    expect(matchSimpleBlock(["manager"], "short")).toBe(true);
+    expect(primarySimpleBlock(["manager"])).toBe("middle_long");
+    expect(viewerCompetitionBlocks(["manager"])).toEqual(["middle_long", "short"]);
   });
 
   it("keeps middle-long memberships separate", () => {

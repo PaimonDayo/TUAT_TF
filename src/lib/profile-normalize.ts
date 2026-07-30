@@ -8,7 +8,7 @@ type AuthorRow = Pick<
   ProfileRow,
   "id" | "display_name" | "avatar_url" | "blocks" | "grade"
 > & Partial<Pick<ProfileRow, "record_source" | "record_fields">>;
-const BLOCK_VALUES = new Set<Block>(["middle_long", "short", "jump", "throw"]);
+const BLOCK_VALUES = new Set<Block>(["middle_long", "short", "manager", "jump", "throw"]);
 const ROLE_VALUES = new Set<Role>(["admin", "menu_staff", "member"]);
 
 export function recordFieldsFromJson(value: Json | null): RecordFieldDef[] {

@@ -133,7 +133,7 @@ type ScheduleQueryRow = Row<"practice_schedules"> & {
 };
 
 function normalizeBlock(value: string): import("@/types").Block | null {
-  return value === "middle_long" || value === "short" || value === "jump" || value === "throw"
+  return value === "middle_long" || value === "short" || value === "manager" || value === "jump" || value === "throw"
     ? value
     : null;
 }

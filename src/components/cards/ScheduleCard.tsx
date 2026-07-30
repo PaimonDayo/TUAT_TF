@@ -23,7 +23,7 @@ import { Disclosure } from "@/components/ui/disclosure";
 import { KeyValue } from "@/components/ui/key-value";
 import { useToast } from "@/components/ui/toast";
 import { SCHEDULE_TYPES, ATTENDANCE_TYPES } from "@/lib/constants";
-import { BLOCKS, BLOCK_ORDER } from "@/lib/constants";
+import { BLOCKS, BLOCK_ORDER, viewerCompetitionBlocks } from "@/lib/constants";
 import { venueShort } from "@/lib/venues";
 import { cn } from "@/lib/utils";
 import { jstToday } from "@/lib/date";
@@ -141,9 +141,10 @@ export function ScheduleCard({
       generalMenus.push(m);
     }
   }
+  const effectiveViewerBlocks = viewerCompetitionBlocks(viewerBlocks);
   const blocksByRelevance = [...BLOCK_ORDER].sort(
     (a, b) =>
-      Number(viewerBlocks.includes(b)) - Number(viewerBlocks.includes(a)),
+      Number(effectiveViewerBlocks.includes(b)) - Number(effectiveViewerBlocks.includes(a)),
   );
   const menuGroups: { key: string; label: string; block: Block | null; menus: PracticeMenu[] }[] = [];
   if (personalMenus.length > 0) {
@@ -296,7 +297,7 @@ export function ScheduleCard({
                             !!userId && (m.targets?.some((t) => t.user_id === userId) ?? false)
                           }
                           isMyBlock={
-                            !!m.target_block && viewerBlocks.includes(m.target_block)
+                            !!m.target_block && effectiveViewerBlocks.includes(m.target_block)
                           }
                           onChanged={(next) => setMenusState((current) => next ? current.map((item) => item.id === next.id ? next : item) : current.filter((item) => item.id !== m.id))}
                         />

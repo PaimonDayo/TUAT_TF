@@ -54,7 +54,7 @@ export async function HomeContent() {
         </p>
 
         <NoticesSection userId={profile.id} />
-        {profile.blocks.includes("middle_long") && (
+        {(profile.blocks.includes("middle_long") || profile.blocks.includes("manager")) && (
           <WeeklySummary userId={profile.id} nowJst={nowJst} />
         )}
         <SchedulesSection profile={profile} />
@@ -110,7 +110,7 @@ async function SchedulesSection({ profile }: { profile: Profile }) {
     10,
   )) as ScheduleWithMenus[];
   schedules = schedules.map((schedule) => ({ ...schedule, menus: schedule.menus ?? [] }));
-  if (profile.blocks.includes("middle_long") || profile.menu_view_all_blocks) {
+  if (profile.blocks.includes("middle_long") || profile.blocks.includes("manager") || profile.menu_view_all_blocks) {
     const snapshot = await fetchMiddleLongMenuSnapshot(middleLongMenuMonths(schedules));
     schedules = applyMiddleLongMenuSnapshot(schedules, snapshot);
   }

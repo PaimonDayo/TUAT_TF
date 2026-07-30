@@ -7,6 +7,7 @@ export const BLOCKS: Record<
 > = {
   middle_long: { label: "中長距離", short: "中長", color: "#34c759", bg: "#e5f7f0" },
   short: { label: "短距離", short: "短", color: "#ff9500", bg: "#fff4e5" },
+  manager: { label: "マネージャー", short: "マネ", color: "#007aff", bg: "#e5f0ff" },
   jump: { label: "跳躍", short: "跳", color: "#af52de", bg: "#f2eeff" },
   throw: { label: "投擲", short: "投", color: "#ff3b30", bg: "#ffe5e5" },
 };
@@ -15,12 +16,12 @@ export const BLOCK_ORDER: Block[] = ["middle_long", "short", "jump", "throw"];
 
 /** Blocks that can be selected in profile editing. Jump and throw are legacy values. */
 export const EDITABLE_BLOCK_ORDER: Block[] = ["middle_long", "short"];
-export const PROFILE_BLOCK_ORDER = EDITABLE_BLOCK_ORDER;
+export const PROFILE_BLOCK_ORDER: Block[] = ["middle_long", "short", "manager"];
 
 export type SimpleBlock = "middle_long" | "short";
 
 /** Convert one legacy membership to the active short-distance block. */
-export function normalizeBlock(block: Block): SimpleBlock {
+export function normalizeBlock(block: Block): SimpleBlock | "manager" {
   return block === "jump" || block === "throw" ? "short" : block;
 }
 
@@ -28,8 +29,11 @@ export function normalizeBlock(block: Block): SimpleBlock {
 export function normalizeProfileBlocks(
   blocks: Block[] | undefined | null,
 ): Block[] {
-  const normalized = (blocks ?? []).map(normalizeBlock);
-  return Array.from(new Set(normalized));
+  const normalized = new Set((blocks ?? []).map(normalizeBlock));
+  if (normalized.has("manager")) return ["manager"];
+  if (normalized.has("middle_long")) return ["middle_long"];
+  if (normalized.has("short")) return ["short"];
+  return [];
 }
 
 /** One stable attendance group per member, based on the first membership. */
@@ -37,7 +41,7 @@ export function primarySimpleBlock(
   blocks: Block[] | undefined | null,
 ): SimpleBlock | null {
   const primary = blocks?.[0];
-  if (primary === "middle_long") return "middle_long";
+  if (primary === "middle_long" || primary === "manager") return "middle_long";
   if (primary === "short" || primary === "jump" || primary === "throw") {
     return "short";
   }
@@ -69,6 +73,7 @@ export const EVENTS_BY_BLOCK: Record<Block, string[]> = {
   ],
   jump: ["走高跳", "走幅跳", "三段跳", "棒高跳"],
   throw: ["砲丸投", "円盤投", "ハンマー投", "やり投"],
+  manager: [],
 };
 
 /** All profile events, including options outside the selected block. */
@@ -91,13 +96,24 @@ export function matchSimpleBlock(
   filter: string,
 ): boolean {
   if (filter === "all") return true;
-  if (filter === "middle_long") return (blocks ?? []).includes("middle_long");
+  if (filter === "middle_long")
+    return (blocks ?? []).some((b) => b === "middle_long" || b === "manager");
   if (filter === "short")
-    return (blocks ?? []).some((b) => b === "short" || b === "jump" || b === "throw");
+    return (blocks ?? []).some((b) => b === "short" || b === "jump" || b === "throw" || b === "manager");
   return true;
 }
 
-/** ロール定義 */
+/** Blocks whose schedules and menus are visible to this profile. */
+export function viewerCompetitionBlocks(
+  blocks: Block[] | undefined | null,
+): Block[] {
+  if ((blocks ?? []).includes("manager")) return ["middle_long", "short"];
+  return normalizeProfileBlocks(blocks).flatMap((block) =>
+    block === "middle_long" || block === "short" ? [block] : [],
+  );
+}
+
+/** Role definitions. */
 export const ROLES: Record<Role, { label: string }> = {
   admin: { label: "管理者" },
   menu_staff: { label: "メニュー担当" },

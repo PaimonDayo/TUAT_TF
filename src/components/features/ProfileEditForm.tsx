@@ -111,8 +111,8 @@ export function ProfileEditForm({
     window.location.assign("/login");
   }
 
-  function toggleBlock(b: Block) {
-    setBlocks((cur) => (cur.includes(b) ? cur.filter((x) => x !== b) : [...cur, b]));
+  function selectBlock(block: Block) {
+    setBlocks([block]);
   }
 
   function toggleEvent(ev: string) {
@@ -172,17 +172,25 @@ export function ProfileEditForm({
     }
   }
 
-  // 所属ブロックの種目を先に表示し、ブロック外種目は「その他」にまとめる。
-  const primaryEventOptions = Array.from(new Set(
-    PROFILE_BLOCK_ORDER.filter((block) => blocks.includes(block)).flatMap(
-      (block) => block === "short"
-        ? [...EVENTS_BY_BLOCK.short, ...EVENTS_BY_BLOCK.jump, ...EVENTS_BY_BLOCK.throw]
-        : EVENTS_BY_BLOCK[block],
-    ),
-  ));
-  const otherEventOptions = blocks.length > 0
-    ? ALL_PROFILE_EVENTS.filter((event) => !primaryEventOptions.includes(event))
-    : [];
+  const selectedBlock = blocks[0];
+  const shortEventOptions = [
+    ...EVENTS_BY_BLOCK.short,
+    ...EVENTS_BY_BLOCK.jump,
+    ...EVENTS_BY_BLOCK.throw,
+  ];
+  const primaryEventOptions = selectedBlock === "manager"
+    ? ALL_PROFILE_EVENTS
+    : selectedBlock === "short"
+      ? shortEventOptions
+      : selectedBlock === "middle_long"
+        ? EVENTS_BY_BLOCK.middle_long
+        : [];
+  const otherEventOptions = selectedBlock === "middle_long"
+    ? shortEventOptions
+    : selectedBlock === "short"
+      ? EVENTS_BY_BLOCK.middle_long
+      : [];
+  const otherEventLabel = selectedBlock === "middle_long" ? "短距離種目" : "中長距離種目";
   const eventOptions = [...primaryEventOptions, ...otherEventOptions];
 
   async function fetchHeader(): Promise<SheetHeaderData | null> {
@@ -259,6 +267,8 @@ export function ProfileEditForm({
       {
         display_name: name.trim(),
         blocks: normalizeProfileBlocks(blocks),
+        attendance_default_block: selectedBlock === "manager" ? "all" : selectedBlock,
+        attendance_view_all_blocks: selectedBlock === "manager",
         events: events.filter((ev) => eventOptions.includes(ev)),
         grade,
         avatar_url: avatarUrl.trim() || null,
@@ -347,7 +357,7 @@ export function ProfileEditForm({
       </div>
 
       <div>
-        <p className="section-label mb-1.5">ブロック（複数選択可）</p>
+        <p className="section-label mb-1.5">所属ブロック</p>
         <div className="grid grid-cols-2 gap-2">
           {PROFILE_BLOCK_ORDER.map((b) => {
             const meta = BLOCKS[b];
@@ -356,7 +366,7 @@ export function ProfileEditForm({
               <button
                 key={b}
                 type="button"
-                onClick={() => toggleBlock(b)}
+                onClick={() => selectBlock(b)}
                 className="h-11 rounded-xl border text-[14px] font-semibold transition-active active:opacity-[0.78]"
                 style={{
                   borderColor: active ? meta.color : "#e5e5ea",
@@ -398,7 +408,7 @@ export function ProfileEditForm({
             <details className="group mt-3 rounded-xl border border-separator bg-card">
               <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-[14px] font-semibold text-muted2">
                 <span className="flex-1">
-                  その他
+                  {otherEventLabel}
                   {events.some((event) => otherEventOptions.includes(event)) && (
                     <span className="ml-2 text-micro text-accent">
                       {events.filter((event) => otherEventOptions.includes(event)).length}件選択

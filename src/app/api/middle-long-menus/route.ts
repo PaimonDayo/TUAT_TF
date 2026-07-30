@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   try {
     const profile = await getCurrentProfile();
     const permissions = permissionsOf(profile.roles);
-    if (!profile.blocks.includes("middle_long") && !profile.menu_view_all_blocks && !permissions.createMenu) {
+    if (!profile.blocks.includes("middle_long") && !profile.blocks.includes("manager") && !profile.menu_view_all_blocks && !permissions.createMenu) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
 

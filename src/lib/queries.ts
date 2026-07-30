@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { fetchRolesByProfileIds } from "@/lib/supabase/auth";
+import { viewerCompetitionBlocks } from "@/lib/constants";
 import { jstToday } from "@/lib/date";
 import { refreshMemberFromSheetLive } from "@/lib/sheet-sync";
 import {
@@ -287,7 +288,7 @@ function filterSchedulesForViewer<T extends { target_blocks?: string[] | null }>
   canManage: boolean,
 ): T[] {
   if (canManage) return schedules;
-  const viewerBlockSet = new Set<string>(viewerBlocks);
+  const viewerBlockSet = new Set<string>(viewerCompetitionBlocks(viewerBlocks));
   return schedules.filter((schedule) => {
     const targets = schedule.target_blocks ?? [];
     return targets.length === 0 || targets.some((block) => viewerBlockSet.has(block));
@@ -596,7 +597,7 @@ export async function getWeeklyRanking(): Promise<WeeklyRankingRow[]> {
       display_name: row.display_name,
       grade: row.grade,
       blocks: (row.blocks ?? []).filter((block): block is Block =>
-        block === "middle_long" || block === "short" || block === "jump" || block === "throw"
+        block === "middle_long" || block === "short" || block === "manager" || block === "jump" || block === "throw"
       ),
       avatar_url: row.avatar_url,
       km_low: row.km_low ?? 0,
