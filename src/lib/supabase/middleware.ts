@@ -44,6 +44,10 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/offline") ||
     // GETはroute内でシステム管理権限を確認し、POSTは旧アプリの署名トークンを検証する。
     pathname.startsWith("/api/legacy-access") ||
+    // VAPID公開鍵はクライアントのバンドルにも入っている公開情報。Service Worker が
+    // pushsubscriptionchange で購読を作り直すときはセッションを持てないことがあるため、
+    // ここで401にすると通知の自動復旧だけが黙って失敗する。
+    pathname.startsWith("/api/push/vapid") ||
     pathname.startsWith("/api/sheets/sync") ||
     pathname.startsWith("/api/schedule-sheets/cron-sync");
 
