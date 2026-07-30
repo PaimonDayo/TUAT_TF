@@ -7,6 +7,7 @@ export function Toggle({
   checked,
   onChange,
   disabled = false,
+  variant = "card",
   className,
 }: {
   label: string;
@@ -14,6 +15,8 @@ export function Toggle({
   checked: boolean;
   onChange: () => void;
   disabled?: boolean;
+  /** card=単独のカード / row=設定一覧の中の1行（枠なし・親カードの区切り線に乗る） */
+  variant?: "card" | "row";
   className?: string;
 }) {
   return (
@@ -22,7 +25,10 @@ export function Toggle({
       onClick={onChange}
       disabled={disabled}
       className={cn(
-        "w-full flex items-center justify-between rounded-xl bg-card border border-separator p-3.5 active:bg-bg disabled:cursor-not-allowed disabled:opacity-50 lg:rounded-lg lg:px-3 lg:py-2.5",
+        "w-full flex items-center justify-between active:bg-bg disabled:cursor-not-allowed disabled:opacity-50",
+        variant === "card"
+          ? "rounded-xl bg-card border border-separator p-3.5 lg:rounded-lg lg:px-3 lg:py-2.5"
+          : "bg-transparent px-4 py-3",
         className,
       )}
     >

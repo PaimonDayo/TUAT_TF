@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowUpDown, Plus, RotateCcw, SlidersHorizontal, X } from "lucide-react";
+import { ArrowUpDown, ChevronRight, Plus, RotateCcw, SlidersHorizontal, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { recordFieldsToJson } from "@/lib/profile-normalize";
@@ -128,9 +128,10 @@ export function RecordFieldsSetting({ profileId, initial, isMiddleLong }: { prof
   }
 
   return <>
-    <button type="button" onClick={showEditor} className="flex w-full items-center gap-3 rounded-xl border border-separator bg-card p-3 text-left active:bg-bg">
-      <SlidersHorizontal size={19} className="text-accent" />
-      <span className="min-w-0 flex-1"><span className="block text-[14px] font-semibold">記録フォームを編集</span><span className="block text-micro text-muted">項目名の変更・表示項目の整理・項目の追加</span></span>
+    <button type="button" onClick={showEditor} className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-bg">
+      <SlidersHorizontal size={19} className="shrink-0 text-accent" />
+      <span className="min-w-0 flex-1"><span className="block text-[14px] font-medium">記録フォームを編集</span><span className="block text-micro text-muted">入力項目の名前を変えたり、使わない項目を外したりできます。</span></span>
+      <ChevronRight size={18} className="shrink-0 text-muted" />
     </button>
 
     <FormModal open={open} onOpenChange={setOpen} title="記録フォームを編集" autoFocus={false}>

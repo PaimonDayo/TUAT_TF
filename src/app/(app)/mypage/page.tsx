@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
-import { Trophy, Medal, ChevronRight, Shield, ShieldCheck, Users, Target, MapPin, Rss } from "lucide-react";
+import { Trophy, Medal, ChevronRight, Settings, Shield, ShieldCheck, Users, Target, MapPin, Rss } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -11,7 +11,6 @@ import { Linkify } from "@/components/common/Linkify";
 import { ActivityFeed } from "@/components/features/ActivityFeed";
 import { MyTrainingChartCached } from "@/components/features/MyTrainingChartCached";
 import { EditProfileButton } from "@/components/features/MyPageActions";
-import { SettingsAccordion } from "@/components/features/SettingsAccordion";
 import { SheetSyncButton } from "@/components/features/SheetSyncButton";
 import { GoalEditor } from "@/components/features/GoalEditor";
 import { getCurrentProfile } from "@/lib/supabase/auth";
@@ -29,7 +28,6 @@ export default async function MyPage({
   const { setup } = await searchParams;
   const profile = await getCurrentProfile();
   const cookieStore = await cookies();
-  const timelineCompact = cookieStore.get("timeline-compact")?.value === "1";
   const showRecordSource = cookieStore.get("show-record-source")?.value === "1";
   // スプシメインの部員は、毎時同期を待たずここで最新内容をDBミラーへ反映してから読む
   // グラフ用の記録だけ先に取得し、重い「これまでの投稿」は下で Suspense ストリーミング。
@@ -116,20 +114,7 @@ export default async function MyPage({
           <RowLink href="/mypage/pb" icon={<Medal size={20} className="text-warning" />} label="大会・記録会の結果" />
           <RowLink href="/members" icon={<Users size={20} className="text-accent" />} label="メンバー一覧" />
           <RowLink href="/blog" icon={<Rss size={20} className="text-accent" />} label="ブログ" />
-          <SettingsAccordion
-            profileId={profile.id}
-            initialComment={profile.notify_comment ?? true}
-            initialNotice={profile.notify_notice ?? true}
-            menuViewAll={profile.menu_view_all_blocks ?? false}
-            attendanceDefaultBlock={profile.attendance_default_block}
-            timelineDefaultBlock={profile.timeline_default_block}
-            timelineCompact={timelineCompact}
-            showRecordSource={showRecordSource}
-            recordFields={profile.record_fields ?? []}
-            isMiddleLong={profile.blocks.includes("middle_long")}
-            canManageSystem={perms.manageSystem}
-            sheetName={profile.sheet_name}
-          />
+          <RowLink href="/mypage/settings" icon={<Settings size={20} className="text-muted2" />} label="設定" />
         </Card>
 
         <section className="space-y-2">

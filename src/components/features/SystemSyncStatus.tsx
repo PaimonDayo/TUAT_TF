@@ -39,8 +39,8 @@ export function SystemSyncStatus() {
   const issue = health?.latest?.hasIssue || (health?.pendingPushCount ?? 0) > 0;
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <p className="section-label">システム</p>
+      <div className="flex items-center justify-between px-1">
+        <p className="text-micro text-muted2">スプレッドシート連携の状態</p>
         <button type="button" onClick={() => { setError(false); setHealth(null); setRefreshKey((key) => key + 1); }} className="p-1 text-muted active:opacity-50" aria-label="連携状態を再確認">
           <RefreshCw size={15} />
         </button>

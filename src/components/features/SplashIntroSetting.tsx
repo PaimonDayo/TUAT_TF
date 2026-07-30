@@ -42,5 +42,13 @@ export function SplashIntroSetting() {
     window.dispatchEvent(new Event(CHANGE_EVENT));
   }
 
-  return <Toggle label={"\u8d77\u52d5\u753b\u9762\u3092\u30b9\u30ad\u30c3\u30d7"} description={"\u6b21\u56de\u4ee5\u964d\u3001\u8d77\u52d5\u753b\u9762\u3092\u8868\u793a\u3057\u307e\u305b\u3093"} checked={skip} onChange={toggle} />;
+  return (
+    <Toggle
+      variant="row"
+      label="起動画面をスキップ"
+      description="次にアプリを開くときから、起動画面を表示しません。"
+      checked={skip}
+      onChange={toggle}
+    />
+  );
 }

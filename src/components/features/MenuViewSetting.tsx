@@ -47,8 +47,9 @@ export function MenuViewSetting({
 
   return (
     <Toggle
+      variant="row"
       label="他ブロックのメニューも見る"
-      description="自分の所属ブロック以外の練習メニューも表示します"
+      description="自分のブロック以外の練習メニューも表示します。"
       checked={on}
       onChange={toggle}
     />

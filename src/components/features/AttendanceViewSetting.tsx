@@ -51,10 +51,10 @@ export function AttendanceViewSetting({
   }
 
   return (
-    <div className="rounded-xl bg-card px-3 py-3">
-      <p className="text-body font-semibold text-ink">出欠一覧の初期表示</p>
+    <div className="px-4 py-3">
+      <p className="text-[14px] font-medium">出欠一覧の初期表示</p>
       <p className="mb-2.5 mt-0.5 text-micro text-muted">
-        出欠一覧を開いたときに最初に表示するタブ。ホームと予定に出る出席・欠席の人数もこのブロックで数えます
+        出欠一覧と、ホーム・予定に出る出欠人数の対象ブロックです。
       </p>
       <SegmentedControl
         items={ITEMS}

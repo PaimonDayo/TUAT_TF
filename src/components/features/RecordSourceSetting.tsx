@@ -25,8 +25,9 @@ export function RecordSourceSetting({ initial }: { initial: boolean }) {
 
   return (
     <Toggle
-      label={"\u6295\u7a3f\u306e\u53d6\u5f97\u5143\u3092\u8868\u793a"}
-      description={"\u7df4\u7fd2\u8a18\u9332\u306b\u300c\u30b9\u30d7\u30b7\u7531\u6765\u300d\u307e\u305f\u306f\u300c\u30a2\u30d7\u30ea\u7531\u6765\u300d\u3092\u8868\u793a\u3057\u307e\u3059"}
+      variant="row"
+      label="記録の保存元を表示"
+      description="練習記録に「スプレッドシート」「アプリ」のどちらで入力されたかを表示します。"
       checked={showSource}
       onChange={toggle}
     />

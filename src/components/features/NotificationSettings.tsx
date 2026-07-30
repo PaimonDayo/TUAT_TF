@@ -162,18 +162,17 @@ export function NotificationSettings({
   };
 
   return (
-    <div className="space-y-3">
-      <p className="section-label">通知</p>
-
+    <>
       {pushStatus === "unsupported" ? (
-        <p className="text-[13px] text-muted2">この端末は通知に対応していません。</p>
+        <p className="px-4 py-3 text-[13px] text-muted2">この端末は通知に対応していません。</p>
       ) : isIos && !isStandalone ? (
-        <p className="text-[13px] text-muted2">
+        <p className="px-4 py-3 text-[13px] leading-relaxed text-muted2">
           iPhoneで通知を受け取るには、ブラウザの共有メニューから「ホーム画面に追加」をしてから、追加したアプリを開いて設定してください。
         </p>
       ) : (
         <>
           <Toggle
+            variant="row"
             label="通知を受け取る"
             description={
               pushStatus === "denied"
@@ -186,17 +185,19 @@ export function NotificationSettings({
 
           {/* 何を通知するか（通知ON時のみ） */}
           {isSubscribed && (
-            <div className="space-y-1.5 pt-1">
-              <p className="text-micro text-muted2">受け取る種類</p>
+            <div className="divide-y divide-separator/70 border-t border-separator/70">
+              <p className="px-4 pb-1 pt-3 text-micro text-muted2">受け取る種類</p>
               <Toggle
+                variant="row"
                 label="コメント"
-                description="投稿へのコメントや参加中スレッドへの返信"
+                description="自分の投稿へのコメントと、参加中スレッドへの返信を通知します。"
                 checked={comment}
                 onChange={() => handleChange("notify_comment", !comment, setComment)}
               />
               <Toggle
+                variant="row"
                 label="お知らせ"
-                description="新しいお知らせが投稿されたとき"
+                description="新しいお知らせが投稿されたときに通知します。"
                 checked={notice}
                 onChange={() => handleChange("notify_notice", !notice, setNotice)}
               />
@@ -205,7 +206,7 @@ export function NotificationSettings({
 
           {/* 届くかどうかをその場で確かめる（「通知が来ない」相談の切り分け用） */}
           {isSubscribed && (
-            <div className="space-y-1 pt-1">
+            <div className="space-y-1.5 px-4 py-3">
               <Button variant="outline" size="sm" onClick={handleTestPush} disabled={isTesting}>
                 {isTesting ? "送信中…" : "通知が届くか試す"}
               </Button>
@@ -214,6 +215,6 @@ export function NotificationSettings({
           )}
         </>
       )}
-    </div>
+    </>
   );
 }

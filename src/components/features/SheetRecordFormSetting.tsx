@@ -54,13 +54,13 @@ export function SheetRecordFormSetting({
   }
 
   return <>
-    <button type="button" onClick={() => void openEditor()} disabled={loading} className="flex w-full items-center gap-3 rounded-xl border border-separator bg-card p-3 text-left active:bg-bg disabled:opacity-60">
-      <SlidersHorizontal size={19} className="text-accent" />
-      <span className="min-w-0 flex-1"><span className="block text-[14px] font-semibold">練習記録フォーム・タイムライン表示</span><span className="block text-micro text-muted">スプレッドシートの列から入力項目と表示項目を設定</span></span>
-      <ChevronRight size={18} className="text-muted" />
+    <button type="button" onClick={() => void openEditor()} disabled={loading} className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-bg disabled:opacity-60">
+      <SlidersHorizontal size={19} className="shrink-0 text-accent" />
+      <span className="min-w-0 flex-1"><span className="block text-[14px] font-medium">記録フォームを編集</span><span className="block text-micro text-muted">スプレッドシートの列から、入力項目とタイムラインの表示項目を選びます。</span></span>
+      <ChevronRight size={18} className="shrink-0 text-muted" />
     </button>
-    {loading && <p className="px-1 text-micro text-muted">見出しを取得中…</p>}
-    {message && <p className="rounded-lg bg-danger/10 px-3 py-2 text-caption text-danger">{message}</p>}
+    {loading && <p className="px-4 pb-3 text-micro text-muted">見出しを取得中…</p>}
+    {message && <p className="mx-4 mb-3 rounded-lg bg-danger/10 px-3 py-2 text-caption text-danger">{message}</p>}
     {data && <SheetHeaderSetupDialog
       key={data.signature}
       open
