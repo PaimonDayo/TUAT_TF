@@ -18,6 +18,14 @@ import type {
 } from "@/types";
 
 export async function POST(request: Request) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const body = (await request.json()) as {
     sheetId?: string;
     csv?: string;
@@ -27,7 +35,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "シートを指定してください" }, { status: 400 });
   }
 
-  const supabase = await createClient();
   const [{ data: sheetData }, { data: venueData }] = await Promise.all([
     supabase.from("schedule_sheets").select("*").eq("id", body.sheetId).maybeSingle(),
     supabase.from("venues").select("*"),

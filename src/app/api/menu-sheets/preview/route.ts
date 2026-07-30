@@ -11,6 +11,14 @@ import { normalizeImportValues } from "@/lib/schedule-import";
 import type { Block, PracticeMenu, PracticeSchedule } from "@/types";
 
 export async function POST(request: Request) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const body = (await request.json()) as {
     year?: number;
     targetBlock?: Block;
@@ -67,7 +75,6 @@ export async function POST(request: Request) {
     }));
   }
 
-  const supabase = await createClient();
   const start = `${year - 1}-12-01`;
   const end = `${year + 1}-02-01`;
   const { data: scheduleData } = await supabase

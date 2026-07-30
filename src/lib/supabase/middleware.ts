@@ -33,7 +33,6 @@ export async function updateSession(request: NextRequest) {
   // getUser() を呼ぶことでセッションが検証・更新される（重要）
   const {
     data: { user },
-    error,
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
@@ -47,13 +46,6 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/api/legacy-access") ||
     pathname.startsWith("/api/sheets/sync") ||
     pathname.startsWith("/api/schedule-sheets/cron-sync");
-
-  // Supabase の認証クッキー（sb-<ref>-auth-token[.n]）が存在するか。
-  // クッキーがあるのに user が取れない場合は「本当のログアウト」ではなく、
-  // レート制限・ネットワーク等の一時的失敗の可能性が高い。
-  const hasAuthCookie = request.cookies
-    .getAll()
-    .some((c) => c.name.includes("-auth-token"));
 
   // 更新後のクッキーを必ず引き継いでリダイレクトする（重要）。
   // 単に NextResponse.redirect すると getUser で更新されたトークンが失われ、
@@ -71,16 +63,21 @@ export async function updateSession(request: NextRequest) {
     return redirectTo("/home");
   }
 
-  // 完全に未認証（認証クッキーが無い）で保護ページ → /login
-  if (!user && !hasAuthCookie && !isPublic) {
-    return redirectTo("/login");
+  // API clients need JSON instead of a redirect to the login page.
+  if (!user && !isPublic && pathname.startsWith("/api/")) {
+    const unauthorized = NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401 },
+    );
+    response.cookies.getAll().forEach((cookie) =>
+      unauthorized.cookies.set(cookie),
+    );
+    return unauthorized;
   }
 
-  // 認証クッキーはあるが user が取れなかった（= 一時的失敗の可能性）。
-  // ここでログアウトさせず通す。ページ側は getSession でクッキーを読み、
-  // データのアクセス制御は RLS が担保する。次のリクエストで回復を試みる。
-  if (!user && error) {
-    console.warn("[proxy] getUser failed but auth cookie exists:", error.message);
+  // Browser navigation to protected pages still goes through the login flow.
+  if (!user && !isPublic) {
+    return redirectTo("/login");
   }
 
   return response;
