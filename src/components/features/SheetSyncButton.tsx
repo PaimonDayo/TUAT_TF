@@ -66,17 +66,17 @@ export function SheetSyncButton() {
       if (!cycleComplete) throw new Error("対象が多いため途中で止まりました。もう一度お試しください");
       setHasIssue(failedMembers.length > 0);
       setMessage(
-        `全${total}人ぶん完了しました：取り込み ${inserted}件 / 更新 ${updated}件 / 書き込み ${pushed}件` +
+        `全${total}人ぶん完了しました: 取り込み ${inserted}件 / 更新 ${updated}件 / 書き込み ${pushed}件` +
           (sheetReplies ? " / 返信 " + sheetReplies + "件" : "") +
           (conflictCount ? ` / 重複のため見送り ${conflictCount}件` : "") +
           (failedMembers.length
-            ? ` / うまくいかなかった人 ${failedMembers.length}件（${failedMembers.join("、")}）`
+            ? ` / うまくいかなかった人 ${failedMembers.length}人（${failedMembers.join("、")}）`
             : ""),
       );
       router.refresh();
     } catch (error) {
       const detail = error instanceof Error ? error.message : "通信エラー";
-      setMessage(`うまくいきませんでした：${detail}`);
+      setMessage(`うまくいきませんでした: ${detail}`);
       setHasIssue(true);
     } finally {
       setBusy(false);

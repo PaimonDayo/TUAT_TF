@@ -74,7 +74,7 @@ export const TweetForm = forwardRef<
       }
       const { error } = await supabase.from("tweets").insert({ user_id: user.id, content: text });
       if (error) {
-        setError("投稿に失敗しました");
+        setError("保存できませんでした。もう一度お試しください");
         setSaving(false);
         return;
       }
@@ -142,7 +142,7 @@ export const TweetForm = forwardRef<
           {saving ? (
             <>
               <LoaderCircle size={18} className="animate-spin" />
-              保存しています…
+              保存中…
             </>
           ) : (
             <>

@@ -30,7 +30,7 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
     <main className="space-y-4 px-4 pb-6 pt-1 md:px-6">
       <div><p className="text-headline">東京農工大学陸上競技部ブログ</p><p className="mt-0.5 text-caption text-muted">公式ブログの記事一覧</p></div>
       {unavailable ? <Card className="p-4"><EmptyState icon={<Rss size={28} />} title="ブログを読み込めませんでした" description="時間をおいて、もう一度開いてください。" className="min-h-36" /></Card>
-      : items.length === 0 ? <Card className="p-4"><EmptyState title="記事がありません" className="min-h-28" /></Card>
+      : items.length === 0 ? <Card className="p-4"><EmptyState title="まだ記事はありません" className="min-h-28" /></Card>
       : <div className="space-y-3">{items.map((item) => {
         const id = blogArticleId(item.url); if (!id) return null; const date = new Date(item.publishedAt);
         return <Card key={item.url} className="overflow-hidden"><Link href={`/blog/${id}`} className="block p-4 active:bg-bg">

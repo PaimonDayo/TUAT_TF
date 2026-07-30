@@ -97,7 +97,7 @@ export function commentColumn(header: string[]): number {
 export function parseMemberCsv(member: SheetMember, csv: string, defaultYear = currentYearJst()): RawMember {
   const parsed = Papa.parse<string[]>(csv, { skipEmptyLines: false });
   const fatal = parsed.errors.find((error) => error.type === "Quotes");
-  if (fatal) throw new Error(`CSVの解析に失敗しました: ${fatal.message}`);
+  if (fatal) throw new Error(`CSVを読み取れませんでした: ${fatal.message}`);
   const rows = parsed.data.map((row) => row.map((cell) => String(cell ?? "")));
   const headerIndex = rows
     .slice(0, 15)
@@ -153,7 +153,7 @@ export async function fetchPublicSheetMembers(): Promise<SheetMember[]> {
     return metadataCache.members;
   }
   const response = await fetchWithTimeout(`${BASE_URL}/${encodeURIComponent(id)}/htmlview`, 10_000);
-  if (!response.ok) throw new Error(`シート一覧の取得に失敗しました (${response.status})`);
+  if (!response.ok) throw new Error(`シート一覧を取得できませんでした (${response.status})`);
   const html = await response.text();
   const members = parseSheetMetadataHtml(html);
   if (members.length === 0) {
@@ -174,7 +174,7 @@ export async function fetchPublicMember(
   const id = spreadsheetId();
   const url = `${BASE_URL}/${encodeURIComponent(id)}/export?format=csv&gid=${encodeURIComponent(member.gid)}&t=${Date.now()}`;
   const response = await fetchWithTimeout(url, opts.timeoutMs ?? 10_000);
-  if (!response.ok) throw new Error(`CSVの取得に失敗しました (${response.status})`);
+  if (!response.ok) throw new Error(`CSVを取得できませんでした (${response.status})`);
   const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
   const csv = await response.text();
   const startsAsHtml = /^\s*(?:<!doctype|<html)/i.test(csv);

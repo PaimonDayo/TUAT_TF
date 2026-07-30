@@ -64,7 +64,7 @@ export function MemberDirectory({ members }: { members: AuthorMini[] }) {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="名前で検索"
+            placeholder="検索" aria-label="部員を検索"
             className="pl-9"
           />
         </div>
@@ -76,7 +76,7 @@ export function MemberDirectory({ members }: { members: AuthorMini[] }) {
 
       <div className="px-4 pt-1">
         {groups.length === 0 ? (
-          <EmptyState title="条件に合う部員がいません" />
+          <EmptyState title="条件に合う部員はいません" description="条件を変えてみてください。" />
         ) : (
           <div className="space-y-5">
             {groups.map((group) => (

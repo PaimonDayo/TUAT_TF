@@ -84,7 +84,7 @@ export function NotificationsList({
       setNotifications((prev) => prev.filter((it) => it.id !== id));
       showToast("通知を削除しました");
     } catch {
-      showToast("削除に失敗しました");
+      showToast("通知を削除できませんでした");
       return false;
     }
   };
@@ -96,12 +96,12 @@ export function NotificationsList({
       router.refresh();
       showToast("すべて既読にしました");
     } catch {
-      showToast("エラーが発生しました");
+      showToast("すべて既読にできませんでした");
     }
   };
 
   if (notifications.length === 0) {
-    return <EmptyState title="通知はありません" />;
+    return <EmptyState title="まだ通知はありません" />;
   }
 
   const hasUnread = notifications.some((n) => !n.is_read);

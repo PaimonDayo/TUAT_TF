@@ -65,7 +65,7 @@ export async function POST(request: Request) {
       .eq("id", recordId);
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "スプレッドシートへの反映に失敗しました";
+    const message = err instanceof Error ? err.message : "スプレッドシートに書き込めませんでした";
     // 失敗: pending_sheet_pushをtrueにし、次回の毎時同期(runSheetSync)が明示的に再送する
     // （synced_atとの大小比較には頼らない。無関係な時刻ズレを再送対象と誤検知しないため）。
     await admin.from("practice_records").update({ pending_sheet_push: true }).eq("id", recordId);

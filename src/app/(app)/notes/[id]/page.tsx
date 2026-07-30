@@ -119,7 +119,7 @@ export default async function NoteFolderPage({
           <p className="section-label">記事</p>
           {articles.length === 0 ? (
             <EmptyState
-              title="記事がありません"
+              title="まだ記事はありません"
               description={
                 canEdit ? "右下のボタンから最初の記事を追加できます。" : undefined
               }

@@ -27,7 +27,7 @@ export function RankingList({
     return (
       <div className="px-4">
         <Card>
-          <EmptyState title="直近7日間はまだ記録がありません" />
+          <EmptyState title="まだ記録はありません" description="直近7日間の記録が対象です。" />
         </Card>
       </div>
     );

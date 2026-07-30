@@ -299,29 +299,29 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
             <div>
               <p className="section-label mb-1.5">練習場所</p>
               <Select ariaLabel="練習場所" value={customVenueDates.includes(date) || (!!scheduleDrafts[date]?.venue && !venues.some((venue) => venue.name === scheduleDrafts[date]?.venue)) ? "other" : scheduleDrafts[date]?.venue ?? ""} onValueChange={(value) => { setCustomVenueDates((current) => value === "other" ? [...new Set([...current, date])] : current.filter((item) => item !== date)); updateSchedule(date, { venue: value === "other" ? (venues.some((venue) => venue.name === scheduleDrafts[date]?.venue) ? "" : scheduleDrafts[date]?.venue ?? "") : value }); }} placeholder="場所を選択" options={[...venues.map((venue) => ({ value: venue.name, label: venue.name })), { value: "other", label: "その他" }]} />
-              {(customVenueDates.includes(date) || (!!scheduleDrafts[date]?.venue && !venues.some((venue) => venue.name === scheduleDrafts[date]?.venue))) && <Input className="mt-2" placeholder="場所を入力" value={scheduleDrafts[date]?.venue ?? ""} onChange={(event) => updateSchedule(date, { venue: event.target.value })} />}
+              {(customVenueDates.includes(date) || (!!scheduleDrafts[date]?.venue && !venues.some((venue) => venue.name === scheduleDrafts[date]?.venue))) && <Input className="mt-2" placeholder="場所名を入力" value={scheduleDrafts[date]?.venue ?? ""} onChange={(event) => updateSchedule(date, { venue: event.target.value })} />}
             </div>
           </div>
           <div>
             <p className="section-label mb-1.5">詳細</p>
-            <Textarea autoGrow rows={2} className="min-h-16" placeholder="集合方法、持ち物、連絡事項など" value={scheduleDrafts[date]?.note ?? ""} onChange={(event) => updateSchedule(date, { note: event.target.value })} />
+            <Textarea autoGrow rows={2} className="min-h-16" placeholder="例: 集合方法、持ち物" value={scheduleDrafts[date]?.note ?? ""} onChange={(event) => updateSchedule(date, { note: event.target.value })} />
           </div>
         </div>
       ) : (
         <div className="space-y-3">
           <div>
             <p className="section-label mb-1.5">メニュー</p>
-            <Textarea autoGrow rows={3} className="min-h-20" placeholder="例：400m×10（つなぎ200m）" value={menuDrafts[date]?.content ?? ""} onChange={(event) => updateMenu(date, { content: event.target.value })} />
+            <Textarea autoGrow rows={3} className="min-h-20" placeholder="例: 400m×10（つなぎ200m）" value={menuDrafts[date]?.content ?? ""} onChange={(event) => updateMenu(date, { content: event.target.value })} />
           </div>
           {(block === "middle_long" || block === "short") && <button type="button" onClick={() => toggleExpanded(date)} className="inline-flex items-center gap-1 text-xs font-semibold text-accent">{isExpanded(date) ? <ChevronUp size={14} /> : <ChevronDown size={14} />}{isExpanded(date) ? "詳細を閉じる" : block === "middle_long" ? "ペース・補足・補強を入力" : "説明を入力"}</button>}
           {block === "middle_long" && isExpanded(date) && <>
             <div>
               <p className="section-label mb-1.5">ペース</p>
-              <Textarea autoGrow rows={2} className="min-h-16" placeholder="距離ごとの設定ペースなど" value={menuDrafts[date]?.pace ?? ""} onChange={(event) => updateMenu(date, { pace: event.target.value })} />
+              <Textarea autoGrow rows={2} className="min-h-16" placeholder="例: 距離ごとの設定ペース" value={menuDrafts[date]?.pace ?? ""} onChange={(event) => updateMenu(date, { pace: event.target.value })} />
             </div>
             <div>
               <p className="section-label mb-1.5">補足</p>
-              <Textarea autoGrow rows={2} className="min-h-16" placeholder="変更条件や注意点など" value={menuDrafts[date]?.remark ?? ""} onChange={(event) => updateMenu(date, { remark: event.target.value })} />
+              <Textarea autoGrow rows={2} className="min-h-16" placeholder="例: 変更条件、注意点" value={menuDrafts[date]?.remark ?? ""} onChange={(event) => updateMenu(date, { remark: event.target.value })} />
             </div>
             {targetIds.length === 0 && <div>
               <p className="section-label mb-1.5">補強</p>
@@ -330,13 +330,13 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
           </>}
           {block === "short" && isExpanded(date) && <div>
             <p className="section-label mb-1.5">説明</p>
-            <Textarea autoGrow rows={2} className="min-h-16" placeholder="目的、走り方、注意点など" value={menuDrafts[date]?.remark ?? ""} onChange={(event) => updateMenu(date, { remark: event.target.value })} />
+            <Textarea autoGrow rows={2} className="min-h-16" placeholder="例: 目的、走り方、注意点" value={menuDrafts[date]?.remark ?? ""} onChange={(event) => updateMenu(date, { remark: event.target.value })} />
           </div>}
         </div>
       )}
     </section>)}</div>
     {error && <p className="text-center text-caption text-danger">{error}</p>}
-    <FormModalFooter><Button size="lg" className={`w-full ${savingAll ? "opacity-100" : ""}`} disabled={savingAll || dirtyCount === 0} onClick={() => { void saveAll().then((ok) => { if (ok) onSaved?.(); }); }}>{savingAll ? <><LoaderCircle size={18} className="animate-spin" />保存しています…</> : <><Save size={17} />変更をまとめて保存（{dirtyCount}件）</>}</Button></FormModalFooter>
+    <FormModalFooter><Button size="lg" className={`w-full ${savingAll ? "opacity-100" : ""}`} disabled={savingAll || dirtyCount === 0} onClick={() => { void saveAll().then((ok) => { if (ok) onSaved?.(); }); }}>{savingAll ? <><LoaderCircle size={18} className="animate-spin" />保存中…</> : <><Save size={17} />変更をまとめて保存（{dirtyCount}件）</>}</Button></FormModalFooter>
   </div>;
 });
 

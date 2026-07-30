@@ -86,7 +86,7 @@ export function NotificationSettings({
       const reg = await navigator.serviceWorker.ready;
       const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
       if (!vapidPublicKey) {
-        showToast('VAPID公開鍵が設定されていません');
+        showToast('通知をオンにできませんでした');
         return;
       }
 
@@ -108,7 +108,7 @@ export function NotificationSettings({
 
       if (error) {
         console.error(error);
-        showToast('登録に失敗しました');
+        showToast('通知をオンにできませんでした');
         return;
       }
       
@@ -116,7 +116,7 @@ export function NotificationSettings({
       setPushStatus('granted');
     } catch (e) {
       console.error(e);
-      showToast('エラーが発生しました');
+      showToast('通知をオンにできませんでした');
     } finally {
       setIsProcessing(false);
     }
@@ -137,7 +137,7 @@ export function NotificationSettings({
       setIsSubscribed(false);
     } catch (e) {
       console.error(e);
-      showToast('解除に失敗しました');
+      showToast('通知をオフにできませんでした');
     } finally {
       setIsProcessing(false);
     }

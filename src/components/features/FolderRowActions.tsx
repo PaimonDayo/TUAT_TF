@@ -73,7 +73,7 @@ export function FolderRowActions({
         deleteDescription="フォルダ内のサブフォルダ・記事もすべて削除され、元に戻せません。"
       />
       {editing && (
-        <FormModal open onOpenChange={setEditing} title="フォルダ設定を編集">
+        <FormModal open onOpenChange={setEditing} title="フォルダを編集">
           {members ? (
             <NoteEditor
               currentUser={currentUser}

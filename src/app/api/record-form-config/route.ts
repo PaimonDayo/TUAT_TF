@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     .eq("id", user.id)
     .single();
   if (profileError || !profile?.sheet_name) {
-    return NextResponse.json({ error: "スプシ連携が設定されていません" }, { status: 400 });
+    return NextResponse.json({ error: "スプレッドシートと連携していません" }, { status: 400 });
   }
   const isMiddleLong = (profile.blocks ?? []).includes("middle_long");
   const persistedFields = isMiddleLong ? fields.filter((field) => field.key !== "dist_actual") : fields;

@@ -121,7 +121,7 @@ export function RecordFieldsSetting({ profileId, initial, isMiddleLong }: { prof
       router.refresh();
     } catch (error) {
       console.error("[RecordFieldsSetting] save failed", error);
-      setMessage("保存に失敗しました。もう一度お試しください");
+      setMessage("保存できませんでした。もう一度お試しください");
     } finally {
       setSaving(false);
     }
@@ -166,7 +166,7 @@ export function RecordFieldsSetting({ profileId, initial, isMiddleLong }: { prof
         <ReorderList items={fields} enabled={reorderMode} onReorder={setFields} renderItem={(field) => <div className="relative rounded-2xl border-2 border-accent/25 bg-card p-3 shadow-sm">
           <button type="button" onClick={() => setFields((current) => current.filter((item) => item.key !== field.key))} aria-label={`${field.label || "追加項目"}を削除`} className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full bg-danger text-white shadow"><X size={15} strokeWidth={3} /></button>
           <p className="section-label mb-1.5">項目名（変更できます）</p>
-          <Input aria-label="項目名" value={field.label} onChange={(event) => setFields((current) => current.map((item) => item.key === field.key ? { ...item, label: event.target.value } : item))} placeholder="項目名" maxLength={30} className="mb-2 h-10 font-semibold" />
+          <Input aria-label="項目名" value={field.label} onChange={(event) => setFields((current) => current.map((item) => item.key === field.key ? { ...item, label: event.target.value } : item))} placeholder="項目名を入力" maxLength={30} className="mb-2 h-10 font-semibold" />
           {field.type === "number" ? <Input disabled placeholder="0" /> : <Textarea disabled rows={2} placeholder="入力欄" />}
           <div className="mt-2 flex gap-2">{(["text", "number"] as const).map((type) => <button key={type} type="button" onClick={() => setFields((current) => current.map((item) => item.key === field.key ? { ...item, type } : item))} className={`rounded-full px-3 py-1 text-micro font-semibold ${field.type === type ? "bg-accent text-white" : "bg-bg text-muted"}`}>{type === "text" ? "文章" : "数値"}</button>)}</div>
         </div>} />
@@ -179,12 +179,12 @@ export function RecordFieldsSetting({ profileId, initial, isMiddleLong }: { prof
 
         <button type="button" onClick={() => setAddOpen(true)} className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-accent/35 bg-accent/5 text-[14px] font-semibold text-accent active:bg-accent/10"><Plus size={19} />新しい入力項目を追加</button>
         {message && <p className="text-center text-caption text-danger">{message}</p>}
-        <FormModalFooter><Button size="lg" onClick={save} disabled={saving}>{saving ? "保存中…" : "このフォームを保存"}</Button></FormModalFooter>
+        <FormModalFooter><Button size="lg" onClick={save} disabled={saving}>{saving ? "保存中…" : "保存する"}</Button></FormModalFooter>
       </div>
     </FormModal>
 
     <Sheet open={addOpen} onOpenChange={setAddOpen}><SheetContent title="入力項目を追加" autoFocus={false}><div className="space-y-4 pb-2">
-      <Input value={newLabel} onChange={(event) => setNewLabel(event.target.value)} placeholder="項目名（例：睡眠時間）" maxLength={30} />
+      <Input value={newLabel} onChange={(event) => setNewLabel(event.target.value)} placeholder="項目名（例: 睡眠時間）" maxLength={30} />
       <div className="grid grid-cols-2 gap-2">{(["text", "number"] as const).map((type) => <button key={type} type="button" onClick={() => setNewType(type)} className={`h-12 rounded-xl border text-[14px] font-semibold ${newType === type ? "border-accent bg-accent/10 text-accent" : "border-separator bg-card"}`}>{type === "text" ? "文章入力" : "数値入力"}</button>)}</div>
       <Button size="lg" onClick={addField} disabled={!newLabel.trim()}>追加する</Button>
     </div></SheetContent></Sheet>

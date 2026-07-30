@@ -33,7 +33,7 @@ export function NoteDetailActions({
     const supabase = createClient();
     const { error } = await supabase.from("notes").delete().eq("id", note.id);
     if (error) {
-      showToast("ノートフォルダを削除できませんでした");
+      showToast("フォルダを削除できませんでした");
       return false;
     }
     router.push("/notes");
@@ -55,7 +55,7 @@ export function NoteDetailActions({
         <ActionMenu
           onEdit={canEdit ? () => setEditing(true) : undefined}
           onDelete={canDelete ? remove : undefined}
-        deleteTitle="ノートフォルダを削除しますか？"
+        deleteTitle="フォルダを削除しますか？"
         deleteDescription="フォルダ内のサブフォルダ・記事もすべて削除され、元に戻せません。"
         />
       )}
@@ -63,7 +63,7 @@ export function NoteDetailActions({
         <FormModal
           open
           onOpenChange={setEditing}
-          title="フォルダ設定を編集"
+          title="フォルダを編集"
         >
           <NoteEditor
             currentUser={currentUser}

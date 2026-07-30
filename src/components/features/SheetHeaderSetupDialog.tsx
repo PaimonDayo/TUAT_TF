@@ -112,7 +112,7 @@ export function SheetHeaderSetupDialog({
     <FormModal open={open} onOpenChange={(next) => !next && onCancel()} title="練習記録フォーム・タイムライン表示" autoFocus={false}>
       <div className="space-y-4 pb-5">
         <div className="rounded-xl bg-accent/8 px-3 py-2.5 text-caption leading-relaxed">
-          「{data.sheetName}」のヘッダーから作成します。日付・曜日は自動処理し、スプシにない項目は表示しません。
+          「{data.sheetName}」の見出しから作成します。日付・曜日は自動で判別し、スプレッドシートにない項目は表示しません。
         </div>
 
         {isMiddleLong && fixed.length > 0 && <section className="rounded-2xl border border-separator bg-card p-3">
@@ -161,7 +161,7 @@ export function SheetHeaderSetupDialog({
         {message && <p role="alert" className="rounded-xl bg-amber-50 px-3 py-2 text-center text-caption font-semibold text-amber-800">{message}</p>}
         <FormModalFooter>
           <Button variant="outline" size="lg" onClick={onCancel} disabled={busy}>戻る</Button>
-          <Button size="lg" onClick={confirm} disabled={busy}>{busy ? "保存中…" : "この設定で保存"}</Button>
+          <Button size="lg" onClick={confirm} disabled={busy}>{busy ? "保存中…" : "保存する"}</Button>
         </FormModalFooter>
       </div>
     </FormModal>

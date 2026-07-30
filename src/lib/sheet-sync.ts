@@ -264,7 +264,7 @@ async function fetchAllRaw(memberNames: string[]): Promise<ProtectedFetchResult>
   }
 
   if (sheetMembers.length > 0 && members.length === 0 && failedMembers.length > 0) {
-    throw new Error(`全ての部員シート取得に失敗しました（${failedMembers.length}件）`);
+    throw new Error(`部員のシートを読み込めませんでした（${failedMembers.length}人）`);
   }
   return {
     members: members.sort((a, b) => a.name.localeCompare(b.name)),
@@ -877,7 +877,7 @@ async function reconcileSheetReplies(
         .eq("id", match.commentId);
       if (indexError) {
         failedMembers.push({
-          member: sheetNameByRecord.get(recordId) ?? "(スプシ返信)",
+          member: sheetNameByRecord.get(recordId) ?? "(スプレッドシートの返信)",
           reason: "返信順の同期: " + indexError.message,
         });
       } else {
@@ -890,7 +890,7 @@ async function reconcileSheetReplies(
     });
     if (error) {
       failedMembers.push({
-        member: sheetNameByRecord.get(recordId) ?? "(スプシ返信)",
+        member: sheetNameByRecord.get(recordId) ?? "(スプレッドシートの返信)",
         reason: "返信の同期: " + error.message,
       });
     } else {
@@ -1105,8 +1105,8 @@ export async function runSheetSync(
       result.failedMembers.push(...replySync.failedMembers);
     } catch (error) {
       result.failedMembers.push({
-        member: "(スプシ返信)",
-        reason: error instanceof Error ? error.message : "返信の同期確認に失敗しました",
+        member: "(スプレッドシートの返信)",
+        reason: error instanceof Error ? error.message : "返信の状態を確認できませんでした",
       });
     }
     return result;
@@ -1143,7 +1143,7 @@ export async function runSheetSync(
       result.updated--;
       result.failedMembers.push({
         member: "(取込更新)",
-        reason: err instanceof Error ? err.message : "更新に失敗しました",
+        reason: err instanceof Error ? err.message : "更新できませんでした",
       });
     }
   }
@@ -1159,8 +1159,8 @@ export async function runSheetSync(
     result.failedMembers.push(...replySync.failedMembers);
   } catch (error) {
     result.failedMembers.push({
-      member: "(スプシ返信)",
-      reason: error instanceof Error ? error.message : "返信の同期に失敗しました",
+      member: "(スプレッドシートの返信)",
+      reason: error instanceof Error ? error.message : "返信を書き込めませんでした",
     });
   }
 
@@ -1179,7 +1179,7 @@ export async function runSheetSync(
     } catch (err) {
       result.failedMembers.push({
         member: p.memberName,
-        reason: err instanceof Error ? err.message : "書き戻しに失敗しました",
+        reason: err instanceof Error ? err.message : "スプレッドシートに書き込めませんでした",
       });
     }
   }

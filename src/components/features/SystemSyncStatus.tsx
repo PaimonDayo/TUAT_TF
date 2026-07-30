@@ -51,7 +51,7 @@ export function SystemSyncStatus() {
           <span className="text-[14px] font-semibold">{error ? "状態を取得できません" : !health ? "確認中…" : issue ? "確認が必要です" : "連携は正常です"}</span>
         </div>
         {health && <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-          <Metric label="スプシ利用" value={`${health.sheetProfileCount}人`} />
+          <Metric label="スプレッドシート連携" value={`${health.sheetProfileCount}人`} />
           <Metric label="未書き込み" value={`${health.pendingPushCount}件`} danger={health.pendingPushCount > 0} />
           <Metric label="前回エラー" value={`${health.latest?.failedCount ?? 0}人`} danger={(health.latest?.failedCount ?? 0) > 0} />
         </div>}

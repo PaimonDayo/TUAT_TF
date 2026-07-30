@@ -359,7 +359,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
           .select("id")
           .single();
         if (error || !inserted) {
-          setError("記録の保存に失敗しました");
+          setError("保存できませんでした。もう一度お試しください");
           setSaving(false);
           return;
         }
@@ -456,7 +456,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
           <p className="section-label mb-1.5">{recordFieldLabel(configuredFields, "menu_text", "メニュー")}</p>
           <Textarea
             rows={2}
-            placeholder="今日取り組んだメニュー"
+            placeholder="メニューを入力"
             value={menuText}
             onChange={(e) => setMenuText(e.target.value)}
           />
@@ -469,7 +469,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
           <p className="section-label mb-1.5">{recordFieldLabel(configuredFields, "focus_text", "目的・意識すること")}</p>
           <Textarea
             rows={2}
-            placeholder="このメニューの狙い・意識したポイント"
+            placeholder="例: このメニューの狙い、意識したポイント"
             value={focusText}
             onChange={(e) => setFocusText(e.target.value)}
           />
@@ -493,7 +493,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
           <p className="section-label mb-1.5">{recordFieldLabel(configuredFields, "strength_text", "補強")}</p>
           <Textarea
             rows={2}
-            placeholder="腹筋・背筋・体幹 など"
+            placeholder="例: 腹筋・背筋・体幹"
             value={strengthText}
             onChange={(e) => setStrengthText(e.target.value)}
           />
@@ -505,7 +505,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
         <p className="section-label mb-1.5">{recordFieldLabel(configuredFields, "memo", "感想・振り返り")}</p>
         <Textarea
           rows={3}
-          placeholder="今日の練習はどうだった？"
+          placeholder="今日の練習を記録"
           value={memo}
           onChange={(e) => setMemo(e.target.value)}
         />
@@ -576,7 +576,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <FormModalFooter>
         <Button size="lg" onClick={submit} disabled={saving}>
-          {saving ? <><LoaderCircle size={18} className="animate-spin" />保存しています…</> : editing || hasExistingSameDay ? "更新する" : "記録する"}
+          {saving ? <><LoaderCircle size={18} className="animate-spin" />保存中…</> : editing || hasExistingSameDay ? "更新する" : "投稿する"}
         </Button>
       </FormModalFooter>
     </div>

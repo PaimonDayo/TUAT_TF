@@ -44,9 +44,9 @@ export function ShareButton({
     try {
       await copyText(url);
       setOpen(false);
-      showToast("\u30ea\u30f3\u30af\u3092\u30b3\u30d4\u30fc\u3057\u307e\u3057\u305f", "success");
+      showToast("リンクをコピーしました", "success");
     } catch {
-      showToast("\u5171\u6709\u30ea\u30f3\u30af\u3092\u30b3\u30d4\u30fc\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f");
+      showToast("リンクをコピーできませんでした");
     }
   }
 

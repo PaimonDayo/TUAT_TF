@@ -40,7 +40,7 @@ export default function LoginPage() {
     });
 
     if (signInError) {
-      setError("ログインに失敗しました。もう一度お試しください。");
+      setError("ログインできませんでした。もう一度お試しください");
       setLoading(false);
     }
   }
@@ -110,7 +110,7 @@ export default function LoginPage() {
             className="gap-3"
           >
             <GoogleIcon />
-            {loading ? "ログイン中..." : "Googleでログイン"}
+            {loading ? "ログイン中…" : "Googleでログイン"}
           </Button>
         )}
 

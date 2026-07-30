@@ -134,7 +134,7 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ ok: true, ...result, chunk });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "同期に失敗しました";
+    const message = err instanceof Error ? err.message : "連携できませんでした";
     if (runId) {
       await admin
         .from("sheet_sync_runs")

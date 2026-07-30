@@ -65,7 +65,7 @@ export function PbManager({
         <FormModal
           open
           onOpenChange={(next) => { if (!next) { if (dirty) setConfirmClose(true); else setOpen(false); } }}
-          title={editTarget ? "結果を編集" : "大会・記録会の結果を追加"}
+          title={editTarget ? "大会・記録会の結果を編集" : "大会・記録会の結果"}
         >
           <ResultForm
             ref={formRef}

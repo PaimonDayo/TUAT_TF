@@ -72,7 +72,7 @@ function parseDateCell(value: string): { exactDate: string | null; monthDay: str
 export function parseMiddleLongMenuCsv(csv: string, sourceMonth: number): MiddleLongSheetMenuRow[] {
   const parsed = Papa.parse<string[]>(csv, { skipEmptyLines: false });
   const fatal = parsed.errors.find((error) => error.type === "Quotes");
-  if (fatal) throw new Error(`メニューCSVの解析に失敗しました: ${fatal.message}`);
+  if (fatal) throw new Error(`メニューのCSVを読み取れませんでした: ${fatal.message}`);
   return parsed.data.flatMap((rawRow) => {
     const row = rawRow.map((cell) => String(cell ?? ""));
     const date = parseDateCell(row[0] ?? "");

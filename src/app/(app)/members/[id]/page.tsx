@@ -145,7 +145,7 @@ async function MemberContent({
         <section className="space-y-2">
           <p className="section-label">これまでの記録</p>
           {records.length === 0 ? (
-            <EmptyState title="まだ記録がありません" className="min-h-24 py-4" />
+            <EmptyState title="まだ記録はありません" className="min-h-24 py-4" />
           ) : (
             <div className="space-y-3">
               {records.map((r) => (

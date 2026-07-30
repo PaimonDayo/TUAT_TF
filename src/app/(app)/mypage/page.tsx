@@ -193,7 +193,7 @@ async function MyActivity({
 }) {
   const activity = await getUserActivity(userId, userId);
   if (activity.length === 0) {
-    return <EmptyState title="まだ投稿がありません" className="min-h-24 py-4" />;
+    return <EmptyState title="まだ投稿はありません" className="min-h-24 py-4" />;
   }
   return <ActivityFeed activity={activity} currentUser={currentUser} showRecordSource={showRecordSource} />;
 }

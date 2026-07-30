@@ -86,7 +86,7 @@ export function RecordCard({
         </div>
         {cond && fieldVisible("condition") && <span className="inline-flex shrink-0 items-center gap-1 text-[13px] font-semibold" style={{ color: cond.color }} title={cond.label}><span className="text-[16px] leading-none">{cond.symbol}</span>{cond.label}</span>}
         {(isOwner || showSource) && <div className="flex shrink-0 items-center gap-1.5">
-          {record.from_sheet && <span className="rounded-full bg-bg px-2 py-0.5 text-micro text-muted2">スプシ由来</span>}
+          {record.from_sheet && <span className="rounded-full bg-bg px-2 py-0.5 text-micro text-muted2">スプレッドシート</span>}
           {showSource && !record.from_sheet && <span className="rounded-full bg-bg px-2 py-0.5 text-micro text-muted2">アプリ由来</span>}
           {isOwner && (author.record_source === "sheet" || !record.from_sheet) && <span onClick={(event) => event.stopPropagation()}><RecordOwnerMenu record={record} isMiddleLong={author.blocks?.includes("middle_long") ?? false} recordSource={author.record_source} recordFields={recordFields} systemRecordForm={currentUser.systemRecordForm === true && hasTimelineConfig} /></span>}
         </div>}

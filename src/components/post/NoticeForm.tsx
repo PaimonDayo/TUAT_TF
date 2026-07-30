@@ -125,7 +125,7 @@ export function NoticeForm({
       mentioned_grades: mentionedGrades,
     });
     if (error) {
-      setError("投稿に失敗しました");
+      setError("保存できませんでした。もう一度お試しください");
       setSaving(false);
       return;
     }
@@ -184,7 +184,7 @@ export function NoticeForm({
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <FormModalFooter>
         <Button size="lg" onClick={submit} disabled={saving}>
-          {saving ? <><LoaderCircle size={18} className="animate-spin" />保存しています…</> : editing ? "更新する" : "投稿する"}
+          {saving ? <><LoaderCircle size={18} className="animate-spin" />保存中…</> : editing ? "更新する" : "作成する"}
         </Button>
       </FormModalFooter>
     </div>

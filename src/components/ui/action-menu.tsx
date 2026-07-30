@@ -91,7 +91,7 @@ export function ActionMenu({
                 className="flex w-full items-center gap-3 rounded-xl border border-separator bg-card p-3.5 active:bg-bg"
               >
                 {pinned ? <PinOff size={20} className="text-accent" /> : <Pin size={20} className="text-accent" />}
-                <span className="text-headline">{pinned ? "\u30d4\u30f3\u7559\u3081\u3092\u5916\u3059" : "\u30d4\u30f3\u7559\u3081\u3059\u308b"}</span>
+                <span className="text-headline">{pinned ? "ピン留めを外す" : "ピン留めする"}</span>
               </button>
             )}
             {onDelete && (

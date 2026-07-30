@@ -38,7 +38,7 @@ export function GradeFilter({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="学年でしぼり込み"
+        aria-label="学年で絞り込み"
         className={cn(
           "inline-flex h-8 shrink-0 items-center gap-1 rounded-full border pl-3 pr-2 text-[13px] font-semibold active:opacity-60",
           active ? "border-accent bg-accent text-white" : "border-separator bg-card text-muted2",
@@ -49,7 +49,7 @@ export function GradeFilter({
       </button>
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent title="学年でしぼり込み">
+        <SheetContent title="学年で絞り込み">
           <div className="max-h-[60vh] overflow-y-auto pb-4">
             <p className="px-1 pb-3 text-micro">
               {"\u672a\u9078\u629e\u306e\u5834\u5408\u306f\u3059\u3079\u3066\u8868\u793a\u3057\u307e\u3059"}

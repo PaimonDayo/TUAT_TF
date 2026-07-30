@@ -85,7 +85,7 @@ export function ThreadPostsView({
   return (
     <div className="space-y-4 pb-20">
       {visiblePosts.length === 0 ? (
-        <EmptyState title="まだ投稿がありません" description="最初のひとことを書いてみましょう。" />
+        <EmptyState title="まだ投稿はありません" description="最初のひとことを書いてみましょう。" />
       ) : (
         <div className="space-y-2">
           {visiblePosts.map((post) => (
@@ -137,8 +137,8 @@ export function ThreadPostsView({
             }}
             maxLength={2000}
             rows={1}
-            placeholder="返信を書く"
-            aria-label="返信を書く"
+            placeholder="返信を入力"
+            aria-label="返信を入力"
             className="min-h-11 max-h-32 flex-1 overflow-y-auto rounded-[22px] bg-card px-4 py-2.5 leading-6"
           />
           <Button

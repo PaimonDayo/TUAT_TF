@@ -22,7 +22,7 @@ export function HomeFeed({
   const { toggleExpanded, isCompact } = useFeedDisplay({ initialCompact: true });
 
   if (feed.length === 0) {
-    return <EmptyState title="まだ投稿がありません" />;
+    return <EmptyState title="まだ投稿はありません" />;
   }
 
   return (

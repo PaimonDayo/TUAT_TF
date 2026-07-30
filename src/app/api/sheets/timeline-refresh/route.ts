@@ -40,7 +40,7 @@ export async function POST() {
     });
   } catch (error) {
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "同期に失敗しました" },
+      { ok: false, error: error instanceof Error ? error.message : "連携できませんでした" },
       { status: 500 },
     );
   }

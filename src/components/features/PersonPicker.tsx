@@ -90,11 +90,11 @@ export function PersonPicker({ people, value, onChange, label = "対象者", exc
             <button type="button" onClick={() => saveMemberLists(memberLists.filter((item) => item.key !== list.key))} aria-label={`${list.name}を削除`} className="rounded-lg p-2 text-muted active:bg-bg"><Trash2 size={16} /></button>
           </div>)}
           {creatingList && <div className="space-y-2 rounded-lg bg-card p-2">
-            <Input autoFocus value={listName} onChange={(event) => setListName(event.target.value)} placeholder="例：駅伝メンバー" />
-            <div className="flex justify-end gap-2"><button type="button" onClick={() => { setCreatingList(false); setListName(""); }} className="px-3 py-2 text-xs font-semibold text-muted">キャンセル</button><Button type="button" size="sm" disabled={!listName.trim()} onClick={createMemberList}>保存</Button></div>
+            <Input autoFocus value={listName} onChange={(event) => setListName(event.target.value)} placeholder="例: 駅伝メンバー" />
+            <div className="flex justify-end gap-2"><button type="button" onClick={() => { setCreatingList(false); setListName(""); }} className="px-3 py-2 text-xs font-semibold text-muted">キャンセル</button><Button type="button" size="sm" disabled={!listName.trim()} onClick={createMemberList}>保存する</Button></div>
           </div>}
         </div>
-        <div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="名前で検索" className="pl-9" /></div>
+        <div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="検索" aria-label="部員を検索" className="pl-9" /></div>
         <div className="flex min-h-10 items-center gap-2">
           <PeopleFilterButton blocks={blocks} grades={grades} onBlocksChange={setBlocks} onGradesChange={setGrades} availableGrades={availableGrades} />
           <span className="ml-auto shrink-0 text-sm font-semibold tabular-nums text-muted">個別選択 {draft.length}人</span>

@@ -30,7 +30,7 @@ export function ResultsList({
     return (
       <Card>
         <EmptyState
-          title="まだ大会・記録会の結果がありません"
+          title="まだ大会・記録会の結果はありません"
           icon={<Trophy size={28} />}
         />
       </Card>

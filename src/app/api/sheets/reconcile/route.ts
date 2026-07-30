@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "同期に失敗しました";
+    const message = err instanceof Error ? err.message : "連携できませんでした";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }

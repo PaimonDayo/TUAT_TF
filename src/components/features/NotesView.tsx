@@ -126,8 +126,8 @@ export function NotesView({
         type="search"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
-        placeholder={"\u30ce\u30fc\u30c8\u3068\u8a18\u4e8b\u3092\u691c\u7d22"}
-        aria-label={"\u30ce\u30fc\u30c8\u3068\u8a18\u4e8b\u3092\u691c\u7d22"}
+        placeholder="検索"
+        aria-label="ノートと記事を検索"
       />
 
 
@@ -170,7 +170,7 @@ export function NoteList({
   if (notes.length === 0) {
     return (
       <EmptyState
-        title="ノートフォルダがありません"
+        title="まだフォルダはありません"
         description="フォルダを作成すると、その中へ記事を追加できます。"
       />
     );
@@ -188,7 +188,7 @@ export function NoteList({
                   <p className="min-w-0 flex-1 truncate text-headline">{note.title}</p>
                   {note.status === "draft" && <Badge>下書き</Badge>}
                 </div>
-                  {note.pinned && <Pin size={14} className="shrink-0 fill-accent text-accent" aria-label={"\u30d4\u30f3\u7559\u3081"} />}
+                  {note.pinned && <Pin size={14} className="shrink-0 fill-accent text-accent" aria-label="ピン留め" />}
                 <p className="mt-1 text-caption">
                   {note.articles?.length ?? 0}件の記事
                 </p>
@@ -253,13 +253,13 @@ function NoteSearchResults({
   error: boolean;
 }) {
   if (error) {
-    return <EmptyState title={"\u691c\u7d22\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002\u901a\u4fe1\u72b6\u614b\u3092\u78ba\u8a8d\u3057\u3066\u518d\u5ea6\u304a\u8a66\u3057\u304f\u3060\u3055\u3044"} />;
+    return <EmptyState title="検索できませんでした" description="通信状態を確認してから、もう一度お試しください。" />;
   }
   if (searching && folders.length === 0 && articles.length === 0) {
-    return <p className="py-8 text-center text-caption">{"\u691c\u7d22\u4e2d..."}</p>;
+    return <p className="py-8 text-center text-caption">検索中…</p>;
   }
   if (folders.length === 0 && articles.length === 0) {
-    return <EmptyState title={"\u4e00\u81f4\u3059\u308b\u30ce\u30fc\u30c8\u3084\u8a18\u4e8b\u306f\u3042\u308a\u307e\u305b\u3093"} />;
+    return <EmptyState title="条件に合うノート・記事はありません" description="条件を変えてみてください。" />;
   }
   return (
     <div className="space-y-5">

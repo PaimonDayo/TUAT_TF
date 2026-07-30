@@ -90,7 +90,7 @@ function MenuCreatePanel({
       <SegmentedControl
         items={[
           { key: "normal", label: "通常入力" },
-          { key: "sheets", label: "スプシ/CSVから入力" },
+          { key: "sheets", label: "スプレッドシートから入力" },
         ]}
         value={mode}
         onChange={setMode}
@@ -292,7 +292,7 @@ function MenuEditor({
             <Skeleton className="h-11 w-full" />
           ) : schedules.length === 0 ? (
             <EmptyState
-              title="今後の予定がありません"
+              title="まだ今後の予定はありません"
               description="先に練習予定を作成してください。"
               className="min-h-24 py-4"
             />
@@ -393,7 +393,7 @@ function MenuEditor({
           <p className="section-label mb-1.5">説明</p>
           <Textarea autoGrow
             rows={5}
-            placeholder="メニューの目的や走り方のポイント"
+            placeholder="例: メニューの目的、走り方のポイント"
             value={remark}
             onChange={(event) => setRemark(event.target.value)}
           />
@@ -454,7 +454,7 @@ function MenuEditor({
           onClick={submit}
           disabled={saving || loading || (!fixedScheduleId && schedules?.length === 0)}
         >
-          {saving ? "保存中…" : menu ? "更新する" : "保存する"}
+          {saving ? "保存中…" : menu ? "更新する" : "作成する"}
         </Button>
       </FormModalFooter>
 

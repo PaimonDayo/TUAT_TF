@@ -34,7 +34,7 @@ export function ThreadList({
   if (threads.length === 0) {
     return (
       <EmptyState
-        title="スレッドがありません"
+        title="まだスレッドはありません"
         description="右下のボタンからスレッドを立てて、みんなで話せます。"
       />
     );

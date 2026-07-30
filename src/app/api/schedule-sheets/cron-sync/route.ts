@@ -50,7 +50,7 @@ export async function POST(request: Request) {
       results.push({
         sheetId: sheet.id,
         kind: sheet.kind,
-        error: err instanceof Error ? err.message : "同期に失敗しました",
+        error: err instanceof Error ? err.message : "連携できませんでした",
       });
     }
   }

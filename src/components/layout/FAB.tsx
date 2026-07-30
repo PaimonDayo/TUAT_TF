@@ -270,7 +270,7 @@ function ContextualFAB({
           <div className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-2xl border border-separator bg-card shadow-xl lg:bottom-24 lg:right-8">
             <SpeedDialAction
               icon={<FolderPlus size={19} />}
-              label="フォルダを作成"
+              label="フォルダ"
               onClick={() => {
                 setSpeedDialOpen(false);
                 setDirectForm("folder");
@@ -279,7 +279,7 @@ function ContextualFAB({
             {false && (
             <SpeedDialAction
               icon={<MessagesSquare size={19} />}
-              label="スレッドを立てる"
+              label="スレッド"
               onClick={() => {
                 setSpeedDialOpen(false);
                 setDirectForm("thread");
@@ -293,7 +293,7 @@ function ContextualFAB({
           <div className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-2xl border border-separator bg-card shadow-xl lg:bottom-24 lg:right-8">
             <SpeedDialAction
               icon={<NotebookPen size={19} />}
-              label="記事を作成"
+              label="記事"
               onClick={() => {
                 setSpeedDialOpen(false);
                 setDirectForm("article");
@@ -301,7 +301,7 @@ function ContextualFAB({
             />
             <SpeedDialAction
               icon={<FolderPlus size={19} />}
-              label="サブフォルダを作成"
+              label="サブフォルダ"
               onClick={() => {
                 setSpeedDialOpen(false);
                 setDirectForm("subfolder");
@@ -309,7 +309,7 @@ function ContextualFAB({
             />
             <SpeedDialAction
               icon={<MessagesSquare size={19} />}
-              label={"\u30b9\u30ec\u30c3\u30c9\u3092\u7acb\u3066\u308b"}
+              label="スレッド"
               onClick={() => {
                 setSpeedDialOpen(false);
                 setDirectForm("thread");
@@ -359,7 +359,7 @@ function ContextualFAB({
         />
       </FormModal>
 
-      <FormModal open={tweetOpen} onOpenChange={(open) => { if (!open) { if (tweetDirty) setPendingTimelineClose("tweet"); else closeTimelineForm("tweet"); } }} title={"\u3064\u3076\u3084\u304d"}>
+      <FormModal open={tweetOpen} onOpenChange={(open) => { if (!open) { if (tweetDirty) setPendingTimelineClose("tweet"); else closeTimelineForm("tweet"); } }} title="つぶやき">
         <TweetForm ref={tweetRef} onDirtyChange={setTweetDirty} onDone={() => closeTimelineForm("tweet")} />
       </FormModal>
 
@@ -373,7 +373,7 @@ function ContextualFAB({
 
       <UnsavedChangesDialog open={pendingTimelineClose !== null} busy={false} onContinue={() => setPendingTimelineClose(null)} onDiscard={() => { if (pendingTimelineClose) closeTimelineForm(pendingTimelineClose); }} onSave={savePendingTimelineForm} />
 
-      <FormModal open={directForm === "planning"} onOpenChange={(open) => { if (!open) { if (scheduleType === "practice" && planningDirty) setConfirmPlanningClose(true); else closeDirectForm(); } }} title="予定を作成">
+      <FormModal open={directForm === "planning"} onOpenChange={(open) => { if (!open) { if (scheduleType === "practice" && planningDirty) setConfirmPlanningClose(true); else closeDirectForm(); } }} title="予定">
         <div className="space-y-5">
           <SegmentedControl
             items={[
@@ -401,7 +401,7 @@ function ContextualFAB({
       <FormModal
         open={directForm === "schedule"}
         onOpenChange={(open) => !open && closeDirectForm()}
-        title="予定を作成"
+        title="予定"
       >
         <ScheduleCreatePanel onDone={closeDirectForm} />
       </FormModal>
@@ -409,7 +409,7 @@ function ContextualFAB({
       <FormModal
         open={directForm === "notice"}
         onOpenChange={(open) => !open && closeDirectForm()}
-        title="お知らせを投稿"
+        title="お知らせ"
       >
         <NoticeForm onDone={closeDirectForm} />
       </FormModal>
@@ -417,7 +417,7 @@ function ContextualFAB({
       <FormModal
         open={directForm === "folder"}
         onOpenChange={(open) => !open && closeDirectForm()}
-        title="ノートフォルダを作成"
+        title="フォルダ"
       >
         <NoteComposer
           currentUser={currentUser}
@@ -429,7 +429,7 @@ function ContextualFAB({
       <FormModal
         open={directForm === "thread"}
         onOpenChange={(open) => !open && closeDirectForm()}
-        title="スレッドを立てる"
+        title="スレッド"
       >
         {noteId && <ThreadComposer userId={userId} folderId={noteId} onDone={closeDirectForm} />}
       </FormModal>
@@ -437,7 +437,7 @@ function ContextualFAB({
       <FormModal
         open={directForm === "subfolder"}
         onOpenChange={(open) => !open && closeDirectForm()}
-        title="サブフォルダを作成"
+        title="サブフォルダ"
       >
         {noteId && folderInfo && (
           <NoteComposer
@@ -453,7 +453,7 @@ function ContextualFAB({
       <FormModal
         open={directForm === "article"}
         onOpenChange={(open) => !open && closeDirectForm()}
-        title="記事を作成"
+        title="記事"
       >
         {noteId && (
           <NoteArticleEditor

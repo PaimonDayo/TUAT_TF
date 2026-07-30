@@ -340,7 +340,7 @@ export function ScheduleSheetsManager() {
       .delete()
       .in("id", lastApplied.map((schedule) => schedule.id));
     if (deleteError) {
-      setError("取り消しに失敗しました");
+      setError("取り消せませんでした。もう一度お試しください");
       setUndoing(false);
       return;
     }
@@ -359,7 +359,7 @@ export function ScheduleSheetsManager() {
       .delete()
       .in("id", deletionIds);
     if (deleteError) {
-      setError("削除に失敗しました");
+      setError("削除できませんでした。もう一度お試しください");
       setDeleting(false);
       return;
     }
@@ -452,7 +452,7 @@ export function ScheduleSheetsManager() {
             onClick={undoLastApply}
             className="border-danger text-danger"
           >
-            {undoing ? "取り消し中..." : `この取込を取り消す（${lastApplied.length}件削除）`}
+            {undoing ? "取り消し中…" : `この取込を取り消す（${lastApplied.length}件削除）`}
           </Button>
         </Card>
       )}
@@ -546,7 +546,7 @@ export function ScheduleSheetsManager() {
         {inputMode === "edit" && (
           <div className="max-h-64 space-y-1 overflow-y-auto rounded-xl border border-separator bg-card p-1">
             {existing.length === 0 ? (
-              <EmptyState title="該当する予定がありません" className="min-h-24 py-4" />
+              <EmptyState title="条件に合う予定はありません" className="min-h-24 py-4" />
             ) : (
               existing.map((schedule) => {
                 const active = selectedIds.includes(schedule.id);
@@ -665,7 +665,7 @@ export function ScheduleSheetsManager() {
               disabled={issuing || googleConnected === null}
               onClick={issueSpreadsheet}
             >
-              {issuing ? "作成中..." : "シートを作る"}
+              {issuing ? "作成中…" : "シートを作る"}
             </Button>
           </>
         )}
@@ -738,7 +738,7 @@ export function ScheduleSheetsManager() {
                   setSheetId(null);
                   setPreview(null);
                 }}
-                placeholder="Googleスプレッドシートの共有URL"
+                placeholder="共有URLを入力"
                 className="pl-10"
               />
             </div>
@@ -768,7 +768,7 @@ export function ScheduleSheetsManager() {
           }
           onClick={previewImport}
         >
-          {loading ? "確認中..." : "内容を確認"}
+          {loading ? "確認中…" : "内容を確認"}
         </Button>
       </section>
 
@@ -796,7 +796,7 @@ export function ScheduleSheetsManager() {
             onClick={() => void validateEditedRows(preview.rows)}
           >
             <RefreshCw size={17} />
-            {loading ? "再確認中..." : "編集内容を再確認"}
+            {loading ? "再確認中…" : "編集内容を再確認"}
           </Button>
           {preview.deletions.length > 0 && (
             <DeletionCandidates
@@ -817,7 +817,7 @@ export function ScheduleSheetsManager() {
             onClick={apply}
           >
             {applying
-              ? "登録中..."
+              ? "登録中…"
               : dirtyCount > 0
                 ? "もう一度確認して、問題のない行を登録"
                 : `${applicable}件を予定に登録`}
@@ -1027,7 +1027,7 @@ function DeletionCandidates({
         onClick={onDelete}
         className="border-danger text-danger"
       >
-        {deleting ? "削除中..." : `選択した${selectedIds.length}件を削除`}
+        {deleting ? "削除中…" : `選択した${selectedIds.length}件を削除`}
       </Button>
     </section>
   );

@@ -50,7 +50,7 @@ export function NoteEditorButton({
         <FormModal
           open
           onOpenChange={setOpen}
-          title={note ? "フォルダ設定を編集" : "ノートフォルダを作成"}
+          title={note ? "フォルダを編集" : "フォルダ"}
         >
           <NoteEditor
             currentUser={currentUser}
@@ -344,7 +344,7 @@ export function NoteEditor({
         <Textarea
           value={description}
           onChange={(event) => setDescription(event.target.value)}
-          placeholder="このフォルダにまとめる内容"
+          placeholder="このフォルダにまとめる内容を入力"
           rows={3}
           maxLength={300}
         />
@@ -365,7 +365,7 @@ export function NoteEditor({
       {error && <p className="text-center text-caption text-danger">{error}</p>}
       <FormModalFooter>
         <Button size="lg" disabled={saving} onClick={submit}>
-          {saving ? "保存中..." : note ? "更新する" : "保存する"}
+          {saving ? "保存中…" : note ? "更新する" : "保存する"}
         </Button>
       </FormModalFooter>
     </div>

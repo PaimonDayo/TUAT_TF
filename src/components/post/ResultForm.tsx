@@ -61,7 +61,7 @@ export const ResultForm = forwardRef<ResultFormHandle, { userId: string; initial
       : await supabase.from("pb_records").insert({ user_id: userId, ...payload }).select().single();
 
     if (error) {
-      setError("保存に失敗しました");
+      setError("保存できませんでした。もう一度お試しください");
       setSaving(false);
       return;
     }
@@ -103,7 +103,7 @@ export const ResultForm = forwardRef<ResultFormHandle, { userId: string; initial
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <FormModalFooter>
         <Button size="lg" onClick={submit} disabled={saving}>
-          {saving ? <><LoaderCircle size={18} className="animate-spin" />保存しています…</> : editing ? "更新する" : "追加する"}
+          {saving ? <><LoaderCircle size={18} className="animate-spin" />保存中…</> : editing ? "更新する" : "投稿する"}
         </Button>
       </FormModalFooter>
     </div>

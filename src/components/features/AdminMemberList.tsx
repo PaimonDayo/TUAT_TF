@@ -55,7 +55,7 @@ export function AdminMemberList({
         <Input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="部員を検索"
+          placeholder="検索" aria-label="部員を検索"
           className="pl-9"
         />
       </div>
@@ -217,7 +217,7 @@ function MemberRoleEditor({
         {error && <p className="text-center text-caption text-danger">{error}</p>}
         <FormModalFooter>
           <Button size="lg" onClick={save} disabled={saving}>
-            {saving ? "保存中..." : "保存する"}
+            {saving ? "保存中…" : "保存する"}
           </Button>
         </FormModalFooter>
       </div>

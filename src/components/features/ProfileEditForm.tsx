@@ -255,7 +255,7 @@ export function ProfileEditForm({
       });
       const reconcileResult = await response.json();
       if (!response.ok || !reconcileResult.ok) {
-        setError(reconcileResult.error ?? "設定の変更に失敗しました。もう一度お試しください");
+        setError(reconcileResult.error ?? "設定を変更できませんでした。もう一度お試しください");
         setSaving(false);
         return;
       }
@@ -489,7 +489,7 @@ export function ProfileEditForm({
           )}
           <p className="text-micro mt-1">
             {enableSheetHeaderSetup
-              ? "選ぶとスプレッドシートが記録の入力元になり、タイムライン表示後にもCSVで最新化します。"
+              ? "選ぶと、練習記録の保存先がスプレッドシートになります。画面を開いたときに最新の内容を読み込みます。"
               : "選ぶと、練習記録とスプレッドシートが自動で連携されます。"}
           </p>
           {enableSheetHeaderSetup && sheetName.trim() && (
@@ -503,7 +503,7 @@ export function ProfileEditForm({
               <span className="min-w-0 flex-1">
                 <span className="block text-[14px] font-semibold">入力フォーム・タイムライン表示項目</span>
                 <span className="block text-micro text-muted">
-                  {loadingHeader ? "シートの見出しを取得中…" : "自分のシートの列から変更"}
+                  {loadingHeader ? "見出しを取得中…" : "自分のシートの列から変更"}
                 </span>
               </span>
             </button>

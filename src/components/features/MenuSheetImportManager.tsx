@@ -293,7 +293,7 @@ export function MenuSheetImportManager() {
                   setSheetUrl(event.target.value);
                   setPreview(null);
                 }}
-                placeholder="Googleスプレッドシートの共有URL"
+                placeholder="共有URLを入力"
                 className="pl-10"
               />
             </div>
@@ -320,7 +320,7 @@ export function MenuSheetImportManager() {
           disabled={loading || (source === "url" ? !sheetUrl.trim() : !csv)}
           onClick={previewImport}
         >
-          {loading ? "確認中..." : "内容を確認"}
+          {loading ? "確認中…" : "内容を確認"}
         </Button>
       </section>
 
@@ -344,7 +344,7 @@ export function MenuSheetImportManager() {
             onClick={() => void validateEditedRows(preview.rows)}
           >
             <RefreshCw size={17} />
-            {loading ? "再確認中..." : "編集内容を再確認"}
+            {loading ? "再確認中…" : "編集内容を再確認"}
           </Button>
           <Button
             size="lg"
@@ -352,7 +352,7 @@ export function MenuSheetImportManager() {
             onClick={apply}
           >
             {applying
-              ? "登録中..."
+              ? "登録中…"
               : dirtyCount > 0
                 ? "もう一度確認して、問題のない行を登録"
                 : `${applicable}件をメニューに登録`}

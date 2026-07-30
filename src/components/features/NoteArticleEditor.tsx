@@ -75,7 +75,7 @@ export function NoteArticleEditor({
         <Input
           value={title}
           onChange={(event) => setTitle(event.target.value)}
-          placeholder="記事のタイトル"
+          placeholder="タイトルを入力"
           maxLength={100}
         />
       </div>
@@ -84,14 +84,14 @@ export function NoteArticleEditor({
         <Textarea
           value={body}
           onChange={(event) => setBody(event.target.value)}
-          placeholder="残しておきたい知識や考えを書く"
+          placeholder="残しておきたい知識や考えを入力"
           rows={16}
         />
       </div>
       {error && <p className="text-center text-caption text-danger">{error}</p>}
       <FormModalFooter>
         <Button size="lg" disabled={saving} onClick={submit}>
-          {saving ? "保存中..." : article ? "更新する" : "保存する"}
+          {saving ? "保存中…" : article ? "更新する" : "保存する"}
         </Button>
       </FormModalFooter>
     </div>

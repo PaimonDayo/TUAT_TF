@@ -204,7 +204,7 @@ function VenueForm({
       : await supabase.from("venues").insert(payload).select().single();
 
     if (error || !data) {
-      setError("保存に失敗しました");
+      setError("保存できませんでした。もう一度お試しください");
       setSaving(false);
       return;
     }

@@ -294,7 +294,7 @@ export function TimelineView({
 
       <div className="px-4 pt-1 md:px-6">
         {filtered.length === 0 ? (
-          <EmptyState title="条件に合う投稿がありません" />
+          <EmptyState title="条件に合う投稿はありません" description="条件を変えてみてください。" />
         ) : (
           <div className="space-y-3 lg:space-y-2">
             {compact ? (

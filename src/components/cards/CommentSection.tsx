@@ -344,7 +344,7 @@ export function CommentSection({
                           disabled={saving || !editText.trim()}
                           onClick={() => saveEdit(comment)}
                         >
-                          {saving ? "保存中…" : "保存"}
+                          {saving ? "保存中…" : "保存する"}
                         </Button>
                       </div>
                     </div>
@@ -370,7 +370,7 @@ export function CommentSection({
         <Textarea
           rows={1}
           maxLength={500}
-          placeholder="コメントを追加…"
+          placeholder="コメントを入力"
           value={text}
           onChange={(event) => setText(event.target.value)}
           className="min-h-11 min-w-0 flex-1 py-2.5"

@@ -119,7 +119,7 @@ export function NoticesClient({
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 className="pl-9 pr-10 [&::-webkit-search-cancel-button]:appearance-none"
-                placeholder="キーワードで検索"
+                placeholder="検索"
                 aria-label="お知らせを検索"
               />
               {query && (
@@ -161,8 +161,8 @@ export function NoticesClient({
         {tab === "notice" &&
           (filteredNotices.length === 0 ? (
             <EmptyState
-              title={hasConditions ? "条件に一致するお知らせはありません" : "お知らせはありません"}
-              description={hasConditions ? "検索語や絞り込み条件を変えてください" : undefined}
+              title={hasConditions ? "条件に合うお知らせはありません" : "まだお知らせはありません"}
+              description={hasConditions ? "条件を変えてみてください。" : undefined}
               action={hasConditions ? (
                 <Button type="button" variant="outline" onClick={resetConditions}>条件をすべて解除</Button>
               ) : undefined}

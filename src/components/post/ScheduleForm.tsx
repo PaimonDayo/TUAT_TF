@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { X } from "lucide-react";
+import { LoaderCircle, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { ActionMenu } from "@/components/ui/action-menu";
@@ -186,7 +186,7 @@ export function ScheduleForm({
         .from("practice_schedules")
         .insert({ ...payload, created_by: user.id });
       if (error) {
-        setError("作成に失敗しました");
+        setError("保存できませんでした。もう一度お試しください");
         setSaving(false);
         return;
       }
@@ -381,7 +381,7 @@ export function ScheduleForm({
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <FormModalFooter>
         <Button size="lg" onClick={submit} disabled={saving}>
-          {saving ? "保存中…" : editing ? "更新する" : "作成する"}
+          {saving ? <><LoaderCircle size={18} className="animate-spin" />保存中…</> : editing ? "更新する" : "作成する"}
         </Button>
       </FormModalFooter>
     </div>
