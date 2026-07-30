@@ -151,9 +151,10 @@ async function SchedulesSection({ profile }: { profile: Profile }) {
                 key={schedule.id}
                 schedule={{ ...schedule, menus: schedule.menus ?? [] }}
                 initialStatus={mine?.status ?? "none"}
-                initialPresent={attendees.filter((attendee) => attendee.status === "present").length}
-                initialAbsent={attendees.filter((attendee) => attendee.status === "absent").length}
+                attendees={attendees}
+                attendanceDefaultBlock={profile.attendance_default_block}
                 userId={profile.id}
+                myProfile={profile}
               />
             );
           })}

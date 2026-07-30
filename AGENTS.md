@@ -266,6 +266,7 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 
 ## 作業ログ（着手前に追記・新しいものを上へ）
 <!-- 形式: YYYY-MM-DD / エージェント / 触る範囲 → 結果(commit・要点) -->
+- 2026-07-31 / Claude Opus 5 / ホーム・予定の出席/欠席人数を「出欠一覧の初期表示」で選んだブロックに連動させた。共通の attendanceCounts を AttendeesButton に追加し、出欠チップの人数は設定ブロック固定（シート内でタブを切り替えても戻る）、ホームの今後の予定カードは全員合計から設定ブロック集計へ変更（attendees と myProfile を受け取り、出欠タップ時もその場で数え直す）。出欠一覧の全体表示ではマネージャーを中長距離・短距離の両方の節に表示し（マネ バッジ付き）、実データが入らない「マネージャー」節は廃止。ATTENDANCE_BLOCK_ORDER を constants に追加。全105テスト・tsc・対象eslint成功。実機確認は未実施 -> (this commit)
 - 2026-07-24 / Codex / プロフィールアイコンをURL入力からSupabase Storageへの画像アップロードへ変更。中央正方形512px WebP変換でEXIFを除去し、12MB入力・2MB保存上限、本人フォルダだけINSERT/SELECT/DELETE可能なRLS、公開読取バケット、保存失敗時の新規画像回収と成功後の旧画像削除を実装。既存の外部URLは変更するまで維持。バケット設定・匿名アップロード拒否・空オブジェクト確認、モバイルUI、tsc・eslint・64テスト・diff check・build成功 → (このcommit)
 - 2026-07-23 / Codex / アプリ返信とスプシ返信を、スプレッドシートの列位置を共通キーにして左から古い順へ統一。新規アプリ返信はGASの書込列を即時保存し、既存分は公開CSVの本文＋投稿者名照合で次回同期時に列位置を復元。返信順カラム追加時にコメント編集時刻が変わらないようトリガーも調整。対象2テーブルをC:\tmpへ退避後、マイグレーション適用・同期dryRun成功（実書込0件）・tsc・eslint・61テスト・diff check・build成功 → (このcommit)
 - 2026-07-23 / Codex / iOSでいいね長押し時に残る青い選択UIを追加修正。操作対象をtouch-action:noneにし、子要素までWebKit user-select/touch-calloutを無効化。長押し中はselectstart/contextmenu/dragstart/selectionchangeを抑止して既存選択範囲も消去し、通常タップ・指外れキャンセル・いいねした人表示は維持。生成CSSでtouch-action/calloutを確認、tsc・対象eslint・59テスト・diff check・build成功、実機確認待ち → (このcommit)

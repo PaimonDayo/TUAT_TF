@@ -17,6 +17,11 @@ export const BLOCK_ORDER: Block[] = ["middle_long", "short", "jump", "throw"];
 /** Blocks that can be selected in profile editing. Jump and throw are legacy values. */
 export const EDITABLE_BLOCK_ORDER: Block[] = ["middle_long", "short"];
 export const PROFILE_BLOCK_ORDER: Block[] = ["middle_long", "short", "manager"];
+/**
+ * 出欠一覧で見出しにするブロック。マネージャー専用の節は作らず、
+ * マネージャーは中長距離・短距離の両方に表示する（matchSimpleBlock が両方に合致する）。
+ */
+export const ATTENDANCE_BLOCK_ORDER: SimpleBlock[] = ["middle_long", "short"];
 
 export type SimpleBlock = "middle_long" | "short";
 

@@ -5,7 +5,7 @@ import { Users } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Avatar } from "@/components/common/Avatar";
 import { SegmentedControl } from "@/components/ui/segmented";
-import { BLOCKS, GRADE_OPTIONS, PROFILE_BLOCK_ORDER, SIMPLE_BLOCK_ITEMS, gradeShort, matchSimpleBlock, primarySimpleBlock } from "@/lib/constants";
+import { ATTENDANCE_BLOCK_ORDER, BLOCKS, GRADE_OPTIONS, PROFILE_BLOCK_ORDER, SIMPLE_BLOCK_ITEMS, gradeShort, matchSimpleBlock, primarySimpleBlock } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { AttendanceDefaultBlock, Attendee } from "@/types";
 
@@ -27,6 +27,24 @@ function sortAttendees(list: Attendee[]): Attendee[] {
   );
 }
 
+/**
+ * 出欠人数を「出欠一覧の初期表示」で選んだブロックに合わせて数える。
+ * マネージャーは中長距離・短距離のどちらでも数える（matchSimpleBlock の仕様）。
+ */
+export function attendanceCounts(
+  attendees: Attendee[],
+  block: AttendanceDefaultBlock,
+): { present: number; absent: number } {
+  let present = 0;
+  let absent = 0;
+  for (const attendee of attendees) {
+    if (!matchSimpleBlock(attendee.profile.blocks, block)) continue;
+    if (attendee.status === "present") present += 1;
+    else if (attendee.status === "absent") absent += 1;
+  }
+  return { present, absent };
+}
+
 /** 「出席◯」表示。タップで出席者・欠席者一覧 */
 export function AttendeesButton({
   attendees,
@@ -42,6 +60,9 @@ export function AttendeesButton({
   );
   const present = sortAttendees(visible.filter((a) => a.status === "present"));
   const absent = sortAttendees(visible.filter((a) => a.status === "absent"));
+  // ボタンの人数は「出欠一覧の初期表示」で選んだブロックに固定する。
+  // シート内でタブを切り替えても、閉じたあとの表示は設定どおりに戻す。
+  const counted = attendanceCounts(attendees, defaultBlock);
 
   return (
     <>
@@ -56,10 +77,10 @@ export function AttendeesButton({
         <Users size={15} />
         {/* 0でも消さず常に表示。数字は等幅＋2桁ぶんの固定幅で桁が増えてもガクつかない。 */}
         <span className="text-success">
-          出席 <span className="inline-block min-w-[2ch] text-right tabular-nums">{present.length}</span>
+          出席 <span className="inline-block min-w-[2ch] text-right tabular-nums">{counted.present}</span>
         </span>
         <span className="text-danger">
-          欠席 <span className="inline-block min-w-[2ch] text-right tabular-nums">{absent.length}</span>
+          欠席 <span className="inline-block min-w-[2ch] text-right tabular-nums">{counted.absent}</span>
         </span>
       </button>
 
@@ -86,14 +107,15 @@ export function AttendeesButton({
 }
 
 function Group({ title, color, list, selectedBlock }: { title: string; color: string; list: Attendee[]; selectedBlock: AttendanceDefaultBlock }) {
-  const blocks = selectedBlock === "all" ? PROFILE_BLOCK_ORDER : [selectedBlock];
+  const blocks = selectedBlock === "all" ? ATTENDANCE_BLOCK_ORDER : [selectedBlock];
   if (list.length === 0) return null;
   return (
     <div className="space-y-3">
       <p className="section-label" style={{ color }}>{title}</p>
       {blocks.map((block) => {
+        // マネージャーは中長距離・短距離のどちらの節にも出す（matchSimpleBlock が両方に合致）。
         const blockMembers = selectedBlock === "all"
-          ? list.filter((attendee) => primarySimpleBlock(attendee.profile.blocks) === block)
+          ? list.filter((attendee) => matchSimpleBlock(attendee.profile.blocks, block))
           : list;
         if (blockMembers.length === 0) return null;
         return (
@@ -112,8 +134,16 @@ function Group({ title, color, list, selectedBlock }: { title: string; color: st
                       <div key={attendee.user_id} className="flex min-h-10 items-start gap-2.5 py-1.5">
                         <Avatar name={attendee.profile.display_name} blocks={attendee.profile.blocks} avatarUrl={attendee.profile.avatar_url} size="sm" />
                         <div className="min-w-0 flex-1 pt-0.5">
-                          <p className={cn("truncate text-[14px] font-semibold", attendee.is_late && "text-warning")}>
-                            {attendee.profile.display_name || "名無し"}
+                          <p className={cn("flex items-center gap-1.5 truncate text-[14px] font-semibold", attendee.is_late && "text-warning")}>
+                            <span className="truncate">{attendee.profile.display_name || "名無し"}</span>
+                            {(attendee.profile.blocks ?? []).includes("manager") && (
+                              <span
+                                className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+                                style={{ color: BLOCKS.manager.color, backgroundColor: BLOCKS.manager.bg }}
+                              >
+                                {BLOCKS.manager.short}
+                              </span>
+                            )}
                           </p>
                           {attendee.is_late && attendee.late_note && (
                             <p className="mt-0.5 whitespace-pre-wrap break-words text-[12px] leading-5 text-muted2">{attendee.late_note}</p>

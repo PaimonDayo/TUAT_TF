@@ -7,39 +7,61 @@ import { ja } from "date-fns/locale";
 import { Clock } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AttendanceToggle } from "@/components/features/AttendanceToggle";
+import { AttendanceToggle, type AttendanceChange } from "@/components/features/AttendanceToggle";
+import { attendanceCounts } from "@/components/features/AttendeesButton";
 import { SCHEDULE_TYPES } from "@/lib/constants";
 import { venueShort } from "@/lib/venues";
-import type { AttendanceStatusOrNone, ScheduleWithMenus } from "@/types";
+import type {
+  Attendee,
+  AttendanceDefaultBlock,
+  AttendanceStatusOrNone,
+  AuthorMini,
+  ScheduleWithMenus,
+} from "@/types";
 
 /**
  * ホーム「今後の予定」のコンパクトカード。
- * 出欠タップで出席/欠席の人数もその場で増減させる（AttendanceToggleは
- * 楽観更新＋失敗時に前の状態でonChangedを再度呼ぶため、差分計算だけで
- * ロールバックも自然に成立する）。
+ * 出席・欠席の人数は「出欠一覧の初期表示」で選んだブロックだけを数える
+ * （マネージャーは中長距離・短距離のどちらでも数える）。
+ * 出欠タップでその場の一覧を更新して人数を数え直すため、AttendanceToggle が
+ * 失敗時に前の状態で onChanged を呼び直すとロールバックも自然に成立する。
  */
 export function UpcomingScheduleCard({
   schedule,
   initialStatus,
-  initialPresent,
-  initialAbsent,
+  attendees,
+  attendanceDefaultBlock,
   userId,
+  myProfile,
 }: {
   schedule: ScheduleWithMenus;
   initialStatus: AttendanceStatusOrNone;
-  initialPresent: number;
-  initialAbsent: number;
+  attendees: Attendee[];
+  attendanceDefaultBlock: AttendanceDefaultBlock;
   userId: string;
+  /** 自分の出欠を即時反映するための最小プロフィール */
+  myProfile: AuthorMini;
 }) {
   const [status, setStatus] = useState<AttendanceStatusOrNone>(initialStatus);
-  const [present, setPresent] = useState(initialPresent);
-  const [absent, setAbsent] = useState(initialAbsent);
+  const [attendeesState, setAttendeesState] = useState(attendees);
   const meta = SCHEDULE_TYPES[schedule.schedule_type];
+  const counted = attendanceCounts(attendeesState, attendanceDefaultBlock);
 
-  function handleChanged(next: { status: AttendanceStatusOrNone }) {
-    setPresent((n) => n + (next.status === "present" ? 1 : 0) - (status === "present" ? 1 : 0));
-    setAbsent((n) => n + (next.status === "absent" ? 1 : 0) - (status === "absent" ? 1 : 0));
-    setStatus(next.status);
+  function handleChanged(change: AttendanceChange) {
+    setStatus(change.status);
+    setAttendeesState((previous) => {
+      const others = previous.filter((attendee) => attendee.user_id !== userId);
+      if (change.status === "none") return others;
+      const mine: Attendee = {
+        user_id: userId,
+        status: change.status,
+        is_late: change.isLate,
+        late_note: change.lateNote,
+        absence_note: change.absenceNote,
+        profile: myProfile,
+      };
+      return [...others, mine];
+    });
   }
 
   return (
@@ -70,10 +92,10 @@ export function UpcomingScheduleCard({
               </span>
             )}
             <span className="shrink-0 text-success">
-              出席 <span className="inline-block min-w-[2ch] text-right tabular-nums">{present}</span>
+              出席 <span className="inline-block min-w-[2ch] text-right tabular-nums">{counted.present}</span>
             </span>
             <span className="shrink-0 text-danger">
-              欠席 <span className="inline-block min-w-[2ch] text-right tabular-nums">{absent}</span>
+              欠席 <span className="inline-block min-w-[2ch] text-right tabular-nums">{counted.absent}</span>
             </span>
           </div>
         </div>
