@@ -44,9 +44,36 @@ self.addEventListener('push', (event) => {
   }
 });
 
+// 既に開いているウィンドウ（インストール済みPWA含む）を探して前面に出し、そこで遷移する。
+// openWindow だけだとタップのたびにアプリがもう1枚開いてしまう。
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  if (event.notification.data && event.notification.data.url) {
-    event.waitUntil(clients.openWindow(event.notification.data.url));
-  }
+  const raw = (event.notification.data && event.notification.data.url) || '/notices';
+  event.waitUntil((async () => {
+    const target = new URL(raw, self.location.origin);
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of windows) {
+      if (new URL(client.url).origin !== target.origin) continue;
+      try {
+        if ('navigate' in client) {
+          const navigated = await client.navigate(target.href);
+          if (navigated && 'focus' in navigated) {
+            await navigated.focus();
+            return;
+          }
+        }
+        await client.focus();
+        return;
+      } catch {
+        // WindowClient.navigate() が未実装・拒否される環境（一部のiOS）向けの保険。
+        try {
+          await client.focus();
+          return;
+        } catch {
+          // このウィンドウは使えないので次の候補へ。
+        }
+      }
+    }
+    await self.clients.openWindow(target.href);
+  })());
 });

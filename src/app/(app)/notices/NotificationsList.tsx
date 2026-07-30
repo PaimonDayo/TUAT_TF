@@ -47,7 +47,7 @@ export function NotificationsList({
     switch (n.reference_type) {
       case "record":
       case "tweet":
-        return `/timeline#${n.reference_type}-${n.reference_id}`;
+        return `/timeline/${n.reference_type}/${n.reference_id}`;
       case "notice":
         return `/notices#notice-${n.reference_id}`;
       case "schedule":

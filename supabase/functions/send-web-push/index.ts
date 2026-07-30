@@ -86,6 +86,13 @@ serve(async (req) => {
     if (notification.type === 'comment') {
       title = "新しいコメント";
       bodyText = "あなたの投稿にコメントがつきました";
+      // コメント通知の reference_type/reference_id は投稿そのもの（record|tweet + 投稿ID）。
+      // 返信を開いた状態のパーマリンクへ直接飛ばす。
+      url =
+        (notification.reference_type === 'record' || notification.reference_type === 'tweet') &&
+        notification.reference_id
+          ? `/timeline/${notification.reference_type}/${notification.reference_id}`
+          : "/notices";
     } else if (notification.type === 'notice') {
       title = "新しいお知らせ";
       bodyText = "お知らせが投稿されました";

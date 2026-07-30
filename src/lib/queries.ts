@@ -219,6 +219,61 @@ export async function getFeed(
   return items.slice(0, limit);
 }
 
+/**
+ * 通知からのパーマリンク用。単一の投稿を FeedItem と同じ形で取得する。
+ * タイムライン表示用の間引き（未来日除外・空の記録の除外・SHEET_TIMELINE_CUTOFF）は
+ * 一切かけない。古い投稿や空に近い記録に付いたコメント通知からも必ず開けるようにするため。
+ * 閲覧できるかどうかは RLS（部員なら全件 SELECT 可）が担保する。
+ */
+export async function getFeedItemById(
+  kind: "record" | "tweet",
+  id: string,
+  currentUserId: string,
+): Promise<FeedItem | null> {
+  const supabase = await createClient();
+
+  // テーブル名を三項演算子で動的に組み立てると生成型の推論が壊れるため if で分ける。
+  if (kind === "record") {
+    const { data, error } = await supabase
+      .from("practice_records")
+      .select(`*, ${AUTHOR_SELECT}`)
+      .eq("id", id)
+      .maybeSingle();
+    if (error) throw new Error(`Failed to load post: ${error.message}`);
+    if (!data || !data.author) return null;
+
+    const [liked, comments] = await Promise.all([
+      fetchMyLikedIds(supabase, currentUserId, "record", [id]),
+      fetchCommentCounts(supabase, "record", [id]),
+    ]);
+    return {
+      kind: "record",
+      ...normalizeRecordWithAuthor(data),
+      liked_by_me: liked.has(id),
+      comments_count: comments.get(id) ?? 0,
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("tweets")
+    .select(`*, ${AUTHOR_SELECT}`)
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(`Failed to load post: ${error.message}`);
+  if (!data || !data.author) return null;
+
+  const [liked, comments] = await Promise.all([
+    fetchMyLikedIds(supabase, currentUserId, "tweet", [id]),
+    fetchCommentCounts(supabase, "tweet", [id]),
+  ]);
+  return {
+    kind: "tweet",
+    ...normalizeTweetWithAuthor(data),
+    liked_by_me: liked.has(id),
+    comments_count: comments.get(id) ?? 0,
+  };
+}
+
 /** ある日付の練習予定を取得 */
 export async function getSchedulesOn(date: string) {
   const supabase = await createClient();

@@ -20,6 +20,10 @@ export function FeedSkeleton() {
   return <div className="space-y-4 pb-6"><Title action /><div className="flex gap-2 overflow-hidden px-4"><Skeleton className="h-8 w-16 rounded-full" /><Skeleton className="h-8 w-20 rounded-full" /><Skeleton className="h-8 w-16 rounded-full" /></div><div className="space-y-3 px-4">{[0, 1, 2, 3].map((i) => <Card key={i} lines={(i % 2) + 1} />)}</div></div>;
 }
 
+export function PostDetailSkeleton({ withHeader = false }: { withHeader?: boolean }) {
+  return <div className="space-y-4 pb-6">{withHeader && <Title />}<div className="px-4"><Card lines={3} /></div></div>;
+}
+
 export function ListSkeleton() {
   return <div className="space-y-4 pb-6"><Title action /><div className="space-y-3 px-4"><Skeleton className="h-10 w-full rounded-xl" /><Skeleton className="h-3 w-16" /><div className="overflow-hidden rounded-[16px] border border-separator bg-card">{[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="flex items-center gap-3 border-b border-separator px-4 py-3 last:border-0"><Skeleton className="h-9 w-9 rounded-full" /><Skeleton className="h-3.5 w-28" /></div>)}</div></div></div>;
 }
