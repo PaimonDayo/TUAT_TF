@@ -2,7 +2,7 @@ import type { PracticeRecord } from "@/types";
 
 type DistanceRecord = Pick<
   PracticeRecord,
-  "dist_low" | "dist_mid" | "dist_high" | "dist_speed"
+  "dist_low" | "dist_mid" | "dist_high" | "dist_speed" | "dist_actual"
 >;
 
 export function intensityDistance(record: DistanceRecord): number {
@@ -14,11 +14,12 @@ export function intensityDistance(record: DistanceRecord): number {
   );
 }
 
-/** Distance is always the sum of the four intensity fields. */
+/** Use the actual distance when it exceeds the classified intensity total. */
 export function displayedDistance(record: DistanceRecord): number {
-  return intensityDistance(record);
+  return Math.max(intensityDistance(record), record.dist_actual ?? 0);
 }
 
-export function unclassifiedDistance(): number {
-  return 0;
+/** The part of the actual distance not covered by the four intensity fields. */
+export function unclassifiedDistance(record: DistanceRecord): number {
+  return Math.max((record.dist_actual ?? 0) - intensityDistance(record), 0);
 }

@@ -1691,6 +1691,7 @@ export type Database = {
           km_low: number | null
           km_mid: number | null
           km_speed: number | null
+          km_other: number | null
           period_end: string | null
           period_start: string | null
           total_km: number | null

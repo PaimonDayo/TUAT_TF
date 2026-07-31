@@ -15,6 +15,7 @@ import { UpcomingScheduleCard } from "@/components/cards/UpcomingScheduleCard";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { jstNow, jstToday } from "@/lib/date";
 import { formatKm } from "@/lib/utils";
+import { displayedDistance } from "@/lib/record-distance";
 import {
   getAttendanceSchedules,
   getAttendancesForSchedules,
@@ -74,8 +75,7 @@ async function WeeklySummary({ userId, nowJst }: { userId: string; nowJst: Date 
   const sevenDaysAgo = format(subDays(nowJst, 6), "yyyy-MM-dd");
   const records = (await getUserRecords(userId, sevenDaysAgo)) as PracticeRecord[];
   const weekKm = records.reduce(
-    (sum, record) =>
-      sum + record.dist_low + record.dist_mid + record.dist_high + record.dist_speed,
+    (sum, record) => sum + displayedDistance(record),
     0,
   );
   return (

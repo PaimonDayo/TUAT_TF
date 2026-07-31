@@ -436,6 +436,7 @@ export interface WeeklyRankingRow {
   avatar_url: string | null;
   km_low: number;
   km_mid: number;
+  km_other: number;
   km_high: number;
   km_speed: number;
   total_km: number;

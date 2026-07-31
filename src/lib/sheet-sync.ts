@@ -103,7 +103,7 @@ const BUILTINS: { key: BuiltinKey; keywords: string[]; numeric: boolean; integer
   { key: "focus_text", keywords: ["目的", "意識"], numeric: false },
 ];
 
-const DISTANCE_KEYS = new Set<BuiltinKey>(["dist_low", "dist_mid", "dist_high", "dist_speed"]);
+const DISTANCE_KEYS = new Set<BuiltinKey>(["dist_low", "dist_mid", "dist_high", "dist_speed", "dist_actual"]);
 
 const norm = (s: string) => (s ?? "").toString().replace(/\s+/g, "").trim();
 
@@ -308,7 +308,7 @@ export function resolveFieldMap(
 
   for (const item of BUILTINS) {
     const configured = fields.find((field) => field.key === item.key);
-    if (configured?.hidden || item.key === "dist_actual") continue;
+    if (configured?.hidden) continue;
     const hit = headers.find((candidate) => !usedColumns.has(candidate.column)
       && (item.key !== "memo" || candidate.n === "感想")
       && (
@@ -323,7 +323,7 @@ export function resolveFieldMap(
 
   for (const item of BUILTINS) {
     const configured = fields.find((field) => field.key === item.key);
-    if (builtin.has(item.key) || configured?.hidden || item.key === "dist_actual") continue;
+    if (builtin.has(item.key) || configured?.hidden) continue;
     const available = headers.filter((candidate) => !usedColumns.has(candidate.column) && !customSourceColumns.has(candidate.column));
     let hit: HeaderCandidate | undefined;
     if (item.key === "memo") {
@@ -488,7 +488,7 @@ export async function pushRecordToSheet(
   // シートに列自体が無く、送信すらされなかった項目（可視化用）
   const unmapped: string[] = [];
   for (const b of BUILTINS) {
-    if (b.key === "dist_actual") continue;
+    // Actual distance is a first-class mapped value.
     if (map.builtin.has(b.key) || recordFields.find((field) => field.key === b.key)?.hidden) continue;
     const v = appBuiltin(rec, b.key);
     const nonEmpty = b.numeric ? Number(v) > 0 : (v ?? "").toString().trim() !== "";

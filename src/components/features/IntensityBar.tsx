@@ -1,17 +1,18 @@
 import { INTENSITY_ORDER, INTENSITY_LABELS } from "@/lib/constants";
-import { intensityDistance } from "@/lib/record-distance";
+import { displayedDistance, unclassifiedDistance } from "@/lib/record-distance";
 import { formatKm } from "@/lib/utils";
 import type { PracticeRecord } from "@/types";
 
 /** 強度別距離を積み上げ横バーで表示 */
-export function IntensityBar({ record }: { record: Pick<PracticeRecord, "dist_low" | "dist_mid" | "dist_high" | "dist_speed"> }) {
+export function IntensityBar({ record }: { record: Pick<PracticeRecord, "dist_low" | "dist_mid" | "dist_high" | "dist_speed" | "dist_actual"> }) {
   const values = {
     low: record.dist_low ?? 0,
     mid: record.dist_mid ?? 0,
     high: record.dist_high ?? 0,
     speed: record.dist_speed ?? 0,
   };
-  const total = intensityDistance(record);
+  const other = unclassifiedDistance(record);
+  const total = displayedDistance(record);
   if (total <= 0) return null;
 
 
@@ -36,6 +37,12 @@ export function IntensityBar({ record }: { record: Pick<PracticeRecord, "dist_lo
             />
           ) : null,
         )}
+        {other > 0 && (
+          <div
+            className="bg-muted/35"
+            style={{ width: `${(other / total) * 100}%` }}
+          />
+        )}
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-0.5">
         {INTENSITY_ORDER.map((k) =>
@@ -48,6 +55,12 @@ export function IntensityBar({ record }: { record: Pick<PracticeRecord, "dist_lo
               {INTENSITY_LABELS[k].label} {values[k]}km
             </span>
           ) : null,
+        )}
+        {other > 0 && (
+          <span className="flex items-center gap-1 text-[11px] text-muted2">
+            <span className="h-2 w-2 rounded-full bg-muted/35" />
+            {"\u305d\u306e\u4ed6"} {formatKm(other)}km
+          </span>
         )}
       </div>
     </div>

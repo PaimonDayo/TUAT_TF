@@ -73,7 +73,7 @@ export function TrainingChart({
       b.by.mid += r.dist_mid;
       b.by.high += r.dist_high;
       b.by.speed += r.dist_speed;
-      b.unclassified += unclassifiedDistance();
+      b.unclassified += unclassifiedDistance(r);
       b.records.push(r);
     }
     for (const b of arr) {
@@ -103,7 +103,7 @@ export function TrainingChart({
         INTENSITY_ORDER.forEach((intensity) => {
           by[intensity] += distances[intensity];
         });
-        unclassified += unclassifiedDistance();
+        unclassified += unclassifiedDistance(record);
         if (recordTotal > 0) trainingDates.add(record.recorded_date);
       } else if (
         record.recorded_date >= previousFrom &&
@@ -225,7 +225,7 @@ export function TrainingChart({
                           ) : null,
                         )}
                         {b.unclassified > 0 && (
-                          <div aria-label={`強度内訳なし ${formatDistance(b.unclassified)}km`} className="bg-muted/35" style={{ height: `${(b.unclassified / b.total) * 100}%` }} />
+                          <div aria-label={`その他 ${formatDistance(b.unclassified)}km`} className="bg-muted/35" style={{ height: `${(b.unclassified / b.total) * 100}%` }} />
                         )}
                       </div>
                     </>
@@ -285,7 +285,7 @@ export function TrainingChart({
                   {sel.unclassified > 0 && (
                     <span className="flex items-center gap-1 text-[12px] text-muted2">
                       <span className="h-2 w-2 rounded-full bg-muted/35" />
-                      強度内訳なし {formatDistance(sel.unclassified)}km
+                      その他 {formatDistance(sel.unclassified)}km
                     </span>
                   )}
                 </div>
@@ -418,7 +418,7 @@ function IntensitySummary({
               ) : null,
             )}
             {summary.unclassified > 0 && (
-              <div aria-label={`強度内訳なし ${formatDistance(summary.unclassified)}km`} className="bg-muted/35" style={{ width: `${(summary.unclassified / summary.total) * 100}%` }} />
+              <div aria-label={`その他 ${formatDistance(summary.unclassified)}km`} className="bg-muted/35" style={{ width: `${(summary.unclassified / summary.total) * 100}%` }} />
             )}
           </div>
           <div className="mt-2.5 grid grid-cols-2 gap-x-4 gap-y-1.5">
@@ -442,7 +442,7 @@ function IntensitySummary({
             {summary.unclassified > 0 && (
               <div className="flex min-w-0 items-center gap-1.5 text-[11px]">
                 <span className="h-2 w-2 shrink-0 rounded-full bg-muted/35" />
-                <span className="truncate text-muted2">強度内訳なし</span>
+                <span className="truncate text-muted2">その他</span>
                 <span className="ml-auto shrink-0 font-semibold tabular-nums">{Math.round((summary.unclassified / summary.total) * 100)}%<span className="ml-1 font-normal text-muted">{formatDistance(summary.unclassified)}km</span></span>
               </div>
             )}

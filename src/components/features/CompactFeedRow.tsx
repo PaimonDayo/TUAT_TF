@@ -5,11 +5,11 @@ import { Heart, MessageCircle } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
 import { BLOCKS, CONDITIONS, gradeShort } from "@/lib/constants";
 import { cn, formatKm } from "@/lib/utils";
+import { displayedDistance } from "@/lib/record-distance";
 import type { FeedItem } from "@/types";
 
 function compactRecordSummary(item: Extract<FeedItem, { kind: "record" }>) {
-  const totalDistance =
-    item.dist_low + item.dist_mid + item.dist_high + item.dist_speed;
+  const totalDistance = displayedDistance(item);
   const detail =
     item.menu_text ||
     item.result_text ||

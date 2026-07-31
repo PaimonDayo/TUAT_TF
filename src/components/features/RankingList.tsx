@@ -13,6 +13,7 @@ const SEGMENTS: { key: keyof WeeklyRankingRow; color: string }[] = [
   { key: "km_mid", color: INTENSITY_LABELS.mid.color },
   { key: "km_high", color: INTENSITY_LABELS.high.color },
   { key: "km_speed", color: INTENSITY_LABELS.speed.color },
+  { key: "km_other", color: "rgba(142, 142, 147, 0.35)" },
 ];
 
 /** 直近7日 走行距離ランキング（強度別の色分けバー） */

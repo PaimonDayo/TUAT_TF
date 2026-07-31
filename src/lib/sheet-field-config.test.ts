@@ -90,16 +90,22 @@ describe("sheet field configuration", () => {
   });
 });
 
-describe("intensity-only distance", () => {
-  it("uses intensity sum when any intensity exists", () => {
+describe("actual distance remainder", () => {
+  it("adds the unclassified remainder when actual distance exceeds the intensity sum", () => {
     const record = { dist_low: 5, dist_mid: 2, dist_high: 0, dist_speed: 0, dist_actual: 12 };
-    expect(displayedDistance(record)).toBe(7);
-    expect(unclassifiedDistance()).toBe(0);
+    expect(displayedDistance(record)).toBe(12);
+    expect(unclassifiedDistance(record)).toBe(5);
   });
 
-  it("ignores actual distance when every intensity is zero", () => {
+  it("treats all of an actual-only distance as unclassified", () => {
     const record = { dist_low: 0, dist_mid: 0, dist_high: 0, dist_speed: 0, dist_actual: 12 };
-    expect(displayedDistance(record)).toBe(0);
-    expect(unclassifiedDistance()).toBe(0);
+    expect(displayedDistance(record)).toBe(12);
+    expect(unclassifiedDistance(record)).toBe(12);
+  });
+
+  it("does not subtract distance when the intensity sum exceeds actual distance", () => {
+    const record = { dist_low: 5, dist_mid: 4, dist_high: 3, dist_speed: 0, dist_actual: 10 };
+    expect(displayedDistance(record)).toBe(12);
+    expect(unclassifiedDistance(record)).toBe(0);
   });
 });

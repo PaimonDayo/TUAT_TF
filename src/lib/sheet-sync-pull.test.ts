@@ -100,6 +100,24 @@ describe("computeMemberPull", () => {
   });
 });
 
+
+  it("creates a record when only actual distance is present", () => {
+    const actualMap = {
+      builtin: new Map([["dist_actual", { header: "actual", column: 0, numeric: true }]]),
+      custom: new Map(),
+    } as Parameters<typeof computeMemberPull>[1];
+    const result = computeMemberPull(
+      "user-1",
+      actualMap,
+      [{ date: "2026-07-24", cells: { actual: "12.34" }, values: ["12.34"] }],
+      new Map(),
+      () => true,
+      "2026-07-24T15:00:00.000Z",
+      "replace_mapped",
+    );
+
+    expect(result.inserts[0]).toMatchObject({ dist_actual: 12.34, from_sheet: true });
+  });
 describe("appToCellsFull", () => {
   it("sends empty mapped values so an edit can clear spreadsheet cells", () => {
     const map = {
@@ -157,6 +175,23 @@ describe("resolveFieldMap", () => {
       header: "\u610f\u8b58\u30fb\u30a6\u30a8\u30a4\u30c8\u6570\u5024",
       column: 5,
       type: "text",
+    });
+  });
+
+  it("maps the actual distance column as a builtin field", () => {
+    const map = resolveFieldMap(
+      {
+        header: ["\u65e5\u4ed8", "\u5b9f\u969b\u306e\u8ddd\u96e2"],
+        columns: [
+          { index: 0, label: "\u65e5\u4ed8" },
+          { index: 6, label: "\u5b9f\u969b\u306e\u8ddd\u96e2" },
+        ],
+      },
+      [],
+    );
+
+    expect(map.builtin.get("dist_actual")).toEqual({
+      header: "\u5b9f\u969b\u306e\u8ddd\u96e2", column: 6, numeric: true,
     });
   });
 });
