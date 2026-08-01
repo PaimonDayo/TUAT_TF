@@ -1,7 +1,7 @@
-// The current linked-member count fits within the existing per-run safety cap,
-// so process the full roster on each scheduled run.
-const DEFAULT_CHUNK_SIZE = 30;
-const MAX_CHUNK_SIZE = 30;
+// Public CSV fetches vary in latency. Keep each serverless request comfortably
+// below the 60-second limit; the caller advances through multiple chunks.
+const DEFAULT_CHUNK_SIZE = 12;
+const MAX_CHUNK_SIZE = 12;
 
 export function sheetSyncChunkSize(rawValue = process.env.SHEET_SYNC_CHUNK_SIZE): number {
   const parsed = Number.parseInt(rawValue ?? String(DEFAULT_CHUNK_SIZE), 10);
