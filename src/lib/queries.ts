@@ -292,7 +292,7 @@ export async function getSchedulesOn(date: string) {
  * 呼び出し側は必ず本人(isSelf)のときだけ呼ぶこと）。GAS不調時は何もせず現状のDBのまま表示する。
  */
 export async function refreshOwnSheetRecords(
-  profile: Pick<Profile, "id" | "sheet_name" | "record_source" | "record_fields" | "sheet_linked_at">,
+  profile: Pick<Profile, "id" | "sheet_name" | "record_source" | "record_fields" | "sheet_linked_at" | "sheet_history_imported_at">,
 ) {
   if (!profile.sheet_name) return;
   const supabase = await createClient();

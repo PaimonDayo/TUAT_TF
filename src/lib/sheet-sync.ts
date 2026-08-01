@@ -53,8 +53,8 @@ export type SyncResult = {
   dryRun: boolean;
 };
 
-// これ以前の日付・未来日・空の行は同期しない（事故対策）
-const SYNC_CUTOFF = "2026-06-22";
+// 現行スプレッドシートの開始日。初回だけここから全履歴を取り込み、以後は直近1か月に絞る。
+const SHEET_HISTORY_START = "2026-03-23";
 function todayJST(): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Tokyo",
@@ -62,6 +62,18 @@ function todayJST(): string {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
+}
+
+/** 初回は全履歴、完了後は同日の1か月前からを同期対象にする。 */
+export function sheetPullCutoff(today: string, historyImportedAt: string | null): string {
+  if (!historyImportedAt) return SHEET_HISTORY_START;
+  const [year, month, day] = today.split("-").map(Number);
+  const targetMonthIndex = month - 2;
+  const targetYear = year + Math.floor(targetMonthIndex / 12);
+  const normalizedMonthIndex = ((targetMonthIndex % 12) + 12) % 12;
+  const lastDay = new Date(Date.UTC(targetYear, normalizedMonthIndex + 1, 0)).getUTCDate();
+  const date = new Date(Date.UTC(targetYear, normalizedMonthIndex, Math.min(day, lastDay)));
+  return date.toISOString().slice(0, 10);
 }
 
 /**
@@ -568,7 +580,7 @@ export async function reconcileOnSwitch(
       "id, user_id, recorded_date, dist_low, dist_mid, dist_high, dist_speed, dist_actual, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at, pending_sheet_push",
     )
     .eq("user_id", profileId)
-    .gte("recorded_date", SYNC_CUTOFF);
+    .gte("recorded_date", SHEET_HISTORY_START);
   if (rErr) throw rErr;
 
   const byDate = new Map<string, DbRecord[]>();
@@ -602,7 +614,7 @@ export async function reconcileOnSwitch(
   } else {
     // シートが正: 中身のある項目だけアプリへ取り込む
     for (const sr of member.records) {
-      if (!sr.date || sr.date < SYNC_CUTOFF || sr.date > today) continue;
+      if (!sr.date || sr.date < SHEET_HISTORY_START || sr.date > today) continue;
       const appList = byDate.get(sr.date) ?? [];
       if (appList.length > 1) {
         result.skipped.push(`${sr.date}（同日に複数記録）`);
@@ -923,11 +935,11 @@ export async function runSheetSync(
     dryRun,
   };
   const today = todayJST();
-  const inRange = (d: string) => d >= SYNC_CUTOFF && d <= today;
+  const inRange = (d: string) => d >= SHEET_HISTORY_START && d <= today;
 
   const { data: profiles, error: pErr } = await admin
     .from("profiles")
-    .select("id, sheet_name, record_fields, record_source, sheet_linked_at, sheet_header_signature")
+    .select("id, sheet_name, record_fields, record_source, sheet_linked_at, sheet_header_signature, sheet_history_imported_at")
     .not("sheet_name", "is", null);
   if (pErr) throw pErr;
 
@@ -938,6 +950,7 @@ export async function runSheetSync(
     record_source: "app" | "sheet";
     sheet_linked_at: string | null;
     sheet_header_signature: string | null;
+    sheet_history_imported_at: string | null;
   }[];
   if (options.onlySheet) {
     linked = linked.filter((p) => p.sheet_name.trim() === options.onlySheet!.trim());
@@ -962,7 +975,7 @@ export async function runSheetSync(
       "id, user_id, recorded_date, dist_low, dist_mid, dist_high, dist_speed, dist_actual, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at, pending_sheet_push",
     )
     .in("user_id", userIds)
-    .gte("recorded_date", SYNC_CUTOFF);
+    .gte("recorded_date", SHEET_HISTORY_START);
   if (rErr) throw rErr;
 
   // user_id -> date -> 記録の配列（複数/日を検出するため配列で持つ）
@@ -977,7 +990,7 @@ export async function runSheetSync(
 
   const nowIso = new Date().toISOString();
   const inserts: Record<string, unknown>[] = [];
-  const updates: { id: string; patch: Record<string, unknown> }[] = [];
+  const updates: { id: string; profileId: string; patch: Record<string, unknown> }[] = [];
   const pushes: {
     id: string;
     memberName: string;
@@ -986,6 +999,8 @@ export async function runSheetSync(
     /** write-through再送分か（成功時にpending_sheet_pushをfalseへ戻す対象） */
     clearsPending?: boolean;
   }[] = [];
+  const historyImportCandidates = new Set<string>();
+  const historyImportFailures = new Set<string>();
 
   for (const [sheetName, profile] of sheetToProfile) {
     const member = memberByName.get(sheetName);
@@ -1027,11 +1042,9 @@ export async function runSheetSync(
       }
 
       // pullのみ: シートを正としてアプリへ反映。シートに行が無い日は触らない。
-      // 新規に連携した部員は連携日より前の履歴を一気に取り込まない（sheet_linked_atが個別カットオフ）。
-      const cutoff =
-        profile.sheet_linked_at && profile.sheet_linked_at > SYNC_CUTOFF
-          ? profile.sheet_linked_at
-          : SYNC_CUTOFF;
+      // 初回はシート開始日から全履歴を補完し、完了後は直近1か月だけを再取得する。
+      const cutoff = sheetPullCutoff(today, profile.sheet_history_imported_at);
+      if (!profile.sheet_history_imported_at) historyImportCandidates.add(profile.id);
       const inRangeForProfile = (d: string) => d >= cutoff && d <= today;
       const pulled = computeMemberPull(
         profile.id,
@@ -1043,10 +1056,11 @@ export async function runSheetSync(
         stagedSheetFlow ? "replace_mapped" : "merge_nonempty",
       );
       inserts.push(...pulled.inserts);
-      updates.push(...pulled.updates);
+      updates.push(...pulled.updates.map((update) => ({ ...update, profileId: profile.id })));
       result.inserted += pulled.inserts.length;
       result.updated += pulled.updates.length;
       for (const d of pulled.conflicts) result.conflicts.push(`${sheetName} ${d}`); // 複数/日は触らない
+      if (pulled.conflicts.length > 0) historyImportFailures.add(profile.id);
     } else {
       // App-main: retry failed pushes, then import only dates missing from the DB.
       const pendingPushDates = new Set<string>();
@@ -1063,10 +1077,8 @@ export async function runSheetSync(
       }
 
       // Non-empty sheet edits win after pending app pushes are safely excluded.
-      const cutoff =
-        profile.sheet_linked_at && profile.sheet_linked_at > SYNC_CUTOFF
-          ? profile.sheet_linked_at
-          : SYNC_CUTOFF;
+      const cutoff = sheetPullCutoff(today, profile.sheet_history_imported_at);
+      if (!profile.sheet_history_imported_at) historyImportCandidates.add(profile.id);
       const pulled = computeMemberPull(
         profile.id,
         map,
@@ -1079,6 +1091,7 @@ export async function runSheetSync(
       inserts.push(...pulled.inserts);
       result.inserted += pulled.inserts.length;
       for (const date of pulled.conflicts) result.conflicts.push(`${sheetName} ${date}`);
+      if (pulled.conflicts.length > 0) historyImportFailures.add(profile.id);
     }
   }
 
@@ -1097,7 +1110,7 @@ export async function runSheetSync(
         admin,
         linked.map((profile) => ({ id: profile.id, sheet_name: profile.sheet_name })),
         members,
-        SYNC_CUTOFF,
+        sheetPullCutoff(today, nowIso),
         today,
         true,
       );
@@ -1117,11 +1130,10 @@ export async function runSheetSync(
   if (inserts.length > 0) {
     const { error } = await admin.from("practice_records").insert(inserts);
     if (error) {
-      // 一括insertが失敗したら1件ずつ入れ直し、不正な行（型不一致等）だけを
-      // スキップして残りを取り込む。失敗行は部員名・日付つきで記録する
-      // （2026-07-09〜12、「流し」列の小数1セルで全部員の新規取込が3日間
-      // 全滅・status=successのため誰も気づけなかった事故の再発防止）。
       result.inserted = 0;
+      // 一括insertが失敗したら1件ずつ入れ直し、不正な行だけをスキップする。
+      // 失敗した部員は履歴取込完了にせず、次回も全期間を再確認する。
+      // （1セルの型不一致で全部員の新規取込が止まった事故の再発防止。）
       for (const row of inserts) {
         const { error: rowErr } = await admin.from("practice_records").insert(row);
         if (rowErr) {
@@ -1129,6 +1141,7 @@ export async function runSheetSync(
             member: nameById.get(row.user_id as string) ?? String(row.user_id),
             reason: `${row.recorded_date}: ${rowErr.message}`,
           });
+          historyImportFailures.add(row.user_id as string);
         } else {
           result.inserted++;
         }
@@ -1142,17 +1155,34 @@ export async function runSheetSync(
     } catch (err) {
       result.updated--;
       result.failedMembers.push({
-        member: "(取込更新)",
+        member: nameById.get(u.profileId) ?? "(取込更新)",
         reason: err instanceof Error ? err.message : "更新できませんでした",
+      });
+      historyImportFailures.add(u.profileId);
+    }
+  }
+
+  for (const profileId of historyImportCandidates) {
+    if (historyImportFailures.has(profileId)) continue;
+    const { error } = await admin
+      .from("profiles")
+      .update({ sheet_history_imported_at: nowIso })
+      .eq("id", profileId)
+      .is("sheet_history_imported_at", null);
+    if (error) {
+      result.failedMembers.push({
+        member: nameById.get(profileId) ?? profileId,
+        reason: `履歴取込の完了を保存できませんでした: ${error.message}`,
       });
     }
   }
+
   try {
     const replySync = await reconcileSheetReplies(
       admin,
       linked.map((profile) => ({ id: profile.id, sheet_name: profile.sheet_name })),
       members,
-      SYNC_CUTOFF,
+      sheetPullCutoff(today, nowIso),
       today,
     );
     result.sheetReplies = replySync.synced;
@@ -1205,6 +1235,7 @@ export async function refreshMemberFromSheetLive(
     record_fields: RecordFieldDef[] | null;
     sheet_linked_at: string | null;
     sheet_header_signature?: string | null;
+    sheet_history_imported_at?: string | null;
   },
   options: { replaceMappedBlanks?: boolean; enforceHeaderSignature?: boolean } = {},
 ): Promise<LiveRefreshResult | null> {
@@ -1223,10 +1254,7 @@ export async function refreshMemberFromSheetLive(
     }
     const map = resolveFieldMap(member, profile.record_fields ?? []);
     const today = todayJST();
-    const cutoff =
-      profile.sheet_linked_at && profile.sheet_linked_at > SYNC_CUTOFF
-        ? profile.sheet_linked_at
-        : SYNC_CUTOFF;
+    const cutoff = sheetPullCutoff(today, profile.sheet_history_imported_at ?? null);
 
     const { data: existing, error } = await supabase
       .from("practice_records")
@@ -1260,9 +1288,11 @@ export async function refreshMemberFromSheetLive(
     );
     let inserted = 0;
     let updated = 0;
+    let writesSucceeded = true;
     if (inserts.length > 0) {
       const { error: insErr } = await supabase.from("practice_records").insert(inserts);
       if (!insErr) inserted = inserts.length;
+      else writesSucceeded = false;
     }
     for (const u of updates) {
       const { error: updErr } = await supabase
@@ -1270,8 +1300,16 @@ export async function refreshMemberFromSheetLive(
         .update(u.patch)
         .eq("id", u.id);
       if (!updErr) updated++;
+      else writesSucceeded = false;
     }
     let sheetReplies = 0;
+    if (!profile.sheet_history_imported_at && writesSucceeded) {
+      await supabase
+        .from("profiles")
+        .update({ sheet_history_imported_at: nowIso })
+        .eq("id", profile.id)
+        .is("sheet_history_imported_at", null);
+    }
     try {
       const replySync = await reconcileSheetReplies(
         supabase,

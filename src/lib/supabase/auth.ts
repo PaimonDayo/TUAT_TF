@@ -57,6 +57,7 @@ export const getCurrentProfile = cache(async (): Promise<Profile> => {
       timeline_default_block: "all",
       sheet_name: null,
       sheet_linked_at: null,
+      sheet_history_imported_at: null,
       sheet_header_signature: null,
       record_source: "app",
       record_fields: [],

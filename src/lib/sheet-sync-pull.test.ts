@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appToCellsFull, computeMemberPull, resolveFieldMap, sheetRecordsWithoutPendingPushes, type DbRecord, type FieldMap } from "./sheet-sync";
+import { appToCellsFull, computeMemberPull, resolveFieldMap, sheetPullCutoff, sheetRecordsWithoutPendingPushes, type DbRecord, type FieldMap } from "./sheet-sync";
 
 const fieldMap = {
   builtin: new Map([["memo", { header: "memo", column: 0, numeric: false }]]),
@@ -205,5 +205,19 @@ describe("sheetRecordsWithoutPendingPushes", () => {
 
     expect(sheetRecordsWithoutPendingPushes(records, new Set(["2026-07-26"])))
       .toEqual([records[1]]);
+  });
+});
+
+describe("sheetPullCutoff", () => {
+  it("uses the sheet start date until the initial history import completes", () => {
+    expect(sheetPullCutoff("2026-08-01", null)).toBe("2026-03-23");
+  });
+
+  it("uses the same day one month earlier after the initial import", () => {
+    expect(sheetPullCutoff("2026-08-01", "2026-08-01T00:00:00Z")).toBe("2026-07-01");
+  });
+
+  it("clamps month-end dates", () => {
+    expect(sheetPullCutoff("2026-03-31", "2026-03-01T00:00:00Z")).toBe("2026-02-28");
   });
 });

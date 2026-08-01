@@ -1157,6 +1157,7 @@ export type Database = {
           role: string
           sheet_header_signature: string | null
           sheet_linked_at: string | null
+          sheet_history_imported_at: string | null
           sheet_name: string | null
           status: string
         }
@@ -1183,6 +1184,7 @@ export type Database = {
           role?: string
           sheet_header_signature?: string | null
           sheet_linked_at?: string | null
+          sheet_history_imported_at?: string | null
           sheet_name?: string | null
           status?: string
         }
@@ -1209,6 +1211,7 @@ export type Database = {
           role?: string
           sheet_header_signature?: string | null
           sheet_linked_at?: string | null
+          sheet_history_imported_at?: string | null
           sheet_name?: string | null
           status?: string
         }

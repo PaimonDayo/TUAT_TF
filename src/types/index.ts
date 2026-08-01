@@ -80,8 +80,10 @@ export interface Profile {
   timeline_default_block: TimelineDefaultBlock;
   /** スプレッドシート同期で使う、自分のシート名（例: B2駒井）。未設定なら同期対象外 */
   sheet_name: string | null;
-  /** シート連携した日(JST)。新規連携時は同期側でこれ以降のみ取り込む個別カットオフに使う */
+  /** シート連携した日(JST) */
   sheet_linked_at: string | null;
+  /** シート開始日からの初回履歴取込が完了した時刻。未完了ならnull */
+  sheet_history_imported_at: string | null;
   sheet_header_signature: string | null;
   /** 記録のメインDB。'sheet'ならスプシが正でアプリからの保存は即write-through、'app'ならアプリが正でスプシへ書き戻す */
   record_source: "app" | "sheet";

@@ -32,7 +32,11 @@ export async function POST(request: Request) {
 
   const { data, error } = await supabase
     .from("profiles")
-    .update({ record_fields: recordFieldsToJson(persistedFields), sheet_header_signature: signature })
+    .update({
+      record_fields: recordFieldsToJson(persistedFields),
+      sheet_header_signature: signature,
+      sheet_history_imported_at: null,
+    })
     .eq("id", user.id)
     .select("record_fields_version")
     .single();
