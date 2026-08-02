@@ -106,7 +106,7 @@ async function SchedulesSection({ profile }: { profile: Profile }) {
   const today = jstToday();
   let schedules = (await getAttendanceSchedules(
     profile.blocks,
-    perms.createSchedule,
+    perms.manageSystem || profile.blocks.includes("manager") || profile.schedule_view_all_blocks,
     10,
   )) as ScheduleWithMenus[];
   schedules = schedules.map((schedule) => ({ ...schedule, menus: schedule.menus ?? [] }));

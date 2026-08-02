@@ -21,7 +21,6 @@ import {
   SCHEDULE_TYPE_OPTIONS,
   normalizeProfileBlocks,
 } from "@/lib/constants";
-import { cn } from "@/lib/utils";
 import type { Block, PracticeSchedule, ScheduleType, VenueRow } from "@/types";
 
 const OTHER = "__other__";
@@ -207,47 +206,16 @@ export function ScheduleForm({
 
       <div>
         <p className="section-label mb-1.5">対象ブロック</p>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setTargetBlocks([])}
-            className={cn(
-              "h-11 rounded-xl border text-[14px] font-semibold",
-              targetBlocks.length === 0
-                ? "border-accent bg-accent text-white"
-                : "border-separator bg-card text-muted2",
-            )}
-          >
-            全体
-          </button>
-          {EDITABLE_BLOCK_ORDER.map((block) => {
-            const meta = BLOCKS[block];
-            const active = targetBlocks.includes(block);
-            return (
-              <button
-                key={block}
-                type="button"
-                onClick={() =>
-                  setTargetBlocks((current) =>
-                    current.includes(block)
-                      ? current.filter((item) => item !== block)
-                      : [...current, block],
-                  )
-                }
-                className="h-11 rounded-xl border text-[14px] font-semibold"
-                style={{
-                  borderColor: active ? meta.color : "#e5e5ea",
-                  backgroundColor: active ? meta.bg : "#fff",
-                  color: active ? meta.color : "#8e8e93",
-                }}
-              >
-                {meta.label}
-              </button>
-            );
-          })}
-        </div>
+        <SegmentedControl
+          items={[
+            { key: "all", label: "全体" },
+            ...(["middle_long", "short"] as const).map((block) => ({ key: block, label: BLOCKS[block].label })),
+          ]}
+          value={targetBlocks[0] ?? "all"}
+          onChange={(value) => setTargetBlocks(value === "all" ? [] : [value as Block])}
+        />
         <p className="text-micro mt-1.5">
-          全体は全員に表示されます。個別ブロックは複数選択できます。
+          全体は中長距離・短距離の両方に表示されます。
         </p>
       </div>
 

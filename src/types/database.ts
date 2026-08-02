@@ -1149,6 +1149,7 @@ export type Database = {
           grade: string | null
           id: string
           menu_view_all_blocks: boolean
+          schedule_view_all_blocks: boolean
           notify_comment: boolean
           notify_notice: boolean
           record_fields: Json
@@ -1176,6 +1177,7 @@ export type Database = {
           grade?: string | null
           id: string
           menu_view_all_blocks?: boolean
+          schedule_view_all_blocks?: boolean
           notify_comment?: boolean
           notify_notice?: boolean
           record_fields?: Json
@@ -1203,6 +1205,7 @@ export type Database = {
           grade?: string | null
           id?: string
           menu_view_all_blocks?: boolean
+          schedule_view_all_blocks?: boolean
           notify_comment?: boolean
           notify_notice?: boolean
           record_fields?: Json

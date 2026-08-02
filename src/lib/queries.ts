@@ -372,7 +372,8 @@ export async function getUpcomingSchedules(
       )
     `)
     .gte("schedule_date", today)
-    .order("schedule_date", { ascending: true });
+    .order("schedule_date", { ascending: true })
+    .order("meeting_time", { ascending: true, nullsFirst: false });
   if (type && type !== "all") q = q.eq("schedule_type", type);
   const { data, error } = await q;
   if (error) throw new Error("Failed to load upcoming schedules: " + error.message);
@@ -414,6 +415,7 @@ export async function getUpcomingSchedulesWithAttendances(
     `)
     .gte("schedule_date", today)
     .order("schedule_date", { ascending: true })
+    .order("meeting_time", { ascending: true, nullsFirst: false })
     .limit(limit);
   if (error) throw new Error(`Failed to load upcoming schedules: ${error.message}`);
   return filterSchedulesForViewer(data ?? [], viewerBlocks, canManage)
@@ -615,6 +617,7 @@ export async function getAttendanceSchedules(
     .gte("schedule_date", today)
     .in("schedule_type", ["practice", "meet", "event"])
     .order("schedule_date", { ascending: true })
+    .order("meeting_time", { ascending: true, nullsFirst: false })
     .limit(Math.max(30, limit * 3));
   if (error) throw new Error(`Failed to load attendance schedules: ${error.message}`);
   return filterSchedulesForViewer(data ?? [], viewerBlocks, canManage).slice(0, limit);

@@ -27,7 +27,7 @@ export async function getSchedulePageData(): Promise<SchedulePageData> {
   const profile = await getCurrentProfile();
   const perms = permissionsOf(profile.roles);
   let schedules: (ScheduleWithMenus & { attendances?: (Attendee & { schedule_id: string })[] })[] =
-    await getUpcomingSchedulesWithAttendances(profile.blocks, perms.createSchedule);
+    await getUpcomingSchedulesWithAttendances(profile.blocks, perms.manageSystem || profile.blocks.includes("manager") || profile.schedule_view_all_blocks);
   let middleLongMenuSnapshot: MiddleLongMenuSnapshot | null = null;
   if (profile.blocks.includes("middle_long") || profile.blocks.includes("manager") || profile.menu_view_all_blocks || perms.createMenu) {
     middleLongMenuSnapshot = await fetchMiddleLongMenuSnapshot(middleLongMenuMonths(schedules));

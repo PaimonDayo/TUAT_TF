@@ -16,6 +16,7 @@ import type { AuthorMini, Block, PracticeMenu, PracticeSchedule, VenueRow } from
 type ScheduleDraft = { id?: string; time: string; venue: string; note: string };
 type MenuDraft = { id?: string; content: string; pace: string; remark: string; supplement: string };
 type RowState = "dirty" | "saving" | "saved" | "error";
+type ScheduleScope = "all" | "middle_long" | "short";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -35,6 +36,7 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [block, setBlock] = useState<Block>("middle_long");
+  const [scheduleScope, setScheduleScope] = useState<ScheduleScope>("all");
   const [targetIds, setTargetIds] = useState<string[]>([]);
   const [status, setStatus] = useState<"draft" | "published">("published");
   const [members, setMembers] = useState<AuthorMini[]>([]);
@@ -51,7 +53,8 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
   const [customVenueDates, setCustomVenueDates] = useState<string[]>([]);
 
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
-  const localDraftKey = `track-app:monthly-planner:${monthKey}`;
+  const activeScheduleScope: ScheduleScope = tab === "menu" ? (block === "short" ? "short" : "middle_long") : scheduleScope;
+  const localDraftKey = `track-app:monthly-planner:${monthKey}:${activeScheduleScope}`;
   const days = useMemo(() => Array.from({ length: new Date(year, month, 0).getDate() }, (_, index) => {
     const date = `${monthKey}-${String(index + 1).padStart(2, "0")}`;
     return { date, day: index + 1, weekday: WEEKDAYS[new Date(year, month - 1, index + 1).getDay()] };
@@ -69,7 +72,15 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
       supabase.from("venues").select("*").order("pinned", { ascending: false }).order("sort"),
     ]).then(([scheduleResult, memberResult, venueResult]) => {
       if (!active) return;
-      const rows = (scheduleResult.data ?? []) as PracticeSchedule[];
+      const allRows = (scheduleResult.data ?? []) as PracticeSchedule[];
+      const rows = activeScheduleScope === "all"
+        ? allRows.filter((row) => row.target_blocks.length === 0)
+        : [...new Map(
+            allRows
+              .filter((row) => row.target_blocks.length === 0 || (row.target_blocks.length === 1 && row.target_blocks[0] === activeScheduleScope))
+              .sort((a, b) => a.target_blocks.length - b.target_blocks.length)
+              .map((row) => [row.schedule_date, row]),
+          ).values()];
       const byDate: Record<string, PracticeSchedule> = {};
       const drafts: Record<string, ScheduleDraft> = {};
       rows.forEach((row) => { byDate[row.schedule_date] = row; drafts[row.schedule_date] = { id: row.id, time: row.meeting_time?.slice(0, 5) ?? "", venue: row.venue_name ?? row.location ?? "", note: row.note ?? "" }; });
@@ -78,7 +89,7 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
       setMembers((memberResult.data ?? []) as AuthorMini[]); setVenues((venueResult.data ?? []) as VenueRow[]);
     });
     return () => { active = false; };
-  }, [localDraftKey, month, monthKey, year]);
+  }, [activeScheduleScope, localDraftKey, month, monthKey, year]);
 
   useEffect(() => {
     let active = true;
@@ -170,7 +181,7 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
     if (!canSchedule) return null;
     setRowStates((current) => ({ ...current, [stateKey("schedule", date)]: "saving" }));
     const supabase = createClient(); const { data: { user } } = await supabase.auth.getUser(); if (!user) return null;
-    const payload = { schedule_date: date, schedule_type: "practice", meeting_time: draft.time || null, venue_name: draft.venue || null, note: draft.note || null, target_blocks: [] as Block[] };
+    const payload = { schedule_date: date, schedule_type: "practice", meeting_time: draft.time || null, venue_name: draft.venue || null, note: draft.note || null, target_blocks: (activeScheduleScope === "all" ? [] : [activeScheduleScope]) as Block[] };
     const result = draft.id ? await supabase.from("practice_schedules").update(payload).eq("id", draft.id).select("*").single() : await supabase.from("practice_schedules").insert({ ...payload, created_by: user.id }).select("*").single();
     if (result.error || !result.data) { setRowStates((current) => ({ ...current, [stateKey("schedule", date)]: "error" })); return null; }
     const saved = result.data as PracticeSchedule; setSchedules((current) => ({ ...current, [date]: saved })); setScheduleDrafts((current) => ({ ...current, [date]: { ...current[date], id: saved.id } })); setRowStates((current) => ({ ...current, [stateKey("schedule", date)]: "saved" })); return saved;
@@ -180,13 +191,14 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
     if (schedules[date]) return schedules[date];
     const saved = await saveSchedule(date); if (saved) return saved;
     const supabase = createClient();
-    const { data: ensured } = await supabase.rpc("ensure_practice_schedule_for_menu", { target_date: date });
-    if (ensured) {
-      const { data } = await supabase.from("practice_schedules").select("*").eq("id", ensured as string).single();
-      if (data) { const schedule = data as PracticeSchedule; setSchedules((current) => ({ ...current, [date]: schedule })); return schedule; }
-    }
     const { data: { user } } = await supabase.auth.getUser(); if (!user) return null;
-    const { data } = await supabase.from("practice_schedules").insert({ schedule_date: date, schedule_type: "practice", created_by: user.id, target_blocks: [] }).select("*").single();
+    const targetBlock = tab === "menu" ? block : scheduleScope;
+    const { data } = await supabase.from("practice_schedules").insert({
+      schedule_date: date,
+      schedule_type: "practice",
+      created_by: user.id,
+      target_blocks: targetBlock === "all" ? [] : [targetBlock],
+    }).select("*").single();
     if (!data) return null;
     const schedule = data as PracticeSchedule; setSchedules((current) => ({ ...current, [date]: schedule })); return schedule;
   }
@@ -273,6 +285,7 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
   function toggleExpanded(date: string) { setExpandedDates((current) => current.includes(date) ? current.filter((item) => item !== date) : [...current, date]); }
 
   return <div className="space-y-4">
+    {tab === "schedule" && <SegmentedControl items={[{ key: "all", label: "全体" }, { key: "middle_long", label: "中長距離" }, { key: "short", label: "短距離" }]} value={scheduleScope} onChange={(value) => { if (hasDirtyChanges) localStorage.setItem(localDraftKey, JSON.stringify({ schedules: scheduleDrafts, menus: menuDrafts })); setScheduleScope(value as ScheduleScope); setSchedules({}); setScheduleDrafts({}); setRowStates({}); }} />}
     <SegmentedControl items={[...(canSchedule ? [{ key: "schedule", label: "予定" }] : []), ...(canMenu ? [{ key: "menu", label: "メニュー" }] : [])]} value={tab} onChange={(value) => setTab(value as "schedule" | "menu")} />
     <div className="flex items-center justify-between rounded-xl bg-bg px-2 py-1"><button type="button" onClick={() => moveMonth(-1)} className="p-2"><ChevronLeft /></button><strong>{year}年{month}月</strong><button type="button" onClick={() => moveMonth(1)} className="p-2"><ChevronRight /></button></div>
     <div className="flex items-center justify-between gap-3">{tab === "schedule" ? <SegmentedControl className="w-52" items={[{ key: "all", label: "すべての日" }, { key: "active", label: "予定あり" }]} value={showActiveOnly ? "active" : "all"} onChange={(value) => setShowActiveOnly(value === "active")} /> : <span className="text-xs text-muted">予定がある日のみ表示</span>}<span className="shrink-0 text-xs text-muted">変更 {dirtyCount}件</span></div>

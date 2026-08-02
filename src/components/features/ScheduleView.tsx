@@ -45,6 +45,7 @@ export function ScheduleView({
   openId?: string;
 }) {
   const [type, setType] = useState("all");
+  const [block, setBlock] = useState<"all" | "middle_long" | "short">("all");
 
   const items = [
     { key: "all", label: "すべて" },
@@ -54,12 +55,13 @@ export function ScheduleView({
   const filtered = useMemo(
     () =>
       schedules.filter((s) => {
-        if (type === "all") return true;
-        // 「大会・行事」タブは旧データの event も含める
-        if (type === "meet") return s.schedule_type === "meet" || s.schedule_type === "event";
-        return s.schedule_type === type;
+        const typeMatches = type === "all"
+          || (type === "meet" ? s.schedule_type === "meet" || s.schedule_type === "event" : s.schedule_type === type);
+        if (!typeMatches) return false;
+        if (block === "all") return true;
+        return s.target_blocks.length === 0 || s.target_blocks.includes(block);
       }),
-    [schedules, type],
+    [block, schedules, type],
   );
 
   return (
@@ -67,6 +69,14 @@ export function ScheduleView({
       <div className="px-4 pt-1 pb-3 md:px-6 lg:pb-2">
         <div className="flex min-h-9 items-center lg:min-h-8">
           <SegmentedControl items={items} value={type} onChange={setType} className="w-full md:max-w-[520px]" />
+        </div>
+        <div className="mt-2">
+          <SegmentedControl
+            items={[{ key: "all", label: "全体" }, { key: "middle_long", label: "中長距離" }, { key: "short", label: "短距離" }]}
+            value={block}
+            onChange={(value) => setBlock(value as typeof block)}
+            className="w-full md:max-w-[520px]"
+          />
         </div>
       </div>
 

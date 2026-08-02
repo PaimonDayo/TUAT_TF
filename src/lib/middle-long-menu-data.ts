@@ -52,6 +52,7 @@ export function applyMiddleLongMenuSnapshot(
   const loadedMonths = new Set(snapshot.loadedMonths);
   return schedules.map((schedule) => {
     if (schedule.schedule_type !== "practice") return schedule;
+    if (schedule.target_blocks.length > 0 && !schedule.target_blocks.includes("middle_long")) return schedule;
     const month = Number(schedule.schedule_date.slice(5, 7));
     const monthDay = schedule.schedule_date.slice(5);
     const candidates = snapshot.rows.filter(

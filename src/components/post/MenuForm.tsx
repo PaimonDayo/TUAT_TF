@@ -43,6 +43,8 @@ type UpcomingSchedule = {
   title: string | null;
   venue_name: string | null;
   schedule_type: string;
+  meeting_time: string | null;
+  target_blocks: Block[];
 };
 
 /** 予定カードから練習メニューを追加する */
@@ -180,7 +182,7 @@ function MenuEditor({
           ? Promise.resolve({ data: [] })
           : supabase
               .from("practice_schedules")
-              .select("id, schedule_date, title, venue_name, schedule_type")
+              .select("id, schedule_date, title, venue_name, schedule_type, meeting_time, target_blocks")
               .gte("schedule_date", today)
               .order("schedule_date", { ascending: true }),
         supabase
@@ -548,5 +550,7 @@ function scheduleLabel(schedule: UpcomingSchedule): string {
     schedule.title ||
     schedule.venue_name ||
     (schedule.schedule_type === "practice" ? "練習" : "予定");
-  return `${date} ${name}`;
+  const block = schedule.target_blocks?.length === 1 ? ` ${BLOCKS[schedule.target_blocks[0]].label}` : " 全体";
+  const time = schedule.meeting_time ? ` ${schedule.meeting_time.slice(0, 5)}` : "";
+  return `${date}${block}${time} ${name}`;
 }

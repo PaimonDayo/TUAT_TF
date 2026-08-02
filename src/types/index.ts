@@ -74,6 +74,7 @@ export interface Profile {
   notify_comment: boolean;
   notify_notice: boolean;
   menu_view_all_blocks: boolean;
+  schedule_view_all_blocks: boolean;
   attendance_view_all_blocks: boolean;
   attendance_default_block: AttendanceDefaultBlock;
   /** タイムラインを開いたとき最初に表示するブロックタブ */

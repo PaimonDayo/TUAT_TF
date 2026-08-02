@@ -52,6 +52,7 @@ export const getCurrentProfile = cache(async (): Promise<Profile> => {
       notify_comment: true,
       notify_notice: true,
       menu_view_all_blocks: false,
+      schedule_view_all_blocks: false,
       attendance_view_all_blocks: false,
       attendance_default_block: "all",
       timeline_default_block: "all",
