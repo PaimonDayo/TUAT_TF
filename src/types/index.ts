@@ -79,8 +79,6 @@ export interface Profile {
   attendance_default_block: AttendanceDefaultBlock;
   /** タイムラインを開いたとき最初に表示するブロックタブ */
   timeline_default_block: TimelineDefaultBlock;
-  /** Whether this member's records and posts appear in timeline lists. */
-  timeline_posts_visible: boolean;
   /** スプレッドシート同期で使う、自分のシート名（例: B2駒井）。未設定なら同期対象外 */
   sheet_name: string | null;
   /** シート連携した日(JST) */

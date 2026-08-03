@@ -38,8 +38,6 @@ import type {
 
 const AUTHOR_SELECT =
   "author:profiles!user_id(id, display_name, avatar_url, blocks, grade, record_source, record_fields)";
-const TIMELINE_AUTHOR_SELECT =
-  "author:profiles!user_id!inner(id, display_name, avatar_url, blocks, grade, record_source, record_fields, timeline_posts_visible)";
 const NOTICE_REACTIONS: NoticeReaction[] = ["ack", "thanks", "question"];
 function isPresent<T>(value: T | null): value is T {
   return value !== null;
@@ -144,8 +142,7 @@ export async function getFeed(
 
   let recordsQuery = supabase
     .from("practice_records")
-    .select(`*, ${TIMELINE_AUTHOR_SELECT}`)
-    .eq("author.timeline_posts_visible", true)
+    .select(`*, ${AUTHOR_SELECT}`)
     .lte("recorded_date", jstToday())
     .or(RECORD_NONEMPTY_OR)
     .or(SHEET_TIMELINE_OR)
@@ -155,8 +152,7 @@ export async function getFeed(
 
   let tweetsQuery = supabase
     .from("tweets")
-    .select(`*, ${TIMELINE_AUTHOR_SELECT}`)
-    .eq("author.timeline_posts_visible", true)
+    .select(`*, ${AUTHOR_SELECT}`)
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(limit);

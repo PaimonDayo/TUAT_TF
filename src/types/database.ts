@@ -1138,7 +1138,6 @@ export type Database = {
           approved: boolean
           attendance_default_block: string
           timeline_default_block: string
-          timeline_posts_visible: boolean
           attendance_view_all_blocks: boolean
           avatar_url: string | null
           blocks: string[]
@@ -1167,7 +1166,6 @@ export type Database = {
           approved?: boolean
           attendance_default_block?: string
           timeline_default_block?: string
-          timeline_posts_visible?: boolean
           attendance_view_all_blocks?: boolean
           avatar_url?: string | null
           blocks?: string[]
@@ -1196,7 +1194,6 @@ export type Database = {
           approved?: boolean
           attendance_default_block?: string
           timeline_default_block?: string
-          timeline_posts_visible?: boolean
           attendance_view_all_blocks?: boolean
           avatar_url?: string | null
           blocks?: string[]
