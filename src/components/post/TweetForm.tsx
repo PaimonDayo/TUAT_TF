@@ -52,6 +52,10 @@ export const TweetForm = forwardRef<
   async function submit() {
     const text = content.trim();
     if (!text && !imageFile) return;
+    if (imageFile && !expiresIn24Hours) {
+      setError("画像はストーリーにだけ追加できます");
+      return;
+    }
     if (tweetContentLength(text) > TWEET_MAX_LENGTH) {
       setError(`本文は${TWEET_MAX_LENGTH.toLocaleString()}文字以内にしてください`);
       return;
@@ -169,12 +173,49 @@ export const TweetForm = forwardRef<
 
       {!editing && (
         <div className="space-y-2">
-          {imagePreview && <div className="relative overflow-hidden rounded-2xl border border-separator"><img src={imagePreview} alt="投稿画像のプレビュー" className="max-h-80 w-full object-contain" /><button type="button" aria-label="画像を外す" onClick={() => setImageFile(null)} className="absolute right-2 top-2 rounded-full bg-black/65 p-2 text-white"><X size={17} /></button></div>}
-          <div className="grid grid-cols-2 gap-2">
-            <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-separator bg-card text-[14px] font-semibold"><ImagePlus size={18} />画像を追加<input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => { const file = event.target.files?.[0] ?? null; try { if (file) validateTweetImage(file); setImageFile(file); setError(null); } catch (fileError) { setImageFile(null); setError(fileError instanceof Error ? fileError.message : "画像を選択できませんでした"); } }} /></label>
-            <button type="button" aria-pressed={expiresIn24Hours} onClick={() => setExpiresIn24Hours((value) => !value)} className={cn("flex min-h-11 items-center justify-center gap-2 rounded-xl border text-[14px] font-semibold", expiresIn24Hours ? "border-accent bg-accent/10 text-accent" : "border-separator bg-card")}><Clock3 size={18} />ストーリー</button>
-          </div>
-          {expiresIn24Hours && <p className="text-center text-[12px] text-muted2">ストーリーは投稿から24時間後に自動で非表示になります</p>}
+          <button
+            type="button"
+            aria-pressed={expiresIn24Hours}
+            onClick={() => setExpiresIn24Hours((value) => {
+              if (value) setImageFile(null);
+              return !value;
+            })}
+            className={cn(
+              "flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border text-[14px] font-semibold",
+              expiresIn24Hours ? "border-accent bg-accent/10 text-accent" : "border-separator bg-card",
+            )}
+          >
+            <Clock3 size={18} />
+            ストーリーとして投稿
+          </button>
+
+          {expiresIn24Hours && (
+            <div className="space-y-2">
+              {imagePreview && (
+                <div className="relative overflow-hidden rounded-2xl border border-separator">
+                  <img src={imagePreview} alt="投稿画像のプレビュー" className="max-h-80 w-full object-contain" />
+                  <button type="button" aria-label="画像を外す" onClick={() => setImageFile(null)} className="absolute right-2 top-2 rounded-full bg-black/65 p-2 text-white">
+                    <X size={17} />
+                  </button>
+                </div>
+              )}
+              <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-separator bg-card text-[14px] font-semibold">
+                <ImagePlus size={18} />画像を追加
+                <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => {
+                  const file = event.target.files?.[0] ?? null;
+                  try {
+                    if (file) validateTweetImage(file);
+                    setImageFile(file);
+                    setError(null);
+                  } catch (fileError) {
+                    setImageFile(null);
+                    setError(fileError instanceof Error ? fileError.message : "画像を選択できませんでした");
+                  }
+                }} />
+              </label>
+              <p className="text-center text-[12px] text-muted2">ストーリーは投稿から24時間後に自動で非表示になります</p>
+            </div>
+          )}
         </div>
       )}
 
