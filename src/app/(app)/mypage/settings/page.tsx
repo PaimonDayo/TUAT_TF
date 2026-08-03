@@ -4,6 +4,7 @@ import { SubHeader } from "@/components/layout/SubHeader";
 import { Card } from "@/components/ui/card";
 import { AttendanceViewSetting } from "@/components/features/AttendanceViewSetting";
 import { TimelineViewSetting } from "@/components/features/TimelineViewSetting";
+import { TimelinePostVisibilitySetting } from "@/components/features/TimelinePostVisibilitySetting";
 import { MenuViewSetting } from "@/components/features/MenuViewSetting";
 import { ScheduleViewSetting } from "@/components/features/ScheduleViewSetting";
 import { SplashIntroSetting } from "@/components/features/SplashIntroSetting";
@@ -34,6 +35,7 @@ export default async function SettingsPage() {
         <Section title="表示">
           <AttendanceViewSetting userId={profile.id} initial={profile.attendance_default_block} />
           <TimelineViewSetting userId={profile.id} initial={profile.timeline_default_block} />
+          <TimelinePostVisibilitySetting userId={profile.id} initial={profile.timeline_posts_visible ?? true} />
           <ScheduleViewSetting userId={profile.id} initial={profile.schedule_view_all_blocks ?? false} />
           <MenuViewSetting userId={profile.id} initial={profile.menu_view_all_blocks ?? false} />
           <SplashIntroSetting />
