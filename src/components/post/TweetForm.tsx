@@ -1,7 +1,8 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- local object URL preview */
 
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
-import { Link2, LoaderCircle, Send } from "lucide-react";
+import { Clock3, ImagePlus, Link2, LoaderCircle, Send, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
@@ -16,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { FormModalFooter } from "@/components/ui/form-modal";
 import { cn } from "@/lib/utils";
+import { prepareTweetImage, TWEET_IMAGE_BUCKET, validateTweetImage } from "@/lib/tweet-image";
 
 /** つぶやきフォーム。tweet を渡すと編集モード */
 export type TweetFormHandle = { save: () => void };
@@ -32,6 +34,9 @@ export const TweetForm = forwardRef<
   const [content, setContent] = useState(tweet?.content ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expiresIn24Hours, setExpiresIn24Hours] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const imagePreview = useMemo(() => imageFile ? URL.createObjectURL(imageFile) : null, [imageFile]);
   const initialContent = tweet?.content ?? "";
   const effectiveLength = tweetContentLength(content);
   const remaining = tweetContentRemaining(content);
@@ -40,13 +45,13 @@ export const TweetForm = forwardRef<
   const progress = Math.min(100, (effectiveLength / TWEET_MAX_LENGTH) * 100);
 
   useEffect(() => {
-    onDirtyChange?.(content !== initialContent);
-  }, [content, initialContent, onDirtyChange]);
+    onDirtyChange?.(content !== initialContent || !!imageFile || expiresIn24Hours);
+  }, [content, imageFile, expiresIn24Hours, initialContent, onDirtyChange]);
   useImperativeHandle(ref, () => ({ save: () => { void submit(); } }));
 
   async function submit() {
     const text = content.trim();
-    if (!text) return;
+    if (!text && !imageFile) return;
     if (tweetContentLength(text) > TWEET_MAX_LENGTH) {
       setError(`本文は${TWEET_MAX_LENGTH.toLocaleString()}文字以内にしてください`);
       return;
@@ -72,7 +77,30 @@ export const TweetForm = forwardRef<
         setSaving(false);
         return;
       }
-      const { error } = await supabase.from("tweets").insert({ user_id: user.id, content: text });
+      const id = crypto.randomUUID();
+      let imagePath: string | null = null;
+      if (imageFile) {
+        let prepared: Blob;
+        try {
+          prepared = await prepareTweetImage(imageFile);
+        } catch (imageError) {
+          setError(imageError instanceof Error ? imageError.message : "画像を変換できませんでした");
+          setSaving(false);
+          return;
+        }
+        imagePath = `${user.id}/${id}.webp`;
+        const { error: uploadError } = await supabase.storage
+          .from(TWEET_IMAGE_BUCKET)
+          .upload(imagePath, prepared, { contentType: "image/webp" });
+        if (uploadError) {
+          setError("画像をアップロードできませんでした");
+          setSaving(false);
+          return;
+        }
+      }
+      const expiresAt = expiresIn24Hours ? new Date(Date.now() + 86400000).toISOString() : null;
+      const { error } = await supabase.from("tweets").insert({ id, user_id: user.id, content: text, image_path: imagePath, expires_at: expiresAt });
+      if (error && imagePath) await supabase.storage.from(TWEET_IMAGE_BUCKET).remove([imagePath]);
       if (error) {
         setError("保存できませんでした。もう一度お試しください");
         setSaving(false);
@@ -80,6 +108,8 @@ export const TweetForm = forwardRef<
       }
     }
     setContent("");
+    setImageFile(null);
+    setExpiresIn24Hours(false);
     router.refresh();
     onDone();
   }
@@ -137,6 +167,17 @@ export const TweetForm = forwardRef<
         </div>
       </section>
 
+      {!editing && (
+        <div className="space-y-2">
+          {imagePreview && <div className="relative overflow-hidden rounded-2xl border border-separator"><img src={imagePreview} alt="投稿画像のプレビュー" className="max-h-80 w-full object-contain" /><button type="button" aria-label="画像を外す" onClick={() => setImageFile(null)} className="absolute right-2 top-2 rounded-full bg-black/65 p-2 text-white"><X size={17} /></button></div>}
+          <div className="grid grid-cols-2 gap-2">
+            <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-separator bg-card text-[14px] font-semibold"><ImagePlus size={18} />画像を追加<input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => { const file = event.target.files?.[0] ?? null; try { if (file) validateTweetImage(file); setImageFile(file); setError(null); } catch (fileError) { setImageFile(null); setError(fileError instanceof Error ? fileError.message : "画像を選択できませんでした"); } }} /></label>
+            <button type="button" aria-pressed={expiresIn24Hours} onClick={() => setExpiresIn24Hours((value) => !value)} className={cn("flex min-h-11 items-center justify-center gap-2 rounded-xl border text-[14px] font-semibold", expiresIn24Hours ? "border-accent bg-accent/10 text-accent" : "border-separator bg-card")}><Clock3 size={18} />ストーリー</button>
+          </div>
+          {expiresIn24Hours && <p className="text-center text-[12px] text-muted2">ストーリーは投稿から24時間後に自動で非表示になります</p>}
+        </div>
+      )}
+
       {error && (
         <p role="alert" className="rounded-xl bg-danger/8 px-3 py-2.5 text-[13px] text-danger">
           {error}
@@ -144,7 +185,7 @@ export const TweetForm = forwardRef<
       )}
 
       <FormModalFooter>
-        <Button size="lg" onClick={submit} disabled={saving || !content.trim() || overLimit}>
+        <Button size="lg" onClick={submit} disabled={saving || (!content.trim() && !imageFile) || overLimit}>
           {saving ? (
             <>
               <LoaderCircle size={18} className="animate-spin" />

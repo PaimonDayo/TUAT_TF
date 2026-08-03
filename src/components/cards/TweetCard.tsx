@@ -12,6 +12,7 @@ import { TweetOwnerMenu } from "@/components/cards/PostOwnerMenu";
 import { cn } from "@/lib/utils";
 import { gradeShort } from "@/lib/constants";
 import type { CommentAuthor, TweetWithAuthor } from "@/types";
+import { tweetImageDisplayUrl } from "@/lib/tweet-image";
 
 /** タイムライン用のつぶやきカード。compact=簡易表示（本文を2行に省略） */
 export function TweetCard({
@@ -56,7 +57,7 @@ export function TweetCard({
           </div>
           <p className="text-caption">
             {formatDistanceToNow(new Date(tweet.created_at), { addSuffix: true, locale: ja })}
-            のつぶやき
+            {tweet.expires_at ? " · ストーリー" : " のつぶやき"}
           </p>
         </div>
         {isOwner && (
@@ -74,6 +75,13 @@ export function TweetCard({
       >
         <Linkify text={tweet.content} />
       </p>
+
+      {tweet.image_path && (
+        <div className="overflow-hidden rounded-2xl border border-separator bg-bg">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={tweetImageDisplayUrl(tweet.image_path)} alt="投稿画像" className="max-h-[520px] w-full object-contain" />
+        </div>
+      )}
 
       <div onClick={(event) => event.stopPropagation()}>
         <PostActions

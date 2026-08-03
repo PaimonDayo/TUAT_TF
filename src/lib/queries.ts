@@ -154,6 +154,7 @@ export async function getFeed(
     .from("tweets")
     .select(`*, ${AUTHOR_SELECT}`)
     .order("created_at", { ascending: false })
+    .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
     .order("id", { ascending: false })
     .limit(limit);
 
@@ -257,6 +258,7 @@ export async function getFeedItemById(
   const { data, error } = await supabase
     .from("tweets")
     .select(`*, ${AUTHOR_SELECT}`)
+    .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(`Failed to load post: ${error.message}`);
@@ -526,6 +528,7 @@ export async function getUserActivity(
       .from("tweets")
       .select(`*, ${AUTHOR_SELECT}`)
       .eq("user_id", userId)
+      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
       .order("created_at", { ascending: false })
       .limit(limit),
   ]);

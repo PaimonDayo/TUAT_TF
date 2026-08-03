@@ -1614,7 +1614,9 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          expires_at: string | null
           likes_count: number
+          image_path: string | null
           user_id: string
         }
         Insert: {
@@ -1622,7 +1624,9 @@ export type Database = {
           created_at?: string
           id?: string
           likes_count?: number
+          expires_at?: string | null
           user_id: string
+          image_path?: string | null
         }
         Update: {
           content?: string
@@ -1630,7 +1634,9 @@ export type Database = {
           id?: string
           likes_count?: number
           user_id?: string
+          expires_at?: string | null
         }
+          image_path?: string | null
         Relationships: [
           {
             foreignKeyName: "tweets_user_id_fkey"

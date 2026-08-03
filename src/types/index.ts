@@ -169,6 +169,8 @@ export interface Tweet {
   content: string;
   likes_count: number;
   created_at: string;
+  image_path: string | null;
+  expires_at: string | null;
 }
 
 export interface TweetWithAuthor extends Tweet {
