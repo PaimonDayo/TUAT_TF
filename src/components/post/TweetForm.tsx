@@ -93,6 +93,12 @@ export const TweetForm = forwardRef<
           maxLength={TWEET_RAW_MAX_LENGTH}
           placeholder="つぶやきを入力"
           value={content}
+          onKeyDown={(event) => {
+            // Keep Enter as a newline in the post body. In particular, do not
+            // let an edit modal (or a parent keyboard shortcut) treat it as
+            // the confirmation key.
+            if (event.key === "Enter") event.stopPropagation();
+          }}
           onChange={(event) => {
             setContent(event.target.value);
             if (error) setError(null);
