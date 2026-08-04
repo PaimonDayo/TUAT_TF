@@ -8,6 +8,7 @@ import {
   BellPlus,
   CalendarPlus,
   FolderPlus,
+  ImagePlus,
   MessageCircle,
   MessagesSquare,
   NotebookPen,
@@ -83,6 +84,7 @@ function ContextualFAB({
   const [speedDialOpen, setSpeedDialOpen] = useState(false);
   const [recordOpen, setRecordOpen] = useState(false);
   const [tweetOpen, setTweetOpen] = useState(false);
+  const [tweetInitialStory, setTweetInitialStory] = useState(false);
   const [resultOpen, setResultOpen] = useState(false);
   const recordRef = useRef<RecordFormHandle>(null);
   const tweetRef = useRef<TweetFormHandle>(null);
@@ -193,7 +195,7 @@ function ContextualFAB({
 
   function closeTimelineForm(kind: "record" | "tweet" | "result") {
     if (kind === "record") { setRecordDirty(false); setRecordOpen(false); }
-    if (kind === "tweet") { setTweetDirty(false); setTweetOpen(false); }
+    if (kind === "tweet") { setTweetDirty(false); setTweetOpen(false); setTweetInitialStory(false); }
     if (kind === "result") { setResultDirty(false); setResultOpen(false); }
     setPendingTimelineClose(null);
   }
@@ -256,7 +258,18 @@ function ContextualFAB({
             <SpeedDialAction
               icon={<MessageCircle size={19} />}
               label="つぶやき"
-              onClick={() => openFeedForm(setTweetOpen)}
+              onClick={() => {
+                setTweetInitialStory(false);
+                openFeedForm(setTweetOpen);
+              }}
+            />
+            <SpeedDialAction
+              icon={<ImagePlus size={19} />}
+              label="ストーリー"
+              onClick={() => {
+                setTweetInitialStory(true);
+                openFeedForm(setTweetOpen);
+              }}
             />
             <SpeedDialAction
               icon={<Trophy size={19} />}
@@ -359,8 +372,8 @@ function ContextualFAB({
         />
       </FormModal>
 
-      <FormModal open={tweetOpen} onOpenChange={(open) => { if (!open) { if (tweetDirty) setPendingTimelineClose("tweet"); else closeTimelineForm("tweet"); } }} title="つぶやき">
-        <TweetForm ref={tweetRef} onDirtyChange={setTweetDirty} onDone={() => closeTimelineForm("tweet")} />
+      <FormModal open={tweetOpen} onOpenChange={(open) => { if (!open) { if (tweetDirty) setPendingTimelineClose("tweet"); else closeTimelineForm("tweet"); } }} title={tweetInitialStory ? "ストーリー" : "つぶやき"}>
+        <TweetForm key={tweetInitialStory ? "story" : "tweet"} ref={tweetRef} initialStory={tweetInitialStory} onDirtyChange={setTweetDirty} onDone={() => closeTimelineForm("tweet")} />
       </FormModal>
 
       <FormModal

@@ -25,16 +25,17 @@ export const TweetForm = forwardRef<
   TweetFormHandle,
   {
     tweet?: { id: string; content: string };
+    initialStory?: boolean;
     onDone: () => void;
     onDirtyChange?: (dirty: boolean) => void;
   }
->(function TweetForm({ tweet, onDone, onDirtyChange }, ref) {
+>(function TweetForm({ tweet, initialStory = false, onDone, onDirtyChange }, ref) {
   const router = useRouter();
   const editing = !!tweet;
   const [content, setContent] = useState(tweet?.content ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [expiresIn24Hours, setExpiresIn24Hours] = useState(false);
+  const [expiresIn24Hours, setExpiresIn24Hours] = useState(initialStory);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const imagePreview = useMemo(() => imageFile ? URL.createObjectURL(imageFile) : null, [imageFile]);
   const initialContent = tweet?.content ?? "";
@@ -45,8 +46,8 @@ export const TweetForm = forwardRef<
   const progress = Math.min(100, (effectiveLength / TWEET_MAX_LENGTH) * 100);
 
   useEffect(() => {
-    onDirtyChange?.(content !== initialContent || !!imageFile || expiresIn24Hours);
-  }, [content, imageFile, expiresIn24Hours, initialContent, onDirtyChange]);
+    onDirtyChange?.(content !== initialContent || !!imageFile || expiresIn24Hours !== initialStory);
+  }, [content, imageFile, expiresIn24Hours, initialContent, initialStory, onDirtyChange]);
   useImperativeHandle(ref, () => ({ save: () => { void submit(); } }));
 
   async function submit() {
