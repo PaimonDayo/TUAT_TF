@@ -10,7 +10,7 @@ export async function loadFeed(
     record?: { createdAt: string; id: string };
     tweet?: { createdAt: string; id: string };
   },
-  limit = 30,
+  limit = 90,
 ): Promise<FeedItem[]> {
   const profile = await getCurrentProfile();
   return getFeed(profile.id, limit, cursors);

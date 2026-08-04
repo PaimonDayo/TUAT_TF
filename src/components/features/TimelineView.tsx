@@ -24,7 +24,7 @@ import { loadFeed } from "@/app/(app)/timeline/actions";
 import { useFeedDisplay } from "@/hooks/use-feed-display";
 import type { BlockViewDefault, CommentAuthor, FeedItem } from "@/types";
 
-const PAGE = 30;
+const PAGE = 90;
 const FILTER_AUTOLOAD_PAGES = 5;
 type FeedCursor = {
   record?: { createdAt: string; id: string };
