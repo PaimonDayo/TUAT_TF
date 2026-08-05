@@ -1,5 +1,7 @@
 export const BLOG_HOME_URL = "https://nokotandf.livedoor.blog/";
 export const BLOG_FEED_URL = `${BLOG_HOME_URL}index.rdf`;
+export const BLOG_PAGE_SIZE = 20;
+const BLOG_SOURCE_PAGE_SIZE = 3;
 
 export type BlogFeedItem = {
   title: string;
@@ -142,11 +144,30 @@ export function parseBlogIndex(html: string): BlogFeedItem[] {
   });
 }
 
+export function blogSourcePagesForAppPage(page: number): { start: number; count: number; offset: number } | null {
+  if (!Number.isInteger(page) || page < 1) return null;
+  const itemOffset = (page - 1) * BLOG_PAGE_SIZE;
+  const start = Math.floor(itemOffset / BLOG_SOURCE_PAGE_SIZE) + 1;
+  const offset = itemOffset % BLOG_SOURCE_PAGE_SIZE;
+  const count = Math.ceil((offset + BLOG_PAGE_SIZE + 1) / BLOG_SOURCE_PAGE_SIZE);
+  return { start, count, offset };
+}
+
 export async function getBlogPage(page: number): Promise<BlogFeedItem[]> {
-  if (!Number.isInteger(page) || page < 1) return [];
-  const response = await fetch(`${BLOG_HOME_URL}?p=${page}`, { headers: { Accept: "text/html;charset=UTF-8" }, next: { revalidate: 15 * 60 } });
-  if (!response.ok) throw new Error(`Blog page request failed: ${response.status}`);
-  return parseBlogIndex(await response.text());
+  const source = blogSourcePagesForAppPage(page);
+  if (!source) return [];
+  const responses = await Promise.all(
+    Array.from({ length: source.count }, (_, index) => fetch(
+      `${BLOG_HOME_URL}?p=${source.start + index}`,
+      { headers: { Accept: "text/html;charset=UTF-8" }, next: { revalidate: 15 * 60 } },
+    )),
+  );
+  const failed = responses.find((response) => !response.ok);
+  if (failed) throw new Error(`Blog page request failed: ${failed.status}`);
+  const pages = await Promise.all(responses.map((response) => response.text()));
+  return pages
+    .flatMap(parseBlogIndex)
+    .slice(source.offset, source.offset + BLOG_PAGE_SIZE + 1);
 }
 export async function getBlogArticle(id: string): Promise<BlogArticle | null> {
   if (!/^\d+$/.test(id)) return null;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseBlogFeed } from "./blog-feed";
+import { BLOG_PAGE_SIZE, blogSourcePagesForAppPage, parseBlogFeed } from "./blog-feed";
 
 describe("parseBlogFeed", () => {
   it("parses Livedoor RSS 1.0 items and decodes text", () => {
@@ -26,5 +26,24 @@ describe("parseBlogFeed", () => {
 
   it("rejects links outside the configured blog", () => {
     expect(parseBlogFeed("<item><title>危険</title><link>https://example.com/</link></item>")).toEqual([]);
+  });
+});
+describe("blogSourcePagesForAppPage", () => {
+  it("collects enough three-item source pages for twenty app articles plus lookahead", () => {
+    expect(BLOG_PAGE_SIZE).toBe(20);
+    expect(blogSourcePagesForAppPage(1)).toEqual({
+      start: 1,
+      count: 7,
+      offset: 0,
+    });
+    expect(blogSourcePagesForAppPage(2)).toEqual({
+      start: 7,
+      count: 8,
+      offset: 2,
+    });
+  });
+
+  it("rejects invalid app page numbers", () => {
+    expect(blogSourcePagesForAppPage(0)).toBeNull();
   });
 });

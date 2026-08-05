@@ -50,6 +50,8 @@ export function Avatar({
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
+        decoding="async"
+        style={{ backgroundColor: bg, color }}
         src={displayUrl}
         alt={name}
         onError={() => setImgError(true)}

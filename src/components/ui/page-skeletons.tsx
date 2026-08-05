@@ -5,7 +5,7 @@ function Title({ action = false }: { action?: boolean }) {
 }
 
 function Card({ lines = 2 }: { lines?: number }) {
-  return <div className="space-y-3 rounded-[16px] border border-separator bg-card p-4"><div className="flex items-center gap-2.5"><Skeleton className="h-9 w-9 rounded-full" /><div className="flex-1 space-y-2"><Skeleton className="h-3.5 w-28" /><Skeleton className="h-2.5 w-20" /></div></div>{Array.from({ length: lines }).map((_, i) => <Skeleton key={i} className={`h-3 ${i === lines - 1 ? "w-2/3" : "w-full"}`} />)}</div>;
+  return <div className="space-y-3 rounded-[16px] border border-separator bg-card p-4"><div className="flex items-center gap-2.5"><Skeleton className="h-10 w-10 rounded-full" /><div className="flex-1 space-y-2"><Skeleton className="h-3.5 w-28" /><Skeleton className="h-2.5 w-20" /></div></div>{Array.from({ length: lines }).map((_, i) => <Skeleton key={i} className={`h-3 ${i === lines - 1 ? "w-2/3" : "w-full"}`} />)}</div>;
 }
 
 export function HomeSkeleton() {
@@ -16,8 +16,12 @@ export function ScheduleSkeleton() {
   return <div className="space-y-4 pb-6"><Title action /><div className="px-4 pb-3 pt-1"><Skeleton className="h-9 w-full rounded-xl" /></div><div className="space-y-3 px-4 pt-1"><Skeleton className="h-3 w-20" />{[0, 1, 2, 3].map((i) => <Card key={i} lines={i === 0 ? 3 : 1} />)}</div></div>;
 }
 
-export function FeedSkeleton() {
-  return <div className="space-y-4 pb-6"><Title action /><div className="flex gap-2 overflow-hidden px-4"><Skeleton className="h-8 w-16 rounded-full" /><Skeleton className="h-8 w-20 rounded-full" /><Skeleton className="h-8 w-16 rounded-full" /></div><div className="space-y-3 px-4">{[0, 1, 2, 3].map((i) => <Card key={i} lines={(i % 2) + 1} />)}</div></div>;
+export function FeedSkeleton({ withHeader = true }: { withHeader?: boolean } = {}) {
+  return <div className="pb-6">
+    {withHeader && <Title action />}
+    <div className="px-4 pb-3 pt-1 md:px-6 lg:pb-2"><div className="flex min-h-9 items-center gap-2"><Skeleton className="h-8 min-w-0 flex-1 rounded-lg md:max-w-[420px]" /><Skeleton className="h-8 w-8 shrink-0 rounded-full" /><Skeleton className="h-8 w-8 shrink-0 rounded-full" /></div></div>
+    <div className="space-y-3 px-4 pt-1 md:px-6 lg:space-y-2">{[0, 1, 2, 3].map((i) => <Card key={i} lines={(i % 2) + 1} />)}</div>
+  </div>;
 }
 
 export function PostDetailSkeleton({ withHeader = false }: { withHeader?: boolean }) {

@@ -25,7 +25,7 @@ export function NotificationSettings({
   const [comment, setComment] = useState(initialComment);
   const [notice, setNotice] = useState(initialNotice);
   
-  const [pushStatus, setPushStatus] = useState<'unsupported' | 'default' | 'granted' | 'denied'>('unsupported');
+  const [pushStatus, setPushStatus] = useState<'unsupported' | 'default' | 'granted' | 'denied'>('default');
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isIos, setIsIos] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
@@ -67,6 +67,11 @@ export function NotificationSettings({
   const handleSubscribe = async () => {
     setIsProcessing(true);
     try {
+      if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+        setPushStatus('unsupported');
+        return;
+      }
+
       if (pushStatus === 'default') {
         const permission = await Notification.requestPermission();
         setPushStatus(permission);
@@ -184,7 +189,7 @@ export function NotificationSettings({
           />
 
           {/* 何を通知するか（通知ON時のみ） */}
-          {isSubscribed && (
+          {(
             <div className="divide-y divide-separator/70 border-t border-separator/70">
               <p className="px-4 pb-1 pt-3 text-micro text-muted2">受け取る種類</p>
               <Toggle
@@ -192,6 +197,7 @@ export function NotificationSettings({
                 label="コメント"
                 description="自分の投稿へのコメントと、参加中スレッドへの返信を通知します。"
                 checked={comment}
+                disabled={!isSubscribed}
                 onChange={() => handleChange("notify_comment", !comment, setComment)}
               />
               <Toggle
@@ -199,15 +205,16 @@ export function NotificationSettings({
                 label="お知らせ"
                 description="新しいお知らせが投稿されたときに通知します。"
                 checked={notice}
+                disabled={!isSubscribed}
                 onChange={() => handleChange("notify_notice", !notice, setNotice)}
               />
             </div>
           )}
 
           {/* 届くかどうかをその場で確かめる（「通知が来ない」相談の切り分け用） */}
-          {isSubscribed && (
+          {(
             <div className="space-y-1.5 px-4 py-3">
-              <Button variant="outline" size="sm" onClick={handleTestPush} disabled={isTesting}>
+              <Button variant="outline" size="sm" onClick={handleTestPush} disabled={!isSubscribed || isTesting}>
                 {isTesting ? "送信中…" : "通知が届くか試す"}
               </Button>
               <p className="text-micro text-muted2">この端末に通知を1件送って確かめます。</p>

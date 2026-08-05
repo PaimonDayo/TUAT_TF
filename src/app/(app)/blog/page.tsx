@@ -3,7 +3,7 @@ import Link from "next/link";
 import { SubHeader } from "@/components/layout/SubHeader";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { blogArticleId, getBlogPage } from "@/lib/blog-feed";
+import { BLOG_PAGE_SIZE, blogArticleId, getBlogPage } from "@/lib/blog-feed";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 
 const dateFormatter = new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric" });
@@ -16,7 +16,9 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
   let hasNext = false;
   let unavailable = false;
   try {
-    [items, hasNext] = await Promise.all([getBlogPage(page), getBlogPage(page + 1).then((next) => next.length > 0)]);
+    const pageItems = await getBlogPage(page);
+    items = pageItems.slice(0, BLOG_PAGE_SIZE);
+    hasNext = pageItems.length > BLOG_PAGE_SIZE;
   } catch (error) {
     console.error("Failed to load the club blog", error);
     unavailable = true;
@@ -32,7 +34,7 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
         const id = blogArticleId(item.url); if (!id) return null; const date = new Date(item.publishedAt);
         return <Card key={item.url} className="overflow-hidden"><Link href={`/blog/${id}`} className="block p-4 active:bg-bg">
           <div className="mb-2 flex flex-wrap items-center gap-2 text-micro text-muted"><time dateTime={item.publishedAt}>{Number.isNaN(date.getTime()) ? item.publishedAt : dateFormatter.format(date)}</time></div>
-          <h2 className="text-headline leading-snug">{item.title}</h2>{item.description && <p className="mt-2 line-clamp-3 text-caption leading-relaxed text-muted2">{item.description}</p>}
+          <h2 className="break-words text-headline leading-snug">{item.title}</h2>{item.description && <p className="mt-2 whitespace-pre-wrap break-words text-caption leading-relaxed text-muted2">{item.description}</p>}
           <span className="mt-3 flex items-center justify-end gap-1 text-caption font-semibold text-accent">続きを読む<ChevronRight size={15} /></span>
         </Link></Card>;
       })}</div>}
