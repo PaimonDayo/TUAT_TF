@@ -86,6 +86,9 @@ export function TweetCard({
           tweetId={tweet.id}
           userId={currentUser.id}
           userName={currentUser.display_name}
+          userAvatarUrl={currentUser.avatar_url}
+          userBlocks={[]}
+          userGrade={null}
           options={tweet.poll.options}
           multiple={tweet.poll_multiple}
           anonymous={tweet.poll_anonymous}

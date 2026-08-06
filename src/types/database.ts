@@ -1751,7 +1751,7 @@ export type Database = {
       }
       get_poll_voters: {
         Args: { tweet_ids: string[] }
-        Returns: { option_id: string; profile_id: string; display_name: string }[]
+        Returns: { option_id: string; profile_id: string; display_name: string; avatar_url: string | null; blocks: string[]; grade: string | null }[]
       }
       claim_sheet_sync_chunk: {
         Args: { requested_chunk_size?: number; reset_cycle?: boolean }

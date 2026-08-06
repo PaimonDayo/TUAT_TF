@@ -177,6 +177,14 @@ export interface Tweet {
   poll_anonymous: boolean;
   poll_allow_options: boolean;
 }
+export interface TweetPollVoter {
+  profile_id: string;
+  display_name: string;
+  avatar_url: string | null;
+  blocks: Block[];
+  grade: string | null;
+}
+
 
 export interface TweetPollOption {
   id: string;
@@ -186,7 +194,7 @@ export interface TweetPollOption {
   sort_order: number;
   vote_count: number;
   voted_by_me: boolean;
-  voters: string[];
+  voters: TweetPollVoter[];
 }
 
 export interface TweetMention {

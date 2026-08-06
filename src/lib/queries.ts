@@ -58,11 +58,17 @@ async function attachTweetSocialData(
     : { data: [] };
   const names = new Map((profiles ?? []).map((profile) => [profile.id, profile.display_name]));
   const resultByOption = new Map((results ?? []).map((result) => [result.option_id, result]));
-  const votersByOption = new Map<string, string[]>();
+  const votersByOption = new Map<string, Array<{ profile_id: string; display_name: string; avatar_url: string | null; blocks: Block[]; grade: string | null }>>();
   for (const voter of voters ?? []) {
-    const names = votersByOption.get(voter.option_id) ?? [];
-    names.push(voter.display_name);
-    votersByOption.set(voter.option_id, names);
+    const optionVoters = votersByOption.get(voter.option_id) ?? [];
+    optionVoters.push({
+      profile_id: voter.profile_id,
+      display_name: voter.display_name,
+      avatar_url: voter.avatar_url,
+      blocks: voter.blocks.filter((block): block is Block => ["middle_long", "short", "manager", "jump", "throw"].includes(block)),
+      grade: voter.grade,
+    });
+    votersByOption.set(voter.option_id, optionVoters);
   }
 
   return tweets.map((tweet) => {

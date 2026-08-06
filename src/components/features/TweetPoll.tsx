@@ -1,9 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { FormModal } from "@/components/ui/form-modal";
+import { Avatar } from "@/components/common/Avatar";
+import { SegmentedControl } from "@/components/ui/segmented";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import type { TweetPollOption } from "@/types";
 
@@ -11,6 +13,9 @@ export function TweetPoll({
   tweetId,
   userId,
   userName,
+  userAvatarUrl,
+  userBlocks,
+  userGrade,
   options: initialOptions,
   multiple,
   anonymous,
@@ -19,6 +24,9 @@ export function TweetPoll({
   tweetId: string;
   userId: string;
   userName: string;
+  userAvatarUrl: string | null;
+  userBlocks: import("@/types").Block[];
+  userGrade: string | null;
   options: TweetPollOption[];
   multiple: boolean;
   anonymous: boolean;
@@ -32,6 +40,23 @@ export function TweetPoll({
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressVote = useRef(false);
   const detailOption = options.find((option) => option.id === detailOptionId) ?? options[0];
+  const pollRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const root = pollRef.current;
+    if (!root) return;
+    const preventNativeSelection = (event: Event) => {
+      event.preventDefault();
+      window.getSelection()?.removeAllRanges();
+    };
+    root.addEventListener("selectstart", preventNativeSelection);
+    root.addEventListener("contextmenu", preventNativeSelection);
+    root.addEventListener("dragstart", preventNativeSelection);
+    return () => {
+      root.removeEventListener("selectstart", preventNativeSelection);
+      root.removeEventListener("contextmenu", preventNativeSelection);
+      root.removeEventListener("dragstart", preventNativeSelection);
+    };
+  }, []);
 
   function startLongPress(optionId: string) {
     if (anonymous) return;
@@ -65,7 +90,7 @@ export function TweetPoll({
     if (!target) return;
     if (target.voted_by_me) {
       await supabase.from("tweet_poll_votes").delete().eq("option_id", optionId).eq("user_id", userId);
-      setOptions((items) => items.map((item) => item.id === optionId ? { ...item, voted_by_me: false, vote_count: Math.max(0, item.vote_count - 1), voters: item.voters.filter((name) => name !== userName) } : item));
+      setOptions((items) => items.map((item) => item.id === optionId ? { ...item, voted_by_me: false, vote_count: Math.max(0, item.vote_count - 1), voters: item.voters.filter((voter) => voter.profile_id !== userId) } : item));
     } else {
       if (!multiple) {
         const selected = options.filter((option) => option.voted_by_me);
@@ -79,7 +104,7 @@ export function TweetPoll({
           ...item,
           voted_by_me: item.id === optionId ? true : multiple ? item.voted_by_me : false,
           vote_count: item.id === optionId ? item.vote_count + 1 : !multiple && item.voted_by_me ? Math.max(0, item.vote_count - 1) : item.vote_count,
-          voters: anonymous ? item.voters : item.id === optionId ? [...item.voters.filter((name) => name !== userName), userName] : !multiple && item.voted_by_me ? item.voters.filter((name) => name !== userName) : item.voters,
+          voters: anonymous ? item.voters : item.id === optionId ? [...item.voters.filter((voter) => voter.profile_id !== userId), { profile_id: userId, display_name: userName, avatar_url: userAvatarUrl, blocks: userBlocks, grade: userGrade }] : !multiple && item.voted_by_me ? item.voters.filter((voter) => voter.profile_id !== userId) : item.voters,
         })));
       }
     }
@@ -106,7 +131,7 @@ export function TweetPoll({
   }
 
   return (
-    <section className="space-y-2 rounded-[16px] border border-separator bg-bg p-3">
+    <section ref={pollRef} className="space-y-2 rounded-[16px] border border-separator bg-bg p-3">
       {options.map((option) => {
         const percent = totalVotes ? Math.round(option.vote_count / totalVotes * 100) : 0;
         return (
@@ -115,7 +140,7 @@ export function TweetPoll({
             type="button"
             disabled={saving}
             onClick={() => handleOptionClick(option.id)}
-            onPointerDown={() => startLongPress(option.id)}
+            onPointerDown={(event) => { event.preventDefault(); window.getSelection()?.removeAllRanges(); startLongPress(option.id); }}
             onPointerUp={cancelLongPress}
             onPointerCancel={cancelLongPress}
             onPointerLeave={cancelLongPress}
@@ -125,7 +150,7 @@ export function TweetPoll({
               setDetailOptionId(option.id);
             }}
             className={cn(
-              "relative flex min-h-11 w-full select-none touch-manipulation items-center overflow-hidden rounded-xl border px-3 text-left",
+              "relative flex min-h-11 w-full select-none touch-manipulation items-center overflow-hidden rounded-xl border px-3 text-left [-webkit-touch-callout:none]",
               option.voted_by_me ? "border-accent text-accent" : "border-separator bg-card",
             )}
           >
@@ -133,9 +158,6 @@ export function TweetPoll({
             <span className="relative min-w-0 flex-1 truncate text-[14px] font-medium">{option.text}</span>
             <span className="relative ml-3 text-[12px] tabular-nums">{percent}%</span>
           </button>
-            {!anonymous && option.voters.length > 0 && (
-              <p className="px-1 text-micro">{option.voters.join("、")}</p>
-            )}
           </div>
         );
       })}
@@ -152,23 +174,10 @@ export function TweetPoll({
       <p className="text-micro">{totalVotes}票 ・ {multiple ? "複数選択可" : "1つ選択"} ・ {anonymous ? "匿名" : "記名"}</p>
       {!anonymous && <p className="text-micro">{"\u9078\u629e\u80a2\u3092\u9577\u62bc\u3057\u3059\u308b\u3068\u6295\u7968\u8005\u3092\u78ba\u8a8d\u3067\u304d\u307e\u3059"}</p>}
       {!anonymous && detailOptionId && detailOption && (
-        <FormModal open onOpenChange={(open) => !open && setDetailOptionId(null)} title={"\u6295\u7968\u8005"}>
+        <Sheet open onOpenChange={(open) => !open && setDetailOptionId(null)}>
+          <SheetContent title={"\u6295\u7968\u8005"} autoFocus={false}>
           <div className="space-y-4 pb-4">
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {options.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => setDetailOptionId(option.id)}
-                  className={cn(
-                    "min-h-10 shrink-0 rounded-full border px-4 text-[13px] font-semibold",
-                    detailOption.id === option.id ? "border-accent bg-accent text-white" : "border-separator bg-card",
-                  )}
-                >
-                  {option.text} ({option.vote_count})
-                </button>
-              ))}
-            </div>
+            <SegmentedControl items={options.map((option) => ({ key: option.id, label: `${option.text} ${option.vote_count}` }))} value={detailOption.id} onChange={setDetailOptionId} />
             <section className="overflow-hidden rounded-[16px] border border-separator bg-card">
               <div className="border-b border-separator px-4 py-3">
                 <p className="text-[15px] font-semibold">{detailOption.text}</p>
@@ -176,12 +185,18 @@ export function TweetPoll({
               </div>
               {detailOption.voters.length > 0 ? (
                 <ul className="divide-y divide-separator">
-                  {detailOption.voters.map((name, index) => <li key={`${name}-${index}`} className="px-4 py-3 text-[14px] font-medium">{name}</li>)}
+                  {detailOption.voters.map((voter) => (
+                    <li key={voter.profile_id} className="flex min-h-12 items-center gap-3 px-4 py-2.5">
+                      <Avatar name={voter.display_name} blocks={voter.blocks} avatarUrl={voter.avatar_url} size="sm" />
+                      <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{voter.display_name}</span>
+                    </li>
+                  ))}
                 </ul>
               ) : <p className="px-4 py-8 text-center text-caption">{"\u307e\u3060\u6295\u7968\u306f\u3042\u308a\u307e\u305b\u3093"}</p>}
             </section>
           </div>
-        </FormModal>
+          </SheetContent>
+        </Sheet>
       )}
     </section>
   );
