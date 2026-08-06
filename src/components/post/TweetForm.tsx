@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element -- local object URL preview */
 
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
-import { Clock3, ImagePlus, Link2, LoaderCircle, Plus, Send, X } from "lucide-react";
+import { BarChart3, Clock3, ImagePlus, Link2, LoaderCircle, Plus, Send, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
@@ -40,6 +40,7 @@ export const TweetForm = forwardRef<
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [members, setMembers] = useState<Array<{ id: string; display_name: string }>>([]);
   const [selectedMentionIds, setSelectedMentionIds] = useState<string[]>([]);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [pollEnabled, setPollEnabled] = useState(false);
   const [pollOptions, setPollOptions] = useState(["", ""]);
   const [pollMultiple, setPollMultiple] = useState(false);
@@ -250,18 +251,35 @@ export const TweetForm = forwardRef<
 
       {!editing && (
         <div className="space-y-2">
-          <button
+          {!pollEnabled && <button
             type="button"
             aria-label="投稿に追加"
-            aria-expanded={pollEnabled}
-            onClick={() => setPollEnabled((value) => !value)}
+            aria-expanded={addMenuOpen}
+            onClick={() => setAddMenuOpen((value) => !value)}
             className={cn(
               "grid h-10 w-10 place-items-center rounded-full border",
-              pollEnabled ? "border-accent bg-accent text-white" : "border-separator bg-card text-accent",
+              addMenuOpen ? "border-accent bg-accent text-white" : "border-separator bg-card text-accent",
             )}
           >
-            <Plus size={20} className={cn("transition-transform", pollEnabled && "rotate-45")} />
-          </button>
+            <Plus size={20} className={cn("transition-transform", addMenuOpen && "rotate-45")} />
+          </button>}
+          {addMenuOpen && !pollEnabled && (
+            <div className="w-full overflow-hidden rounded-[16px] border border-separator bg-card p-1 shadow-sm">
+              <button
+                type="button"
+                className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-[14px] font-semibold active:bg-bg"
+                onClick={() => {
+                  setPollEnabled(true);
+                  setAddMenuOpen(false);
+                }}
+              >
+                <span className="grid h-8 w-8 place-items-center rounded-full bg-accent/10 text-accent">
+                  <BarChart3 size={17} />
+                </span>
+                {"\u6295\u7968"}
+              </button>
+            </div>
+          )}
           {pollEnabled && (
             <section className="space-y-3 rounded-[16px] border border-separator bg-card p-3">
               <p className="text-[14px] font-semibold">投票</p>
@@ -272,7 +290,7 @@ export const TweetForm = forwardRef<
                       value={option}
                       maxLength={80}
                       placeholder={`選択肢 ${index + 1}`}
-                      className="h-10 min-w-0 flex-1 rounded-xl border border-separator bg-bg px-3 text-[14px]"
+                      className="h-10 min-w-0 flex-1 rounded-xl border border-separator bg-bg px-3 text-[16px]"
                       onChange={(event) => setPollOptions((options) => options.map((value, optionIndex) => optionIndex === index ? event.target.value : value))}
                     />
                     {pollOptions.length > 2 && (
