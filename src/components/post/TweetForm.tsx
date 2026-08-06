@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element -- local object URL preview */
 
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
-import { BarChart3, Clock3, ImagePlus, Link2, LoaderCircle, Plus, Send, X } from "lucide-react";
+import { BarChart3, Check, Clock3, ImagePlus, Link2, LoaderCircle, Plus, Send, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
@@ -14,6 +14,7 @@ import {
   tweetContentUrls,
 } from "@/lib/tweet-content";
 import { Textarea } from "@/components/ui/textarea";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import { FormModalFooter } from "@/components/ui/form-modal";
@@ -286,35 +287,42 @@ export const TweetForm = forwardRef<
 
       {!editing && (
         <div className="space-y-2">
-          {!pollEnabled && <button
+          <button
             type="button"
             aria-label="投稿に追加"
             aria-expanded={addMenuOpen}
-            onClick={() => setAddMenuOpen((value) => !value)}
+            onClick={() => setAddMenuOpen(true)}
             className={cn(
               "grid h-10 w-10 place-items-center rounded-full border",
               addMenuOpen ? "border-accent bg-accent text-white" : "border-separator bg-card text-accent",
             )}
           >
             <Plus size={20} className={cn("transition-transform", addMenuOpen && "rotate-45")} />
-          </button>}
-          {addMenuOpen && !pollEnabled && (
-            <div className="w-full overflow-hidden rounded-[16px] border border-separator bg-card p-1 shadow-sm">
-              <button
-                type="button"
-                className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-[14px] font-semibold active:bg-bg"
-                onClick={() => {
-                  setPollEnabled(true);
+          </button>
+          <Sheet open={addMenuOpen} onOpenChange={setAddMenuOpen}>
+            <SheetContent title="投稿に追加" autoFocus={false}>
+              <div className="space-y-2 pb-4">
+                <button type="button" className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-separator bg-card p-3.5 text-left active:bg-bg" onClick={() => { setPollEnabled((value) => !value); setAddMenuOpen(false); }}>
+                  <BarChart3 size={20} className="text-accent" />
+                  <span className="min-w-0 flex-1 text-headline">投票</span>
+                  {pollEnabled && <Check size={18} className="text-accent" />}
+                </button>
+                {!initialStory && (
+                <button type="button" className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-separator bg-card p-3.5 text-left active:bg-bg" onClick={() => {
+                  setExpiresIn24Hours((value) => {
+                    if (value) setImageFile(null);
+                    return !value;
+                  });
                   setAddMenuOpen(false);
-                }}
-              >
-                <span className="grid h-8 w-8 place-items-center rounded-full bg-accent/10 text-accent">
-                  <BarChart3 size={17} />
-                </span>
-                {"\u6295\u7968"}
-              </button>
-            </div>
-          )}
+                }}>
+                  <Clock3 size={20} className="text-accent" />
+                  <span className="min-w-0 flex-1 text-headline">ストーリーとして投稿</span>
+                  {expiresIn24Hours && <Check size={18} className="text-accent" />}
+                </button>
+                )}
+              </div>
+            </SheetContent>
+          </Sheet>
           {pollEnabled && (
             <section className="space-y-3 rounded-[16px] border border-separator bg-card p-3">
               <p className="text-[14px] font-semibold">投票</p>
@@ -352,24 +360,13 @@ export const TweetForm = forwardRef<
       )}
       {!editing && (
         <div className="space-y-2">
-          <button
-            type="button"
-            aria-pressed={expiresIn24Hours}
-            onClick={() => setExpiresIn24Hours((value) => {
-              if (value) setImageFile(null);
-              return !value;
-            })}
-            className={cn(
-              "flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border text-[14px] font-semibold",
-              expiresIn24Hours ? "border-accent bg-accent/10 text-accent" : "border-separator bg-card",
-            )}
-          >
-            <Clock3 size={18} />
-            ストーリーとして投稿
-          </button>
 
           {expiresIn24Hours && (
             <div className="space-y-2">
+              <div className="flex items-center justify-between rounded-xl border border-accent/30 bg-accent/5 px-3 py-2.5">
+                <span className="text-[14px] font-semibold text-accent">ストーリー</span>
+                <span className="text-micro">24時間</span>
+              </div>
               {imagePreview && (
                 <div className="relative overflow-hidden rounded-2xl border border-separator">
                   <img src={imagePreview} alt="投稿画像のプレビュー" className="max-h-80 w-full object-contain" />
