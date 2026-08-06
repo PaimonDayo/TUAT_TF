@@ -30,5 +30,6 @@ export function MyTrainingChartCached({
     queryClient.setQueryData(queryKey, initialRecords);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialRecords, queryClient]);
-  return <TrainingChart records={data} showIntensitySummary={showIntensitySummary} />;
+  if (!showIntensitySummary) return null;
+  return <TrainingChart records={data} showIntensitySummary />;
 }

@@ -117,7 +117,8 @@ export default async function MyPage({
           <RowLink href="/mypage/settings" icon={<Settings size={20} className="text-muted2" />} label="設定" />
         </Card>
 
-        <section className="space-y-2">
+        {profile.blocks.includes("middle_long") && (
+          <section className="space-y-2">
           <p className="section-label">中長距離</p>
           <Card className="divide-y divide-separator/70 overflow-hidden">
             <RowLink
@@ -127,6 +128,7 @@ export default async function MyPage({
             />
           </Card>
         </section>
+        )}
 
         {/* 管理メニュー（権限に応じて表示） */}
         {showAdminMenu && (

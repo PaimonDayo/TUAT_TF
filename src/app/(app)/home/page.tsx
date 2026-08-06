@@ -55,7 +55,7 @@ export async function HomeContent() {
         </p>
 
         <NoticesSection userId={profile.id} />
-        {(profile.blocks.includes("middle_long") || profile.blocks.includes("manager")) && (
+        {profile.blocks.includes("middle_long") && (
           <WeeklySummary userId={profile.id} nowJst={nowJst} />
         )}
         <SchedulesSection profile={profile} />

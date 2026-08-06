@@ -126,7 +126,9 @@ async function MemberContent({
           </div>
         </Card>
 
-        <TrainingChart records={records} showIntensitySummary={profile.blocks.includes("middle_long")} />
+        {profile.blocks.includes("middle_long") && (
+          <TrainingChart records={records} showIntensitySummary />
+        )}
 
         {(isSelf || notes.length > 0) && (
           <section className="space-y-2">

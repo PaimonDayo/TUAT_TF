@@ -82,11 +82,19 @@ export function TrainingChart({
     return arr;
   }, [records, period]);
 
-  const recentSummary = useMemo(() => {
-    const from = jstToday(-6);
-    const through = jstToday();
-    const previousFrom = jstToday(-13);
-    const previousThrough = jstToday(-7);
+  const periodSummary = useMemo(() => {
+    const today = new Date(jstToday() + "T00:00:00");
+    const currentStart = bucketStart(today, period);
+    const previousStart = period === "day"
+      ? subDays(currentStart, 1)
+      : period === "week"
+        ? subWeeks(currentStart, 1)
+        : subMonths(currentStart, 1);
+    const previousEnd = subDays(currentStart, 1);
+    const from = format(currentStart, "yyyy-MM-dd");
+    const through = format(today, "yyyy-MM-dd");
+    const previousFrom = format(previousStart, "yyyy-MM-dd");
+    const previousThrough = format(previousEnd, "yyyy-MM-dd");
     const by: Record<Intensity, number> = { low: 0, mid: 0, high: 0, speed: 0 };
     const trainingDates = new Set<string>();
     let unclassified = 0;
@@ -122,7 +130,7 @@ export function TrainingChart({
       from,
       through,
     };
-  }, [records]);
+  }, [period, records]);
 
   const max = Math.max(...buckets.map((b) => b.total), 1);
   // 期間切替直後は前の選択番号が範囲外になりうるので必ず範囲内へ収める
@@ -152,7 +160,7 @@ export function TrainingChart({
 
   return (
     <Card className="p-4 space-y-3">
-      {showIntensitySummary && <IntensitySummary summary={recentSummary} />}
+      {showIntensitySummary && <IntensitySummary summary={periodSummary} period={period} />}
       <div className="flex items-center justify-between">
         <p className="section-label">練習量の推移</p>
         <div className="w-36">
@@ -344,7 +352,7 @@ function formatDistance(value: number): string {
 }
 
 function IntensitySummary({
-  summary,
+  summary, period,
 }: {
   summary: {
     by: Record<Intensity, number>;
@@ -355,16 +363,17 @@ function IntensitySummary({
     from: string;
     through: string;
   };
+  period: Period;
 }) {
   const difference = summary.total - summary.previousTotal;
-  const comparison =
-    summary.previousTotal === 0
-      ? summary.total > 0
-        ? "前の7日は記録なし"
-        : null
-      : Math.abs(difference) < 0.05
-        ? "前の7日と同じ"
-        : `前の7日より ${difference > 0 ? "+" : ""}${formatDistance(difference)}km`;
+  const previousLabel = period === "day" ? "前日" : period === "week" ? "先週" : "先月";
+  const periodComparison = summary.previousTotal === 0
+    ? summary.total > 0
+      ? `${previousLabel}は記録なし`
+      : null
+    : Math.abs(difference) < 0.05
+      ? `${previousLabel}と同じ`
+      : `${previousLabel}より ${difference > 0 ? "+" : ""}${formatDistance(difference)}km`;
   const dateRange = `${format(new Date(`${summary.from}T00:00:00`), "M/d")}–${format(
     new Date(`${summary.through}T00:00:00`),
     "M/d",
@@ -382,11 +391,11 @@ function IntensitySummary({
           {formatDistance(summary.total)}
           <span className="ml-1 text-caption">km</span>
         </p>
-        {summary.total > 0 || comparison ? (
+        {summary.total > 0 || periodComparison ? (
           <p className="mt-1.5 text-caption tabular-nums">
-            {comparison && (
+            {periodComparison && (
               <>
-                {comparison}
+                {periodComparison}
                 <span className="mx-1.5 text-muted" aria-hidden="true">
                   ・
                 </span>
