@@ -185,6 +185,7 @@ export interface TweetPollOption {
   sort_order: number;
   vote_count: number;
   voted_by_me: boolean;
+  voters: string[];
 }
 
 export interface TweetMention {

@@ -45,9 +45,10 @@ async function attachTweetSocialData(
   const tweetIds = tweets.map((tweet) => tweet.id);
   if (tweetIds.length === 0) return tweets;
 
-  const [{ data: options }, { data: results }, { data: mentionRows }] = await Promise.all([
+  const [{ data: options }, { data: results }, { data: voters }, { data: mentionRows }] = await Promise.all([
     supabase.from("tweet_poll_options").select("*").in("tweet_id", tweetIds).order("sort_order"),
     supabase.rpc("get_poll_results", { tweet_ids: tweetIds }),
+    supabase.rpc("get_poll_voters", { tweet_ids: tweetIds }),
     supabase.from("tweet_mentions").select("tweet_id, profile_id").in("tweet_id", tweetIds),
   ]);
 
@@ -57,6 +58,12 @@ async function attachTweetSocialData(
     : { data: [] };
   const names = new Map((profiles ?? []).map((profile) => [profile.id, profile.display_name]));
   const resultByOption = new Map((results ?? []).map((result) => [result.option_id, result]));
+  const votersByOption = new Map<string, string[]>();
+  for (const voter of voters ?? []) {
+    const names = votersByOption.get(voter.option_id) ?? [];
+    names.push(voter.display_name);
+    votersByOption.set(voter.option_id, names);
+  }
 
   return tweets.map((tweet) => {
     const pollOptions = (options ?? [])
@@ -65,6 +72,7 @@ async function attachTweetSocialData(
         ...option,
         vote_count: Number(resultByOption.get(option.id)?.vote_count ?? 0),
         voted_by_me: resultByOption.get(option.id)?.voted_by_me ?? false,
+        voters: votersByOption.get(option.id) ?? [],
       }));
     const mentions = (mentionRows ?? [])
       .filter((mention) => mention.tweet_id === tweet.id)

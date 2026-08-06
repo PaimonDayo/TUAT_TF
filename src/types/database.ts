@@ -1746,6 +1746,10 @@ export type Database = {
         Args: { tweet_ids: string[] }
         Returns: { option_id: string; vote_count: number; voted_by_me: boolean }[]
       }
+      get_poll_voters: {
+        Args: { tweet_ids: string[] }
+        Returns: { option_id: string; profile_id: string; display_name: string }[]
+      }
       claim_sheet_sync_chunk: {
         Args: { requested_chunk_size?: number; reset_cycle?: boolean }
         Returns: Json

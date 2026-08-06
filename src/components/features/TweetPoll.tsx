@@ -67,7 +67,7 @@ export function TweetPoll({
       sort_order: options.length,
     }).select("*").single();
     if (!error && data) {
-      setOptions((items) => [...items, { ...data, vote_count: 0, voted_by_me: false }]);
+      setOptions((items) => [...items, { ...data, vote_count: 0, voted_by_me: false, voters: [] }]);
       setNewOption("");
       setAdding(false);
     }
@@ -79,8 +79,8 @@ export function TweetPoll({
       {options.map((option) => {
         const percent = totalVotes ? Math.round(option.vote_count / totalVotes * 100) : 0;
         return (
-          <button
-            key={option.id}
+          <div key={option.id} className="space-y-1">
+            <button
             type="button"
             disabled={saving}
             onClick={() => vote(option.id)}
@@ -93,6 +93,10 @@ export function TweetPoll({
             <span className="relative min-w-0 flex-1 truncate text-[14px] font-medium">{option.text}</span>
             <span className="relative ml-3 text-[12px] tabular-nums">{percent}%</span>
           </button>
+            {!anonymous && option.voters.length > 0 && (
+              <p className="px-1 text-micro">{option.voters.join("、")}</p>
+            )}
+          </div>
         );
       })}
       {allowOptions && (
