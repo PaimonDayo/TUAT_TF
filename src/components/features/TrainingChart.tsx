@@ -51,7 +51,7 @@ export function TrainingChart({
   records: PracticeRecord[];
   showIntensitySummary?: boolean;
 }) {
-  const [period, setPeriod] = useState<Period>("day");
+  const [period, setPeriod] = useState<Period>("week");
   const [selected, setSelected] = useState<number | null>(null);
   const [showDetail, setShowDetail] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
