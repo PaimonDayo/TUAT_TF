@@ -38,7 +38,7 @@ export const TweetForm = forwardRef<
   const [error, setError] = useState<string | null>(null);
   const [expiresIn24Hours, setExpiresIn24Hours] = useState(initialStory);
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [members, setMembers] = useState<Array<{ id: string; display_name: string }>>([]);
+  const [members, setMembers] = useState<Array<{ id: string; display_name: string; mention_reading: string | null }>>([]);
   const [selectedMentionIds, setSelectedMentionIds] = useState<string[]>([]);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [pollEnabled, setPollEnabled] = useState(false);
@@ -64,7 +64,7 @@ export const TweetForm = forwardRef<
     const supabase = createClient();
     supabase
       .from("profiles")
-      .select("id, display_name")
+      .select("id, display_name, mention_reading")
       .eq("status", "active")
       .order("display_name")
       .then(({ data }) => setMembers(data ?? []));
@@ -202,7 +202,11 @@ export const TweetForm = forwardRef<
             <p className="px-2 pb-1 text-micro">メンションする人</p>
             <div className="max-h-40 overflow-y-auto">
               {members
-                .filter((member) => member.display_name.toLocaleLowerCase("ja").includes(mentionQuery))
+                .filter((member) => {
+                  const displayName = member.display_name.toLocaleLowerCase("ja");
+                  const reading = member.mention_reading?.toLocaleLowerCase("ja") ?? "";
+                  return displayName.includes(mentionQuery) || reading.includes(mentionQuery);
+                })
                 .slice(0, 6)
                 .map((member) => (
                   <button

@@ -41,6 +41,7 @@ export const getCurrentProfile = cache(async (): Promise<Profile> => {
       id: user.id,
       email: user.email ?? "",
       display_name: "",
+      mention_reading: null,
       avatar_url: null,
       blocks: [],
       events: [],

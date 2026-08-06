@@ -1143,6 +1143,7 @@ export type Database = {
           blocks: string[]
           created_at: string
           display_name: string
+          mention_reading: string | null
           email: string
           events: string[]
           goal: string | null
@@ -1172,6 +1173,7 @@ export type Database = {
           blocks?: string[]
           created_at?: string
           display_name?: string
+          mention_reading?: string | null
           email: string
           events?: string[]
           goal?: string | null
@@ -1201,6 +1203,7 @@ export type Database = {
           blocks?: string[]
           created_at?: string
           display_name?: string
+          mention_reading?: string | null
           email?: string
           events?: string[]
           goal?: string | null
@@ -1816,6 +1819,10 @@ export type Database = {
       }
       set_member_approved: {
         Args: { target_profile_id: string; value: boolean }
+        Returns: undefined
+      }
+      set_profile_mention_reading: {
+        Args: { target_profile_id: string; new_reading: string | null }
         Returns: undefined
       }
       set_profile_roles: {

@@ -58,6 +58,7 @@ export interface Profile {
   id: string;
   email: string;
   display_name: string;
+  mention_reading: string | null;
   avatar_url: string | null;
   blocks: Block[];
   /** 専門種目（任意・複数可。情報表示用） */

@@ -17,9 +17,11 @@ import type { AppRole, Profile } from "@/types";
 export function AdminMemberList({
   members,
   roles,
+  canManageSystem,
 }: {
   members: Profile[];
   roles: AppRole[];
+  canManageSystem: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Profile | null>(null);
@@ -29,6 +31,7 @@ export function AdminMemberList({
     return members.filter(
       (member) =>
         member.display_name.toLowerCase().includes(keyword) ||
+        (member.mention_reading ?? "").includes(keyword) ||
         member.email.toLowerCase().includes(keyword),
     );
   }, [members, query]);
@@ -119,6 +122,7 @@ export function AdminMemberList({
         <MemberRoleEditor
           member={selected}
           roles={roles.filter((role) => !role.is_everyone)}
+          canManageSystem={canManageSystem}
           onClose={() => setSelected(null)}
         />
       )}
@@ -129,10 +133,12 @@ export function AdminMemberList({
 function MemberRoleEditor({
   member,
   roles,
+  canManageSystem,
   onClose,
 }: {
   member: Profile;
   roles: AppRole[];
+  canManageSystem: boolean;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -141,6 +147,7 @@ function MemberRoleEditor({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [mentionReading, setMentionReading] = useState(member.mention_reading ?? "");
 
   function toggle(roleId: string) {
     setSelectedIds((current) =>
@@ -154,6 +161,23 @@ function MemberRoleEditor({
     setSaving(true);
     setError("");
     const supabase = createClient();
+    if (canManageSystem) {
+      const normalizedReading = mentionReading.trim().replace(/\s+/g, " ");
+      if (normalizedReading && !/^[\u3041-\u3096\u30fc\u309d\u309e\u30fb ]+$/.test(normalizedReading)) {
+        setError("\u3072\u3089\u304c\u306a\u540d\u306f\u3001\u3072\u3089\u304c\u306a\u3067\u5165\u529b\u3057\u3066\u304f\u3060\u3055\u3044");
+        setSaving(false);
+        return;
+      }
+      const { error: readingError } = await supabase.rpc("set_profile_mention_reading", {
+        target_profile_id: member.id,
+        new_reading: normalizedReading || null,
+      });
+      if (readingError) {
+        setError("\u3072\u3089\u304c\u306a\u540d\u3092\u66f4\u65b0\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f");
+        setSaving(false);
+        return;
+      }
+    }
     const { error: saveError } = await supabase.rpc("set_profile_roles", {
       target_profile_id: member.id,
       target_role_ids: selectedIds,
@@ -182,6 +206,14 @@ function MemberRoleEditor({
             <p className="truncate text-caption">{member.email}</p>
           </div>
         </div>
+
+        {canManageSystem && (
+          <label className="block space-y-1.5">
+            <span className="text-[13px] font-semibold">{"\u30e1\u30f3\u30b7\u30e7\u30f3\u7528\u3072\u3089\u304c\u306a\u540d"}</span>
+            <Input value={mentionReading} onChange={(event) => setMentionReading(event.target.value)} placeholder={"\u4f8b\uff1a\u305f\u306a\u304b \u305f\u308d\u3046"} maxLength={80} />
+            <span className="block text-micro">{"\u540d\u5b57\u3068\u540d\u524d\u3092\u7a7a\u767d\u3067\u533a\u5207\u308b\u3068\u3001\u3069\u3061\u3089\u306e\u8aad\u307f\u3067\u3082\u5019\u88dc\u306b\u8868\u793a\u3055\u308c\u307e\u3059\u3002"}</span>
+          </label>
+        )}
 
         <div className="space-y-2">
           {roles.map((role) => {

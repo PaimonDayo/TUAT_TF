@@ -85,6 +85,7 @@ export function TweetCard({
         <TweetPoll
           tweetId={tweet.id}
           userId={currentUser.id}
+          userName={currentUser.display_name}
           options={tweet.poll.options}
           multiple={tweet.poll_multiple}
           anonymous={tweet.poll_anonymous}
