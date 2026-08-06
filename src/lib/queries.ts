@@ -32,12 +32,54 @@ import type {
   NoteArticleWithAuthor,
   NoteWithRelations,
   AppNotificationWithActor,
+  TweetWithAuthor,
   Profile,
   PracticeRecord,
 } from "@/types";
 
-const AUTHOR_SELECT =
-  "author:profiles!user_id(id, display_name, avatar_url, blocks, grade, record_source, record_fields)";
+const AUTHOR_SELECT = "author:profiles!user_id(id, display_name, avatar_url, blocks, grade, record_source, record_fields)";
+async function attachTweetSocialData(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  tweets: TweetWithAuthor[],
+): Promise<TweetWithAuthor[]> {
+  const tweetIds = tweets.map((tweet) => tweet.id);
+  if (tweetIds.length === 0) return tweets;
+
+  const [{ data: options }, { data: results }, { data: mentionRows }] = await Promise.all([
+    supabase.from("tweet_poll_options").select("*").in("tweet_id", tweetIds).order("sort_order"),
+    supabase.rpc("get_poll_results", { tweet_ids: tweetIds }),
+    supabase.from("tweet_mentions").select("tweet_id, profile_id").in("tweet_id", tweetIds),
+  ]);
+
+  const mentionIds = [...new Set((mentionRows ?? []).map((row) => row.profile_id))];
+  const { data: profiles } = mentionIds.length
+    ? await supabase.from("profiles").select("id, display_name").in("id", mentionIds)
+    : { data: [] };
+  const names = new Map((profiles ?? []).map((profile) => [profile.id, profile.display_name]));
+  const resultByOption = new Map((results ?? []).map((result) => [result.option_id, result]));
+
+  return tweets.map((tweet) => {
+    const pollOptions = (options ?? [])
+      .filter((option) => option.tweet_id === tweet.id)
+      .map((option) => ({
+        ...option,
+        vote_count: Number(resultByOption.get(option.id)?.vote_count ?? 0),
+        voted_by_me: resultByOption.get(option.id)?.voted_by_me ?? false,
+      }));
+    const mentions = (mentionRows ?? [])
+      .filter((mention) => mention.tweet_id === tweet.id)
+      .map((mention) => ({
+        profile_id: mention.profile_id,
+        display_name: names.get(mention.profile_id) ?? "",
+      }))
+      .filter((mention) => mention.display_name);
+    return {
+      ...tweet,
+      poll: pollOptions.length ? { options: pollOptions } : undefined,
+      mentions,
+    };
+  });
+}
 const NOTICE_REACTIONS: NoticeReaction[] = ["ack", "thanks", "question"];
 function isPresent<T>(value: T | null): value is T {
   return value !== null;
@@ -181,7 +223,7 @@ export async function getFeed(
   const twRows = tweetsResult.data;
 
   const records = (recRows ?? []).map(normalizeRecordWithAuthor);
-  const tweets = (twRows ?? []).map(normalizeTweetWithAuthor);
+  const tweets = await attachTweetSocialData(supabase, (twRows ?? []).map(normalizeTweetWithAuthor));
 
   const recIds = records.map((r) => r.id);
   const twIds = tweets.map((t) => t.id);
@@ -268,9 +310,10 @@ export async function getFeedItemById(
     fetchMyLikedIds(supabase, currentUserId, "tweet", [id]),
     fetchCommentCounts(supabase, "tweet", [id]),
   ]);
+  const [tweet] = await attachTweetSocialData(supabase, [normalizeTweetWithAuthor(data)]);
   return {
     kind: "tweet",
-    ...normalizeTweetWithAuthor(data),
+    ...tweet,
     liked_by_me: liked.has(id),
     comments_count: comments.get(id) ?? 0,
   };
@@ -538,7 +581,7 @@ export async function getUserActivity(
   const twRows = tweetsResult.data;
 
   const records = (recRows ?? []).map(normalizeRecordWithAuthor);
-  const tweets = (twRows ?? []).map(normalizeTweetWithAuthor);
+  const tweets = await attachTweetSocialData(supabase, (twRows ?? []).map(normalizeTweetWithAuthor));
   const recIds = records.map((r) => r.id);
   const twIds = tweets.map((t) => t.id);
 

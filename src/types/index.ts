@@ -76,6 +76,7 @@ export interface Profile {
   menu_view_all_blocks: boolean;
   schedule_view_all_blocks: boolean;
   attendance_view_all_blocks: boolean;
+  notify_mention: boolean;
   attendance_default_block: AttendanceDefaultBlock;
   /** タイムラインを開いたとき最初に表示するブロックタブ */
   timeline_default_block: TimelineDefaultBlock;
@@ -171,12 +172,36 @@ export interface Tweet {
   created_at: string;
   image_path: string | null;
   expires_at: string | null;
+  poll_multiple: boolean;
+  poll_anonymous: boolean;
+  poll_allow_options: boolean;
+}
+
+export interface TweetPollOption {
+  id: string;
+  tweet_id: string;
+  text: string;
+  created_by: string;
+  sort_order: number;
+  vote_count: number;
+  voted_by_me: boolean;
+}
+
+export interface TweetMention {
+  profile_id: string;
+  display_name: string;
+}
+
+export interface TweetPoll {
+  options: TweetPollOption[];
 }
 
 export interface TweetWithAuthor extends Tweet {
   author: AuthorMini;
   liked_by_me?: boolean;
   comments_count?: number;
+  poll?: TweetPoll;
+  mentions?: TweetMention[];
 }
 
 export interface Like {
@@ -527,7 +552,7 @@ export type FeedItem =
   | ({ kind: "record" } & RecordWithAuthor)
   | ({ kind: "tweet" } & TweetWithAuthor);
 
-export type NotificationType = "comment" | "notice" | "schedule_update" | "sync_failure" | "thread_reply";
+export type NotificationType = "comment" | "notice" | "schedule_update" | "sync_failure" | "thread_reply" | "mention";
 export type NotificationReferenceType = "record" | "tweet" | "schedule" | "notice" | "thread";
 
 export interface AppNotification {

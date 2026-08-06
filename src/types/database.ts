@@ -1152,6 +1152,7 @@ export type Database = {
           schedule_view_all_blocks: boolean
           notify_comment: boolean
           notify_notice: boolean
+          notify_mention: boolean
           record_fields: Json
           record_fields_version: number
           record_source: string
@@ -1180,6 +1181,7 @@ export type Database = {
           schedule_view_all_blocks?: boolean
           notify_comment?: boolean
           notify_notice?: boolean
+          notify_mention?: boolean
           record_fields?: Json
           record_fields_version?: number
           record_source?: string
@@ -1208,6 +1210,7 @@ export type Database = {
           schedule_view_all_blocks?: boolean
           notify_comment?: boolean
           notify_notice?: boolean
+          notify_mention?: boolean
           record_fields?: Json
           record_fields_version?: number
           record_source?: string
@@ -1609,10 +1612,31 @@ export type Database = {
           },
         ]
       }
+      tweet_mentions: {
+        Row: { tweet_id: string; profile_id: string; created_at: string }
+        Insert: { tweet_id: string; profile_id: string; created_at?: string }
+        Update: { tweet_id?: string; profile_id?: string; created_at?: string }
+        Relationships: []
+      }
+      tweet_poll_options: {
+        Row: { id: string; tweet_id: string; text: string; created_by: string; sort_order: number; created_at: string }
+        Insert: { id?: string; tweet_id: string; text: string; created_by: string; sort_order?: number; created_at?: string }
+        Update: { id?: string; tweet_id?: string; text?: string; created_by?: string; sort_order?: number; created_at?: string }
+        Relationships: []
+      }
+      tweet_poll_votes: {
+        Row: { option_id: string; user_id: string; created_at: string }
+        Insert: { option_id: string; user_id: string; created_at?: string }
+        Update: { option_id?: string; user_id?: string; created_at?: string }
+        Relationships: []
+      }
       tweets: {
         Row: {
           content: string
           created_at: string
+          poll_allow_options: boolean
+          poll_anonymous: boolean
+          poll_multiple: boolean
           id: string
           expires_at: string | null
           likes_count: number
@@ -1622,6 +1646,9 @@ export type Database = {
         Insert: {
           content: string
           created_at?: string
+          poll_allow_options?: boolean
+          poll_anonymous?: boolean
+          poll_multiple?: boolean
           id?: string
           likes_count?: number
           expires_at?: string | null
@@ -1630,6 +1657,9 @@ export type Database = {
         }
         Update: {
           content?: string
+          poll_allow_options?: boolean
+          poll_anonymous?: boolean
+          poll_multiple?: boolean
           created_at?: string
           id?: string
           likes_count?: number
@@ -1712,6 +1742,10 @@ export type Database = {
       }
     }
     Functions: {
+      get_poll_results: {
+        Args: { tweet_ids: string[] }
+        Returns: { option_id: string; vote_count: number; voted_by_me: boolean }[]
+      }
       claim_sheet_sync_chunk: {
         Args: { requested_chunk_size?: number; reset_cycle?: boolean }
         Returns: Json

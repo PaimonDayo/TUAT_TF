@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { ja } from "date-fns/locale";
 import { Avatar } from "@/components/common/Avatar";
 import { BlockPills } from "@/components/common/BlockPill";
 import { Card } from "@/components/ui/card";
+import { ImageLightbox } from "@/components/ui/image-lightbox";
 import { PostActions } from "@/components/cards/PostActions";
-import { Linkify } from "@/components/common/Linkify";
+import { MentionText } from "@/components/common/MentionText";
+import { TweetPoll } from "@/components/features/TweetPoll";
 import { TweetOwnerMenu } from "@/components/cards/PostOwnerMenu";
 import { cn } from "@/lib/utils";
 import { gradeShort } from "@/lib/constants";
@@ -31,8 +34,11 @@ export function TweetCard({
   const { author } = tweet;
   const isOwner = currentUser.id === author.id;
   const gradeLabel = gradeShort(author.grade);
+  const [imageOpen, setImageOpen] = useState(false);
+  const imageUrl = tweet.image_path ? tweetImageDisplayUrl(tweet.image_path) : null;
 
   return (
+    <>
     <Card
       className={cn(
         "space-y-3 p-4",
@@ -73,14 +79,30 @@ export function TweetCard({
           compact ? "line-clamp-2" : "whitespace-pre-wrap",
         )}
       >
-        <Linkify text={tweet.content} />
+        <MentionText text={tweet.content} mentions={tweet.mentions} />
       </p>
+      {tweet.poll && (
+        <TweetPoll
+          tweetId={tweet.id}
+          userId={currentUser.id}
+          options={tweet.poll.options}
+          multiple={tweet.poll_multiple}
+          anonymous={tweet.poll_anonymous}
+          allowOptions={tweet.poll_allow_options}
+        />
+      )}
+
 
       {tweet.image_path && (
-        <div className="overflow-hidden rounded-2xl border border-separator bg-bg">
+        <button
+          type="button"
+          aria-label="画像を拡大"
+          className="block w-full overflow-hidden rounded-2xl border border-separator bg-bg"
+          onClick={(event) => { event.stopPropagation(); setImageOpen(true); }}
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={tweetImageDisplayUrl(tweet.image_path)} alt="投稿画像" className="max-h-[520px] w-full object-contain" />
-        </div>
+          <img src={imageUrl!} alt="投稿画像" className="max-h-[520px] w-full object-contain" />
+        </button>
       )}
 
       <div onClick={(event) => event.stopPropagation()}>
@@ -95,5 +117,7 @@ export function TweetCard({
         />
       </div>
     </Card>
+      {imageUrl && <ImageLightbox src={imageUrl} alt="投稿画像" open={imageOpen} onClose={() => setImageOpen(false)} />}
+    </>
   );
 }

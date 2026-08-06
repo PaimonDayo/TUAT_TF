@@ -109,14 +109,17 @@ serve(async (req) => {
       title = "スレッドに新しい返信";
       bodyText = "参加中のスレッドに返信がありました";
       url = notification.reference_id ? `/notes/threads/${notification.reference_id}` : "/notices#notifications";
-    }
+    } else if (notification.type === 'mention') {
+      title = "メンションされました";
+      bodyText = "つぶやきまたはストーリーであなたがメンションされました";
+      url = notification.reference_id ? `/timeline/tweet/${notification.reference_id}` : "/notices#notifications";
 
+    }
     const payload = JSON.stringify({
       title,
       body: bodyText,
       data: { url }
     });
-
     const sendPromises = subscriptions.map(async (sub) => {
       const pushSubscription = {
         endpoint: sub.endpoint,

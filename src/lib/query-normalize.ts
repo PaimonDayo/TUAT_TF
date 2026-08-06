@@ -87,6 +87,7 @@ const NOTIFICATION_TYPES = new Set<NotificationType>([
   "notice",
   "schedule_update",
   "sync_failure",
+  "mention",
   "thread_reply",
 ]);
 const REFERENCE_TYPES = new Set<NotificationReferenceType>([

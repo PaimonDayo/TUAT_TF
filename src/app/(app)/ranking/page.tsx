@@ -1,5 +1,6 @@
 import { SubHeader } from "@/components/layout/SubHeader";
 import { RankingList } from "@/components/features/RankingList";
+import { RankingMonthNav } from "@/components/features/RankingMonthNav";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getMonthlyRanking } from "@/lib/queries";
 import { jstToday } from "@/lib/date";
@@ -23,19 +24,8 @@ export default async function RankingPage({
     <>
       <SubHeader title="走行距離ランキング" backHref="/mypage" />
       <div className="px-4 pb-3 space-y-2">
-        <p className="text-body text-muted">{`${year}年${monthNumber}月の走行距離 ・ 中長距離ブロック`}</p>
-        <form className="flex items-center gap-2" action="/ranking">
-          <label htmlFor="ranking-month" className="text-caption">集計月</label>
-          <input
-            id="ranking-month"
-            name="month"
-            type="month"
-            defaultValue={month}
-            max={currentMonth}
-            className="h-10 rounded-xl border border-separator bg-card px-3 text-body"
-          />
-          <button className="h-10 rounded-xl bg-accent px-4 text-[14px] font-semibold text-white">表示</button>
-        </form>
+        <RankingMonthNav month={month} currentMonth={currentMonth} />
+        <p className="text-body text-muted">中長距離ブロックの走行距離</p>
         <div className="flex flex-wrap gap-x-3 gap-y-0.5">
           {INTENSITY_ORDER.map((k) => (
             <span key={k} className="flex items-center gap-1 text-[10px] text-muted2">

@@ -37,6 +37,7 @@ export const getCurrentProfile = cache(async (): Promise<Profile> => {
   // トリガー未作成等で行が無い場合の保険
   if (!profile) {
     return {
+    notify_mention: true,
       id: user.id,
       email: user.email ?? "",
       display_name: "",

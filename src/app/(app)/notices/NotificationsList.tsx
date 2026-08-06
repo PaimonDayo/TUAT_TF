@@ -37,6 +37,8 @@ export function NotificationsList({
         return "スプレッドシートとの連携でエラーが続いています。設定を確認してください";
       case "thread_reply":
         return `${actorName}さんがスレッドに返信しました`;
+      case "mention":
+        return `${actorName}さんがあなたをメンションしました`;
       default:
         return "新しい通知があります";
     }

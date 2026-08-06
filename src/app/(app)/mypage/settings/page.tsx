@@ -44,6 +44,7 @@ export default async function SettingsPage() {
             profileId={profile.id}
             initialComment={profile.notify_comment ?? true}
             initialNotice={profile.notify_notice ?? true}
+            initialMention={profile.notify_mention ?? true}
           />
         </Section>
 

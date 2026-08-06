@@ -16,15 +16,18 @@ export function NotificationSettings({
   profileId,
   initialComment,
   initialNotice,
+  initialMention,
 }: {
   profileId: string;
   initialComment: boolean;
   initialNotice: boolean;
+  initialMention: boolean;
 }) {
   const { showToast } = useToast();
   const [comment, setComment] = useState(initialComment);
   const [notice, setNotice] = useState(initialNotice);
   
+  const [mention, setMention] = useState(initialMention);
   const [pushStatus, setPushStatus] = useState<'unsupported' | 'default' | 'granted' | 'denied'>('default');
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isIos, setIsIos] = useState(false);
@@ -55,7 +58,7 @@ export function NotificationSettings({
     setIsStandalone(window.matchMedia('(display-mode: standalone)').matches || (window.navigator as Navigator & { standalone?: boolean }).standalone === true);
   }, []);
 
-  const handleChange = async (field: "notify_comment" | "notify_notice", value: boolean, setter: (val: boolean) => void) => {
+  const handleChange = async (field: "notify_comment" | "notify_notice" | "notify_mention", value: boolean, setter: (val: boolean) => void) => {
     setter(value);
     const result = await safeUpdate(supabase, "profiles", { [field]: value }, { id: profileId });
     if (!result.ok) {
@@ -192,6 +195,14 @@ export function NotificationSettings({
           {(
             <div className="divide-y divide-separator/70 border-t border-separator/70">
               <p className="px-4 pb-1 pt-3 text-micro text-muted2">受け取る種類</p>
+              <Toggle
+                variant="row"
+                label="メンション"
+                description="つぶやきやストーリーで@メンションされたときに通知します"
+                checked={mention}
+                disabled={!isSubscribed}
+                onChange={() => handleChange("notify_mention", !mention, setMention)}
+              />
               <Toggle
                 variant="row"
                 label="コメント"
