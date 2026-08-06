@@ -46,8 +46,13 @@ export const TweetForm = forwardRef<
   const [pollMultiple, setPollMultiple] = useState(false);
   const [pollAnonymous, setPollAnonymous] = useState(true);
   const [pollAllowOptions, setPollAllowOptions] = useState(false);
-  const mentionMatch = content.match(/@([^@\n]*)$/);
-  const mentionQuery = mentionMatch?.[1]?.trim().toLocaleLowerCase("ja") ?? null;
+  const mentionMatch = content.match(/@([^\s@\n]*)$/);
+  const mentionQuery = mentionMatch?.[1]?.toLocaleLowerCase("ja") ?? null;
+  const selectedMentions = members.filter(
+    (member) =>
+      selectedMentionIds.includes(member.id) &&
+      content.includes(`@${member.display_name}`),
+  );
   const imagePreview = useMemo(() => imageFile ? URL.createObjectURL(imageFile) : null, [imageFile]);
   const initialContent = tweet?.content ?? "";
   const effectiveLength = tweetContentLength(content);
@@ -71,8 +76,15 @@ export const TweetForm = forwardRef<
   }, []);
 
   function selectMention(member: { id: string; display_name: string }) {
-    setContent((value) => value.replace(/@([^@\n]*)$/, `@${member.display_name} `));
+    setContent((value) => value.replace(/@([^\s@\n]*)$/, `@${member.display_name} `));
     setSelectedMentionIds((ids) => ids.includes(member.id) ? ids : [...ids, member.id]);
+  }
+
+  function removeMention(member: { id: string; display_name: string }) {
+    setContent((value) =>
+      value.replaceAll(`@${member.display_name}`, "").replace(/ {2,}/g, " "),
+    );
+    setSelectedMentionIds((ids) => ids.filter((id) => id !== member.id));
   }
 
 
@@ -212,16 +224,35 @@ export const TweetForm = forwardRef<
                   <button
                     key={member.id}
                     type="button"
-                    className="flex min-h-10 w-full items-center rounded-lg px-2 text-left text-[14px] active:bg-card"
+                    className="flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-[14px] active:bg-card"
                     onClick={() => selectMention(member)}
                   >
-                    @{member.display_name}
+                    <span className="min-w-0 flex-1 truncate">@{member.display_name}</span>
+                    <span className="shrink-0 text-[12px] font-semibold text-accent">追加</span>
                   </button>
                 ))}
             </div>
           </div>
         )}
+        {selectedMentions.length > 0 && (
+          <div className="border-t border-separator bg-bg/60 px-3 py-2" aria-live="polite">
+            <p className="mb-1.5 text-micro">メンション中</p>
+            <div className="flex flex-wrap gap-1.5">
+              {selectedMentions.map((member) => (
+                <button
+                  key={member.id}
+                  type="button"
+                  onClick={() => removeMention(member)}
+                  className="inline-flex min-h-8 items-center gap-1 rounded-full bg-accent/10 px-2.5 text-[12px] font-semibold text-accent"
+                  aria-label={`@${member.display_name} のメンションを外す`}
+                >
+                  @{member.display_name}<X size={13} />
+                </button>
+              ))}
+            </div>
+          </div>
 
+        )}
         <div className="border-t border-separator/70 bg-bg/35">
           <div className="flex min-h-11 items-center justify-between gap-3 px-4 py-2.5">
             <div className="min-w-0 text-[12px] text-muted2">
