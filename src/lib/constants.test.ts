@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  attendanceSectionBlock,
   matchSimpleBlock,
   normalizeProfileBlocks,
   primarySimpleBlock,
@@ -25,6 +26,9 @@ describe("block normalization", () => {
     expect(matchSimpleBlock(["manager"], "short")).toBe(true);
     expect(primarySimpleBlock(["manager"])).toBe("middle_long");
     expect(viewerCompetitionBlocks(["manager"])).toEqual(["middle_long", "short"]);
+    expect(attendanceSectionBlock(["manager"])).toBe("manager");
+    expect(attendanceSectionBlock(["middle_long"])).toBe("middle_long");
+    expect(attendanceSectionBlock(["short"])).toBe("short");
   });
 
   it("keeps middle-long memberships separate", () => {

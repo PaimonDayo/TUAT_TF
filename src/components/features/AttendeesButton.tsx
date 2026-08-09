@@ -5,7 +5,7 @@ import { Users } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Avatar } from "@/components/common/Avatar";
 import { SegmentedControl } from "@/components/ui/segmented";
-import { ATTENDANCE_BLOCK_ORDER, BLOCKS, GRADE_OPTIONS, PROFILE_BLOCK_ORDER, SIMPLE_BLOCK_ITEMS, gradeShort, matchSimpleBlock, primarySimpleBlock } from "@/lib/constants";
+import { ATTENDANCE_BLOCK_ORDER, BLOCKS, GRADE_OPTIONS, PROFILE_BLOCK_ORDER, SIMPLE_BLOCK_ITEMS, attendanceSectionBlock, gradeShort, matchSimpleBlock, primarySimpleBlock } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { avatarDisplayUrl } from "@/lib/avatar-image";
 import type { AttendanceDefaultBlock, Attendee } from "@/types";
@@ -131,9 +131,8 @@ function Group({ title, color, list, selectedBlock }: { title: string; color: st
     <div className="space-y-3">
       <p className="section-label" style={{ color }}>{title}</p>
       {blocks.map((block) => {
-        // マネージャーは中長距離・短距離のどちらの節にも出す（matchSimpleBlock が両方に合致）。
         const blockMembers = selectedBlock === "all"
-          ? list.filter((attendee) => matchSimpleBlock(attendee.profile.blocks, block))
+          ? list.filter((attendee) => attendanceSectionBlock(attendee.profile.blocks) === block)
           : list;
         if (blockMembers.length === 0) return null;
         return (

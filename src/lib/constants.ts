@@ -18,10 +18,25 @@ export const BLOCK_ORDER: Block[] = ["middle_long", "short", "jump", "throw"];
 export const EDITABLE_BLOCK_ORDER: Block[] = ["middle_long", "short"];
 export const PROFILE_BLOCK_ORDER: Block[] = ["middle_long", "short", "manager"];
 /**
- * 出欠一覧で見出しにするブロック。マネージャー専用の節は作らず、
- * マネージャーは中長距離・短距離の両方に表示する（matchSimpleBlock が両方に合致する）。
+ * 出欠一覧の「全体」タブで見出しにするブロック。マネージャーは
+ * 中長距離・短距離のどちらにも出さず、専用の「マネ」節にまとめる。
  */
-export const ATTENDANCE_BLOCK_ORDER: SimpleBlock[] = ["middle_long", "short"];
+export const ATTENDANCE_BLOCK_ORDER: (SimpleBlock | "manager")[] = [
+  "middle_long",
+  "short",
+  "manager",
+];
+
+/** Assign each member to exactly one section in the all-attendance list. */
+export function attendanceSectionBlock(
+  blocks: Block[] | undefined | null,
+): SimpleBlock | "manager" | null {
+  const normalized = normalizeProfileBlocks(blocks);
+  if (normalized.includes("manager")) return "manager";
+  if (normalized.includes("middle_long")) return "middle_long";
+  if (normalized.includes("short")) return "short";
+  return null;
+}
 
 export type SimpleBlock = "middle_long" | "short";
 
