@@ -251,6 +251,72 @@ export type Database = {
           },
         ]
       }
+      ito_games: {
+        Row: { id: string; name: string; target_role_id: string | null; group_count: number; max_group_size: number; status: string; created_by: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string; name: string; target_role_id?: string | null; group_count: number; max_group_size: number; status?: string; created_by?: string | null; created_at?: string; updated_at?: string }
+        Update: { id?: string; name?: string; target_role_id?: string | null; group_count?: number; max_group_size?: number; status?: string; created_by?: string | null; created_at?: string; updated_at?: string }
+        Relationships: []
+      }
+      ito_invitations: {
+        Row: { id: string; game_id: string; profile_id: string; round_no: number; status: string; invited_by: string | null; invited_at: string; responded_at: string | null }
+        Insert: { id?: string; game_id: string; profile_id: string; round_no: number; status?: string; invited_by?: string | null; invited_at?: string; responded_at?: string | null }
+        Update: { id?: string; game_id?: string; profile_id?: string; round_no?: number; status?: string; invited_by?: string | null; invited_at?: string; responded_at?: string | null }
+        Relationships: []
+      }
+      ito_participants: {
+        Row: { game_id: string; profile_id: string; status: string; joined_round: number; left_round: number | null; updated_at: string }
+        Insert: { game_id: string; profile_id: string; status?: string; joined_round: number; left_round?: number | null; updated_at?: string }
+        Update: { game_id?: string; profile_id?: string; status?: string; joined_round?: number; left_round?: number | null; updated_at?: string }
+        Relationships: []
+      }
+      ito_rounds: {
+        Row: { id: string; game_id: string; round_no: number; phase: string; created_at: string; started_at: string | null; ended_at: string | null }
+        Insert: { id?: string; game_id: string; round_no: number; phase?: string; created_at?: string; started_at?: string | null; ended_at?: string | null }
+        Update: { id?: string; game_id?: string; round_no?: number; phase?: string; created_at?: string; started_at?: string | null; ended_at?: string | null }
+        Relationships: []
+      }
+      ito_groups: {
+        Row: { id: string; round_id: string; name: string; is_leader_team: boolean; sort_order: number }
+        Insert: { id?: string; round_id: string; name: string; is_leader_team?: boolean; sort_order?: number }
+        Update: { id?: string; round_id?: string; name?: string; is_leader_team?: boolean; sort_order?: number }
+        Relationships: []
+      }
+      ito_group_members: {
+        Row: { id: string; round_id: string; group_id: string; profile_id: string; is_leader: boolean }
+        Insert: { id?: string; round_id: string; group_id: string; profile_id: string; is_leader?: boolean }
+        Update: { id?: string; round_id?: string; group_id?: string; profile_id?: string; is_leader?: boolean }
+        Relationships: []
+      }
+      ito_secrets: {
+        Row: { round_id: string; profile_id: string; number: number; assigned_at: string; confirmed_at: string | null }
+        Insert: { round_id: string; profile_id: string; number: number; assigned_at?: string; confirmed_at?: string | null }
+        Update: { round_id?: string; profile_id?: string; number?: number; assigned_at?: string; confirmed_at?: string | null }
+        Relationships: []
+      }
+      ito_leader_answers: {
+        Row: { round_id: string; profile_id: string; answer: string; updated_by: string | null; updated_at: string }
+        Insert: { round_id: string; profile_id: string; answer: string; updated_by?: string | null; updated_at?: string }
+        Update: { round_id?: string; profile_id?: string; answer?: string; updated_by?: string | null; updated_at?: string }
+        Relationships: []
+      }
+      ito_group_orders: {
+        Row: { group_id: string; round_id: string; order_ids: string[]; revision: number; submitted: boolean; updated_by: string | null; updated_at: string }
+        Insert: { group_id: string; round_id: string; order_ids?: string[]; revision?: number; submitted?: boolean; updated_by?: string | null; updated_at?: string }
+        Update: { group_id?: string; round_id?: string; order_ids?: string[]; revision?: number; submitted?: boolean; updated_by?: string | null; updated_at?: string }
+        Relationships: []
+      }
+      ito_round_scores: {
+        Row: { group_id: string; round_id: string; correct_count: number; points: number; is_perfect: boolean; computed_at: string }
+        Insert: { group_id: string; round_id: string; correct_count: number; points: number; is_perfect?: boolean; computed_at?: string }
+        Update: { group_id?: string; round_id?: string; correct_count?: number; points?: number; is_perfect?: boolean; computed_at?: string }
+        Relationships: []
+      }
+      ito_point_events: {
+        Row: { id: string; game_id: string; round_id: string; profile_id: string; points: number; source: string; created_at: string }
+        Insert: { id?: string; game_id: string; round_id: string; profile_id: string; points: number; source: string; created_at?: string }
+        Update: { id?: string; game_id?: string; round_id?: string; profile_id?: string; points?: number; source?: string; created_at?: string }
+        Relationships: []
+      }
       likes: {
         Row: {
           created_at: string
@@ -1831,6 +1897,43 @@ export type Database = {
       }
       set_role_members: {
         Args: { target_profile_ids: string[]; target_role_id: string }
+        Returns: undefined
+      }
+      ito_advance_phase: {
+        Args: { target_round_id: string; to_phase: string }
+        Returns: string
+      }
+      ito_respond_invitation: {
+        Args: { invitation_id: string; accept: boolean }
+        Returns: string
+      }
+      ito_set_leader: {
+        Args: { target_group_id: string; leader_profile_id: string }
+        Returns: undefined
+      }
+      ito_assign_secrets: {
+        Args: { target_round_id: string }
+        Returns: number
+      }
+      ito_confirm_secret: {
+        Args: { target_round_id: string }
+        Returns: undefined
+      }
+      ito_secret_status: {
+        Args: { target_round_id: string }
+        Returns: { profile_id: string; assigned: boolean; confirmed: boolean }[]
+      }
+      ito_set_order: {
+        Args: {
+          target_group_id: string
+          new_order: string[]
+          expected_revision: number
+          submit?: boolean
+        }
+        Returns: Database["public"]["Tables"]["ito_group_orders"]["Row"]
+      }
+      ito_apply_scores: {
+        Args: { target_round_id: string; scores: Json; points: Json }
         Returns: undefined
       }
     }
