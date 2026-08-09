@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
-import { Trophy, Medal, ChevronRight, Settings, Shield, ShieldCheck, Users, Target, MapPin, Rss } from "lucide-react";
+import { Trophy, Medal, ChevronRight, Settings, Shield, ShieldCheck, Users, Target, MapPin, Rss, Dices } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -14,7 +14,7 @@ import { EditProfileButton } from "@/components/features/MyPageActions";
 import { SheetSyncButton } from "@/components/features/SheetSyncButton";
 import { GoalEditor } from "@/components/features/GoalEditor";
 import { getCurrentProfile } from "@/lib/supabase/auth";
-import { getUserRecords, getUserActivity } from "@/lib/queries";
+import { getUserRecords, getUserActivity, getMyItoInvitations } from "@/lib/queries";
 import { SheetLiveRefresh } from "@/components/features/SheetLiveRefresh";
 import { gradeShort } from "@/lib/constants";
 import { permissionsOf } from "@/lib/permissions";
@@ -34,7 +34,10 @@ export default async function MyPage({
   const records = (await getUserRecords(profile.id)) as PracticeRecord[];
 
   const perms = permissionsOf(profile.roles);
-  const showAdminMenu = perms.manageMembers || perms.createSchedule;
+  const showAdminMenu = perms.manageMembers || perms.createSchedule || perms.manageSystem;
+  // ito は招待された人にだけ導線を出す（招待が無い人の画面は今までどおり）。
+  const itoInvitations = await getMyItoInvitations(profile.id);
+  const itoPending = itoInvitations.filter((invitation) => invitation.status === "pending").length;
 
   return (
     <>
@@ -114,6 +117,13 @@ export default async function MyPage({
           <RowLink href="/mypage/pb" icon={<Medal size={20} className="text-warning" />} label="大会・記録会の結果" />
           <RowLink href="/members" icon={<Users size={20} className="text-accent" />} label="メンバー一覧" />
           <RowLink href="/blog" icon={<Rss size={20} className="text-accent" />} label="ブログ" />
+          {itoInvitations.length > 0 && (
+            <RowLink
+              href="/ito"
+              icon={<Dices size={20} className="text-accent" />}
+              label={itoPending > 0 ? `itoゲーム（未回答${itoPending}件）` : "itoゲーム"}
+            />
+          )}
           <RowLink href="/mypage/settings" icon={<Settings size={20} className="text-muted2" />} label="設定" />
         </Card>
 
@@ -140,6 +150,9 @@ export default async function MyPage({
               )}
               {perms.createSchedule && (
                 <RowLink href="/venues" icon={<MapPin size={20} className="text-accent" />} label="練習場所" />
+              )}
+              {perms.manageSystem && (
+                <RowLink href="/ito/admin" icon={<Dices size={20} className="text-accent" />} label="itoゲーム" />
               )}
               {perms.manageMembers && <SheetSyncButton />}
             </Card>
