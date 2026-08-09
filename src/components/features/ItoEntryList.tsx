@@ -83,6 +83,7 @@ export function ItoEntryList({
                   ? `Round ${invitation.round_no} からの参加`
                   : ITO_GAME_STATUS_LABELS[game.status]}
               </p>
+              {game.theme && <p className="text-caption mt-0.5">お題: {game.theme}</p>}
             </div>
 
             {invitation.status === "pending" ? (

@@ -587,6 +587,13 @@ export interface AppNotificationWithActor extends AppNotification {
 /** ゲーム全体の状態。ラウンド内の進行は ItoPhase が持つ。 */
 export type ItoGameStatus = "draft" | "entry" | "active" | "finished";
 
+/**
+ * ゲームのモード。
+ * team: 各グループが代表者1＋通常回答者1以上で構成される（既存挙動）。
+ * solo: 代表のみのグループ（回答者なし）を許容する、ソロプレイ向けモード。
+ */
+export type ItoGameMode = "team" | "solo";
+
 /** ラウンド内フェーズ。遷移の許可表は src/lib/ito-phase.ts。 */
 export type ItoPhase =
   | "grouping"
@@ -609,8 +616,13 @@ export interface ItoGame {
   id: string;
   name: string;
   target_role_id: string | null;
+  mode: ItoGameMode;
   group_count: number;
   max_group_size: number;
+  /** お題。未設定なら null。 */
+  theme: string | null;
+  /** 進行役のシステム管理者もこのゲームに参加するか。 */
+  admin_participates: boolean;
   status: ItoGameStatus;
   created_by: string | null;
   created_at: string;

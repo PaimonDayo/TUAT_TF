@@ -5,7 +5,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getAllProfiles } from "@/lib/queries";
 import { permissionsOf } from "@/lib/permissions";
-import { ITO_DELETABLE_STATUSES, itoInviteTargets, validateItoGameForm } from "@/lib/ito-entry";
+import {
+  ITO_DELETABLE_STATUSES,
+  ITO_GAME_THEME_MAX,
+  itoInviteTargets,
+  validateItoGameForm,
+} from "@/lib/ito-entry";
 import type { ItoGameFormValues } from "@/lib/ito-entry";
 import type { ItoGame } from "@/types";
 
@@ -34,8 +39,11 @@ export async function createItoGame(values: ItoGameFormValues): Promise<ItoGame>
     .insert({
       name: values.name.trim(),
       target_role_id: values.targetRoleId,
+      mode: values.mode ?? "team",
       group_count: values.groupCount,
       max_group_size: values.maxGroupSize,
+      theme: values.theme?.trim() || null,
+      admin_participates: values.adminParticipates ?? false,
       status: "draft",
       created_by: profile.id,
     })
@@ -63,8 +71,11 @@ export async function updateItoGame(
     .update({
       name: values.name.trim(),
       target_role_id: values.targetRoleId,
+      mode: values.mode ?? "team",
       group_count: values.groupCount,
       max_group_size: values.maxGroupSize,
+      theme: values.theme?.trim() || null,
+      admin_participates: values.adminParticipates ?? false,
       updated_at: new Date().toISOString(),
     })
     .eq("id", gameId)
@@ -77,6 +88,33 @@ export async function updateItoGame(
     throw new Error("エントリー開始後は設定を変更できません");
   }
   revalidatePath("/ito/admin");
+}
+
+/**
+ * お題を設定・変更する。ゲームが終了していなければいつでも変更できる
+ * （ラウンドごとにお題を変えたい運用を想定し、draft 限定にはしない）。
+ */
+export async function updateItoGameTheme(gameId: string, theme: string): Promise<void> {
+  await requireItoAdmin();
+  const trimmed = theme.trim();
+  if (trimmed.length > ITO_GAME_THEME_MAX) {
+    throw new Error(`テーマは${ITO_GAME_THEME_MAX}文字までにしてください。`);
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("ito_games")
+    .update({ theme: trimmed || null, updated_at: new Date().toISOString() })
+    .eq("id", gameId)
+    .neq("status", "finished")
+    .select("id");
+
+  if (error) throw new Error("テーマを設定できませんでした");
+  if (!data || data.length === 0) {
+    throw new Error("終了したゲームのテーマは変更できません");
+  }
+  revalidatePath("/ito/admin");
+  revalidatePath("/ito");
 }
 
 /**
@@ -133,6 +171,8 @@ export async function inviteItoMembers(
     candidates: members.filter((member) => member.status === "active"),
     targetRoleId: game.target_role_id,
     alreadyInvitedIds: (existing ?? []).map((row) => row.profile_id),
+    // 進行役の参加を選んだゲームは、作成者本人だけロール・管理権限に関わらず招待対象に含める。
+    includeProfileIds: game.admin_participates && game.created_by ? [game.created_by] : [],
   });
   if (targets.length === 0) return 0;
 

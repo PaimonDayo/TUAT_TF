@@ -25,6 +25,7 @@ import {
   inviteItoMembers,
   openItoEntry,
   respondItoInvitation,
+  updateItoGameTheme,
 } from "./actions";
 
 interface RecordedCall {
@@ -62,6 +63,10 @@ function stubSupabase(reply: (call: RecordedCall) => Reply) {
       },
       eq: (column: string, value: unknown) => {
         call.filters[column] = value;
+        return chain;
+      },
+      neq: (column: string, value: unknown) => {
+        call.filters[`${column}!`] = value;
         return chain;
       },
       in: (column: string, values: unknown[]) => {
@@ -114,9 +119,13 @@ const GAME = {
   id: "game1",
   name: "合宿2026 ito",
   target_role_id: CAMP.id,
+  mode: "team",
   group_count: 10,
   max_group_size: 5,
+  theme: null,
+  admin_participates: false,
   status: "draft",
+  created_by: ADMIN.id,
 };
 
 beforeEach(() => {
@@ -257,6 +266,29 @@ describe("ito entry", () => {
     expect(invited).toBe(2);
   });
 
+  it("also invites the creating administrator when admin_participates is on", async () => {
+    const game = { ...GAME, admin_participates: true };
+    const { calls } = stubSupabase((call) => {
+      if (call.table === "ito_games") return { data: game, error: null };
+      if (call.table === "ito_invitations" && call.op === "select") {
+        return { data: [], error: null };
+      }
+      return { data: null, error: null };
+    });
+
+    const invited = await inviteItoMembers(game.id, 1);
+
+    const insert = calls.find(
+      (call) => call.table === "ito_invitations" && call.op === "insert",
+    );
+    expect(insert?.payload).toEqual([
+      { game_id: game.id, profile_id: "m1", round_no: 1, invited_by: ADMIN.id },
+      { game_id: game.id, profile_id: "m2", round_no: 1, invited_by: ADMIN.id },
+      { game_id: game.id, profile_id: "admin1", round_no: 1, invited_by: ADMIN.id },
+    ]);
+    expect(invited).toBe(3);
+  });
+
   it("answers an invitation through the RPC, not a direct update", async () => {
     getCurrentProfile.mockResolvedValue(MEMBER);
     const { calls, rpc } = stubSupabase(() => ({ data: null, error: null }));
@@ -278,6 +310,41 @@ describe("ito entry", () => {
     await expect(respondItoInvitation("invitation1", false)).rejects.toThrow(
       "すでに回答しています",
     );
+  });
+});
+
+describe("ito theme", () => {
+  it("refuses a member without the system permission", async () => {
+    getCurrentProfile.mockResolvedValue(MEMBER);
+    const { calls } = stubSupabase(() => ({ data: [{ id: GAME.id }], error: null }));
+
+    await expect(updateItoGameTheme(GAME.id, "テーマ")).rejects.toThrow("システム管理者");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("sets the theme on a non-finished game", async () => {
+    const { calls } = stubSupabase(() => ({ data: [{ id: GAME.id }], error: null }));
+
+    await updateItoGameTheme(GAME.id, "  好きな食べ物度  ");
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].table).toBe("ito_games");
+    expect(calls[0].op).toBe("update");
+    expect(calls[0].payload).toMatchObject({ theme: "好きな食べ物度" });
+    expect(calls[0].filters).toMatchObject({ id: GAME.id });
+  });
+
+  it("refuses to set a theme that is too long", async () => {
+    const { calls } = stubSupabase(() => ({ data: [{ id: GAME.id }], error: null }));
+
+    await expect(updateItoGameTheme(GAME.id, "あ".repeat(61))).rejects.toThrow("60文字");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("refuses to change the theme of a finished game", async () => {
+    stubSupabase(() => ({ data: [], error: null }));
+
+    await expect(updateItoGameTheme(GAME.id, "テーマ")).rejects.toThrow("終了したゲーム");
   });
 });
 
