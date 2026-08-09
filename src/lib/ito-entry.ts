@@ -1,4 +1,4 @@
-import type { AppRole, ItoInvitationStatus } from "@/types";
+import type { AppRole, ItoGameStatus, ItoInvitationStatus } from "@/types";
 import { hasPermission } from "@/lib/permissions";
 
 /**
@@ -7,6 +7,12 @@ import { hasPermission } from "@/lib/permissions";
  */
 
 export const ITO_GAME_NAME_MAX = 60;
+
+/**
+ * 削除してよいゲームの状態。進行中（エントリー受付・進行中）のゲームは、
+ * 終了してからでないと消せない。
+ */
+export const ITO_DELETABLE_STATUSES: ItoGameStatus[] = ["draft", "finished"];
 
 export interface ItoGameFormValues {
   name: string;

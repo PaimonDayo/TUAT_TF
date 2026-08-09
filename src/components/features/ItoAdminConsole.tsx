@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import {
+  ITO_DELETABLE_STATUSES,
   ITO_GAME_NAME_MAX,
   itoCapacityWarning,
   itoEntryCounts,
@@ -130,6 +131,8 @@ function GameCard({
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<null | "close" | "finish" | "delete">(null);
   const counts = itoEntryCounts(invitations);
+  // 進行中（エントリー受付・進行中）のゲームは、終了してからでないと消せない。
+  const deletable = ITO_DELETABLE_STATUSES.includes(game.status);
   const warning =
     game.status === "entry" || game.status === "active"
       ? itoCapacityWarning({
@@ -200,9 +203,6 @@ function GameCard({
             <Button size="sm" variant="outline" disabled={busy} onClick={onEdit}>
               設定を変更
             </Button>
-            <Button size="sm" variant="outline" disabled={busy} onClick={() => setConfirming("delete")}>
-              削除
-            </Button>
           </>
         )}
         {game.status === "entry" && (
@@ -213,6 +213,11 @@ function GameCard({
         {game.status === "active" && (
           <Button size="sm" variant="outline" disabled={busy} onClick={() => setConfirming("finish")}>
             ゲームを終了する
+          </Button>
+        )}
+        {deletable && (
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => setConfirming("delete")}>
+            削除
           </Button>
         )}
       </div>
@@ -241,7 +246,11 @@ function GameCard({
         open={confirming === "delete"}
         onOpenChange={(open) => !open && setConfirming(null)}
         title={`「${game.name}」を削除しますか？`}
-        description="この操作は元に戻せません。エントリー開始前のゲームだけ削除できます。"
+        description={
+          game.status === "finished"
+            ? "この操作は元に戻せません。ラウンド・グループ・秘密数字・各グループの予想・得点とランキングの履歴も、すべて一緒に消えます。"
+            : "この操作は元に戻せません。"
+        }
         busy={busy}
         onConfirm={() => void run(() => deleteItoGame(game.id), "ゲームを削除しました")}
       />

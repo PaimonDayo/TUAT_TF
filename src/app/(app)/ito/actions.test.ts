@@ -21,6 +21,7 @@ vi.mock("@/lib/queries", () => ({ getAllProfiles }));
 import {
   closeItoEntry,
   createItoGame,
+  deleteItoGame,
   inviteItoMembers,
   openItoEntry,
   respondItoInvitation,
@@ -61,6 +62,10 @@ function stubSupabase(reply: (call: RecordedCall) => Reply) {
       },
       eq: (column: string, value: unknown) => {
         call.filters[column] = value;
+        return chain;
+      },
+      in: (column: string, values: unknown[]) => {
+        call.filters[column] = values;
         return chain;
       },
       single: () => chain,
@@ -273,5 +278,36 @@ describe("ito entry", () => {
     await expect(respondItoInvitation("invitation1", false)).rejects.toThrow(
       "すでに回答しています",
     );
+  });
+});
+
+describe("ito game deletion", () => {
+  it("refuses a member without the system permission", async () => {
+    getCurrentProfile.mockResolvedValue(MEMBER);
+    const { calls } = stubSupabase(() => ({ data: [{ id: GAME.id }], error: null }));
+
+    await expect(deleteItoGame(GAME.id)).rejects.toThrow("システム管理者");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("deletes only a draft or a finished game", async () => {
+    const { calls } = stubSupabase(() => ({ data: [{ id: GAME.id }], error: null }));
+
+    await deleteItoGame(GAME.id);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].table).toBe("ito_games");
+    expect(calls[0].op).toBe("delete");
+    expect(calls[0].filters).toEqual({
+      id: GAME.id,
+      status: ["draft", "finished"],
+    });
+  });
+
+  it("keeps a running game until it is finished", async () => {
+    // 進行中のゲームは status 条件に合わず0行になる。
+    stubSupabase(() => ({ data: [], error: null }));
+
+    await expect(deleteItoGame(GAME.id)).rejects.toThrow("終了してから削除");
   });
 });

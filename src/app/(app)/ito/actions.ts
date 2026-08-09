@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getAllProfiles } from "@/lib/queries";
 import { permissionsOf } from "@/lib/permissions";
-import { itoInviteTargets, validateItoGameForm } from "@/lib/ito-entry";
+import { ITO_DELETABLE_STATUSES, itoInviteTargets, validateItoGameForm } from "@/lib/ito-entry";
 import type { ItoGameFormValues } from "@/lib/ito-entry";
 import type { ItoGame } from "@/types";
 
@@ -79,6 +79,11 @@ export async function updateItoGame(
   revalidatePath("/ito/admin");
 }
 
+/**
+ * ゲームを削除する。終了済みのゲームは、ラウンド・グループ・秘密数字・
+ * 回答・得点履歴も一緒に消える（外部キーの ON DELETE CASCADE）ため、
+ * 呼び出し側で必ず確認を取ること。
+ */
 export async function deleteItoGame(gameId: string): Promise<void> {
   await requireItoAdmin();
   const supabase = await createClient();
@@ -86,13 +91,14 @@ export async function deleteItoGame(gameId: string): Promise<void> {
     .from("ito_games")
     .delete()
     .eq("id", gameId)
-    .eq("status", "draft")
+    .in("status", ITO_DELETABLE_STATUSES)
     .select("id");
   if (error) throw new Error("ゲームを削除できませんでした");
   if (!data || data.length === 0) {
-    throw new Error("エントリー開始後は削除できません");
+    throw new Error("進行中のゲームは、終了してから削除してください");
   }
   revalidatePath("/ito/admin");
+  revalidatePath("/ito");
 }
 
 /**
