@@ -55,6 +55,17 @@ describe("ito grouping constraints", () => {
       ),
     ).toContain("too_few_participants");
   });
+
+  it("allows leader-only groups when minGroupSize is 1 (solo mode)", () => {
+    expect(
+      validateItoGrouping({
+        participantCount: 2,
+        groupCount: 2,
+        maxGroupSize: 5,
+        minGroupSize: 1,
+      }),
+    ).toEqual([]);
+  });
 });
 
 describe("ito group building", () => {
@@ -90,6 +101,21 @@ describe("ito group building", () => {
     expect(() =>
       buildItoGroups({ participantIds: members(3), groupCount: 2, maxGroupSize: 5 }),
     ).toThrow();
+  });
+
+  it("builds leader-only groups of size 1 when minGroupSize is 1 (solo mode)", () => {
+    const groups = buildItoGroups({
+      participantIds: members(4),
+      groupCount: 4,
+      maxGroupSize: 1,
+      minGroupSize: 1,
+      random: createSeededRandom(1),
+    });
+    expect(groups).toHaveLength(4);
+    for (const group of groups) {
+      expect(group.length).toBe(1);
+    }
+    expect(groups.flat().sort()).toEqual(members(4).sort());
   });
 
   it("avoids putting past team-mates together again", () => {

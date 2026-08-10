@@ -252,9 +252,9 @@ export type Database = {
         ]
       }
       ito_games: {
-        Row: { id: string; name: string; target_role_id: string | null; group_count: number; max_group_size: number; status: string; created_by: string | null; created_at: string; updated_at: string }
-        Insert: { id?: string; name: string; target_role_id?: string | null; group_count: number; max_group_size: number; status?: string; created_by?: string | null; created_at?: string; updated_at?: string }
-        Update: { id?: string; name?: string; target_role_id?: string | null; group_count?: number; max_group_size?: number; status?: string; created_by?: string | null; created_at?: string; updated_at?: string }
+        Row: { id: string; name: string; target_role_id: string | null; mode: string; group_count: number; max_group_size: number; theme: string | null; admin_participates: boolean; status: string; created_by: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string; name: string; target_role_id?: string | null; mode?: string; group_count: number; max_group_size: number; theme?: string | null; admin_participates?: boolean; status?: string; created_by?: string | null; created_at?: string; updated_at?: string }
+        Update: { id?: string; name?: string; target_role_id?: string | null; mode?: string; group_count?: number; max_group_size?: number; theme?: string | null; admin_participates?: boolean; status?: string; created_by?: string | null; created_at?: string; updated_at?: string }
         Relationships: []
       }
       ito_invitations: {

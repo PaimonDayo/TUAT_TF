@@ -38,6 +38,7 @@ import type {
   ItoGame,
   ItoInvitation,
   ItoParticipant,
+  ItoSecret,
 } from "@/types";
 
 const AUTHOR_SELECT = "author:profiles!user_id(id, display_name, avatar_url, blocks, grade, record_source, record_fields)";
@@ -1077,6 +1078,20 @@ export async function getItoParticipants(gameId: string): Promise<ItoParticipant
     .select("*")
     .eq("game_id", gameId);
   return (data ?? []) as ItoParticipant[];
+}
+
+/**
+ * そのラウンドの秘密数字。RLS が範囲を絞る＝
+ * 自分の行、結果発表後のそのラウンド参加者、または
+ * 進行役として見るシステム管理者（自分がそのラウンドの参加者でない場合のみ）。
+ */
+export async function getItoSecrets(roundId: string): Promise<ItoSecret[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("ito_secrets")
+    .select("*")
+    .eq("round_id", roundId);
+  return (data ?? []) as ItoSecret[];
 }
 
 /** 自分あての招待（新しい順）。未回答があればエントリー画面で確認する。 */

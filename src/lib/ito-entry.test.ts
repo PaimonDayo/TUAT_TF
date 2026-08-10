@@ -66,6 +66,40 @@ describe("ito game form", () => {
     });
     expect(errors.map((error) => error.field)).toEqual(["groupCount"]);
   });
+
+  it("requires at least 2 per group in team mode", () => {
+    const errors = validateItoGameForm({
+      name: "ito",
+      targetRoleId: CAMP.id,
+      mode: "team",
+      groupCount: 2,
+      maxGroupSize: 1,
+    });
+    expect(errors.map((error) => error.field)).toEqual(["maxGroupSize"]);
+  });
+
+  it("allows leader-only groups (max size 1) in solo mode", () => {
+    expect(
+      validateItoGameForm({
+        name: "ito",
+        targetRoleId: CAMP.id,
+        mode: "solo",
+        groupCount: 2,
+        maxGroupSize: 1,
+      }),
+    ).toEqual([]);
+  });
+
+  it("rejects a theme that is too long", () => {
+    const errors = validateItoGameForm({
+      name: "ito",
+      targetRoleId: CAMP.id,
+      groupCount: 10,
+      maxGroupSize: 5,
+      theme: "あ".repeat(61),
+    });
+    expect(errors.map((error) => error.field)).toEqual(["theme"]);
+  });
 });
 
 describe("ito invite targets", () => {
@@ -98,6 +132,25 @@ describe("ito invite targets", () => {
       alreadyInvitedIds: ["m1"],
     });
     expect(targets.map((target) => target.id)).toEqual(["m2"]);
+  });
+
+  it("invites a system administrator only when explicitly included (admin participation)", () => {
+    const targets = itoInviteTargets({
+      candidates: members,
+      targetRoleId: CAMP.id,
+      includeProfileIds: ["admin1"],
+    });
+    expect(targets.map((target) => target.id)).toEqual(["m1", "m2", "admin1"]);
+  });
+
+  it("still skips an included admin who was already invited", () => {
+    const targets = itoInviteTargets({
+      candidates: members,
+      targetRoleId: CAMP.id,
+      alreadyInvitedIds: ["admin1"],
+      includeProfileIds: ["admin1"],
+    });
+    expect(targets.map((target) => target.id)).not.toContain("admin1");
   });
 });
 
@@ -135,5 +188,11 @@ describe("ito capacity warning", () => {
     expect(itoCapacityWarning({ joined: 12, groupCount: 10, maxGroupSize: 5 })).toContain(
       "20人必要",
     );
+  });
+
+  it("allows 1 per group in solo mode without warning", () => {
+    expect(
+      itoCapacityWarning({ joined: 10, groupCount: 10, maxGroupSize: 5, mode: "solo" }),
+    ).toBeNull();
   });
 });

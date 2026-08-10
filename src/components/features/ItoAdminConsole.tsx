@@ -10,10 +10,15 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { SegmentedControl } from "@/components/ui/segmented";
+import { Toggle } from "@/components/ui/toggle";
 import { useToast } from "@/components/ui/toast";
 import {
   ITO_DELETABLE_STATUSES,
+  ITO_GAME_MIN_GROUP_SIZE,
+  ITO_GAME_MODE_LABELS,
   ITO_GAME_NAME_MAX,
+  ITO_GAME_THEME_MAX,
   itoCapacityWarning,
   itoEntryCounts,
   validateItoGameForm,
@@ -27,8 +32,9 @@ import {
   finishItoGame,
   openItoEntry,
   updateItoGame,
+  updateItoGameTheme,
 } from "@/app/(app)/ito/actions";
-import type { AppRole, ItoGame, ItoInvitation } from "@/types";
+import type { AppRole, ItoGame, ItoGameMode, ItoInvitation } from "@/types";
 
 /**
  * ito の進行コンソール。この画面はシステム管理者だけが開ける
@@ -130,6 +136,7 @@ function GameCard({
   const { showToast } = useToast();
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<null | "close" | "finish" | "delete">(null);
+  const [editingTheme, setEditingTheme] = useState(false);
   const counts = itoEntryCounts(invitations);
   // 進行中（エントリー受付・進行中）のゲームは、終了してからでないと消せない。
   const deletable = ITO_DELETABLE_STATUSES.includes(game.status);
@@ -139,6 +146,7 @@ function GameCard({
           joined: counts.joined,
           groupCount: game.group_count,
           maxGroupSize: game.max_group_size,
+          mode: game.mode,
         })
       : null;
 
@@ -167,13 +175,34 @@ function GameCard({
         <div className="min-w-0 flex-1">
           <p className="text-headline break-words">{game.name}</p>
           <p className="text-caption">
-            対象: {roleName} ／ {game.group_count}グループ × 最大{game.max_group_size}人
+            対象: {roleName} ／ {ITO_GAME_MODE_LABELS[game.mode]} ／ {game.group_count}
+            グループ × 最大{game.max_group_size}人
+            {game.admin_participates && "／進行役も参加"}
           </p>
         </div>
         <span className="shrink-0 rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-bold text-accent">
           {ITO_GAME_STATUS_LABELS[game.status]}
         </span>
       </div>
+
+      <button
+        type="button"
+        onClick={() => setEditingTheme(true)}
+        disabled={game.status === "finished"}
+        className="w-full rounded-xl bg-bg/60 p-2.5 text-left disabled:cursor-not-allowed"
+      >
+        <p className="text-micro text-muted2">お題</p>
+        <p className="text-[14px] font-medium break-words">
+          {game.theme || (game.status === "finished" ? "未設定" : "タップして設定")}
+        </p>
+      </button>
+
+      {editingTheme && (
+        <ThemeEditDialog
+          game={game}
+          onClose={() => setEditingTheme(false)}
+        />
+      )}
 
       {game.status !== "draft" && (
         <div className="grid grid-cols-4 gap-2 text-center">
@@ -258,6 +287,50 @@ function GameCard({
   );
 }
 
+function ThemeEditDialog({ game, onClose }: { game: ItoGame; onClose: () => void }) {
+  const router = useRouter();
+  const { showToast } = useToast();
+  const [theme, setTheme] = useState(game.theme ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    setSaving(true);
+    setError(null);
+    try {
+      await updateItoGameTheme(game.id, theme);
+      showToast("テーマを設定しました");
+      onClose();
+      router.refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "設定できませんでした");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <FormModal open onOpenChange={(open) => !open && onClose()} title="お題を設定">
+      <div className="space-y-4 pb-4">
+        <div>
+          <p className="section-label mb-1.5">お題</p>
+          <Input
+            placeholder="例: 好きな食べ物度（1=苦手〜100=大好き）"
+            value={theme}
+            onChange={(event) => setTheme(event.target.value)}
+            maxLength={ITO_GAME_THEME_MAX}
+          />
+        </div>
+        {error && <p className="text-caption text-danger text-center">{error}</p>}
+        <FormModalFooter>
+          <Button size="lg" onClick={submit} disabled={saving}>
+            {saving ? "保存中…" : "保存する"}
+          </Button>
+        </FormModalFooter>
+      </div>
+    </FormModal>
+  );
+}
+
 function Stat({ label, value, tone }: { label: string; value: number; tone?: string }) {
   return (
     <div className="rounded-xl bg-bg/60 py-2">
@@ -280,21 +353,28 @@ function GameForm({
 }) {
   const router = useRouter();
   const { showToast } = useToast();
+  const [mode, setMode] = useState<ItoGameMode>(game?.mode ?? "team");
   const [name, setName] = useState(game?.name ?? "");
   const [targetRoleId, setTargetRoleId] = useState(game?.target_role_id ?? "");
   const [groupCount, setGroupCount] = useState(String(game?.group_count ?? 10));
   const [maxGroupSize, setMaxGroupSize] = useState(String(game?.max_group_size ?? 5));
+  const [theme, setTheme] = useState(game?.theme ?? "");
+  const [adminParticipates, setAdminParticipates] = useState(game?.admin_participates ?? false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const values: ItoGameFormValues = {
     name,
     targetRoleId: targetRoleId || null,
+    mode,
     groupCount: Number(groupCount),
     maxGroupSize: Number(maxGroupSize),
+    theme,
+    adminParticipates,
   };
   const targetCount = targetRoleId ? (targetCounts[targetRoleId] ?? 0) : 0;
   const capacity = (Number(groupCount) || 0) * (Number(maxGroupSize) || 0);
+  const minGroupSize = ITO_GAME_MIN_GROUP_SIZE[mode];
 
   async function submit() {
     const errors = validateItoGameForm(values);
@@ -319,6 +399,22 @@ function GameForm({
   return (
     <div className="space-y-4 pb-4">
       <div>
+        <p className="section-label mb-1.5">モード</p>
+        <SegmentedControl
+          items={[
+            { key: "team" as const, label: ITO_GAME_MODE_LABELS.team },
+            { key: "solo" as const, label: ITO_GAME_MODE_LABELS.solo },
+          ]}
+          value={mode}
+          onChange={setMode}
+        />
+        <p className="text-caption mt-1">
+          {mode === "team"
+            ? "各グループは代表者1人＋回答する人1人以上で編成します。"
+            : "ソロプレイ・代表のみのグループ（回答する人がいないグループ）を認めます。"}
+        </p>
+      </div>
+      <div>
         <p className="section-label mb-1.5">ゲーム名</p>
         <Input
           placeholder="例: 合宿2026 ito"
@@ -341,6 +437,7 @@ function GameForm({
         {targetRoleId && (
           <p className="text-caption mt-1">
             招待対象は{targetCount}人です（システム管理者を除く）。
+            {adminParticipates && "進行役も別途参加します。"}
           </p>
         )}
       </div>
@@ -365,9 +462,23 @@ function GameForm({
         </div>
       </div>
       <p className="text-caption">
-        収容できるのは最大{capacity}人です。各グループは代表者1人と回答する人が1人以上必要なため、
-        2人以上になるように編成します。
+        収容できるのは最大{capacity}人です。各グループは{minGroupSize}人以上になるように編成します。
       </p>
+      <div>
+        <p className="section-label mb-1.5">お題（あとから変更できます）</p>
+        <Input
+          placeholder="例: 好きな食べ物度（1=苦手〜100=大好き）"
+          value={theme}
+          onChange={(event) => setTheme(event.target.value)}
+          maxLength={ITO_GAME_THEME_MAX}
+        />
+      </div>
+      <Toggle
+        label="進行役も参加する"
+        description="オンにすると、このゲームを作成したシステム管理者も参加者に加わります。"
+        checked={adminParticipates}
+        onChange={() => setAdminParticipates((prev) => !prev)}
+      />
 
       {error && <p className="text-caption text-danger text-center">{error}</p>}
 
