@@ -1116,18 +1116,35 @@ export async function getMyItoInvitations(userId: string): Promise<ItoInvitation
 /** 部員向け ito 画面のデータ。参加中・招待中のゲームだけを返す。 */
 export async function getMyItoOverview(userId: string): Promise<{
   invitations: ItoInvitation[];
+  participations: ItoParticipant[];
   games: ItoGame[];
 }> {
-  const invitations = await getMyItoInvitations(userId);
-  const gameIds = [...new Set(invitations.map((invitation) => invitation.game_id))];
-  if (gameIds.length === 0) return { invitations, games: [] };
   const supabase = await createClient();
+  // 招待に答えて参加した人と、進行役が直接追加した人（招待なし）の両方を拾う。
+  const [invitations, { data: participantRows }] = await Promise.all([
+    getMyItoInvitations(userId),
+    supabase
+      .from("ito_participants")
+      .select("*")
+      .eq("profile_id", userId)
+      .eq("status", "active"),
+  ]);
+  const participations = (participantRows ?? []) as ItoParticipant[];
+
+  const gameIds = [
+    ...new Set([
+      ...invitations.map((invitation) => invitation.game_id),
+      ...participations.map((participation) => participation.game_id),
+    ]),
+  ];
+  if (gameIds.length === 0) return { invitations, participations, games: [] };
+
   const { data } = await supabase
     .from("ito_games")
     .select("*")
     .in("id", gameIds)
     .order("created_at", { ascending: false });
-  return { invitations, games: (data ?? []) as ItoGame[] };
+  return { invitations, participations, games: (data ?? []) as ItoGame[] };
 }
 
 /** そのゲームのラウンド一覧（古い順） */

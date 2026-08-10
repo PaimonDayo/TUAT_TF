@@ -16,14 +16,17 @@ import {
 /** 部員向けの ito 画面。招待への回答と、進行中ラウンドのプレイ。 */
 export default async function ItoPage() {
   const profile = await getCurrentProfile();
-  const { invitations, games } = await getMyItoOverview(profile.id);
+  const { invitations, participations, games } = await getMyItoOverview(profile.id);
 
-  // 参加中のゲーム（新しい順）のうち、いま動いているものを1つ表示する。
-  const joinedGameIds = invitations
-    .filter((invitation) => invitation.status === "joined")
-    .map((invitation) => invitation.game_id);
+  // 招待に「参加する」で答えた人と、進行役が直接追加した人（招待なし）の両方を参加者として扱う。
+  const joinedGameIds = new Set([
+    ...invitations
+      .filter((invitation) => invitation.status === "joined")
+      .map((invitation) => invitation.game_id),
+    ...participations.map((participation) => participation.game_id),
+  ]);
   const activeGame = games.find(
-    (game) => joinedGameIds.includes(game.id) && game.status === "active",
+    (game) => joinedGameIds.has(game.id) && game.status === "active",
   );
 
   const rounds = activeGame ? await getItoRounds(activeGame.id) : [];
@@ -40,10 +43,12 @@ export default async function ItoPage() {
 
       <div className="px-4 pt-2 space-y-4">
         {invitations.length === 0 ? (
-          <EmptyState
-            title="まだ招待はありません"
-            description="ゲームに招待されると、ここで参加するかどうかを選べます。"
-          />
+          participations.length === 0 && (
+            <EmptyState
+              title="まだ招待はありません"
+              description="ゲームに招待されると、ここで参加するかどうかを選べます。"
+            />
+          )
         ) : (
           <ItoEntryList invitations={invitations} games={games} />
         )}

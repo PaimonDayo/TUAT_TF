@@ -69,6 +69,10 @@ export default async function ItoAdminPage() {
                 secretStatus,
                 people,
                 participantCount: participants.filter((row) => row.status === "active").length,
+                viewerId: profile.id,
+                viewerJoined: participants.some(
+                  (row) => row.profile_id === profile.id && row.status === "active",
+                ),
               }}
             />
             {pointEvents.length > 0 && <ItoRanking events={pointEvents} people={people} />}

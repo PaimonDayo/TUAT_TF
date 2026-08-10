@@ -49,6 +49,10 @@ export interface ItoRoundConsoleData {
   secretStatus: ItoSecretStatus[];
   people: AuthorMini[];
   participantCount: number;
+  /** いま見ている進行役の profile id。自分自身を参加者に加えるのに使う。 */
+  viewerId: string;
+  /** 進行役自身がこのゲームの参加者になっているか。 */
+  viewerJoined: boolean;
 }
 
 /** いま進行役が何をすればよいか。画面の一番上に出す。 */
@@ -215,6 +219,19 @@ export function ItoRoundConsole({ data }: { data: ItoRoundConsoleData }) {
             招待を送らずに、選んだ部員をこのゲームの参加者にします。通知は飛びません。
             人数が足りないときの調整や、ひとりでの動作確認に使えます。
           </p>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy || data.viewerJoined}
+            onClick={() =>
+              void run(
+                () => addItoParticipants(game.id, [data.viewerId]),
+                "自分を参加者に追加しました",
+              )
+            }
+          >
+            {data.viewerJoined ? "自分も参加しています" : "自分も参加する"}
+          </Button>
           <PersonPicker
             people={people}
             value={extraIds}
