@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
-import { createClient } from "@/lib/supabase/client";
 import { ITO_GAME_STATUS_LABELS } from "@/lib/ito-phase";
 import { unwrapItoResult } from "@/lib/ito-result";
 import { respondItoInvitation } from "@/app/(app)/ito/actions";
@@ -26,35 +25,7 @@ export function ItoEntryList({
   const router = useRouter();
   const { showToast } = useToast();
   const [busyId, setBusyId] = useState<string | null>(null);
-  const profileId = invitations[0]?.profile_id;
-
-  useEffect(() => {
-    if (!profileId) return;
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`ito-invitations-${profileId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "ito_invitations",
-          filter: `profile_id=eq.${profileId}`,
-        },
-        // 通知はきっかけとしてだけ使い、中身はサーバーから取り直す。
-        () => router.refresh(),
-      )
-      .subscribe();
-
-    function visible() {
-      if (document.visibilityState === "visible") router.refresh();
-    }
-    document.addEventListener("visibilitychange", visible);
-    return () => {
-      document.removeEventListener("visibilitychange", visible);
-      void supabase.removeChannel(channel);
-    };
-  }, [profileId, router]);
+  // 新しい招待の検知と自動更新は、共通の ItoLiveRefresh がまとめて行う。
 
   async function respond(invitation: ItoInvitation, accept: boolean) {
     setBusyId(invitation.id);

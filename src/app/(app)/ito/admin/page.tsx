@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { SubHeader } from "@/components/layout/SubHeader";
 import { ItoAdminConsole } from "@/components/features/ItoAdminConsole";
 import { ItoRoundConsole } from "@/components/features/ItoRoundConsole";
+import { ItoLiveRefresh } from "@/components/features/ItoLiveRefresh";
 import { ItoRanking } from "@/components/features/ItoRanking";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import {
@@ -52,6 +53,9 @@ export default async function ItoAdminPage() {
   return (
     <>
       <SubHeader title="itoゲーム" backHref="/mypage" />
+
+      {/* 部員の操作（代表者選択・提出）を待たずに自動で最新にする（描画なし）。 */}
+      <ItoLiveRefresh gameId={runningGame?.id} roundId={currentRound?.id} />
 
       <div className="px-4 pt-2 space-y-6">
         {runningGame && (

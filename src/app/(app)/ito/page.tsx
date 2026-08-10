@@ -2,6 +2,7 @@ import { SubHeader } from "@/components/layout/SubHeader";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Card } from "@/components/ui/card";
 import { ItoEntryList } from "@/components/features/ItoEntryList";
+import { ItoLiveRefresh } from "@/components/features/ItoLiveRefresh";
 import { ItoPlayView } from "@/components/features/ItoPlayView";
 import { ItoRanking } from "@/components/features/ItoRanking";
 import { getCurrentProfile } from "@/lib/supabase/auth";
@@ -47,6 +48,13 @@ export default async function ItoPage() {
   return (
     <>
       <SubHeader title="itoゲーム" backHref="/mypage" />
+
+      {/* 招待・ラウンド・共有状態の変化を拾って自動で最新にする（描画なし）。 */}
+      <ItoLiveRefresh
+        gameId={activeGame?.id}
+        roundId={currentRound?.id}
+        profileId={profile.id}
+      />
 
       <div className="px-4 pt-2 space-y-4">
         {invitations.length === 0 && participations.length === 0 && (

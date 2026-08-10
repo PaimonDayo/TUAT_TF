@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Play, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -113,18 +113,7 @@ export function ItoRoundConsole({ data }: { data: ItoRoundConsoleData }) {
   const [extraIds, setExtraIds] = useState<string[]>([]);
   const { game, round, groups, members, answers, orders, scores, secretStatus, people } = data;
 
-  useEffect(() => {
-    if (!round) return;
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`ito-admin-${round.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "ito_group_members", filter: `round_id=eq.${round.id}` }, () => router.refresh())
-      .on("postgres_changes", { event: "*", schema: "public", table: "ito_group_orders", filter: `round_id=eq.${round.id}` }, () => router.refresh())
-      .subscribe();
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [round, router]);
+  // 自動更新は共通の ItoLiveRefresh がまとめて行う（ページ側でマウント）。
 
   async function run(
     action: () => Promise<ItoActionResult<unknown>>,

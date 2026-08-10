@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowDown, ArrowUp, Check, Eye, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -88,25 +88,7 @@ export function ItoPlayView({ data }: { data: ItoPlayData }) {
     [people],
   );
 
-  useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`ito-round-${round.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "ito_rounds", filter: `id=eq.${round.id}` }, () => router.refresh())
-      .on("postgres_changes", { event: "*", schema: "public", table: "ito_group_members", filter: `round_id=eq.${round.id}` }, () => router.refresh())
-      .on("postgres_changes", { event: "*", schema: "public", table: "ito_group_orders", filter: `round_id=eq.${round.id}` }, () => router.refresh())
-      .on("postgres_changes", { event: "*", schema: "public", table: "ito_leader_answers", filter: `round_id=eq.${round.id}` }, () => router.refresh())
-      .subscribe();
-
-    function visible() {
-      if (document.visibilityState === "visible") router.refresh();
-    }
-    document.addEventListener("visibilitychange", visible);
-    return () => {
-      document.removeEventListener("visibilitychange", visible);
-      void supabase.removeChannel(channel);
-    };
-  }, [round.id, router]);
+  // 自動更新は共通の ItoLiveRefresh がまとめて行う（ページ側でマウント）。
 
   const myMembership = members.find((member) => member.profile_id === viewerId);
   const myGroup = groups.find((group) => group.id === myMembership?.group_id);
