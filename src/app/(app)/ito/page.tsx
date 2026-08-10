@@ -29,6 +29,13 @@ export default async function ItoPage() {
     (game) => joinedGameIds.has(game.id) && game.status === "active",
   );
 
+  // 回答済みの招待カードは、ゲームが動き出したら邪魔なので出さない。
+  // 未回答の招待だけは、進行中でも上に出す（回答してもらう必要があるため）。
+  const pendingInvitations = invitations.filter(
+    (invitation) => invitation.status === "pending",
+  );
+  const entryInvitations = activeGame ? pendingInvitations : invitations;
+
   const rounds = activeGame ? await getItoRounds(activeGame.id) : [];
   const currentRound = [...rounds].reverse()[0] ?? null;
   const [state, people, pointEvents] = await Promise.all([
@@ -42,15 +49,15 @@ export default async function ItoPage() {
       <SubHeader title="itoゲーム" backHref="/mypage" />
 
       <div className="px-4 pt-2 space-y-4">
-        {invitations.length === 0 ? (
-          participations.length === 0 && (
-            <EmptyState
-              title="まだ招待はありません"
-              description="ゲームに招待されると、ここで参加するかどうかを選べます。"
-            />
-          )
-        ) : (
-          <ItoEntryList invitations={invitations} games={games} />
+        {invitations.length === 0 && participations.length === 0 && (
+          <EmptyState
+            title="まだ招待はありません"
+            description="ゲームに招待されると、ここで参加するかどうかを選べます。"
+          />
+        )}
+
+        {entryInvitations.length > 0 && (
+          <ItoEntryList invitations={entryInvitations} games={games} />
         )}
 
         {activeGame && currentRound && state && (
