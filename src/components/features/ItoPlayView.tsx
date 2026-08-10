@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, Check, Eye, Loader2, X } from "lucide-react";
+import { Check, CheckCircle2, Eye, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ReorderList } from "@/components/ui/reorder-list";
@@ -379,7 +379,12 @@ function SecretNumber({
   );
 }
 
-/** グループ共有の並び替え。上ほど数字が大きい。 */
+/**
+ * グループ共有の並び替え。上ほど数字が大きい。
+ * 並べ替えるたびにグループ内へ共有し、「提出する」で確定させる。
+ * 提出後は読み取り専用になり、「編集する」を押すと再び並べ替えられる
+ * （並びを変えれば自動的に未提出へ戻る）。
+ */
 function OrderEditor({
   group,
   order,
@@ -406,82 +411,90 @@ function OrderEditor({
     return [...saved.filter((id) => known.includes(id)), ...known.filter((id) => !saved.includes(id))];
   }, [cards, order?.order_ids]);
 
-  // サーバーの並びを基準に、自分の未保存の編集だけを上に載せる。
-  // 他の端末が保存してサーバー側が変わったら、そちらを正として自分の下書きは捨てる。
-  const serverKey = serverOrder.join(",");
-  const [draft, setDraft] = useState<{ base: string; order: string[] } | null>(null);
+  const [pending, setPending] = useState<string[] | null>(null);
   const [saving, setSaving] = useState(false);
-  const local = draft && draft.base === serverKey ? draft.order : serverOrder;
-  const dirty = local.join(",") !== serverKey;
+  const [editing, setEditing] = useState(false);
+  // 送信中だけ自分の並びを見せ、確定したらサーバーの並びに戻す（サーバーが正）。
+  const local = pending ?? serverOrder;
 
-  function apply(next: string[]) {
-    setDraft({ base: serverKey, order: next });
-  }
+  const submitted = Boolean(order?.submitted);
+  const canEdit = editable && (!submitted || editing);
 
-  function move(index: number, direction: -1 | 1) {
-    const next = [...local];
-    const target = index + direction;
-    if (target < 0 || target >= next.length) return;
-    [next[index], next[target]] = [next[target], next[index]];
-    apply(next);
-  }
-
-  async function save(submit: boolean) {
+  async function push(next: string[], submit: boolean) {
+    setPending(next);
     setSaving(true);
     const supabase = createClient();
     const { error } = await supabase.rpc("ito_set_order", {
       target_group_id: group.id,
-      new_order: local,
+      new_order: next,
       expected_revision: order?.revision ?? 0,
       submit,
     });
     setSaving(false);
+    setPending(null);
     if (error) {
       if (error.message.includes("ito_order_conflict")) {
-        showToast("ほかの人が先に更新しました。最新の並びに戻します");
-        setDraft(null);
+        showToast("ほかの人が先に変えました。最新の並びに戻します");
         onSaved();
         return;
       }
       showToast("並び順を保存できませんでした");
       return;
     }
-    setDraft(null);
-    showToast(submit ? "提出しました（サーバーに保存済み）" : "並び順を保存しました");
+    if (submit) {
+      setEditing(false);
+      showToast("提出しました");
+    }
     onSaved();
   }
 
-  const submitted = Boolean(order?.submitted) && !dirty;
   const items = local.map((profileId) => ({ id: profileId }));
 
   return (
-    <Card className="space-y-3 border-2 border-accent p-3">
+    <Card
+      className={cn(
+        "space-y-3 border-2 p-3",
+        submitted && !editing ? "border-success" : "border-accent",
+      )}
+    >
       <div className="flex items-center justify-between gap-2">
         <p className="section-label">{group.name}の予想</p>
-        <span
-          className={cn(
-            "rounded-full px-2 py-0.5 text-[11px] font-bold",
-            submitted ? "bg-success/15 text-success" : "bg-warning/15 text-warning",
-          )}
-        >
-          {locked ? "受付終了" : submitted ? "提出済み" : dirty ? "未保存" : "未提出"}
-        </span>
+        {saving && <Loader2 size={15} className="animate-spin text-muted" />}
       </div>
+
+      {submitted && !editing ? (
+        <div className="flex items-start gap-2 rounded-xl bg-success/10 p-3">
+          <CheckCircle2 size={20} className="mt-0.5 shrink-0 text-success" />
+          <div className="min-w-0">
+            <p className="text-[15px] font-bold text-success">提出しました</p>
+            <p className="text-caption">
+              {locked
+                ? "回答は締め切られました。公開までお待ちください。"
+                : "受付が終わるまでは、下の「編集する」でやり直せます。"}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl bg-warning/10 p-3">
+          <p className="text-[15px] font-bold text-warning">まだ提出していません</p>
+          <p className="text-caption">
+            {canEdit
+              ? "並べ替えたら「提出する」を押してください。並びはグループ全員に共有されます。"
+              : "このグループの並び替えには参加できません。"}
+          </p>
+        </div>
+      )}
 
       <div className="rounded-xl bg-bg/60 px-3 py-2">
         <p className="text-[12px] font-bold text-accent">↑ 数字が大きい</p>
-        <p className="text-caption">
-          {editable
-            ? "左の三本線をつまんで動かすか、右の矢印で入れ替えます。"
-            : "このグループの並び替えには参加できません。"}
-        </p>
+        {canEdit && <p className="text-caption">左の三本線をつまんで動かします。</p>}
         <p className="text-[12px] font-bold text-muted2">↓ 数字が小さい</p>
       </div>
 
       <ReorderList
         items={items}
-        enabled={editable}
-        onReorder={(next) => apply(next.map((item) => item.id))}
+        enabled={canEdit && !saving}
+        onReorder={(next) => void push(next.map((item) => item.id), false)}
         renderItem={(item) => {
           const index = local.indexOf(item.id);
           const card = cards.find((entry) => entry.profileId === item.id);
@@ -498,43 +511,28 @@ function OrderEditor({
                   <span className="block truncate text-[12px] text-muted2">「{card.answer}」</span>
                 )}
               </span>
-              {editable && (
-                <span className="flex shrink-0 flex-col gap-1">
-                  <button
-                    type="button"
-                    aria-label="上へ"
-                    onClick={() => move(index, -1)}
-                    className="flex h-8 w-9 items-center justify-center rounded-lg border border-separator active:opacity-50"
-                  >
-                    <ArrowUp size={15} />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="下へ"
-                    onClick={() => move(index, 1)}
-                    className="flex h-8 w-9 items-center justify-center rounded-lg border border-separator active:opacity-50"
-                  >
-                    <ArrowDown size={15} />
-                  </button>
-                </span>
-              )}
             </div>
           );
         }}
       />
 
-      {editable ? (
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant="outline" disabled={saving || !dirty} onClick={() => void save(false)}>
-            保存する
+      {editable && !locked && (
+        submitted && !editing ? (
+          <Button variant="outline" size="lg" onClick={() => setEditing(true)}>
+            編集する
           </Button>
-          <Button disabled={saving} onClick={() => void save(true)} className="gap-1">
-            <Check size={16} /> {saving ? "送信中…" : "提出する"}
+        ) : (
+          <Button
+            size="lg"
+            disabled={saving}
+            onClick={() => void push(local, true)}
+            className="gap-1"
+          >
+            <Check size={16} /> {saving ? "送信中…" : "この順番で提出する"}
           </Button>
-        </div>
-      ) : (
-        locked && <p className="text-caption">公開までお待ちください。</p>
+        )
       )}
+
       {order?.updated_by && (
         <p className="text-micro text-muted2">最終更新: {nameOf(order.updated_by)}</p>
       )}

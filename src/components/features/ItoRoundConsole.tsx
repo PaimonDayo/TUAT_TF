@@ -550,7 +550,6 @@ function AnswerInput({
           setSaved(false);
         }}
         onBlur={() => void save()}
-        placeholder="例: 武藤さん"
         maxLength={100}
       />
       <span className="w-10 shrink-0 text-right text-micro text-muted2">
