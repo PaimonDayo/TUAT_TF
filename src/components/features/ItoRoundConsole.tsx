@@ -51,6 +51,19 @@ export interface ItoRoundConsoleData {
   participantCount: number;
 }
 
+/** いま進行役が何をすればよいか。画面の一番上に出す。 */
+const NEXT_TODO: Record<ItoPhase, string> = {
+  grouping: "グループを確認します。人を移したり編成をやり直したら、代表者選択へ進んでください。",
+  leader_select: "各グループが自分の端末で代表者を選びます。決まらないグループはここで代理指定できます。",
+  numbers: "代表者が自分の端末で数字を確認します。全員そろったら回答の聞き取りへ進んでください。",
+  leader_answers: "代表者の発言（「この数字なら○○」）をここに入力します。入力欄から離れると保存されます。",
+  ordering: "各グループが並び替えて提出します。全部そろったら回答受付を終了してください。",
+  locked: "回答は締め切られました。みんなの予想を公開してください。",
+  revealed: "予想を公開しました。結果発表で秘密数字と正解を出します。",
+  result: "結果を発表しました。得点を確認したらラウンドを終了してください。",
+  finished: "ラウンドが終わりました。次のラウンドを開始できます。",
+};
+
 /** 次に進むボタンの文言（フェーズごと）。confirm が必要なものは description を持つ。 */
 const NEXT_STEP: Record<
   ItoPhase,
@@ -174,6 +187,15 @@ export function ItoRoundConsole({ data }: { data: ItoRoundConsoleData }) {
             nameOf={nameOf}
           />
         )}
+        <div className="rounded-xl bg-accent/8 p-2.5">
+          <p className="text-micro text-muted2">次にやること</p>
+          <p className="text-[14px] font-medium">
+            {canStart
+              ? "ラウンドを開始すると、参加者を自動でグループ分けします。"
+              : "参加者をそろえてからラウンドを開始します。"}
+          </p>
+        </div>
+
         <p className="text-caption">
           参加者{data.participantCount}人 ／ {game.group_count}グループ × 最大
           {game.max_group_size}人で編成します。
@@ -250,6 +272,11 @@ export function ItoRoundConsole({ data }: { data: ItoRoundConsoleData }) {
         <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-bold text-accent">
           {ITO_PHASE_LABELS[round.phase]}
         </span>
+      </div>
+
+      <div className="rounded-xl bg-accent/8 p-2.5">
+        <p className="text-micro text-muted2">次にやること</p>
+        <p className="text-[14px] font-medium">{NEXT_TODO[round.phase]}</p>
       </div>
 
       {round.phase === "grouping" && (
