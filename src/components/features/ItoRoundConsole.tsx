@@ -12,12 +12,15 @@ import { useToast } from "@/components/ui/toast";
 import { createClient } from "@/lib/supabase/client";
 import { ITO_PHASE_LABELS } from "@/lib/ito-phase";
 import { sortByGradeThenName } from "@/lib/member-sort";
+import { PersonPicker } from "@/components/features/PersonPicker";
 import {
+  addItoParticipants,
   advanceItoRound,
   moveItoMember,
   regenerateItoGroups,
   setItoLeaderAnswer,
   startItoRound,
+  submitItoOrderAsAdmin,
 } from "@/app/(app)/ito/actions";
 import type {
   AuthorMini,
@@ -87,6 +90,7 @@ export function ItoRoundConsole({ data }: { data: ItoRoundConsoleData }) {
   const { showToast } = useToast();
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<ItoPhase | null>(null);
+  const [extraIds, setExtraIds] = useState<string[]>([]);
   const { game, round, groups, members, answers, orders, scores, secretStatus, people } = data;
 
   useEffect(() => {
@@ -119,6 +123,28 @@ export function ItoRoundConsole({ data }: { data: ItoRoundConsoleData }) {
   const nameOf = (profileId: string) =>
     people.find((person) => person.id === profileId)?.display_name || "名無し";
 
+  /** 代表者を代理で決める（グループの端末が使えないとき・ひとりでの通しテスト用）。 */
+  async function setLeader(groupId: string, profileId: string) {
+    setBusy(true);
+    const supabase = createClient();
+    const { error } = await supabase.rpc("ito_set_leader", {
+      target_group_id: groupId,
+      leader_profile_id: profileId,
+    });
+    setBusy(false);
+    if (error) {
+      showToast("代表者を決められませんでした");
+      return;
+    }
+    showToast("代表者を決めました");
+    router.refresh();
+  }
+
+  /** そのグループの並び順を代理で提出する（並びはサーバー側でランダムに決める）。 */
+  async function proxySubmit(groupId: string) {
+    await run(() => submitItoOrderAsAdmin(groupId), "代理で提出しました");
+  }
+
   if (!round || round.phase === "finished") {
     return (
       <Card className="space-y-3 p-3">
@@ -137,6 +163,33 @@ export function ItoRoundConsole({ data }: { data: ItoRoundConsoleData }) {
           参加者{data.participantCount}人 ／ {game.group_count}グループ × 最大
           {game.max_group_size}人で編成します。
         </p>
+
+        <div className="space-y-2 rounded-xl bg-bg/60 p-2.5">
+          <p className="text-[13px] font-bold">参加者を直接追加する</p>
+          <p className="text-caption">
+            招待を送らずに、選んだ部員をこのゲームの参加者にします。通知は飛びません。
+            人数が足りないときの調整や、ひとりでの動作確認に使えます。
+          </p>
+          <PersonPicker
+            people={people}
+            value={extraIds}
+            onChange={setExtraIds}
+            label={`追加する部員（${extraIds.length}人）`}
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy || extraIds.length === 0}
+            onClick={() =>
+              void run(async () => {
+                await addItoParticipants(game.id, extraIds);
+                setExtraIds([]);
+              }, "参加者を追加しました")
+            }
+          >
+            参加者に追加する
+          </Button>
+        </div>
         <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
@@ -242,7 +295,36 @@ export function ItoRoundConsole({ data }: { data: ItoRoundConsoleData }) {
               </div>
             );
           })}
-          <p className="text-caption">各グループの端末から代表者を選んでもらってください。</p>
+          <p className="text-caption">
+            各グループの端末から代表者を選んでもらいます。決まらないときは、ここから代理で決められます。
+          </p>
+          {normalGroups.map((group) => {
+            const groupMembers = sortByGradeThenName(
+              people.filter((person) =>
+                members.some(
+                  (member) => member.group_id === group.id && member.profile_id === person.id,
+                ),
+              ),
+            );
+            const leader = members.find(
+              (member) => member.group_id === group.id && member.is_leader,
+            );
+            return (
+              <div key={`pick-${group.id}`} className="flex items-center gap-2">
+                <span className="w-16 shrink-0 text-[13px] font-bold">{group.name}</span>
+                <Select
+                  value={leader?.profile_id ?? ""}
+                  ariaLabel={`${group.name}の代表者`}
+                  onValueChange={(value) => void setLeader(group.id, value)}
+                  options={groupMembers.map((person) => ({
+                    value: person.id,
+                    label: person.display_name || "名無し",
+                  }))}
+                  className="flex-1"
+                />
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -305,6 +387,16 @@ export function ItoRoundConsole({ data }: { data: ItoRoundConsoleData }) {
                 >
                   {state}
                 </span>
+                {round.phase === "ordering" && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void proxySubmit(group.id)}
+                    className="ml-auto shrink-0 text-[12px] text-accent active:opacity-50"
+                  >
+                    代理で提出
+                  </button>
+                )}
               </div>
             );
           })}

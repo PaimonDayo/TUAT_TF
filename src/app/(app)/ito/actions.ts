@@ -672,3 +672,116 @@ export async function scoreItoRound(roundId: string): Promise<void> {
   revalidatePath("/ito/admin");
   revalidatePath("/ito");
 }
+
+/**
+ * 招待を送らずに、参加者を直接そのゲームへ追加する。
+ * 通知は飛ばないので、進行役ひとりでの通しテストや、当日の飛び入り対応に使う。
+ * 招待履歴（ito_invitations）は作らないため、その人の /ito には出てこない。
+ */
+export async function addItoParticipants(
+  gameId: string,
+  profileIds: string[],
+): Promise<number> {
+  await requireItoAdmin();
+  if (profileIds.length === 0) return 0;
+  const supabase = await createClient();
+
+  const { data: rounds } = await supabase
+    .from("ito_rounds")
+    .select("round_no")
+    .eq("game_id", gameId);
+  const joinedRound = (rounds ?? []).length + 1;
+
+  const { error } = await supabase.from("ito_participants").upsert(
+    profileIds.map((profileId) => ({
+      game_id: gameId,
+      profile_id: profileId,
+      status: "active",
+      joined_round: joinedRound,
+      left_round: null,
+      updated_at: new Date().toISOString(),
+    })),
+    { onConflict: "game_id,profile_id" },
+  );
+  if (error) throw new Error("参加者を追加できませんでした");
+
+  revalidatePath("/ito/admin");
+  return profileIds.length;
+}
+
+/** 参加者をこのゲームから外す（過去ラウンドの得点・履歴はそのまま残る）。 */
+export async function excludeItoParticipant(
+  gameId: string,
+  profileId: string,
+): Promise<void> {
+  await requireItoAdmin();
+  const supabase = await createClient();
+
+  const { data: rounds } = await supabase
+    .from("ito_rounds")
+    .select("round_no")
+    .eq("game_id", gameId);
+
+  const { error } = await supabase
+    .from("ito_participants")
+    .update({
+      status: "excluded",
+      left_round: (rounds ?? []).length,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("game_id", gameId)
+    .eq("profile_id", profileId);
+  if (error) throw new Error("参加者を外せませんでした");
+
+  revalidatePath("/ito/admin");
+}
+
+/**
+ * 進行役がグループの代わりに並び順を保存・提出する。
+ * 端末が使えない部員の代理入力と、ひとりでの通しテストに使う。
+ * 編集できるのは回答受付中だけ（判定は DB の ito_can_edit_group）。
+ */
+export async function submitItoOrderAsAdmin(
+  groupId: string,
+  order?: string[],
+): Promise<void> {
+  await requireItoAdmin();
+  const supabase = await createClient();
+
+  const { data: current } = await supabase
+    .from("ito_group_orders")
+    .select("revision, round_id")
+    .eq("group_id", groupId)
+    .maybeSingle();
+
+  // 並びの指定がなければ、そのラウンドの代表者をランダムに並べる（動作確認用）。
+  let finalOrder = order ?? [];
+  if (finalOrder.length === 0) {
+    const roundId = current?.round_id ?? (await supabase
+      .from("ito_groups")
+      .select("round_id")
+      .eq("id", groupId)
+      .maybeSingle()).data?.round_id;
+    const { data: leaders } = await supabase
+      .from("ito_group_members")
+      .select("profile_id")
+      .eq("round_id", roundId ?? "")
+      .eq("is_leader", true);
+    finalOrder = (leaders ?? []).map((leader) => leader.profile_id);
+    for (let i = finalOrder.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [finalOrder[i], finalOrder[j]] = [finalOrder[j], finalOrder[i]];
+    }
+  }
+
+  const { error } = await supabase.rpc("ito_set_order", {
+    target_group_id: groupId,
+    new_order: finalOrder,
+    expected_revision: current?.revision ?? 0,
+    submit: true,
+  });
+  if (error) throw new Error(`代理提出できませんでした（${error.message}）`);
+
+  revalidatePath("/ito/admin");
+  revalidatePath("/ito");
+}
