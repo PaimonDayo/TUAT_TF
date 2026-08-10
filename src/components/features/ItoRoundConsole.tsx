@@ -11,7 +11,10 @@ import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import { createClient } from "@/lib/supabase/client";
 import { ITO_PHASE_LABELS } from "@/lib/ito-phase";
+import { unwrapItoResult, type ItoActionResult } from "@/lib/ito-result";
 import { sortByGradeThenName } from "@/lib/member-sort";
+import { ITO_GAME_MIN_GROUP_SIZE } from "@/lib/ito-entry";
+import { validateItoGrouping } from "@/lib/ito-grouping";
 import { PersonPicker } from "@/components/features/PersonPicker";
 import {
   addItoParticipants,
@@ -106,10 +109,14 @@ export function ItoRoundConsole({ data }: { data: ItoRoundConsoleData }) {
     };
   }, [round, router]);
 
-  async function run(action: () => Promise<unknown>, done: string) {
+  async function run(
+    action: () => Promise<ItoActionResult<unknown>>,
+    done: string,
+  ) {
     setBusy(true);
     try {
-      await action();
+      // 失敗の理由はサーバーから result.message で返る（例外にすると本番で伏せられる）。
+      unwrapItoResult(await action());
       showToast(done);
       setConfirming(null);
       router.refresh();
@@ -146,6 +153,14 @@ export function ItoRoundConsole({ data }: { data: ItoRoundConsoleData }) {
   }
 
   if (!round || round.phase === "finished") {
+    // 開始できない構成は、押す前に理由を出す（押してからエラーにしない）。
+    const blockers = validateItoGrouping({
+      participantCount: data.participantCount,
+      groupCount: game.group_count,
+      maxGroupSize: game.max_group_size,
+      minGroupSize: ITO_GAME_MIN_GROUP_SIZE[game.mode],
+    });
+    const canStart = blockers.length === 0;
     return (
       <Card className="space-y-3 p-3">
         <p className="section-label">
@@ -163,6 +178,14 @@ export function ItoRoundConsole({ data }: { data: ItoRoundConsoleData }) {
           参加者{data.participantCount}人 ／ {game.group_count}グループ × 最大
           {game.max_group_size}人で編成します。
         </p>
+
+        {!canStart && (
+          <p className="text-caption text-warning">
+            {data.participantCount === 0
+              ? "参加者がまだいません。エントリーに「参加する」で答えた人がいないので、下の「参加者を直接追加する」から追加してください。"
+              : blockers.map((blocker) => blocker.message).join(" ")}
+          </p>
+        )}
 
         <div className="space-y-2 rounded-xl bg-bg/60 p-2.5">
           <p className="text-[13px] font-bold">参加者を直接追加する</p>
@@ -182,8 +205,9 @@ export function ItoRoundConsole({ data }: { data: ItoRoundConsoleData }) {
             disabled={busy || extraIds.length === 0}
             onClick={() =>
               void run(async () => {
-                await addItoParticipants(game.id, extraIds);
-                setExtraIds([]);
+                const result = await addItoParticipants(game.id, extraIds);
+                if (result.ok) setExtraIds([]);
+                return result;
               }, "参加者を追加しました")
             }
           >
@@ -193,7 +217,7 @@ export function ItoRoundConsole({ data }: { data: ItoRoundConsoleData }) {
         <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
-            disabled={busy}
+            disabled={busy || !canStart}
             className="gap-1"
             onClick={() => void run(() => startItoRound(game.id, false), "ラウンドを開始しました")}
           >
@@ -203,7 +227,7 @@ export function ItoRoundConsole({ data }: { data: ItoRoundConsoleData }) {
             <Button
               size="sm"
               variant="outline"
-              disabled={busy}
+              disabled={busy || !canStart}
               onClick={() => void run(() => startItoRound(game.id, true), "ラウンドを開始しました")}
             >
               同じ編成のまま開始
@@ -474,7 +498,7 @@ function AnswerInput({
     if (value.trim() === initial.trim() && saved) return;
     setSaving(true);
     try {
-      await setItoLeaderAnswer(roundId, profileId, value);
+      unwrapItoResult(await setItoLeaderAnswer(roundId, profileId, value));
       setSaved(true);
     } catch {
       showToast("回答を保存できませんでした");

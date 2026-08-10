@@ -25,6 +25,7 @@ import {
   type ItoGameFormValues,
 } from "@/lib/ito-entry";
 import { ITO_GAME_STATUS_LABELS } from "@/lib/ito-phase";
+import { unwrapItoResult, type ItoActionResult } from "@/lib/ito-result";
 import {
   closeItoEntry,
   createItoGame,
@@ -150,10 +151,14 @@ function GameCard({
         })
       : null;
 
-  async function run(action: () => Promise<unknown>, done: string) {
+  async function run(
+    action: () => Promise<ItoActionResult<unknown>>,
+    done: string,
+  ) {
     setBusy(true);
     try {
-      await action();
+      // 失敗の理由はサーバーから result.message で返る（例外にすると本番で伏せられる）。
+      unwrapItoResult(await action());
       showToast(done);
       setConfirming(null);
       router.refresh();
@@ -298,7 +303,7 @@ function ThemeEditDialog({ game, onClose }: { game: ItoGame; onClose: () => void
     setSaving(true);
     setError(null);
     try {
-      await updateItoGameTheme(game.id, theme);
+      unwrapItoResult(await updateItoGameTheme(game.id, theme));
       showToast("テーマを設定しました");
       onClose();
       router.refresh();
@@ -385,8 +390,8 @@ function GameForm({
     setSaving(true);
     setError(null);
     try {
-      if (game) await updateItoGame(game.id, values);
-      else await createItoGame(values);
+      if (game) unwrapItoResult(await updateItoGame(game.id, values));
+      else unwrapItoResult(await createItoGame(values));
       showToast(game ? "ゲームを更新しました" : "ゲームを作成しました");
       onSaved();
       router.refresh();

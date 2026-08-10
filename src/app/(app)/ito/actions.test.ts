@@ -30,6 +30,16 @@ import {
   updateItoGameTheme,
 } from "./actions";
 
+/** 失敗は例外ではなく result で返る（本番で理由が消えないようにするため）。 */
+async function expectFailure(
+  promise: Promise<{ ok: boolean; message?: string }>,
+  contains: string,
+) {
+  const result = await promise;
+  expect(result.ok).toBe(false);
+  expect(result.ok ? "" : result.message).toContain(contains);
+}
+
 interface RecordedCall {
   table: string;
   op: "select" | "insert" | "update" | "delete";
@@ -145,14 +155,12 @@ describe("ito game creation", () => {
     getCurrentProfile.mockResolvedValue(MEMBER);
     const { calls } = stubSupabase(() => ({ data: null, error: null }));
 
-    await expect(
-      createItoGame({
+    await expectFailure(createItoGame({
         name: "合宿2026 ito",
         targetRoleId: CAMP.id,
         groupCount: 10,
         maxGroupSize: 5,
-      }),
-    ).rejects.toThrow("システム管理者");
+      }), "システム管理者");
     // 権限が無いときは DB に触れない。
     expect(calls).toHaveLength(0);
   });
@@ -163,12 +171,13 @@ describe("ito game creation", () => {
       error: null,
     }));
 
-    const game = await createItoGame({
+    const result = await createItoGame({
       name: "  合宿2026 ito  ",
       targetRoleId: CAMP.id,
       groupCount: 10,
       maxGroupSize: 5,
     });
+    expect(result.ok).toBe(true);
 
     expect(calls).toHaveLength(1);
     expect(calls[0].table).toBe("ito_games");
@@ -179,19 +188,17 @@ describe("ito game creation", () => {
       status: "draft",
       created_by: ADMIN.id,
     });
-    expect(game.name).toBe("合宿2026 ito");
+    expect(result.ok && result.value.name).toBe("合宿2026 ito");
   });
 
   it("rejects an invalid setup before touching the database", async () => {
     const { calls } = stubSupabase(() => ({ data: null, error: null }));
-    await expect(
-      createItoGame({
+    await expectFailure(createItoGame({
         name: "ito",
         targetRoleId: CAMP.id,
         groupCount: 1,
         maxGroupSize: 5,
-      }),
-    ).rejects.toThrow("2つ以上");
+      }), "2つ以上");
     expect(calls).toHaveLength(0);
   });
 });
@@ -210,6 +217,7 @@ describe("ito entry", () => {
     });
 
     const invited = await openItoEntry(GAME.id);
+    expect(invited.ok).toBe(true);
 
     const statusUpdate = calls.find(
       (call) => call.table === "ito_games" && call.op === "update",
@@ -225,14 +233,14 @@ describe("ito entry", () => {
     expect(insert?.payload).toEqual([
       { game_id: GAME.id, profile_id: "m2", round_no: 1, invited_by: ADMIN.id },
     ]);
-    expect(invited).toBe(1);
+    expect(invited.ok && invited.value).toBe(1);
   });
 
   it("refuses to start entry twice", async () => {
     stubSupabase((call) =>
       call.op === "update" ? { data: [], error: null } : { data: GAME, error: null },
     );
-    await expect(openItoEntry(GAME.id)).rejects.toThrow("すでにエントリーを開始");
+    await expectFailure(openItoEntry(GAME.id), "すでにエントリーを開始");
   });
 
   it("closes entry without rewriting unanswered invitations", async () => {
@@ -257,6 +265,7 @@ describe("ito entry", () => {
     });
 
     const invited = await inviteItoMembers(GAME.id, 3);
+    expect(invited.ok).toBe(true);
 
     const insert = calls.find(
       (call) => call.table === "ito_invitations" && call.op === "insert",
@@ -265,7 +274,7 @@ describe("ito entry", () => {
       { game_id: GAME.id, profile_id: "m1", round_no: 3, invited_by: ADMIN.id },
       { game_id: GAME.id, profile_id: "m2", round_no: 3, invited_by: ADMIN.id },
     ]);
-    expect(invited).toBe(2);
+    expect(invited.ok && invited.value).toBe(2);
   });
 
   it("also invites the creating administrator when admin_participates is on", async () => {
@@ -288,7 +297,7 @@ describe("ito entry", () => {
       { game_id: game.id, profile_id: "m2", round_no: 1, invited_by: ADMIN.id },
       { game_id: game.id, profile_id: "admin1", round_no: 1, invited_by: ADMIN.id },
     ]);
-    expect(invited).toBe(3);
+    expect(invited.ok && invited.value).toBe(3);
   });
 
   it("answers an invitation through the RPC, not a direct update", async () => {
@@ -309,9 +318,7 @@ describe("ito entry", () => {
     const { rpc } = stubSupabase(() => ({ data: null, error: null }));
     rpc.mockResolvedValue({ data: null, error: { message: "invitation already answered" } });
 
-    await expect(respondItoInvitation("invitation1", false)).rejects.toThrow(
-      "すでに回答しています",
-    );
+    await expectFailure(respondItoInvitation("invitation1", false), "すでに回答しています");
   });
 });
 
@@ -320,7 +327,7 @@ describe("ito theme", () => {
     getCurrentProfile.mockResolvedValue(MEMBER);
     const { calls } = stubSupabase(() => ({ data: [{ id: GAME.id }], error: null }));
 
-    await expect(updateItoGameTheme(GAME.id, "テーマ")).rejects.toThrow("システム管理者");
+    await expectFailure(updateItoGameTheme(GAME.id, "テーマ"), "システム管理者");
     expect(calls).toHaveLength(0);
   });
 
@@ -339,14 +346,14 @@ describe("ito theme", () => {
   it("refuses to set a theme that is too long", async () => {
     const { calls } = stubSupabase(() => ({ data: [{ id: GAME.id }], error: null }));
 
-    await expect(updateItoGameTheme(GAME.id, "あ".repeat(61))).rejects.toThrow("60文字");
+    await expectFailure(updateItoGameTheme(GAME.id, "あ".repeat(61)), "60文字");
     expect(calls).toHaveLength(0);
   });
 
   it("refuses to change the theme of a finished game", async () => {
     stubSupabase(() => ({ data: [], error: null }));
 
-    await expect(updateItoGameTheme(GAME.id, "テーマ")).rejects.toThrow("終了したゲーム");
+    await expectFailure(updateItoGameTheme(GAME.id, "テーマ"), "終了したゲーム");
   });
 });
 
@@ -355,7 +362,7 @@ describe("ito game deletion", () => {
     getCurrentProfile.mockResolvedValue(MEMBER);
     const { calls } = stubSupabase(() => ({ data: [{ id: GAME.id }], error: null }));
 
-    await expect(deleteItoGame(GAME.id)).rejects.toThrow("システム管理者");
+    await expectFailure(deleteItoGame(GAME.id), "システム管理者");
     expect(calls).toHaveLength(0);
   });
 
@@ -377,7 +384,7 @@ describe("ito game deletion", () => {
     // 進行中のゲームは status 条件に合わず0行になる。
     stubSupabase(() => ({ data: [], error: null }));
 
-    await expect(deleteItoGame(GAME.id)).rejects.toThrow("終了してから削除");
+    await expectFailure(deleteItoGame(GAME.id), "終了してから削除");
   });
 });
 
@@ -388,7 +395,7 @@ describe("ito round progress", () => {
     getCurrentProfile.mockResolvedValue(MEMBER);
     const { calls, rpc } = stubSupabase(() => ({ data: null, error: null }));
 
-    await expect(advanceItoRound(ROUND.id, "numbers")).rejects.toThrow("システム管理者");
+    await expectFailure(advanceItoRound(ROUND.id, "numbers"), "システム管理者");
     expect(calls).toHaveLength(0);
     expect(rpc).not.toHaveBeenCalled();
   });
@@ -413,7 +420,7 @@ describe("ito round progress", () => {
       return { data: null, error: null };
     });
 
-    await expect(advanceItoRound(ROUND.id, "numbers")).rejects.toThrow("B班");
+    await expectFailure(advanceItoRound(ROUND.id, "numbers"), "B班");
     // フェーズは進めず、秘密数字も配らない。
     expect(rpc).not.toHaveBeenCalled();
   });
@@ -450,7 +457,7 @@ describe("ito round progress", () => {
       return { data: null, error: null };
     });
 
-    await expect(startItoRound(GAME.id)).rejects.toThrow("進行中のラウンド");
+    await expectFailure(startItoRound(GAME.id), "進行中のラウンド");
   });
 
   it("will not start a round before the entry is closed", async () => {
@@ -460,7 +467,7 @@ describe("ito round progress", () => {
         : { data: [], error: null },
     );
 
-    await expect(startItoRound(GAME.id)).rejects.toThrow("エントリーを締め切って");
+    await expectFailure(startItoRound(GAME.id), "エントリーを締め切って");
   });
 
   it("stops a round that cannot be split into valid groups", async () => {
@@ -476,6 +483,6 @@ describe("ito round progress", () => {
       return { data: null, error: null };
     });
 
-    await expect(startItoRound(GAME.id)).rejects.toThrow("必要です");
+    await expectFailure(startItoRound(GAME.id), "必要です");
   });
 });

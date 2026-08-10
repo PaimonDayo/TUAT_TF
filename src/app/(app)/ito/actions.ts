@@ -16,6 +16,7 @@ import { buildItoGroups, validateItoGrouping } from "@/lib/ito-grouping";
 import { scoreItoRound as scoreItoRoundPure } from "@/lib/ito-score";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ItoGameFormValues } from "@/lib/ito-entry";
+import { runItoAction } from "@/lib/ito-result";
 import type { ItoGame, ItoGameMode, ItoPhase } from "@/types";
 
 /**
@@ -32,7 +33,7 @@ async function requireItoAdmin() {
   return profile;
 }
 
-export async function createItoGame(values: ItoGameFormValues): Promise<ItoGame> {
+async function createItoGameImpl(values: ItoGameFormValues): Promise<ItoGame> {
   const profile = await requireItoAdmin();
   const errors = validateItoGameForm(values);
   if (errors.length > 0) throw new Error(errors[0].message);
@@ -61,7 +62,7 @@ export async function createItoGame(values: ItoGameFormValues): Promise<ItoGame>
   return data as ItoGame;
 }
 
-export async function updateItoGame(
+async function updateItoGameImpl(
   gameId: string,
   values: ItoGameFormValues,
 ): Promise<void> {
@@ -98,7 +99,7 @@ export async function updateItoGame(
  * お題を設定・変更する。ゲームが終了していなければいつでも変更できる
  * （ラウンドごとにお題を変えたい運用を想定し、draft 限定にはしない）。
  */
-export async function updateItoGameTheme(gameId: string, theme: string): Promise<void> {
+async function updateItoGameThemeImpl(gameId: string, theme: string): Promise<void> {
   await requireItoAdmin();
   const trimmed = theme.trim();
   if (trimmed.length > ITO_GAME_THEME_MAX) {
@@ -126,7 +127,7 @@ export async function updateItoGameTheme(gameId: string, theme: string): Promise
  * 回答・得点履歴も一緒に消える（外部キーの ON DELETE CASCADE）ため、
  * 呼び出し側で必ず確認を取ること。
  */
-export async function deleteItoGame(gameId: string): Promise<void> {
+async function deleteItoGameImpl(gameId: string): Promise<void> {
   await requireItoAdmin();
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -147,7 +148,7 @@ export async function deleteItoGame(gameId: string): Promise<void> {
  * 対象ロールの部員へ招待を送る。招待行は追記だけで、過去の回答は書き換えない。
  * 同じラウンドで招待済みの人は重複させない（再招待は次のラウンド番号で行う）。
  */
-export async function inviteItoMembers(
+async function inviteItoMembersImpl(
   gameId: string,
   roundNo: number,
 ): Promise<number> {
@@ -195,7 +196,7 @@ export async function inviteItoMembers(
 }
 
 /** エントリー受付を開始し、対象ロールの部員へ招待を送る。 */
-export async function openItoEntry(gameId: string): Promise<number> {
+async function openItoEntryImpl(gameId: string): Promise<number> {
   await requireItoAdmin();
   const supabase = await createClient();
 
@@ -210,14 +211,14 @@ export async function openItoEntry(gameId: string): Promise<number> {
     throw new Error("このゲームはすでにエントリーを開始しています");
   }
 
-  return inviteItoMembers(gameId, 1);
+  return inviteItoMembersImpl(gameId, 1);
 }
 
 /**
  * エントリー受付を終了する。
  * 未回答は declined に書き換えず pending のまま残し、そのラウンドの対象から外すだけ。
  */
-export async function closeItoEntry(gameId: string): Promise<void> {
+async function closeItoEntryImpl(gameId: string): Promise<void> {
   await requireItoAdmin();
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -234,7 +235,7 @@ export async function closeItoEntry(gameId: string): Promise<void> {
   revalidatePath("/ito");
 }
 
-export async function finishItoGame(gameId: string): Promise<void> {
+async function finishItoGameImpl(gameId: string): Promise<void> {
   await requireItoAdmin();
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -252,7 +253,7 @@ export async function finishItoGame(gameId: string): Promise<void> {
 }
 
 /** 招待への回答。本人確認とフェーズ確認は RPC 側で行う。 */
-export async function respondItoInvitation(
+async function respondItoInvitationImpl(
   invitationId: string,
   accept: boolean,
 ): Promise<void> {
@@ -289,7 +290,7 @@ function groupName(index: number): string {
  * 次のラウンドを開始する。参加者をグループに分け、グループ編成フェーズまで作る。
  * 編成できない構成のときは理由を返して中止する。
  */
-export async function startItoRound(gameId: string, keepGroups = false): Promise<string> {
+async function startItoRoundImpl(gameId: string, keepGroups = false): Promise<string> {
   await requireItoAdmin();
   const supabase = await createClient();
 
@@ -434,7 +435,7 @@ export async function startItoRound(gameId: string, keepGroups = false): Promise
 }
 
 /** グループ編成をやり直す（編成フェーズのみ）。 */
-export async function regenerateItoGroups(roundId: string): Promise<void> {
+async function regenerateItoGroupsImpl(roundId: string): Promise<void> {
   await requireItoAdmin();
   const supabase = await createClient();
 
@@ -491,7 +492,7 @@ export async function regenerateItoGroups(roundId: string): Promise<void> {
 }
 
 /** メンバーを別のグループへ移す（編成フェーズのみ）。 */
-export async function moveItoMember(
+async function moveItoMemberImpl(
   roundId: string,
   profileId: string,
   toGroupId: string,
@@ -518,7 +519,7 @@ export async function moveItoMember(
 }
 
 /** 代表者の自由回答（「この数字なら○○さん」）を管理者が聞き取って入力する。 */
-export async function setItoLeaderAnswer(
+async function setItoLeaderAnswerImpl(
   roundId: string,
   profileId: string,
   answer: string,
@@ -544,7 +545,7 @@ export async function setItoLeaderAnswer(
  * ラウンドのフェーズを進める。遷移の可否は DB 側（ito_advance_phase）が判定し、
  * ここではフェーズごとの付随処理（数字配布・回答枠の用意・採点）を行う。
  */
-export async function advanceItoRound(roundId: string, toPhase: ItoPhase): Promise<void> {
+async function advanceItoRoundImpl(roundId: string, toPhase: ItoPhase): Promise<void> {
   await requireItoAdmin();
   const supabase = await createClient();
 
@@ -608,7 +609,7 @@ export async function advanceItoRound(roundId: string, toPhase: ItoPhase): Promi
   }
 
   if (toPhase === "result") {
-    await scoreItoRound(roundId);
+    await scoreItoRoundImpl(roundId);
   }
 
   revalidatePath("/ito/admin");
@@ -621,7 +622,7 @@ export async function advanceItoRound(roundId: string, toPhase: ItoPhase): Promi
  * 秘密数字の読み取りは、進行役自身が参加している場合でも採点できるよう
  * service role で行う（権限は requireItoAdmin で確認済み）。
  */
-export async function scoreItoRound(roundId: string): Promise<void> {
+async function scoreItoRoundImpl(roundId: string): Promise<void> {
   await requireItoAdmin();
   const supabase = await createClient();
   const admin = createAdminClient();
@@ -678,7 +679,7 @@ export async function scoreItoRound(roundId: string): Promise<void> {
  * 通知は飛ばないので、進行役ひとりでの通しテストや、当日の飛び入り対応に使う。
  * 招待履歴（ito_invitations）は作らないため、その人の /ito には出てこない。
  */
-export async function addItoParticipants(
+async function addItoParticipantsImpl(
   gameId: string,
   profileIds: string[],
 ): Promise<number> {
@@ -710,7 +711,7 @@ export async function addItoParticipants(
 }
 
 /** 参加者をこのゲームから外す（過去ラウンドの得点・履歴はそのまま残る）。 */
-export async function excludeItoParticipant(
+async function excludeItoParticipantImpl(
   gameId: string,
   profileId: string,
 ): Promise<void> {
@@ -741,7 +742,7 @@ export async function excludeItoParticipant(
  * 端末が使えない部員の代理入力と、ひとりでの通しテストに使う。
  * 編集できるのは回答受付中だけ（判定は DB の ito_can_edit_group）。
  */
-export async function submitItoOrderAsAdmin(
+async function submitItoOrderAsAdminImpl(
   groupId: string,
   order?: string[],
 ): Promise<void> {
@@ -784,4 +785,83 @@ export async function submitItoOrderAsAdmin(
 
   revalidatePath("/ito/admin");
   revalidatePath("/ito");
+}
+
+// ─────────────────────────────
+// 公開する入り口
+//   Next.js は Server Action の例外を本番で伏せてしまい、画面には digest つきの
+//   汎用エラーしか出ない。理由を伝えたいので、結果オブジェクトとして返す
+//   （呼び出し側は unwrapItoResult か result.message を使う）。
+// ─────────────────────────────
+
+export async function createItoGame(values: ItoGameFormValues) {
+  return runItoAction(() => createItoGameImpl(values));
+}
+
+export async function updateItoGame(gameId: string, values: ItoGameFormValues) {
+  return runItoAction(() => updateItoGameImpl(gameId, values));
+}
+
+export async function updateItoGameTheme(gameId: string, theme: string) {
+  return runItoAction(() => updateItoGameThemeImpl(gameId, theme));
+}
+
+export async function deleteItoGame(gameId: string) {
+  return runItoAction(() => deleteItoGameImpl(gameId));
+}
+
+export async function inviteItoMembers(gameId: string, roundNo: number) {
+  return runItoAction(() => inviteItoMembersImpl(gameId, roundNo));
+}
+
+export async function openItoEntry(gameId: string) {
+  return runItoAction(() => openItoEntryImpl(gameId));
+}
+
+export async function closeItoEntry(gameId: string) {
+  return runItoAction(() => closeItoEntryImpl(gameId));
+}
+
+export async function finishItoGame(gameId: string) {
+  return runItoAction(() => finishItoGameImpl(gameId));
+}
+
+export async function respondItoInvitation(invitationId: string, accept: boolean) {
+  return runItoAction(() => respondItoInvitationImpl(invitationId, accept));
+}
+
+export async function startItoRound(gameId: string, keepGroups = false) {
+  return runItoAction(() => startItoRoundImpl(gameId, keepGroups));
+}
+
+export async function regenerateItoGroups(roundId: string) {
+  return runItoAction(() => regenerateItoGroupsImpl(roundId));
+}
+
+export async function moveItoMember(roundId: string, profileId: string, toGroupId: string) {
+  return runItoAction(() => moveItoMemberImpl(roundId, profileId, toGroupId));
+}
+
+export async function setItoLeaderAnswer(roundId: string, profileId: string, answer: string) {
+  return runItoAction(() => setItoLeaderAnswerImpl(roundId, profileId, answer));
+}
+
+export async function advanceItoRound(roundId: string, toPhase: ItoPhase) {
+  return runItoAction(() => advanceItoRoundImpl(roundId, toPhase));
+}
+
+export async function scoreItoRound(roundId: string) {
+  return runItoAction(() => scoreItoRoundImpl(roundId));
+}
+
+export async function addItoParticipants(gameId: string, profileIds: string[]) {
+  return runItoAction(() => addItoParticipantsImpl(gameId, profileIds));
+}
+
+export async function excludeItoParticipant(gameId: string, profileId: string) {
+  return runItoAction(() => excludeItoParticipantImpl(gameId, profileId));
+}
+
+export async function submitItoOrderAsAdmin(groupId: string, order?: string[]) {
+  return runItoAction(() => submitItoOrderAsAdminImpl(groupId, order));
 }

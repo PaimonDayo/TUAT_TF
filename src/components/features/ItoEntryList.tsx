@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import { createClient } from "@/lib/supabase/client";
 import { ITO_GAME_STATUS_LABELS } from "@/lib/ito-phase";
+import { unwrapItoResult } from "@/lib/ito-result";
 import { respondItoInvitation } from "@/app/(app)/ito/actions";
 import type { ItoGame, ItoInvitation } from "@/types";
 
@@ -58,7 +59,7 @@ export function ItoEntryList({
   async function respond(invitation: ItoInvitation, accept: boolean) {
     setBusyId(invitation.id);
     try {
-      await respondItoInvitation(invitation.id, accept);
+      unwrapItoResult(await respondItoInvitation(invitation.id, accept));
       showToast(accept ? "参加で回答しました" : "不参加で回答しました");
       router.refresh();
     } catch (error) {
