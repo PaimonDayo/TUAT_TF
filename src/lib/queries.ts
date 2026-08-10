@@ -39,6 +39,14 @@ import type {
   ItoInvitation,
   ItoParticipant,
   ItoSecret,
+  ItoRound,
+  ItoGroup,
+  ItoGroupMember,
+  ItoLeaderAnswer,
+  ItoGroupOrder,
+  ItoSecretStatus,
+  ItoRoundScore,
+  ItoPointEvent,
 } from "@/types";
 
 const AUTHOR_SELECT = "author:profiles!user_id(id, display_name, avatar_url, blocks, grade, record_source, record_fields)";
@@ -1120,4 +1128,63 @@ export async function getMyItoOverview(userId: string): Promise<{
     .in("id", gameIds)
     .order("created_at", { ascending: false });
   return { invitations, games: (data ?? []) as ItoGame[] };
+}
+
+/** そのゲームのラウンド一覧（古い順） */
+export async function getItoRounds(gameId: string): Promise<ItoRound[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("ito_rounds")
+    .select("*")
+    .eq("game_id", gameId)
+    .order("round_no", { ascending: true });
+  return (data ?? []) as ItoRound[];
+}
+
+/**
+ * 進行中（または最後）のラウンドの状態一式。
+ * 秘密数字は RLS が許す分だけ返る（本人の分、結果発表後、または進行役）。
+ */
+export async function getItoRoundState(roundId: string): Promise<{
+  groups: ItoGroup[];
+  members: ItoGroupMember[];
+  answers: ItoLeaderAnswer[];
+  orders: ItoGroupOrder[];
+  secrets: ItoSecret[];
+  scores: ItoRoundScore[];
+}> {
+  const supabase = await createClient();
+  const [groups, members, answers, orders, secrets, scores] = await Promise.all([
+    supabase.from("ito_groups").select("*").eq("round_id", roundId).order("sort_order"),
+    supabase.from("ito_group_members").select("*").eq("round_id", roundId),
+    supabase.from("ito_leader_answers").select("*").eq("round_id", roundId),
+    supabase.from("ito_group_orders").select("*").eq("round_id", roundId),
+    supabase.from("ito_secrets").select("*").eq("round_id", roundId),
+    supabase.from("ito_round_scores").select("*").eq("round_id", roundId),
+  ]);
+  return {
+    groups: (groups.data ?? []) as ItoGroup[],
+    members: (members.data ?? []) as ItoGroupMember[],
+    answers: (answers.data ?? []) as ItoLeaderAnswer[],
+    orders: (orders.data ?? []) as ItoGroupOrder[],
+    secrets: (secrets.data ?? []) as ItoSecret[],
+    scores: (scores.data ?? []) as ItoRoundScore[],
+  };
+}
+
+/** 秘密数字の配布・確認状況（数字そのものは含まない） */
+export async function getItoSecretStatus(roundId: string): Promise<ItoSecretStatus[]> {
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("ito_secret_status", { target_round_id: roundId });
+  return (data ?? []) as ItoSecretStatus[];
+}
+
+/** そのゲームの個人得点履歴（累計は SUM で算出する） */
+export async function getItoPointEvents(gameId: string): Promise<ItoPointEvent[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("ito_point_events")
+    .select("*")
+    .eq("game_id", gameId);
+  return (data ?? []) as ItoPointEvent[];
 }

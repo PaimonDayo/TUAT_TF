@@ -19,9 +19,11 @@ vi.mock("@/lib/supabase/server", () => ({ createClient }));
 vi.mock("@/lib/queries", () => ({ getAllProfiles }));
 
 import {
+  advanceItoRound,
   closeItoEntry,
   createItoGame,
   deleteItoGame,
+  startItoRound,
   inviteItoMembers,
   openItoEntry,
   respondItoInvitation,
@@ -376,5 +378,104 @@ describe("ito game deletion", () => {
     stubSupabase(() => ({ data: [], error: null }));
 
     await expect(deleteItoGame(GAME.id)).rejects.toThrow("終了してから削除");
+  });
+});
+
+describe("ito round progress", () => {
+  const ROUND = { id: "round1", game_id: GAME.id, round_no: 1, phase: "leader_select" };
+
+  it("refuses a member without the system permission", async () => {
+    getCurrentProfile.mockResolvedValue(MEMBER);
+    const { calls, rpc } = stubSupabase(() => ({ data: null, error: null }));
+
+    await expect(advanceItoRound(ROUND.id, "numbers")).rejects.toThrow("システム管理者");
+    expect(calls).toHaveLength(0);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("does not close leader selection while a group has no leader", async () => {
+    const { rpc } = stubSupabase((call) => {
+      if (call.table === "ito_rounds") return { data: ROUND, error: null };
+      if (call.table === "ito_groups") {
+        return {
+          data: [
+            { id: "gA", name: "A班", is_leader_team: false },
+            { id: "gB", name: "B班", is_leader_team: false },
+            { id: "gL", name: "代表者チーム", is_leader_team: true },
+          ],
+          error: null,
+        };
+      }
+      if (call.table === "ito_group_members") {
+        // A班だけ代表者が決まっている。
+        return { data: [{ group_id: "gA", is_leader: true }], error: null };
+      }
+      return { data: null, error: null };
+    });
+
+    await expect(advanceItoRound(ROUND.id, "numbers")).rejects.toThrow("B班");
+    // フェーズは進めず、秘密数字も配らない。
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("distributes the secret numbers right after closing leader selection", async () => {
+    const { rpc } = stubSupabase((call) => {
+      if (call.table === "ito_rounds") return { data: ROUND, error: null };
+      if (call.table === "ito_groups") {
+        return { data: [{ id: "gA", name: "A班", is_leader_team: false }], error: null };
+      }
+      if (call.table === "ito_group_members") {
+        return { data: [{ group_id: "gA", is_leader: true }], error: null };
+      }
+      return { data: null, error: null };
+    });
+
+    await advanceItoRound(ROUND.id, "numbers");
+
+    expect(rpc).toHaveBeenNthCalledWith(1, "ito_advance_phase", {
+      target_round_id: ROUND.id,
+      to_phase: "numbers",
+    });
+    expect(rpc).toHaveBeenNthCalledWith(2, "ito_assign_secrets", {
+      target_round_id: ROUND.id,
+    });
+  });
+
+  it("will not start a round while another one is running", async () => {
+    stubSupabase((call) => {
+      if (call.table === "ito_games") return { data: { ...GAME, status: "active" }, error: null };
+      if (call.table === "ito_rounds") {
+        return { data: [{ id: "round1", phase: "ordering" }], error: null };
+      }
+      return { data: null, error: null };
+    });
+
+    await expect(startItoRound(GAME.id)).rejects.toThrow("進行中のラウンド");
+  });
+
+  it("will not start a round before the entry is closed", async () => {
+    stubSupabase((call) =>
+      call.table === "ito_games"
+        ? { data: { ...GAME, status: "entry" }, error: null }
+        : { data: [], error: null },
+    );
+
+    await expect(startItoRound(GAME.id)).rejects.toThrow("エントリーを締め切って");
+  });
+
+  it("stops a round that cannot be split into valid groups", async () => {
+    stubSupabase((call) => {
+      if (call.table === "ito_games") {
+        return { data: { ...GAME, status: "active", group_count: 10 }, error: null };
+      }
+      if (call.table === "ito_rounds") return { data: [], error: null };
+      if (call.table === "ito_participants") {
+        // 10グループに対して3人しかいない。
+        return { data: [{ profile_id: "m1" }, { profile_id: "m2" }, { profile_id: "m3" }], error: null };
+      }
+      return { data: null, error: null };
+    });
+
+    await expect(startItoRound(GAME.id)).rejects.toThrow("必要です");
   });
 });
