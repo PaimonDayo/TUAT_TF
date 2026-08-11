@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, X, Minus, Loader2, CircleCheck } from "lucide-react";
+import { format } from "date-fns";
+import { ja } from "date-fns/locale";
+import { Check, X, Minus, Loader2, CircleCheck, CloudRain } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
@@ -230,4 +232,107 @@ export function AbsenceAttendanceControl({ scheduleId, userId, initialNote, onCh
   function changeNote(value: string) { setNote(value); setNoteState("idle"); if (saveTimer.current) clearTimeout(saveTimer.current); saveTimer.current = setTimeout(() => { saveTimer.current = null; void persist(value); }, 700); }
   function blurNote() { if (!saveTimer.current) return; clearTimeout(saveTimer.current); saveTimer.current = null; void persist(note); }
   return <div className="relative w-full" onClick={(event) => event.stopPropagation()}><Input value={note} onChange={(event) => changeNote(event.target.value)} onBlur={blurNote} maxLength={60} placeholder={"\u6b20\u5e2d\u306e\u9023\u7d61\u4e8b\u9805\uff08\u4efb\u610f\uff09"} className={cn("w-full pr-10", noteState === "error" && "border-danger/50")} /><span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" aria-live="polite">{noteState === "saving" && <Loader2 size={17} className="animate-spin text-muted2" />}{noteState === "saved" && <CircleCheck size={18} className="text-success" />}</span></div>;
+}
+
+const WEATHER_PRESET = "\u96e8\u5929\u306e\u305f\u3081\u958b\u50ac\u3059\u308b\u304b\u8a71\u3057\u5408\u3044\u4e2d\u3067\u3059\u3002\u6c7a\u307e\u308a\u6b21\u7b2c\u304a\u77e5\u3089\u305b\u3057\u307e\u3059\u3002";
+
+/** \u96e8\u5929\u6642\u306a\u3069\u300c\u8a71\u3057\u5408\u3044\u4e2d\u3067\u3059\u300d\u3092\u4f1d\u3048\u308b\u5bfe\u5fdc\u72b6\u6cc1\u306e\u95b2\u89a7\u7528\u30d0\u30ca\u30fc\uff08\u7de8\u96c6\u6a29\u9650\u304c\u306a\u3044\u4eba\u5411\u3051\uff09 */
+export function WeatherStatusBanner({ note, updatedAt }: { note: string; updatedAt: string | null }) {
+  return (
+    <div className="flex items-start gap-2 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2">
+      <CloudRain size={16} className="mt-0.5 shrink-0 text-warning" />
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] font-medium whitespace-pre-wrap">{note}</p>
+        {updatedAt && (
+          <p className="mt-0.5 text-micro text-muted2">{format(new Date(updatedAt), "M/d HH:mm", { locale: ja })} \u66f4\u65b0</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** \u96e8\u5929\u6642\u306a\u3069\u300c\u958b\u50ac\u3092\u5224\u65ad\u4e2d\u3067\u3059\u300d\u3092\u51fa\u6b20\u6b04\u306e\u8fd1\u304f\u306b\u8868\u793a\u30fb\u7de8\u96c6\u3059\u308b\uff08\u7df4\u7fd2\u306e\u958b\u50ac\u5224\u65ad\u6a29\u9650\u3092\u6301\u3064\u4eba\u5411\u3051\uff09 */
+export function WeatherStatusControl({
+  scheduleId,
+  initialNote,
+  initialUpdatedAt,
+  onChanged,
+}: {
+  scheduleId: string;
+  initialNote: string | null;
+  initialUpdatedAt: string | null;
+  onChanged?: (note: string | null, updatedAt: string | null) => void;
+}) {
+  const { showToast } = useToast();
+  const [note, setNote] = useState(initialNote ?? "");
+  const [updatedAt, setUpdatedAt] = useState(initialUpdatedAt);
+  const [saveState, setSaveState] = useState<SaveState>(initialNote ? "saved" : "idle");
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
+
+  async function persist(value: string) {
+    setSaveState("saving");
+    const { data, error } = await createClient()
+      .rpc("set_schedule_weather_note", { target_schedule_id: scheduleId, new_note: value || null });
+    if (error || !data) {
+      setSaveState("error");
+      showToast("\u5bfe\u5fdc\u72b6\u6cc1\u3092\u9001\u4fe1\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f", "error");
+      return;
+    }
+    setSaveState(data.weather_note ? "saved" : "idle");
+    setUpdatedAt(data.weather_note_updated_at);
+    onChanged?.(data.weather_note, data.weather_note_updated_at);
+  }
+
+  function changeNote(value: string) {
+    setNote(value);
+    setSaveState("idle");
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => { saveTimer.current = null; void persist(value); }, 700);
+  }
+  function blurNote() {
+    if (!saveTimer.current) return;
+    clearTimeout(saveTimer.current);
+    saveTimer.current = null;
+    void persist(note);
+  }
+  function applyPreset() {
+    if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
+    setNote(WEATHER_PRESET);
+    void persist(WEATHER_PRESET);
+  }
+  function clearNote() {
+    if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
+    setNote("");
+    void persist("");
+  }
+
+  return (
+    <div className="space-y-1.5 rounded-xl border border-warning/40 bg-warning/10 p-3" onClick={(event) => event.stopPropagation()}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1 text-[12px] font-semibold text-warning"><CloudRain size={14} />\u5bfe\u5fdc\u72b6\u6cc1\uff08\u96e8\u5929\u6642\u306a\u3069\uff09</p>
+        {note && <button type="button" onClick={clearNote} className="text-[12px] text-muted2 active:opacity-60">\u6d88\u3059</button>}
+      </div>
+      <div className="relative w-full">
+        <Input
+          value={note}
+          onChange={(event) => changeNote(event.target.value)}
+          onBlur={blurNote}
+          maxLength={80}
+          placeholder="\u4f8b: \u958b\u50ac\u3059\u308b\u304b\u8a71\u3057\u5408\u3044\u4e2d\u3067\u3059"
+          className="w-full pr-10"
+        />
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" aria-live="polite">
+          {saveState === "saving" && <Loader2 size={17} className="animate-spin text-muted2" />}
+          {saveState === "saved" && <CircleCheck size={18} className="text-success" />}
+        </span>
+      </div>
+      {!note && (
+        <button type="button" onClick={applyPreset} className="text-[12px] font-medium text-accent active:opacity-60">
+          \u300c\u8a71\u3057\u5408\u3044\u4e2d\u3067\u3059\u300d\u3068\u8868\u793a\u3059\u308b
+        </button>
+      )}
+      {updatedAt && <p className="text-micro text-muted2">{format(new Date(updatedAt), "M/d HH:mm", { locale: ja })} \u66f4\u65b0</p>}
+    </div>
+  );
 }

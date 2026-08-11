@@ -15,6 +15,7 @@ export type SchedulePageData = {
   canEditMenu: boolean;
   canManageAllMenus: boolean;
   canManage: boolean;
+  canDecidePractice: boolean;
   attendeesBySchedule: Record<string, Attendee[]>;
   myStatusBySchedule: Record<string, AttendanceStatusOrNone>;
   myLateBySchedule: Record<string, boolean>;
@@ -60,6 +61,7 @@ export async function getSchedulePageData(): Promise<SchedulePageData> {
     canEditMenu: perms.createMenu,
     canManageAllMenus: perms.manageMembers,
     canManage: perms.createSchedule,
+    canDecidePractice: perms.decidePractice,
     attendeesBySchedule,
     myStatusBySchedule,
     myLateBySchedule,

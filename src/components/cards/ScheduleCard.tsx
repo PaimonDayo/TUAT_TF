@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils";
 import { jstToday } from "@/lib/date";
 import { MenuEditModal, SheetMenuEditModal } from "@/components/post/MenuForm";
 import { ScheduleManageActions } from "@/components/post/ScheduleForm";
-import { AbsenceAttendanceControl, AttendanceToggle, LateAttendanceControl, type AttendanceChange, type LateAttendanceChange } from "@/components/features/AttendanceToggle";
+import { AbsenceAttendanceControl, AttendanceToggle, LateAttendanceControl, WeatherStatusBanner, WeatherStatusControl, type AttendanceChange, type LateAttendanceChange } from "@/components/features/AttendanceToggle";
 import { AttendeesButton } from "@/components/features/AttendeesButton";
 import { Linkify } from "@/components/common/Linkify";
 import { createClient } from "@/lib/supabase/client";
@@ -49,6 +49,7 @@ export function ScheduleCard({
   canEditMenu = false,
   canManageAllMenus = false,
   canManage = false,
+  canDecidePractice = false,
   userId,
   myProfile,
   myStatus = "none",
@@ -64,6 +65,8 @@ export function ScheduleCard({
   canEditMenu?: boolean;
   canManageAllMenus?: boolean;
   canManage?: boolean;
+  /** 雨天時など、出欠欄近くに開催の対応状況を表示・編集できる（練習の開催判断権限） */
+  canDecidePractice?: boolean;
   userId?: string;
   /** 自分の出欠を即時反映するための最小プロフィール（出欠一覧の表示名等に使う） */
   myProfile?: AuthorMini;
@@ -80,6 +83,8 @@ export function ScheduleCard({
   const [attendanceStatus, setAttendanceStatus] = useState(myStatus);
   const [lateState, setLateState] = useState({ late: myLate, note: myLateNote });
   const [absenceNote, setAbsenceNote] = useState(myAbsenceNote);
+  const [weatherNote, setWeatherNote] = useState(schedule.weather_note);
+  const [weatherNoteUpdatedAt, setWeatherNoteUpdatedAt] = useState(schedule.weather_note_updated_at);
   const cardRef = useRef<HTMLDivElement>(null);
 
   // 自分の出欠変更をサーバー往復なしで即座に一覧へ反映する
@@ -248,6 +253,16 @@ export function ScheduleCard({
       {/* 出欠行 */}
       {showAttendance && (
         <div className="-mt-1 space-y-2 px-4 pb-3 lg:px-3 lg:pb-2.5">
+          {canDecidePractice ? (
+            <WeatherStatusControl
+              scheduleId={schedule.id}
+              initialNote={weatherNote}
+              initialUpdatedAt={weatherNoteUpdatedAt}
+              onChanged={(note, updatedAt) => { setWeatherNote(note); setWeatherNoteUpdatedAt(updatedAt); }}
+            />
+          ) : (
+            weatherNote && <WeatherStatusBanner note={weatherNote} updatedAt={weatherNoteUpdatedAt} />
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <AttendanceToggle scheduleId={schedule.id} userId={userId!} initial={myStatus} onChanged={handleAttendanceChanged} />
             <AttendeesButton attendees={attendeesState} defaultBlock={attendanceDefaultBlock} />

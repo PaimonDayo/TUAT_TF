@@ -1094,6 +1094,9 @@ export type Database = {
           venue_fee: string | null
           venue_name: string | null
           venue_url: string | null
+          weather_note: string | null
+          weather_note_updated_at: string | null
+          weather_note_updated_by: string | null
         }
         Insert: {
           created_at?: string
@@ -1114,6 +1117,9 @@ export type Database = {
           venue_fee?: string | null
           venue_name?: string | null
           venue_url?: string | null
+          weather_note?: string | null
+          weather_note_updated_at?: string | null
+          weather_note_updated_by?: string | null
         }
         Update: {
           created_at?: string
@@ -1134,6 +1140,9 @@ export type Database = {
           venue_fee?: string | null
           venue_name?: string | null
           venue_url?: string | null
+          weather_note?: string | null
+          weather_note_updated_at?: string | null
+          weather_note_updated_by?: string | null
         }
         Relationships: [
           {
@@ -1363,6 +1372,7 @@ export type Database = {
           can_create_menu: boolean
           can_create_notice: boolean
           can_create_schedule: boolean
+          can_decide_practice: boolean
           can_manage_members: boolean
           can_manage_system: boolean
           category: string | null
@@ -1378,6 +1388,7 @@ export type Database = {
           can_create_menu?: boolean
           can_create_notice?: boolean
           can_create_schedule?: boolean
+          can_decide_practice?: boolean
           can_manage_members?: boolean
           can_manage_system?: boolean
           category?: string | null
@@ -1393,6 +1404,7 @@ export type Database = {
           can_create_menu?: boolean
           can_create_notice?: boolean
           can_create_schedule?: boolean
+          can_decide_practice?: boolean
           can_manage_members?: boolean
           can_manage_system?: boolean
           category?: string | null
@@ -1895,6 +1907,11 @@ export type Database = {
         Args: { target_profile_id: string; target_role_ids: string[] }
         Returns: undefined
       }
+      set_schedule_weather_note: {
+        Args: { target_schedule_id: string; new_note: string | null }
+        Returns: Database["public"]["Tables"]["practice_schedules"]["Row"]
+      }
+      can_decide_practice: { Args: never; Returns: boolean }
       set_role_members: {
         Args: { target_profile_ids: string[]; target_role_id: string }
         Returns: undefined

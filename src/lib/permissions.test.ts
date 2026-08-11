@@ -11,6 +11,7 @@ function role(overrides: Partial<AppRole> = {}): AppRole {
     can_create_schedule: false,
     can_create_menu: false,
     can_create_notice: false,
+    can_decide_practice: false,
     is_system: false,
     is_everyone: false,
     color: "#000000",
@@ -25,8 +26,12 @@ describe("permissions", () => {
   it("denies every permission without roles", () => {
     expect(permissionsOf(undefined)).toEqual({
       manageSystem: false, manageMembers: false, createSchedule: false,
-      createMenu: false, createNotice: false,
+      createMenu: false, createNotice: false, decidePractice: false,
     });
+  });
+  it("recognizes practice-decision permission independently", () => {
+    expect(hasPermission([role({ can_decide_practice: true })], "decide_practice")).toBe(true);
+    expect(hasPermission([role({ can_manage_system: true })], "decide_practice")).toBe(false);
   });
   it("combines permissions from multiple roles", () => {
     const value = permissionsOf([

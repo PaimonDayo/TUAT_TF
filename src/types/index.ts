@@ -13,7 +13,8 @@ export type Permission =
   | "manage_members" // 部員・ロール管理
   | "create_schedule" // 練習予定の作成
   | "create_menu" // 練習メニューの作成
-  | "create_notice"; // お知らせの作成
+  | "create_notice" // お知らせの作成
+  | "decide_practice"; // 練習の開催を決定する（雨天対応など）
 
 /** カスタムロール（roles テーブル） */
 export interface AppRole {
@@ -24,6 +25,7 @@ export interface AppRole {
   can_create_schedule: boolean;
   can_create_menu: boolean;
   can_create_notice: boolean;
+  can_decide_practice: boolean;
   is_system: boolean;
   /** 全ユーザーへ個別割当なしで適用する固定ロール。 */
   is_everyone: boolean;
@@ -266,6 +268,10 @@ export interface PracticeSchedule {
   entry_end: string | null;
   venue_url: string | null;
   note: string | null;
+  /** 雨天時など「開催するか話し合い中」等を伝える対応状況（任意） */
+  weather_note: string | null;
+  weather_note_updated_at: string | null;
+  weather_note_updated_by: string | null;
   target_blocks: Block[];
   source_sheet_id?: string | null;
   created_by: string;

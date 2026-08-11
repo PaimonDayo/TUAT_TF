@@ -7,6 +7,7 @@ const PERMISSION_COLUMN: Record<Permission, keyof AppRole> = {
   create_schedule: "can_create_schedule",
   create_menu: "can_create_menu",
   create_notice: "can_create_notice",
+  decide_practice: "can_decide_practice",
 };
 
 /** ロール作成・編集フォームで使う権限の一覧（表示順） */
@@ -16,6 +17,7 @@ export const PERMISSION_LIST: { key: Permission; label: string; desc: string }[]
   { key: "create_schedule", label: "練習予定の作成", desc: "練習・大会などの予定を作成できる" },
   { key: "create_menu", label: "練習メニューの作成", desc: "予定に練習メニューを追加できる" },
   { key: "create_notice", label: "お知らせの作成", desc: "お知らせを投稿できる" },
+  { key: "decide_practice", label: "練習の開催判断", desc: "雨天時など、出欠欄に「話し合い中です」等の対応状況を表示できる" },
 ];
 
 /** 所属ロールのいずれかが該当権限を持つか（権限は OR で合算） */
@@ -35,5 +37,6 @@ export function permissionsOf(roles: AppRole[] | undefined | null) {
     createSchedule: hasPermission(roles, "create_schedule"),
     createMenu: hasPermission(roles, "create_menu"),
     createNotice: hasPermission(roles, "create_notice"),
+    decidePractice: hasPermission(roles, "decide_practice"),
   };
 }

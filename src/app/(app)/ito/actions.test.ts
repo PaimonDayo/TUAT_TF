@@ -107,6 +107,7 @@ function role(id: string, overrides: Partial<AppRole> = {}): AppRole {
     can_manage_members: false,
     can_create_schedule: false,
     can_create_menu: false,
+    can_decide_practice: false,
     can_create_notice: false,
     is_system: false,
     is_everyone: false,

@@ -24,6 +24,7 @@ const PERM_COLUMN: Record<Permission, keyof AppRole> = {
   create_schedule: "can_create_schedule",
   create_menu: "can_create_menu",
   create_notice: "can_create_notice",
+  decide_practice: "can_decide_practice",
 };
 
 export function RoleManager({ roles: initialRoles, members, categories: initialCategories, canManageSystem }: { roles: AppRole[]; members: Profile[]; categories: RoleCategory[]; canManageSystem: boolean }) {
@@ -115,7 +116,7 @@ function RoleRow({ role, members, categories, onUpdated, onDeleted, onMembersUpd
 
 function RoleEditor({ open, onClose, onSaved, sortOrder, role, categories, canManageSystem }: { open: boolean; onClose: () => void; onSaved: (role: AppRole) => void; sortOrder: number; role?: AppRole; categories: RoleCategory[]; canManageSystem: boolean }) {
   const [name, setName] = useState(role?.name ?? "");
-  const [flags, setFlags] = useState<Record<Permission, boolean>>({ manage_system: role?.can_manage_system ?? false, manage_members: role?.can_manage_members ?? false, create_schedule: role?.can_create_schedule ?? false, create_menu: role?.can_create_menu ?? false, create_notice: role?.can_create_notice ?? false });
+  const [flags, setFlags] = useState<Record<Permission, boolean>>({ manage_system: role?.can_manage_system ?? false, manage_members: role?.can_manage_members ?? false, create_schedule: role?.can_create_schedule ?? false, create_menu: role?.can_create_menu ?? false, create_notice: role?.can_create_notice ?? false, decide_practice: role?.can_decide_practice ?? false });
   const [color, setColor] = useState(role?.color ?? ROLE_COLORS[0]);
   const [category, setCategory] = useState(role?.category ?? "");
   const [saving, setSaving] = useState(false);
@@ -124,7 +125,7 @@ function RoleEditor({ open, onClose, onSaved, sortOrder, role, categories, canMa
   async function save() {
     if (!name.trim()) { setError("ロール名を入力してください"); return; }
     setSaving(true); setError(null);
-    const payload = { name: name.trim(), can_manage_system: flags.manage_system, can_manage_members: flags.manage_members, can_create_schedule: flags.create_schedule, can_create_menu: flags.create_menu, can_create_notice: flags.create_notice, color, category: role?.is_everyone ? null : category || null, sort_order: sortOrder };
+    const payload = { name: name.trim(), can_manage_system: flags.manage_system, can_manage_members: flags.manage_members, can_create_schedule: flags.create_schedule, can_create_menu: flags.create_menu, can_create_notice: flags.create_notice, can_decide_practice: flags.decide_practice, color, category: role?.is_everyone ? null : category || null, sort_order: sortOrder };
     const query = role ? createClient().from("roles").update(payload).eq("id", role.id) : createClient().from("roles").insert(payload);
     const { data, error: saveError } = await query.select("*").single();
     if (saveError || !data) { setError("保存できませんでした。もう一度お試しください"); setSaving(false); return; }

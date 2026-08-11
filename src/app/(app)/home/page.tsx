@@ -134,7 +134,7 @@ async function SchedulesSection({ profile }: { profile: Profile }) {
           {todaySchedules.map((schedule) => {
             const attendees = attendeesBySchedule.get(schedule.id) ?? [];
             const mine = attendees.find((attendee) => attendee.user_id === profile.id);
-            return <ScheduleCard key={schedule.id} schedule={{ ...schedule, menus: schedule.menus ?? [] }} viewerBlocks={profile.blocks} userId={profile.id} myProfile={profile} myStatus={mine?.status ?? "none"} myLate={mine?.is_late ?? false} myLateNote={mine?.late_note ?? null} myAbsenceNote={mine?.absence_note ?? null} attendees={attendees} attendanceDefaultBlock={profile.attendance_default_block} />;
+            return <ScheduleCard key={schedule.id} schedule={{ ...schedule, menus: schedule.menus ?? [] }} viewerBlocks={profile.blocks} userId={profile.id} myProfile={profile} myStatus={mine?.status ?? "none"} myLate={mine?.is_late ?? false} myLateNote={mine?.late_note ?? null} myAbsenceNote={mine?.absence_note ?? null} attendees={attendees} attendanceDefaultBlock={profile.attendance_default_block} canDecidePractice={perms.decidePractice} />;
           })}
         </div>
       </section>
