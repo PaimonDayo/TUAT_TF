@@ -267,6 +267,7 @@ export function WeatherStatusControl({
   const [note, setNote] = useState(initialNote ?? "");
   const [updatedAt, setUpdatedAt] = useState(initialUpdatedAt);
   const [saveState, setSaveState] = useState<SaveState>(initialNote ? "saved" : "idle");
+  const [open, setOpen] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
 
@@ -304,14 +305,32 @@ export function WeatherStatusControl({
   function clearNote() {
     if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
     setNote("");
+    setOpen(false);
     void persist("");
+  }
+
+  // 予定ごとに入力欄を開いておくと場所を取るので、
+  // 対応状況が無いあいだは小さな導線だけを出し、押したときに開く。
+  if (!note && !open) {
+    return (
+      <button
+        type="button"
+        onClick={(event) => { event.stopPropagation(); setOpen(true); }}
+        className="flex items-center gap-1 text-[12px] text-muted2 active:opacity-60"
+      >
+        <CloudRain size={13} />
+        対応状況を知らせる
+      </button>
+    );
   }
 
   return (
     <div className="space-y-1.5 rounded-xl border border-warning/40 bg-warning/10 p-3" onClick={(event) => event.stopPropagation()}>
       <div className="flex items-center justify-between gap-2">
         <p className="flex items-center gap-1 text-[12px] font-semibold text-warning"><CloudRain size={14} />対応状況（雨天時など）</p>
-        {note && <button type="button" onClick={clearNote} className="text-[12px] text-muted2 active:opacity-60">消す</button>}
+        <button type="button" onClick={note ? clearNote : () => setOpen(false)} className="text-[12px] text-muted2 active:opacity-60">
+          {note ? "消す" : "閉じる"}
+        </button>
       </div>
       <div className="relative w-full">
         <Input

@@ -253,7 +253,7 @@ export function ScheduleCard({
       {/* 出欠行 */}
       {showAttendance && (
         <div className="-mt-1 space-y-2 px-4 pb-3 lg:px-3 lg:pb-2.5">
-          {canDecidePractice ? (
+          {canDecidePractice && (weatherNote || schedule.schedule_date <= jstToday(1)) ? (
             <WeatherStatusControl
               scheduleId={schedule.id}
               initialNote={weatherNote}
