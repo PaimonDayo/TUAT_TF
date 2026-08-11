@@ -272,6 +272,10 @@ export interface PracticeSchedule {
   weather_note: string | null;
   weather_note_updated_at: string | null;
   weather_note_updated_by: string | null;
+  /** 中止にした日時。null なら通常どおり実施 */
+  cancelled_at: string | null;
+  cancelled_by: string | null;
+  cancel_reason: string | null;
   target_blocks: Block[];
   source_sheet_id?: string | null;
   created_by: string;

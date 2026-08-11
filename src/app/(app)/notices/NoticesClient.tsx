@@ -20,6 +20,7 @@ import {
   type NoticeFilters,
 } from "@/lib/notice-filters";
 import { NotificationsList } from "./NotificationsList";
+import { markAllNotificationsAsRead } from "./actions";
 import type { NoticeCategory, NoticeWithReactions, AppNotificationWithActor, Profile } from "@/types";
 
 export function NoticesClient({
@@ -38,6 +39,13 @@ export function NoticesClient({
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<NoticeFilters>(EMPTY_NOTICE_FILTERS);
   const pendingScroll = useRef<string | null>(null);
+  // お知らせ画面を開いた時点で通知を既読にする。ベルの赤い丸は「前回見たあとに
+  // 届いたものがあるか」だけを表すようにして、既存の未確認と混ざらないようにする。
+  // 一覧内の未読強調はサーバーから受け取った初期状態のまま残すので、
+  // どれが新着だったかはこの画面を開いているあいだ分かる。
+  useEffect(() => {
+    void markAllNotificationsAsRead().catch(() => {});
+  }, []);
   const tokens = useMemo(() => noticeSearchTokens(query), [query]);
   const activeFilterCount = noticeFilterCount(filters);
   const hasConditions = tokens.length > 0 || activeFilterCount > 0;

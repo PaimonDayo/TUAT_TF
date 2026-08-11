@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils";
 import { jstToday } from "@/lib/date";
 import { MenuEditModal, SheetMenuEditModal } from "@/components/post/MenuForm";
 import { ScheduleManageActions } from "@/components/post/ScheduleForm";
-import { AbsenceAttendanceControl, AttendanceToggle, LateAttendanceControl, WeatherStatusBanner, WeatherStatusControl, type AttendanceChange, type LateAttendanceChange } from "@/components/features/AttendanceToggle";
+import { AbsenceAttendanceControl, AttendanceToggle, CancelledBanner, LateAttendanceControl, WeatherStatusBanner, WeatherStatusControl, type AttendanceChange, type LateAttendanceChange } from "@/components/features/AttendanceToggle";
 import { AttendeesButton } from "@/components/features/AttendeesButton";
 import { Linkify } from "@/components/common/Linkify";
 import { createClient } from "@/lib/supabase/client";
@@ -85,6 +85,8 @@ export function ScheduleCard({
   const [absenceNote, setAbsenceNote] = useState(myAbsenceNote);
   const [weatherNote, setWeatherNote] = useState(schedule.weather_note);
   const [weatherNoteUpdatedAt, setWeatherNoteUpdatedAt] = useState(schedule.weather_note_updated_at);
+  const [cancelledAt, setCancelledAt] = useState(schedule.cancelled_at);
+  const [cancelReason, setCancelReason] = useState(schedule.cancel_reason);
   const cardRef = useRef<HTMLDivElement>(null);
 
   // 自分の出欠変更をサーバー往復なしで即座に一覧へ反映する
@@ -168,6 +170,14 @@ export function ScheduleCard({
   }
   if (generalMenus.length > 0) menuGroups.push({ key: "general", label: "全体", block: null, menus: generalMenus });
   const showAttendance = userId && ATTENDANCE_TYPES.includes(schedule.schedule_type);
+  // 中止・対応状況は出欠の有無に関わらず出す（記録会も中止になりうるため）。
+  // 編集の導線は当日・翌日か、すでに対応状況が入っている予定だけ。
+  const canEditWeather = canDecidePractice && (!!weatherNote || schedule.schedule_date <= jstToday(1));
+  const weatherSection = cancelledAt ? "cancelled" : canEditWeather ? "editor" : weatherNote ? "banner" : null;
+  function handleCancelChanged(at: string | null, reason: string | null) {
+    setCancelledAt(at);
+    setCancelReason(reason);
+  }
   const hasEntry = schedule.entry_start || schedule.entry_end;
   const hasDetail =
     schedule.venue_access ||
@@ -250,19 +260,35 @@ export function ScheduleCard({
         )}
       </button>
 
-      {/* 出欠行 */}
-      {showAttendance && (
-        <div className="-mt-1 space-y-2 px-4 pb-3 lg:px-3 lg:pb-2.5">
-          {canDecidePractice && (weatherNote || schedule.schedule_date <= jstToday(1)) ? (
+      {/* 開催の対応状況・中止 */}
+      {weatherSection && (
+        <div className="-mt-1 px-4 pb-2.5 lg:px-3 lg:pb-2">
+          {weatherSection === "cancelled" && (
+            <CancelledBanner
+              scheduleId={schedule.id}
+              reason={cancelReason}
+              canDecide={canDecidePractice}
+              onChanged={handleCancelChanged}
+            />
+          )}
+          {weatherSection === "editor" && (
             <WeatherStatusControl
               scheduleId={schedule.id}
               initialNote={weatherNote}
               initialUpdatedAt={weatherNoteUpdatedAt}
               onChanged={(note, updatedAt) => { setWeatherNote(note); setWeatherNoteUpdatedAt(updatedAt); }}
+              onCancelled={handleCancelChanged}
             />
-          ) : (
-            weatherNote && <WeatherStatusBanner note={weatherNote} updatedAt={weatherNoteUpdatedAt} />
           )}
+          {weatherSection === "banner" && weatherNote && (
+            <WeatherStatusBanner note={weatherNote} updatedAt={weatherNoteUpdatedAt} />
+          )}
+        </div>
+      )}
+
+      {/* 出欠行（中止のあいだは出さない） */}
+      {showAttendance && !cancelledAt && (
+        <div className="-mt-1 space-y-2 px-4 pb-3 lg:px-3 lg:pb-2.5">
           <div className="flex flex-wrap items-center gap-2">
             <AttendanceToggle scheduleId={schedule.id} userId={userId!} initial={myStatus} onChanged={handleAttendanceChanged} />
             <AttendeesButton attendees={attendeesState} defaultBlock={attendanceDefaultBlock} />

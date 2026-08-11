@@ -1094,6 +1094,9 @@ export type Database = {
           venue_fee: string | null
           venue_name: string | null
           venue_url: string | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
           weather_note: string | null
           weather_note_updated_at: string | null
           weather_note_updated_by: string | null
@@ -1117,6 +1120,9 @@ export type Database = {
           venue_fee?: string | null
           venue_name?: string | null
           venue_url?: string | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           weather_note?: string | null
           weather_note_updated_at?: string | null
           weather_note_updated_by?: string | null
@@ -1140,6 +1146,9 @@ export type Database = {
           venue_fee?: string | null
           venue_name?: string | null
           venue_url?: string | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           weather_note?: string | null
           weather_note_updated_at?: string | null
           weather_note_updated_by?: string | null
@@ -1906,6 +1915,10 @@ export type Database = {
       set_profile_roles: {
         Args: { target_profile_id: string; target_role_ids: string[] }
         Returns: undefined
+      }
+      set_schedule_cancelled: {
+        Args: { target_schedule_id: string; cancel: boolean; reason?: string | null }
+        Returns: Database["public"]["Tables"]["practice_schedules"]["Row"]
       }
       set_schedule_weather_note: {
         Args: { target_schedule_id: string; new_note: string | null }

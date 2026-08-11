@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { Check, X, Minus, Loader2, CircleCheck, CloudRain } from "lucide-react";
+import { Check, X, Minus, Loader2, CircleCheck, CloudRain, Ban } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { Toggle } from "@/components/ui/toggle";
 import { Input } from "@/components/ui/input";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { AttendanceStatusOrNone } from "@/types";
 
 const NEXT: Record<AttendanceStatusOrNone, AttendanceStatusOrNone> = {
@@ -234,8 +235,6 @@ export function AbsenceAttendanceControl({ scheduleId, userId, initialNote, onCh
   return <div className="relative w-full" onClick={(event) => event.stopPropagation()}><Input value={note} onChange={(event) => changeNote(event.target.value)} onBlur={blurNote} maxLength={60} placeholder={"\u6b20\u5e2d\u306e\u9023\u7d61\u4e8b\u9805\uff08\u4efb\u610f\uff09"} className={cn("w-full pr-10", noteState === "error" && "border-danger/50")} /><span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" aria-live="polite">{noteState === "saving" && <Loader2 size={17} className="animate-spin text-muted2" />}{noteState === "saved" && <CircleCheck size={18} className="text-success" />}</span></div>;
 }
 
-const WEATHER_PRESET = "雨天のため開催するか話し合い中です。決まり次第お知らせします。";
-
 /** 雨天時など「話し合い中です」を伝える対応状況の閲覧用バナー（編集権限がない人向け） */
 export function WeatherStatusBanner({ note, updatedAt }: { note: string; updatedAt: string | null }) {
   return (
@@ -251,23 +250,79 @@ export function WeatherStatusBanner({ note, updatedAt }: { note: string; updated
   );
 }
 
+/** 中止の表示。開催判断権限を持つ人には取り消しの導線も出す。 */
+export function CancelledBanner({
+  scheduleId,
+  reason,
+  canDecide,
+  onChanged,
+}: {
+  scheduleId: string;
+  reason: string | null;
+  canDecide: boolean;
+  onChanged?: (cancelledAt: string | null, reason: string | null) => void;
+}) {
+  const { showToast } = useToast();
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function restore() {
+    setBusy(true);
+    const { data, error } = await createClient()
+      .rpc("set_schedule_cancelled", { target_schedule_id: scheduleId, cancel: false, reason: null });
+    setBusy(false);
+    if (error || !data) {
+      showToast("中止を取り消せませんでした", "error");
+      return;
+    }
+    setConfirming(false);
+    onChanged?.(data.cancelled_at, data.cancel_reason);
+  }
+
+  return (
+    <div className="rounded-xl border border-danger/40 bg-danger/10 px-3 py-2" onClick={(event) => event.stopPropagation()}>
+      <p className="flex items-center gap-1.5 text-[13px] font-bold text-danger"><Ban size={15} />この予定は中止です</p>
+      {reason && <p className="mt-1 text-[13px] whitespace-pre-wrap">{reason}</p>}
+      {canDecide && (
+        <button type="button" onClick={() => setConfirming(true)} className="mt-1.5 text-[12px] text-muted2 active:opacity-60">
+          中止を取り消す
+        </button>
+      )}
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title="中止を取り消しますか？"
+        description="「中止を取り消しました」というお知らせが対象の部員に届きます。"
+        confirmLabel="取り消す"
+        busyLabel="送信中…"
+        busy={busy}
+        onConfirm={restore}
+      />
+    </div>
+  );
+}
+
 /** 雨天時など「開催を判断中です」を出欠欄の近くに表示・編集する（練習の開催判断権限を持つ人向け） */
 export function WeatherStatusControl({
   scheduleId,
   initialNote,
   initialUpdatedAt,
   onChanged,
+  onCancelled,
 }: {
   scheduleId: string;
   initialNote: string | null;
   initialUpdatedAt: string | null;
   onChanged?: (note: string | null, updatedAt: string | null) => void;
+  onCancelled?: (cancelledAt: string | null, reason: string | null) => void;
 }) {
   const { showToast } = useToast();
   const [note, setNote] = useState(initialNote ?? "");
   const [updatedAt, setUpdatedAt] = useState(initialUpdatedAt);
   const [saveState, setSaveState] = useState<SaveState>(initialNote ? "saved" : "idle");
   const [open, setOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [cancelBusy, setCancelBusy] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
 
@@ -297,16 +352,25 @@ export function WeatherStatusControl({
     saveTimer.current = null;
     void persist(note);
   }
-  function applyPreset() {
-    if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
-    setNote(WEATHER_PRESET);
-    void persist(WEATHER_PRESET);
-  }
   function clearNote() {
     if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
     setNote("");
     setOpen(false);
     void persist("");
+  }
+
+  // 中止の理由には、入力済みの対応状況をそのまま使う（改めて書かせない）。
+  async function cancelPractice() {
+    setCancelBusy(true);
+    const { data, error } = await createClient()
+      .rpc("set_schedule_cancelled", { target_schedule_id: scheduleId, cancel: true, reason: note.trim() || null });
+    setCancelBusy(false);
+    if (error || !data) {
+      showToast("中止にできませんでした", "error");
+      return;
+    }
+    setConfirming(false);
+    onCancelled?.(data.cancelled_at, data.cancel_reason);
   }
 
   // 予定ごとに入力欄を開いておくと場所を取るので、
@@ -346,12 +410,27 @@ export function WeatherStatusControl({
           {saveState === "saved" && <CircleCheck size={18} className="text-success" />}
         </span>
       </div>
-      {!note && (
-        <button type="button" onClick={applyPreset} className="text-[12px] font-medium text-accent active:opacity-60">
-          「話し合い中です」と表示する
+      <div className="flex items-center justify-between gap-2">
+        {updatedAt ? (
+          <p className="text-micro text-muted2">{format(new Date(updatedAt), "M/d HH:mm", { locale: ja })} 更新</p>
+        ) : (
+          <span />
+        )}
+        <button type="button" onClick={() => setConfirming(true)} className="flex items-center gap-1 text-[12px] font-semibold text-danger active:opacity-60">
+          <Ban size={13} />
+          中止にする
         </button>
-      )}
-      {updatedAt && <p className="text-micro text-muted2">{format(new Date(updatedAt), "M/d HH:mm", { locale: ja })} 更新</p>}
+      </div>
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title="この予定を中止にしますか？"
+        description="中止のお知らせが対象の部員に届きます。入力した対応状況が理由として一緒に送られます。"
+        confirmLabel="中止にする"
+        busyLabel="送信中…"
+        busy={cancelBusy}
+        onConfirm={cancelPractice}
+      />
     </div>
   );
 }
