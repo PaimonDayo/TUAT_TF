@@ -1,8 +1,11 @@
 import { cache } from "react";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole, Profile } from "@/types";
 import { normalizeProfileRow } from "@/lib/profile-normalize";
+import { hasPermission } from "@/lib/permissions";
+import { MEMBER_PREVIEW_COOKIE } from "@/lib/member-preview";
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>;
 
@@ -14,7 +17,7 @@ type SupabaseServer = Awaited<ReturnType<typeof createClient>>;
  * ここではネットワークを使わない getSession でユーザーIDだけ取り出す。
  * データ自体のアクセス制御は Supabase の RLS が担保する。
  */
-export const getCurrentProfile = cache(async (): Promise<Profile> => {
+const getStoredProfile = cache(async (): Promise<Profile> => {
   const supabase = await createClient();
   const {
     data: { session },
@@ -71,6 +74,42 @@ export const getCurrentProfile = cache(async (): Promise<Profile> => {
 
   const rolesMap = await fetchRolesByProfileIds(supabase, [user.id]);
   return normalizeProfileRow(profile, rolesMap.get(user.id) ?? []);
+});
+
+/**
+ * 本来の権限を持つプロフィール。一般部員プレビューの切り替えUIなど、
+ * 「プレビュー中でも本当の権限で判定したい」ところだけで使う。
+ */
+export const getRealCurrentProfile = getStoredProfile;
+
+/** 一般部員プレビューが有効か。システム管理者以外では常に false。 */
+export const isMemberPreviewActive = cache(async (): Promise<boolean> => {
+  const store = await cookies();
+  if (store.get(MEMBER_PREVIEW_COOKIE)?.value !== "1") return false;
+  const profile = await getStoredProfile();
+  return hasPermission(profile.roles, "manage_system");
+});
+
+/**
+ * 画面を組み立てるときのプロフィール。一般部員プレビュー中は権限フラグだけを
+ * 落として返すので、権限で出し分けている画面がそのまま一般部員の見え方になる。
+ * ロール名や色は残すので、肩書きの表示は本来のまま。
+ */
+export const getCurrentProfile = cache(async (): Promise<Profile> => {
+  const profile = await getStoredProfile();
+  if (!(await isMemberPreviewActive())) return profile;
+  return {
+    ...profile,
+    roles: profile.roles.map((role) => ({
+      ...role,
+      can_manage_system: false,
+      can_manage_members: false,
+      can_create_schedule: false,
+      can_create_menu: false,
+      can_create_notice: false,
+      can_decide_practice: false,
+    })),
+  };
 });
 
 /**

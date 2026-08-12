@@ -12,7 +12,8 @@ import { RecordFieldsSetting } from "@/components/features/RecordFieldsSetting";
 import { SheetRecordFormSetting } from "@/components/features/SheetRecordFormSetting";
 import { RecordSourceSetting } from "@/components/features/RecordSourceSetting";
 import { SystemSyncStatus } from "@/components/features/SystemSyncStatus";
-import { getCurrentProfile } from "@/lib/supabase/auth";
+import { MemberPreviewSetting } from "@/components/features/MemberPreviewSetting";
+import { getCurrentProfile, isMemberPreviewActive } from "@/lib/supabase/auth";
 import { permissionsOf } from "@/lib/permissions";
 
 /**
@@ -22,6 +23,7 @@ import { permissionsOf } from "@/lib/permissions";
  */
 export default async function SettingsPage() {
   const profile = await getCurrentProfile();
+  const previewingAsMember = await isMemberPreviewActive();
   const cookieStore = await cookies();
   const showRecordSource = cookieStore.get("show-record-source")?.value === "1";
   const perms = permissionsOf(profile.roles);
@@ -31,6 +33,9 @@ export default async function SettingsPage() {
       <SubHeader title="設定" backHref="/mypage" />
 
       <div className="space-y-5 px-4 pb-6 pt-1">
+        {/* プレビュー中は管理者向けが全部隠れるので、戻す導線を最初に出す */}
+        {previewingAsMember && <MemberPreviewSetting previewing />}
+
         <Section title="表示">
           <AttendanceViewSetting userId={profile.id} initial={profile.attendance_default_block} />
           <TimelineViewSetting userId={profile.id} initial={profile.timeline_default_block} />
@@ -74,6 +79,7 @@ export default async function SettingsPage() {
             <SystemSyncStatus />
             <Card className="divide-y divide-separator/70 overflow-hidden">
               <RecordSourceSetting initial={showRecordSource} />
+              <MemberPreviewSetting previewing={false} />
               <a
                 href="/api/legacy-access"
                 target="_blank"
