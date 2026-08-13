@@ -9,6 +9,7 @@ import { ActionMenu } from "@/components/ui/action-menu";
 import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import { Select } from "@/components/ui/select";
@@ -74,6 +75,7 @@ export function ScheduleForm({
   const [useEntry, setUseEntry] = useState(!!(schedule?.entry_start || schedule?.entry_end));
   const [entryStart, setEntryStart] = useState(schedule?.entry_start ?? "");
   const [entryEnd, setEntryEnd] = useState(schedule?.entry_end ?? "");
+  const [note, setNote] = useState(schedule?.note ?? "");
   const [targetBlocks, setTargetBlocks] = useState<Block[]>(normalizeProfileBlocks(schedule?.target_blocks));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -165,6 +167,7 @@ export function ScheduleForm({
       end_date: !isPractice && useEndDate && endDate ? endDate : null,
       entry_start: canEntry && useEntry && entryStart ? entryStart : null,
       entry_end: canEntry && useEntry && entryEnd ? entryEnd : null,
+      note: note.trim() || null,
       target_blocks: targetBlocks,
     };
 
@@ -344,6 +347,18 @@ export function ScheduleForm({
             )}
           </div>
         )}
+      </div>
+
+      {/* 詳細情報：集合方法・持ち物・連絡事項など。予定カードに「詳細情報」として表示される */}
+      <div>
+        <p className="section-label mb-1.5">詳細情報</p>
+        <Textarea
+          autoGrow
+          rows={3}
+          placeholder="例: 集合方法・持ち物・連絡事項"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
       </div>
 
       {error && <p className="text-caption text-danger text-center">{error}</p>}
