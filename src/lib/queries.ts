@@ -1018,27 +1018,39 @@ export async function getPublishedPersonalNotes(
 }
 
 /** 直近50件（無期限の全件取得はしない） */
-export async function getPersonalNotifications(userId: string): Promise<AppNotificationWithActor[]> {
+/**
+ * 個人の通知。ito は公開準備中でシステム管理者にだけ見せているため、
+ * 権限が無い人には ito の通知を出さない（開けない画面へ誘導しないため）。
+ */
+export async function getPersonalNotifications(
+  userId: string,
+  options: { includeIto?: boolean } = {},
+): Promise<AppNotificationWithActor[]> {
   const supabase = await createClient();
-  const { data } = await supabase
+  let query = supabase
     .from("notifications")
     .select(`
       *,
       actor:profiles!actor_id(id, display_name, avatar_url)
     `)
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(50);
+    .eq("user_id", userId);
+  if (!options.includeIto) query = query.neq("type", "ito_invite");
+  const { data } = await query.order("created_at", { ascending: false }).limit(50);
   return (data ?? []).map(normalizeNotificationRow).filter(isPresent);
 }
 
-export async function getUnreadNotificationCount(userId: string): Promise<number> {
+export async function getUnreadNotificationCount(
+  userId: string,
+  options: { includeIto?: boolean } = {},
+): Promise<number> {
   const supabase = await createClient();
-  const { count } = await supabase
+  let query = supabase
     .from("notifications")
     .select("*", { count: "exact", head: true })
     .eq("user_id", userId)
     .eq("is_read", false);
+  if (!options.includeIto) query = query.neq("type", "ito_invite");
+  const { count } = await query;
   return count ?? 0;
 }
 

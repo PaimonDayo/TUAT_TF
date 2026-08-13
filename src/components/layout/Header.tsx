@@ -1,5 +1,6 @@
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getUnreadNotificationCount } from "@/lib/queries";
+import { permissionsOf } from "@/lib/permissions";
 import { NotificationBell } from "@/components/layout/NotificationBell";
 
 /** 全タブ統一ヘッダー（高さ48px / 右にベルアイコン固定） */
@@ -17,7 +18,9 @@ export async function Header({
   try {
     const profile = await getCurrentProfile();
     userId = profile.id;
-    unreadCount = await getUnreadNotificationCount(profile.id);
+    unreadCount = await getUnreadNotificationCount(profile.id, {
+      includeIto: permissionsOf(profile.roles).manageSystem,
+    });
   } catch {
     // Ignore error if not logged in or during static generation
   }

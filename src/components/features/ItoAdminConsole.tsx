@@ -66,6 +66,10 @@ export function ItoAdminConsole({
           ゲームの作成と進行はシステム管理者だけが行えます。進行役はゲームに参加しないため、
           システム管理権限を持つ人は招待対象から外れます。
         </p>
+        <p className="text-caption text-warning">
+          いま ito はシステム管理者だけに公開しています。エントリーを開始しても、
+          一般の部員には画面も通知も表示されません（動作確認は「参加者を直接追加する」で行ってください）。
+        </p>
 
         {games.length === 0 ? (
           <EmptyState

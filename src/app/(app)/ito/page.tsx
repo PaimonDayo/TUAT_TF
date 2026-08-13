@@ -5,7 +5,9 @@ import { ItoEntryList } from "@/components/features/ItoEntryList";
 import { ItoLiveRefresh } from "@/components/features/ItoLiveRefresh";
 import { ItoPlayView } from "@/components/features/ItoPlayView";
 import { ItoRanking } from "@/components/features/ItoRanking";
+import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/supabase/auth";
+import { permissionsOf } from "@/lib/permissions";
 import {
   getItoPointEvents,
   getItoRoundState,
@@ -17,6 +19,9 @@ import {
 /** 部員向けの ito 画面。招待への回答と、進行中ラウンドのプレイ。 */
 export default async function ItoPage() {
   const profile = await getCurrentProfile();
+  // ito は公開準備中。いまはシステム管理者だけが使える。
+  if (!permissionsOf(profile.roles).manageSystem) redirect("/home");
+
   const { invitations, participations, games } = await getMyItoOverview(profile.id);
 
   // 招待に「参加する」で答えた人と、進行役が直接追加した人（招待なし）の両方を参加者として扱う。

@@ -40,7 +40,9 @@ export default async function MyPage({
   const { invitations: itoInvitations, participations: itoParticipations } =
     await getMyItoOverview(profile.id);
   const itoPending = itoInvitations.filter((invitation) => invitation.status === "pending").length;
-  const showIto = itoInvitations.length > 0 || itoParticipations.length > 0;
+  // ito は公開準備中のため、システム管理者にだけ導線を出す。
+  const showIto =
+    perms.manageSystem && (itoInvitations.length > 0 || itoParticipations.length > 0);
 
   return (
     <>

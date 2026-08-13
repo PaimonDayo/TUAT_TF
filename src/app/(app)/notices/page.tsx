@@ -7,11 +7,12 @@ import type { NoticeWithReactions } from "@/types";
 
 export default async function NoticesPage() {
   const profile = await getCurrentProfile();
-  const canCreateNotice = permissionsOf(profile.roles).createNotice;
+  const permissions = permissionsOf(profile.roles);
+  const canCreateNotice = permissions.createNotice;
   
   const [notices, notifications] = await Promise.all([
     getNotices(profile.id),
-    getPersonalNotifications(profile.id),
+    getPersonalNotifications(profile.id, { includeIto: permissions.manageSystem }),
   ]);
 
   return (
