@@ -326,6 +326,7 @@ export function TimelineView({
                           aria-label="投稿の詳細を開閉"
                           onClick={() => toggleExpanded(key)}
                           onKeyDown={(event) => {
+                            if (event.target !== event.currentTarget) return;
                             if (event.key === "Enter" || event.key === " ") {
                               event.preventDefault();
                               toggleExpanded(key);

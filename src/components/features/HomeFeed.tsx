@@ -47,6 +47,7 @@ export function HomeFeed({
             aria-label={"\u6295\u7a3f\u306e\u8a73\u7d30\u3092\u958b\u9589"}
             onClick={() => toggleExpanded(key)}
             onKeyDown={(event) => {
+              if (event.target !== event.currentTarget) return;
               if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
                 toggleExpanded(key);

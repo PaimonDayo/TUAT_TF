@@ -70,6 +70,24 @@ export function FullScreenContent({
       </Dialog.Overlay>
       <Dialog.Content
         ref={contentRef}
+        onKeyDownCapture={(event) => {
+          // このモーダルは Portal で描画されるが、React の合成イベントは
+          // 「開いた元のカード」の React ツリーを通って伝播する。カードは
+          // タップ／Enter で開閉する role="button" なので、入力欄で改行を
+          // 押すとカードが閉じ、編集フォームごと消えてしまっていた。
+          // 入力中のキー操作はここで止める（保存は明示的なボタンのみ）。
+          // Escape（閉じる）と Tab（フォーカス移動）は Radix 側の処理を
+          // 残すため素通しする。
+          const target = event.target as HTMLElement | null;
+          const typing =
+            target instanceof HTMLTextAreaElement ||
+            target instanceof HTMLInputElement ||
+            target instanceof HTMLSelectElement ||
+            target?.isContentEditable === true;
+          if (typing && event.key !== "Escape" && event.key !== "Tab") {
+            event.stopPropagation();
+          }
+        }}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           if (!autoFocus) return;

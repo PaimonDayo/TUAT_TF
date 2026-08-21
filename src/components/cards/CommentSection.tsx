@@ -252,7 +252,11 @@ export function CommentSection({
   }
 
   return (
-    <div className="mt-3 min-w-0 max-w-full overflow-hidden border-t border-separator/70 pt-3">
+    <div
+      className="mt-3 min-w-0 max-w-full overflow-hidden border-t border-separator/70 pt-3"
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
       <div className="max-h-[40vh] max-w-full touch-pan-y overflow-x-hidden overflow-y-auto overscroll-x-none space-y-3 pr-0.5">
         {loading ? (
           <div className="space-y-3 py-2">
