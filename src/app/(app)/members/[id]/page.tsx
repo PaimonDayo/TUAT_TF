@@ -8,7 +8,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Avatar } from "@/components/common/Avatar";
 import { BlockPills } from "@/components/common/BlockPill";
 import { Linkify } from "@/components/common/Linkify";
-import { RecordCard } from "@/components/cards/RecordCard";
+import { ActivityFeed } from "@/components/features/ActivityFeed";
 import { ResultsList } from "@/components/features/ResultsList";
 import { TrainingChart } from "@/components/features/TrainingChart";
 import { FavoriteButton } from "@/components/features/FavoriteButton";
@@ -21,11 +21,13 @@ import {
   getUserRecordsWithSocialState,
   getPbRecords,
   getPublishedPersonalNotes,
+  getUserTweets,
   isFavorite,
+  sortFeedItems,
 } from "@/lib/queries";
 import { gradeShort } from "@/lib/constants";
 import { permissionsOf } from "@/lib/permissions";
-import type { PbRecord, Profile, RecordWithAuthor } from "@/types";
+import type { FeedItem, PbRecord, Profile, RecordWithAuthor } from "@/types";
 
 export default function MemberPage({
   params,
@@ -48,8 +50,9 @@ async function MemberContent({
   const isSelf = viewer.id === id;
   // スプシメインの本人がここ(/members/自分)から記録を見る場合も、毎時同期を待たず最新化する
 
-  const [records, pbs, notes, favorited, cookieStore] = await Promise.all([
+  const [records, tweets, pbs, notes, favorited, cookieStore] = await Promise.all([
     getUserRecordsWithSocialState(id, viewer.id),
+    getUserTweets(id, viewer.id),
     getPbRecords(id) as Promise<PbRecord[]>,
     getPublishedPersonalNotes(id),
     isSelf ? Promise.resolve(false) : isFavorite(viewer.id, id),
@@ -72,6 +75,20 @@ async function MemberContent({
     avatar_url: viewer.avatar_url,
     systemRecordForm: Boolean(viewer.sheet_name),
   };
+
+  // 記録とつぶやきを一つの「これまでの投稿」にまとめる。
+  // つぶやきはマイページにしか出ておらず、他の人のプロフィールでは
+  // 記録しか見えていなかった。
+  const activity = sortFeedItems([
+    ...records.map(
+      (record): FeedItem => ({
+        kind: "record",
+        ...(record as RecordWithAuthor),
+        author: authorMini,
+      }),
+    ),
+    ...tweets,
+  ]);
 
   return (
     <>
@@ -145,20 +162,15 @@ async function MemberContent({
         )}
 
         <section className="space-y-2">
-          <p className="section-label">これまでの記録</p>
-          {records.length === 0 ? (
-            <EmptyState title="まだ記録はありません" className="min-h-24 py-4" />
+          <p className="section-label">これまでの投稿</p>
+          {activity.length === 0 ? (
+            <EmptyState title="まだ投稿はありません" className="min-h-24 py-4" />
           ) : (
-            <div className="space-y-3">
-              {records.map((r) => (
-                <RecordCard
-                  key={r.id}
-                  record={{ ...r, author: authorMini } as RecordWithAuthor}
-                  currentUser={currentUser}
-                  showSource={showRecordSource}
-                />
-              ))}
-            </div>
+            <ActivityFeed
+              activity={activity}
+              currentUser={currentUser}
+              showRecordSource={showRecordSource}
+            />
           )}
         </section>
       </div>

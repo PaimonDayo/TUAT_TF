@@ -575,6 +575,46 @@ export async function getAllRoleCategories(): Promise<RoleCategory[]> {
     .order("created_at", { ascending: true });
   return (data ?? []) as RoleCategory[];
 }
+/**
+ * あるユーザーのつぶやきを、いいね・コメント件数つきで取得する。
+ * マイページと部員ページ（他人のプロフィール）で同じ内容を出すための共通経路。
+ */
+export async function getUserTweets(
+  userId: string,
+  currentUserId: string,
+  limit = 50,
+): Promise<FeedItem[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("tweets")
+    .select(`*, ${AUTHOR_SELECT}`)
+    .eq("user_id", userId)
+    .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error("Failed to load member posts: " + error.message);
+
+  const tweets = await attachTweetSocialData(supabase, (data ?? []).map(normalizeTweetWithAuthor));
+  const ids = tweets.map((tweet) => tweet.id);
+  const [liked, comments] = await Promise.all([
+    fetchMyLikedIds(supabase, currentUserId, "tweet", ids),
+    fetchCommentCounts(supabase, "tweet", ids),
+  ]);
+  return tweets.map(
+    (tweet): FeedItem => ({
+      kind: "tweet",
+      ...tweet,
+      liked_by_me: liked.has(tweet.id),
+      comments_count: comments.get(tweet.id) ?? 0,
+    }),
+  );
+}
+
+/** 投稿（練習記録 + つぶやき）を新しい順に並べる */
+export function sortFeedItems(items: FeedItem[]): FeedItem[] {
+  return [...items].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+}
+
 /** あるユーザーの投稿（練習記録 + つぶやき）をマージして返す（マイページ用） */
 export async function getUserActivity(
   userId: string,
@@ -583,7 +623,7 @@ export async function getUserActivity(
 ): Promise<FeedItem[]> {
   const supabase = await createClient();
 
-  const [recordsResult, tweetsResult] = await Promise.all([
+  const [recordsResult, tweetItems] = await Promise.all([
     supabase
       .from("practice_records")
       .select(`*, ${AUTHOR_SELECT}`)
@@ -593,32 +633,18 @@ export async function getUserActivity(
       .or(SHEET_TIMELINE_OR)
       .order("recorded_date", { ascending: false })
       .limit(limit),
-    supabase
-      .from("tweets")
-      .select(`*, ${AUTHOR_SELECT}`)
-      .eq("user_id", userId)
-      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
-      .order("created_at", { ascending: false })
-      .limit(limit),
+    getUserTweets(userId, currentUserId, limit),
   ]);
   if (recordsResult.error) throw new Error("Failed to load member records: " + recordsResult.error.message);
-  if (tweetsResult.error) throw new Error("Failed to load member posts: " + tweetsResult.error.message);
-  const recRows = recordsResult.data;
-  const twRows = tweetsResult.data;
 
-  const records = (recRows ?? []).map(normalizeRecordWithAuthor);
-  const tweets = await attachTweetSocialData(supabase, (twRows ?? []).map(normalizeTweetWithAuthor));
+  const records = (recordsResult.data ?? []).map(normalizeRecordWithAuthor);
   const recIds = records.map((r) => r.id);
-  const twIds = tweets.map((t) => t.id);
-
-  const [recLiked, twLiked, recComments, twComments] = await Promise.all([
+  const [recLiked, recComments] = await Promise.all([
     fetchMyLikedIds(supabase, currentUserId, "record", recIds),
-    fetchMyLikedIds(supabase, currentUserId, "tweet", twIds),
     fetchCommentCounts(supabase, "record", recIds),
-    fetchCommentCounts(supabase, "tweet", twIds),
   ]);
 
-  const items: FeedItem[] = [
+  return sortFeedItems([
     ...records.map(
       (r): FeedItem => ({
         kind: "record",
@@ -627,17 +653,8 @@ export async function getUserActivity(
         comments_count: recComments.get(r.id) ?? 0,
       }),
     ),
-    ...tweets.map(
-      (t): FeedItem => ({
-        kind: "tweet",
-        ...t,
-        liked_by_me: twLiked.has(t.id),
-        comments_count: twComments.get(t.id) ?? 0,
-      }),
-    ),
-  ];
-  items.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
-  return items;
+    ...tweetItems,
+  ]);
 }
 
 /** ホーム: 重要は全件、通常は直近3件、明日締切は件数外で表示 */
