@@ -896,7 +896,7 @@ export async function getNoteById(id: string): Promise<NoteWithRelations | null>
   return data ? normalizeNoteRow(data) : null;
 }
 
-/** スレッド一覧（新しい返信があった順） */
+/** スレッド一覧（新しいメッセージがあった順） */
 export async function getThreads(): Promise<ThreadWithAuthor[]> {
   const supabase = await createClient();
   const { data } = await supabase

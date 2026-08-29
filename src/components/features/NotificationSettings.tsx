@@ -206,7 +206,7 @@ export function NotificationSettings({
               <Toggle
                 variant="row"
                 label="コメント"
-                description="自分の投稿へのコメントと、参加中スレッドへの返信を通知します。"
+                description="自分の投稿へのコメントと、参加中スレッドの新しいメッセージを通知します。"
                 checked={comment}
                 disabled={!isSubscribed}
                 onChange={() => handleChange("notify_comment", !comment, setComment)}

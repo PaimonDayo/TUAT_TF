@@ -140,7 +140,7 @@ export function ThreadComposer({ userId, folderId, onDone }: { userId: string; f
           placeholder="例: 合宿の持ち物どうする？"
         />
       </div>
-      <p className="text-caption">スレッドは部員全員が見て返信できます。</p>
+      <p className="text-caption">スレッドは部員全員が見てメッセージを送信できます。</p>
       <FormModalFooter>
         <Button type="button" className="w-full" disabled={!title.trim() || saving} onClick={create}>
           スレッドを立てる

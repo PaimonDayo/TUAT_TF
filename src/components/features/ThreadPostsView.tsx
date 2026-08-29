@@ -11,12 +11,13 @@ import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { createClient } from "@/lib/supabase/client";
 import type { AuthorMini, ThreadPostWithAuthor } from "@/types";
 
-/** スレッドの投稿一覧＋返信欄（掲示板スタイル・時系列） */
+/** スレッドのメッセージ一覧＋送信欄（掲示板スタイル・時系列） */
 export function ThreadPostsView({
   threadId,
   posts,
@@ -34,6 +35,9 @@ export function ThreadPostsView({
   const { showToast } = useToast();
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
+  const [editingPost, setEditingPost] = useState<ThreadPostWithAuthor | null>(null);
+  const [editingBody, setEditingBody] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [visiblePosts, setVisiblePosts] = useState(posts);
@@ -58,7 +62,7 @@ export function ThreadPostsView({
       .single();
     setSending(false);
     if (error) {
-      showToast("投稿できませんでした");
+      showToast("メッセージを送信できませんでした");
       setVisiblePosts((current) => current.filter((post) => post.id !== optimisticId));
       setBody(submittedBody);
       return;
@@ -73,19 +77,49 @@ export function ThreadPostsView({
   }
 
   async function removePost(id: string) {
-    const { error } = await createClient().from("thread_posts").delete().eq("id", id);
-    if (error) {
-      showToast("投稿を削除できませんでした");
+    const { data, error } = await createClient().from("thread_posts").delete().eq("id", id).select("id");
+    if (error || !data || data.length !== 1) {
+      showToast("メッセージを削除できませんでした");
       return false;
     }
+    setVisiblePosts((current) => current.filter((post) => post.id !== id));
     router.refresh();
     return true;
+  }
+
+  function startEdit(post: ThreadPostWithAuthor) {
+    setEditingPost(post);
+    setEditingBody(post.body);
+  }
+
+  async function saveEdit() {
+    if (!editingPost || savingEdit) return;
+    const trimmed = editingBody.trim().slice(0, 2000);
+    if (!trimmed) return;
+    setSavingEdit(true);
+    const updatedAt = new Date().toISOString();
+    const { data, error } = await createClient()
+      .from("thread_posts")
+      .update({ body: trimmed, updated_at: updatedAt })
+      .eq("id", editingPost.id)
+      .eq("author_id", currentUserId)
+      .select("id, body, updated_at")
+      .single();
+    setSavingEdit(false);
+    if (error || !data) {
+      showToast("メッセージを更新できませんでした");
+      return;
+    }
+    setVisiblePosts((current) => current.map((post) => post.id === data.id ? { ...post, body: data.body, updated_at: data.updated_at } : post));
+    setEditingPost(null);
+    showToast("メッセージを更新しました", "success");
+    router.refresh();
   }
 
   return (
     <div className="space-y-4 pb-20">
       {visiblePosts.length === 0 ? (
-        <EmptyState title="まだ投稿はありません" description="最初のひとことを書いてみましょう。" />
+        <EmptyState title="まだメッセージはありません" description="最初のメッセージを送ってみましょう。" />
       ) : (
         <div className="space-y-2">
           {visiblePosts.map((post) => (
@@ -101,6 +135,7 @@ export function ThreadPostsView({
                   <p className="text-caption">
                     {post.author.display_name}・
                     {format(new Date(post.created_at), "M月d日 HH:mm", { locale: ja })}
+                    {post.updated_at !== post.created_at && "・編集済み"}
                   </p>
                   <div className="mt-1 whitespace-pre-wrap break-words text-body">
                     <Linkify text={post.body} />
@@ -108,9 +143,13 @@ export function ThreadPostsView({
                 </div>
                 {!post.id.startsWith("optimistic-") && (post.author_id === currentUserId || isAdmin) && (
                   <ActionMenu
+                    onEdit={post.author_id === currentUserId ? () => startEdit(post) : undefined}
                     onDelete={() => removePost(post.id)}
-                    deleteTitle="投稿を削除しますか？"
-                    deleteDescription="削除した投稿は元に戻せません。"
+                    editLabel="メッセージを編集"
+                    deleteLabel="メッセージを削除"
+                    deleteTitle="メッセージを削除しますか？"
+                    deleteDescription="削除したメッセージは元に戻せません。"
+                    triggerLabel="メッセージのメニュー"
                   />
                 )}
               </div>
@@ -137,8 +176,8 @@ export function ThreadPostsView({
             }}
             maxLength={2000}
             rows={1}
-            placeholder="返信を入力"
-            aria-label="返信を入力"
+            placeholder="メッセージを入力"
+            aria-label="メッセージを入力"
             className="min-h-11 max-h-32 flex-1 overflow-y-auto rounded-[22px] bg-card px-4 py-2.5 leading-6"
           />
           <Button
@@ -146,12 +185,30 @@ export function ThreadPostsView({
             size="icon"
             className="h-11 w-11 shrink-0 rounded-full"
             disabled={!body.trim() || sending}
-            aria-label="返信を送信"
+            aria-label="メッセージを送信"
           >
             <Send size={18} />
           </Button>
         </div>
       </form>
+
+      <FormModal open={editingPost !== null} onOpenChange={(open) => { if (!open && !savingEdit) setEditingPost(null); }} title="メッセージを編集" autoFocus={false}>
+        <div className="space-y-4 pb-4">
+          <Textarea
+            value={editingBody}
+            onChange={(event) => setEditingBody(event.target.value)}
+            maxLength={2000}
+            rows={6}
+            placeholder="メッセージを入力"
+            autoFocus
+          />
+          <FormModalFooter>
+            <Button size="lg" disabled={!editingBody.trim() || savingEdit} onClick={() => void saveEdit()}>
+              {savingEdit ? "更新中…" : "更新する"}
+            </Button>
+          </FormModalFooter>
+        </div>
+      </FormModal>
     </div>
   );
 }

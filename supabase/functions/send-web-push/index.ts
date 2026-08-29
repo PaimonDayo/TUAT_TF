@@ -106,8 +106,8 @@ serve(async (req) => {
       bodyText = "この通知が見えていれば、通知は届いています";
       url = "/mypage";
     } else if (notification.type === 'thread_reply') {
-      title = "スレッドに新しい返信";
-      bodyText = "参加中のスレッドに返信がありました";
+      title = "スレッドに新しいメッセージ";
+      bodyText = "参加中のスレッドにメッセージが届きました";
       url = notification.reference_id ? `/notes/threads/${notification.reference_id}` : "/notices#notifications";
     } else if (notification.type === 'mention') {
       title = "メンションされました";
