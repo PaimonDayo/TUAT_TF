@@ -662,30 +662,60 @@ export async function getUserActivity(
 }
 
 /** ホーム: 重要は全件、通常は直近3件、明日締切は件数外で表示 */
+/** ホームの「通常のお知らせ直近3件」を選ぶために読む件数。重要と明日締切は別途全件引く。 */
+const HOME_NOTICE_SCAN_LIMIT = 50;
+
 export async function getHomeNotices(userId: string): Promise<NoticeWithReactions[]> {
   const supabase = await createClient();
   const today = jstToday();
   const tomorrow = jstToday(1);
 
-  const [{ data: notices }, { data: dismissed }, { data: acknowledged }] = await Promise.all([
+  // 重要（pin_home）は古くてもホームに出し続ける仕様なので、通常のお知らせと分けて引く。
+  // 1本の limit 付きクエリにすると、通常のお知らせが増えたときに重要が押し出されてしまう。
+  const [{ data: pinned }, { data: recentNotices }, { data: deadlineReminders }, { data: dismissed }, { data: acknowledged }] = await Promise.all([
     supabase
       .from("notices")
       .select("*")
       .or(`deadline.is.null,deadline.gte.${today}`)
+      .eq("pin_home", true)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("notices")
+      .select("*")
+      .or(`deadline.is.null,deadline.gte.${today}`)
+      .eq("pin_home", false)
+      .order("created_at", { ascending: false })
+      .limit(HOME_NOTICE_SCAN_LIMIT),
+    // 明日締切のリマインドは件数の外側で必ず拾うため、上の直近分とは別に引く。
+    supabase
+      .from("notices")
+      .select("*")
+      .eq("deadline", tomorrow)
       .order("created_at", { ascending: false }),
     supabase.from("notice_dismissals").select("notice_id").eq("user_id", userId),
     supabase.from("notice_reactions").select("notice_id").eq("user_id", userId).eq("reaction", "ack"),
   ]);
+  const notices = [...(pinned ?? []), ...(recentNotices ?? []), ...(deadlineReminders ?? [])];
 
   const dismissedIds = new Set((dismissed ?? []).map((dismissal) => dismissal.notice_id as string));
   const acknowledgedIds = new Set((acknowledged ?? []).map((reaction) => reaction.notice_id as string));
+  // 3本のクエリは重なりうるので id で一意化してから絞り込む。
+  const seen = new Set<string>();
+  const uniqueNotices = (notices as Notice[]).filter((notice) => {
+    if (seen.has(notice.id)) return false;
+    seen.add(notice.id);
+    return true;
+  });
   // 「確認」を付けたお知らせは重要指定を含めホームから除外する。
-  const visible = ((notices ?? []) as Notice[]).filter(
+  const visible = uniqueNotices.filter(
     (notice) => !acknowledgedIds.has(notice.id) && (notice.pin_home || !dismissedIds.has(notice.id)),
   );
   const important = visible.filter((notice) => notice.pin_home);
   const reminders = visible.filter((notice) => notice.deadline === tomorrow);
-  const recent = visible.filter((notice) => !notice.pin_home).slice(0, 3);
+  const recent = visible
+    .filter((notice) => !notice.pin_home)
+    .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+    .slice(0, 3);
   const selected = new Map<string, Notice>();
   for (const notice of [...important, ...reminders, ...recent]) {
     selected.set(notice.id, notice);
