@@ -93,12 +93,27 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 - **origin/master が正。force-push 厳禁。作業前に必ず `git pull`**（diverge時は丸ごとマージせず自分の差分だけ載せ直す）。
 - マイグレーションは **新しいタイムスタンプ＋冪等**（`IF NOT EXISTS` / `DROP POLICY IF EXISTS`）。適用は `"Y" | npx --yes supabase db push`。
 - **検証は `npx tsc --noEmit` を基本**。`npm run build` は **push 直前だけ**（重い）。push 後 `xxxx..yyyy master -> master` を確認。
+- **ブランチへの push で終わりにしない。master へ入れて Vercel Production が成功するまで見届ける**（下の「完了の定義」）。
 - **コミット署名は作業したエージェント自身の名で**（他AIの名を偽らない）。末尾に各自の `Co-Authored-By` を付ける:
   - Claude Code → `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
   - Codex → `Co-Authored-By: Codex <noreply@openai.com>`
 - 認証はユーザー版を維持（proxy は cookie があれば getUser 失敗でもログアウトさせない＋SessionKeepAlive）。
 - アクセス制御は最終的に **RLS** が担保。UIガードと RLS の両方で守る。
 - **同期・一括更新系のロジック変更は、本番初回実行の前に①対象テーブルのスナップショット取得（例: service roleでCSVエクスポート）②dryRunで差分確認、を必ず行う**（2026-07-03のデータ消失インシデントの教訓。本番DBはPITR/バックアップ無しで、消えたら戻せない）。
+
+## 完了の定義（本番反映まで見届ける。2026-08-29 オーナー確定）
+**作業ブランチへの push は完了ではない。** それだけでは Vercel の Preview が1つ増えるだけで、部員が使う本番（https://tuat-tf.vercel.app ）は何も変わっていない。オーナーから別の指示が無いかぎり、次の5つを終えて初めて「完了」と報告する。
+
+1. `npx tsc --noEmit`・対象eslint・`npx vitest run`・`npm run build` を通す。
+2. 作業ブランチを `git push -u origin <branch>` する。
+3. `git fetch origin master` のうえ **master へ fast-forward して push** する。
+   `git checkout master && git merge --ff-only <branch> && git push -u origin master`
+   ff-only にならないときは origin/master が進んでいるので、**自分の差分を origin/master の上に載せ直してから**もう一度 ff（force-push 厳禁は従来どおり）。
+4. **Vercel Production が自分の commit で成功したことを確認する。** Vercel MCP の `list_deployments`（project `tuat-tf` = `prj_fLc2aGQHb2Ny4IMt21ESzN0ij25p` / team `team_kxzFfl8gjcBDe6W8AayTW156`）で、最新の deployment が `target: "production"`・`state: "READY"`・`meta.githubCommitSha` が自分の commit、の3つを満たすことを見る。`target: null` はブランチのPreviewなので**本番ではない**。ビルド中（`BUILDING`）なら READY になるまで待つ。失敗していれば直してから再度この手順を回す。Vercel MCP が使えないセッションでは、その旨を伝えてオーナーに確認を依頼する。
+5. 報告に **commit・master へ入ったこと・Production の状態** を書く。実機（iOS PWA）で見ていないなら「実機確認は未実施」も必ず書く。
+
+- migration・同期・一括更新など本番データを壊しうる変更は、従来どおり**スナップショット取得と dryRun をこの手順の前に**行う（厳守ルール参照）。
+- 途中で止めるとき（レビューを挟みたい・オーナーの判断が要る）は、**どこまで進めたか**と**本番にはまだ出ていないこと**を明示する。黙ってブランチ止まりにしない。
 
 ## ドキュメント索引
 - `docs/CLAUDE-HANDOFF.md` … **最新の進捗・引き継ぎ（まずここ）**
@@ -283,6 +298,7 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 - 他AIが直前に触った範囲は、ログを見て**現状コードを確認してから**触る（古い前提で上書きしない）。
 
 ## 作業ログ（着手前に追記・新しいものを上へ）
+- 2026-08-29 / Claude Opus 5 / 「完了の定義」節を追加（オーナー確定）。作業ブランチへの push は Vercel の Preview が増えるだけで本番は変わらないのに、そこで完了として報告していたため。以後は ①検証 ②ブランチ push ③master へ fast-forward して push ④Vercel Production の最新 deployment が target=production・state=READY・githubCommitSha が自分の commit であることを確認（target=null はPreview）⑤報告に commit・master 反映・Production の状態・実機確認の有無を書く、までを完了とする。途中で止めるときは本番に出ていないことを明示する。ドキュメントのみでコード変更なし -> (this commit)
 - 2026-08-29 / Claude Opus 5 / 投稿の「簡易表示」を廃止し、投稿自身が高さを決める形へ作り直した。従来は同じ名前で中身が3種類（タイムライン＝2行リスト・ホーム＝カードのまま本文を畳む・マイページ＝カードのまま＋トグル）あり、初期値も画面ごとにバラバラ、切替はラベルの無いアイコン1個、タップで開ける手掛かりも無く、切り替えると開いていた投稿が全部閉じていた。主要SNS（X・Instagram・Facebook・Strava・Slack等）はどこも密度モードを持たず「1投稿の高さに上限＋続きを読む」で一覧性を作っているため、その形へ寄せた。ExpandableSection を新設し、記録の詳細（150px）とつぶやき本文（140px）だけを畳んで下端をぼかし、収まる投稿にはボタンを出さない（短いつぶやきが2行で切られて読めない問題も解消）。あわせて Slack の未読ラインに相当する「ここまで読みました」をタイムラインに追加（use-last-seen-feed が端末内 localStorage に最終閲覧時刻を保持、開いた時点の値を固定するので見ている最中に線が動かない。既読判定は絞り込み後の実際に表示した投稿が対象）。日付の見出しは簡易表示専用だったが全投稿で常に出す。RecordCard/TweetCard の compact・embedded prop、CompactFeedRow、useFeedDisplay、useBooleanPreference、boolean-preference、timeline-compact cookie を削除（差し引き約400行減）。unreadBoundaryIndex を純関数化してテスト追加。全199テスト・tsc・対象eslint・build成功。実機確認は未実施 -> (this commit)
 <!-- 形式: YYYY-MM-DD / エージェント / 触る範囲 → 結果(commit・要点) -->
 - 2026-07-31 / Claude Opus 5 / 上記4件の実装後にレビューして3点修正。①notificationclick が WindowClient.navigate() 失敗時に既存ウィンドウへfocusして終わっており、iOSでは通知をタップしても直前の画面のままで目的の投稿へ行けなかった（openWindow を先に試し、素のfocusは最後の手段へ。同一オリジン判定の new URL 例外も握る）→ 48b96f1 ②Service Worker の pushsubscriptionchange が /api/push/vapid を叩くのに、そこが認証ゲートの内側で401になり通知の自動復旧だけが黙って失敗していた（VAPID公開鍵はクライアントバンドルにも入る公開情報なので proxy の公開パスへ）→ 73e2349 ③重複していた設定側の「タイムラインを簡略表示」をオーナー確認のうえ撤去（タイムライン画面のトグルは維持・同じcookie）→ 821bf44。あわせて旧アプリ（別リポジトリ D:\AI\Antigravity\TF, menu20260404）を修正・デプロイ: 旧オリジンのPWAはSWにpushハンドラが無く構造的に通知が届かないのに、index.html が新アプリへ自動リダイレクトするため誰も気づけなかった。案内ページ /moved.html へ変更し、SWは自己解除＋キャッシュ削除のみに差し替え、登録も撤去（管理者の #access= 経路は不変）。本番の2オリジンとも反映確認済み。全118テスト・tsc・対象eslint・build成功。実機確認は未実施 -> (this commit)
