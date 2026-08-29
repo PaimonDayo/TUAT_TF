@@ -2,17 +2,17 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { UserCheck } from "lucide-react";
+import { List, UserCheck } from "lucide-react";
 import { RecordCard } from "@/components/cards/RecordCard";
 import { TweetCard } from "@/components/cards/TweetCard";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented";
-import { GradeFilter } from "@/components/features/GradeFilter";
+import { CompactFeedRow } from "@/components/features/CompactFeedRow";
 import { UnreadDivider } from "@/components/features/UnreadDivider";
 import { FAVORITE_CHANGE_EVENT } from "@/components/features/FavoriteButton";
 import { createClient } from "@/lib/supabase/client";
 import { EmptyState } from "@/components/ui/empty-state";
-import { GRADE_OPTIONS, SIMPLE_BLOCK_ITEMS, matchSimpleBlock } from "@/lib/constants";
+import { SIMPLE_BLOCK_ITEMS, matchSimpleBlock } from "@/lib/constants";
 import { jstToday } from "@/lib/date";
 import {
   feedDateLabel,
@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { loadFeed } from "@/app/(app)/timeline/actions";
 import { useLastSeenFeed } from "@/hooks/use-last-seen-feed";
+import { useFeedDisplay } from "@/hooks/use-feed-display";
 import { unreadBoundaryIndex } from "@/lib/feed-unread";
 import type { BlockViewDefault, CommentAuthor, FeedItem } from "@/types";
 
@@ -33,9 +34,9 @@ type FeedCursor = {
 } | null;
 
 /**
- * タイムライン本体。表示の切り替えは持たず、長い投稿だけがカード内で畳まれる。
+ * タイムライン本体。カード表示と、一覧性を優先した2行表示を切り替えられる。
  * 前回開いたときの続きの位置に「ここまで読みました」の線を出す。
- * ブロック・学年・お気に入りの絞り込みはサーバー往復せず
+ * ブロック・お気に入りの絞り込みはサーバー往復せず
  * 読み込み済みアイテムをクライアント側でフィルタするため、タブ切替が即時。
  * 「もっと見る」のときだけサーバーから追加取得する。
  */
@@ -43,6 +44,7 @@ export function TimelineView({
   initialItems,
   currentUser,
   favoriteIds = [],
+  initialCompact = false,
   initialBlock = "all",
   showRecordSource = false,
   enableCsvRefresh = false,
@@ -50,6 +52,8 @@ export function TimelineView({
   initialItems: FeedItem[];
   currentUser: CommentAuthor;
   favoriteIds?: string[];
+  /** 一覧表示の初期値（Cookieから復元し、初期表示のちらつきを防ぐ） */
+  initialCompact?: boolean;
   /** 最初に表示するブロックタブ（マイページの「タイムラインの初期表示」） */
   initialBlock?: BlockViewDefault;
   showRecordSource?: boolean;
@@ -87,10 +91,13 @@ export function TimelineView({
   );
 
   const [block, setBlock] = useState<string>(initialBlock);
-  const [grades, setGrades] = useState<string[]>([]);
   const [favOnly, setFavOnly] = useState(false);
   const [currentFavoriteIds, setCurrentFavoriteIds] = useState(favoriteIds);
   const filterAutoLoadCount = useRef(0);
+  const { compact, toggleCompact, toggleExpanded, isCompact } = useFeedDisplay({
+    initialCompact,
+    cookieName: "timeline-compact",
+  });
 
   useEffect(() => {
     let active = true;
@@ -189,20 +196,13 @@ export function TimelineView({
 
   const favSet = useMemo(() => new Set(currentFavoriteIds), [currentFavoriteIds]);
 
-  // 投稿者にいる学年だけをフィルタ候補に出す（メンバー一覧と同じ仕様）
-  const presentGrades = useMemo(() => {
-    const set = new Set(items.map((i) => i.author?.grade ?? "").filter(Boolean));
-    return GRADE_OPTIONS.map((g) => g.value).filter((v) => set.has(v));
-  }, [items]);
-
   const filtered = useMemo(() => {
     return items.filter((item) => {
       if (!matchSimpleBlock(item.author?.blocks, block)) return false;
-      if (grades.length > 0 && !grades.includes(item.author?.grade ?? "")) return false;
       if (favOnly && !favSet.has(item.author?.id)) return false;
       return true;
     });
-  }, [items, block, grades, favOnly, favSet]);
+  }, [items, block, favOnly, favSet]);
 
   const groups = useMemo(() => groupFeedItemsByDate(filtered), [filtered]);
   // 既読の基準は「実際に画面へ出した投稿」。絞り込みで隠れている投稿は既読にしない。
@@ -213,11 +213,11 @@ export function TimelineView({
     [filtered, lastSeenAt],
   );
 
-  const hasActiveFilter = block !== "all" || grades.length > 0 || favOnly;
+  const hasActiveFilter = block !== "all" || favOnly;
 
   useEffect(() => {
     filterAutoLoadCount.current = 0;
-  }, [block, grades, favOnly]);
+  }, [block, favOnly]);
 
   useEffect(() => {
     if (
@@ -238,11 +238,26 @@ export function TimelineView({
 
   function loadMore() { void feedQuery.fetchNextPage(); }
 
-  function renderItem(item: FeedItem) {
+  function renderItem(
+    item: FeedItem,
+    commentsExpanded = false,
+    embedded = false,
+  ) {
     return item.kind === "record" ? (
-      <RecordCard record={item} currentUser={currentUser} showSource={showRecordSource} />
+      <RecordCard
+        record={item}
+        currentUser={currentUser}
+        commentsExpanded={commentsExpanded}
+        showSource={showRecordSource}
+        embedded={embedded}
+      />
     ) : (
-      <TweetCard tweet={item} currentUser={currentUser} />
+      <TweetCard
+        tweet={item}
+        currentUser={currentUser}
+        commentsExpanded={commentsExpanded}
+        embedded={embedded}
+      />
     );
   }
 
@@ -251,7 +266,20 @@ export function TimelineView({
       <div className="px-4 pt-1 pb-3 md:px-6 lg:pb-2">
         <div className="flex min-h-9 items-center gap-2 lg:min-h-8">
           <div className="min-w-0 flex-1 md:max-w-[420px]"><SegmentedControl items={SIMPLE_BLOCK_ITEMS} value={block} onChange={setBlock} /></div>
-          <GradeFilter value={grades} onChange={setGrades} availableGrades={presentGrades} />
+          <button
+            type="button"
+            onClick={toggleCompact}
+            aria-pressed={compact}
+            aria-label={compact ? "カード表示に戻す" : "一覧表示にする"}
+            title={compact ? "カード表示に戻す" : "一覧表示にする"}
+            className={cn(
+              "inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full border px-3 text-[12px] font-semibold active:opacity-60",
+              compact ? "border-accent bg-accent text-white" : "border-separator bg-card text-muted2",
+            )}
+          >
+            <List size={14} />
+            <span>一覧</span>
+          </button>
           <button
             onClick={() => setFavOnly((v) => !v)}
             aria-label={favOnly ? "フォロー中のみを解除" : "フォロー中のみ表示"}
@@ -289,14 +317,50 @@ export function TimelineView({
                       </h2>
                       <span className="text-[10px] text-muted">・{group.items.length}件</span>
                     </div>
-                    <div className="space-y-3 lg:space-y-2">
-                      {group.items.map((item, index) => (
-                        <Fragment key={`${item.kind}-${item.id}`}>
-                          {index > 0 && boundaryIndex === groupStart + index && <UnreadDivider />}
-                          {renderItem(item)}
-                        </Fragment>
-                      ))}
-                    </div>
+                    {compact ? (
+                      <div className="divide-y divide-separator/70 overflow-hidden rounded-[16px] border border-separator/70 bg-card">
+                        {group.items.map((item, index) => {
+                          const key = `${item.kind}-${item.id}`;
+                          const collapsed = isCompact(key);
+                          const commentsExpanded = !collapsed && (item.comments_count ?? 0) > 0;
+                          return (
+                            <Fragment key={key}>
+                              {index > 0 && boundaryIndex === groupStart + index && (
+                                <div className="bg-card px-3"><UnreadDivider /></div>
+                              )}
+                              <div
+                                role="button"
+                                tabIndex={0}
+                                aria-label={collapsed ? "投稿の詳細を開く" : "投稿の詳細を閉じる"}
+                                aria-expanded={!collapsed}
+                                onClick={() => toggleExpanded(key)}
+                                onKeyDown={(event) => {
+                                  if (event.target !== event.currentTarget) return;
+                                  if (event.key === "Enter" || event.key === " ") {
+                                    event.preventDefault();
+                                    toggleExpanded(key);
+                                  }
+                                }}
+                                className="cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent"
+                              >
+                                {collapsed
+                                  ? <CompactFeedRow item={item} />
+                                  : renderItem(item, commentsExpanded, true)}
+                              </div>
+                            </Fragment>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="space-y-3 lg:space-y-2">
+                        {group.items.map((item, index) => (
+                          <Fragment key={`${item.kind}-${item.id}`}>
+                            {index > 0 && boundaryIndex === groupStart + index && <UnreadDivider />}
+                            {renderItem(item)}
+                          </Fragment>
+                        ))}
+                      </div>
+                    )}
                   </section>
                 );
               });

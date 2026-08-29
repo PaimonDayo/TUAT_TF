@@ -33,11 +33,13 @@ export function RecordCard({
   currentUser,
   commentsExpanded = false,
   showSource = false,
+  embedded = false,
 }: {
   record: RecordWithAuthor;
   currentUser: CommentAuthor;
   commentsExpanded?: boolean;
   showSource?: boolean;
+  embedded?: boolean;
 }) {
   const { author } = record;
   const recordFields = record.record_fields_version !== null && record.record_fields_version !== undefined
@@ -67,7 +69,7 @@ export function RecordCard({
   const details = [...configuredDetails, ...legacyDetails].filter((field) => !field.hidden && recordValue(record, field.key) !== null && recordValue(record, field.key) !== undefined && recordValue(record, field.key) !== "");
 
   return (
-    <Card className="space-y-3 p-4">
+    <Card className={embedded ? "space-y-3 rounded-none border-0 p-4" : "space-y-3 p-4"}>
       <div className="flex items-center gap-2.5">
         <Link href={`/members/${author.id}`} onClick={(event) => event.stopPropagation()}>
           <Avatar name={author.display_name} blocks={author.blocks} avatarUrl={author.avatar_url} />

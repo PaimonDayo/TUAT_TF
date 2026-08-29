@@ -25,6 +25,7 @@ async function TimelineContent() {
     getMyFavoriteIds(profile.id),
     cookies(),
   ]);
+  const initialCompact = cookieStore.get("timeline-compact")?.value === "1";
   const showRecordSource =
     permissionsOf(profile.roles).manageSystem &&
     cookieStore.get("show-record-source")?.value === "1";
@@ -39,6 +40,7 @@ async function TimelineContent() {
         systemRecordForm: Boolean(profile.sheet_name),
       }}
       favoriteIds={favoriteIds}
+      initialCompact={initialCompact}
       initialBlock={profile.timeline_default_block}
       showRecordSource={showRecordSource}
       enableCsvRefresh={Boolean(profile.sheet_name)}
