@@ -34,9 +34,15 @@ export async function safeUpdate(
   return { ok: true };
 }
 
-/** 更新失敗時に利用者へ表示する共通メッセージ。 */
-export function safeUpdateMessage(reason: "error" | "blocked"): string {
+/**
+ * 更新失敗時に利用者へ表示する共通メッセージ。
+ * subject には「保存」「ピン留めを変更」のように、できなかった操作を渡す。
+ */
+export function safeUpdateMessage(
+  reason: "error" | "blocked",
+  subject = "保存",
+): string {
   return reason === "error"
-    ? "保存できませんでした。もう一度お試しください"
-    : "保存できませんでした。画面を開き直してから、もう一度お試しください";
+    ? `${subject}できませんでした。もう一度お試しください`
+    : `${subject}できませんでした。画面を開き直してから、もう一度お試しください`;
 }

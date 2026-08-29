@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { FormModalFooter } from "@/components/ui/form-modal";
 import { useToast } from "@/components/ui/toast";
 import { createClient } from "@/lib/supabase/client";
+import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import type { ThreadWithAuthor } from "@/types";
 
 /** スレッド一覧（掲示板スタイル・タスク17-b） */
@@ -51,12 +52,14 @@ export function ThreadList({
   }
 
   async function togglePin(thread: ThreadWithAuthor) {
-    const { error } = await createClient()
-      .from("threads")
-      .update({ pinned: !thread.pinned })
-      .eq("id", thread.id);
-    if (error) {
-      showToast("\u30d4\u30f3\u7559\u3081\u3092\u5909\u66f4\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f");
+    const result = await safeUpdate(
+      createClient(),
+      "threads",
+      { pinned: !thread.pinned },
+      { id: thread.id },
+    );
+    if (!result.ok) {
+      showToast(safeUpdateMessage(result.reason, "ピン留めを変更"));
       return;
     }
     router.refresh();
