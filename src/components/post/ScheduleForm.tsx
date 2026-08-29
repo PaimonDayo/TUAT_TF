@@ -212,7 +212,7 @@ export function ScheduleForm({
         <SegmentedControl
           items={[
             { key: "all", label: "全体" },
-            ...(["middle_long", "short"] as const).map((block) => ({ key: block, label: BLOCKS[block].label })),
+            ...EDITABLE_BLOCK_ORDER.map((block) => ({ key: block, label: BLOCKS[block].label })),
           ]}
           value={targetBlocks[0] ?? "all"}
           onChange={(value) => setTargetBlocks(value === "all" ? [] : [value as Block])}
