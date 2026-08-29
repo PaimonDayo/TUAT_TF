@@ -10,26 +10,22 @@ import { Card } from "@/components/ui/card";
 import { ImageLightbox } from "@/components/ui/image-lightbox";
 import { PostActions } from "@/components/cards/PostActions";
 import { MentionText } from "@/components/common/MentionText";
+import { ExpandableSection } from "@/components/common/ExpandableSection";
 import { TweetPoll } from "@/components/features/TweetPoll";
 import { TweetOwnerMenu } from "@/components/cards/PostOwnerMenu";
-import { cn } from "@/lib/utils";
 import { gradeShort } from "@/lib/constants";
 import type { CommentAuthor, TweetWithAuthor } from "@/types";
 import { tweetImageDisplayUrl } from "@/lib/tweet-image";
 
-/** タイムライン用のつぶやきカード。compact=簡易表示（本文を2行に省略） */
+/** タイムライン用のつぶやきカード。長い本文は自動で畳み、「続きを読む」で全文を出す。 */
 export function TweetCard({
   tweet,
   currentUser,
-  compact = false,
   commentsExpanded = false,
-  embedded = false,
 }: {
   tweet: TweetWithAuthor;
   currentUser: CommentAuthor;
-  compact?: boolean;
   commentsExpanded?: boolean;
-  embedded?: boolean;
 }) {
   const { author } = tweet;
   const isOwner = currentUser.id === author.id;
@@ -39,12 +35,7 @@ export function TweetCard({
 
   return (
     <>
-    <Card
-      className={cn(
-        "space-y-3 p-4",
-        embedded && "rounded-none border-0",
-      )}
-    >
+    <Card className="space-y-3 p-4">
       <div className="flex items-center gap-2.5">
         <Link href={`/members/${author.id}`} onClick={(event) => event.stopPropagation()}>
           <Avatar name={author.display_name} blocks={author.blocks} avatarUrl={author.avatar_url} />
@@ -71,14 +62,11 @@ export function TweetCard({
         </span>
       </div>
 
-      <p
-        className={cn(
-          "break-words text-[15px] leading-7",
-          compact ? "line-clamp-2" : "whitespace-pre-wrap",
-        )}
-      >
-        <MentionText text={tweet.content} mentions={tweet.mentions} />
-      </p>
+      <ExpandableSection maxHeight={140}>
+        <p className="whitespace-pre-wrap break-words text-[15px] leading-7">
+          <MentionText text={tweet.content} mentions={tweet.mentions} />
+        </p>
+      </ExpandableSection>
       {tweet.poll && (
         <TweetPoll
           tweetId={tweet.id}

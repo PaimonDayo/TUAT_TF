@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { UserCheck, List } from "lucide-react";
+import { UserCheck } from "lucide-react";
 import { RecordCard } from "@/components/cards/RecordCard";
 import { TweetCard } from "@/components/cards/TweetCard";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { GradeFilter } from "@/components/features/GradeFilter";
-import { CompactFeedRow } from "@/components/features/CompactFeedRow";
+import { UnreadDivider } from "@/components/features/UnreadDivider";
 import { FAVORITE_CHANGE_EVENT } from "@/components/features/FavoriteButton";
 import { createClient } from "@/lib/supabase/client";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -21,7 +21,8 @@ import {
 } from "@/lib/feed-date";
 import { cn } from "@/lib/utils";
 import { loadFeed } from "@/app/(app)/timeline/actions";
-import { useFeedDisplay } from "@/hooks/use-feed-display";
+import { useLastSeenFeed } from "@/hooks/use-last-seen-feed";
+import { unreadBoundaryIndex } from "@/lib/feed-unread";
 import type { BlockViewDefault, CommentAuthor, FeedItem } from "@/types";
 
 const PAGE = 90;
@@ -32,7 +33,9 @@ type FeedCursor = {
 } | null;
 
 /**
- * タイムライン本体。ブロック・学年・お気に入りの絞り込みはサーバー往復せず
+ * タイムライン本体。表示の切り替えは持たず、長い投稿だけがカード内で畳まれる。
+ * 前回開いたときの続きの位置に「ここまで読みました」の線を出す。
+ * ブロック・学年・お気に入りの絞り込みはサーバー往復せず
  * 読み込み済みアイテムをクライアント側でフィルタするため、タブ切替が即時。
  * 「もっと見る」のときだけサーバーから追加取得する。
  */
@@ -40,7 +43,6 @@ export function TimelineView({
   initialItems,
   currentUser,
   favoriteIds = [],
-  initialCompact = false,
   initialBlock = "all",
   showRecordSource = false,
   enableCsvRefresh = false,
@@ -48,8 +50,6 @@ export function TimelineView({
   initialItems: FeedItem[];
   currentUser: CommentAuthor;
   favoriteIds?: string[];
-  /** 簡易表示の初期値（サーバーが cookie から復元して渡す。詳細→簡易のフラッシュ防止） */
-  initialCompact?: boolean;
   /** 最初に表示するブロックタブ（マイページの「タイムラインの初期表示」） */
   initialBlock?: BlockViewDefault;
   showRecordSource?: boolean;
@@ -91,10 +91,6 @@ export function TimelineView({
   const [favOnly, setFavOnly] = useState(false);
   const [currentFavoriteIds, setCurrentFavoriteIds] = useState(favoriteIds);
   const filterAutoLoadCount = useRef(0);
-  const { compact, toggleCompact, toggleExpanded, isCompact } = useFeedDisplay({
-    initialCompact,
-    cookieName: "timeline-compact",
-  });
 
   useEffect(() => {
     let active = true;
@@ -208,9 +204,13 @@ export function TimelineView({
     });
   }, [items, block, grades, favOnly, favSet]);
 
-  const compactGroups = useMemo(
-    () => groupFeedItemsByDate(filtered),
-    [filtered],
+  const groups = useMemo(() => groupFeedItemsByDate(filtered), [filtered]);
+  // 既読の基準は「実際に画面へ出した投稿」。絞り込みで隠れている投稿は既読にしない。
+  const lastSeenAt = useLastSeenFeed(currentUser.id, filtered);
+  // 絞り込み後の並びで数えた「ここまで読みました」の位置（-1 のときは線を出さない）
+  const boundaryIndex = useMemo(
+    () => unreadBoundaryIndex(filtered, lastSeenAt),
+    [filtered, lastSeenAt],
   );
 
   const hasActiveFilter = block !== "all" || grades.length > 0 || favOnly;
@@ -238,26 +238,11 @@ export function TimelineView({
 
   function loadMore() { void feedQuery.fetchNextPage(); }
 
-  function renderDetailedItem(
-    item: FeedItem,
-    commentsExpanded: boolean,
-    embedded = false,
-  ) {
+  function renderItem(item: FeedItem) {
     return item.kind === "record" ? (
-      <RecordCard
-        record={item}
-        currentUser={currentUser}
-        commentsExpanded={commentsExpanded}
-        showSource={showRecordSource}
-        embedded={embedded}
-      />
+      <RecordCard record={item} currentUser={currentUser} showSource={showRecordSource} />
     ) : (
-      <TweetCard
-        tweet={item}
-        currentUser={currentUser}
-        commentsExpanded={commentsExpanded}
-        embedded={embedded}
-      />
+      <TweetCard tweet={item} currentUser={currentUser} />
     );
   }
 
@@ -278,19 +263,6 @@ export function TimelineView({
           >
             <UserCheck size={14} />
           </button>
-          <button
-            type="button"
-            onClick={toggleCompact}
-            aria-pressed={compact}
-            aria-label={compact ? "詳細表示にする" : "簡易表示にする"}
-            title={compact ? "詳細表示" : "簡易表示"}
-            className={cn(
-              "h-8 w-8 rounded-full border inline-flex items-center justify-center shrink-0 active:opacity-60",
-              compact ? "bg-accent text-white border-accent" : "bg-card border-separator text-muted2",
-            )}
-          >
-            <List size={15} />
-          </button>
         </div>
       </div>
 
@@ -300,60 +272,35 @@ export function TimelineView({
           <EmptyState title="条件に合う投稿はありません" description="条件を変えてみてください。" />
         ) : (
           <div className="space-y-3 lg:space-y-2">
-            {compact ? (
-              compactGroups.map((group) => (
-                <section key={group.date} aria-labelledby={`feed-date-${group.date}`}>
-                  <div className="mb-1.5 flex items-center gap-1.5 px-1">
-                    <h2
-                      id={`feed-date-${group.date}`}
-                      className="text-[12px] font-semibold text-muted2"
-                    >
-                      {feedDateLabel(group.date, jstToday(), jstToday(-1))}
-                    </h2>
-                    <span className="text-[10px] text-muted">・{group.items.length}件</span>
-                  </div>
-                  <div className="divide-y divide-separator/70 overflow-hidden rounded-[16px] border border-separator/70 bg-card">
-                    {group.items.map((item) => {
-                      const key = `${item.kind}-${item.id}`;
-                      const collapsed = isCompact(key);
-                      const commentsExpanded =
-                        !collapsed && (item.comments_count ?? 0) > 0;
-                      return (
-                        <div
-                          key={key}
-                          role="button"
-                          tabIndex={0}
-                          aria-label="投稿の詳細を開閉"
-                          onClick={() => toggleExpanded(key)}
-                          onKeyDown={(event) => {
-                            if (event.target !== event.currentTarget) return;
-                            if (event.key === "Enter" || event.key === " ") {
-                              event.preventDefault();
-                              toggleExpanded(key);
-                            }
-                          }}
-                          className={cn(
-                            "cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent",
-                          )}
-                        >
-                          {collapsed ? (
-                            <CompactFeedRow item={item} />
-                          ) : (
-                            renderDetailedItem(item, commentsExpanded, true)
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-              ))
-            ) : (
-              filtered.map((item) => (
-                <div key={`${item.kind}-${item.id}`}>
-                  {renderDetailedItem(item, false)}
-                </div>
-              ))
-            )}
+            {(() => {
+              let offset = 0;
+              return groups.map((group) => {
+                const groupStart = offset;
+                offset += group.items.length;
+                return (
+                  <section key={group.date} aria-labelledby={`feed-date-${group.date}`}>
+                    {boundaryIndex === groupStart && <UnreadDivider />}
+                    <div className="mb-1.5 flex items-center gap-1.5 px-1">
+                      <h2
+                        id={`feed-date-${group.date}`}
+                        className="text-[12px] font-semibold text-muted2"
+                      >
+                        {feedDateLabel(group.date, jstToday(), jstToday(-1))}
+                      </h2>
+                      <span className="text-[10px] text-muted">・{group.items.length}件</span>
+                    </div>
+                    <div className="space-y-3 lg:space-y-2">
+                      {group.items.map((item, index) => (
+                        <Fragment key={`${item.kind}-${item.id}`}>
+                          {index > 0 && boundaryIndex === groupStart + index && <UnreadDivider />}
+                          {renderItem(item)}
+                        </Fragment>
+                      ))}
+                    </div>
+                  </section>
+                );
+              });
+            })()}
 
             {feedQuery.hasNextPage && (
               <div className="pt-1 pb-2">

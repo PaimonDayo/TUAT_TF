@@ -7,8 +7,8 @@ import { Avatar } from "@/components/common/Avatar";
 import { BlockPills } from "@/components/common/BlockPill";
 import { Card } from "@/components/ui/card";
 import { KeyValue } from "@/components/ui/key-value";
+import { ExpandableSection } from "@/components/common/ExpandableSection";
 import { IntensityBar } from "@/components/features/IntensityBar";
-import { formatKm } from "@/lib/utils";
 import { PostActions } from "@/components/cards/PostActions";
 import { RecordOwnerMenu } from "@/components/cards/PostOwnerMenu";
 import { CONDITIONS, gradeShort } from "@/lib/constants";
@@ -27,21 +27,17 @@ function recordValue(record: RecordWithAuthor, key: string): string | number | n
   return record.custom?.[key];
 }
 
-/** タイムライン用の練習記録カード。compact=簡易表示（テキスト詳細を畳む） */
+/** タイムライン用の練習記録カード。長い記録は自動で畳み、「続きを読む」で全文を出す。 */
 export function RecordCard({
   record,
   currentUser,
-  compact = false,
   commentsExpanded = false,
   showSource = false,
-  embedded = false,
 }: {
   record: RecordWithAuthor;
   currentUser: CommentAuthor;
-  compact?: boolean;
   commentsExpanded?: boolean;
   showSource?: boolean;
-  embedded?: boolean;
 }) {
   const { author } = record;
   const recordFields = record.record_fields_version !== null && record.record_fields_version !== undefined
@@ -71,7 +67,7 @@ export function RecordCard({
   const details = [...configuredDetails, ...legacyDetails].filter((field) => !field.hidden && recordValue(record, field.key) !== null && recordValue(record, field.key) !== undefined && recordValue(record, field.key) !== "");
 
   return (
-    <Card className={embedded ? "space-y-3 rounded-none border-0 p-4" : "space-y-3 p-4"}>
+    <Card className="space-y-3 p-4">
       <div className="flex items-center gap-2.5">
         <Link href={`/members/${author.id}`} onClick={(event) => event.stopPropagation()}>
           <Avatar name={author.display_name} blocks={author.blocks} avatarUrl={author.avatar_url} />
@@ -92,12 +88,14 @@ export function RecordCard({
         </div>
       </div>
 
-      {compact
-        ? distanceVisible && totalDistance > 0 && <p className="text-[13px] font-semibold tabular-nums text-muted2">走行距離 {formatKm(totalDistance)}km</p>
-        : distanceVisible && totalDistance > 0 && <IntensityBar record={record} />}
-      {!compact && fieldVisible("strides") && record.strides > 0 && <p className="text-[12px] text-muted2">{recordFieldLabel(recordFields, "strides", "流し")} {record.strides}本</p>}
+      {distanceVisible && totalDistance > 0 && <IntensityBar record={record} />}
+      {fieldVisible("strides") && record.strides > 0 && <p className="text-[12px] text-muted2">{recordFieldLabel(recordFields, "strides", "流し")} {record.strides}本</p>}
 
-      {!compact && details.length > 0 && <dl>{details.map((field) => <KeyValue key={field.key} label={field.label} value={recordValue(record, field.key)} />)}</dl>}
+      {details.length > 0 && (
+        <ExpandableSection maxHeight={150}>
+          <dl>{details.map((field) => <KeyValue key={field.key} label={field.label} value={recordValue(record, field.key)} />)}</dl>
+        </ExpandableSection>
+      )}
 
       <div onClick={(event) => event.stopPropagation()}>
         <PostActions targetType="record" targetId={record.id} initialLikes={record.likes_count} initialLiked={record.liked_by_me ?? false} initialComments={record.comments_count ?? 0} currentUser={currentUser} commentsExpanded={commentsExpanded} />
