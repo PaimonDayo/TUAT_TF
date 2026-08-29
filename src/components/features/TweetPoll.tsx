@@ -4,10 +4,50 @@ import { useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Avatar } from "@/components/common/Avatar";
-import { SegmentedControl } from "@/components/ui/segmented";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import type { TweetPollOption } from "@/types";
+
+function PollOptionTabs({
+  options,
+  value,
+  onChange,
+}: {
+  options: TweetPollOption[];
+  value: string;
+  onChange: (optionId: string) => void;
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label="投票の選択肢"
+      className="flex h-9 snap-x snap-mandatory gap-1 overflow-x-auto rounded-[10px] bg-[#e9e9eb] p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
+      {options.map((option) => {
+        const active = option.id === value;
+        return (
+          <button
+            key={option.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            title={option.text}
+            onClick={(event) => {
+              onChange(option.id);
+              event.currentTarget.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+            }}
+            className={cn(
+              "h-8 min-w-24 max-w-44 shrink-0 snap-center truncate rounded-[8px] px-3 text-[13px] font-semibold transition-colors active:opacity-70",
+              active ? "bg-white text-ink shadow-sm" : "text-muted2",
+            )}
+          >
+            {option.text} <span className="tabular-nums">{option.vote_count}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export function TweetPoll({
   tweetId,
@@ -175,10 +215,21 @@ export function TweetPoll({
       {!anonymous && <p className="text-micro">{"\u9078\u629e\u80a2\u3092\u9577\u62bc\u3057\u3059\u308b\u3068\u6295\u7968\u8005\u3092\u78ba\u8a8d\u3067\u304d\u307e\u3059"}</p>}
       {!anonymous && detailOptionId && detailOption && (
         <Sheet open onOpenChange={(open) => !open && setDetailOptionId(null)}>
-          <SheetContent title={"\u6295\u7968\u8005"} autoFocus={false}>
-          <div className="space-y-4 pb-4">
-            <SegmentedControl items={options.map((option) => ({ key: option.id, label: `${option.text} ${option.vote_count}` }))} value={detailOption.id} onChange={setDetailOptionId} />
-            <section className="overflow-hidden rounded-[16px] border border-separator bg-card">
+          <SheetContent
+            title={"\u6295\u7968\u8005"}
+            autoFocus={false}
+            className="flex h-[calc(100dvh-12px)] flex-col"
+            bodyClassName="flex min-h-0 flex-1 flex-col"
+          >
+          <div
+            className="flex min-h-0 flex-1 flex-col"
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            <div className="shrink-0 pb-3">
+              <PollOptionTabs options={options} value={detailOption.id} onChange={setDetailOptionId} />
+            </div>
+            <section className="min-h-0 flex-1 overflow-y-auto rounded-[16px] border border-separator bg-card">
               <div className="border-b border-separator px-4 py-3">
                 <p className="text-[15px] font-semibold">{detailOption.text}</p>
                 <p className="text-micro">{detailOption.vote_count}{"\u7968"}</p>

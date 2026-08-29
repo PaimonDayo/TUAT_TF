@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { Home, Newspaper, CalendarDays, NotebookTabs, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -13,10 +15,15 @@ const ITEMS = [
   { href: "/mypage", label: "マイページ", icon: User },
 ];
 
+const subscribeToClient = () => () => {};
+
 export function BottomNav() {
   const pathname = usePathname();
+  const mounted = useSyncExternalStore(subscribeToClient, () => true, () => false);
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <nav
       aria-label="メインナビゲーション"
       className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md border-t border-separator bg-card/90 backdrop-blur-xl pb-[env(safe-area-inset-bottom)] md:hidden"
@@ -40,6 +47,7 @@ export function BottomNav() {
           );
         })}
       </div>
-    </nav>
+    </nav>,
+    document.body,
   );
 }
