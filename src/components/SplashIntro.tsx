@@ -70,7 +70,7 @@ export default function SplashIntro() {
     <div
       onClick={skipIntro}
       onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") skipIntro(); }}
-      aria-label={"\u8d77\u52d5\u753b\u9762\u3092\u30b9\u30ad\u30c3\u30d7"}
+      aria-label={"起動画面をスキップ"}
       role="button"
       tabIndex={0}
       className={`${styles.overlay} ${exiting ? styles.exiting : ""} tuat-splash-root`}

@@ -63,9 +63,9 @@ export function NoteArticleActions({
       {canShare && (
         <ShareButton
           title={article.title}
-          text={`${article.title}\uFF5C\u30ce\u30fc\u30c8\u306e\u8a18\u4e8b`}
+          text={`${article.title}｜ノートの記事`}
           path={`/notes/${noteId}/articles/${article.id}`}
-          label={"\u3053\u306e\u8a18\u4e8b\u3092\u5171\u6709\u3059\u308b"}
+          label={"この記事を共有する"}
         />
       )}
       {canEdit && (

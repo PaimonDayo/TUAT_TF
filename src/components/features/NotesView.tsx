@@ -265,7 +265,7 @@ function NoteSearchResults({
     <div className="space-y-5">
       {folders.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-caption font-semibold">{"\u30ce\u30fc\u30c8"}</h2>
+          <h2 className="text-caption font-semibold">{"ノート"}</h2>
           <NoteList
             notes={folders}
             currentUser={currentUser}
@@ -276,7 +276,7 @@ function NoteSearchResults({
       )}
       {articles.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-caption font-semibold">{"\u8a18\u4e8b"}</h2>
+          <h2 className="text-caption font-semibold">{"記事"}</h2>
           <div className="space-y-2">
             {articles.map((article) => (
               <Link key={article.id} href={`/notes/${article.note_id}/articles/${article.id}`}>

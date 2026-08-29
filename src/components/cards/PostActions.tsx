@@ -307,8 +307,8 @@ export function PostActions({
           type="button"
           aria-label={
             liked
-              ? `\u3044\u3044\u306d\u3092\u89e3\u9664\u3001\u73fe\u5728${likes}\u4ef6`
-              : `\u3044\u3044\u306d\u3001\u73fe\u5728${likes}\u4ef6`
+              ? `いいねを解除、現在${likes}件`
+              : `いいね、現在${likes}件`
           }
           onClick={(event) => {
             if (event.detail > 0 && Date.now() - lastTouchEndAt.current < 700) return;

@@ -46,9 +46,9 @@ export function NoteDetailActions({
       {note.status === "published" && (
         <ShareButton
           title={note.title}
-          text={`${note.title}\uFF5C\u30ce\u30fc\u30c8`}
+          text={`${note.title}｜ノート`}
           path={`/notes/${note.id}`}
-          label={"\u3053\u306e\u30ce\u30fc\u30c8\u3092\u5171\u6709\u3059\u308b"}
+          label={"このノートを共有する"}
         />
       )}
       {(canEdit || canDelete) && (

@@ -54,7 +54,7 @@ export function NoteArticleList({
                   <p className="mt-1 text-caption">
                     {article.author.display_name}・
                     {format(new Date(article.updated_at), "M月d日更新", { locale: ja })}
-                  {article.pinned && <Pin size={14} className="mt-1 shrink-0 fill-accent text-accent" aria-label={"\u30d4\u30f3\u7559\u3081"} />}
+                  {article.pinned && <Pin size={14} className="mt-1 shrink-0 fill-accent text-accent" aria-label={"ピン留め"} />}
                   </p>
                 </div>
               </button>

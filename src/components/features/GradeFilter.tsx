@@ -52,7 +52,7 @@ export function GradeFilter({
         <SheetContent title="学年で絞り込み">
           <div className="max-h-[60vh] overflow-y-auto pb-4">
             <p className="px-1 pb-3 text-micro">
-              {"\u672a\u9078\u629e\u306e\u5834\u5408\u306f\u3059\u3079\u3066\u8868\u793a\u3057\u307e\u3059"}
+              {"未選択の場合はすべて表示します"}
             </p>
             {options.map((g) => (
               <Row

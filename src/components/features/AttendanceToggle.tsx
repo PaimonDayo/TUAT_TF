@@ -232,7 +232,7 @@ export function AbsenceAttendanceControl({ scheduleId, userId, initialNote, onCh
   }
   function changeNote(value: string) { setNote(value); setNoteState("idle"); if (saveTimer.current) clearTimeout(saveTimer.current); saveTimer.current = setTimeout(() => { saveTimer.current = null; void persist(value); }, 700); }
   function blurNote() { if (!saveTimer.current) return; clearTimeout(saveTimer.current); saveTimer.current = null; void persist(note); }
-  return <div className="relative w-full" onClick={(event) => event.stopPropagation()}><Input value={note} onChange={(event) => changeNote(event.target.value)} onBlur={blurNote} maxLength={60} placeholder={"\u6b20\u5e2d\u306e\u9023\u7d61\u4e8b\u9805\uff08\u4efb\u610f\uff09"} className={cn("w-full pr-10", noteState === "error" && "border-danger/50")} /><span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" aria-live="polite">{noteState === "saving" && <Loader2 size={17} className="animate-spin text-muted2" />}{noteState === "saved" && <CircleCheck size={18} className="text-success" />}</span></div>;
+  return <div className="relative w-full" onClick={(event) => event.stopPropagation()}><Input value={note} onChange={(event) => changeNote(event.target.value)} onBlur={blurNote} maxLength={60} placeholder={"欠席の連絡事項（任意）"} className={cn("w-full pr-10", noteState === "error" && "border-danger/50")} /><span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" aria-live="polite">{noteState === "saving" && <Loader2 size={17} className="animate-spin text-muted2" />}{noteState === "saved" && <CircleCheck size={18} className="text-success" />}</span></div>;
 }
 
 /** 雨天時など「話し合い中です」を伝える対応状況の閲覧用バナー（編集権限がない人向け） */

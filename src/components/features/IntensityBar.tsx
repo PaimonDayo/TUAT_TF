@@ -59,7 +59,7 @@ export function IntensityBar({ record }: { record: Pick<PracticeRecord, "dist_lo
         {other > 0 && (
           <span className="flex items-center gap-1 text-[11px] text-muted2">
             <span className="h-2 w-2 rounded-full bg-muted/35" />
-            {"\u305d\u306e\u4ed6"} {formatKm(other)}km
+            {"その他"} {formatKm(other)}km
           </span>
         )}
       </div>

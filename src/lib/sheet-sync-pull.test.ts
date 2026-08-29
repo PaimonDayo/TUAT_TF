@@ -144,35 +144,35 @@ describe("resolveFieldMap", () => {
   it("does not let a builtin keyword fallback steal a configured custom column", () => {
     const map = resolveFieldMap(
       {
-        header: ["\u65e5\u4ed8", "\u66dc\u65e5", "\u30e1\u30cb\u30e5\u30fc", "\u610f\u8b58\u30fb\u30a6\u30a8\u30a4\u30c8\u6570\u5024"],
+        header: ["日付", "曜日", "メニュー", "意識・ウエイト数値"],
         columns: [
-          { index: 0, label: "\u65e5\u4ed8" },
-          { index: 1, label: "\u66dc\u65e5" },
-          { index: 2, label: "\u30e1\u30cb\u30e5\u30fc" },
-          { index: 5, label: "\u610f\u8b58\u30fb\u30a6\u30a8\u30a4\u30c8\u6570\u5024" },
+          { index: 0, label: "日付" },
+          { index: 1, label: "曜日" },
+          { index: 2, label: "メニュー" },
+          { index: 5, label: "意識・ウエイト数値" },
         ],
       },
       [
         {
           key: "menu_text",
-          label: "\u30e1\u30cb\u30e5\u30fc",
+          label: "メニュー",
           type: "text",
           sourceColumn: 2,
-          sourceHeader: "\u30e1\u30cb\u30e5\u30fc",
+          sourceHeader: "メニュー",
         },
         {
           key: "sheet_5_custom",
-          label: "\u610f\u8b58\u30fb\u30a6\u30a8\u30a4\u30c8\u6570\u5024",
+          label: "意識・ウエイト数値",
           type: "text",
           sourceColumn: 5,
-          sourceHeader: "\u610f\u8b58\u30fb\u30a6\u30a8\u30a4\u30c8\u6570\u5024",
+          sourceHeader: "意識・ウエイト数値",
         },
       ],
     );
 
     expect(map.builtin.has("focus_text")).toBe(false);
     expect(map.custom.get("sheet_5_custom")).toEqual({
-      header: "\u610f\u8b58\u30fb\u30a6\u30a8\u30a4\u30c8\u6570\u5024",
+      header: "意識・ウエイト数値",
       column: 5,
       type: "text",
     });
@@ -181,17 +181,17 @@ describe("resolveFieldMap", () => {
   it("maps the actual distance column as a builtin field", () => {
     const map = resolveFieldMap(
       {
-        header: ["\u65e5\u4ed8", "\u5b9f\u969b\u306e\u8ddd\u96e2"],
+        header: ["日付", "実際の距離"],
         columns: [
-          { index: 0, label: "\u65e5\u4ed8" },
-          { index: 6, label: "\u5b9f\u969b\u306e\u8ddd\u96e2" },
+          { index: 0, label: "日付" },
+          { index: 6, label: "実際の距離" },
         ],
       },
       [],
     );
 
     expect(map.builtin.get("dist_actual")).toEqual({
-      header: "\u5b9f\u969b\u306e\u8ddd\u96e2", column: 6, numeric: true,
+      header: "実際の距離", column: 6, numeric: true,
     });
   });
 });

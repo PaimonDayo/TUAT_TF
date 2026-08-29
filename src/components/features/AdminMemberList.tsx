@@ -163,8 +163,8 @@ function MemberRoleEditor({
     const supabase = createClient();
     if (canManageSystem) {
       const normalizedReading = mentionReading.trim().replace(/\s+/g, " ");
-      if (normalizedReading && !/^[\u3041-\u3096\u30fc\u309d\u309e\u30fb ]+$/.test(normalizedReading)) {
-        setError("\u3072\u3089\u304c\u306a\u540d\u306f\u3001\u3072\u3089\u304c\u306a\u3067\u5165\u529b\u3057\u3066\u304f\u3060\u3055\u3044");
+      if (normalizedReading && !/^[ぁ-ゖーゝゞ・ ]+$/.test(normalizedReading)) {
+        setError("ひらがな名は、ひらがなで入力してください");
         setSaving(false);
         return;
       }
@@ -173,7 +173,7 @@ function MemberRoleEditor({
         new_reading: normalizedReading || null,
       });
       if (readingError) {
-        setError("\u3072\u3089\u304c\u306a\u540d\u3092\u66f4\u65b0\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f");
+        setError("ひらがな名を更新できませんでした");
         setSaving(false);
         return;
       }
@@ -209,9 +209,9 @@ function MemberRoleEditor({
 
         {canManageSystem && (
           <label className="block space-y-1.5">
-            <span className="text-[13px] font-semibold">{"\u30e1\u30f3\u30b7\u30e7\u30f3\u7528\u3072\u3089\u304c\u306a\u540d"}</span>
-            <Input value={mentionReading} onChange={(event) => setMentionReading(event.target.value)} placeholder={"\u4f8b\uff1a\u305f\u306a\u304b \u305f\u308d\u3046"} maxLength={80} />
-            <span className="block text-micro">{"\u540d\u5b57\u3068\u540d\u524d\u3092\u7a7a\u767d\u3067\u533a\u5207\u308b\u3068\u3001\u3069\u3061\u3089\u306e\u8aad\u307f\u3067\u3082\u5019\u88dc\u306b\u8868\u793a\u3055\u308c\u307e\u3059\u3002"}</span>
+            <span className="text-[13px] font-semibold">{"メンション用ひらがな名"}</span>
+            <Input value={mentionReading} onChange={(event) => setMentionReading(event.target.value)} placeholder={"例：たなか たろう"} maxLength={80} />
+            <span className="block text-micro">{"名字と名前を空白で区切ると、どちらの読みでも候補に表示されます。"}</span>
           </label>
         )}
 

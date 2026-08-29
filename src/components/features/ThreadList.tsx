@@ -74,7 +74,7 @@ export function ThreadList({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-headline">{thread.title}</p>
                 <p className="mt-1 text-caption">
-                {thread.pinned && <Pin size={14} className="mt-1 shrink-0 fill-accent text-accent" aria-label={"\u30d4\u30f3\u7559\u3081"} />}
+                {thread.pinned && <Pin size={14} className="mt-1 shrink-0 fill-accent text-accent" aria-label={"ピン留め"} />}
                   {thread.author.display_name}・{thread.posts?.length ?? 0}件の投稿・
                   {format(new Date(thread.updated_at), "M月d日", { locale: ja })}
                 </p>

@@ -9,7 +9,7 @@ import {
 describe("parseSheetMetadataHtml", () => {
   it("extracts only member sheets and decodes escaped names", () => {
     const html = `
-      items.push({name:"B2\\u99d2\\u4e95",gid:"123"});
+      items.push({name:"B2\駒\井",gid:"123"});
       items.push({name:"予定",gid:"456"});
       items.push({name:"M1 山田",gid:"789"});
     `;

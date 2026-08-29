@@ -212,11 +212,11 @@ export function TweetPoll({
         )
       )}
       <p className="text-micro">{totalVotes}票 ・ {multiple ? "複数選択可" : "1つ選択"} ・ {anonymous ? "匿名" : "記名"}</p>
-      {!anonymous && <p className="text-micro">{"\u9078\u629e\u80a2\u3092\u9577\u62bc\u3057\u3059\u308b\u3068\u6295\u7968\u8005\u3092\u78ba\u8a8d\u3067\u304d\u307e\u3059"}</p>}
+      {!anonymous && <p className="text-micro">{"選択肢を長押しすると投票者を確認できます"}</p>}
       {!anonymous && detailOptionId && detailOption && (
         <Sheet open onOpenChange={(open) => !open && setDetailOptionId(null)}>
           <SheetContent
-            title={"\u6295\u7968\u8005"}
+            title={"投票者"}
             autoFocus={false}
             className="flex h-[calc(100dvh-12px)] flex-col"
             bodyClassName="flex min-h-0 flex-1 flex-col"
@@ -232,7 +232,7 @@ export function TweetPoll({
             <section className="min-h-0 flex-1 overflow-y-auto rounded-[16px] border border-separator bg-card">
               <div className="border-b border-separator px-4 py-3">
                 <p className="text-[15px] font-semibold">{detailOption.text}</p>
-                <p className="text-micro">{detailOption.vote_count}{"\u7968"}</p>
+                <p className="text-micro">{detailOption.vote_count}{"票"}</p>
               </div>
               {detailOption.voters.length > 0 ? (
                 <ul className="divide-y divide-separator">
@@ -243,7 +243,7 @@ export function TweetPoll({
                     </li>
                   ))}
                 </ul>
-              ) : <p className="px-4 py-8 text-center text-caption">{"\u307e\u3060\u6295\u7968\u306f\u3042\u308a\u307e\u305b\u3093"}</p>}
+              ) : <p className="px-4 py-8 text-center text-caption">{"まだ投票はありません"}</p>}
             </section>
           </div>
           </SheetContent>
