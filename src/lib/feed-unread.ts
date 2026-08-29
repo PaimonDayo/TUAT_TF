@@ -1,6 +1,6 @@
 import type { FeedItem } from "@/types";
 
-/** 未読ラインの基準になる時刻。フィードの並び順（created_at）と同じものを使う。 */
+/** 新着かどうかの基準になる時刻。フィードの並び順（created_at）と同じものを使う。 */
 export function feedItemTime(item: FeedItem): number {
   return new Date(item.created_at).getTime();
 }
@@ -17,7 +17,7 @@ export function newestFeedTime(items: readonly FeedItem[]): number | null {
 }
 
 /**
- * 「ここまで読みました」の線を出す位置（この番号の投稿の直前に出す）。線を出さないときは -1。
+ * 新着の件数＝「以前の投稿」の区切りを出す位置（この番号の投稿の直前に出す）。出さないときは -1。
  * 新着が1件も無いとき（先頭が既読）と、読み込んだ範囲が全部新着のとき（＝境目が画面外）は出さない。
  */
 export function unreadBoundaryIndex(

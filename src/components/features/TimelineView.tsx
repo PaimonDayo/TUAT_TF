@@ -8,7 +8,7 @@ import { TweetCard } from "@/components/cards/TweetCard";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { CompactFeedRow } from "@/components/features/CompactFeedRow";
-import { UnreadDivider } from "@/components/features/UnreadDivider";
+import { SeenDivider, UnreadHeading } from "@/components/features/NewPostMarkers";
 import { FAVORITE_CHANGE_EVENT } from "@/components/features/FavoriteButton";
 import { createClient } from "@/lib/supabase/client";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -35,7 +35,7 @@ type FeedCursor = {
 
 /**
  * タイムライン本体。カード表示と、一覧性を優先した2行表示を切り替えられる。
- * 前回開いたときの続きの位置に「ここまで読みました」の線を出す。
+ * 前回開いたあとに増えた投稿を「新着の投稿」として先頭に数え、そこが終わる位置に区切りを出す。
  * ブロック・お気に入りの絞り込みはサーバー往復せず
  * 読み込み済みアイテムをクライアント側でフィルタするため、タブ切替が即時。
  * 「もっと見る」のときだけサーバーから追加取得する。
@@ -207,7 +207,7 @@ export function TimelineView({
   const groups = useMemo(() => groupFeedItemsByDate(filtered), [filtered]);
   // 既読の基準は「実際に画面へ出した投稿」。絞り込みで隠れている投稿は既読にしない。
   const lastSeenAt = useLastSeenFeed(currentUser.id, filtered);
-  // 絞り込み後の並びで数えた「ここまで読みました」の位置（-1 のときは線を出さない）
+  // 絞り込み後の並びで数えた新着の件数＝「以前の投稿」の区切り位置（-1 のときは何も出さない）
   const boundaryIndex = useMemo(
     () => unreadBoundaryIndex(filtered, lastSeenAt),
     [filtered, lastSeenAt],
@@ -300,6 +300,7 @@ export function TimelineView({
           <EmptyState title="条件に合う投稿はありません" description="条件を変えてみてください。" />
         ) : (
           <div className="space-y-3 lg:space-y-2">
+            {boundaryIndex > 0 && <UnreadHeading count={boundaryIndex} />}
             {(() => {
               let offset = 0;
               return groups.map((group) => {
@@ -307,7 +308,7 @@ export function TimelineView({
                 offset += group.items.length;
                 return (
                   <section key={group.date} aria-labelledby={`feed-date-${group.date}`}>
-                    {boundaryIndex === groupStart && <UnreadDivider />}
+                    {boundaryIndex === groupStart && <SeenDivider />}
                     <div className="mb-1.5 flex items-center gap-1.5 px-1">
                       <h2
                         id={`feed-date-${group.date}`}
@@ -326,7 +327,7 @@ export function TimelineView({
                           return (
                             <Fragment key={key}>
                               {index > 0 && boundaryIndex === groupStart + index && (
-                                <div className="bg-card px-3"><UnreadDivider /></div>
+                                <div className="bg-card px-3"><SeenDivider /></div>
                               )}
                               <div
                                 role="button"
@@ -355,7 +356,7 @@ export function TimelineView({
                       <div className="space-y-3 lg:space-y-2">
                         {group.items.map((item, index) => (
                           <Fragment key={`${item.kind}-${item.id}`}>
-                            {index > 0 && boundaryIndex === groupStart + index && <UnreadDivider />}
+                            {index > 0 && boundaryIndex === groupStart + index && <SeenDivider />}
                             {renderItem(item)}
                           </Fragment>
                         ))}
