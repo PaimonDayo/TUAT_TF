@@ -34,6 +34,9 @@ import type {
   NoteWithRelations,
   AppNotificationWithActor,
   TweetWithAuthor,
+  TweetPollOption,
+  TweetPollVoter,
+  TweetMention,
   Profile,
   PracticeRecord,
   ItoGame,
@@ -71,7 +74,7 @@ async function attachTweetSocialData(
     : { data: [] };
   const names = new Map((profiles ?? []).map((profile) => [profile.id, profile.display_name]));
   const resultByOption = new Map((results ?? []).map((result) => [result.option_id, result]));
-  const votersByOption = new Map<string, Array<{ profile_id: string; display_name: string; avatar_url: string | null; blocks: Block[]; grade: string | null }>>();
+  const votersByOption = new Map<string, TweetPollVoter[]>();
   for (const voter of voters ?? []) {
     const optionVoters = votersByOption.get(voter.option_id) ?? [];
     optionVoters.push({
@@ -84,26 +87,35 @@ async function attachTweetSocialData(
     votersByOption.set(voter.option_id, optionVoters);
   }
 
+  // 選択肢・メンションは投稿ごとに filter せず、tweet_id で1度だけ束ねる
+  // （投稿数×選択肢数の総当たりを避ける）。sort_order・取得順はそのまま保たれる。
+  const optionsByTweet = new Map<string, TweetPollOption[]>();
+  for (const option of options ?? []) {
+    const list = optionsByTweet.get(option.tweet_id) ?? [];
+    list.push({
+      ...option,
+      vote_count: Number(resultByOption.get(option.id)?.vote_count ?? 0),
+      voted_by_me: resultByOption.get(option.id)?.voted_by_me ?? false,
+      voters: votersByOption.get(option.id) ?? [],
+    });
+    optionsByTweet.set(option.tweet_id, list);
+  }
+
+  const mentionsByTweet = new Map<string, TweetMention[]>();
+  for (const mention of mentionRows ?? []) {
+    const displayName = names.get(mention.profile_id);
+    if (!displayName) continue;
+    const list = mentionsByTweet.get(mention.tweet_id) ?? [];
+    list.push({ profile_id: mention.profile_id, display_name: displayName });
+    mentionsByTweet.set(mention.tweet_id, list);
+  }
+
   return tweets.map((tweet) => {
-    const pollOptions = (options ?? [])
-      .filter((option) => option.tweet_id === tweet.id)
-      .map((option) => ({
-        ...option,
-        vote_count: Number(resultByOption.get(option.id)?.vote_count ?? 0),
-        voted_by_me: resultByOption.get(option.id)?.voted_by_me ?? false,
-        voters: votersByOption.get(option.id) ?? [],
-      }));
-    const mentions = (mentionRows ?? [])
-      .filter((mention) => mention.tweet_id === tweet.id)
-      .map((mention) => ({
-        profile_id: mention.profile_id,
-        display_name: names.get(mention.profile_id) ?? "",
-      }))
-      .filter((mention) => mention.display_name);
+    const pollOptions = optionsByTweet.get(tweet.id) ?? [];
     return {
       ...tweet,
       poll: pollOptions.length ? { options: pollOptions } : undefined,
-      mentions,
+      mentions: mentionsByTweet.get(tweet.id) ?? [],
     };
   });
 }
