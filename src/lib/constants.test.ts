@@ -5,6 +5,7 @@ import {
   normalizeProfileBlocks,
   primarySimpleBlock,
   viewerCompetitionBlocks,
+  normalizeAudienceBlocks,
 } from "@/lib/constants";
 
 describe("block normalization", () => {
@@ -34,5 +35,25 @@ describe("block normalization", () => {
   it("keeps middle-long memberships separate", () => {
     expect(matchSimpleBlock(["middle_long"], "short")).toBe(false);
     expect(primarySimpleBlock(["middle_long"])).toBe("middle_long");
+  });
+});
+
+describe("normalizeAudienceBlocks", () => {
+  // 通知先の複数選択を1つに畳んでしまうと、編集して保存し直すたびに対象が黙って狭まる。
+  it("選んだブロックをすべて残す", () => {
+    expect(normalizeAudienceBlocks(["middle_long", "short"])).toEqual(["middle_long", "short"]);
+  });
+
+  it("マネージャーを他のブロックと併用できる", () => {
+    expect(normalizeAudienceBlocks(["manager", "middle_long"])).toEqual(["middle_long", "manager"]);
+  });
+
+  it("過去互換の jump/throw を短距離へ寄せて重複を除く", () => {
+    expect(normalizeAudienceBlocks(["jump", "throw", "short"])).toEqual(["short"]);
+  });
+
+  it("未選択・null を空配列にする", () => {
+    expect(normalizeAudienceBlocks([])).toEqual([]);
+    expect(normalizeAudienceBlocks(null)).toEqual([]);
   });
 });

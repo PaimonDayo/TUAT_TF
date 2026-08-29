@@ -69,6 +69,18 @@ export function normalizeProfileBlocks(
   return [];
 }
 
+/**
+ * 通知先などで「複数のブロックを選ぶ」ための正規化。
+ * normalizeProfileBlocks は部員1人を1つの節に割り当てるため候補を1つに畳んでしまうので、
+ * 選択そのものを保つ用途にはこちらを使う（jump/throw だけ short へ寄せて重複を除く）。
+ */
+export function normalizeAudienceBlocks(
+  blocks: Block[] | undefined | null,
+): Block[] {
+  const normalized = new Set<Block>((blocks ?? []).map(normalizeBlock));
+  return PROFILE_BLOCK_ORDER.filter((block) => normalized.has(block));
+}
+
 /** One stable attendance group per member, based on the first membership. */
 export function primarySimpleBlock(
   blocks: Block[] | undefined | null,
