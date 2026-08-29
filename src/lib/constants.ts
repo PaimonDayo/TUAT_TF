@@ -12,6 +12,19 @@ export const BLOCKS: Record<
   throw: { label: "投擲", short: "投", color: "#ff3b30", bg: "#ffe5e5" },
 };
 
+/**
+ * Block として妥当な値のすべて。表示順ではなく「値の集合」の正。
+ * jump / throw は 20260722110000 で short へ寄せた過去互換の値。
+ */
+export const ALL_BLOCKS: Block[] = ["middle_long", "short", "manager", "jump", "throw"];
+
+export function isBlock(value: string): value is Block {
+  return (ALL_BLOCKS as string[]).includes(value);
+}
+
+/** 予定スプレッドシートの対象ブロック。マネージャーは競技ブロックではないため含めない。 */
+export const SCHEDULE_SHEET_BLOCKS: string[] = ["all", "middle_long", "short", "jump", "throw"];
+
 export const BLOCK_ORDER: Block[] = ["middle_long", "short", "jump", "throw"];
 
 /** Blocks that can be selected in profile editing. Jump and throw are legacy values. */

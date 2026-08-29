@@ -6,7 +6,7 @@ import {
   decryptGoogleToken,
   refreshGoogleAccessToken,
 } from "@/lib/google-drive";
-import { BLOCKS } from "@/lib/constants";
+import { BLOCKS, SCHEDULE_SHEET_BLOCKS } from "@/lib/constants";
 import type {
   PracticeSchedule,
   ScheduleSheetBlock,
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   const body = (await request.json()) as RequestBody;
   if (
     !["practice", "meet", "time_trial"].includes(body.kind) ||
-    !["all", "middle_long", "short", "jump", "throw"].includes(body.block)
+    !SCHEDULE_SHEET_BLOCKS.includes(body.block)
   ) {
     return NextResponse.json({ error: "発行条件が不正です" }, { status: 400 });
   }

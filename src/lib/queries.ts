@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { fetchRolesByProfileIds } from "@/lib/supabase/auth";
-import { viewerCompetitionBlocks } from "@/lib/constants";
+import { isBlock, viewerCompetitionBlocks } from "@/lib/constants";
 import { jstToday } from "@/lib/date";
 import { compareFeedItems, sortFeedItems } from "@/lib/feed-sort";
 import { refreshMemberFromSheetLive } from "@/lib/sheet-sync";
@@ -78,7 +78,7 @@ async function attachTweetSocialData(
       profile_id: voter.profile_id,
       display_name: voter.display_name,
       avatar_url: voter.avatar_url,
-      blocks: voter.blocks.filter((block): block is Block => ["middle_long", "short", "manager", "jump", "throw"].includes(block)),
+      blocks: voter.blocks.filter(isBlock),
       grade: voter.grade,
     });
     votersByOption.set(voter.option_id, optionVoters);

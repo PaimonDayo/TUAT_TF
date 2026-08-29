@@ -1,5 +1,6 @@
 import type { AppRole, AttendanceDefaultBlock, AuthorMini, Block, BlockViewDefault, Profile, PracticeRecord, RecordFieldDef, RecordWithAuthor, Role, TweetWithAuthor } from "@/types";
 import type { Database, Json } from "@/types/database";
+import { ALL_BLOCKS } from "@/lib/constants";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type PracticeRecordRow = Database["public"]["Tables"]["practice_records"]["Row"];
@@ -8,7 +9,7 @@ type AuthorRow = Pick<
   ProfileRow,
   "id" | "display_name" | "avatar_url" | "blocks" | "grade"
 > & Partial<Pick<ProfileRow, "record_source" | "record_fields">>;
-const BLOCK_VALUES = new Set<Block>(["middle_long", "short", "manager", "jump", "throw"]);
+const BLOCK_VALUES = new Set<Block>(ALL_BLOCKS);
 const ROLE_VALUES = new Set<Role>(["admin", "menu_staff", "member"]);
 
 export function recordFieldsFromJson(value: Json | null): RecordFieldDef[] {
