@@ -455,6 +455,7 @@ export interface Notice {
   mentioned_all: boolean;
   mentioned_role_ids: string[];
   mentioned_user_ids: string[];
+  mentioned_excluded_user_ids: string[];
   mentioned_blocks: Block[];
   mentioned_grades: string[];
   created_at: string;

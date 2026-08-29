@@ -25,11 +25,12 @@ function readMemberLists(): MemberList[] {
   }
 }
 
-export function PersonPicker({ people, value, onChange, label = "対象者", excludeIds = [], includedIds = [] }: {
-  people: AuthorMini[]; value: string[]; onChange: (ids: string[]) => void; label?: string; excludeIds?: string[]; includedIds?: string[];
+export function PersonPicker({ people, value, onChange, label = "対象者", excludeIds = [], includedIds = [], excludedIncludedIds = [], onExcludedIncludedIdsChange }: {
+  people: AuthorMini[]; value: string[]; onChange: (ids: string[]) => void; label?: string; excludeIds?: string[]; includedIds?: string[]; excludedIncludedIds?: string[]; onExcludedIncludedIdsChange?: (ids: string[]) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
+  const [draftExcludedIncludedIds, setDraftExcludedIncludedIds] = useState(excludedIncludedIds);
   const [query, setQuery] = useState("");
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [grades, setGrades] = useState<string[]>([]);
@@ -52,6 +53,7 @@ export function PersonPicker({ people, value, onChange, label = "対象者", exc
 
   function launch() {
     setDraft(value);
+    setDraftExcludedIncludedIds(excludedIncludedIds);
     setMemberLists(readMemberLists());
     setCreatingList(false);
     setListName("");
@@ -59,6 +61,14 @@ export function PersonPicker({ people, value, onChange, label = "対象者", exc
   }
   function toggle(id: string) {
     setDraft((ids) => ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]);
+  }
+  function togglePerson(id: string) {
+    if (included.has(id)) {
+      setDraft((ids) => ids.filter((item) => item !== id));
+      setDraftExcludedIncludedIds((ids) => ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]);
+      return;
+    }
+    toggle(id);
   }
   function saveMemberLists(next: MemberList[]) {
     setMemberLists(next);
@@ -78,7 +88,7 @@ export function PersonPicker({ people, value, onChange, label = "対象者", exc
 
   return <>
     <button type="button" onClick={launch} className="flex min-h-11 w-full items-center justify-between rounded-xl border border-separator bg-card px-3 text-left">
-      <span><span className="block text-sm font-semibold">{label}</span><span className="text-micro text-muted">{value.length ? `個別に${value.length}人を選択中` : includedIds.length ? `${includedIds.length}人が条件で対象` : "選択なし"}</span></span><ChevronRight size={17} className="text-muted" />
+      <span><span className="block text-sm font-semibold">{label}</span><span className="text-micro text-muted">{excludedIncludedIds.length ? `${excludedIncludedIds.length}人を個別に除外` : value.length ? `個別に${value.length}人を選択中` : includedIds.length ? `${includedIds.length}人が条件で対象` : "選択なし"}</span></span><ChevronRight size={17} className="text-muted" />
     </button>
     <FormModal open={open} onOpenChange={setOpen} title={`${label}を選択`} autoFocus={false}>
       <div className="space-y-3 pb-4">
@@ -101,11 +111,12 @@ export function PersonPicker({ people, value, onChange, label = "対象者", exc
         </div>        <div className="space-y-1">{filtered.map((person) => {
           const explicit = draft.includes(person.id);
           const byCondition = included.has(person.id);
-          const active = explicit || byCondition;
-          return <button key={person.id} type="button" onClick={() => { if (!byCondition || explicit) toggle(person.id); }} className={cn("flex min-h-12 w-full items-center gap-3 rounded-xl px-2 text-left", active ? "bg-accent/10" : "active:bg-bg")}><Avatar name={person.display_name} avatarUrl={person.avatar_url} blocks={person.blocks} size="sm" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{person.display_name}</span><span className="text-micro text-muted">{explicit ? "個別指定" : byCondition ? "条件で対象" : person.grade ?? "学年未設定"}</span></span>{active && <Check size={18} className="text-accent" />}</button>;
+          const excludedByCondition = byCondition && draftExcludedIncludedIds.includes(person.id);
+          const active = explicit || (byCondition && !excludedByCondition);
+          return <button key={person.id} type="button" onClick={() => togglePerson(person.id)} className={cn("flex min-h-12 w-full items-center gap-3 rounded-xl px-2 text-left", active ? "bg-accent/10" : excludedByCondition ? "bg-danger/5" : "active:bg-bg")}><Avatar name={person.display_name} avatarUrl={person.avatar_url} blocks={person.blocks} size="sm" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{person.display_name}</span><span className={cn("text-micro text-muted", excludedByCondition && "text-danger")}>{explicit ? "個別指定" : excludedByCondition ? "個別に除外" : byCondition ? "条件で対象" : person.grade ?? "学年未設定"}</span></span>{active && <Check size={18} className="text-accent" />}</button>;
         })}</div>
       </div>
-      <FormModalFooter><Button size="lg" onClick={() => { onChange(draft); setOpen(false); }}>完了（個別 {draft.length}人）</Button></FormModalFooter>
+      <FormModalFooter><Button size="lg" onClick={() => { onChange(draft); onExcludedIncludedIdsChange?.(draftExcludedIncludedIds.filter((id) => included.has(id))); setOpen(false); }}>完了（追加 {draft.length}人・除外 {draftExcludedIncludedIds.filter((id) => included.has(id)).length}人）</Button></FormModalFooter>
     </FormModal>
   </>;
 }

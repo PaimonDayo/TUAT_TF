@@ -4,19 +4,21 @@ import { useMemo } from "react";
 import { Check, Users } from "lucide-react";
 import { PersonPicker } from "@/components/features/PersonPicker";
 import { Disclosure } from "@/components/ui/disclosure";
-import { BLOCKS, EDITABLE_BLOCK_ORDER, GRADE_OPTIONS, matchSimpleBlock } from "@/lib/constants";
+import { BLOCKS, EDITABLE_BLOCK_ORDER, GRADE_OPTIONS } from "@/lib/constants";
+import { noticeConditionRecipientIds, noticeRecipientIds } from "@/lib/notice-recipients";
 import { cn } from "@/lib/utils";
 import type { AppRole, AuthorMini, Block } from "@/types";
 
 type RoleAssignment = { profile_id: string; role_id: string };
 
-export function RecipientPicker({ people, roles, roleAssignments, all, roleIds, personIds, blocks, grades, onAllChange, onRoleIdsChange, onPersonIdsChange, onBlocksChange, onGradesChange }: {
-  people: AuthorMini[]; roles: AppRole[]; roleAssignments: RoleAssignment[]; all: boolean; roleIds: string[]; personIds: string[]; blocks: Block[]; grades: string[];
-  onAllChange: (value: boolean) => void; onRoleIdsChange: (ids: string[]) => void; onPersonIdsChange: (ids: string[]) => void; onBlocksChange: (blocks: Block[]) => void; onGradesChange: (grades: string[]) => void;
+export function RecipientPicker({ people, roles, roleAssignments, all, roleIds, personIds, excludedPersonIds, blocks, grades, onAllChange, onRoleIdsChange, onPersonIdsChange, onExcludedPersonIdsChange, onBlocksChange, onGradesChange }: {
+  people: AuthorMini[]; roles: AppRole[]; roleAssignments: RoleAssignment[]; all: boolean; roleIds: string[]; personIds: string[]; excludedPersonIds: string[]; blocks: Block[]; grades: string[];
+  onAllChange: (value: boolean) => void; onRoleIdsChange: (ids: string[]) => void; onPersonIdsChange: (ids: string[]) => void; onExcludedPersonIdsChange: (ids: string[]) => void; onBlocksChange: (blocks: Block[]) => void; onGradesChange: (grades: string[]) => void;
 }) {
   function toggleRole(id: string) { onRoleIdsChange(roleIds.includes(id) ? roleIds.filter((item) => item !== id) : [...roleIds, id]); }
-  const conditionSelectedIds = useMemo(() => people.filter((person) => all || blocks.some((block) => matchSimpleBlock(person.blocks, block)) || grades.includes(person.grade ?? "") || roleAssignments.some((assignment) => assignment.profile_id === person.id && roleIds.includes(assignment.role_id))).map((person) => person.id), [all, blocks, grades, people, roleAssignments, roleIds]);
-  const uniqueRecipientCount = new Set([...conditionSelectedIds, ...personIds]).size;
+  const conditionSelectedIds = useMemo(() => noticeConditionRecipientIds({ people, roleAssignments, all, roleIds, blocks, grades }), [all, blocks, grades, people, roleAssignments, roleIds]);
+  const effectiveExcludedPersonIds = excludedPersonIds.filter((id) => conditionSelectedIds.includes(id));
+  const uniqueRecipientCount = noticeRecipientIds(conditionSelectedIds, personIds, effectiveExcludedPersonIds).length;
   const availableGrades = useMemo(() => { const present = new Set(people.map((person) => person.grade).filter((grade): grade is string => Boolean(grade))); return GRADE_OPTIONS.filter((grade) => present.has(grade.value)); }, [people]);
 
   return <div className="rounded-xl border border-separator bg-bg/40 px-3">
@@ -31,8 +33,8 @@ export function RecipientPicker({ people, roles, roleAssignments, all, roleIds, 
     {availableGrades.length > 0 && <Disclosure title={<span>学年{grades.length > 0 && <span className="ml-2 text-xs text-accent">{grades.length}件</span>}</span>}>
       <div className="space-y-1">{availableGrades.map((grade) => <FilterRow key={grade.value} label={grade.short} checked={grades.includes(grade.value)} onClick={() => onGradesChange(grades.includes(grade.value) ? grades.filter((item) => item !== grade.value) : [...grades, grade.value])} />)}</div>
     </Disclosure>}
-    <Disclosure title={<span>個別指定{personIds.length > 0 && <span className="ml-2 text-xs text-accent">{personIds.length}人</span>}</span>}>
-      <PersonPicker people={people} value={personIds} includedIds={conditionSelectedIds} onChange={onPersonIdsChange} label="個別に部員を追加" />
+    <Disclosure title={<span>個別調整{(personIds.length > 0 || effectiveExcludedPersonIds.length > 0) && <span className="ml-2 text-xs text-accent">追加{personIds.length}・除外{effectiveExcludedPersonIds.length}</span>}</span>}>
+      <PersonPicker people={people} value={personIds} includedIds={conditionSelectedIds} excludedIncludedIds={effectiveExcludedPersonIds} onChange={onPersonIdsChange} onExcludedIncludedIdsChange={onExcludedPersonIdsChange} label="個別に追加・除外" />
     </Disclosure>
     <p className="border-t border-separator/70 py-3 text-xs font-semibold text-muted">通知対象 {uniqueRecipientCount}人</p>
   </div>;

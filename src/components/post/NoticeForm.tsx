@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import { RecipientPicker } from "@/components/features/RecipientPicker";
 import { NOTICE_CATEGORIES, normalizeProfileBlocks } from "@/lib/constants";
+import { noticeConditionRecipientIds } from "@/lib/notice-recipients";
 import type { AppRole, AuthorMini, Block, Notice, NoticeCategory } from "@/types";
 
 export function NoticeForm({
@@ -38,6 +39,7 @@ export function NoticeForm({
     initial?.mentioned_role_ids ?? initial?.target_role_ids ?? [],
   );
   const [mentionedUserIds, setMentionedUserIds] = useState<string[]>(initial?.mentioned_user_ids ?? []);
+  const [mentionedExcludedUserIds, setMentionedExcludedUserIds] = useState<string[]>(initial?.mentioned_excluded_user_ids ?? []);
   const [mentionedBlocks, setMentionedBlocks] = useState<Block[]>(normalizeProfileBlocks(initial?.mentioned_blocks));
   const [mentionedGrades, setMentionedGrades] = useState<string[]>(initial?.mentioned_grades ?? []);
   const [saving, setSaving] = useState(false);
@@ -71,6 +73,11 @@ export function NoticeForm({
     setSaving(true);
     setError(null);
     const supabase = createClient();
+    const conditionRecipientIds = new Set(noticeConditionRecipientIds({ people: members, roleAssignments, all: mentionedAll, roleIds: mentionedRoleIds, blocks: mentionedBlocks, grades: mentionedGrades }));
+    // 編集画面を開いた直後で部員一覧がまだ読めていない場合は、既存の除外設定を失わない。
+    const effectiveExcludedUserIds = members.length === 0
+      ? mentionedExcludedUserIds
+      : mentionedExcludedUserIds.filter((id) => conditionRecipientIds.has(id));
 
     if (editing) {
       const result = await safeUpdate(
@@ -87,6 +94,7 @@ export function NoticeForm({
           mentioned_all: mentionedAll,
           mentioned_role_ids: mentionedRoleIds,
           mentioned_user_ids: mentionedUserIds,
+          mentioned_excluded_user_ids: effectiveExcludedUserIds,
           mentioned_blocks: mentionedBlocks,
           mentioned_grades: mentionedGrades,
         },
@@ -121,6 +129,7 @@ export function NoticeForm({
       mentioned_all: mentionedAll,
       mentioned_role_ids: mentionedRoleIds,
       mentioned_user_ids: mentionedUserIds,
+      mentioned_excluded_user_ids: effectiveExcludedUserIds,
       mentioned_blocks: mentionedBlocks,
       mentioned_grades: mentionedGrades,
     });
@@ -178,8 +187,8 @@ export function NoticeForm({
         onChange={() => setPinHome((v) => !v)}
       />
       <RecipientPicker
-        people={members} roles={roles} roleAssignments={roleAssignments} all={mentionedAll} roleIds={mentionedRoleIds} personIds={mentionedUserIds} blocks={mentionedBlocks} grades={mentionedGrades}
-        onAllChange={setMentionedAll} onRoleIdsChange={setMentionedRoleIds} onPersonIdsChange={setMentionedUserIds} onBlocksChange={setMentionedBlocks} onGradesChange={setMentionedGrades}
+        people={members} roles={roles} roleAssignments={roleAssignments} all={mentionedAll} roleIds={mentionedRoleIds} personIds={mentionedUserIds} excludedPersonIds={mentionedExcludedUserIds} blocks={mentionedBlocks} grades={mentionedGrades}
+        onAllChange={setMentionedAll} onRoleIdsChange={setMentionedRoleIds} onPersonIdsChange={setMentionedUserIds} onExcludedPersonIdsChange={setMentionedExcludedUserIds} onBlocksChange={setMentionedBlocks} onGradesChange={setMentionedGrades}
       />
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <FormModalFooter>

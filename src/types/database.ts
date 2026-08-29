@@ -701,6 +701,7 @@ export type Database = {
           mentioned_blocks: string[]
           mentioned_grades: string[]
           mentioned_role_ids: string[]
+          mentioned_excluded_user_ids: string[]
           mentioned_user_ids: string[]
           notify_members: boolean
           pin_home: boolean
@@ -718,6 +719,7 @@ export type Database = {
           mentioned_blocks?: string[]
           mentioned_grades?: string[]
           mentioned_role_ids?: string[]
+          mentioned_excluded_user_ids?: string[]
           mentioned_user_ids?: string[]
           notify_members?: boolean
           pin_home?: boolean
@@ -735,6 +737,7 @@ export type Database = {
           mentioned_blocks?: string[]
           mentioned_grades?: string[]
           mentioned_role_ids?: string[]
+          mentioned_excluded_user_ids?: string[]
           mentioned_user_ids?: string[]
           notify_members?: boolean
           pin_home?: boolean

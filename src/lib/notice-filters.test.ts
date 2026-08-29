@@ -19,6 +19,7 @@ const notice: NoticeWithReactions = {
   target_role_ids: [],
   mentioned_all: true,
   mentioned_role_ids: [],
+  mentioned_excluded_user_ids: [],
   mentioned_user_ids: [],
   mentioned_blocks: [],
   mentioned_grades: [],
