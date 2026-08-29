@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { fetchRolesByProfileIds } from "@/lib/supabase/auth";
 import { viewerCompetitionBlocks } from "@/lib/constants";
 import { jstToday } from "@/lib/date";
+import { compareFeedItems, sortFeedItems } from "@/lib/feed-sort";
 import { refreshMemberFromSheetLive } from "@/lib/sheet-sync";
 import {
   normalizeNoteArticleRow,
@@ -280,11 +281,7 @@ export async function getFeed(
     ),
   ];
 
-  items.sort((a, b) =>
-    a.created_at === b.created_at
-      ? b.id.localeCompare(a.id)
-      : a.created_at < b.created_at ? 1 : -1,
-  );
+  items.sort(compareFeedItems);
   return items.slice(0, limit);
 }
 
@@ -608,11 +605,6 @@ export async function getUserTweets(
       comments_count: comments.get(tweet.id) ?? 0,
     }),
   );
-}
-
-/** 投稿（練習記録 + つぶやき）を新しい順に並べる */
-export function sortFeedItems(items: FeedItem[]): FeedItem[] {
-  return [...items].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
 }
 
 /** あるユーザーの投稿（練習記録 + つぶやき）をマージして返す（マイページ用） */

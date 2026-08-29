@@ -23,8 +23,8 @@ import {
   getPublishedPersonalNotes,
   getUserTweets,
   isFavorite,
-  sortFeedItems,
 } from "@/lib/queries";
+import { sortFeedItems } from "@/lib/feed-sort";
 import { gradeShort } from "@/lib/constants";
 import { permissionsOf } from "@/lib/permissions";
 import type { FeedItem, PbRecord, Profile, RecordWithAuthor } from "@/types";
