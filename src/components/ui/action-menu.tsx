@@ -1,17 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
+import { MoreHorizontal, Pencil, Pin, PinOff, Share2, Trash2 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
 export function ActionMenu({
   onEdit,
+  onShare,
   onPin,
   pinned = false,
   onDelete,
   editLabel = "編集する",
+  shareLabel = "共有リンクをコピー",
   deleteLabel = "削除する",
   deleteTitle = "削除しますか？",
   deleteDescription = "削除した内容は元に戻せません。",
@@ -19,10 +21,12 @@ export function ActionMenu({
   className,
 }: {
   onEdit?: () => void;
+  onShare?: () => void | Promise<void>;
   onDelete?: () => void | boolean | Promise<void | boolean>;
   onPin?: () => void | Promise<void>;
   pinned?: boolean;
   editLabel?: string;
+  shareLabel?: string;
   deleteLabel?: string;
   deleteTitle?: string;
   deleteDescription?: string;
@@ -79,6 +83,19 @@ export function ActionMenu({
               >
                 <Pencil size={20} className="text-accent" />
                 <span className="text-headline">{editLabel}</span>
+              </button>
+            )}
+            {onShare && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  void onShare();
+                }}
+                className="flex w-full items-center gap-3 rounded-xl border border-separator bg-card p-3.5 active:bg-bg"
+              >
+                <Share2 size={20} className="text-accent" />
+                <span className="text-headline">{shareLabel}</span>
               </button>
             )}
             {onPin && (

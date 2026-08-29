@@ -66,11 +66,9 @@ export function TweetCard({
             {tweet.expires_at ? " · ストーリー" : " のつぶやき"}
           </p>
         </div>
-        {isOwner && (
-          <span className="shrink-0" onClick={(event) => event.stopPropagation()}>
-            <TweetOwnerMenu tweet={{ id: tweet.id, content: tweet.content }} />
-          </span>
-        )}
+        <span className="shrink-0" onClick={(event) => event.stopPropagation()}>
+          <TweetOwnerMenu tweet={{ id: tweet.id, content: tweet.content }} isOwner={isOwner} />
+        </span>
       </div>
 
       <p

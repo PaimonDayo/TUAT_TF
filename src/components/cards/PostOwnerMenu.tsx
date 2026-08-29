@@ -9,15 +9,17 @@ import { RecordForm, type RecordFormHandle } from "@/components/post/RecordForm"
 import { TweetForm, type TweetFormHandle } from "@/components/post/TweetForm";
 import { useToast } from "@/components/ui/toast";
 import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
+import { copyText } from "@/components/common/ShareButton";
 import type { PracticeRecord, RecordFieldDef } from "@/types";
 
-/** 練習記録の編集・削除メニュー（本人のみ表示） */
+/** 練習記録の共有メニュー。編集・削除は本人だけに表示する。 */
 export function RecordOwnerMenu({
   record,
   isMiddleLong,
   recordSource = "app",
   recordFields,
   systemRecordForm = false,
+  isOwner,
 }: {
   record: PracticeRecord;
   isMiddleLong: boolean;
@@ -25,6 +27,7 @@ export function RecordOwnerMenu({
   recordSource?: "app" | "sheet";
   recordFields?: RecordFieldDef[];
   systemRecordForm?: boolean;
+  isOwner: boolean;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -35,6 +38,15 @@ export function RecordOwnerMenu({
   // 記録のメインがアプリの部員は、スプシ由来(from_sheet)の記録はアプリ内では編集不可
   // （そちらは今もスプシ側が正）。メインがスプシの部員はどちらの記録も編集可（write-through）。
   const editable = recordSource === "sheet" || !record.from_sheet;
+
+  async function copyLink() {
+    try {
+      await copyText(new URL(`/timeline/record/${record.id}`, window.location.origin).toString());
+      showToast("共有リンクをコピーしました", "success");
+    } catch {
+      showToast("共有リンクをコピーできませんでした");
+    }
+  }
 
   async function remove() {
     const supabase = createClient();
@@ -50,8 +62,9 @@ export function RecordOwnerMenu({
   return (
     <>
       <ActionMenu
-        onEdit={editable ? () => setEditOpen(true) : undefined}
-        onDelete={editable ? remove : undefined}
+        onEdit={isOwner && editable ? () => setEditOpen(true) : undefined}
+        onShare={copyLink}
+        onDelete={isOwner && editable ? remove : undefined}
         deleteTitle="練習記録を削除しますか？"
         deleteDescription="削除した練習記録は元に戻せません。"
         triggerLabel="練習記録のメニュー"
@@ -75,14 +88,23 @@ export function RecordOwnerMenu({
   );
 }
 
-/** つぶやきの編集・削除メニュー（本人のみ表示） */
-export function TweetOwnerMenu({ tweet }: { tweet: { id: string; content: string } }) {
+/** つぶやきの共有メニュー。編集・削除は本人だけに表示する。 */
+export function TweetOwnerMenu({ tweet, isOwner }: { tweet: { id: string; content: string }; isOwner: boolean }) {
   const router = useRouter();
   const { showToast } = useToast();
   const [editOpen, setEditOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const formRef = useRef<TweetFormHandle>(null);
+
+  async function copyLink() {
+    try {
+      await copyText(new URL(`/timeline/tweet/${tweet.id}`, window.location.origin).toString());
+      showToast("共有リンクをコピーしました", "success");
+    } catch {
+      showToast("共有リンクをコピーできませんでした");
+    }
+  }
 
   async function remove() {
     const supabase = createClient();
@@ -98,8 +120,9 @@ export function TweetOwnerMenu({ tweet }: { tweet: { id: string; content: string
   return (
     <>
       <ActionMenu
-        onEdit={() => setEditOpen(true)}
-        onDelete={remove}
+        onEdit={isOwner ? () => setEditOpen(true) : undefined}
+        onShare={copyLink}
+        onDelete={isOwner ? remove : undefined}
         deleteTitle="つぶやきを削除しますか？"
         deleteDescription="削除したつぶやきは元に戻せません。"
         triggerLabel="つぶやきのメニュー"
