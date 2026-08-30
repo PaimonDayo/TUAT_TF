@@ -612,7 +612,11 @@ export async function getUserTweets(
 
 /** 投稿（練習記録 + つぶやき）を新しい順に並べる */
 export function sortFeedItems(items: FeedItem[]): FeedItem[] {
-  return [...items].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+  return [...items].sort((a, b) =>
+    a.created_at === b.created_at
+      ? b.id.localeCompare(a.id)
+      : a.created_at < b.created_at ? 1 : -1,
+  );
 }
 
 /** あるユーザーの投稿（練習記録 + つぶやき）をマージして返す（マイページ用） */
@@ -631,7 +635,8 @@ export async function getUserActivity(
       .lte("recorded_date", jstToday())
       .or(RECORD_NONEMPTY_OR)
       .or(SHEET_TIMELINE_OR)
-      .order("recorded_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
       .limit(limit),
     getUserTweets(userId, currentUserId, limit),
   ]);

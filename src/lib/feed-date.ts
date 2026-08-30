@@ -8,9 +8,9 @@ const JST_DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
 });
 
 export function feedItemDate(item: FeedItem): string {
-  return item.kind === "record"
-    ? item.recorded_date
-    : JST_DATE_FORMATTER.format(new Date(item.created_at));
+  // 練習日ではなく投稿日でまとめる。過去日の記録を後から入力しても、
+  // 入力した日の新着としてタイムライン上部に残すため。
+  return JST_DATE_FORMATTER.format(new Date(item.created_at));
 }
 
 export function feedDateLabel(date: string, today: string, yesterday: string): string {

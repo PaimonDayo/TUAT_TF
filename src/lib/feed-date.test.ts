@@ -8,11 +8,11 @@ import {
 import type { FeedItem } from "@/types";
 
 describe("feed date helpers", () => {
-  it("uses recorded_date for practice records", () => {
+  it("uses the JST posting date for practice records, not the practice date", () => {
     const item = {
       kind: "record",
-      recorded_date: "2026-07-24",
-      created_at: "2026-07-23T15:00:00.000Z",
+      recorded_date: "2026-07-23",
+      created_at: "2026-07-24T03:00:00.000Z",
     } as FeedItem;
 
     expect(feedItemDate(item)).toBe("2026-07-24");
@@ -33,33 +33,32 @@ describe("feed date helpers", () => {
     expect(feedDateLabel("2026-07-20", "2026-07-24", "2026-07-23")).toBe("7月20日");
   });
 
-  it("merges non-consecutive items from the same practice date", () => {
-    const lateYesterday = {
+  it("keeps a late-entered practice record in its posting-day group", () => {
+    const lateYesterdayPractice = {
       kind: "record",
       id: "late-yesterday",
       recorded_date: "2026-07-25",
+      created_at: "2026-07-26T08:00:00.000Z",
     } as FeedItem;
-    const today = {
-      kind: "record",
+    const todayPost = {
+      kind: "tweet",
       id: "today",
-      recorded_date: "2026-07-26",
+      created_at: "2026-07-26T07:00:00.000Z",
     } as FeedItem;
-    const earlierYesterday = {
+    const yesterdayPost = {
       kind: "record",
       id: "earlier-yesterday",
       recorded_date: "2026-07-25",
+      created_at: "2026-07-25T07:00:00.000Z",
     } as FeedItem;
 
     expect(groupFeedItemsByDate([
-      lateYesterday,
-      today,
-      earlierYesterday,
+      lateYesterdayPractice,
+      todayPost,
+      yesterdayPost,
     ])).toEqual([
-      { date: "2026-07-26", items: [today] },
-      {
-        date: "2026-07-25",
-        items: [lateYesterday, earlierYesterday],
-      },
+      { date: "2026-07-26", items: [lateYesterdayPractice, todayPost] },
+      { date: "2026-07-25", items: [yesterdayPost] },
     ]);
   });
 
