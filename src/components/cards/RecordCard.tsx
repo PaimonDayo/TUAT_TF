@@ -94,7 +94,7 @@ export function RecordCard({
       {fieldVisible("strides") && record.strides > 0 && <p className="text-[12px] text-muted2">{recordFieldLabel(recordFields, "strides", "流し")} {record.strides}本</p>}
 
       {details.length > 0 && (
-        <ExpandableSection maxHeight={150}>
+        <ExpandableSection maxHeight={150} forceExpanded={embedded}>
           <dl>{details.map((field) => <KeyValue key={field.key} label={field.label} value={recordValue(record, field.key)} />)}</dl>
         </ExpandableSection>
       )}

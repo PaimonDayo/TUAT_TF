@@ -33,6 +33,25 @@ type FeedCursor = {
   tweet?: { createdAt: string; id: string };
 } | null;
 
+const INTERACTIVE_FEED_SELECTOR = [
+  "a",
+  "button",
+  "input",
+  "textarea",
+  "select",
+  "label",
+  "[contenteditable='true']",
+  "[role='button']",
+  "[role='tab']",
+].join(",");
+
+/** カード内の操作部品を押したときは、外側の一覧行を開閉しない。 */
+function isInteractiveFeedTarget(target: EventTarget | null, row: HTMLElement) {
+  if (!(target instanceof Element)) return false;
+  const control = target.closest(INTERACTIVE_FEED_SELECTOR);
+  return control !== null && control !== row;
+}
+
 /**
  * タイムライン本体。カード表示と、一覧性を優先した2行表示を切り替えられる。
  * 前回開いたあとに増えた投稿を「新着の投稿」として先頭に数え、そこが終わる位置に区切りを出す。
@@ -334,7 +353,10 @@ export function TimelineView({
                                 tabIndex={0}
                                 aria-label={collapsed ? "投稿の詳細を開く" : "投稿の詳細を閉じる"}
                                 aria-expanded={!collapsed}
-                                onClick={() => toggleExpanded(key)}
+                                onClick={(event) => {
+                                  if (isInteractiveFeedTarget(event.target, event.currentTarget)) return;
+                                  toggleExpanded(key);
+                                }}
                                 onKeyDown={(event) => {
                                   if (event.target !== event.currentTarget) return;
                                   if (event.key === "Enter" || event.key === " ") {

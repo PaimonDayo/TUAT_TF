@@ -9,10 +9,13 @@ import { cn } from "@/lib/utils";
  */
 export function ExpandableSection({
   maxHeight = 140,
+  forceExpanded = false,
   className,
   children,
 }: {
   maxHeight?: number;
+  /** 一覧行を展開したカードなど、外側ですでに全文表示を選んでいる場合に使う。 */
+  forceExpanded?: boolean;
   className?: string;
   children: ReactNode;
 }) {
@@ -33,7 +36,7 @@ export function ExpandableSection({
     return () => observer.disconnect();
   }, [maxHeight]);
 
-  const collapsed = overflowing && !expanded;
+  const collapsed = !forceExpanded && overflowing && !expanded;
 
   return (
     <div className={className}>
@@ -52,7 +55,7 @@ export function ExpandableSection({
           />
         )}
       </div>
-      {overflowing && (
+      {!forceExpanded && overflowing && (
         <button
           type="button"
           onClick={() => setExpanded((current) => !current)}
