@@ -29,6 +29,47 @@ describe("sheet replies", () => {
     ]);
   });
 
+  // アプリ側の返信を削除すると本文・列位置の手掛かりが消えるため、
+  // 痕跡が無いとシートに残った写しが「スプレッドシートからの返信」として復活する。
+  it("does not re-import the mirror of a deleted app reply", () => {
+    expect(importedSheetReplies(
+      [
+        { replyIndex: 5, content: "了解　山田", source: "sheet" },
+        { replyIndex: 6, content: "シートだけの返信", source: "sheet" },
+      ],
+      [],
+      [],
+      [{ replyIndex: 5, exportedText: "了解　山田" }],
+    )).toEqual([{ replyIndex: 6, content: "シートだけの返信" }]);
+  });
+
+  it("matches a deleted app reply by text when its column is unknown", () => {
+    expect(importedSheetReplies(
+      [{ replyIndex: 5, content: "了解　 山田", source: "sheet" }],
+      [],
+      [],
+      [{ replyIndex: null, exportedText: "了解 山田" }],
+    )).toEqual([]);
+  });
+
+  it("matches a deleted app reply by column when the author was renamed", () => {
+    expect(importedSheetReplies(
+      [{ replyIndex: 5, content: "改名前の名前が入った写し", source: "sheet" }],
+      [],
+      [],
+      [{ replyIndex: 5, exportedText: "改名後の名前が入った写し" }],
+    )).toEqual([]);
+  });
+
+  it("keeps sheet replies that no deleted app reply matches", () => {
+    expect(importedSheetReplies(
+      [{ replyIndex: 6, content: "部員がシートに書いた返信", source: "sheet" }],
+      [],
+      [],
+      [{ replyIndex: 5, exportedText: "削除したアプリ返信　山田" }],
+    )).toEqual([{ replyIndex: 6, content: "部員がシートに書いた返信" }]);
+  });
+
   it("deduplicates display replies by column before normalized text", () => {
     expect(sheetRepliesWithoutAppDuplicates([
       { replyIndex: 4, content: "名前が変わって本文照合できない写し" },

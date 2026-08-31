@@ -6,6 +6,7 @@ import { roundKm } from "@/lib/utils";
 import {
   importedSheetReplies,
   matchAppReplyIndexes,
+  type DeletedAppReply,
   normalizeSheetReplyText,
   type AppReplyIndexCandidate,
   type RawSheetReply,
@@ -838,6 +839,20 @@ async function reconcileSheetReplies(
     .in("target_id", [...targetIds]);
   if (commentError) throw commentError;
 
+  // 削除済みのアプリ返信。シートに残った写しを取り込み直さないための痕跡。
+  const { data: tombstones, error: tombstoneError } = await supabase
+    .from("sheet_reply_tombstones")
+    .select("record_id, reply_index, exported_text")
+    .in("record_id", [...targetIds]);
+  if (tombstoneError) throw tombstoneError;
+
+  const deletedByRecord = new Map<string, DeletedAppReply[]>();
+  for (const tombstone of tombstones ?? []) {
+    const list = deletedByRecord.get(tombstone.record_id) ?? [];
+    list.push({ replyIndex: tombstone.reply_index, exportedText: tombstone.exported_text });
+    deletedByRecord.set(tombstone.record_id, list);
+  }
+
   const exportedByRecord = new Map<string, Set<string>>();
   const exportedIndexesByRecord = new Map<string, Set<number>>();
   const appRepliesByRecord = new Map<string, AppReplyIndexCandidate[]>();
@@ -876,6 +891,7 @@ async function reconcileSheetReplies(
       rawReplies,
       exportedByRecord.get(recordId) ?? [],
       exportedIndexesByRecord.get(recordId) ?? [],
+      deletedByRecord.get(recordId) ?? [],
     );
     if (dryRun) {
       synced += indexMatches.length + rows.length;

@@ -1532,6 +1532,30 @@ export type Database = {
           },
         ]
       }
+      sheet_reply_tombstones: {
+        Row: {
+          deleted_at: string
+          exported_text: string
+          id: string
+          record_id: string
+          reply_index: number | null
+        }
+        Insert: {
+          deleted_at?: string
+          exported_text: string
+          id?: string
+          record_id: string
+          reply_index?: number | null
+        }
+        Update: {
+          deleted_at?: string
+          exported_text?: string
+          id?: string
+          record_id?: string
+          reply_index?: number | null
+        }
+        Relationships: []
+      }
       sheet_sync_runs: {
         Row: {
           alerted_at: string | null

@@ -13,9 +13,19 @@ export function normalizeSheetReplyText(value: string): string {
   return value.replace(/[\s\u3000]+/g, " ").trim();
 }
 
+/** 削除されたアプリ返信の痕跡（sheet_reply_tombstones の1行ぶん）。 */
+export type DeletedAppReply = {
+  replyIndex: number | null;
+  exportedText: string;
+};
+
 /**
  * アプリ返信のスプレッドシート写しを表示・取込対象から外す。
  * 新しい返信は列位置、旧返信は「本文＋投稿者名」の正規化文字列で照合する。
+ *
+ * deletedAppReplies には削除済みのアプリ返信を渡す。削除するとアプリ側に照合材料が
+ * 残らないため、これが無いとシートに残った写しが「スプレッドシートからの返信」として
+ * 復活してしまう。
  */
 export function sheetRepliesWithoutAppDuplicates<
   T extends { replyIndex: number; content: string },
@@ -23,6 +33,7 @@ export function sheetRepliesWithoutAppDuplicates<
   replies: T[],
   exportedAppReplies: Iterable<string>,
   exportedAppReplyIndexes: Iterable<number> = [],
+  deletedAppReplies: Iterable<DeletedAppReply> = [],
 ): T[] {
   const exportedTexts = new Set(
     Array.from(exportedAppReplies, normalizeSheetReplyText).filter(Boolean),
@@ -32,6 +43,14 @@ export function sheetRepliesWithoutAppDuplicates<
       (index) => Number.isInteger(index) && index >= 0,
     ),
   );
+
+  for (const deleted of deletedAppReplies) {
+    const text = normalizeSheetReplyText(deleted.exportedText);
+    if (text) exportedTexts.add(text);
+    if (Number.isInteger(deleted.replyIndex) && (deleted.replyIndex ?? -1) >= 0) {
+      exportedIndexes.add(deleted.replyIndex as number);
+    }
+  }
 
   return replies.filter(
     (reply) =>
@@ -44,6 +63,7 @@ export function importedSheetReplies(
   replies: RawSheetReply[],
   exportedAppReplies: Iterable<string>,
   exportedAppReplyIndexes: Iterable<number> = [],
+  deletedAppReplies: Iterable<DeletedAppReply> = [],
 ): ImportedSheetReply[] {
   const byIndex = new Map<number, ImportedSheetReply>();
 
@@ -65,6 +85,7 @@ export function importedSheetReplies(
     [...byIndex.values()].sort((a, b) => a.replyIndex - b.replyIndex),
     exportedAppReplies,
     exportedAppReplyIndexes,
+    deletedAppReplies,
   );
 }
 
