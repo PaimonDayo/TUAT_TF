@@ -35,18 +35,6 @@ import type {
   TweetWithAuthor,
   Profile,
   PracticeRecord,
-  ItoGame,
-  ItoInvitation,
-  ItoParticipant,
-  ItoSecret,
-  ItoRound,
-  ItoGroup,
-  ItoGroupMember,
-  ItoLeaderAnswer,
-  ItoGroupOrder,
-  ItoSecretStatus,
-  ItoRoundScore,
-  ItoPointEvent,
 } from "@/types";
 
 const AUTHOR_SELECT = "author:profiles!user_id(id, display_name, avatar_url, blocks, grade, record_source, record_fields)";
@@ -1039,203 +1027,29 @@ export async function getPublishedPersonalNotes(
   return (data ?? []).map(normalizeNoteRow).filter(isPresent);
 }
 
-/** 直近50件（無期限の全件取得はしない） */
-/**
- * 個人の通知。ito は公開準備中でシステム管理者にだけ見せているため、
- * 権限が無い人には ito の通知を出さない（開けない画面へ誘導しないため）。
- */
-export async function getPersonalNotifications(
-  userId: string,
-  options: { includeIto?: boolean } = {},
-): Promise<AppNotificationWithActor[]> {
+/** 直近50件（無期限の全件取得はしない）。廃止したitoの通知は表示しない。 */
+export async function getPersonalNotifications(userId: string): Promise<AppNotificationWithActor[]> {
   const supabase = await createClient();
-  let query = supabase
+  const query = supabase
     .from("notifications")
     .select(`
       *,
       actor:profiles!actor_id(id, display_name, avatar_url)
     `)
-    .eq("user_id", userId);
-  if (!options.includeIto) query = query.neq("type", "ito_invite");
+    .eq("user_id", userId)
+    .neq("type", "ito_invite");
   const { data } = await query.order("created_at", { ascending: false }).limit(50);
   return (data ?? []).map(normalizeNotificationRow).filter(isPresent);
 }
 
-export async function getUnreadNotificationCount(
-  userId: string,
-  options: { includeIto?: boolean } = {},
-): Promise<number> {
+export async function getUnreadNotificationCount(userId: string): Promise<number> {
   const supabase = await createClient();
-  let query = supabase
+  const query = supabase
     .from("notifications")
     .select("*", { count: "exact", head: true })
     .eq("user_id", userId)
-    .eq("is_read", false);
-  if (!options.includeIto) query = query.neq("type", "ito_invite");
+    .eq("is_read", false)
+    .neq("type", "ito_invite");
   const { count } = await query;
   return count ?? 0;
-}
-
-// ─────────────────────────────
-// ito ゲーム（docs/ITO-PLAN.md）
-// ─────────────────────────────
-
-/** ゲーム一覧（管理コンソール用。新しい順） */
-export async function getItoGames(): Promise<ItoGame[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("ito_games")
-    .select("*")
-    .order("created_at", { ascending: false });
-  return (data ?? []) as ItoGame[];
-}
-
-/** ゲーム単体 */
-export async function getItoGame(gameId: string): Promise<ItoGame | null> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("ito_games")
-    .select("*")
-    .eq("id", gameId)
-    .maybeSingle();
-  return (data as ItoGame | null) ?? null;
-}
-
-/** そのゲームの招待一覧（管理者は全件、部員は自分の行だけ RLS で絞られる） */
-export async function getItoInvitations(gameId: string): Promise<ItoInvitation[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("ito_invitations")
-    .select("*")
-    .eq("game_id", gameId)
-    .order("invited_at", { ascending: true });
-  return (data ?? []) as ItoInvitation[];
-}
-
-/** そのゲームの現在の参加プール */
-export async function getItoParticipants(gameId: string): Promise<ItoParticipant[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("ito_participants")
-    .select("*")
-    .eq("game_id", gameId);
-  return (data ?? []) as ItoParticipant[];
-}
-
-/**
- * そのラウンドの秘密数字。RLS が範囲を絞る＝
- * 自分の行、結果発表後のそのラウンド参加者、または
- * 進行役として見るシステム管理者（自分がそのラウンドの参加者でない場合のみ）。
- */
-export async function getItoSecrets(roundId: string): Promise<ItoSecret[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("ito_secrets")
-    .select("*")
-    .eq("round_id", roundId);
-  return (data ?? []) as ItoSecret[];
-}
-
-/** 自分あての招待（新しい順）。未回答があればエントリー画面で確認する。 */
-export async function getMyItoInvitations(userId: string): Promise<ItoInvitation[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("ito_invitations")
-    .select("*")
-    .eq("profile_id", userId)
-    .order("invited_at", { ascending: false });
-  return (data ?? []) as ItoInvitation[];
-}
-
-/** 部員向け ito 画面のデータ。参加中・招待中のゲームだけを返す。 */
-export async function getMyItoOverview(userId: string): Promise<{
-  invitations: ItoInvitation[];
-  participations: ItoParticipant[];
-  games: ItoGame[];
-}> {
-  const supabase = await createClient();
-  // 招待に答えて参加した人と、進行役が直接追加した人（招待なし）の両方を拾う。
-  const [invitations, { data: participantRows }] = await Promise.all([
-    getMyItoInvitations(userId),
-    supabase
-      .from("ito_participants")
-      .select("*")
-      .eq("profile_id", userId)
-      .eq("status", "active"),
-  ]);
-  const participations = (participantRows ?? []) as ItoParticipant[];
-
-  const gameIds = [
-    ...new Set([
-      ...invitations.map((invitation) => invitation.game_id),
-      ...participations.map((participation) => participation.game_id),
-    ]),
-  ];
-  if (gameIds.length === 0) return { invitations, participations, games: [] };
-
-  const { data } = await supabase
-    .from("ito_games")
-    .select("*")
-    .in("id", gameIds)
-    .order("created_at", { ascending: false });
-  return { invitations, participations, games: (data ?? []) as ItoGame[] };
-}
-
-/** そのゲームのラウンド一覧（古い順） */
-export async function getItoRounds(gameId: string): Promise<ItoRound[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("ito_rounds")
-    .select("*")
-    .eq("game_id", gameId)
-    .order("round_no", { ascending: true });
-  return (data ?? []) as ItoRound[];
-}
-
-/**
- * 進行中（または最後）のラウンドの状態一式。
- * 秘密数字は RLS が許す分だけ返る（本人の分、結果発表後、または進行役）。
- */
-export async function getItoRoundState(roundId: string): Promise<{
-  groups: ItoGroup[];
-  members: ItoGroupMember[];
-  answers: ItoLeaderAnswer[];
-  orders: ItoGroupOrder[];
-  secrets: ItoSecret[];
-  scores: ItoRoundScore[];
-}> {
-  const supabase = await createClient();
-  const [groups, members, answers, orders, secrets, scores] = await Promise.all([
-    supabase.from("ito_groups").select("*").eq("round_id", roundId).order("sort_order"),
-    supabase.from("ito_group_members").select("*").eq("round_id", roundId),
-    supabase.from("ito_leader_answers").select("*").eq("round_id", roundId),
-    supabase.from("ito_group_orders").select("*").eq("round_id", roundId),
-    supabase.from("ito_secrets").select("*").eq("round_id", roundId),
-    supabase.from("ito_round_scores").select("*").eq("round_id", roundId),
-  ]);
-  return {
-    groups: (groups.data ?? []) as ItoGroup[],
-    members: (members.data ?? []) as ItoGroupMember[],
-    answers: (answers.data ?? []) as ItoLeaderAnswer[],
-    orders: (orders.data ?? []) as ItoGroupOrder[],
-    secrets: (secrets.data ?? []) as ItoSecret[],
-    scores: (scores.data ?? []) as ItoRoundScore[],
-  };
-}
-
-/** 秘密数字の配布・確認状況（数字そのものは含まない） */
-export async function getItoSecretStatus(roundId: string): Promise<ItoSecretStatus[]> {
-  const supabase = await createClient();
-  const { data } = await supabase.rpc("ito_secret_status", { target_round_id: roundId });
-  return (data ?? []) as ItoSecretStatus[];
-}
-
-/** そのゲームの個人得点履歴（累計は SUM で算出する） */
-export async function getItoPointEvents(gameId: string): Promise<ItoPointEvent[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("ito_point_events")
-    .select("*")
-    .eq("game_id", gameId);
-  return (data ?? []) as ItoPointEvent[];
 }

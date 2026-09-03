@@ -12,7 +12,7 @@ export default async function NoticesPage() {
   
   const [notices, notifications] = await Promise.all([
     getNotices(profile.id),
-    getPersonalNotifications(profile.id, { includeIto: permissions.manageSystem }),
+    getPersonalNotifications(profile.id),
   ]);
 
   return (

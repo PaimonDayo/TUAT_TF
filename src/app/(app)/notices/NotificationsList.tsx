@@ -39,8 +39,6 @@ export function NotificationsList({
         return `${actorName}さんがスレッドにメッセージを送信しました`;
       case "mention":
         return `${actorName}さんがあなたをメンションしました`;
-      case "ito_invite":
-        return "itoゲームへの参加確認が届いています";
       default:
         return "新しい通知があります";
     }
@@ -58,8 +56,6 @@ export function NotificationsList({
         return "/schedule";
       case "thread":
         return `/notes/threads/${n.reference_id}`;
-      case "ito":
-        return "/ito";
       default:
         return null;
     }
