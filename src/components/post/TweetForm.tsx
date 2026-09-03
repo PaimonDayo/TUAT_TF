@@ -344,11 +344,9 @@ export const TweetForm = forwardRef<
                   </div>
                 ))}
               </div>
-              {pollOptions.length < 6 && (
-                <button type="button" className="text-[13px] font-semibold text-accent" onClick={() => setPollOptions((options) => [...options, ""])}>
-                  ＋ 選択肢を追加
-                </button>
-              )}
+              <button type="button" className="text-[13px] font-semibold text-accent" onClick={() => setPollOptions((options) => [...options, ""])}>
+                ＋ 選択肢を追加
+              </button>
               <div className="divide-y divide-separator/70 overflow-hidden rounded-xl border border-separator">
                 <Toggle variant="row" label="複数投票" checked={pollMultiple} onChange={() => setPollMultiple((value) => !value)} />
                 <Toggle variant="row" label="匿名投票" checked={pollAnonymous} onChange={() => setPollAnonymous((value) => !value)} />
