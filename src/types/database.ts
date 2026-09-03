@@ -1466,6 +1466,42 @@ export type Database = {
           },
         ]
       }
+      sheet_member_sync_state: {
+        Row: {
+          config_signature: string
+          content_signature: string
+          profile_id: string
+          synced_at: string
+        }
+        Insert: {
+          config_signature: string
+          content_signature: string
+          profile_id: string
+          synced_at?: string
+        }
+        Update: {
+          config_signature?: string
+          content_signature?: string
+          profile_id?: string
+          synced_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sheet_member_sync_state_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sheet_member_sync_state_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
+            referencedRelation: "weekly_ranking"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sheet_sync_runs: {
         Row: {
           alerted_at: string | null
@@ -1769,6 +1805,15 @@ export type Database = {
       }
     }
     Functions: {
+      get_feed_social_state: {
+        Args: { record_ids: string[]; tweet_ids: string[] }
+        Returns: {
+          comments_count: number
+          liked_by_me: boolean
+          target_id: string
+          target_type: string
+        }[]
+      }
       get_poll_results: {
         Args: { tweet_ids: string[] }
         Returns: { option_id: string; vote_count: number; voted_by_me: boolean }[]
@@ -1776,6 +1821,10 @@ export type Database = {
       get_poll_voters: {
         Args: { tweet_ids: string[] }
         Returns: { option_id: string; profile_id: string; display_name: string; avatar_url: string | null; blocks: string[]; grade: string | null }[]
+      }
+      get_tweet_feed_extras: {
+        Args: { tweet_ids: string[] }
+        Returns: { mentions: Json; options: Json; tweet_id: string }[]
       }
       claim_sheet_sync_chunk: {
         Args: { requested_chunk_size?: number; reset_cycle?: boolean }
@@ -1809,6 +1858,14 @@ export type Database = {
         Returns: string
       }
       is_admin: { Args: never; Returns: boolean }
+      set_like_state: {
+        Args: {
+          desired_liked: boolean
+          target_id_in: string
+          target_type_in: string
+        }
+        Returns: { liked: boolean; likes_count: number }[]
+      }
       is_member: { Args: never; Returns: boolean }
       is_staff: { Args: never; Returns: boolean }
       notify_sync_failure_if_needed: {

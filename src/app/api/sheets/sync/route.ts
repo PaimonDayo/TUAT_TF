@@ -25,6 +25,7 @@ type SyncChunk = {
  *   - 管理者の手動実行: ログイン中かつ「部員・ロール管理」権限
  */
 export async function POST(request: Request) {
+  const startedAt = Date.now();
   const body = await request.json().catch(() => ({}));
   const dryRun = body?.dryRun === true;
   const onlySheet = typeof body?.onlySheet === "string" ? body.onlySheet : undefined;
@@ -116,6 +117,16 @@ export async function POST(request: Request) {
       onlySheet,
       onlySheets: chunk?.sheetNames,
     });
+    console.info("sheet_sync_complete", {
+      trigger,
+      durationMs: Date.now() - startedAt,
+      processedMembers: (chunk?.sheetNames.length ?? (onlySheet ? 1 : 0)) - result.unchangedMembers.length,
+      unchangedMembers: result.unchangedMembers.length,
+      inserted: result.inserted,
+      updated: result.updated,
+      pushed: result.pushed,
+      failures: result.failedMembers.length,
+    });
     if (runId) {
       await admin
         .from("sheet_sync_runs")
@@ -135,6 +146,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, ...result, chunk });
   } catch (err) {
     const message = err instanceof Error ? err.message : "連携できませんでした";
+    console.error("sheet_sync_failed", {
+      trigger,
+      durationMs: Date.now() - startedAt,
+      message,
+    });
     if (runId) {
       await admin
         .from("sheet_sync_runs")

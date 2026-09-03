@@ -8,6 +8,9 @@ import { fetchMiddleLongMenuSnapshot } from "@/lib/middle-long-menu-sheet";
 export async function GET(request: Request) {
   await connection();
   try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const profile = await getCurrentProfile();
     const permissions = permissionsOf(profile.roles);
     if (!profile.blocks.includes("middle_long") && !profile.blocks.includes("manager") && !profile.menu_view_all_blocks && !permissions.createMenu) {
@@ -43,6 +46,9 @@ const MAX_MENU_FIELD_LENGTH = 20_000;
 export async function POST(request: Request) {
   await connection();
   try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const profile = await getCurrentProfile();
     if (!permissionsOf(profile.roles).createMenu) {
       return NextResponse.json({ error: "メニュー編集権限がありません" }, { status: 403 });
@@ -64,7 +70,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "入力内容が長すぎます" }, { status: 400 });
     }
 
-    const supabase = await createClient();
     const { data: schedule, error: scheduleError } = await supabase
       .from("practice_schedules")
       .select("schedule_date, schedule_type")

@@ -101,12 +101,6 @@ export function TimelineView({
     () => uniqueFeedItems(feedQuery.data.pages.flat()),
     [feedQuery.data.pages],
   );
-  const refetchFeed = feedQuery.refetch;
-  const visibleLikeTargets = useMemo(
-    () => new Set(items.map((item) => `${item.kind}:${item.id}`)),
-    [items],
-  );
-
   const [block, setBlock] = useState<string>(initialBlock);
   const [favOnly, setFavOnly] = useState(false);
   const [currentFavoriteIds, setCurrentFavoriteIds] = useState(favoriteIds);
@@ -139,48 +133,6 @@ export function TimelineView({
       window.removeEventListener(FAVORITE_CHANGE_EVENT, handleFavoriteChange);
     };
   }, [currentUser.id]);
-
-  // 他の利用者が押したいいねも、画面を開いたまま反映する。
-  // 投稿ごとの購読ではなく likes テーブルを一つだけ購読し、今表示している投稿に
-  // 関係する変更だけをまとめて再取得することで、購読数と通信回数を抑える。
-  useEffect(() => {
-    const supabase = createClient();
-    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const scheduleRefresh = (payload: {
-      new: { target_type?: string; target_id?: string };
-      old: { target_type?: string; target_id?: string };
-    }) => {
-      const target = payload.new.target_id
-        ? payload.new
-        : payload.old;
-      if (
-        (target.target_type !== "record" && target.target_type !== "tweet") ||
-        !target.target_id ||
-        !visibleLikeTargets.has(`${target.target_type}:${target.target_id}`)
-      ) return;
-
-      if (refreshTimer) return;
-      refreshTimer = setTimeout(() => {
-        refreshTimer = null;
-        void refetchFeed();
-      }, 150);
-    };
-
-    const channel = supabase
-      .channel(`timeline-likes-${currentUser.id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "likes" },
-        scheduleRefresh,
-      )
-      .subscribe();
-
-    return () => {
-      if (refreshTimer) clearTimeout(refreshTimer);
-      void supabase.removeChannel(channel);
-    };
-  }, [currentUser.id, refetchFeed, visibleLikeTargets]);
 
   const favSet = useMemo(() => new Set(currentFavoriteIds), [currentFavoriteIds]);
 

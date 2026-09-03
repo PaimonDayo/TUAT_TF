@@ -13,8 +13,9 @@ type SupabaseServer = Awaited<ReturnType<typeof createClient>>;
  * 現在ログイン中のユーザーのプロフィールを取得する。
  * 未ログインなら /login へリダイレクト。
  *
- * セッション検証・トークン更新は proxy.ts（毎リクエストの getUser）で行うため、
- * ここではネットワークを使わない getSession でユーザーIDだけ取り出す。
+ * 画面遷移のセッション検証・トークン更新は proxy.ts で行うため、ここでは
+ * ネットワークを使わない getSession でユーザーIDだけ取り出す。API Routeは
+ * Proxy対象外なので、各Route HandlerがgetUserまたはBearerで直接認証する。
  * データ自体のアクセス制御は Supabase の RLS が担保する。
  */
 const getStoredProfile = cache(async (): Promise<Profile> => {

@@ -242,34 +242,15 @@ export function PostActions({
 
     const supabase = createClient();
     updateTimelineLikeState(next, optimistic.likes);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      queryClient.setQueryData(interactionKey, previous);
-      showToast("ログイン状態を確認できませんでした");
-      updateTimelineLikeState(previous.liked, previous.likes);
-      mutationBusy.current = false;
-      return;
-    }
-
-    const result = next
-      ? await supabase
-          .from("likes")
-          .upsert(
-            { user_id: user.id, target_type: targetType, target_id: targetId },
-            { onConflict: "user_id,target_type,target_id" },
-          )
-          .select("target_id")
-          .single()
-      : await supabase
-          .from("likes")
-          .delete()
-          .eq("user_id", user.id)
-          .eq("target_type", targetType)
-          .eq("target_id", targetId)
-          .select("target_id");
-
-    const deleteFailed = !next && (!Array.isArray(result.data) || result.data.length !== 1);
-    if (result.error || deleteFailed) {
+    // 認証確認・insert/delete・件数再取得をDB内の1トランザクションへまとめる。
+    // UIは先に楽観反映し、RPCが返した実件数だけで確定する。
+    const { data, error } = await supabase.rpc("set_like_state", {
+      target_type_in: targetType,
+      target_id_in: targetId,
+      desired_liked: next,
+    });
+    const confirmedRow = data?.[0];
+    if (error || !confirmedRow || confirmedRow.liked !== next) {
       queryClient.setQueryData(interactionKey, previous);
       showToast(next ? "いいねできませんでした" : "いいねを解除できませんでした");
       updateTimelineLikeState(previous.liked, previous.likes);
@@ -277,19 +258,13 @@ export function PostActions({
       return;
     }
 
-    const { count, error: countError } = await supabase
-      .from("likes")
-      .select("id", { count: "exact", head: true })
-      .eq("target_type", targetType)
-      .eq("target_id", targetId);
-    const confirmedLikes = countError || count == null ? optimistic.likes : count;
     const confirmed = {
       ...optimistic,
-      likes: confirmedLikes,
+      likes: Number(confirmedRow.likes_count),
       busy: false,
     };
     queryClient.setQueryData(interactionKey, confirmed);
-    updateTimelineLikeState(next, confirmedLikes);
+    updateTimelineLikeState(next, confirmed.likes);
     mutationBusy.current = false;
   }
   useEffect(() => {

@@ -4,7 +4,15 @@ import {
   parseMemberCsv,
   parsePublicSheetDate,
   parseSheetMetadataHtml,
+  sheetContentSignature,
 } from "./sheet-public-csv";
+
+describe("sheetContentSignature", () => {
+  it("is stable for identical CSV and changes with the body", () => {
+    expect(sheetContentSignature("a,b\n1,2")).toBe(sheetContentSignature("a,b\n1,2"));
+    expect(sheetContentSignature("a,b\n1,2")).not.toBe(sheetContentSignature("a,b\n1,3"));
+  });
+});
 
 describe("parseSheetMetadataHtml", () => {
   it("extracts only member sheets and decodes escaped names", () => {

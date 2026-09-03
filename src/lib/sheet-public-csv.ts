@@ -1,4 +1,5 @@
 import Papa from "papaparse";
+import { createHash } from "node:crypto";
 import type { RawSheetReply } from "@/lib/sheet-replies";
 
 export type RawMember = {
@@ -10,6 +11,10 @@ export type RawMember = {
 };
 
 export type SheetMember = { name: string; gid: string };
+export type PublicMemberSnapshot = {
+  signature: string;
+  member: RawMember | null;
+};
 
 const BASE_URL = "https://docs.google.com/spreadsheets/d";
 const MEMBER_SHEET = /^[BM]\d/;
@@ -167,6 +172,28 @@ export async function fetchPublicMember(
   memberName: string,
   opts: { timeoutMs?: number; members?: SheetMember[] } = {},
 ): Promise<RawMember> {
+  const snapshot = await fetchPublicMemberSnapshot(memberName, { ...opts, forceParse: true });
+  if (!snapshot.member) throw new Error("CSVを解析できませんでした");
+  return snapshot.member;
+}
+
+export function sheetContentSignature(csv: string): string {
+  return createHash("sha256").update(csv, "utf8").digest("hex");
+}
+
+/**
+ * CSV本文を先にハッシュ化し、前回と同じなら重いCSV解析を省略する。
+ * pending write-throughの再送時だけ forceParse で内容を復元する。
+ */
+export async function fetchPublicMemberSnapshot(
+  memberName: string,
+  opts: {
+    timeoutMs?: number;
+    members?: SheetMember[];
+    expectedSignature?: string | null;
+    forceParse?: boolean;
+  } = {},
+): Promise<PublicMemberSnapshot> {
   const members = opts.members ?? (await fetchPublicSheetMembers());
   const wanted = canonicalName(memberName);
   const member = members.find((candidate) => canonicalName(candidate.name) === wanted);
@@ -181,5 +208,11 @@ export async function fetchPublicMember(
   if (contentType.includes("text/html") || startsAsHtml) {
     throw new Error("CSVではなくHTMLが返されました。公開状態を確認してください");
   }
-  return parseMemberCsv(member, csv);
+  const signature = sheetContentSignature(csv);
+  return {
+    signature,
+    member: !opts.forceParse && opts.expectedSignature === signature
+      ? null
+      : parseMemberCsv(member, csv),
+  };
 }

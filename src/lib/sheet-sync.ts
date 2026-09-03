@@ -12,7 +12,9 @@ import {
 } from "@/lib/sheet-replies";
 import {
   fetchPublicMember,
+  fetchPublicMemberSnapshot,
   fetchPublicSheetMembers,
+  sheetContentSignature,
   type RawMember,
   type SheetMember,
 } from "@/lib/sheet-public-csv";
@@ -47,6 +49,8 @@ export type SyncResult = {
   pushed: number; // アプリ→スプシ 書き戻し
   conflicts: string[]; // 同日に複数記録があり安全のためスキップした "シート名 日付"
   skippedMembers: string[];
+  /** 前回取得時とCSV本文が同一で、解析・DB突合を省略した部員 */
+  unchangedMembers: string[];
   /** 部員ごとの失敗（1人の不調で他の部員の同期を止めないための部分失敗設計） */
   failedMembers: { member: string; reason: string }[];
   sheetReplies: number;
@@ -232,21 +236,32 @@ export async function fetchSheetMembers(): Promise<SheetMember[]> {
 type ProtectedFetchResult = {
   members: RawMember[];
   failedMembers: { member: string; reason: string }[];
+  unchangedMembers: string[];
+  signatures: Map<string, string>;
+};
+
+type MemberFetchInput = {
+  name: string;
+  previousSignature: string | null;
+  forceParse: boolean;
 };
 
 /**
  * 公開CSVを少数並列で取得する。失敗したタブを空データとして扱わず、
  * 他の部員だけ同期を継続しつつ failedMembers に残す。
  */
-async function fetchAllRaw(memberNames: string[]): Promise<ProtectedFetchResult> {
+async function fetchAllRaw(inputs: MemberFetchInput[]): Promise<ProtectedFetchResult> {
   const allMembers = await fetchSheetMembers();
   const byName = new Map(allMembers.map((member) => [member.name.normalize("NFC").trim(), member]));
-  const requested = [...new Set(memberNames.map((name) => name.normalize("NFC").trim()))];
+  const inputByName = new Map(inputs.map((input) => [input.name.normalize("NFC").trim(), input]));
+  const requested = [...inputByName.keys()];
   const sheetMembers = requested.flatMap((name) => {
     const member = byName.get(name);
     return member ? [member] : [];
   });
   const members: RawMember[] = [];
+  const unchangedMembers: string[] = [];
+  const signatures = new Map<string, string>();
   const foundNames = new Set(sheetMembers.map((member) => member.name.normalize("NFC").trim()));
   const failedMembers: { member: string; reason: string }[] = requested
     .filter((name) => !foundNames.has(name))
@@ -260,12 +275,20 @@ async function fetchAllRaw(memberNames: string[]): Promise<ProtectedFetchResult>
     const batch = sheetMembers.slice(index, index + concurrency);
     const fetched = await Promise.allSettled(
       batch.map(async (member) => {
-        return fetchPublicMember(member.name, { timeoutMs: 15_000, members: allMembers });
+        const input = inputByName.get(member.name.normalize("NFC").trim());
+        return fetchPublicMemberSnapshot(member.name, {
+          timeoutMs: 15_000,
+          members: allMembers,
+          expectedSignature: input?.previousSignature,
+          forceParse: input?.forceParse,
+        });
       }),
     );
     fetched.forEach((item, batchIndex) => {
       if (item.status === "fulfilled") {
-        members.push(item.value);
+        signatures.set(batch[batchIndex].name.trim(), item.value.signature);
+        if (item.value.member) members.push(item.value.member);
+        else unchangedMembers.push(batch[batchIndex].name.trim());
       } else {
         failedMembers.push({
           member: batch[batchIndex].name,
@@ -281,6 +304,8 @@ async function fetchAllRaw(memberNames: string[]): Promise<ProtectedFetchResult>
   return {
     members: members.sort((a, b) => a.name.localeCompare(b.name)),
     failedMembers,
+    unchangedMembers: unchangedMembers.sort((a, b) => a.localeCompare(b)),
+    signatures,
   };
 }
 
@@ -929,6 +954,7 @@ export async function runSheetSync(
     pushed: 0,
     conflicts: [],
     skippedMembers: [],
+    unchangedMembers: [],
     failedMembers: [],
     sheetReplies: 0,
     dryRun,
@@ -960,14 +986,48 @@ export async function runSheetSync(
   }
   if (linked.length === 0) return result;
 
-  const sheetToProfile = new Map(linked.map((p) => [p.sheet_name.trim(), p]));
   const nameById = new Map(linked.map((p) => [p.id, p.sheet_name.trim()]));
-  const fetched = await fetchAllRaw(linked.map((profile) => profile.sheet_name));
+  const allUserIds = linked.map((profile) => profile.id);
+  const [{ data: syncStates, error: stateError }, { data: pendingRows, error: pendingError }] = await Promise.all([
+    admin
+      .from("sheet_member_sync_state")
+      .select("profile_id, content_signature, config_signature")
+      .in("profile_id", allUserIds),
+    admin
+      .from("practice_records")
+      .select("user_id")
+      .in("user_id", allUserIds)
+      .eq("pending_sheet_push", true),
+  ]);
+  if (stateError) throw stateError;
+  if (pendingError) throw pendingError;
+  const signatureByProfile = new Map((syncStates ?? []).map((state) => [state.profile_id, state.content_signature]));
+  const configSignatureByProfile = new Map((syncStates ?? []).map((state) => [state.profile_id, state.config_signature]));
+  const profilesWithPendingPush = new Set((pendingRows ?? []).map((row) => row.user_id));
+  const currentConfigSignatures = new Map(linked.map((profile) => [
+    profile.id,
+    sheetContentSignature(JSON.stringify({
+      fields: profile.record_fields,
+      header: profile.sheet_header_signature,
+      source: profile.record_source,
+    })),
+  ]));
+
+  const fetched = await fetchAllRaw(linked.map((profile) => ({
+    name: profile.sheet_name,
+    previousSignature: signatureByProfile.get(profile.id) ?? null,
+    forceParse: profilesWithPendingPush.has(profile.id)
+      || configSignatureByProfile.get(profile.id) !== currentConfigSignatures.get(profile.id),
+  })));
   result.failedMembers.push(...fetched.failedMembers);
+  result.unchangedMembers.push(...fetched.unchangedMembers);
   const members = fetched.members;
   const memberByName = new Map(members.map((m) => [m.name.trim(), m]));
+  const processedProfiles = linked.filter((profile) => memberByName.has(profile.sheet_name.trim()));
+  const sheetToProfile = new Map(processedProfiles.map((profile) => [profile.sheet_name.trim(), profile]));
 
-  const userIds = linked.map((p) => p.id);
+  const userIds = processedProfiles.map((profile) => profile.id);
+  if (userIds.length === 0) return result;
   const { data: existing, error: rErr } = await admin
     .from("practice_records")
     .select(
@@ -1107,7 +1167,7 @@ export async function runSheetSync(
     try {
       const replySync = await reconcileSheetReplies(
         admin,
-        linked.map((profile) => ({ id: profile.id, sheet_name: profile.sheet_name })),
+        processedProfiles.map((profile) => ({ id: profile.id, sheet_name: profile.sheet_name })),
         members,
         sheetPullCutoff(today, nowIso),
         today,
@@ -1179,7 +1239,7 @@ export async function runSheetSync(
   try {
     const replySync = await reconcileSheetReplies(
       admin,
-      linked.map((profile) => ({ id: profile.id, sheet_name: profile.sheet_name })),
+      processedProfiles.map((profile) => ({ id: profile.id, sheet_name: profile.sheet_name })),
       members,
       sheetPullCutoff(today, nowIso),
       today,
@@ -1209,6 +1269,35 @@ export async function runSheetSync(
       result.failedMembers.push({
         member: p.memberName,
         reason: err instanceof Error ? err.message : "スプレッドシートに書き込めませんでした",
+      });
+    }
+  }
+
+  // CSV取得後にアプリからシートへ書いた部員は、取得時点のハッシュが直後に古くなる。
+  // それ以外の正常完了分だけ保存し、次回は本文が同じならCSV解析とDB突合を丸ごと省略する。
+  const failedNames = new Set(result.failedMembers.map((failure) => failure.member));
+  const hasGlobalFailure = [...failedNames].some((name) => name.startsWith("("));
+  const pushedNames = new Set(scheduledPushes.map((push) => push.memberName));
+  const signatureRows = hasGlobalFailure ? [] : processedProfiles.flatMap((profile) => {
+    const name = profile.sheet_name.trim();
+    const signature = fetched.signatures.get(name);
+    const conflicted = result.conflicts.some((conflict) => conflict.startsWith(`${name} `));
+    if (!signature || failedNames.has(name) || pushedNames.has(name) || conflicted) return [];
+    return [{
+      profile_id: profile.id,
+      content_signature: signature,
+      config_signature: currentConfigSignatures.get(profile.id)!,
+      synced_at: nowIso,
+    }];
+  });
+  if (signatureRows.length > 0) {
+    const { error } = await admin
+      .from("sheet_member_sync_state")
+      .upsert(signatureRows, { onConflict: "profile_id" });
+    if (error) {
+      result.failedMembers.push({
+        member: "(差分取得状態)",
+        reason: `次回用のCSV署名を保存できませんでした: ${error.message}`,
       });
     }
   }

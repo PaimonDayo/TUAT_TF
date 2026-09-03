@@ -43,48 +43,18 @@ async function attachTweetSocialData(
   const tweetIds = tweets.map((tweet) => tweet.id);
   if (tweetIds.length === 0) return tweets;
 
-  const [{ data: options }, { data: results }, { data: voters }, { data: mentionRows }] = await Promise.all([
-    supabase.from("tweet_poll_options").select("*").in("tweet_id", tweetIds).order("sort_order"),
-    supabase.rpc("get_poll_results", { tweet_ids: tweetIds }),
-    supabase.rpc("get_poll_voters", { tweet_ids: tweetIds }),
-    supabase.from("tweet_mentions").select("tweet_id, profile_id").in("tweet_id", tweetIds),
-  ]);
-
-  const mentionIds = [...new Set((mentionRows ?? []).map((row) => row.profile_id))];
-  const { data: profiles } = mentionIds.length
-    ? await supabase.from("profiles").select("id, display_name").in("id", mentionIds)
-    : { data: [] };
-  const names = new Map((profiles ?? []).map((profile) => [profile.id, profile.display_name]));
-  const resultByOption = new Map((results ?? []).map((result) => [result.option_id, result]));
-  const votersByOption = new Map<string, Array<{ profile_id: string; display_name: string; avatar_url: string | null; blocks: Block[]; grade: string | null }>>();
-  for (const voter of voters ?? []) {
-    const optionVoters = votersByOption.get(voter.option_id) ?? [];
-    optionVoters.push({
-      profile_id: voter.profile_id,
-      display_name: voter.display_name,
-      avatar_url: voter.avatar_url,
-      blocks: voter.blocks.filter((block): block is Block => ["middle_long", "short", "manager", "jump", "throw"].includes(block)),
-      grade: voter.grade,
-    });
-    votersByOption.set(voter.option_id, optionVoters);
-  }
+  const { data, error } = await supabase.rpc("get_tweet_feed_extras", { tweet_ids: tweetIds });
+  if (error) throw new Error(`Failed to load poll data: ${error.message}`);
+  const extras = new Map((data ?? []).map((row) => [row.tweet_id, row]));
 
   return tweets.map((tweet) => {
-    const pollOptions = (options ?? [])
-      .filter((option) => option.tweet_id === tweet.id)
-      .map((option) => ({
-        ...option,
-        vote_count: Number(resultByOption.get(option.id)?.vote_count ?? 0),
-        voted_by_me: resultByOption.get(option.id)?.voted_by_me ?? false,
-        voters: votersByOption.get(option.id) ?? [],
-      }));
-    const mentions = (mentionRows ?? [])
-      .filter((mention) => mention.tweet_id === tweet.id)
-      .map((mention) => ({
-        profile_id: mention.profile_id,
-        display_name: names.get(mention.profile_id) ?? "",
-      }))
-      .filter((mention) => mention.display_name);
+    const extra = extras.get(tweet.id);
+    const pollOptions = Array.isArray(extra?.options)
+      ? extra.options as unknown as NonNullable<TweetWithAuthor["poll"]>["options"]
+      : [];
+    const mentions = Array.isArray(extra?.mentions)
+      ? extra.mentions as unknown as NonNullable<TweetWithAuthor["mentions"]>
+      : [];
     return {
       ...tweet,
       poll: pollOptions.length ? { options: pollOptions } : undefined,
@@ -144,40 +114,47 @@ async function withNoticeReactions(
   }));
 }
 
-/** 自分がいいね済みの target_id 集合を取得 */
-async function fetchMyLikedIds(
+type FeedSocialState = {
+  liked: Set<string>;
+  comments: Map<string, number>;
+};
+
+/** 自分のいいね状態とコメント件数を、投稿種別をまたいで1 RPCで取得する。 */
+async function fetchFeedSocialState(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  userId: string,
-  type: "record" | "tweet",
-  ids: string[],
-): Promise<Set<string>> {
-  if (ids.length === 0) return new Set();
-  const { data } = await supabase
-    .from("likes")
-    .select("target_id")
-    .eq("user_id", userId)
-    .eq("target_type", type)
-    .in("target_id", ids);
-  return new Set((data ?? []).map((r) => r.target_id as string));
+  recordIds: string[],
+  tweetIds: string[],
+): Promise<FeedSocialState> {
+  const liked = new Set<string>();
+  const comments = new Map<string, number>();
+  if (recordIds.length === 0 && tweetIds.length === 0) return { liked, comments };
+  const { data, error } = await supabase.rpc("get_feed_social_state", {
+    record_ids: recordIds,
+    tweet_ids: tweetIds,
+  });
+  if (error) throw new Error(`Failed to load social state: ${error.message}`);
+  for (const row of data ?? []) {
+    const key = `${row.target_type}:${row.target_id}`;
+    if (row.liked_by_me) liked.add(key);
+    comments.set(key, Number(row.comments_count));
+  }
+  return { liked, comments };
 }
 
-/** コメント数を target_id ごとに集計 */
-async function fetchCommentCounts(
+async function fetchTargetSocialState(
   supabase: Awaited<ReturnType<typeof createClient>>,
   type: "record" | "tweet",
   ids: string[],
-): Promise<Map<string, number>> {
-  const map = new Map<string, number>();
-  if (ids.length === 0) return map;
-  // 全行取得→JS集計ではなく、DB側でGROUP BY集計するRPCを使う（P4）
-  const { data } = await supabase.rpc("count_comments_by_target", {
-    target_type_in: type,
-    target_ids: ids,
-  });
-  for (const row of (data ?? []) as { target_id: string; count: number }[]) {
-    map.set(row.target_id, Number(row.count));
-  }
-  return map;
+): Promise<{ liked: Set<string>; comments: Map<string, number> }> {
+  const state = await fetchFeedSocialState(
+    supabase,
+    type === "record" ? ids : [],
+    type === "tweet" ? ids : [],
+  );
+  return {
+    liked: new Set(ids.filter((id) => state.liked.has(`${type}:${id}`))),
+    comments: new Map(ids.map((id) => [id, state.comments.get(`${type}:${id}`) ?? 0])),
+  };
 }
 
 /**
@@ -240,28 +217,26 @@ export async function getFeed(
   const recIds = records.map((r) => r.id);
   const twIds = tweets.map((t) => t.id);
 
-  const [recLiked, twLiked, recComments, twComments] = await Promise.all([
-    fetchMyLikedIds(supabase, currentUserId, "record", recIds),
-    fetchMyLikedIds(supabase, currentUserId, "tweet", twIds),
-    fetchCommentCounts(supabase, "record", recIds),
-    fetchCommentCounts(supabase, "tweet", twIds),
-  ]);
+  // currentUserId remains part of this function's public contract/query key. The
+  // RPC derives the authenticated viewer from auth.uid(), so it cannot be spoofed.
+  void currentUserId;
+  const social = await fetchFeedSocialState(supabase, recIds, twIds);
 
   const items: FeedItem[] = [
     ...records.map(
       (r): FeedItem => ({
         kind: "record",
         ...r,
-        liked_by_me: recLiked.has(r.id),
-        comments_count: recComments.get(r.id) ?? 0,
+        liked_by_me: social.liked.has(`record:${r.id}`),
+        comments_count: social.comments.get(`record:${r.id}`) ?? 0,
       }),
     ),
     ...tweets.map(
       (t): FeedItem => ({
         kind: "tweet",
         ...t,
-        liked_by_me: twLiked.has(t.id),
-        comments_count: twComments.get(t.id) ?? 0,
+        liked_by_me: social.liked.has(`tweet:${t.id}`),
+        comments_count: social.comments.get(`tweet:${t.id}`) ?? 0,
       }),
     ),
   ];
@@ -297,10 +272,8 @@ export async function getFeedItemById(
     if (error) throw new Error(`Failed to load post: ${error.message}`);
     if (!data || !data.author) return null;
 
-    const [liked, comments] = await Promise.all([
-      fetchMyLikedIds(supabase, currentUserId, "record", [id]),
-      fetchCommentCounts(supabase, "record", [id]),
-    ]);
+    void currentUserId;
+    const { liked, comments } = await fetchTargetSocialState(supabase, "record", [id]);
     return {
       kind: "record",
       ...normalizeRecordWithAuthor(data),
@@ -318,10 +291,8 @@ export async function getFeedItemById(
   if (error) throw new Error(`Failed to load post: ${error.message}`);
   if (!data || !data.author) return null;
 
-  const [liked, comments] = await Promise.all([
-    fetchMyLikedIds(supabase, currentUserId, "tweet", [id]),
-    fetchCommentCounts(supabase, "tweet", [id]),
-  ]);
+  void currentUserId;
+  const { liked, comments } = await fetchTargetSocialState(supabase, "tweet", [id]);
   const [tweet] = await attachTweetSocialData(supabase, [normalizeTweetWithAuthor(data)]);
   return {
     kind: "tweet",
@@ -368,10 +339,8 @@ export async function getUserRecordsWithSocialState(
   const records = (await getUserRecords(userId)) as PracticeRecord[];
   const ids = records.map((record) => record.id);
   const supabase = await createClient();
-  const [liked, comments] = await Promise.all([
-    fetchMyLikedIds(supabase, currentUserId, "record", ids),
-    fetchCommentCounts(supabase, "record", ids),
-  ]);
+  void currentUserId;
+  const { liked, comments } = await fetchTargetSocialState(supabase, "record", ids);
   return records.map((record) => ({
     ...record,
     liked_by_me: liked.has(record.id),
@@ -568,10 +537,8 @@ export async function getUserTweets(
 
   const tweets = await attachTweetSocialData(supabase, (data ?? []).map(normalizeTweetWithAuthor));
   const ids = tweets.map((tweet) => tweet.id);
-  const [liked, comments] = await Promise.all([
-    fetchMyLikedIds(supabase, currentUserId, "tweet", ids),
-    fetchCommentCounts(supabase, "tweet", ids),
-  ]);
+  void currentUserId;
+  const { liked, comments } = await fetchTargetSocialState(supabase, "tweet", ids);
   return tweets.map(
     (tweet): FeedItem => ({
       kind: "tweet",
@@ -616,10 +583,8 @@ export async function getUserActivity(
 
   const records = (recordsResult.data ?? []).map(normalizeRecordWithAuthor);
   const recIds = records.map((r) => r.id);
-  const [recLiked, recComments] = await Promise.all([
-    fetchMyLikedIds(supabase, currentUserId, "record", recIds),
-    fetchCommentCounts(supabase, "record", recIds),
-  ]);
+  void currentUserId;
+  const { liked: recLiked, comments: recComments } = await fetchTargetSocialState(supabase, "record", recIds);
 
   return sortFeedItems([
     ...records.map(
