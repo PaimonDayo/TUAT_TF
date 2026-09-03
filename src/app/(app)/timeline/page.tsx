@@ -21,7 +21,7 @@ export default function TimelinePage() {
 async function TimelineContent() {
   const profile = await getCurrentProfile();
   const [feed, favoriteIds, cookieStore] = await Promise.all([
-    getFeed(profile.id, 90),
+    getFeed(profile.id, 30),
     getMyFavoriteIds(profile.id),
     cookies(),
   ]);

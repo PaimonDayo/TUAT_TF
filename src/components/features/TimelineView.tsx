@@ -26,7 +26,7 @@ import { useFeedDisplay } from "@/hooks/use-feed-display";
 import { unreadBoundaryIndex } from "@/lib/feed-unread";
 import type { BlockViewDefault, CommentAuthor, FeedItem } from "@/types";
 
-const PAGE = 90;
+const PAGE = 30;
 const FILTER_AUTOLOAD_PAGES = 5;
 type FeedCursor = {
   record?: { createdAt: string; id: string };
