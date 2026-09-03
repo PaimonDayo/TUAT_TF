@@ -11,11 +11,12 @@ export const config = {
     /*
      * 以下を除く全パスで実行:
      * - _next/static, _next/image（静的アセット）
+     * - api/avatar/image（route側で本人確認し、Storage署名URLへ転送）
      * - favicon.ico / 画像ファイル
      * - apple-icon / icon / manifest.webmanifest（アプリアイコン・PWA。
      *   ここを認証ガードに通すと未ログイン時に /login へリダイレクトされ、
      *   アイコンが取得できず真っ白になる）
      */
-    "/((?!_next/static|_next/image|favicon.ico|sw.js|apple-icon|icon|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!api/avatar/image|_next/static|_next/image|favicon.ico|sw.js|apple-icon|icon|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

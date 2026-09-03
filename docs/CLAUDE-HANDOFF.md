@@ -1,5 +1,11 @@
 # Claude Code 引き継ぎメモ
 
+## 2026-09-04 運用変更
+
+- itoは再実装しない方針となり、アプリコード・設計書・型を削除。migration `20260904090000_remove_ito_feature.sql` で本番のito通知、RPC、Realtime登録、11テーブルも削除する。
+- 練習記録は、アプリ保存後の1件write-throughを維持。シート→アプリのpullは毎日0:00 JST（15:00 UTC）の1回だけに変更し、画面表示時pullと通常UIの手動全件pullを撤去。最大100人を1回で扱う。
+- アバター画像は認証済みRoute Handlerが7日間のStorage署名URLを発行し、画像本体はSupabaseから直接配信する。`/api/avatar/image` はroute内で認証するためProxyの二重認証対象から除外。
+
 最終更新: 2026-07-12
 
 ## 【最優先・Codexへの引き継ぎ 2026-07-12】iOS実機のフリーズ（/schedule・/timeline）と表示ガクつき

@@ -58,7 +58,7 @@ export async function POST(request: Request) {
       recordFieldsFromJson(profile.record_fields),
       rec as DbRecord,
     );
-    // 成功: pending_sheet_pushをfalseに戻す（毎時同期の再送対象から外す）
+    // 成功: pending_sheet_pushをfalseに戻す（毎日0時の再送対象から外す）
     await admin
       .from("practice_records")
       .update({ synced_at: new Date().toISOString(), pending_sheet_push: false })
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     const message = err instanceof Error ? err.message : "スプレッドシートに書き込めませんでした";
-    // 失敗: pending_sheet_pushをtrueにし、次回の毎時同期(runSheetSync)が明示的に再送する
+    // 失敗: pending_sheet_pushをtrueにし、次回の毎日0時連携(runSheetSync)が明示的に再送する
     // （synced_atとの大小比較には頼らない。無関係な時刻ズレを再送対象と誤検知しないため）。
     await admin.from("practice_records").update({ pending_sheet_push: true }).eq("id", recordId);
     return NextResponse.json({ ok: false, error: message }, { status: 502 });

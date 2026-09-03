@@ -368,7 +368,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
     }
 
     // write-through: 連携シートがある場合は、保存直後にGASで1回だけ反映する。
-    // 未連携ならAPI側がskippedで返し、失敗時はDBの再送フラグを毎時同期が処理する。
+    // 未連携ならAPI側がskippedで返し、失敗時はDBの再送フラグを毎日0時の連携が処理する。
     const pushResult = await pushRecordToSheet(savedId);
     if (!pushResult.ok) {
       showToast(

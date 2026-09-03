@@ -2,7 +2,6 @@ import { createClient } from "@/lib/supabase/server";
 import { fetchRolesByProfileIds } from "@/lib/supabase/auth";
 import { viewerCompetitionBlocks } from "@/lib/constants";
 import { jstToday } from "@/lib/date";
-import { refreshMemberFromSheetLive } from "@/lib/sheet-sync";
 import {
   normalizeNoteArticleRow,
   normalizeNoteRow,
@@ -33,7 +32,6 @@ import type {
   NoteWithRelations,
   AppNotificationWithActor,
   TweetWithAuthor,
-  Profile,
   PracticeRecord,
 } from "@/types";
 
@@ -342,20 +340,6 @@ export async function getSchedulesOn(date: string) {
     .eq("schedule_date", date)
     .order("meeting_time", { ascending: true });
   return data ?? [];
-}
-
-/**
- * 記録のメインがスプシ(record_source='sheet')の本人が記録画面を開く直前に呼ぶ。
- * 毎時同期を待たず、その場でスプシの最新内容をDB(Supabaseミラー)へ非破壊で反映する
- * （タスク16残作業。他部員の記録を見ているだけの閲覧者から誤って書き込まないよう、
- * 呼び出し側は必ず本人(isSelf)のときだけ呼ぶこと）。GAS不調時は何もせず現状のDBのまま表示する。
- */
-export async function refreshOwnSheetRecords(
-  profile: Pick<Profile, "id" | "sheet_name" | "record_source" | "record_fields" | "sheet_linked_at" | "sheet_history_imported_at">,
-) {
-  if (!profile.sheet_name) return;
-  const supabase = await createClient();
-  await refreshMemberFromSheetLive(supabase, profile);
 }
 
 /** ユーザーの期間内の練習記録（マイページ・週間集計に使用） */
@@ -1027,7 +1011,7 @@ export async function getPublishedPersonalNotes(
   return (data ?? []).map(normalizeNoteRow).filter(isPresent);
 }
 
-/** 直近50件（無期限の全件取得はしない）。廃止したitoの通知は表示しない。 */
+/** 直近50件（無期限の全件取得はしない）。 */
 export async function getPersonalNotifications(userId: string): Promise<AppNotificationWithActor[]> {
   const supabase = await createClient();
   const query = supabase
@@ -1036,8 +1020,7 @@ export async function getPersonalNotifications(userId: string): Promise<AppNotif
       *,
       actor:profiles!actor_id(id, display_name, avatar_url)
     `)
-    .eq("user_id", userId)
-    .neq("type", "ito_invite");
+    .eq("user_id", userId);
   const { data } = await query.order("created_at", { ascending: false }).limit(50);
   return (data ?? []).map(normalizeNotificationRow).filter(isPresent);
 }
@@ -1048,8 +1031,7 @@ export async function getUnreadNotificationCount(userId: string): Promise<number
     .from("notifications")
     .select("*", { count: "exact", head: true })
     .eq("user_id", userId)
-    .eq("is_read", false)
-    .neq("type", "ito_invite");
+    .eq("is_read", false);
   const { count } = await query;
   return count ?? 0;
 }

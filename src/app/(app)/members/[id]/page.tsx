@@ -12,7 +12,6 @@ import { ActivityFeed } from "@/components/features/ActivityFeed";
 import { ResultsList } from "@/components/features/ResultsList";
 import { TrainingChart } from "@/components/features/TrainingChart";
 import { FavoriteButton } from "@/components/features/FavoriteButton";
-import { SheetLiveRefresh } from "@/components/features/SheetLiveRefresh";
 import { ListSkeleton } from "@/components/ui/page-skeletons";
 import { NoteList } from "@/components/features/NotesView";
 import { getCurrentProfile } from "@/lib/supabase/auth";
@@ -48,8 +47,6 @@ async function MemberContent({
 
   const viewer = await getCurrentProfile();
   const isSelf = viewer.id === id;
-  // スプシメインの本人がここ(/members/自分)から記録を見る場合も、毎時同期を待たず最新化する
-
   const [records, tweets, pbs, notes, favorited, cookieStore] = await Promise.all([
     getUserRecordsWithSocialState(id, viewer.id),
     getUserTweets(id, viewer.id),
@@ -92,7 +89,6 @@ async function MemberContent({
 
   return (
     <>
-      <SheetLiveRefresh enabled={isSelf && Boolean(viewer.sheet_name)} />
       <SubHeader
         title={profile.display_name || "部員"}
         right={!isSelf ? <FavoriteButton targetId={id} initial={favorited} /> : undefined}

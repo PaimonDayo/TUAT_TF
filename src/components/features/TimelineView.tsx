@@ -66,7 +66,6 @@ export function TimelineView({
   initialCompact = false,
   initialBlock = "all",
   showRecordSource = false,
-  enableCsvRefresh = false,
 }: {
   initialItems: FeedItem[];
   currentUser: CommentAuthor;
@@ -76,16 +75,15 @@ export function TimelineView({
   /** 最初に表示するブロックタブ（マイページの「タイムラインの初期表示」） */
   initialBlock?: BlockViewDefault;
   showRecordSource?: boolean;
-  enableCsvRefresh?: boolean;
 }) {
   const feedQuery = useInfiniteQuery({
     queryKey: ["timeline", currentUser.id],
     queryFn: ({ pageParam }) => loadFeed(pageParam ?? {}, PAGE),
     initialPageParam: null as FeedCursor,
     initialData: { pages: [initialItems], pageParams: [null as FeedCursor] },
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    staleTime: 60_000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
     getNextPageParam: (lastPage): FeedCursor | undefined => {
       if (lastPage.length < PAGE) return undefined;
       const lastRecord = lastPage.findLast((item) => item.kind === "record");
@@ -183,35 +181,6 @@ export function TimelineView({
       void supabase.removeChannel(channel);
     };
   }, [currentUser.id, refetchFeed, visibleLikeTargets]);
-
-  useEffect(() => {
-    if (!enableCsvRefresh) return;
-    const refreshKey = `timeline-csv-refresh:${currentUser.id}`;
-    const lastRefresh = Number(sessionStorage.getItem(refreshKey) ?? "0");
-    if (Date.now() - lastRefresh < 15_000) return;
-    sessionStorage.setItem(refreshKey, String(Date.now()));
-    let active = true;
-
-    void (async () => {
-      // 初期表示はDBだけで即時に行い、その後システム管理者本人のCSVを同期する。
-      // 変更があればタイムラインを自動再取得する。
-      for (let attempt = 0; active && attempt < 12; attempt++) {
-        try {
-          const response = await fetch("/api/sheets/timeline-refresh", { method: "POST", cache: "no-store" });
-          const result = await response.json() as { ok?: boolean; changed?: boolean; cycleComplete?: boolean };
-          if (!active || !response.ok || !result.ok) return;
-          if (result.changed) await refetchFeed();
-          if (result.cycleComplete) return;
-        } catch {
-          return;
-        }
-      }
-    })();
-
-    return () => {
-      active = false;
-    };
-  }, [currentUser.id, enableCsvRefresh, refetchFeed]);
 
   const favSet = useMemo(() => new Set(currentFavoriteIds), [currentFavoriteIds]);
 

@@ -7,8 +7,8 @@ import { runSheetSync } from "@/lib/sheet-sync";
 import { timingSafeEqualString } from "@/lib/timing-safe";
 import { sheetSyncChunkSize } from "@/lib/sheet-sync-chunk";
 
-// 同期はネットワーク往復が多いので余裕を持たせる
-export const maxDuration = 60;
+// 毎日0時（JST）の1回で最大100人を処理する。主な待ち時間はGASへのI/O。
+export const maxDuration = 300;
 
 type SyncChunk = {
   sheetNames: string[];
@@ -19,9 +19,9 @@ type SyncChunk = {
 };
 
 /**
- * 練習記録のスプシ⇔アプリ双方向同期を実行する。
+ * 練習記録のスプシ⇔アプリ連携を実行する。
  * 認可は2系統:
- *   - pg_cron / 外部スケジューラ: ヘッダ `Authorization: Bearer <SHEET_SYNC_SECRET>`
+ *   - pg_cron（毎日0時JST）: ヘッダ `Authorization: Bearer <SHEET_SYNC_SECRET>`
  *   - 管理者の手動実行: ログイン中かつ「部員・ロール管理」権限
  */
 export async function POST(request: Request) {

@@ -7,6 +7,9 @@ import {
 
 export const runtime = "nodejs";
 
+const SIGNED_URL_TTL_SECONDS = 7 * 24 * 60 * 60;
+const REDIRECT_CACHE_SECONDS = 6 * 24 * 60 * 60;
+
 export async function GET(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -21,19 +24,16 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase.storage
     .from(AVATAR_BUCKET)
-    .download(path);
-  if (error || !data) {
-    console.warn("Failed to download avatar", error);
+    .createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
+  if (error || !data?.signedUrl) {
+    console.warn("Failed to sign avatar URL", error);
     return NextResponse.json({ error: "画像が見つかりません" }, { status: 404 });
   }
 
-  return new NextResponse(await data.arrayBuffer(), {
-    headers: {
-      "Cache-Control": "private, max-age=31536000, immutable",
-      "Content-Length": String(data.size),
-      "Content-Type":
-        data.type || (path.toLowerCase().endsWith(".webp") ? "image/webp" : "image/jpeg"),
-      "X-Content-Type-Options": "nosniff",
-    },
-  });
+  // The object path changes whenever an avatar is replaced. Cache this private
+  // redirect for less than the signed URL lifetime and let Supabase Storage/CDN
+  // serve the image bytes directly instead of buffering them in Vercel.
+  const response = NextResponse.redirect(data.signedUrl, 307);
+  response.headers.set("Cache-Control", `private, max-age=${REDIRECT_CACHE_SECONDS}, immutable`);
+  return response;
 }

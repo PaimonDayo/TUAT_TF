@@ -499,8 +499,8 @@ export function ProfileEditForm({
           )}
           <p className="text-micro mt-1">
             {enableSheetHeaderSetup
-              ? "選ぶと、練習記録の保存先がスプレッドシートになります。画面を開いたときに最新の内容を読み込みます。"
-              : "選ぶと、練習記録とスプレッドシートが自動で連携されます。"}
+              ? "選ぶと、アプリで保存した記録はすぐに書き込み、スプレッドシートで入力した記録は毎日0時に読み込みます。"
+              : "選ぶと、アプリの記録はすぐに書き込み、スプレッドシートの記録は毎日0時に読み込みます。"}
           </p>
           {enableSheetHeaderSetup && sheetName.trim() && (
             <button

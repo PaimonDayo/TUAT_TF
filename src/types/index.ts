@@ -573,8 +573,8 @@ export type FeedItem =
   | ({ kind: "record" } & RecordWithAuthor)
   | ({ kind: "tweet" } & TweetWithAuthor);
 
-export type NotificationType = "comment" | "notice" | "schedule_update" | "sync_failure" | "thread_reply" | "mention" | "ito_invite";
-export type NotificationReferenceType = "record" | "tweet" | "schedule" | "notice" | "thread" | "ito";
+export type NotificationType = "comment" | "notice" | "schedule_update" | "sync_failure" | "thread_reply" | "mention";
+export type NotificationReferenceType = "record" | "tweet" | "schedule" | "notice" | "thread";
 
 export interface AppNotification {
   id: string;

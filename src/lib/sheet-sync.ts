@@ -105,7 +105,7 @@ const BUILTINS: { key: BuiltinKey; keywords: string[]; numeric: boolean; integer
   { key: "dist_speed", keywords: ["解糖系"], numeric: true },
   { key: "dist_actual", keywords: ["実際の距離", "実距離", "走行距離", "総距離"], numeric: true },
   // strides はDBがINT型。シートに小数（例: 0.3）が入っていても丸めて取り込み、
-  // insert全体を巻き込んで失敗させない（2026-07-09〜12、この型不一致で毎時同期の
+  // insert全体を巻き込んで失敗させない（2026-07-09〜12、この型不一致で定期連携の
   // 新規取込が3日間全滅した実例あり）。
   { key: "strides", keywords: ["流し"], numeric: true, integer: true },
   { key: "strength_text", keywords: ["補強"], numeric: false },
@@ -380,7 +380,7 @@ export type DbRecord = {
   custom: Record<string, string | number | null> | null;
   updated_at: string | null;
   synced_at: string | null;
-  /** write-through(保存直後のスプシ反映)が失敗し、毎時同期での再送が必要な状態か */
+  /** write-through(保存直後のスプシ反映)が失敗し、毎日0時の連携で再送が必要な状態か */
   pending_sheet_push?: boolean;
 };
 
@@ -671,7 +671,6 @@ export async function reconcileOnSwitch(
 
   return result;
 }
-
 type MemberPullComputation = {
   inserts: Record<string, unknown>[];
   updates: { id: string; patch: Record<string, unknown> }[];
@@ -681,7 +680,7 @@ type MemberPullComputation = {
 
 /**
  * 1部員分の「シート→アプリ」pullを計算する（runSheetSyncのpull-onlyブランチと
- * refreshMemberFromSheetLive の共通ロジック）。副作用なし（DB書き込みは呼び出し側が行う）。
+ * 定期連携のpull処理を計算する純粋関数。副作用なし（DB書き込みは呼び出し側が行う）。
  */
 export type ExistingSheetRecordPolicy = "merge_nonempty" | "replace_mapped" | "preserve";
 export function sheetRecordsWithoutPendingPushes(
@@ -1215,115 +1214,4 @@ export async function runSheetSync(
   }
 
   return result;
-}
-
-export type LiveRefreshResult = { inserted: number; updated: number; sheetReplies: number };
-
-/**
- * Before rendering a linked member's own record page, refresh CSV-only dates into the DB mirror.
- * 本人の記録を毎時同期を待たず、その場でシートを正としてDB(Supabaseミラー)へ反映する。
- * fetchMember 1回＋既存ロジック(computeMemberPull)の使い回しで、100人規模でもfetchAllRawを
- * 引かずに済む。GAS不調・タイムアウト時はDBの現状のまま表示させるため例外を投げず null を返す
- * （呼び出し側＝Server Componentのレンダリングを絶対に壊さないため）。
- */
-export async function refreshMemberFromSheetLive(
-  supabase: SupabaseClient,
-  profile: {
-    id: string;
-    sheet_name: string | null;
-    record_source: "app" | "sheet";
-    record_fields: RecordFieldDef[] | null;
-    sheet_linked_at: string | null;
-    sheet_header_signature?: string | null;
-    sheet_history_imported_at?: string | null;
-  },
-  options: { replaceMappedBlanks?: boolean; enforceHeaderSignature?: boolean } = {},
-): Promise<LiveRefreshResult | null> {
-  if (!profile.sheet_name) return null;
-
-  try {
-    const member = await fetchMemberRaw(profile.sheet_name, { timeoutMs: 5000 });
-    const profileFields = profile.record_fields ?? [];
-    const currentHeaderSignature = relevantSheetHeaderSignature(
-      member.columns ?? member.header.map((label, index) => ({ index, label })),
-      profileFields,
-      profileFields.some((field) => field.key.startsWith("dist_")),
-    );
-    if (options.enforceHeaderSignature && profile.sheet_header_signature && profile.sheet_header_signature !== currentHeaderSignature) {
-      return null;
-    }
-    const map = resolveFieldMap(member, profile.record_fields ?? []);
-    const today = todayJST();
-    const cutoff = sheetPullCutoff(today, profile.sheet_history_imported_at ?? null);
-
-    const { data: existing, error } = await supabase
-      .from("practice_records")
-      .select(
-        "id, user_id, recorded_date, dist_low, dist_mid, dist_high, dist_speed, dist_actual, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at, pending_sheet_push",
-      )
-      .eq("user_id", profile.id)
-      .gte("recorded_date", cutoff);
-    if (error || !existing) return null;
-
-    const byDate = new Map<string, DbRecord[]>();
-    const pendingPushDates = new Set<string>();
-    for (const r of existing as DbRecord[]) {
-      const arr = byDate.get(r.recorded_date) ?? [];
-      arr.push(r);
-      if (r.pending_sheet_push) pendingPushDates.add(r.recorded_date);
-      byDate.set(r.recorded_date, arr);
-    }
-
-    const nowIso = new Date().toISOString();
-    const { inserts, updates } = computeMemberPull(
-      profile.id,
-      map,
-      sheetRecordsWithoutPendingPushes(member.records, pendingPushDates),
-      byDate,
-      (d) => d >= cutoff && d <= today,
-      nowIso,
-      profile.record_source === "sheet" && options.replaceMappedBlanks
-        ? "replace_mapped"
-        : "merge_nonempty",
-    );
-    let inserted = 0;
-    let updated = 0;
-    let writesSucceeded = true;
-    if (inserts.length > 0) {
-      const { error: insErr } = await supabase.from("practice_records").insert(inserts);
-      if (!insErr) inserted = inserts.length;
-      else writesSucceeded = false;
-    }
-    for (const u of updates) {
-      const { error: updErr } = await supabase
-        .from("practice_records")
-        .update(u.patch)
-        .eq("id", u.id);
-      if (!updErr) updated++;
-      else writesSucceeded = false;
-    }
-    let sheetReplies = 0;
-    if (!profile.sheet_history_imported_at && writesSucceeded) {
-      await supabase
-        .from("profiles")
-        .update({ sheet_history_imported_at: nowIso })
-        .eq("id", profile.id)
-        .is("sheet_history_imported_at", null);
-    }
-    try {
-      const replySync = await reconcileSheetReplies(
-        supabase,
-        [{ id: profile.id, sheet_name: profile.sheet_name }],
-        [member],
-        cutoff,
-        today,
-      );
-      sheetReplies = replySync.synced;
-    } catch {
-      // Reply synchronization must not prevent the record page from loading.
-    }
-    return { inserted, updated, sheetReplies };
-  } catch {
-    return null; // GAS不調・タイムアウト等はDBの現状のまま表示（ページを壊さない）
-  }
 }
