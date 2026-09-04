@@ -20,6 +20,7 @@ export function DesktopNav() {
     <aside className="sticky top-0 hidden h-dvh w-20 shrink-0 flex-col py-4 md:flex lg:w-60 lg:py-6">
       <Link
         href="/home"
+        prefetch={false}
         aria-label="ホーム"
         className="mx-2 flex items-center justify-center gap-3 rounded-2xl px-2 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent lg:justify-start lg:px-3"
       >
@@ -39,6 +40,7 @@ export function DesktopNav() {
             <Link
               key={href}
               href={href}
+              prefetch={false}
               aria-label={label}
               title={label}
               aria-current={active ? "page" : undefined}

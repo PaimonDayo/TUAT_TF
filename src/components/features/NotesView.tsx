@@ -179,7 +179,7 @@ export function NoteList({
   return (
     <div className="grid gap-2 md:grid-cols-2 md:gap-3">
       {[...notes].sort((a, b) => Number(b.pinned) - Number(a.pinned)).map((note) => (
-        <Link key={note.id} href={`/notes/${note.id}`}>
+        <Link key={note.id} href={`/notes/${note.id}`} prefetch={false}>
           <Card className="p-4 active:bg-bg">
             <div className="flex items-start gap-3">
               <Folder size={20} className="mt-0.5 shrink-0 text-accent" />
@@ -279,7 +279,7 @@ function NoteSearchResults({
           <h2 className="text-caption font-semibold">{"\u8a18\u4e8b"}</h2>
           <div className="space-y-2">
             {articles.map((article) => (
-              <Link key={article.id} href={`/notes/${article.note_id}/articles/${article.id}`}>
+              <Link key={article.id} href={`/notes/${article.note_id}/articles/${article.id}`} prefetch={false}>
                 <Card className="p-4 active:bg-bg">
                   <p className="text-headline">{article.title}</p>
                   <p className="mt-1 text-caption">{article.note?.title}</p>

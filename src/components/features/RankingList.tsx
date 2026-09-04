@@ -42,7 +42,7 @@ export function RankingList({
         const isMe = row.id === currentUserId;
         const gradeLabel = gradeShort(row.grade);
         return (
-          <Link key={row.id} href={isMe ? "/mypage" : `/members/${row.id}`}>
+          <Link key={row.id} href={isMe ? "/mypage" : `/members/${row.id}`} prefetch={false}>
             <Card
               className="p-3 flex items-center gap-3"
               style={isMe ? { borderColor: "#007aff", borderWidth: 1.5 } : undefined}

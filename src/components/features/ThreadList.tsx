@@ -64,7 +64,7 @@ export function ThreadList({
   return (
     <div className="space-y-2">
       {[...threads].sort((a, b) => Number(b.pinned) - Number(a.pinned)).map((thread) => (
-        <Link key={thread.id} href={`/notes/threads/${thread.id}`}>
+        <Link key={thread.id} href={`/notes/threads/${thread.id}`} prefetch={false}>
           <Card className="p-4 active:bg-bg">
             <div className="flex items-start gap-3">
               <MessagesSquare size={20} className="mt-0.5 shrink-0 text-accent" />

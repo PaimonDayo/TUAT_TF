@@ -68,6 +68,7 @@ export function UpcomingScheduleCard({
     <Card className="flex items-center gap-3 p-3">
       <Link
         href={`/schedule?open=${schedule.id}`}
+        prefetch={false}
         className="flex min-w-0 flex-1 items-center gap-3 active:opacity-60"
       >
         <div className="flex w-10 shrink-0 flex-col items-center">

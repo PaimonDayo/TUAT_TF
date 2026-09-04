@@ -16,7 +16,7 @@ export function MentionText({ text, mentions }: { text: string; mentions?: Tweet
       {text.split(pattern).map((part, index) => {
         const mention = byLabel.get(part);
         return mention ? (
-          <Link key={`${part}-${index}`} href={`/members/${mention.profile_id}`} className="font-semibold text-accent" onClick={(event) => event.stopPropagation()}>
+          <Link key={`${part}-${index}`} href={`/members/${mention.profile_id}`} prefetch={false} className="font-semibold text-accent" onClick={(event) => event.stopPropagation()}>
             {part}
           </Link>
         ) : <Linkify key={index} text={part} />;

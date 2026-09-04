@@ -93,6 +93,7 @@ export function NoteArticleList({
                 {isLong && (
                   <Link
                     href={`/notes/${noteId}/articles/${article.id}`}
+                    prefetch={false}
                     className="mt-2 inline-block text-[13px] font-medium text-accent active:opacity-60"
                   >
                     全文を表示

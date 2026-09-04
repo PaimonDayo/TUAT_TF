@@ -201,7 +201,7 @@ function ActivitySkeleton() {
 /** 区切り線リスト内の1行リンク（カード枠は親のCardが持つ） */
 function RowLink({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
   return (
-    <Link href={href} prefetch className="flex items-center gap-3 p-4 active:bg-bg">
+    <Link href={href} prefetch={false} className="flex items-center gap-3 p-4 active:bg-bg">
       {icon}
       <span className="flex-1 text-headline">{label}</span>
       <ChevronRight size={18} className="text-muted" />

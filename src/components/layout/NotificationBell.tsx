@@ -53,6 +53,7 @@ export function NotificationBell({
   return (
     <Link
       href="/notices"
+      prefetch={false}
       aria-label={unread > 0 ? `お知らせ、未読${unread}件` : "お知らせ"}
       className="relative flex h-9 w-9 items-center justify-center text-accent active:opacity-50"
     >

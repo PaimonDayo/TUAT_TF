@@ -1,16 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Users } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Avatar } from "@/components/common/Avatar";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { ATTENDANCE_BLOCK_ORDER, BLOCKS, GRADE_OPTIONS, PROFILE_BLOCK_ORDER, SIMPLE_BLOCK_ITEMS, attendanceSectionBlock, gradeShort, matchSimpleBlock, primarySimpleBlock } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import { avatarDisplayUrl } from "@/lib/avatar-image";
 import type { AttendanceDefaultBlock, Attendee } from "@/types";
-
-const prefetchedAvatarUrls = new Set<string>();
 
 /** 所属ブロック→学年→名前の順に並べる（見やすさのため） */
 function sortAttendees(list: Attendee[]): Attendee[] {
@@ -59,20 +56,6 @@ export function AttendeesButton({
   const [open, setOpen] = useState(false);
   const [block, setBlock] = useState<AttendanceDefaultBlock>(defaultBlock);
 
-  useEffect(() => {
-    const urls = new Set(
-      attendees
-        .map((attendee) => avatarDisplayUrl(attendee.profile.avatar_url))
-        .filter((url): url is string => Boolean(url)),
-    );
-    for (const url of urls) {
-      if (prefetchedAvatarUrls.has(url)) continue;
-      prefetchedAvatarUrls.add(url);
-      const image = new Image();
-      image.decoding = "async";
-      image.src = url;
-    }
-  }, [attendees]);
   const visible = attendees.filter((attendee) =>
     matchSimpleBlock(attendee.profile.blocks, block),
   );

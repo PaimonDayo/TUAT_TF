@@ -40,13 +40,14 @@ export function TweetCard({
     <>
     <Card className={cn("space-y-3 p-4", embedded && "rounded-none border-0")}>
       <div className="flex items-center gap-2.5">
-        <Link href={`/members/${author.id}`} onClick={(event) => event.stopPropagation()}>
+        <Link href={`/members/${author.id}`} prefetch={false} onClick={(event) => event.stopPropagation()}>
           <Avatar name={author.display_name} blocks={author.blocks} avatarUrl={author.avatar_url} />
         </Link>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
             <Link
               href={`/members/${author.id}`}
+              prefetch={false}
               onClick={(event) => event.stopPropagation()}
               className="truncate text-headline"
             >

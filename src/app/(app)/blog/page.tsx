@@ -32,15 +32,15 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
       : items.length === 0 ? <Card className="p-4"><EmptyState title="まだ記事はありません" className="min-h-28" /></Card>
       : <div className="space-y-3">{items.map((item) => {
         const id = blogArticleId(item.url); if (!id) return null; const date = new Date(item.publishedAt);
-        return <Card key={item.url} className="overflow-hidden"><Link href={`/blog/${id}`} className="block p-4 active:bg-bg">
+        return <Card key={item.url} className="overflow-hidden"><Link href={`/blog/${id}`} prefetch={false} className="block p-4 active:bg-bg">
           <div className="mb-2 flex flex-wrap items-center gap-2 text-micro text-muted"><time dateTime={item.publishedAt}>{Number.isNaN(date.getTime()) ? item.publishedAt : dateFormatter.format(date)}</time></div>
           <h2 className="break-words text-headline leading-snug">{item.title}</h2>{item.description && <p className="mt-2 whitespace-pre-wrap break-words text-caption leading-relaxed text-muted2">{item.description}</p>}
           <span className="mt-3 flex items-center justify-end gap-1 text-caption font-semibold text-accent">続きを読む<ChevronRight size={15} /></span>
         </Link></Card>;
       })}</div>}
       {!unavailable && <nav className="grid grid-cols-2 gap-3 pt-1" aria-label="ブログ一覧のページ送り">
-        {page > 1 ? <Link href={page === 2 ? "/blog" : `/blog?page=${page - 1}`} className="flex min-h-11 items-center justify-center gap-1 rounded-xl border border-separator bg-card text-sm font-semibold text-accent"><ChevronLeft size={17} />新しい記事</Link> : <span />}
-        {hasNext && <Link href={`/blog?page=${page + 1}`} className="flex min-h-11 items-center justify-center gap-1 rounded-xl border border-separator bg-card text-sm font-semibold text-accent">過去の記事<ChevronRight size={17} /></Link>}
+        {page > 1 ? <Link href={page === 2 ? "/blog" : `/blog?page=${page - 1}`} prefetch={false} className="flex min-h-11 items-center justify-center gap-1 rounded-xl border border-separator bg-card text-sm font-semibold text-accent"><ChevronLeft size={17} />新しい記事</Link> : <span />}
+        {hasNext && <Link href={`/blog?page=${page + 1}`} prefetch={false} className="flex min-h-11 items-center justify-center gap-1 rounded-xl border border-separator bg-card text-sm font-semibold text-accent">過去の記事<ChevronRight size={17} /></Link>}
       </nav>}
     </main>
   </>;

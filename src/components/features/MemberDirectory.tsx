@@ -87,7 +87,7 @@ export function MemberDirectory({ members }: { members: AuthorMini[] }) {
                 </p>
                 <div className="space-y-2">
                   {group.list.map((m) => (
-                    <Link key={m.id} href={`/members/${m.id}`}>
+                    <Link key={m.id} href={`/members/${m.id}`} prefetch={false}>
                       <Card className="p-3 flex items-center gap-3 active:bg-bg">
                         <Avatar
                           name={m.display_name || "?"}

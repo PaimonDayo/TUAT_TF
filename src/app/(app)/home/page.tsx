@@ -172,7 +172,7 @@ async function NotesSection() {
       <SectionHeading title="ノート" href="/notes" />
       <div className="space-y-2">
         {notes.map((note) => (
-          <Link key={note.id} href={`/notes/${note.id}`}>
+          <Link key={note.id} href={`/notes/${note.id}`} prefetch={false}>
             <Card className="p-4 active:bg-bg">
               <div className="flex items-start gap-3">
                 <Folder size={19} className="mt-0.5 shrink-0 text-accent" />
@@ -216,7 +216,7 @@ function SectionHeading({ title, href }: { title: string; href: string }) {
   return (
     <div className="flex items-center justify-between">
       <p className="section-label">{title}</p>
-      <Link href={href} className="flex items-center text-[13px] text-accent">
+      <Link href={href} prefetch={false} className="flex items-center text-[13px] text-accent">
         すべて見る <ChevronRight size={15} />
       </Link>
     </div>

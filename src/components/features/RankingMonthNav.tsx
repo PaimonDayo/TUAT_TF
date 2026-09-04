@@ -25,6 +25,7 @@ export function RankingMonthNav({
     <div className="flex items-center justify-between rounded-[16px] border border-separator bg-card p-1">
       <Link
         href={`/ranking?month=${previous}`}
+        prefetch={false}
         replace
         aria-label="前の月"
         className="grid h-10 w-10 place-items-center rounded-xl text-accent active:bg-bg"
@@ -38,6 +39,7 @@ export function RankingMonthNav({
       {canGoNext ? (
         <Link
           href={`/ranking?month=${next}`}
+          prefetch={false}
           replace
           aria-label="次の月"
           className="grid h-10 w-10 place-items-center rounded-xl text-accent active:bg-bg"
