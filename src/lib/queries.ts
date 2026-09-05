@@ -16,6 +16,7 @@ import {
   normalizePracticeRecord, normalizeRecordWithAuthor,
   normalizeTweetWithAuthor,
 } from "@/lib/profile-normalize";
+import { RECORD_NONEMPTY_OR } from "@/lib/record-content";
 import type {
   ThreadPostWithAuthor,
   ThreadWithAuthor,
@@ -73,12 +74,6 @@ function isPresent<T>(value: T | null): value is T {
 // 一気に流れ込んで埋まらないよう、この機能を入れた日以降の recorded_date だけ対象にする。
 const SHEET_TIMELINE_CUTOFF = "2026-07-04";
 const SHEET_TIMELINE_OR = `from_sheet.eq.false,and(from_sheet.eq.true,recorded_date.gte.${SHEET_TIMELINE_CUTOFF})`;
-// 中身が空でない（距離いずれか>0、または各テキストが非null）
-const RECORD_NONEMPTY_OR =
-  "dist_low.gt.0,dist_mid.gt.0,dist_high.gt.0,dist_speed.gt.0,dist_actual.gt.0,strides.gt.0," +
-  "result_text.not.is.null,strength_text.not.is.null,memo.not.is.null," +
-  "menu_text.not.is.null,focus_text.not.is.null";
-
 async function withNoticeReactions(
   supabase: Awaited<ReturnType<typeof createClient>>,
   notices: Notice[],

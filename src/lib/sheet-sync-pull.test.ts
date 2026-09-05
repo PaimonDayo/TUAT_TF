@@ -82,6 +82,32 @@ describe("computeMemberPull", () => {
     expect(result.inserts).toEqual([]);
   });
 
+  it("creates a record when only a text custom field has content", () => {
+    const customOnlyMap = {
+      builtin: new Map(),
+      custom: new Map([["monologue", { header: "独り言", column: 3, type: "text" }]]),
+    } as Parameters<typeof computeMemberPull>[1];
+    const result = computeMemberPull(
+      "user-1",
+      customOnlyMap,
+      [{
+        date: "2026-09-05",
+        cells: { 独り言: "今日は休養日" },
+        values: ["2026-09-05", "", "", "今日は休養日"],
+      }],
+      new Map(),
+      () => true,
+      "2026-09-05T15:00:00.000Z",
+      "replace_mapped",
+    );
+
+    expect(result.inserts[0]).toMatchObject({
+      recorded_date: "2026-09-05",
+      custom: { monologue: "今日は休養日" },
+      from_sheet: true,
+    });
+  });
+
   it("preserves spreadsheet distances to two decimal places", () => {
     const distanceMap = {
       builtin: new Map([["dist_low", { header: "low", column: 0, numeric: true }]]),
