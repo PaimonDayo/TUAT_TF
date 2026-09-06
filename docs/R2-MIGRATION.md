@@ -4,6 +4,16 @@
 R2は非公開のStandardバケットを1つ使い、キーを `avatars/<元パス>` / `tweet-images/<元パス>` とする。
 public development URL、公開カスタムドメインは有効にしない。アプリが認証し、ストーリーは既存RLSと有効期限を確認してから署名URLへリダイレクトする。
 
+## 実施記録（2026-09-06）
+
+- オーナーの明示承認後、`tuat-tf-images` 限定のAccount Object Read & Writeキーを発行。ローカル `.env.local` とVercel ProductionのSecret型環境変数へ保存。バケットは非公開Standard。
+- dry-run: 37画像 / 17,711,786 bytes。avatars 31画像 / 1,159,970 bytes、tweet-images 6画像 / 16,551,816 bytes。元StorageにないDB参照0。
+- `.r2-migration/2026-09-06T00-48-19-423Z/` に事前スナップショット、`2026-09-06T00-49-16-799Z/verified.json` に全37件のコピー・SHA-256検証記録。元画像の削除0、DB変更0。
+- アプリのimage-storage実装を使って両バケットの署名URL取得・画像ハッシュ一致、署名なしアクセス拒否、一時画像の保存・取得・削除成功を実接続検証。検証後も37画像 / 17,711,786 bytes。
+- READ=trueと配信識別子r2-v1はProductionデプロイ `HgymvYiChDSXtgKxdAyy3G2QxRLE`（36bd97f）でREADY確認。続いてWRITE=trueを本番環境に設定。本記録のデプロイで反映する。
+- 大学認証を伴うログイン後の画面操作・iOS実機は未確認。認証情報のチャット共有を求めず大学ログインを依頼済み。今期のSupabase累積転送量・9月8日からの制限警告は移行で消えない。
+- 古いPWAからのSupabase書き込みは404フォールバックで読める。更新後にコピーを再実行し、新規画像があれば追いつかせる。DB・Authやノート本文は今回移行していない。
+
 ## 設定
 
 `.env.example` のR2変数をローカルとVercel Productionに設定する。

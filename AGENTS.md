@@ -103,6 +103,9 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 - **同期・一括更新系のロジック変更は、本番初回実行の前に①対象テーブルのスナップショット取得（例: service roleでCSVエクスポート）②dryRunで差分確認、を必ず行う**（2026-07-03のデータ消失インシデントの教訓。本番DBはPITR/バックアップ無しで、消えたら戻せない）。
 
 ## 完了の定義（本番反映まで見届ける。2026-08-29 オーナー確定）
+
+2026-09-06 / Codex / R2移行の実施記録: オーナー承認後、非公開画像バケット限定キーを発行しローカルとVercel ProductionのSecretへ保存。事前スナップショット後37画像17,711,786 bytesをコピー、全件SHA-256一致・元画像削除0・DB変更0。image-storage実装で両バケットの署名GETと公開拒否、一時画像の保存/取得/削除を実接続検証。READ=trueはProduction HgymvYiChDSXtgKxdAyy3G2QxRLE（36bd97f）でREADY確認。WRITE=trueも環境設定し、この記録のデプロイで反映する。実環境変数入りbuild成功。コードは前回全163テスト済みから変更なし。大学認証後の画面・iOS実機は未確認、ユーザーへ大学ログインを依頼済み。詳細はdocs/R2-MIGRATION.md。Vercel使用量キーは未発行、Supabase月間転送量は公式へのリンクのみ。
+
 **作業ブランチへの push は完了ではない。** それだけでは Vercel の Preview が1つ増えるだけで、部員が使う本番（https://tuat-tf.vercel.app ）は何も変わっていない。オーナーから別の指示が無いかぎり、次の5つを終えて初めて「完了」と報告する。
 
 1. `npx tsc --noEmit`・対象eslint・`npx vitest run`・`npm run build` を通す。
