@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { timingSafeEqualString } from "@/lib/timing-safe";
 import { TWEET_IMAGE_BUCKET } from "@/lib/tweet-image";
+import { removeImages } from "@/lib/image-storage";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -25,8 +26,12 @@ export async function GET(request: Request) {
 
   const imagePaths = stories.flatMap((story) => story.image_path ? [story.image_path] : []);
   if (imagePaths.length) {
-    const { error: storageError } = await supabase.storage.from(TWEET_IMAGE_BUCKET).remove(imagePaths);
-    if (storageError) return NextResponse.json({ error: storageError.message }, { status: 500 });
+    try {
+      await removeImages(supabase, TWEET_IMAGE_BUCKET, imagePaths);
+    } catch (error) {
+      console.error("Failed to remove expired story images", error);
+      return NextResponse.json({ error: "Image cleanup failed" }, { status: 500 });
+    }
   }
 
   const ids = stories.map((story) => story.id);

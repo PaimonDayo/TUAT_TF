@@ -1,5 +1,7 @@
 export const TWEET_IMAGE_BUCKET = "tweet-images";
 export const TWEET_IMAGE_MAX_INPUT_BYTES = 12 * 1024 * 1024;
+// Leave headroom below Vercel's request body limit; originals are resized first.
+export const TWEET_IMAGE_MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
 const MAX_SIDE = 1600;
 const MAX_PIXELS = 50_000_000;
 const INPUT_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -47,7 +49,7 @@ export async function prepareTweetImage(file: File): Promise<Blob> {
     const blob = await new Promise<Blob | null>((resolve) => {
       canvas.toBlob(resolve, "image/webp", 0.82);
     });
-    if (!blob || blob.size > 5 * 1024 * 1024) {
+    if (!blob || blob.size > TWEET_IMAGE_MAX_UPLOAD_BYTES) {
       throw new Error("画像を圧縮できませんでした。別の画像をお試しください");
     }
     return blob;

@@ -195,8 +195,10 @@ export function avatarDisplayUrl(
   avatarUrl: string | null | undefined,
 ): string | null {
   if (!avatarUrl) return null;
-  return isSafeAvatarStoragePath(avatarUrl)
-    ? `/api/avatar/image?path=${encodeURIComponent(avatarUrl)}`
+  const path = avatarStoragePathFromUrl(avatarUrl, process.env.NEXT_PUBLIC_SUPABASE_URL ?? "");
+  const version = process.env.NEXT_PUBLIC_IMAGE_DELIVERY_VERSION;
+  return path
+    ? `/api/avatar/image?path=${encodeURIComponent(path)}${version ? `&v=${encodeURIComponent(version)}` : ""}`
     : avatarUrl;
 }
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import sharp from "sharp";
 import { createClient } from "@/lib/supabase/server";
+import { uploadImage, removeImages } from "@/lib/image-storage";
 import {
   AVATAR_BUCKET,
   AVATAR_OUTPUT_SIZE,
@@ -50,14 +51,7 @@ export async function POST(request: Request) {
     }
 
     const uploadedPath = `${user.id}/${crypto.randomUUID()}.webp`;
-    const { error: uploadError } = await supabase.storage
-      .from(AVATAR_BUCKET)
-      .upload(uploadedPath, output, {
-        cacheControl: "31536000",
-        contentType: "image/webp",
-        upsert: false,
-      });
-    if (uploadError) throw uploadError;
+    await uploadImage(supabase, AVATAR_BUCKET, uploadedPath, output);
 
     const { data: updated, error: updateError } = await supabase
       .from("profiles")
@@ -66,7 +60,7 @@ export async function POST(request: Request) {
       .select("id")
       .maybeSingle();
     if (updateError || !updated) {
-      await supabase.storage.from(AVATAR_BUCKET).remove([uploadedPath]);
+      await removeImages(supabase, AVATAR_BUCKET, [uploadedPath]);
       throw updateError ?? new Error("Profile update was blocked");
     }
 
@@ -76,10 +70,8 @@ export async function POST(request: Request) {
       user.id,
     );
     if (previousPath && previousPath !== uploadedPath) {
-      const { error: removeError } = await supabase.storage
-        .from(AVATAR_BUCKET)
-        .remove([previousPath]);
-      if (removeError) console.warn("Failed to remove the previous avatar", removeError);
+      await removeImages(supabase, AVATAR_BUCKET, [previousPath])
+        .catch((error) => console.warn("Failed to remove the previous avatar", error));
     }
 
     return NextResponse.json({ ok: true, avatarUrl: uploadedPath });
@@ -121,8 +113,8 @@ export async function DELETE() {
     user.id,
   );
   if (previousPath) {
-    const { error: removeError } = await supabase.storage.from(AVATAR_BUCKET).remove([previousPath]);
-    if (removeError) console.warn("Failed to remove avatar", removeError);
+    await removeImages(supabase, AVATAR_BUCKET, [previousPath])
+      .catch((error) => console.warn("Failed to remove avatar", error));
   }
   return NextResponse.json({ ok: true });
 }

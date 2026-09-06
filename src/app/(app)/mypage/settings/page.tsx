@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
-import { ChevronRight, ExternalLink } from "lucide-react";
+import { ChevronRight, ExternalLink, Activity } from "lucide-react";
+import Link from "next/link";
 import { SubHeader } from "@/components/layout/SubHeader";
 import { Card } from "@/components/ui/card";
 import { AttendanceViewSetting } from "@/components/features/AttendanceViewSetting";
@@ -78,6 +79,14 @@ export default async function SettingsPage() {
             <p className="section-label">システム管理</p>
             <SystemSyncStatus />
             <Card className="divide-y divide-separator/70 overflow-hidden">
+              <Link href="/admin/services" prefetch={false} className="flex items-center gap-3 px-4 py-3 active:bg-bg">
+                <Activity size={19} className="shrink-0 text-muted2" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[14px] font-medium">サービスの状態</span>
+                  <span className="block text-micro text-muted">Vercel・Supabase・Cloudflare</span>
+                </span>
+                <ChevronRight size={18} className="shrink-0 text-muted" />
+              </Link>
               <RecordSourceSetting initial={showRecordSource} />
               <MemberPreviewSetting previewing={false} />
               <a

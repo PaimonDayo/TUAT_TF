@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import { FormModalFooter } from "@/components/ui/form-modal";
 import { cn } from "@/lib/utils";
-import { prepareTweetImage, TWEET_IMAGE_BUCKET, validateTweetImage } from "@/lib/tweet-image";
+import { prepareTweetImage, validateTweetImage } from "@/lib/tweet-image";
 
 /** つぶやきフォーム。tweet を渡すと編集モード */
 export type TweetFormHandle = { save: () => void };
@@ -133,11 +133,14 @@ export const TweetForm = forwardRef<
           setSaving(false);
           return;
         }
-        imagePath = `${user.id}/${id}.webp`;
-        const { error: uploadError } = await supabase.storage
-          .from(TWEET_IMAGE_BUCKET)
-          .upload(imagePath, prepared, { contentType: "image/webp" });
-        if (uploadError) {
+        try {
+          const response = await fetch("/api/tweet-image/upload", {
+            method: "POST", headers: { "Content-Type": prepared.type }, body: prepared,
+          });
+          const result = await response.json();
+          if (!response.ok || typeof result.path !== "string") throw new Error("Upload failed");
+          imagePath = result.path;
+        } catch {
           setError("画像をアップロードできませんでした");
           setSaving(false);
           return;
@@ -150,7 +153,9 @@ export const TweetForm = forwardRef<
         poll_anonymous: pollAnonymous,
         poll_allow_options: pollEnabled && pollAllowOptions,
       });
-      if (error && imagePath) await supabase.storage.from(TWEET_IMAGE_BUCKET).remove([imagePath]);
+      if (error && imagePath) {
+        await fetch(`/api/tweet-image/upload?path=${encodeURIComponent(imagePath)}`, { method: "DELETE" }).catch(() => {});
+      }
       if (error) {
         setError("保存できませんでした。もう一度お試しください");
         setSaving(false);

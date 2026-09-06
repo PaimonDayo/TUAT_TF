@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { signedImageUrl } from "@/lib/image-storage";
 import {
   AVATAR_BUCKET,
   isSafeAvatarStoragePath,
@@ -22,10 +23,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "画像が見つかりません" }, { status: 404 });
   }
 
-  const { data, error } = await supabase.storage
-    .from(AVATAR_BUCKET)
-    .createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
-  if (error || !data?.signedUrl) {
+  let url: string;
+  try {
+    url = await signedImageUrl(supabase, AVATAR_BUCKET, path, SIGNED_URL_TTL_SECONDS);
+  } catch (error) {
     console.warn("Failed to sign avatar URL", error);
     return NextResponse.json({ error: "画像が見つかりません" }, { status: 404 });
   }
@@ -33,7 +34,8 @@ export async function GET(request: Request) {
   // The object path changes whenever an avatar is replaced. Cache this private
   // redirect for less than the signed URL lifetime and let Supabase Storage/CDN
   // serve the image bytes directly instead of buffering them in Vercel.
-  const response = NextResponse.redirect(data.signedUrl, 307);
+  const response = NextResponse.redirect(url, 307);
   response.headers.set("Cache-Control", `private, max-age=${REDIRECT_CACHE_SECONDS}, immutable`);
+  response.headers.set("Vary", "Cookie");
   return response;
 }
