@@ -26,10 +26,9 @@ export default async function NoteFolderPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [profile, note, members, articles, childNotes, threads] = await Promise.all([
+  const [profile, note, articles, childNotes, threads] = await Promise.all([
     getCurrentProfile(),
     getNoteById(id),
-    getMembersList(),
     getNoteArticles(id),
     getChildNotes(id),
     getThreadsByFolder(id),
@@ -45,6 +44,9 @@ export default async function NoteFolderPage({
   const canEdit =
     isAuthor || isAdmin || note.edit_policy === "everyone" || isSpecifiedEditor;
   const canManageFolder = isAuthor || isAdmin;
+  // The member picker exists only in the folder editor. Readers don't need
+  // the entire directory on every folder visit.
+  const members = canManageFolder ? await getMembersList() : [];
   const canDelete = isAuthor || isAdmin;
   const currentUser = {
     id: profile.id,

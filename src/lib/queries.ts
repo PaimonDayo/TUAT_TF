@@ -37,6 +37,9 @@ import type {
 } from "@/types";
 
 const AUTHOR_SELECT = "author:profiles!user_id(id, display_name, avatar_url, blocks, grade, record_source, record_fields)";
+// Tweets never render practice-record fields. Avoid repeating every author's
+// form configuration in each tweet; records still use AUTHOR_SELECT above.
+const TWEET_AUTHOR_SELECT = "author:profiles!user_id(id, display_name, avatar_url, blocks, grade)";
 async function attachTweetSocialData(
   supabase: Awaited<ReturnType<typeof createClient>>,
   tweets: TweetWithAuthor[],
@@ -178,7 +181,7 @@ export async function getFeed(
 
   let tweetsQuery = supabase
     .from("tweets")
-    .select(`*, ${AUTHOR_SELECT}`)
+    .select(`*, ${TWEET_AUTHOR_SELECT}`)
     .order("created_at", { ascending: false })
     .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
     .order("id", { ascending: false })
@@ -279,7 +282,7 @@ export async function getFeedItemById(
 
   const { data, error } = await supabase
     .from("tweets")
-    .select(`*, ${AUTHOR_SELECT}`)
+    .select(`*, ${TWEET_AUTHOR_SELECT}`)
     .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
     .eq("id", id)
     .maybeSingle();
@@ -483,7 +486,7 @@ export async function getMembersList(): Promise<AuthorMini[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("profiles")
-    .select("id, display_name, avatar_url, blocks, grade, record_source, record_fields")
+    .select("id, display_name, avatar_url, blocks, grade")
     .eq("status", "active")
     .eq("approved", true)
     .order("display_name", { ascending: true });
@@ -523,7 +526,7 @@ export async function getUserTweets(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("tweets")
-    .select(`*, ${AUTHOR_SELECT}`)
+    .select(`*, ${TWEET_AUTHOR_SELECT}`)
     .eq("user_id", userId)
     .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
     .order("created_at", { ascending: false })
