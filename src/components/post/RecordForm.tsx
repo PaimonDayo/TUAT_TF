@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { jstToday } from "@/lib/date";
 import { canSaveRecord, customRecordFields, recordFieldHidden, recordFieldLabel } from "@/lib/record-fields";
+import { hasCustomRecordContent } from "@/lib/record-content";
 import { IntensityInput, type IntensityValues } from "@/components/features/IntensityInput";
 import { recordFieldsFromJson } from "@/lib/profile-normalize";
 import { Textarea } from "@/components/ui/textarea";
@@ -257,7 +258,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
       (parseFloat(dist.high) || 0) +
       (parseFloat(dist.speed) || 0);
     const actualHasContent = fieldEnabled("dist_actual") && (parseFloat(actualDistance) || 0) > 0;
-    const customHasContent = customFields.some((field) => (customValues[field.key] ?? "").trim() !== "");
+    const customHasContent = customFields.some((field) => hasCustomRecordContent(customValues[field.key]));
     const hasContent = isMiddleLong
       ? distTotal > 0 || actualHasContent ||
         (fieldEnabled("strides") && (parseInt(strides) || 0) > 0) ||

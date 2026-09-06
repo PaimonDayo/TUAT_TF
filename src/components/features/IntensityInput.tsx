@@ -37,6 +37,7 @@ export function IntensityInput({
           </div>;
         })}
       </div>
+      <p className="text-caption">走っていない項目は空欄で大丈夫です。0kmはスプレッドシートでも空欄になります。</p>
       <div className="flex items-baseline justify-between px-1">
         <span className="section-label">合計</span>
         <span className="text-headline">{formatKm(total)}<span className="ml-0.5 text-caption">km</span></span>

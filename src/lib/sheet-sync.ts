@@ -3,6 +3,7 @@ import type { RecordFieldDef } from "@/types";
 import { customRecordFields } from "@/lib/record-fields";
 import { relevantSheetHeaderSignature } from "@/lib/sheet-field-config";
 import { roundKm } from "@/lib/utils";
+import { hasCustomRecordContent } from "@/lib/record-content";
 import {
   importedSheetReplies,
   matchAppReplyIndexes,
@@ -450,7 +451,7 @@ function valuesEmpty(
     if (typeof v === "number" ? v !== 0 : (v ?? "").toString().trim() !== "") return false;
   }
   for (const v of Object.values(custom)) {
-    if ((v ?? "").toString().trim() !== "") return false;
+    if (hasCustomRecordContent(v)) return false;
   }
   return true;
 }
@@ -460,11 +461,16 @@ export function appToCellsFull(map: FieldMap, rec: DbRecord): Record<string, str
   const cells: Record<string, string | number> = {};
   for (const [key, m] of map.builtin) {
     const v = appBuiltin(rec, key);
-    cells[m.header] = m.numeric ? Number(v) || 0 : (v ?? "").toString();
+    // DB distances use 0 for both blank and zero km. Match sheet entry by
+    // clearing that cell; sending "" also clears an old nonzero value on edit.
+    cells[m.header] = m.numeric ? Number(v) || "" : (v ?? "").toString();
   }
   for (const [key, m] of map.custom) {
     const v = rec.custom?.[key];
-    cells[m.header] = m.type === "number" ? parseSheetNum(v as string) : (v ?? "").toString();
+    // Unlike builtin distance defaults, an explicit custom numeric 0 is data.
+    cells[m.header] = m.type === "number"
+      ? v == null || String(v).trim() === "" ? "" : parseSheetNum(v as string)
+      : (v ?? "").toString();
   }
   return cells;
 }
@@ -510,7 +516,7 @@ export type PushRecordResult = {
 
 /**
  * write-through: アプリで保存した1件をその場でスプシへ書き込む（タスク16）。
- * 非破壊（appToCellsNonEmptyを使用。空項目でシートの既存セルを消さない）。
+ * アプリで保存したマップ済み項目を反映する。空欄も送って既存セルをクリアする。
  * シートに列が無い項目は書き込まず unmapped に集めて呼び出し側へ返す（黙って落とさない）。
  */
 export async function pushRecordToSheet(

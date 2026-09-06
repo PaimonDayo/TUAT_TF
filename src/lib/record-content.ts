@@ -5,17 +5,13 @@
  * 「独り言」など利用者が追加したスプレッドシート列だけに値がある記録を
  * タイムラインとプロフィールから落とさない。
  */
-export const RECORD_NONEMPTY_OR = [
-  "dist_low.gt.0",
-  "dist_mid.gt.0",
-  "dist_high.gt.0",
-  "dist_speed.gt.0",
-  "dist_actual.gt.0",
-  "strides.gt.0",
-  "result_text.not.is.null",
-  "strength_text.not.is.null",
-  "memo.not.is.null",
-  "menu_text.not.is.null",
-  "focus_text.not.is.null",
-  "custom.neq.{}",
-].join(",");
+// Computed in Postgres before LIMIT/cursors so empty rows cannot consume a page.
+export const RECORD_NONEMPTY_OR = "record_has_content.eq.true";
+
+/** Zero-only sheet placeholders are not a post; keep all meaningful custom text. */
+export function hasCustomRecordContent(value: unknown): boolean {
+  if (typeof value === "number") return Number.isFinite(value) && value !== 0;
+  if (typeof value !== "string") return false;
+  const text = value.trim();
+  return text !== "" && !/^[+-]?0+(?:\.0+)?$/.test(text);
+}

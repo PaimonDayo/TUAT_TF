@@ -17,6 +17,11 @@ function dbRecord(date: string, memo: string): DbRecord {
 }
 
 describe("computeMemberPull", () => {
+  it.each(["0", "0.00", "", " "])("does not import a custom-only placeholder %s", (value) => {
+    const map = { builtin: new Map(), custom: new Map([["other", { header: "その他", column: 0, type: "text" }]]) } as FieldMap;
+    const result = computeMemberPull("user-1", map, [{ date: "2026-09-07", cells: { その他: value } }], new Map(), () => true, "2026-09-07T00:00:00Z", "replace_mapped");
+    expect(result.inserts).toEqual([]);
+  });
   const sheetRecords = [
     { date: "2026-07-23", cells: { memo: "sheet value" } },
     { date: "2026-07-24", cells: { memo: "CSV-only post" } },
@@ -145,6 +150,20 @@ describe("computeMemberPull", () => {
     expect(result.inserts[0]).toMatchObject({ dist_actual: 12.34, from_sheet: true });
   });
 describe("appToCellsFull", () => {
+  it("keeps explicit custom zero but sends blank numeric fields as blank", () => {
+    const map = {
+      builtin: new Map([["dist_low", { header: "距離", column: 0, numeric: true }]]),
+      custom: new Map([
+        ["empty", { header: "空", column: 1, type: "number" }],
+        ["zero", { header: "明示0", column: 2, type: "number" }],
+      ]),
+    } as FieldMap;
+    const record = dbRecord("2026-09-07", "");
+    record.custom = { empty: null, zero: 0 };
+    expect(appToCellsFull(map, record)).toEqual({ 距離: "", 空: "", 明示0: 0 });
+    record.dist_low = 3.51;
+    expect(appToCellsFull(map, record).距離).toBe(3.51);
+  });
   it("sends empty mapped values so an edit can clear spreadsheet cells", () => {
     const map = {
       builtin: new Map([
@@ -160,7 +179,7 @@ describe("appToCellsFull", () => {
 
     expect(appToCellsFull(map, record)).toEqual({
       感想: "",
-      低強度: 0,
+      低強度: "",
       睡眠: "",
     });
   });
