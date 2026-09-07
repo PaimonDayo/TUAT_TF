@@ -1,15 +1,14 @@
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $checks = @{}
-foreach ($tool in @('docker', 'cloudflared', 'psql', 'npx')) {
-    $checks[$tool] = [bool](Get-Command $tool -ErrorAction SilentlyContinue)
+$checks['windowsDocker'] = [bool](Get-Command docker -ErrorAction SilentlyContinue)
+$checks['wslAvailable'] = [bool](Get-Command wsl -ErrorAction SilentlyContinue)
+if ($checks['wslAvailable']) {
+  $checks['wslDockerVersion'] = (& wsl -d Ubuntu -u root -- docker version --format '{{.Server.Version}}' 2>$null | Out-String).Trim()
+  $checks['wslComposeVersion'] = (& wsl -d Ubuntu -u root -- docker compose version --short 2>$null | Out-String).Trim()
+  $checks['wslCloudflared'] = (& wsl -d Ubuntu -u root -- cloudflared --version 2>$null | Out-String).Trim()
+  & wsl -d Ubuntu -u root -- test -f /opt/tuat-tf-supabase/.env
+  $checks['wslEnvironmentConfigured'] = $LASTEXITCODE -eq 0
 }
-$checks['runtimePrepared'] = Test-Path -LiteralPath (Join-Path $repoRoot '.contingency/runtime/docker-compose.yml')
-$checks['environmentConfigured'] = Test-Path -LiteralPath (Join-Path $repoRoot '.contingency/runtime/.env')
-if ($checks['docker']) {
-    docker info --format '{{.ServerVersion}}'
-    $checks['dockerDaemon'] = ($LASTEXITCODE -eq 0)
-    docker compose version --short
-    $checks['composeAvailable'] = ($LASTEXITCODE -eq 0)
-}
+$checks['localAppEnvironmentPrepared'] = Test-Path -LiteralPath (Join-Path $repoRoot '.contingency/local-app.env')
 $checks | ConvertTo-Json

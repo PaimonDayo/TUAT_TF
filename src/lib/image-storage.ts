@@ -94,6 +94,7 @@ async function assertCapacity(client: S3Client, bucket: string, incomingBytes: n
 }
 
 export async function uploadImage(supabase: SupabaseClient, bucket: ImageBucket, path: string, bytes: Buffer) {
+  if (process.env.IMAGE_STORAGE_READ_ONLY === "true") throw new Error("画像は読み取り専用です");
   const key = imageObjectKey(bucket, path);
   if (bucket === "note-images" && process.env.R2_WRITE_ENABLED !== "true") throw new Error("R2 writes are unavailable");
   if (process.env.R2_WRITE_ENABLED === "true") {
@@ -117,6 +118,7 @@ export async function uploadImage(supabase: SupabaseClient, bucket: ImageBucket,
 export async function removeImages(supabase: SupabaseClient, bucket: ImageBucket, paths: string[]) {
   const keys = paths.map((path) => imageObjectKey(bucket, path));
   if (!keys.length) return;
+  if (process.env.IMAGE_STORAGE_READ_ONLY === "true") throw new Error("画像は読み取り専用です");
   if (bucket === "note-images" || process.env.R2_READ_ENABLED === "true" || process.env.R2_WRITE_ENABLED === "true") {
     const { client, bucket: r2Bucket } = r2();
     for (let offset = 0; offset < keys.length; offset += 1000) {

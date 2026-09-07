@@ -53,6 +53,12 @@ export function getGoogleOAuthCredentials(): OAuthCredentials {
 }
 
 function cryptoKey(): Buffer {
+  const dedicatedKey = process.env.GOOGLE_TOKEN_ENCRYPTION_KEY;
+  if (dedicatedKey) {
+    if (!/^[0-9a-f]{64}$/i.test(dedicatedKey)) throw new Error("GOOGLE_TOKEN_ENCRYPTION_KEY must be a 32-byte hex key");
+    return Buffer.from(dedicatedKey, "hex");
+  }
+  // Preserve existing ciphertext until the derived key is configured separately.
   return crypto
     .createHash("sha256")
     .update(process.env.SUPABASE_SERVICE_ROLE_KEY!)

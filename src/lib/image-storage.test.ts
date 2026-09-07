@@ -109,3 +109,10 @@ describe("private image storage migration", () => {
     expect(legacyRemove).not.toHaveBeenCalled();
   });
 });
+it("blocks uploads and removals during a local restore rehearsal while allowing reads",async()=>{
+  vi.stubEnv("IMAGE_STORAGE_READ_ONLY","true");
+  await expect(uploadImage(supabase,"avatars",path,Buffer.from("image"))).rejects.toThrow("読み取り専用");
+  await expect(removeImages(supabase,"avatars",[path])).rejects.toThrow("読み取り専用");
+  expect(mocks.send).not.toHaveBeenCalled();expect(legacyUpload).not.toHaveBeenCalled();expect(legacyRemove).not.toHaveBeenCalled();
+  await expect(signedImageUrl(supabase,"avatars",path,300)).resolves.toContain("r2.example");
+});
