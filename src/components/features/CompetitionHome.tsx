@@ -10,10 +10,9 @@ import { createClient } from "@/lib/supabase/client";
 import { competitionDays } from "@/lib/competition";
 import {
   normalizeGoalDrafts,
-  orderCompetitionEvents,
+  sortCompetitionEvents,
   type GoalDraft,
   type CompetitionEvent,
-  type EventOrder,
 } from "@/lib/competition-goals";
 import { CompetitionGoalBoard } from "./CompetitionGoalBoard";
 import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
@@ -26,7 +25,7 @@ export type CompetitionGoal = {
   user_id: string;
   event: string;
   target: string;
-  author: { display_name: string } | null;
+  author: { display_name: string; blocks: Block[] | null } | null;
 };
 const selectClass =
   "w-full rounded-xl border border-separator bg-card p-3 text-base";
@@ -60,13 +59,6 @@ export function CompetitionHome({
   const [drafts, setDrafts] = useState<GoalDraft[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [order, setOrder] = useState<EventOrder>(
-    viewerBlocks.includes("middle_long")
-      ? "middle_long"
-      : viewerBlocks.some((b) => ["short", "jump", "throw"].includes(b))
-        ? "short"
-        : "standard",
-  );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftBaseline, setDraftBaseline] = useState("");
   const [pendingExit, setPendingExit] = useState<"goals" | "close" | null>(
@@ -88,7 +80,7 @@ export function CompetitionHome({
     };
   }, []);
   const days = competitionDays(meet.starts_on, today);
-  const events = orderCompetitionEvents(catalog, order);
+  const events = sortCompetitionEvents(catalog);
   const ownGoals = goals.filter((g) => g.user_id === userId);
   const people = new Set(goals.map((g) => g.user_id)).size;
   function open(next: typeof view) {
@@ -138,9 +130,15 @@ export function CompetitionHome({
         throw new Error("目標を保存できませんでした。入力内容は残っています。");
       setGoals((old) => [
         ...old.filter((g) => !data.some((saved) => saved.id === g.id)),
-        ...data.map((g) => ({ ...g, author: { display_name: displayName } })),
+        ...data.map((g) => ({
+          ...g,
+          author: { display_name: displayName, blocks: viewerBlocks },
+        })),
       ]);
-      showToast(editingId ? "目標を更新しました" : "目標を追加しました", "success");
+      showToast(
+        editingId ? "目標を更新しました" : "目標を追加しました",
+        "success",
+      );
       open(pendingExit === "close" ? null : "goals");
       setPendingExit(null);
     } catch (e) {
@@ -389,8 +387,6 @@ export function CompetitionHome({
               events={events}
               userId={userId}
               meetName={meet.name}
-              order={order}
-              onOrder={setOrder}
               onEdit={edit}
               onDelete={removeGoal}
               busy={busy}
