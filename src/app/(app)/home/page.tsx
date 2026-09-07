@@ -52,10 +52,10 @@ export async function HomeContent() {
     <>
       <Header title="ホーム" large besideTitle={<time dateTime={jstToday()} className="truncate text-[13px] text-muted">{format(nowJst, "M月d日 (E)", { locale: ja })}</time>} />
       <div className="space-y-5 px-4 pt-1">
+        <NoticesSection userId={profile.id} />
         <CompetitionSection profile={profile} />
         <InstallPrompt />
 
-        <NoticesSection userId={profile.id} />
         {profile.blocks.includes("middle_long") && (
           <WeeklySummary userId={profile.id} nowJst={nowJst} />
         )}
