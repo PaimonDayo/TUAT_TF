@@ -8,6 +8,7 @@ import { ChevronDown, FileText, Pin } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Linkify } from "@/components/common/Linkify";
 import { NoteArticleActions } from "@/components/features/NoteArticleActions";
+import { NoteImages } from "@/components/features/NoteImages";
 import { cn } from "@/lib/utils";
 import type { AuthorMini, NoteArticleWithAuthor } from "@/types";
 
@@ -87,6 +88,7 @@ export function NoteArticleList({
 
             {open && (
               <div className="mt-3 border-t border-separator pt-3">
+                <NoteImages images={article.images}/>
                 <p className="whitespace-pre-wrap break-words text-[14px]">
                   <Linkify text={isLong ? article.body.slice(0, LONG_BODY) + "…" : article.body} />
                 </p>

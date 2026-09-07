@@ -30,6 +30,21 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 describe("private image storage migration", () => {
+  it("never sends note photos to legacy Storage when R2 is unavailable", async()=>{
+    const notePath="11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222.webp";
+    mocks.send.mockRejectedValueOnce({$metadata:{httpStatusCode:404}});
+    await expect(signedImageUrl(supabase,"note-images",notePath,300)).rejects.toBeDefined();
+    expect(legacySign).not.toHaveBeenCalled();
+    vi.stubEnv("R2_WRITE_ENABLED","false");
+    await expect(uploadImage(supabase,"note-images",notePath,Buffer.from("abc"))).rejects.toThrow("R2 writes");
+    expect(legacyUpload).not.toHaveBeenCalled();
+  });
+  it("removes queued note photos from R2 without a nonexistent legacy bucket", async()=>{
+    const notePath="11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222.webp";
+    await removeImages(supabase,"note-images",[notePath]);
+    expect(mocks.send).toHaveBeenCalledOnce();
+    expect(legacyRemove).not.toHaveBeenCalled();
+  });
   it("rejects traversal and invalid namespaces before storage access", () => {
     expect(() => imageObjectKey("avatars", "../private/secret.webp")).toThrow();
     expect(() => imageObjectKey("avatars", "user/%2e%2e.webp")).toThrow();

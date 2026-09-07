@@ -70,7 +70,7 @@ export function normalizeThreadPostRow(row: ThreadPostQueryRow): ThreadPostWithA
   };
 }
 
-type NoteArticleQueryRow = Row<"note_articles"> & { author: AuthorInput };
+type NoteArticleQueryRow = Row<"note_articles"> & { author: AuthorInput; images?: {id:string;path:string}[] };
 
 export function normalizeNoteArticleRow(row: NoteArticleQueryRow): NoteArticleWithAuthor {
   return {

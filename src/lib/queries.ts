@@ -1,3 +1,4 @@
+import { HOME_COMPETITION_ID } from "@/lib/competition";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRolesByProfileIds } from "@/lib/supabase/auth";
 import { viewerCompetitionBlocks } from "@/lib/constants";
@@ -919,6 +920,7 @@ export async function getNoteArticles(
     .from("note_articles")
     .select(`
       *,
+      images:note_article_images(id,path),
       author:profiles!author_id(id, display_name, avatar_url, blocks, grade)
     `)
     .eq("note_id", noteId)
@@ -936,6 +938,7 @@ export async function getNoteArticleById(
     .from("note_articles")
     .select(`
       *,
+      images:note_article_images(id,path),
       author:profiles!author_id(id, display_name, avatar_url, blocks, grade)
     `)
     .eq("note_id", noteId)
@@ -997,4 +1000,14 @@ export async function getUnreadNotificationCount(userId: string): Promise<number
     .eq("is_read", false);
   const { count } = await query;
   return count ?? 0;
+}
+
+export async function getHomeCompetition() {
+  const supabase = await createClient();
+  const [{data:competition,error:meetError},{data:goals,error:goalsError}] = await Promise.all([
+    supabase.from("competitions").select("id,name,starts_on").eq("id",HOME_COMPETITION_ID).maybeSingle(),
+    supabase.from("competition_goals").select("id,user_id,event,target,author:profiles!user_id(display_name)").eq("competition_id",HOME_COMPETITION_ID),
+  ]);
+  if(meetError || goalsError) return null;
+  return { competition, goals: goals ?? [] };
 }

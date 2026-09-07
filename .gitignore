@@ -44,3 +44,4 @@ next-env.d.ts
 .vercel
 gas/sync-clasp/secret.js
 /.r2-migration/
+/.contingency/

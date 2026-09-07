@@ -4,6 +4,7 @@ import { ja } from "date-fns/locale";
 import { Avatar } from "@/components/common/Avatar";
 import { Linkify } from "@/components/common/Linkify";
 import { NoteArticleActions } from "@/components/features/NoteArticleActions";
+import { NoteImages } from "@/components/features/NoteImages";
 import { SubHeader } from "@/components/layout/SubHeader";
 import { Card } from "@/components/ui/card";
 import { getNoteArticleById, getNoteById } from "@/lib/queries";
@@ -79,6 +80,7 @@ export default async function NoteArticlePage({
           <div className="whitespace-pre-wrap break-words text-[15px] leading-7">
             <Linkify text={article.body} />
           </div>
+          <NoteImages images={article.images}/>
         </Card>
       </article>
     </>

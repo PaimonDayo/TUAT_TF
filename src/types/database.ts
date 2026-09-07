@@ -14,6 +14,131 @@ export type Database = {
   }
   public: {
     Tables: {
+      note_image_cleanup: {
+        Row: {
+          created_at: string
+          path: string
+        }
+        Insert: {
+          created_at?: string
+          path: string
+        }
+        Update: {
+          created_at?: string
+          path?: string
+        }
+        Relationships: []
+      }
+      note_article_images: {
+        Row: {
+          article_id: string
+          created_at: string
+          created_by: string
+          id: string
+          path: string
+        }
+        Insert: {
+          article_id: string
+          created_at?: string
+          created_by: string
+          id?: string
+          path: string
+        }
+        Update: {
+          article_id?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "note_article_images_article_id_fkey"
+            columns: ["article_id"]
+            isOneToOne: false
+            referencedRelation: "note_articles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "note_article_images_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "note_article_images_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "weekly_ranking"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      competitions: {
+        Row: {
+          id: string
+          name: string
+          starts_on: string
+        }
+        Insert: {
+          id: string
+          name: string
+          starts_on: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          starts_on?: string
+        }
+        Relationships: []
+      }
+      competition_goals: {
+        Row: {
+          competition_id: string
+          event: string
+          id: string
+          target: string
+          user_id: string
+        }
+        Insert: {
+          competition_id: string
+          event: string
+          id?: string
+          target: string
+          user_id: string
+        }
+        Update: {
+          competition_id?: string
+          event?: string
+          id?: string
+          target?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competition_goals_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "competitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "competition_goals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "competition_goals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_ranking"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attendances: {
         Row: {
           absence_note: string | null

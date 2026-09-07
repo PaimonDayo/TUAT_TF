@@ -8,6 +8,9 @@ import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { HomeSkeleton } from "@/components/ui/page-skeletons";
 import { HomeFeed } from "@/components/features/HomeFeed";
+import { CompetitionHome } from "@/components/features/CompetitionHome";
+
+
 import { HomeNotices } from "@/components/features/HomeNotices";
 import { InstallPrompt } from "@/components/features/InstallPrompt";
 import { ScheduleCard } from "@/components/cards/ScheduleCard";
@@ -17,6 +20,7 @@ import { jstNow, jstToday } from "@/lib/date";
 import { formatKm } from "@/lib/utils";
 import { displayedDistance } from "@/lib/record-distance";
 import {
+  getHomeCompetition,
   getAttendanceSchedules,
   getAttendancesForSchedules,
   getFeed,
@@ -48,6 +52,7 @@ export async function HomeContent() {
     <>
       <Header title="ホーム" large />
       <div className="space-y-5 px-4 pt-1">
+        <CompetitionSection profile={profile} />
         <InstallPrompt />
 
         <p className="text-body text-muted">
@@ -64,6 +69,14 @@ export async function HomeContent() {
       </div>
     </>
   );
+}
+
+async function CompetitionSection({profile}:{profile:Profile}) {
+  const result = await getHomeCompetition();
+  if (!result) return <p className="text-caption">大会情報を取得できませんでした</p>;
+  const { competition, goals } = result;
+  if(!competition)return null;
+  return <CompetitionHome competition={competition} initialGoals={goals??[]} userId={profile.id} displayName={profile.display_name} canManage={permissionsOf(profile.roles).manageSystem} initialToday={jstToday()}/>;
 }
 
 async function NoticesSection({ userId }: { userId: string }) {

@@ -5,12 +5,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { isSafeAvatarStoragePath } from "./avatar-image";
 import { isSafeTweetImagePath } from "./tweet-image";
 
-export type ImageBucket = "avatars" | "tweet-images";
+export type ImageBucket = "avatars" | "tweet-images" | "note-images";
 let cached: { signature: string; bucket: string; client: S3Client } | undefined;
 
 export function imageObjectKey(bucket: ImageBucket, path: string): string {
   const valid = bucket === "avatars" ? isSafeAvatarStoragePath(path)
-    : bucket === "tweet-images" && isSafeTweetImagePath(path);
+    : (bucket === "tweet-images" || bucket === "note-images") && isSafeTweetImagePath(path);
   if (!valid) throw new Error("Invalid image path");
   return `${bucket}/${path}`;
 }
@@ -60,6 +60,7 @@ export async function getR2Inventory() {
 /** Call only after authenticating and checking the resource's existing RLS. */
 export async function signedImageUrl(supabase: SupabaseClient, bucket: ImageBucket, path: string, ttl: number) {
   const key = imageObjectKey(bucket, path);
+  if (bucket === "note-images" && process.env.R2_READ_ENABLED !== "true") throw new Error("R2 reads are unavailable");
   if (process.env.R2_READ_ENABLED === "true") {
     const { client, bucket: r2Bucket } = r2();
     try {
@@ -67,7 +68,7 @@ export async function signedImageUrl(supabase: SupabaseClient, bucket: ImageBuck
       return await getSignedUrl(client, new GetObjectCommand({ Bucket: r2Bucket, Key: key }), { expiresIn: ttl });
     } catch (error) {
       // Only a missing copy falls back. Never hide invalid credentials/outages.
-      if (!isMissing(error)) throw error;
+      if (!isMissing(error) || bucket === "note-images") throw error;
     }
   }
   const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, ttl);
@@ -94,6 +95,7 @@ async function assertCapacity(client: S3Client, bucket: string, incomingBytes: n
 
 export async function uploadImage(supabase: SupabaseClient, bucket: ImageBucket, path: string, bytes: Buffer) {
   const key = imageObjectKey(bucket, path);
+  if (bucket === "note-images" && process.env.R2_WRITE_ENABLED !== "true") throw new Error("R2 writes are unavailable");
   if (process.env.R2_WRITE_ENABLED === "true") {
     // New R2-only files must remain readable immediately after saving.
     if (process.env.R2_READ_ENABLED !== "true") throw new Error("Enable R2 reads before writes");
@@ -115,7 +117,7 @@ export async function uploadImage(supabase: SupabaseClient, bucket: ImageBucket,
 export async function removeImages(supabase: SupabaseClient, bucket: ImageBucket, paths: string[]) {
   const keys = paths.map((path) => imageObjectKey(bucket, path));
   if (!keys.length) return;
-  if (process.env.R2_READ_ENABLED === "true" || process.env.R2_WRITE_ENABLED === "true") {
+  if (bucket === "note-images" || process.env.R2_READ_ENABLED === "true" || process.env.R2_WRITE_ENABLED === "true") {
     const { client, bucket: r2Bucket } = r2();
     for (let offset = 0; offset < keys.length; offset += 1000) {
       const result = await client.send(new DeleteObjectsCommand({ Bucket: r2Bucket,
@@ -124,6 +126,7 @@ export async function removeImages(supabase: SupabaseClient, bucket: ImageBucket
       if (result.Errors?.length) throw new Error("Some R2 images could not be removed");
     }
   }
+  if (bucket === "note-images") return;
   const { error } = await supabase.storage.from(bucket).remove(paths);
   if (error) throw error;
 }

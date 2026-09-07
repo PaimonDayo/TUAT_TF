@@ -1,0 +1,9 @@
+# Replace both placeholders after creating a named tunnel on an owned hostname.
+tunnel: REPLACE_TUNNEL_UUID
+credentials-file: REPLACE_ABSOLUTE_CREDENTIALS_PATH
+# Expose API paths only. Studio and PostgreSQL are never public.
+ingress:
+  - hostname: REPLACE_API_HOSTNAME
+    path: ^/(auth|rest|storage|realtime|functions)/v1(/.*)?$
+    service: http://127.0.0.1:8000
+  - service: http_status:404

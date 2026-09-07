@@ -1,0 +1,10 @@
+# Docker Compose >= 2.24.4. All published services stay on loopback.
+services:
+  api-gw:
+    ports: !override
+      - "127.0.0.1:8000:8000"
+  supavisor:
+    ports: !reset []
+  db:
+    ports:
+      - "127.0.0.1:15432:5432"

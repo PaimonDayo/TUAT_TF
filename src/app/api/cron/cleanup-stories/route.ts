@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { timingSafeEqualString } from "@/lib/timing-safe";
 import { TWEET_IMAGE_BUCKET } from "@/lib/tweet-image";
 import { removeImages } from "@/lib/image-storage";
+import { cleanupNoteImages } from "@/lib/note-image-cleanup";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -15,6 +16,7 @@ export async function GET(request: Request) {
   }
 
   const supabase = createAdminClient();
+  try { await cleanupNoteImages(); } catch { return NextResponse.json({error:"Note image cleanup failed"},{status:503}); }
   const { data: stories, error } = await supabase
     .from("tweets")
     .select("id, image_path")

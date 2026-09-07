@@ -566,6 +566,7 @@ export interface NoteArticleRow {
 
 export interface NoteArticleWithAuthor extends NoteArticleRow {
   author: AuthorMini;
+  images?: {id:string;path:string}[];
 }
 
 /** フィード（タイムライン）用の合成型 */
