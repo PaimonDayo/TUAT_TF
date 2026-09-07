@@ -34,7 +34,9 @@ export function createPrivateGateway(config, { authenticate, validateUser } = {}
     return result.ok && (await result.json()).id === config.userId;
   });
   function reply(res, status, body, type = 'application/json; charset=utf-8') {
-    res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store, private', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer', 'x-robots-tag': 'noindex, nofollow', 'content-security-policy': "frame-ancestors 'none'" });
+    // no-referrer makes native form POSTs send Origin: null. Keep same-origin
+    // form origins while still withholding referrers from external sites.
+    res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store, private', 'x-content-type-options': 'nosniff', 'referrer-policy': 'same-origin', 'x-robots-tag': 'noindex, nofollow', 'content-security-policy': "frame-ancestors 'none'" });
     res.end(body);
   }
   function loginPage(res, failed = false) {
@@ -62,7 +64,7 @@ export function createPrivateGateway(config, { authenticate, validateUser } = {}
       const outgoing = Object.fromEntries(Object.entries(response.headers).filter(([k]) => !hopHeaders.has(k) && k !== 'access-control-allow-origin' && k !== 'access-control-allow-credentials'));
       outgoing['cache-control'] = 'no-store, private';
       outgoing['x-robots-tag'] = 'noindex, nofollow';
-      outgoing['referrer-policy'] = 'no-referrer';
+      outgoing['referrer-policy'] = 'same-origin';
       outgoing['content-security-policy'] = "frame-ancestors 'none'";
       if (outgoing.location?.startsWith(app.origin)) outgoing.location = origin.origin + outgoing.location.slice(app.origin.length);
       if (outgoing.location?.startsWith('http://localhost:3009')) outgoing.location = origin.origin + outgoing.location.slice('http://localhost:3009'.length);
