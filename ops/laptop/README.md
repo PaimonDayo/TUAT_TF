@@ -82,3 +82,9 @@ R2の画像実体は移動不要。PCでのテストは画像の読み取りだ�
 - 停止・再起動後も11コンテナがhealthyに復帰し、Auth/プロフィール各64件・練習記録3,769件、Authトリガー1本・Storageポリシー6本、cron停止が保持された。復元の再実行は既存データ検出で拒否された。
 
 公式参照: [Docker EngineのUbuntu導入](https://docs.docker.com/engine/install/ubuntu/)、[Supabase self-hosting](https://supabase.com/docs/guides/self-hosting/docker)、[Platformからの復元](https://supabase.com/docs/guides/self-hosting/restore-from-platform)。
+
+## 2026-09-08 本番切替依頼後の確認
+
+ユーザーから「一旦このPCに移行して」と切替依頼を受けた。CloudflareのDomains Overviewは登録0件。所有しているドメインの有無を質問中。固定HTTPS URL、Google OAuth、通知/同期の移行、書き込み停止と最終復元、切り戻し検証が未完了のため、Vercelの本番DB接続先は変更していない。Quick TunnelのランダムURLは再起動で変わるため本番認証先には採用していない。
+
+PC版の一般部員テストアカウントで、目標UIの1件編集・新規追加・1件削除と他種目保持を実DB確認した。49人146件の合成表示、種目/部員切替、検索、短距離優先、未保存確認、320px幅の横はみ出しなしを確認。テスト用アカウント/大会/目標/認証ファイルと一時プレビュールートを削除済み。全11コンテナhealthy。目標UIの改善とPC切替の完了は別の状態として扱う。

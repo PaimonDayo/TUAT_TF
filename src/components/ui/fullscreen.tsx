@@ -53,12 +53,14 @@ export function FullScreenContent({
   footer,
   autoFocus = true,
   className,
+  floatingAction,
 }: {
   title: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
   autoFocus?: boolean;
   className?: string;
+  floatingAction?: React.ReactNode;
 }) {
   const contentRef = React.useRef<HTMLDivElement | null>(null);
   useViewportSync(contentRef);
@@ -140,6 +142,7 @@ export function FullScreenContent({
           {children}
         </div>
 
+        {floatingAction && <div className="absolute right-4 bottom-[max(env(safe-area-inset-bottom),16px)] z-20">{floatingAction}</div>}
         {footer && (
           <div className="shrink-0 border-t border-separator bg-card px-4 pt-3 pb-[max(env(safe-area-inset-bottom),12px)]">
             {footer}

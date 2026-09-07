@@ -8,10 +8,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { createClient } from "@/lib/supabase/client";
 import { competitionDays } from "@/lib/competition";
-import { normalizeGoalDrafts, type GoalDraft } from "@/lib/competition-goals";
+import {
+  normalizeGoalDrafts,
+  orderCompetitionEvents,
+  type GoalDraft,
+  type CompetitionEvent,
+  type EventOrder,
+} from "@/lib/competition-goals";
+import { CompetitionGoalBoard } from "./CompetitionGoalBoard";
+import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
+import type { Block } from "@/types";
 import { jstToday } from "@/lib/date";
+import { useToast } from "@/components/ui/toast";
 
-type CompetitionEvent = { name: string; sort_order: number };
 export type CompetitionGoal = {
   id: string;
   user_id: string;
@@ -27,6 +36,7 @@ export function CompetitionHome({
   initialEvents,
   userId,
   displayName,
+  viewerBlocks,
   canManage,
   initialToday,
 }: {
@@ -35,9 +45,11 @@ export function CompetitionHome({
   initialEvents: CompetitionEvent[];
   userId: string;
   displayName: string;
+  viewerBlocks: Block[];
   canManage: boolean;
   initialToday: string;
 }) {
+  const { showToast } = useToast();
   const [meet, setMeet] = useState(competition);
   const [goals, setGoals] = useState(initialGoals);
   const [catalog, setCatalog] = useState(initialEvents);
@@ -48,7 +60,18 @@ export function CompetitionHome({
   const [drafts, setDrafts] = useState<GoalDraft[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [filter, setFilter] = useState("");
+  const [order, setOrder] = useState<EventOrder>(
+    viewerBlocks.includes("middle_long")
+      ? "middle_long"
+      : viewerBlocks.some((b) => ["short", "jump", "throw"].includes(b))
+        ? "short"
+        : "standard",
+  );
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftBaseline, setDraftBaseline] = useState("");
+  const [pendingExit, setPendingExit] = useState<"goals" | "close" | null>(
+    null,
+  );
   const [date, setDate] = useState(meet.starts_on);
   const [eventDraft, setEventDraft] = useState<CompetitionEvent>({
     name: "",
@@ -65,25 +88,26 @@ export function CompetitionHome({
     };
   }, []);
   const days = competitionDays(meet.starts_on, today);
-  const events = [...catalog].sort(
-    (a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name, "ja"),
-  );
-  const goalEvents = events.filter((e) =>
-    goals.some((g) => g.event === e.name),
-  );
+  const events = orderCompetitionEvents(catalog, order);
   const ownGoals = goals.filter((g) => g.user_id === userId);
   const people = new Set(goals.map((g) => g.user_id)).size;
   function open(next: typeof view) {
     setError("");
     setView(next);
   }
-  function edit() {
-    setDrafts(
-      ownGoals.length
-        ? ownGoals.map(({ event, target }) => ({ event, target }))
-        : [{ event: "", target: "" }],
-    );
+  function edit(goal?: CompetitionGoal) {
+    const nextDrafts = goal
+      ? [{ event: goal.event, target: goal.target }]
+      : [{ event: "", target: "" }];
+    setEditingId(goal?.id ?? null);
+    setDrafts(nextDrafts);
+    setDraftBaseline(JSON.stringify(nextDrafts));
     open("edit");
+  }
+  function leaveEditor(next: "goals" | "close") {
+    if (busy) return;
+    if (JSON.stringify(drafts) !== draftBaseline) setPendingExit(next);
+    else open(next === "close" ? null : "goals");
   }
   async function saveGoals() {
     setBusy(true);
@@ -92,25 +116,35 @@ export function CompetitionHome({
       const rows = normalizeGoalDrafts(drafts);
       if (rows.some((row) => !catalog.some((e) => e.name === row.event)))
         throw new Error("種目を選択してください");
-      const { data, error } = await createClient()
-        .from("competition_goals")
-        .upsert(
-          rows.map((row) => ({
-            ...row,
-            competition_id: meet.id,
-            user_id: userId,
-          })),
-          { onConflict: "competition_id,user_id,event" },
-        )
-        .select("id,user_id,event,target");
+      const sb = createClient();
+      const { data, error } = editingId
+        ? await sb
+            .from("competition_goals")
+            .update(rows[0])
+            .eq("id", editingId)
+            .eq("user_id", userId)
+            .select("id,user_id,event,target")
+        : await sb
+            .from("competition_goals")
+            .insert(
+              rows.map((row) => ({
+                ...row,
+                competition_id: meet.id,
+                user_id: userId,
+              })),
+            )
+            .select("id,user_id,event,target");
       if (error || data?.length !== rows.length)
         throw new Error("目標を保存できませんでした。入力内容は残っています。");
       setGoals((old) => [
         ...old.filter((g) => !data.some((saved) => saved.id === g.id)),
         ...data.map((g) => ({ ...g, author: { display_name: displayName } })),
       ]);
-      open("goals");
+      showToast(editingId ? "目標を更新しました" : "目標を追加しました", "success");
+      open(pendingExit === "close" ? null : "goals");
+      setPendingExit(null);
     } catch (e) {
+      setPendingExit(null);
       setError(e instanceof Error ? e.message : "目標を保存できませんでした");
     } finally {
       setBusy(false);
@@ -128,9 +162,11 @@ export function CompetitionHome({
         .select("id");
       if (error || !data?.length) throw error;
       setGoals((old) => old.filter((g) => g.id !== id));
-      setFilter("");
+      return true;
     } catch {
       setError("目標を削除できませんでした");
+      showToast("目標を削除できませんでした", "error");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -193,7 +229,6 @@ export function CompetitionHome({
             g.event === originalEvent ? { ...g, event: name } : g,
           ),
         );
-        setFilter("");
       }
       setOriginalEvent(null);
       setEventDraft({ name: "", sort_order: eventDraft.sort_order + 10 });
@@ -276,9 +311,31 @@ export function CompetitionHome({
         </Card>
       </div>
       <FormModal
+        autoFocus={false}
+        floatingAction={
+          view === "goals" ? (
+            <button
+              type="button"
+              aria-label="目標を追加"
+              title={
+                ownGoals.length >= catalog.length
+                  ? "すべての種目に目標を設定済みです"
+                  : "目標を追加"
+              }
+              disabled={busy || ownGoals.length >= catalog.length}
+              onClick={() => edit()}
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-xl active:scale-95 disabled:opacity-40"
+            >
+              <Plus size={26} />
+            </button>
+          ) : undefined
+        }
         open={view !== null}
         onOpenChange={(value) => {
-          if (!busy && !value) setView(null);
+          if (!busy && !value) {
+            if (view === "edit") leaveEditor("close");
+            else setView(null);
+          }
         }}
         title={
           view === "date"
@@ -286,7 +343,9 @@ export function CompetitionHome({
             : view === "events"
               ? "大会の種目を管理"
               : view === "edit"
-                ? "自分の目標を設定"
+                ? editingId
+                  ? "目標を編集"
+                  : "目標を追加"
                 : "みんなの目標"
         }
       >
@@ -324,93 +383,45 @@ export function CompetitionHome({
               )}
             </>
           )}
-          {view === "goals" && (
-            <>
-              <p className="text-caption">
-                {meet.name}に向けた種目別の目標です。
-              </p>
-              <Button size="lg" onClick={edit}>
-                自分の目標を設定・編集
-              </Button>
-              {canManage && (
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setOriginalEvent(null);
-                    setEventDraft({
-                      name: "",
-                      sort_order: (events.at(-1)?.sort_order ?? 0) + 10,
-                    });
-                    open("events");
-                  }}
-                >
-                  種目を管理
-                </Button>
-              )}
-              {goalEvents.length > 0 && (
-                <select
-                  className={selectClass}
-                  aria-label="目標の種目"
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
-                >
-                  <option value="">すべての種目</option>
-                  {goalEvents.map((e) => (
-                    <option key={e.name}>{e.name}</option>
-                  ))}
-                </select>
-              )}
-              {goals.length === 0 && (
-                <p className="text-caption">まだ目標はありません</p>
-              )}
-              {goalEvents
-                .filter((e) => !filter || e.name === filter)
-                .map((e) => (
-                  <section key={e.name} className="space-y-2">
-                    <h3 className="text-headline text-accent">{e.name}</h3>
-                    {goals
-                      .filter((g) => g.event === e.name)
-                      .sort((a, b) =>
-                        (a.author?.display_name ?? "").localeCompare(
-                          b.author?.display_name ?? "",
-                          "ja",
-                        ),
-                      )
-                      .map((g) => (
-                        <Card key={g.id} className="space-y-1 p-3">
-                          <p className="text-caption">
-                            {g.author?.display_name ?? "部員"}
-                          </p>
-                          <p className="whitespace-pre-wrap break-words text-body">
-                            {g.target}
-                          </p>
-                          {g.user_id === userId && (
-                            <button
-                              type="button"
-                              disabled={busy}
-                              className="py-2 text-caption text-danger"
-                              onClick={() => void removeGoal(g.id)}
-                            >
-                              この目標を削除
-                            </button>
-                          )}
-                        </Card>
-                      ))}
-                  </section>
-                ))}
-            </>
-          )}
+          <div hidden={view !== "goals"}>
+            <CompetitionGoalBoard
+              goals={goals}
+              events={events}
+              userId={userId}
+              meetName={meet.name}
+              order={order}
+              onOrder={setOrder}
+              onEdit={edit}
+              onDelete={removeGoal}
+              busy={busy}
+              onManage={
+                canManage
+                  ? () => {
+                      setOriginalEvent(null);
+                      setEventDraft({
+                        name: "",
+                        sort_order:
+                          Math.max(0, ...catalog.map((e) => e.sort_order)) + 10,
+                      });
+                      open("events");
+                    }
+                  : undefined
+              }
+            />
+          </div>
           {view === "edit" && (
             <>
               <Button
                 variant="ghost"
                 disabled={busy}
-                onClick={() => open("goals")}
+                onClick={() => leaveEditor("goals")}
               >
                 一覧に戻る
               </Button>
               <p className="text-caption">
-                出場する種目ごとに目標を設定できます。「種目を追加」で複数種目を入力できます。
+                {editingId
+                  ? "この種目の目標を編集します。"
+                  : "出場する種目を選んで目標を入力してください。複数種目をまとめて追加できます。"}
               </p>
               {drafts.map((row, index) => (
                 <Card key={index} className="space-y-3 p-3">
@@ -419,9 +430,7 @@ export function CompetitionHome({
                     <select
                       className={selectClass}
                       value={row.event}
-                      disabled={
-                        busy || ownGoals.some((g) => g.event === row.event)
-                      }
+                      disabled={busy}
                       onChange={(e) =>
                         setDrafts((old) =>
                           old.map((r, i) =>
@@ -435,7 +444,10 @@ export function CompetitionHome({
                         .filter(
                           (e) =>
                             e.name === row.event ||
-                            !drafts.some((r) => r.event === e.name),
+                            (!drafts.some((r) => r.event === e.name) &&
+                              !ownGoals.some(
+                                (g) => g.id !== editingId && g.event === e.name,
+                              )),
                         )
                         .map((e) => (
                           <option key={e.name}>{e.name}</option>
@@ -459,30 +471,33 @@ export function CompetitionHome({
                       }
                     />
                   </label>
-                  {!ownGoals.some((g) => g.event === row.event) &&
-                    drafts.length > 1 && (
-                      <Button
-                        variant="ghost"
-                        disabled={busy}
-                        onClick={() =>
-                          setDrafts((old) => old.filter((_, i) => i !== index))
-                        }
-                      >
-                        この入力欄を外す
-                      </Button>
-                    )}
+                  {!editingId && drafts.length > 1 && (
+                    <Button
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={() =>
+                        setDrafts((old) => old.filter((_, i) => i !== index))
+                      }
+                    >
+                      この入力欄を外す
+                    </Button>
+                  )}
                 </Card>
               ))}
-              <Button
-                variant="secondary"
-                disabled={busy || drafts.length >= events.length}
-                onClick={() =>
-                  setDrafts((old) => [...old, { event: "", target: "" }])
-                }
-              >
-                <Plus size={16} />
-                種目を追加
-              </Button>
+              {!editingId && (
+                <Button
+                  variant="secondary"
+                  disabled={
+                    busy || drafts.length >= events.length - ownGoals.length
+                  }
+                  onClick={() =>
+                    setDrafts((old) => [...old, { event: "", target: "" }])
+                  }
+                >
+                  <Plus size={16} />
+                  種目を追加
+                </Button>
+              )}
               <p className="text-caption">
                 プロフィールの目標とは別に保存します。
               </p>
@@ -492,7 +507,11 @@ export function CompetitionHome({
                   disabled={busy || !events.length}
                   onClick={() => void saveGoals()}
                 >
-                  {busy ? "保存中…" : "目標をまとめて保存する"}
+                  {busy
+                    ? "保存中…"
+                    : editingId
+                      ? "変更を保存する"
+                      : "目標を追加する"}
                 </Button>
               </FormModalFooter>
             </>
@@ -551,7 +570,8 @@ export function CompetitionHome({
                       setOriginalEvent(null);
                       setEventDraft({
                         name: "",
-                        sort_order: (events.at(-1)?.sort_order ?? 0) + 10,
+                        sort_order:
+                          Math.max(0, ...catalog.map((e) => e.sort_order)) + 10,
                       });
                     }}
                   >
@@ -599,6 +619,16 @@ export function CompetitionHome({
           )}
         </div>
       </FormModal>
+      <UnsavedChangesDialog
+        open={pendingExit !== null}
+        busy={busy}
+        onContinue={() => setPendingExit(null)}
+        onDiscard={() => {
+          open(pendingExit === "close" ? null : "goals");
+          setPendingExit(null);
+        }}
+        onSave={() => void saveGoals()}
+      />
     </section>
   );
 }

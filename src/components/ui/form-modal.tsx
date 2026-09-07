@@ -25,6 +25,7 @@ export function FormModal({
   children,
   footer,
   autoFocus = true,
+  floatingAction,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -32,6 +33,7 @@ export function FormModal({
   children: ReactNode;
   footer?: ReactNode;
   autoFocus?: boolean;
+  floatingAction?: ReactNode;
 }) {
   const [footerCount, setFooterCount] = useState(0);
   const [footerTarget, setFooterTarget] = useState<HTMLDivElement | null>(null);
@@ -55,6 +57,7 @@ export function FormModal({
         title={title}
         footer={footerHost}
         autoFocus={autoFocus}
+        floatingAction={floatingAction}
       >
         <FormModalFooterContext.Provider value={context}>
           {children}

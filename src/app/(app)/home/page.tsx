@@ -50,14 +50,10 @@ export async function HomeContent() {
 
   return (
     <>
-      <Header title="ホーム" large />
+      <Header title="ホーム" large besideTitle={<time dateTime={jstToday()} className="truncate text-[13px] text-muted">{format(nowJst, "M月d日 (E)", { locale: ja })}</time>} />
       <div className="space-y-5 px-4 pt-1">
         <CompetitionSection profile={profile} />
         <InstallPrompt />
-
-        <p className="text-body text-muted">
-          {format(nowJst, "M月d日 (E)", { locale: ja })}
-        </p>
 
         <NoticesSection userId={profile.id} />
         {profile.blocks.includes("middle_long") && (
@@ -76,7 +72,7 @@ async function CompetitionSection({profile}:{profile:Profile}) {
   if (!result) return <p className="text-caption">大会情報を取得できませんでした</p>;
   const { competition, goals, events } = result;
   if(!competition)return null;
-  return <CompetitionHome competition={competition} initialGoals={goals??[]} initialEvents={events} userId={profile.id} displayName={profile.display_name} canManage={permissionsOf(profile.roles).manageSystem} initialToday={jstToday()}/>;
+  return <CompetitionHome competition={competition} initialGoals={goals??[]} initialEvents={events} userId={profile.id} displayName={profile.display_name} viewerBlocks={profile.blocks} canManage={permissionsOf(profile.roles).manageSystem} initialToday={jstToday()}/>;
 }
 
 async function NoticesSection({ userId }: { userId: string }) {
@@ -93,7 +89,6 @@ async function WeeklySummary({ userId, nowJst }: { userId: string; nowJst: Date 
   );
   return (
     <section className="space-y-2">
-      <p className="section-label">直近7日間のサマリー</p>
       <div className="grid grid-cols-2 gap-3">
         <Card className="p-4">
           <p className="text-caption">直近7日間の走行距離</p>
