@@ -3,6 +3,36 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { createPrivateGateway } from './private-gateway.mjs';
 const listen = s => new Promise(resolve => s.listen(0, '127.0.0.1', () => resolve(s.address().port)));
+test('Vercel bridge requires its private key and preserves owner and session restrictions', async () => {
+  let hits = 0;
+  const upstream = http.createServer((req, res) => { assert.equal(req.headers['x-pc-trial-bridge'], undefined); hits++; res.end('private data'); });
+  const port = await listen(upstream);
+  const key = 'server-only-bridge-key-01234567890123456789';
+  const password = 'test-only-random-password-0123456789';
+  const gateway = createPrivateGateway({ origin: 'https://owner-test.trycloudflare.com', password, userId: 'owner', email: 'owner@example.invalid', bridgeKey: key, serviceRoleKey: 'service-role-fixture', apiUrl: `http://127.0.0.1:${port}` }, { authenticate: async () => [], validateUser: async token => token === 'owner-token' });
+  const base = `http://127.0.0.1:${await listen(gateway)}/_pc/bridge`;
+  const request = (path, headers = {}, method = 'GET', body) => fetch(base + path, { method, body, headers, redirect: 'manual' });
+  const bridge = { 'x-pc-trial-bridge': key };
+  try {
+    assert.equal((await request('/_pc/supabase/rest/v1/profiles')).status, 401);
+    assert.equal((await request('/_pc/supabase/rest/v1/profiles', { ...bridge, authorization: 'Bearer other' })).status, 403);
+    assert.equal((await request('/_pc/supabase/rest/v1/profiles', { ...bridge, authorization: 'Bearer owner-token' })).status, 200);
+    assert.equal((await request('/_pc/supabase/rest/v1/profiles', { ...bridge, authorization: 'Bearer service-role-fixture' })).status, 403);
+    assert.equal((await request('/_pc/supabase/rest/v1/profiles', { ...bridge, authorization: 'Bearer service-role-fixture' }, 'POST', '{}')).status, 403);
+    assert.equal((await request('/_pc/supabase/rest/v1/profiles', { ...bridge, 'x-pc-trial-browser': '1', authorization: 'Bearer owner-token' })).status, 401);
+    assert.equal((await request('/home', bridge)).status, 403);
+    assert.equal((await request('/_pc/supabase/auth/v1/signup', bridge, 'POST', '{}')).status, 403);
+    assert.equal((await request('/_pc/session', bridge)).status, 401);
+    const login = await request('/_pc/login', bridge, 'POST', `password=${password}`);
+    assert.equal(login.status, 303);
+    const cookie = login.headers.getSetCookie().find(c => c.startsWith('__Host-pc-trial=')).split(';')[0];
+    assert.equal((await request('/_pc/session', { ...bridge, cookie })).status, 200);
+    assert.equal((await request('/_pc/supabase/rest/v1/profiles', { ...bridge, cookie, 'x-pc-trial-browser': '1', authorization: 'Bearer owner-token' })).status, 200);
+    assert.equal((await request('/_pc/logout', { ...bridge, cookie }, 'POST')).status, 303);
+    assert.equal((await request('/_pc/session', { ...bridge, cookie })).status, 401);
+    assert.equal(hits, 2);
+  } finally { gateway.closeAllConnections(); gateway.close(); upstream.closeAllConnections(); upstream.close(); }
+});
 test('private gateway rejects anonymous, cross-origin, non-owner and external side effects', async () => {
   let hits = 0;
   const upstream = http.createServer((_req, res) => { hits++; res.end('private data'); });

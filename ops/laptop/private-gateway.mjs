@@ -9,11 +9,13 @@ const digest = value => createHash('sha256').update(value).digest();
 const safePassword = (a, b) => timingSafeEqual(digest(a), digest(b));
 const blockedApp = /^\/(?:api\/(?:google|sheets|schedule-sheets|menu-sheets|push|cron|legacy-access|admin\/services)(?:\/|$)|auth(?:\/|$)|sw\.js$)/;
 const hopHeaders = new Set(['connection', 'keep-alive', 'transfer-encoding', 'upgrade', 'proxy-authorization', 'proxy-authenticate', 'te', 'trailer']);
+const imageReadPaths = new Set(['/api/avatar/image', '/api/note-image', '/api/tweet-image']);
 
 export function createPrivateGateway(config, { authenticate, validateUser } = {}) {
   const origin = new URL(config.origin);
   if (origin.protocol !== 'https:' && !(origin.hostname === '127.0.0.1' && config.testOnly)) throw Error('HTTPS required');
   if (config.password.length < 24 || !config.userId || !config.email) throw Error('Missing private trial owner');
+  if (config.bridgeKey && config.bridgeKey.length < 32) throw Error('Invalid server bridge key');
   const app = new URL(config.appUrl ?? 'http://127.0.0.1:3009');
   const api = new URL(config.apiUrl ?? 'http://127.0.0.1:8000');
   if ([app, api].some(u => u.hostname !== '127.0.0.1' || u.protocol !== 'http:')) throw Error('Loopback upstreams only');
@@ -56,7 +58,7 @@ export function createPrivateGateway(config, { authenticate, validateUser } = {}
     return Buffer.concat(chunks).toString('utf8');
   }
   function proxy(req, res, upstream, path) {
-    const headers = Object.fromEntries(Object.entries(req.headers).filter(([k]) => !hopHeaders.has(k) && !k.startsWith('x-forwarded-') && k !== 'forwarded' && k !== 'host'));
+    const headers = Object.fromEntries(Object.entries(req.headers).filter(([k]) => !hopHeaders.has(k) && !k.startsWith('x-forwarded-') && !k.startsWith('x-pc-trial-') && k !== 'forwarded' && k !== 'host'));
     headers.host = origin.host;
     headers['x-forwarded-host'] = origin.host;
     headers['x-forwarded-proto'] = 'https';
@@ -81,9 +83,15 @@ export function createPrivateGateway(config, { authenticate, validateUser } = {}
       // Reject encoded separators, dot segments and backslashes before dispatch.
       const raw = req.url ?? '/';
       if (/%(?:2f|5c|2e)|\\|(?:^|\/)\.{1,2}(?:\/|\?|$)/i.test(raw.split('?')[0])) return reply(res, 400, '{"error":"Invalid path"}');
-      const url = new URL(raw, origin);
+      let url = new URL(raw, origin);
       if (url.origin !== origin.origin) return reply(res, 400, '{"error":"Invalid origin"}');
-      if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !sameOrigin(req)) return reply(res, 403, '{"error":"Origin denied"}');
+      const bridge = url.pathname.startsWith('/_pc/bridge/');
+      if (bridge) {
+        if (!config.bridgeKey || !safePassword(req.headers['x-pc-trial-bridge'] ?? '', config.bridgeKey)) return reply(res, 401, '{"error":"Private bridge required"}');
+        url = new URL(url.pathname.slice('/_pc/bridge'.length) + url.search, origin);
+        if (!['/_pc/login', '/_pc/logout', '/_pc/session'].includes(url.pathname) && !url.pathname.startsWith('/_pc/supabase/') && !(imageReadPaths.has(url.pathname) && ['GET', 'HEAD'].includes(req.method))) return reply(res, 403, '{"error":"Bridge route denied"}');
+      }
+      if (!bridge && !['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !sameOrigin(req)) return reply(res, 403, '{"error":"Origin denied"}');
       if (url.pathname === '/_pc/login' || url.pathname === '/login') {
         if (req.method === 'GET') return loginPage(res);
         if (req.method !== 'POST') return reply(res, 405, '{}');
@@ -103,10 +111,12 @@ export function createPrivateGateway(config, { authenticate, validateUser } = {}
         res.writeHead(303, { location: '/home', 'cache-control': 'no-store', 'set-cookie': [...authCookies, serialize(gateCookie, session, { path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge: lifetime / 1000 })] });
         return res.end();
       }
-      if (!hasSession(req)) {
+      const serverApi = bridge && req.headers['x-pc-trial-browser'] !== '1' && url.pathname.startsWith('/_pc/supabase/');
+      if (!serverApi && !hasSession(req)) {
         if (req.method === 'GET' && (url.pathname === '/' || req.headers.accept?.includes('text/html'))) { res.writeHead(303, { location: '/_pc/login', 'cache-control': 'no-store' }); return res.end(); }
         return reply(res, 401, '{"error":"本人専用ログインが必要です"}');
       }
+      if (url.pathname === '/_pc/session') return reply(res, req.method === 'GET' ? 200 : 405, '{}');
       if (url.pathname === '/_pc/logout') {
         if (req.method !== 'POST') return reply(res, 405, '{}');
         const cookies = parse(req.headers.cookie ?? '');

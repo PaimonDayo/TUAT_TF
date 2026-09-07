@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database";
+import { pcServerOptions } from "./pc-server-options";
 
 /**
  * リクエストごとにセッションを更新し、未認証ユーザーを /login へ誘導する。
@@ -13,6 +14,7 @@ export async function updateSession(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      ...pcServerOptions(),
       ...(process.env.NEXT_PUBLIC_PC_TRIAL === "true" ? { cookieOptions: { name: "sb-pc-trial-auth" } } : {}),
       cookies: {
         getAll() {

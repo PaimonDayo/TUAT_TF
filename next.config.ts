@@ -1,11 +1,19 @@
 import type { NextConfig } from "next";
 
-if (process.env.NEXT_PUBLIC_PC_TRIAL === "true" && (process.env.VERCEL || process.env.NEXT_PUBLIC_SUPABASE_URL !== "http://127.0.0.1:8000")) {
-  throw new Error("PC trial requires a local build and the loopback Supabase API");
+const vercelPcTrial = process.env.PC_TRIAL_VERCEL === "true";
+if (process.env.NEXT_PUBLIC_PC_TRIAL === "true") {
+  if (vercelPcTrial) {
+    const bridge = process.env.PC_TRIAL_BRIDGE_URL ?? "";
+    if (process.env.VERCEL_ENV !== "preview" || !/^https:\/\/[a-z0-9-]+\.trycloudflare\.com\/_pc\/bridge$/.test(bridge) || process.env.NEXT_PUBLIC_SUPABASE_URL !== `${bridge}/_pc/supabase` || (process.env.PC_TRIAL_BRIDGE_KEY?.length ?? 0) < 32 || process.env.IMAGE_STORAGE_READ_ONLY !== "true") throw new Error("Vercel PC trial requires an isolated Preview and private PC bridge");
+  } else if (process.env.VERCEL || process.env.NEXT_PUBLIC_SUPABASE_URL !== "http://127.0.0.1:8000") {
+    throw new Error("PC trial requires a local build and the loopback Supabase API");
+  }
+} else if (vercelPcTrial) {
+  throw new Error("Vercel PC trial requires trial protections");
 }
 
 const nextConfig: NextConfig = {
-  ...(process.env.NEXT_PUBLIC_PC_TRIAL === "true" ? { distDir: ".next-pc-trial" } : {}),
+  ...(process.env.NEXT_PUBLIC_PC_TRIAL === "true" && !vercelPcTrial ? { distDir: ".next-pc-trial" } : {}),
   // 注意: cacheComponents(PPR) は有効化しない。
   // 2026-07-12 00:14 に「タブ復元の高速化」目的で有効化した直後から、実機iOS PWAで
   // 「別タブ→ホームで毎回完全フリーズ」「予定/タイムラインのフリーズ」「リロード時の
