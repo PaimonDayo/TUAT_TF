@@ -66,8 +66,9 @@ export default function RootLayout({
         <style>{`html[data-tuat-splash-skip="1"] .tuat-splash-root{display:none!important}`}</style>
       </head>
       <body className="min-h-full">
+        {process.env.NEXT_PUBLIC_PC_TRIAL === "true" && <div className="bg-amber-100 px-4 py-2 text-center text-xs text-amber-950"><p role="status">PC試験版・本人限定｜変更はPC内のみ。スプシ同期・Push通知・画像変更・リアルタイム配信は停止中</p><form method="post" action="/_pc/logout"><button type="submit" className="mt-1 underline">試験版からログアウト</button></form></div>}
         {children}
-        <ServiceWorkerRegistrar />
+        {process.env.NEXT_PUBLIC_PC_TRIAL !== "true" && <ServiceWorkerRegistrar />}
         <SplashIntro />
       </body>
     </html>

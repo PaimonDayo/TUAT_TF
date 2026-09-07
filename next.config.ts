@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
+if (process.env.NEXT_PUBLIC_PC_TRIAL === "true" && (process.env.VERCEL || process.env.NEXT_PUBLIC_SUPABASE_URL !== "http://127.0.0.1:8000")) {
+  throw new Error("PC trial requires a local build and the loopback Supabase API");
+}
+
 const nextConfig: NextConfig = {
+  ...(process.env.NEXT_PUBLIC_PC_TRIAL === "true" ? { distDir: ".next-pc-trial" } : {}),
   // 注意: cacheComponents(PPR) は有効化しない。
   // 2026-07-12 00:14 に「タブ復元の高速化」目的で有効化した直後から、実機iOS PWAで
   // 「別タブ→ホームで毎回完全フリーズ」「予定/タイムラインのフリーズ」「リロード時の
