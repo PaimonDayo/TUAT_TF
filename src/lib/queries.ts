@@ -1004,10 +1004,11 @@ export async function getUnreadNotificationCount(userId: string): Promise<number
 
 export async function getHomeCompetition() {
   const supabase = await createClient();
-  const [{data:competition,error:meetError},{data:goals,error:goalsError}] = await Promise.all([
+  const [{data:events,error:eventsError},{data:competition,error:meetError},{data:goals,error:goalsError}] = await Promise.all([
+    supabase.from("competition_events").select("name,sort_order").order("sort_order").order("name"),
     supabase.from("competitions").select("id,name,starts_on").eq("id",HOME_COMPETITION_ID).maybeSingle(),
     supabase.from("competition_goals").select("id,user_id,event,target,author:profiles!user_id(display_name)").eq("competition_id",HOME_COMPETITION_ID),
   ]);
-  if(meetError || goalsError) return null;
-  return { competition, goals: goals ?? [] };
+  if(meetError || goalsError || eventsError) return null;
+  return { competition, goals: goals ?? [], events: events ?? [] };
 }

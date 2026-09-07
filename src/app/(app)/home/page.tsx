@@ -74,9 +74,9 @@ export async function HomeContent() {
 async function CompetitionSection({profile}:{profile:Profile}) {
   const result = await getHomeCompetition();
   if (!result) return <p className="text-caption">大会情報を取得できませんでした</p>;
-  const { competition, goals } = result;
+  const { competition, goals, events } = result;
   if(!competition)return null;
-  return <CompetitionHome competition={competition} initialGoals={goals??[]} userId={profile.id} displayName={profile.display_name} canManage={permissionsOf(profile.roles).manageSystem} initialToday={jstToday()}/>;
+  return <CompetitionHome competition={competition} initialGoals={goals??[]} initialEvents={events} userId={profile.id} displayName={profile.display_name} canManage={permissionsOf(profile.roles).manageSystem} initialToday={jstToday()}/>;
 }
 
 async function NoticesSection({ userId }: { userId: string }) {
