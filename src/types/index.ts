@@ -607,11 +607,28 @@ export interface NoteArticleRow {
   body: string;
   created_at: string;
   updated_at: string;
+  /** 投票の設定。つぶやきの投票と同じ意味 */
+  poll_multiple: boolean;
+  poll_anonymous: boolean;
+  poll_allow_options: boolean;
+}
+
+/** ノート記事の投票の選択肢（集計込み） */
+export interface NotePollOption {
+  id: string;
+  article_id: string;
+  text: string;
+  created_by: string;
+  sort_order: number;
+  vote_count: number;
+  voted_by_me: boolean;
+  voters: TweetPollVoter[];
 }
 
 export interface NoteArticleWithAuthor extends NoteArticleRow {
   author: AuthorMini;
   images?: {id:string;path:string}[];
+  pollOptions?: NotePollOption[];
 }
 
 /** フィード（タイムライン）用の合成型 */

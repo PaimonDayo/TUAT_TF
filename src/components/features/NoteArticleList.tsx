@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Linkify } from "@/components/common/Linkify";
 import { NoteArticleActions } from "@/components/features/NoteArticleActions";
 import { NoteImages } from "@/components/features/NoteImages";
+import { NotePoll } from "@/components/features/NotePoll";
 import { cn } from "@/lib/utils";
 import type { AuthorMini, NoteArticleWithAuthor } from "@/types";
 
@@ -88,10 +89,27 @@ export function NoteArticleList({
 
             {open && (
               <div className="mt-3 border-t border-separator pt-3">
-                <NoteImages images={article.images}/>
+                {/* 本文 → 写真 → 投票 の順。記事詳細と同じ並びにする。 */}
                 <p className="whitespace-pre-wrap break-words text-[14px]">
                   <Linkify text={isLong ? article.body.slice(0, LONG_BODY) + "…" : article.body} />
                 </p>
+                <NoteImages images={article.images}/>
+                {article.pollOptions && article.pollOptions.length > 0 && (
+                  <div className="mt-3">
+                    <NotePoll
+                      articleId={article.id}
+                      userId={currentUser.id}
+                      userName={currentUser.display_name}
+                      userAvatarUrl={currentUser.avatar_url}
+                      userBlocks={currentUser.blocks}
+                      userGrade={currentUser.grade}
+                      options={article.pollOptions}
+                      multiple={article.poll_multiple}
+                      anonymous={article.poll_anonymous}
+                      allowOptions={article.poll_allow_options}
+                    />
+                  </div>
+                )}
                 {isLong && (
                   <Link
                     href={`/notes/${noteId}/articles/${article.id}`}

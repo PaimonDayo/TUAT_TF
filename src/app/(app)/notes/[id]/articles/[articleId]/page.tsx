@@ -5,6 +5,7 @@ import { Avatar } from "@/components/common/Avatar";
 import { Linkify } from "@/components/common/Linkify";
 import { NoteArticleActions } from "@/components/features/NoteArticleActions";
 import { NoteImages } from "@/components/features/NoteImages";
+import { NotePoll } from "@/components/features/NotePoll";
 import { SubHeader } from "@/components/layout/SubHeader";
 import { Card } from "@/components/ui/card";
 import { getNoteArticleById, getNoteById } from "@/lib/queries";
@@ -81,6 +82,20 @@ export default async function NoteArticlePage({
             <Linkify text={article.body} />
           </div>
           <NoteImages images={article.images}/>
+          {article.pollOptions && article.pollOptions.length > 0 && (
+            <NotePoll
+              articleId={article.id}
+              userId={profile.id}
+              userName={profile.display_name}
+              userAvatarUrl={profile.avatar_url}
+              userBlocks={profile.blocks}
+              userGrade={profile.grade}
+              options={article.pollOptions}
+              multiple={article.poll_multiple}
+              anonymous={article.poll_anonymous}
+              allowOptions={article.poll_allow_options}
+            />
+          )}
         </Card>
       </article>
     </>

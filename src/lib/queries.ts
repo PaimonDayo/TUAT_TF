@@ -34,6 +34,7 @@ import type {
   NoticeReaction,
   NoticeWithReactions,
   NoteArticleWithAuthor,
+  NotePollOption,
   NoteWithRelations,
   AppNotificationWithActor,
   TweetWithAuthor,
@@ -937,7 +938,30 @@ export async function getNoteArticles(
     `)
     .eq("note_id", noteId)
     .order("updated_at", { ascending: false });
-  return (data ?? []).map(normalizeNoteArticleRow);
+  return attachNotePolls(supabase, (data ?? []).map(normalizeNoteArticleRow));
+}
+
+/**
+ * 記事に投票の選択肢と集計を付ける。票そのものは本人の分しか読めないので、
+ * 集計は閲覧可否を確かめる関数（get_note_poll_options）から受け取る。
+ */
+async function attachNotePolls(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  articles: NoteArticleWithAuthor[],
+): Promise<NoteArticleWithAuthor[]> {
+  const ids = articles.map((article) => article.id);
+  if (ids.length === 0) return articles;
+  const { data } = await supabase.rpc("get_note_poll_options", { article_ids: ids });
+  const byArticle = new Map(
+    (data ?? []).map((row) => [
+      row.article_id,
+      (Array.isArray(row.options) ? row.options : []) as unknown as NotePollOption[],
+    ]),
+  );
+  return articles.map((article) => {
+    const options = byArticle.get(article.id) ?? [];
+    return options.length ? { ...article, pollOptions: options } : article;
+  });
 }
 
 /** 記事詳細。親フォルダのRLSにより閲覧不可ならnull */
@@ -956,7 +980,9 @@ export async function getNoteArticleById(
     .eq("note_id", noteId)
     .eq("id", articleId)
     .maybeSingle();
-  return data ? normalizeNoteArticleRow(data) : null;
+  if (!data) return null;
+  const [article] = await attachNotePolls(supabase, [normalizeNoteArticleRow(data)]);
+  return article;
 }
 
 /** ホームに表示する最近の共有ノート（RLSで閲覧可能なもの） */

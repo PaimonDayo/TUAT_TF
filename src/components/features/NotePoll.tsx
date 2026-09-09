@@ -1,12 +1,11 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
-import { PollView, type PollApi } from "@/components/features/PollView";
-import type { TweetPollOption } from "@/types";
+import { PollView, type PollApi, type PollOption } from "@/components/features/PollView";
 
-/** つぶやきの投票。表示と操作は PollView と共通で、保存先だけがここで決まる。 */
-export function TweetPoll({
-  tweetId,
+/** ノート記事の投票。つぶやきの投票と同じ見た目・同じ操作で、保存先だけが違う。 */
+export function NotePoll({
+  articleId,
   userId,
   userName,
   userAvatarUrl,
@@ -17,13 +16,13 @@ export function TweetPoll({
   anonymous,
   allowOptions,
 }: {
-  tweetId: string;
+  articleId: string;
   userId: string;
   userName: string;
   userAvatarUrl: string | null;
   userBlocks: import("@/types").Block[];
   userGrade: string | null;
-  options: TweetPollOption[];
+  options: PollOption[];
   multiple: boolean;
   anonymous: boolean;
   allowOptions: boolean;
@@ -31,13 +30,13 @@ export function TweetPoll({
   const api: PollApi = {
     async addVote(optionId) {
       const { error } = await createClient()
-        .from("tweet_poll_votes")
+        .from("note_poll_votes")
         .insert({ option_id: optionId, user_id: userId });
       return !error;
     },
     async removeVotes(optionIds) {
       const { error } = await createClient()
-        .from("tweet_poll_votes")
+        .from("note_poll_votes")
         .delete()
         .in("option_id", optionIds)
         .eq("user_id", userId);
@@ -45,8 +44,8 @@ export function TweetPoll({
     },
     async addOption(text, sortOrder) {
       const { data, error } = await createClient()
-        .from("tweet_poll_options")
-        .insert({ tweet_id: tweetId, text, created_by: userId, sort_order: sortOrder })
+        .from("note_poll_options")
+        .insert({ article_id: articleId, text, created_by: userId, sort_order: sortOrder })
         .select("*")
         .single();
       if (error || !data) return null;

@@ -480,6 +480,9 @@ export type Database = {
           id: string
           note_id: string
           pinned: boolean
+          poll_allow_options: boolean
+          poll_anonymous: boolean
+          poll_multiple: boolean
           title: string
           updated_at: string
         }
@@ -490,6 +493,9 @@ export type Database = {
           id?: string
           note_id: string
           pinned?: boolean
+          poll_allow_options?: boolean
+          poll_anonymous?: boolean
+          poll_multiple?: boolean
           title: string
           updated_at?: string
         }
@@ -500,6 +506,9 @@ export type Database = {
           id?: string
           note_id?: string
           pinned?: boolean
+          poll_allow_options?: boolean
+          poll_anonymous?: boolean
+          poll_multiple?: boolean
           title?: string
           updated_at?: string
         }
@@ -523,6 +532,67 @@ export type Database = {
             columns: ["note_id"]
             isOneToOne: false
             referencedRelation: "notes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      note_poll_options: {
+        Row: {
+          article_id: string
+          created_at: string
+          created_by: string
+          id: string
+          sort_order: number
+          text: string
+        }
+        Insert: {
+          article_id: string
+          created_at?: string
+          created_by: string
+          id?: string
+          sort_order?: number
+          text: string
+        }
+        Update: {
+          article_id?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          sort_order?: number
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "note_poll_options_article_id_fkey"
+            columns: ["article_id"]
+            isOneToOne: false
+            referencedRelation: "note_articles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      note_poll_votes: {
+        Row: {
+          created_at: string
+          option_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          option_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          option_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "note_poll_votes_option_id_fkey"
+            columns: ["option_id"]
+            isOneToOne: false
+            referencedRelation: "note_poll_options"
             referencedColumns: ["id"]
           },
         ]
@@ -1992,6 +2062,10 @@ export type Database = {
       get_tweet_feed_extras: {
         Args: { tweet_ids: string[] }
         Returns: { mentions: Json; options: Json; tweet_id: string }[]
+      }
+      get_note_poll_options: {
+        Args: { article_ids: string[] }
+        Returns: { article_id: string; options: Json }[]
       }
       claim_sheet_sync_chunk: {
         Args: { requested_chunk_size?: number; reset_cycle?: boolean }
