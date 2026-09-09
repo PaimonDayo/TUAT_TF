@@ -10,14 +10,22 @@ import { useToast } from "@/components/ui/toast";
 import { ResultsList } from "@/components/features/ResultsList";
 import { ResultForm, type ResultFormHandle } from "@/components/post/ResultForm";
 import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
-import type { PbRecord } from "@/types";
+import type { CompetitionEvent } from "@/lib/competition-goals";
+import type { CompetitionRow, PbRecord } from "@/types";
 
 export function PbManager({
   userId,
   initial,
+  events,
+  competitions,
+  addLabel = "結果を追加",
 }: {
+  /** 結果の持ち主。システム管理者が他の部員の結果を直すときは本人以外になる */
   userId: string;
   initial: PbRecord[];
+  events: CompetitionEvent[];
+  competitions: CompetitionRow[];
+  addLabel?: string;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -54,10 +62,10 @@ export function PbManager({
   return (
     <>
       <div className="space-y-3">
-        <ResultsList results={items} onEdit={openEdit} onDelete={remove} />
+        <ResultsList results={items} events={events} onEdit={openEdit} onDelete={remove} />
 
         <Button variant="outline" size="lg" onClick={openAdd} className="gap-2">
-          <Plus size={18} /> 結果を追加
+          <Plus size={18} /> {addLabel}
         </Button>
       </div>
 
@@ -72,6 +80,8 @@ export function PbManager({
             onDirtyChange={setDirty}
             key={editTarget?.id ?? "new"}
             userId={userId}
+            events={events}
+            competitions={competitions}
             initial={editTarget ?? undefined}
             onDone={(saved) => {
               if (saved) {

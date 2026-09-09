@@ -5,6 +5,14 @@ import { Trophy, ChevronDown, ChevronUp } from "lucide-react";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import {
+  formatRecord,
+  formatRecordedOn,
+  formatWind,
+  measureTypeOf,
+  recordGroupKey,
+} from "@/lib/competition-record";
+import type { CompetitionEvent } from "@/lib/competition-goals";
 import type { PbRecord } from "@/types";
 
 const PREVIEW = 5;
@@ -12,15 +20,17 @@ const PREVIEW = 5;
 /**
  * 大会・記録会の結果リスト。
  * - 既定は直近 PREVIEW 件、「すべて見る」で全件展開
- * - 年ごとにグループ表示
- * - onDelete を渡すと各行に削除ボタン（自分の管理画面用）
+ * - 大学は年ごと、大学以前はひとまとめに表示
+ * - onEdit / onDelete を渡すと各行に操作メニュー（本人とシステム管理者）
  */
 export function ResultsList({
   results,
+  events = [],
   onEdit,
   onDelete,
 }: {
   results: PbRecord[];
+  events?: CompetitionEvent[];
   onEdit?: (pb: PbRecord) => void;
   onDelete?: (id: string) => void | boolean | Promise<void | boolean>;
 }) {
@@ -37,25 +47,20 @@ export function ResultsList({
     );
   }
 
-  // PB/UB は「種目ごとに記録日が最新のもの」だけにバッジを付ける（入力順ではなく日付で判定）
-  const pbWinners = computeWinners(results, "is_pb");
-  const ubWinners = computeWinners(results, "is_ub");
-
   const shown = expanded ? results : results.slice(0, PREVIEW);
-  const groups = groupByYear(shown);
+  const groups = groupRows(shown);
 
   return (
     <div className="space-y-3">
-      {groups.map(([year, rows]) => (
-        <div key={year} className="space-y-1.5">
-          <p className="section-label">{year}</p>
+      {groups.map(([label, rows]) => (
+        <div key={label} className="space-y-1.5">
+          <p className="section-label">{label}</p>
           <Card className="divide-y divide-separator">
             {rows.map((pb) => (
               <ResultRow
                 key={pb.id}
                 pb={pb}
-                showPb={pbWinners.has(pb.id)}
-                showUb={ubWinners.has(pb.id)}
+                events={events}
                 onEdit={onEdit}
                 onDelete={onDelete}
               />
@@ -86,28 +91,33 @@ export function ResultsList({
 
 function ResultRow({
   pb,
-  showPb,
-  showUb,
+  events,
   onEdit,
   onDelete,
 }: {
   pb: PbRecord;
-  showPb: boolean;
-  showUb: boolean;
+  events: CompetitionEvent[];
   onEdit?: (pb: PbRecord) => void;
   onDelete?: (id: string) => void | boolean | Promise<void | boolean>;
 }) {
+  const detail = [
+    pb.meet_name,
+    formatRecordedOn(pb.recorded_on, pb.date_precision),
+    pb.wind !== null && pb.wind !== undefined ? `風速 ${formatWind(pb.wind)}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ・ ");
   return (
     <div className="p-3.5 flex items-center gap-3">
       <div className="flex-1 min-w-0">
         <p className="text-headline flex items-center gap-1.5 flex-wrap">
           {pb.event_name}
-          {showPb && (
+          {pb.is_pb && (
             <span className="text-[10px] font-bold text-warning border border-warning rounded px-1 leading-tight">
               PB
             </span>
           )}
-          {showUb && (
+          {pb.is_ub && (
             <span className="text-[10px] font-bold text-accent border border-accent rounded px-1 leading-tight">
               UB
             </span>
@@ -118,13 +128,11 @@ function ResultRow({
             </span>
           )}
         </p>
-        {(pb.meet_name || pb.recorded_on) && (
-          <p className="text-caption">
-            {[pb.meet_name, pb.recorded_on].filter(Boolean).join(" ・ ")}
-          </p>
-        )}
+        {detail && <p className="text-caption">{detail}</p>}
       </div>
-      <span className="text-title tabular-nums">{pb.record}</span>
+      <span className="text-title tabular-nums">
+        {formatRecord(pb, measureTypeOf(events, pb.event_name))}
+      </span>
       {(onEdit || onDelete) && (
         <ActionMenu
           onEdit={onEdit ? () => onEdit(pb) : undefined}
@@ -138,32 +146,14 @@ function ResultRow({
   );
 }
 
-/** a の記録日が b より新しいか（日付ありは日付なしより新しい扱い） */
-function isNewer(a: string | null, b: string | null): boolean {
-  if (a && b) return a > b;
-  if (a && !b) return true;
-  return false;
-}
-
-/** 種目ごとに、フラグ(is_pb/is_ub)が立っている中で記録日が最新の1件の id を集める */
-function computeWinners(rows: PbRecord[], key: "is_pb" | "is_ub"): Set<string> {
-  const best = new Map<string, PbRecord>();
-  for (const r of rows) {
-    if (!r[key]) continue;
-    const cur = best.get(r.event_name);
-    if (!cur || isNewer(r.recorded_on, cur.recorded_on)) best.set(r.event_name, r);
-  }
-  return new Set([...best.values()].map((r) => r.id));
-}
-
-/** recorded_on の年でグループ化（新しい年が先。日付なしは最後） */
-function groupByYear(rows: PbRecord[]): [string, PbRecord[]][] {
+/** 大学は年ごと、大学以前はまとめて（新しい年が先。日付なしは最後） */
+function groupRows(rows: PbRecord[]): [string, PbRecord[]][] {
   const map = new Map<string, PbRecord[]>();
   for (const r of rows) {
-    const year = r.recorded_on ? `${r.recorded_on.slice(0, 4)}年` : "日付未設定";
-    const arr = map.get(year) ?? [];
+    const key = recordGroupKey(r);
+    const arr = map.get(key) ?? [];
     arr.push(r);
-    map.set(year, arr);
+    map.set(key, arr);
   }
   return [...map.entries()];
 }
