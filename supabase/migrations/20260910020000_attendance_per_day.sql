@@ -25,10 +25,10 @@ BEGIN
    WHERE c.conrelid = 'public.attendances'::regclass
      AND c.contype = 'u'
      AND (
-       SELECT array_agg(a.attname ORDER BY a.attname)
+       SELECT array_agg(a.attname::text ORDER BY a.attname::text)
          FROM unnest(c.conkey) AS k
          JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k
-     ) = ARRAY['schedule_id', 'user_id'];
+     ) = ARRAY['schedule_id', 'user_id']::text[];
   IF target IS NOT NULL THEN
     EXECUTE format('ALTER TABLE public.attendances DROP CONSTRAINT %I', target);
   END IF;
