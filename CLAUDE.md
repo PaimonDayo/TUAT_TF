@@ -1,1 +1,3 @@
 @AGENTS.md
+
+@ops/laptop/CLAUDE-PRODUCTION-UPDATE.md
