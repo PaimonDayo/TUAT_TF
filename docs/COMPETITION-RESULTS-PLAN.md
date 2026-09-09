@@ -49,3 +49,24 @@
 - 実機（iOS PWA）での確認。
 - 目標と結果の突き合わせ（同じ `competition_id` を持つので、後から「目標 4'00" / 結果 4'02"」の
   振り返りを作れる）。
+
+## 引き継ぎ（Supabase 側の作業。2026-09-09 Claude Opus 5 → Codex）
+
+コードは `claude/competition-record-input-standardization-0bca68` に3コミット（`a805f96` / `c925b3c` / `59d318e` / `e238490`）。
+tsc・全214テスト・対象eslint・build（ダミーSupabase設定）は通っている。**本番DBには何も適用していない。**
+このセッションには接続情報が無く `supabase login` も未認証だったため、以下は未実施。
+
+1. **migration の適用**（先にこれ。適用前に master へ入れると、大会・種目・目標の一覧が空表示になり結果の保存がエラーになる）
+   - `supabase/migrations/20260909010000_competition_results_v2.sql`
+   - `"Y" | npx --yes supabase db push`
+   - 内容は列追加とポリシー・トリガー追加のみで、既存行の書き換えは
+     `competitions.is_countdown`（27大戦を1件 true）と `competition_events.measure_type`（跳躍投擲=distance・混成=points）だけ。
+   - 追加されるもの: `competitions`(ends_on/sort_order/is_countdown＋INSERT・DELETEポリシー),
+     `competition_events.measure_type`, `pb_records`(competition_id/stage/date_precision/result_status/wind/value_cs/value_cm/value_points),
+     PB・UBを種目ごと1件にするトリガー, 種目名変更を結果へ伝播するトリガー, pb_records の update/delete を
+     `auth.uid()=user_id OR can_manage_system()` へ緩和。
+2. **master へ fast-forward して push** → Vercel Production が READY になるまで確認。
+3. **既存データの正規化**（上の「既存データの修正方針」の1〜5）。まだ何も実行していない。
+   `npx tsx --env-file=.env.local scripts/dryrun-pb-normalize.ts` が書き込みなしの確認用。
+4. iOS 実機確認（結果フォームの種目・記録の入力欄の切替、大会選択で記録日が入ること、
+   /events・/competitions のドラッグ並べ替え、目標ページのPB併記）。
