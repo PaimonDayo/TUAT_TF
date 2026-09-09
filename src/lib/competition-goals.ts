@@ -1,9 +1,15 @@
 import { EVENTS_BY_BLOCK } from "./constants";
 export type GoalDraft = { event: string; target: string };
 export type EventOrder = "standard" | "middle_long" | "short";
-export type CompetitionEvent = { name: string; sort_order: number };
+export type CompetitionEvent = {
+  name: string;
+  sort_order: number;
+  measure_type: string;
+};
 /** Block preference changes priority, never removes another block's events. */
-export function orderCompetitionEvents<T extends CompetitionEvent>(
+export function orderCompetitionEvents<
+  T extends { name: string; sort_order: number },
+>(
   events: T[],
   order: EventOrder,
 ): T[] {

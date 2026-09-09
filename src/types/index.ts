@@ -470,13 +470,56 @@ export interface PbRecord {
   id: string;
   user_id: string;
   event_name: string;
+  /** 表示用の記録。構造化した値があるときは保存時にそこから組み立てる */
   record: string;
   meet_name: string | null;
+  /** 部で統一している大会を選んだときだけ入る。記録会などの自由入力は meet_name */
+  competition_id: string | null;
   recorded_on: string | null;
+  /** 記録日をどこまで入力したか（日・月・年） */
+  date_precision: "day" | "month" | "year";
+  /** 大学 / 大学以前。大学以前は日付を入れなくてよい */
+  stage: "university" | "pre_university";
+  result_status: "ok" | "DNS" | "DNF" | "DQ" | "NM";
+  wind: number | null;
+  value_cs: number | null;
+  value_cm: number | null;
+  value_points: number | null;
   is_pb: boolean;
   is_ub: boolean;
   is_official: boolean;
   created_at: string;
+}
+
+/** 大会ごとの目標（種目別） */
+export interface CompetitionGoalRow {
+  id: string;
+  user_id: string;
+  event: string;
+  target: string;
+  author: { display_name: string } | null;
+}
+
+/** 目標の横に出す本人のPB（種目ごとに1件） */
+export interface PersonalBestRow {
+  user_id: string;
+  event_name: string;
+  record: string;
+  value_cs: number | null;
+  value_cm: number | null;
+  value_points: number | null;
+  result_status: string;
+}
+
+/** 部で統一している大会（対抗戦など）。管理者が管理する */
+export interface CompetitionRow {
+  id: string;
+  name: string;
+  starts_on: string;
+  ends_on: string | null;
+  sort_order: number;
+  /** ホームのカウントダウンに出す大会（同時に1つだけ） */
+  is_countdown: boolean;
 }
 
 export interface WeeklyRankingRow {

@@ -1,4 +1,3 @@
-import { HOME_COMPETITION_ID } from "@/lib/competition";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRolesByProfileIds } from "@/lib/supabase/auth";
 import { viewerCompetitionBlocks } from "@/lib/constants";
@@ -28,6 +27,10 @@ import type {
   RoleCategory,
   AuthorMini,
   Notice,
+  CompetitionRow,
+  CompetitionGoalRow,
+  PersonalBestRow,
+  PbRecord,
   NoticeReaction,
   NoticeWithReactions,
   NoteArticleWithAuthor,
@@ -453,7 +456,7 @@ export async function getPbRecords(userId: string) {
     .select("*")
     .eq("user_id", userId)
     .order("recorded_on", { ascending: false, nullsFirst: false });
-  return data ?? [];
+  return (data ?? []) as PbRecord[];
 }
 
 /** プロフィール単体取得（他部員ページ用。ロール込み） */
@@ -1002,13 +1005,110 @@ export async function getUnreadNotificationCount(userId: string): Promise<number
   return count ?? 0;
 }
 
+export const COMPETITION_SELECT = "id,name,starts_on,ends_on,sort_order,is_countdown";
+/** 部で統一している大会（対抗戦など）の一覧 */
+export async function getCompetitions() {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("competitions")
+    .select(COMPETITION_SELECT)
+    .order("sort_order")
+    .order("starts_on", { ascending: false });
+  return (data ?? []) as CompetitionRow[];
+}
+
+/** 種目マスタ（表示順） */
+export async function getCompetitionEvents() {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("competition_events")
+    .select("name,sort_order,measure_type")
+    .order("sort_order")
+    .order("name");
+  return data ?? [];
+}
+
+/** ホームのカウントダウン。管理者が選んだ大会（無ければ非表示） */
 export async function getHomeCompetition() {
   const supabase = await createClient();
-  const [{data:events,error:eventsError},{data:competition,error:meetError},{data:goals,error:goalsError}] = await Promise.all([
-    supabase.from("competition_events").select("name,sort_order").order("sort_order").order("name"),
-    supabase.from("competitions").select("id,name,starts_on").eq("id",HOME_COMPETITION_ID).maybeSingle(),
-    supabase.from("competition_goals").select("id,user_id,event,target,author:profiles!user_id(display_name)").eq("competition_id",HOME_COMPETITION_ID),
+  const { data: competition, error } = await supabase
+    .from("competitions")
+    .select(COMPETITION_SELECT)
+    .eq("is_countdown", true)
+    .maybeSingle();
+  if (error || !competition) return null;
+  const { count } = await supabase
+    .from("competition_goals")
+    .select("user_id", { count: "exact", head: true })
+    .eq("competition_id", competition.id);
+  return { competition: competition as CompetitionRow, goalCount: count ?? 0 };
+}
+
+/** 目標一覧ページ（大会別）。目標の横に出す本人のPBも一緒に読む */
+export async function getCompetitionGoals(competitionId: string) {
+  const supabase = await createClient();
+  const [{ data: goals }, events, competitions] = await Promise.all([
+    supabase
+      .from("competition_goals")
+      .select("id,user_id,event,target,author:profiles!user_id(display_name)")
+      .eq("competition_id", competitionId),
+    getCompetitionEvents(),
+    getCompetitions(),
   ]);
-  if(meetError || goalsError || eventsError) return null;
-  return { competition, goals: goals ?? [], events: events ?? [] };
+  const rows = (goals ?? []) as unknown as CompetitionGoalRow[];
+  const userIds = [...new Set(rows.map((g) => g.user_id))];
+  const { data: bests } = userIds.length
+    ? await supabase
+        .from("pb_records")
+        .select("user_id,event_name,record,value_cs,value_cm,value_points,result_status")
+        .eq("is_pb", true)
+        .in("user_id", userIds)
+    : { data: [] };
+  return {
+    goals: rows,
+    events,
+    competitions,
+    personalBests: (bests ?? []) as PersonalBestRow[],
+  };
+}
+
+/** ある大会の結果（大会別の一覧ページ用） */
+export async function getCompetitionResults(competitionId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("pb_records")
+    .select("*,author:profiles!user_id(display_name)")
+    .eq("competition_id", competitionId)
+    .order("event_name");
+  return (data ?? []) as unknown as (PbRecord & {
+    author: { display_name: string } | null;
+  })[];
+}
+
+/** 結果に入力されているがマスタに無い種目名（表記統一の入口） */
+export async function getUnregisteredEventNames() {
+  const supabase = await createClient();
+  const [{ data: records }, events] = await Promise.all([
+    supabase.from("pb_records").select("event_name"),
+    getCompetitionEvents(),
+  ]);
+  const known = new Set(events.map((e) => e.name));
+  const counts = new Map<string, number>();
+  for (const row of records ?? []) {
+    if (known.has(row.event_name)) continue;
+    counts.set(row.event_name, (counts.get(row.event_name) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "ja"));
+}
+
+export async function getCompetitionById(id: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("competitions")
+    .select(COMPETITION_SELECT)
+    .eq("id", id)
+    .maybeSingle();
+  return (data as CompetitionRow | null) ?? null;
 }

@@ -15,9 +15,9 @@ export type Database = {
   public: {
     Tables: {
       competition_events: {
-        Row: { name: string; sort_order: number }
-        Insert: { name: string; sort_order?: number }
-        Update: { name?: string; sort_order?: number }
+        Row: { name: string; sort_order: number; measure_type: string }
+        Insert: { name: string; sort_order?: number; measure_type?: string }
+        Update: { name?: string; sort_order?: number; measure_type?: string }
         Relationships: []
       }
       note_image_cleanup: {
@@ -83,18 +83,27 @@ export type Database = {
       }
       competitions: {
         Row: {
+          ends_on: string | null
           id: string
+          is_countdown: boolean
           name: string
+          sort_order: number
           starts_on: string
         }
         Insert: {
+          ends_on?: string | null
           id: string
+          is_countdown?: boolean
           name: string
+          sort_order?: number
           starts_on: string
         }
         Update: {
+          ends_on?: string | null
           id?: string
+          is_countdown?: boolean
           name?: string
+          sort_order?: number
           starts_on?: string
         }
         Relationships: []
@@ -890,6 +899,7 @@ export type Database = {
       }
       pb_records: {
         Row: {
+          competition_id: string | null
           created_at: string
           event_name: string
           id: string
@@ -900,9 +910,18 @@ export type Database = {
           record: string
           recorded_on: string | null
           user_id: string
+          date_precision: string
+          result_status: string
+          stage: string
+          value_cm: number | null
+          value_cs: number | null
+          value_points: number | null
+          wind: number | null
         }
         Insert: {
+          competition_id?: string | null
           created_at?: string
+          date_precision?: string
           event_name: string
           id?: string
           is_official?: boolean
@@ -911,10 +930,18 @@ export type Database = {
           meet_name?: string | null
           record: string
           recorded_on?: string | null
+          result_status?: string
+          stage?: string
           user_id: string
+          value_cm?: number | null
+          value_cs?: number | null
+          value_points?: number | null
+          wind?: number | null
         }
         Update: {
+          competition_id?: string | null
           created_at?: string
+          date_precision?: string
           event_name?: string
           id?: string
           is_official?: boolean
@@ -923,7 +950,13 @@ export type Database = {
           meet_name?: string | null
           record?: string
           recorded_on?: string | null
+          result_status?: string
+          stage?: string
           user_id?: string
+          value_cm?: number | null
+          value_cs?: number | null
+          value_points?: number | null
+          wind?: number | null
         }
         Relationships: [
           {

@@ -1,34 +1,37 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Settings2 } from "lucide-react";
+import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { cn } from "@/lib/utils";
 import type { CompetitionEvent, EventOrder } from "@/lib/competition-goals";
-import type { CompetitionGoal } from "./CompetitionHome";
+import type { CompetitionGoalRow } from "@/types";
 
+/**
+ * 大会ごとの目標一覧（種目別・部員別）。
+ * 各行には本人の PB を併記する（目標だけでは狙っている位置が分からないため）。
+ */
 export function CompetitionGoalBoard({
   goals,
   events,
   userId,
-  meetName,
+  personalBests,
   order,
   onOrder,
   onEdit,
   onDelete,
-  onManage,
   busy,
 }: {
-  goals: CompetitionGoal[];
+  goals: CompetitionGoalRow[];
   events: CompetitionEvent[];
   userId: string;
-  meetName: string;
+  /** `${user_id} ${event}` → PB の表示文字列 */
+  personalBests: Map<string, string>;
   order: EventOrder;
   onOrder: (order: EventOrder) => void;
-  onEdit: (goal: CompetitionGoal) => void;
+  onEdit: (goal: CompetitionGoalRow) => void;
   onDelete: (id: string) => Promise<boolean>;
-  onManage?: () => void;
   busy: boolean;
 }) {
   const [mode, setMode] = useState<"event" | "person">("event");
@@ -52,7 +55,7 @@ export function CompetitionGoalBoard({
           .includes(needle)),
   );
   const eventIndex = new Map(events.map((e, i) => [e.name, i]));
-  const byName = (a: CompetitionGoal, b: CompetitionGoal) =>
+  const byName = (a: CompetitionGoalRow, b: CompetitionGoalRow) =>
     (a.author?.display_name ?? "部員").localeCompare(
       b.author?.display_name ?? "部員",
       "ja",
@@ -81,25 +84,8 @@ export function CompetitionGoalBoard({
         }));
 
   return (
-    <div className="pb-20">
-      <div className="sticky -top-3 z-10 -mx-4 space-y-2 border-b border-separator bg-bg px-4 pb-3 pt-3">
-        <div className="flex items-center justify-between gap-2">
-          <p className="min-w-0 truncate text-caption">
-            {meetName} · {new Set(goals.map((g) => g.user_id)).size}人 /{" "}
-            {goals.length}件
-          </p>
-          {onManage && (
-            <button
-              type="button"
-              onClick={onManage}
-              disabled={busy}
-              className="flex shrink-0 items-center gap-1 py-2 text-[12px] text-muted"
-            >
-              <Settings2 size={14} />
-              種目設定
-            </button>
-          )}
-        </div>
+    <div>
+      <div className="sticky top-0 z-10 -mx-4 space-y-2 border-b border-separator bg-bg px-4 pb-3 pt-2">
         <div className="flex items-center gap-2">
           <div
             className="flex min-w-0 flex-1 rounded-xl bg-separator/50 p-0.5"
@@ -177,12 +163,21 @@ export function CompetitionGoalBoard({
             <option value="short">短距離を先に</option>
           </select>
         </div>
+        <p className="text-[12px] text-muted" role="status">
+          {new Set(visible.map((g) => g.user_id)).size}人 / {visible.length}件
+          {needle || activeEvent || ownOnly ? `（全${goals.length}件）` : ""}
+        </p>
       </div>
-      <p className="py-3 text-[12px] text-muted" role="status">
-        {visible.length}件を表示
-        {needle || activeEvent || ownOnly ? ` / 全${goals.length}件` : ""}
-      </p>
-      <div className="space-y-5">
+
+      {visible.length === 0 && (
+        <p className="py-10 text-center text-caption">
+          {goals.length === 0
+            ? "まだ目標はありません"
+            : "条件に合う目標はありません"}
+        </p>
+      )}
+
+      <div className="space-y-5 pt-3">
         {groups
           .filter((group) => group.rows.length > 0)
           .map((group) => (
@@ -202,9 +197,9 @@ export function CompetitionGoalBoard({
               <div className="overflow-hidden rounded-xl border border-separator bg-card">
                 <table className="w-full table-fixed border-collapse text-left">
                   <colgroup>
-                    <col className="w-[30%] md:w-[24%]" />
+                    <col className="w-[34%] md:w-[26%]" />
                     <col />
-                    <col className="w-10" />
+                    <col className="w-9" />
                   </colgroup>
                   <thead className="border-b border-separator bg-bg">
                     <tr>
@@ -212,7 +207,7 @@ export function CompetitionGoalBoard({
                         scope="col"
                         className="px-3 py-2 text-[11px] font-medium text-muted"
                       >
-                        {mode === "event" ? "名前" : "種目"}
+                        {mode === "event" ? "名前 / PB" : "種目 / PB"}
                       </th>
                       <th
                         scope="col"
@@ -228,8 +223,10 @@ export function CompetitionGoalBoard({
                   <tbody>
                     {group.rows.map((g) => {
                       const long =
-                        g.target.length > 70 || g.target.split("\n").length > 3;
+                        g.target.length > 70 ||
+                        g.target.split(String.fromCharCode(10)).length > 3;
                       const isExpanded = expanded.has(g.id);
+                      const pb = personalBests.get(`${g.user_id} ${g.event}`);
                       return (
                         <tr
                           key={g.id}
@@ -252,6 +249,9 @@ export function CompetitionGoalBoard({
                                 自分
                               </span>
                             )}
+                            <span className="mt-0.5 block text-[11px] font-normal tabular-nums text-muted">
+                              {pb ? `PB ${pb}` : "PB 未登録"}
+                            </span>
                           </th>
                           <td className="px-2 py-3 align-top">
                             <p
@@ -302,20 +302,6 @@ export function CompetitionGoalBoard({
             </section>
           ))}
       </div>
-      {visible.length === 0 && (
-        <div className="py-12 text-center">
-          <p className="text-body">
-            {goals.length
-              ? "条件に合う目標はありません"
-              : "まだ目標はありません"}
-          </p>
-          <p className="mt-2 text-caption">
-            {goals.length
-              ? "検索や絞り込みを変更してください。"
-              : "右下の＋から、出場種目の目標を追加できます。"}
-          </p>
-        </div>
-      )}
     </div>
   );
 }
