@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { X } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -121,20 +121,21 @@ export function FullScreenContent({
         className={cn(
           // 既定は dvh で全画面。キーボード表示時は viewportStyle が高さを上書きし、
           // ヘッダー(閉じる)・スクロール領域・フッター(投稿)を可視領域内に収める。
-          "sheet-content fixed inset-x-0 top-0 z-50 mx-auto h-dvh w-full max-w-md bg-bg flex flex-col outline-none md:max-w-2xl",
+          "fullscreen-content fixed inset-x-0 top-0 z-50 mx-auto h-dvh w-full max-w-md bg-bg flex flex-col outline-none md:max-w-2xl",
           className,
         )}
       >
-        {/* 固定ヘッダー */}
-        <div className="h-12 shrink-0 box-content flex items-center justify-between border-b border-separator bg-bg px-2 pt-[env(safe-area-inset-top)]">
+        {/* 固定ヘッダー。左上はページと同じ「‹戻る」に揃える（閉じる操作は従来どおり） */}
+        <div className="h-12 shrink-0 box-content grid grid-cols-[1fr_auto_1fr] items-center border-b border-separator bg-bg px-2 pt-[env(safe-area-inset-top)]">
           <Dialog.Close
-            aria-label="閉じる"
-            className="h-9 w-9 flex items-center justify-center text-muted active:opacity-50"
+            aria-label="戻る"
+            className="justify-self-start h-9 pl-1 pr-2 flex items-center gap-0.5 text-accent active:opacity-50 text-[15px]"
           >
-            <X size={22} />
+            <ChevronLeft size={24} />
+            戻る
           </Dialog.Close>
-          <Dialog.Title className="text-title">{title}</Dialog.Title>
-          <div className="w-9" />
+          <Dialog.Title className="text-title text-center whitespace-nowrap">{title}</Dialog.Title>
+          <div />
         </div>
 
         {/* スクロール領域（高さ固定なので中身が変わっても外形は不変） */}
