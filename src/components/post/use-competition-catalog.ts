@@ -19,7 +19,8 @@ export function useCompetitionCatalog(enabled: boolean): Catalog {
   const [catalog, setCatalog] = useState<Catalog>(cache ?? EMPTY);
 
   useEffect(() => {
-    if (!enabled || cache) return;
+    // キャッシュがあっても開くたびに裏で読み直す（種目や大会を足した直後に古い一覧を見せないため）。
+    if (!enabled) return;
     let active = true;
     void (async () => {
       const supabase = createClient();

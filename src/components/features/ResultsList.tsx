@@ -146,7 +146,10 @@ function ResultRow({
   );
 }
 
-/** 大学は年ごと、大学以前はまとめて（新しい年が先。日付なしは最後） */
+/**
+ * 大学は年ごと、大学以前はまとめて表示する。
+ * 大学以前は年が付いていても最後に置く（大学の年に混ざると読み違えるため）。
+ */
 function groupRows(rows: PbRecord[]): [string, PbRecord[]][] {
   const map = new Map<string, PbRecord[]>();
   for (const r of rows) {
@@ -155,5 +158,7 @@ function groupRows(rows: PbRecord[]): [string, PbRecord[]][] {
     arr.push(r);
     map.set(key, arr);
   }
-  return [...map.entries()];
+  const groups = [...map.entries()];
+  const rank = (key: string) => (key === "大学以前" ? 2 : key === "日付未設定" ? 1 : 0);
+  return groups.sort(([a], [b]) => rank(a) - rank(b));
 }
