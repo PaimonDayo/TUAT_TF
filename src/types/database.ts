@@ -2059,6 +2059,10 @@ export type Database = {
         Args: { tweet_ids: string[] }
         Returns: { option_id: string; profile_id: string; display_name: string; avatar_url: string | null; blocks: string[]; grade: string | null }[]
       }
+      get_comment_like_state: {
+        Args: { comment_ids: string[] }
+        Returns: { comment_id: string; likes_count: number; liked_by_me: boolean }[]
+      }
       get_tweet_feed_extras: {
         Args: { tweet_ids: string[] }
         Returns: { mentions: Json; options: Json; tweet_id: string }[]

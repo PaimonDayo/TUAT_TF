@@ -6,7 +6,7 @@ import { normalizeAuthorRow } from "@/lib/profile-normalize";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Avatar } from "@/components/common/Avatar";
 import { gradeShort } from "@/lib/constants";
-import type { Block, TargetType } from "@/types";
+import type { Block, LikeTargetType } from "@/types";
 
 type Liker = {
   id: string;
@@ -23,7 +23,7 @@ export function LikersSheet({
   open,
   onOpenChange,
 }: {
-  targetType: TargetType;
+  targetType: LikeTargetType;
   targetId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;

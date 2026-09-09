@@ -47,6 +47,8 @@ export type ScheduleType = "practice" | "meet" | "event" | "time_trial";
 export type NoticeCategory = "fee" | "entry" | "info" | "rule";
 export type NoticeReaction = "ack" | "thanks" | "question";
 export type TargetType = "record" | "tweet";
+/** いいねを付けられる対象。投稿に加えてコメントも対象にする（コメントへのコメントは無い） */
+export type LikeTargetType = TargetType | "comment";
 export type AttendanceStatus = "present" | "absent";
 /** 一覧を開いたとき最初に表示するブロック（出欠一覧・タイムライン共通の考え方） */
 export type BlockViewDefault = "all" | "middle_long" | "short";

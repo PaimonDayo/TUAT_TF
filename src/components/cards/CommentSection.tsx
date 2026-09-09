@@ -5,6 +5,7 @@ import { FileSpreadsheet } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { sheetRepliesWithoutAppDuplicates } from "@/lib/sheet-replies";
 import { Avatar } from "@/components/common/Avatar";
+import { CommentLikeButton } from "@/components/cards/CommentLikeButton";
 import { Linkify } from "@/components/common/Linkify";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ type SheetReply = {
   synced_at: string;
 };
 type DisplayReply = AppReply | SheetReply;
+type CommentLike = { liked: boolean; count: number };
 
 function spreadsheetReplyIndex(reply: DisplayReply): number | null {
   return reply.kind === "sheet" ? reply.reply_index : reply.sheet_reply_index ?? null;
@@ -53,6 +55,8 @@ export function CommentSection({
   onCountChange: (count: number) => void;
 }) {
   const [comments, setComments] = useState<DisplayReply[]>([]);
+  // コメントごとのいいね。件数と自分の状態を1回のRPCでまとめて読む。
+  const [likeState, setLikeState] = useState<Record<string, CommentLike>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [text, setText] = useState("");
@@ -119,6 +123,21 @@ export function CommentSection({
       setComments(rows);
       onCountChange(rows.length);
       setLoading(false);
+
+      // いいねはコメント本文より後でよいので、表示を待たせない。
+      if (appRows.length > 0) {
+        const { data: likeRows } = await supabase.rpc("get_comment_like_state", {
+          comment_ids: appRows.map((row) => row.id),
+        });
+        if (!active) return;
+        const next: Record<string, CommentLike> = {};
+        for (const row of likeRows ?? [])
+          next[row.comment_id] = {
+            liked: row.liked_by_me,
+            count: Number(row.likes_count),
+          };
+        setLikeState(next);
+      }
     }
 
     load();
@@ -358,6 +377,14 @@ export function CommentSection({
                         <Linkify text={comment.content} />
                       </p>
                       {edited && <p className="text-micro mt-0.5">編集済み</p>}
+                      <CommentLikeButton
+                        commentId={comment.id}
+                        liked={likeState[comment.id]?.liked ?? false}
+                        count={likeState[comment.id]?.count ?? 0}
+                        onChange={(next) =>
+                          setLikeState((state) => ({ ...state, [comment.id]: next }))
+                        }
+                      />
                     </>
                   )}
                 </div>
