@@ -1,2 +1,4 @@
-# WSL executes these files directly from the Windows checkout.
+# WSL operation scripts must remain executable after a Windows Git checkout.
 ops/laptop/*.sh text eol=lf
+ops/laptop/*.py text eol=lf
+ops/laptop/*.sql text eol=lf
