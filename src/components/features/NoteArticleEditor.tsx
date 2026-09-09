@@ -2,18 +2,29 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BarChart3, ImagePlus, Plus, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Toggle } from "@/components/ui/toggle";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormModalFooter } from "@/components/ui/form-modal";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { prepareTweetImage } from "@/lib/tweet-image";
+import {
+  parseNoteBody,
+  photoKeyFromPath,
+  removePhotoBlock,
+  serializeNoteBlocks,
+  type NoteBlock,
+} from "@/lib/note-body";
+import {
+  NoteBodyEditor,
+  insertPhotoIntoBody,
+  type EditorPhoto,
+} from "@/components/features/NoteBodyEditor";
 import type { NoteImage } from "@/components/features/NoteImages";
 import type { AuthorMini, NoteArticleWithAuthor, NotePollOption } from "@/types";
 
@@ -47,7 +58,11 @@ export function NoteArticleEditor({
 }) {
   const router = useRouter();
   const [title, setTitle] = useState(article?.title ?? "");
-  const [body, setBody] = useState(article?.body ?? "");
+  // 本文は「文章」と「写真」の並びとして編集し、保存時に1本のテキストへ戻す。
+  const [blocks, setBlocks] = useState<NoteBlock[]>(() =>
+    parseNoteBody(article?.body ?? ""),
+  );
+  const caret = useRef({ textIndex: 0, caret: 0 });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedId, setSavedId] = useState(article?.id);
@@ -73,6 +88,44 @@ export function NoteArticleEditor({
   const previews = usePreviews(pending);
   const liveImages = images.filter((image) => !removed.includes(image.id));
   const imageCount = liveImages.length + pending.length;
+  const previewById = new Map(previews.map((preview) => [preview.id, preview.url]));
+
+  // 保存済み・未保存をまとめて「1枚の写真」として扱う。キーは保存先パスと同じ形なので、
+  // 保存前に本文へ差し込んでも、保存後にそのまま同じ写真を指す。
+  const editorPhotos: (EditorPhoto & { removeLabel: string; remove: () => void })[] = [
+    ...liveImages.flatMap((image) => {
+      const key = photoKeyFromPath(image.path);
+      if (!key) return [];
+      return [{
+        key,
+        src: `/api/note-image?id=${image.id}`,
+        pending: false,
+        removeLabel: "写真を削除",
+        remove: () => {
+          setRemoved((old) => [...old, image.id]);
+          setBlocks((current) => removePhotoBlock(current, key));
+        },
+      }];
+    }),
+    ...pending.map((file) => ({
+      key: file.id,
+      src: previewById.get(file.id) ?? "",
+      pending: true,
+      removeLabel: "追加をやめる",
+      remove: () => {
+        setPending((old) => old.filter((item) => item.id !== file.id));
+        setBlocks((current) => removePhotoBlock(current, file.id));
+      },
+    })),
+  ];
+  const placedKeys = new Set(
+    blocks.flatMap((block) => (block.type === "photo" ? [block.key] : [])),
+  );
+  const unplacedPhotos = editorPhotos.filter((photo) => !placedKeys.has(photo.key));
+
+  function placePhoto(key: string) {
+    setBlocks((current) => insertPhotoIntoBody(current, caret.current, key));
+  }
 
   function addFiles(files: File[]) {
     setError(null);
@@ -91,6 +144,14 @@ export function NoteArticleEditor({
             blob: await prepareTweetImage(file),
           });
         setPending((old) => [...old, ...prepared]);
+        // 選んだ写真は、いま書いていた位置へそのまま入れる。
+        // 置き場所を変えたくなったら本文の✕で外して置き直せる。
+        setBlocks((current) =>
+          prepared.reduce(
+            (next, file) => insertPhotoIntoBody(next, caret.current, file.id),
+            current,
+          ),
+        );
       } catch (prepareError) {
         setError(
           prepareError instanceof Error
@@ -149,7 +210,8 @@ export function NoteArticleEditor({
   }
 
   async function submit() {
-    if (!title.trim() || (!body.trim() && !pending.length && !liveImages.length && !pollEnabled)) {
+    const body = serializeNoteBlocks(blocks);
+    if (!title.trim() || (!body && !pending.length && !liveImages.length && !pollEnabled)) {
       setError("タイトルと、本文・写真・投票のいずれかを入力してください");
       return;
     }
@@ -159,7 +221,7 @@ export function NoteArticleEditor({
     const supabase = createClient();
     const payload = {
       title: title.trim(),
-      body: body.trim(),
+      body,
       poll_multiple: pollEnabled && pollMultiple,
       poll_anonymous: pollAnonymous,
       poll_allow_options: pollEnabled && pollAllowOptions,
@@ -252,61 +314,48 @@ export function NoteArticleEditor({
 
       <div>
         <p className="section-label mb-1.5">本文</p>
-        <Textarea
-          autoGrow
-          value={body}
-          onChange={(event) => setBody(event.target.value)}
-          placeholder="残しておきたい知識や考えを入力"
-          rows={8}
-          className="min-h-44"
+        {/* 写真は文章の間にそのまま入る。「写真を追加」を押した位置へ入り、✕で外して置き直せる。 */}
+        <NoteBodyEditor
+          blocks={blocks}
+          photos={editorPhotos}
+          disabled={saving}
+          onChange={setBlocks}
+          onCaretChange={(position) => {
+            caret.current = position;
+          }}
         />
       </div>
 
-      {/* 写真は本文のすぐ下。並びがそのまま記事の並びになる。 */}
-      {imageCount > 0 && (
+      {/* 本文に置いていない写真。記事の最後に並ぶので、必要なら本文へ入れる。 */}
+      {unplacedPhotos.length > 0 && (
         <div className="space-y-2">
-          <p className="section-label">
-            写真（{imageCount}/{MAX_IMAGES}）
-          </p>
+          <p className="section-label">本文に置いていない写真</p>
           <div className="grid grid-cols-3 gap-2">
-            {liveImages.map((image, index) => (
-              <figure key={image.id} className="relative">
-                <img
-                  src={`/api/note-image?id=${image.id}`}
-                  alt={`添付写真${index + 1}`}
-                  className="aspect-square w-full rounded-xl object-cover"
-                />
+            {unplacedPhotos.map((photo) => (
+              <figure key={photo.key} className="space-y-1">
+                <div className="relative">
+                  <img
+                    src={photo.src}
+                    alt="本文に置いていない写真"
+                    className="aspect-square w-full rounded-xl object-cover"
+                  />
+                  <button
+                    type="button"
+                    aria-label={photo.removeLabel}
+                    disabled={saving}
+                    onClick={photo.remove}
+                    className="absolute right-1 top-1 rounded-full bg-black/65 p-1.5 text-white active:opacity-70"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
                 <button
                   type="button"
-                  aria-label={`写真${index + 1}を外す`}
                   disabled={saving}
-                  onClick={() => setRemoved((old) => [...old, image.id])}
-                  className="absolute right-1 top-1 rounded-full bg-black/65 p-1.5 text-white active:opacity-70"
+                  onClick={() => placePhoto(photo.key)}
+                  className="w-full text-[12px] font-semibold text-accent active:opacity-60"
                 >
-                  <X size={14} />
-                </button>
-              </figure>
-            ))}
-            {previews.map((preview, index) => (
-              <figure key={preview.id} className="relative">
-                <img
-                  src={preview.url}
-                  alt={`追加する写真${index + 1}`}
-                  className="aspect-square w-full rounded-xl object-cover"
-                />
-                <span className="absolute inset-x-1 bottom-1 rounded-full bg-black/60 px-2 py-0.5 text-center text-[10px] text-white">
-                  保存時に追加
-                </span>
-                <button
-                  type="button"
-                  aria-label={`追加する写真${index + 1}を外す`}
-                  disabled={saving}
-                  onClick={() =>
-                    setPending((old) => old.filter((file) => file.id !== preview.id))
-                  }
-                  className="absolute right-1 top-1 rounded-full bg-black/65 p-1.5 text-white active:opacity-70"
-                >
-                  <X size={14} />
+                  本文に入れる
                 </button>
               </figure>
             ))}

@@ -2,9 +2,8 @@ import { notFound } from "next/navigation";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 import { Avatar } from "@/components/common/Avatar";
-import { Linkify } from "@/components/common/Linkify";
 import { NoteArticleActions } from "@/components/features/NoteArticleActions";
-import { NoteImages } from "@/components/features/NoteImages";
+import { NoteBody } from "@/components/features/NoteBody";
 import { NotePoll } from "@/components/features/NotePoll";
 import { SubHeader } from "@/components/layout/SubHeader";
 import { Card } from "@/components/ui/card";
@@ -78,10 +77,7 @@ export default async function NoteArticlePage({
               </p>
             </div>
           </div>
-          <div className="whitespace-pre-wrap break-words text-[15px] leading-7">
-            <Linkify text={article.body} />
-          </div>
-          <NoteImages images={article.images}/>
+          <NoteBody body={article.body} images={article.images} />
           {article.pollOptions && article.pollOptions.length > 0 && (
             <NotePoll
               articleId={article.id}
