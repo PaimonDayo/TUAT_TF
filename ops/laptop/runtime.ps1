@@ -1,4 +1,4 @@
-param([ValidateSet('start','stop','status')][string]$Action = 'status')
+param([ValidateSet('start','stop','status')][string]$Action = 'status', [switch]$NoHold)
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $pidFile = Join-Path $repoRoot '.contingency/wsl-hold.pid'
@@ -11,7 +11,7 @@ if (Test-Path -LiteralPath $pidFile) {
   $candidate = Get-CimInstance Win32_Process -Filter "ProcessId = $holderId"
   if ($candidate.Name -eq 'wsl.exe' -and $candidate.CommandLine.Contains($holdScript)) { $holder = $candidate }
 }
-if ($Action -eq 'start' -and -not $holder) {
+if ($Action -eq 'start' -and -not $holder -and -not $NoHold) {
   $process = Start-Process -FilePath wsl.exe -ArgumentList "-d Ubuntu -u root -- sh `"$holdScript`"" -WindowStyle Hidden -PassThru
   Set-Content -LiteralPath $pidFile -Value $process.Id
 }

@@ -26,7 +26,7 @@ export function NotificationBell({
 
   useEffect(() => {
     const supabase = createClient();
-    const channel = supabase
+    const channel = process.env.NEXT_PUBLIC_PC_BACKEND === "true" ? null : supabase
       .channel(`notification-bell-${userId}`)
       .on(
         "postgres_changes",
@@ -44,9 +44,11 @@ export function NotificationBell({
       if (document.visibilityState === "visible") void refreshUnread();
     }
     document.addEventListener("visibilitychange", visible);
+    const timer = process.env.NEXT_PUBLIC_PC_BACKEND === "true" ? window.setInterval(visible, 30_000) : undefined;
     return () => {
       document.removeEventListener("visibilitychange", visible);
-      void supabase.removeChannel(channel);
+      if (timer !== undefined) window.clearInterval(timer);
+      if (channel) void supabase.removeChannel(channel);
     };
   }, [refreshUnread, userId]);
 

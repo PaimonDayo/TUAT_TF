@@ -46,3 +46,4 @@ next-env.d.ts
 gas/sync-clasp/secret.js
 /.r2-migration/
 /.contingency/
+/ops/laptop/__pycache__/

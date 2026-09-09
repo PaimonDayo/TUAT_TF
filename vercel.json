@@ -2,6 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": ["hnd1"],
   "crons": [
+    { "path": "/api/sheets/sync", "schedule": "0 15 * * *" },
+    { "path": "/api/schedule-sheets/cron-sync", "schedule": "5 * * * *" },
     {
       "path": "/api/cron/cleanup-stories",
       "schedule": "17 3 * * *"

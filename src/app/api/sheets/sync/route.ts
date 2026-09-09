@@ -6,6 +6,9 @@ import { permissionsOf } from "@/lib/permissions";
 import { runSheetSync } from "@/lib/sheet-sync";
 import { timingSafeEqualString } from "@/lib/timing-safe";
 import { sheetSyncChunkSize } from "@/lib/sheet-sync-chunk";
+import { forwardPcCron } from "@/lib/pc-cron-forward";
+
+export async function GET(request: Request) { return forwardPcCron(request, POST); }
 
 // 毎日0時（JST）の1回で最大100人を処理する。主な待ち時間はGASへのI/O。
 export const maxDuration = 300;

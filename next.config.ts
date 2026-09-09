@@ -1,6 +1,14 @@
 import type { NextConfig } from "next";
 
 const vercelPcTrial = process.env.PC_TRIAL_VERCEL === "true";
+if (process.env.PC_BACKEND_ENABLED === "true" || process.env.NEXT_PUBLIC_PC_BACKEND === "true") {
+  if (process.env.PC_BACKEND_ENABLED !== "true" || process.env.NEXT_PUBLIC_PC_BACKEND !== "true" ||
+      process.env.NEXT_PUBLIC_PC_TRIAL === "true" || vercelPcTrial ||
+      !/^https:\/\/[a-z0-9.-]+\.vercel\.app\/api\/pc-supabase$/.test(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "") ||
+      (process.env.PC_BACKEND_BRIDGE_KEY?.length ?? 0) < 32 || !process.env.PC_BACKEND_INSTANCE_ID) {
+    throw new Error("PC production backend requires its dedicated Vercel API configuration");
+  }
+}
 if (process.env.NEXT_PUBLIC_PC_TRIAL === "true") {
   if (vercelPcTrial) {
     const bridge = process.env.PC_TRIAL_BRIDGE_URL ?? "";

@@ -15,6 +15,7 @@ export async function updateSession(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       ...pcServerOptions(),
+      ...(process.env.NEXT_PUBLIC_PC_BACKEND === "true" ? { cookieOptions: { name: "sb-pc-backend-auth" } } : {}),
       ...(process.env.NEXT_PUBLIC_PC_TRIAL === "true" ? { cookieOptions: { name: "sb-pc-trial-auth" } } : {}),
       cookies: {
         getAll() {
