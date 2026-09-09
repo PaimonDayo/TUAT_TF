@@ -10,6 +10,8 @@ import { BlockPills } from "@/components/common/BlockPill";
 import { Linkify } from "@/components/common/Linkify";
 import { ActivityFeed } from "@/components/features/ActivityFeed";
 import { ResultsList } from "@/components/features/ResultsList";
+import { PbManager } from "@/components/features/PbManager";
+import type { CompetitionEvent } from "@/lib/competition-goals";
 import { TrainingChart } from "@/components/features/TrainingChart";
 import { FavoriteButton } from "@/components/features/FavoriteButton";
 import { ListSkeleton } from "@/components/ui/page-skeletons";
@@ -19,6 +21,8 @@ import {
   getProfileById,
   getUserRecordsWithSocialState,
   getPbRecords,
+  getCompetitionEvents,
+  getCompetitions,
   getPublishedPersonalNotes,
   getUserTweets,
   isFavorite,
@@ -47,16 +51,19 @@ async function MemberContent({
 
   const viewer = await getCurrentProfile();
   const isSelf = viewer.id === id;
-  const [records, tweets, pbs, notes, favorited, cookieStore] = await Promise.all([
+  const canManageSystem = permissionsOf(viewer.roles).manageSystem;
+  const [records, tweets, pbs, notes, favorited, cookieStore, events, competitions] = await Promise.all([
     getUserRecordsWithSocialState(id, viewer.id),
     getUserTweets(id, viewer.id),
     getPbRecords(id) as Promise<PbRecord[]>,
     getPublishedPersonalNotes(id),
     isSelf ? Promise.resolve(false) : isFavorite(viewer.id, id),
     cookies(),
+    getCompetitionEvents(),
+    canManageSystem ? getCompetitions() : Promise.resolve([]),
   ]);
   const showRecordSource =
-    permissionsOf(viewer.roles).manageSystem &&
+    canManageSystem &&
     cookieStore.get("show-record-source")?.value === "1";
 
   const authorMini = {
@@ -150,10 +157,25 @@ async function MemberContent({
           </section>
         )}
 
-        {pbs.length > 0 && (
+        {(pbs.length > 0 || canManageSystem) && (
           <section className="space-y-2">
             <p className="section-label">大会・記録会の結果</p>
-            <ResultsList results={pbs} />
+            {canManageSystem && !isSelf ? (
+              <>
+                <PbManager
+                  userId={profile.id}
+                  initial={pbs}
+                  events={events as CompetitionEvent[]}
+                  competitions={competitions}
+                  addLabel="この部員の結果を追加"
+                />
+                <p className="text-caption">
+                  システム管理者として、表記の統一のためにこの部員の結果を編集できます。
+                </p>
+              </>
+            ) : (
+              <ResultsList results={pbs} events={events as CompetitionEvent[]} />
+            )}
           </section>
         )}
 

@@ -53,7 +53,7 @@ export async function HomeContent() {
       <Header title="ホーム" large besideTitle={<time dateTime={jstToday()} className="truncate text-[13px] text-muted">{format(nowJst, "M月d日 (E)", { locale: ja })}</time>} />
       <div className="space-y-5 px-4 pt-1">
         <NoticesSection userId={profile.id} />
-        <CompetitionSection profile={profile} />
+        <CompetitionSection />
         <InstallPrompt />
 
         {profile.blocks.includes("middle_long") && (
@@ -67,12 +67,16 @@ export async function HomeContent() {
   );
 }
 
-async function CompetitionSection({profile}:{profile:Profile}) {
+async function CompetitionSection() {
   const result = await getHomeCompetition();
-  if (!result) return <p className="text-caption">大会情報を取得できませんでした</p>;
-  const { competition, goals, events } = result;
-  if(!competition)return null;
-  return <CompetitionHome competition={competition} initialGoals={goals??[]} initialEvents={events} userId={profile.id} displayName={profile.display_name} viewerBlocks={profile.blocks} canManage={permissionsOf(profile.roles).manageSystem} initialToday={jstToday()}/>;
+  if (!result) return null;
+  return (
+    <CompetitionHome
+      competition={result.competition}
+      goalCount={result.goalCount}
+      initialToday={jstToday()}
+    />
+  );
 }
 
 async function NoticesSection({ userId }: { userId: string }) {

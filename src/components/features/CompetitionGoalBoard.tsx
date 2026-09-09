@@ -12,23 +12,25 @@ import {
   type SimpleBlockFilter,
 } from "@/lib/constants";
 import { SegmentedControl } from "@/components/ui/segmented";
-import type { CompetitionGoal } from "./CompetitionHome";
+import type { CompetitionGoalRow } from "@/types";
 
 export function CompetitionGoalBoard({
   goals,
   events,
   userId,
   meetName,
+  personalBests,
   onEdit,
   onDelete,
   onManage,
   busy,
 }: {
-  goals: CompetitionGoal[];
+  goals: CompetitionGoalRow[];
   events: CompetitionEvent[];
   userId: string;
   meetName: string;
-  onEdit: (goal: CompetitionGoal) => void;
+  personalBests: Map<string, string>;
+  onEdit: (goal: CompetitionGoalRow) => void;
   onDelete: (id: string) => Promise<boolean>;
   onManage?: () => void;
   busy: boolean;
@@ -56,7 +58,7 @@ export function CompetitionGoalBoard({
           .toLocaleLowerCase()
           .includes(needle)),
   );
-  const byName = (a: CompetitionGoal, b: CompetitionGoal) =>
+  const byName = (a: CompetitionGoalRow, b: CompetitionGoalRow) =>
     (a.author?.display_name ?? "部員").localeCompare(
       b.author?.display_name ?? "部員",
       "ja",
@@ -165,7 +167,7 @@ export function CompetitionGoalBoard({
                         scope="col"
                         className="px-3 py-2 text-[11px] font-medium text-muted"
                       >
-                        名前
+                        名前 / PB
                       </th>
                       <th
                         scope="col"
@@ -183,6 +185,7 @@ export function CompetitionGoalBoard({
                       const long =
                         g.target.length > 70 || g.target.split("\n").length > 3;
                       const isExpanded = expanded.has(g.id);
+                      const pb = personalBests.get(`${g.user_id} ${g.event}`);
                       return (
                         <tr
                           key={g.id}
@@ -203,6 +206,9 @@ export function CompetitionGoalBoard({
                                 自分
                               </span>
                             )}
+                            <span className="mt-0.5 block text-[11px] font-normal tabular-nums text-muted">
+                              {pb ? `PB ${pb}` : "PB 未登録"}
+                            </span>
                           </th>
                           <td className="px-2 py-3 align-top">
                             <p

@@ -1,7 +1,7 @@
 export type GoalDraft = { event: string; target: string };
-export type CompetitionEvent = { name: string; sort_order: number };
+export type CompetitionEvent = { name: string; sort_order: number; measure_type: string };
 /** Use the system's catalog order in every block. */
-export function sortCompetitionEvents<T extends CompetitionEvent>(
+export function sortCompetitionEvents<T extends { name: string; sort_order: number }>(
   events: T[],
 ): T[] {
   return [...events].sort(

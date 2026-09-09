@@ -25,6 +25,7 @@ import { NoteComposer } from "@/components/features/NoteComposer";
 import { NoticeForm } from "@/components/post/NoticeForm";
 import { RecordForm, type RecordFormHandle } from "@/components/post/RecordForm";
 import { ResultForm, type ResultFormHandle } from "@/components/post/ResultForm";
+import { useCompetitionCatalog } from "@/components/post/use-competition-catalog";
 import { ScheduleCreatePanel, ScheduleForm } from "@/components/post/ScheduleForm";
 import { TweetForm, type TweetFormHandle } from "@/components/post/TweetForm";
 import { createClient } from "@/lib/supabase/client";
@@ -86,6 +87,7 @@ function ContextualFAB({
   const [tweetOpen, setTweetOpen] = useState(false);
   const [tweetInitialStory, setTweetInitialStory] = useState(false);
   const [resultOpen, setResultOpen] = useState(false);
+  const catalog = useCompetitionCatalog(resultOpen);
   const recordRef = useRef<RecordFormHandle>(null);
   const tweetRef = useRef<TweetFormHandle>(null);
   const resultRef = useRef<ResultFormHandle>(null);
@@ -381,7 +383,7 @@ function ContextualFAB({
         onOpenChange={(open) => { if (!open) { if (resultDirty) setPendingTimelineClose("result"); else closeTimelineForm("result"); } }}
         title="大会・記録会の結果"
       >
-        <ResultForm ref={resultRef} userId={userId} onDirtyChange={setResultDirty} onDone={() => closeTimelineForm("result")} />
+        <ResultForm ref={resultRef} userId={userId} events={catalog.events} competitions={catalog.competitions} onDirtyChange={setResultDirty} onDone={() => closeTimelineForm("result")} />
       </FormModal>
 
       <UnsavedChangesDialog open={pendingTimelineClose !== null} busy={false} onContinue={() => setPendingTimelineClose(null)} onDiscard={() => { if (pendingTimelineClose) closeTimelineForm(pendingTimelineClose); }} onSave={savePendingTimelineForm} />

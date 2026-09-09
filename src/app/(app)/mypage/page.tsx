@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
-import { Trophy, Medal, ChevronRight, Settings, Shield, ShieldCheck, Users, Target, MapPin, Rss } from "lucide-react";
+import { Trophy, Medal, ChevronRight, Settings, Shield, ShieldCheck, Users, Target, MapPin, ListOrdered, Rss } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -31,7 +31,7 @@ export default async function MyPage({
   const records = (await getUserRecords(profile.id)) as PracticeRecord[];
 
   const perms = permissionsOf(profile.roles);
-  const showAdminMenu = perms.manageMembers || perms.createSchedule;
+  const showAdminMenu = perms.manageMembers || perms.createSchedule || perms.manageSystem;
 
   return (
     <>
@@ -108,6 +108,7 @@ export default async function MyPage({
         <Card className="divide-y divide-separator/70 overflow-hidden">
           <GoalEditor userId={profile.id} goal={profile.goal} />
           <RowLink href="/mypage/pb" icon={<Medal size={20} className="text-warning" />} label="大会・記録会の結果" />
+          <RowLink href="/competitions" icon={<Trophy size={20} className="text-warning" />} label="大会" />
           <RowLink href="/members" icon={<Users size={20} className="text-accent" />} label="メンバー一覧" />
           <RowLink href="/blog" icon={<Rss size={20} className="text-accent" />} label="ブログ" />
           <RowLink href="/mypage/settings" icon={<Settings size={20} className="text-muted2" />} label="設定" />
@@ -136,6 +137,9 @@ export default async function MyPage({
               )}
               {perms.createSchedule && (
                 <RowLink href="/venues" icon={<MapPin size={20} className="text-accent" />} label="練習場所" />
+              )}
+              {perms.manageSystem && (
+                <RowLink href="/events" icon={<ListOrdered size={20} className="text-accent" />} label="種目" />
               )}
             </Card>
           </section>
