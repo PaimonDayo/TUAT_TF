@@ -43,7 +43,8 @@ export async function getSchedulePageData(): Promise<SchedulePageData> {
   for (const schedule of schedules) {
     for (const attendee of schedule.attendances ?? []) {
       (attendeesBySchedule[attendee.schedule_id] ??= []).push(attendee);
-      if (attendee.user_id === profile.id) {
+      // my* は「初日の自分の出欠」。2日目以降はカード側が attendees から日ごとに読む。
+      if (attendee.user_id === profile.id && attendee.attend_date === schedule.schedule_date) {
         myStatusBySchedule[attendee.schedule_id] = attendee.status;
         myLateBySchedule[attendee.schedule_id] = attendee.is_late;
         myLateNoteBySchedule[attendee.schedule_id] = attendee.late_note;

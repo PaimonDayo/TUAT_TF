@@ -13,7 +13,14 @@ import { createClient } from "@/lib/supabase/client";
 import { BLOCKS, EDITABLE_BLOCK_ORDER } from "@/lib/constants";
 import type { AuthorMini, Block, PracticeMenu, PracticeSchedule, VenueRow } from "@/types";
 
-type ScheduleDraft = { id?: string; time: string; venue: string; note: string };
+type ScheduleDraft = {
+  id?: string;
+  time: string;
+  venue: string;
+  note: string;
+  /** この予定を出す対象。取り違えたときはここで全体・中長距離・短距離を付け替える */
+  scope?: ScheduleScope;
+};
 type MenuDraft = { id?: string; content: string; pace: string; remark: string; supplement: string };
 type RowState = "dirty" | "saving" | "saved" | "error";
 type ScheduleScope = "all" | "middle_long" | "short";
@@ -26,6 +33,14 @@ function readStored<T>(key: string, fallback: T): T {
 }
 
 function hasScheduleValue(draft?: ScheduleDraft) { return !!draft && !!(draft.time || draft.venue || draft.note); }
+/** 保存対象かどうか。既に保存済みの予定は、対象ブロックだけ変えた場合も保存する。 */
+function isScheduleSavable(draft?: ScheduleDraft) { return hasScheduleValue(draft) || !!draft?.id; }
+/** DBの target_blocks と、画面の「全体・中長距離・短距離」の相互変換 */
+function scopeOf(targetBlocks: Block[]): ScheduleScope {
+  if (targetBlocks.length === 1 && (targetBlocks[0] === "middle_long" || targetBlocks[0] === "short")) return targetBlocks[0];
+  return "all";
+}
+function blocksOf(scope: ScheduleScope): Block[] { return scope === "all" ? [] : [scope]; }
 function hasMenuValue(draft?: MenuDraft) { return !!draft && [draft.content, draft.pace, draft.remark, draft.supplement].some((value) => value.trim()); }
 
 export type MonthlyPlanningEditorHandle = { save: () => Promise<boolean> };
@@ -83,7 +98,7 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
           ).values()];
       const byDate: Record<string, PracticeSchedule> = {};
       const drafts: Record<string, ScheduleDraft> = {};
-      rows.forEach((row) => { byDate[row.schedule_date] = row; drafts[row.schedule_date] = { id: row.id, time: row.meeting_time?.slice(0, 5) ?? "", venue: row.venue_name ?? row.location ?? "", note: row.note ?? "" }; });
+      rows.forEach((row) => { byDate[row.schedule_date] = row; drafts[row.schedule_date] = { id: row.id, time: row.meeting_time?.slice(0, 5) ?? "", venue: row.venue_name ?? row.location ?? "", note: row.note ?? "", scope: scopeOf(row.target_blocks) }; });
       const local = readStored<{ schedules?: Record<string, ScheduleDraft> }>(localDraftKey, {});
       setSchedules(byDate); setScheduleDrafts({ ...drafts, ...(local.schedules ?? {}) });
       setMembers((memberResult.data ?? []) as AuthorMini[]); setVenues((venueResult.data ?? []) as VenueRow[]);
@@ -173,18 +188,34 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
   function moveMonth(delta: number) { const next = new Date(year, month - 1 + delta, 1); setYear(next.getFullYear()); setMonth(next.getMonth() + 1); setRowStates({}); setMenuDrafts({}); }
   function stateKey(kind: "schedule" | "menu", date: string) { return `${kind}:${date}`; }
   function markDirty(kind: "schedule" | "menu", date: string) { setRowStates((current) => ({ ...current, [stateKey(kind, date)]: "dirty" })); }
-  function updateSchedule(date: string, patch: Partial<ScheduleDraft>) { setScheduleDrafts((current) => ({ ...current, [date]: { id: current[date]?.id, time: current[date]?.time ?? "", venue: current[date]?.venue ?? "", note: current[date]?.note ?? "", ...patch } })); markDirty("schedule", date); }
+  function updateSchedule(date: string, patch: Partial<ScheduleDraft>) { setScheduleDrafts((current) => ({ ...current, [date]: { id: current[date]?.id, time: current[date]?.time ?? "", venue: current[date]?.venue ?? "", note: current[date]?.note ?? "", scope: current[date]?.scope, ...patch } })); markDirty("schedule", date); }
   function updateMenu(date: string, patch: Partial<MenuDraft>) { setMenuDrafts((current) => ({ ...current, [date]: { id: current[date]?.id, content: current[date]?.content ?? "", pace: current[date]?.pace ?? "", remark: current[date]?.remark ?? "", supplement: current[date]?.supplement ?? "", ...patch } })); markDirty("menu", date); }
 
   async function saveSchedule(date: string): Promise<PracticeSchedule | null> {
-    const draft = scheduleDrafts[date]; if (!hasScheduleValue(draft)) return schedules[date] ?? null;
+    const draft = scheduleDrafts[date]; if (!isScheduleSavable(draft)) return schedules[date] ?? null;
     if (!canSchedule) return null;
     setRowStates((current) => ({ ...current, [stateKey("schedule", date)]: "saving" }));
     const supabase = createClient(); const { data: { user } } = await supabase.auth.getUser(); if (!user) return null;
-    const payload = { schedule_date: date, schedule_type: "practice", meeting_time: draft.time || null, venue_name: draft.venue || null, note: draft.note || null, target_blocks: (activeScheduleScope === "all" ? [] : [activeScheduleScope]) as Block[] };
+    const scope = draft.scope ?? activeScheduleScope;
+    // 対象を付け替えるときは、移動先に同じ日の予定が既にないか確かめる（同じ対象の重複を作らない）。
+    if (draft.id && scope !== scopeOf(schedules[date]?.target_blocks ?? [])) {
+      const { data: sameDay } = await supabase
+        .from("practice_schedules")
+        .select("id,target_blocks")
+        .eq("schedule_date", date);
+      const clash = (sameDay ?? []).some(
+        (row) => row.id !== draft.id && scopeOf(row.target_blocks as Block[]) === scope,
+      );
+      if (clash) {
+        setError(`${date} には移動先の対象の予定が既にあります。先にそちらを整理してください。`);
+        setRowStates((current) => ({ ...current, [stateKey("schedule", date)]: "error" }));
+        return null;
+      }
+    }
+    const payload = { schedule_date: date, schedule_type: "practice", meeting_time: draft.time || null, venue_name: draft.venue || null, note: draft.note || null, target_blocks: blocksOf(scope) };
     const result = draft.id ? await supabase.from("practice_schedules").update(payload).eq("id", draft.id).select("*").single() : await supabase.from("practice_schedules").insert({ ...payload, created_by: user.id }).select("*").single();
     if (result.error || !result.data) { setRowStates((current) => ({ ...current, [stateKey("schedule", date)]: "error" })); return null; }
-    const saved = result.data as PracticeSchedule; setSchedules((current) => ({ ...current, [date]: saved })); setScheduleDrafts((current) => ({ ...current, [date]: { ...current[date], id: saved.id } })); setRowStates((current) => ({ ...current, [stateKey("schedule", date)]: "saved" })); return saved;
+    const saved = result.data as PracticeSchedule; setSchedules((current) => ({ ...current, [date]: saved })); setScheduleDrafts((current) => ({ ...current, [date]: { ...current[date], id: saved.id, scope: scopeOf(saved.target_blocks) } })); setRowStates((current) => ({ ...current, [stateKey("schedule", date)]: "saved" })); return saved;
   }
 
   async function ensureSchedule(date: string): Promise<PracticeSchedule | null> {
@@ -254,7 +285,7 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
   }
   async function saveAll(): Promise<boolean> {
     setSavingAll(true); setError(null);
-    const scheduleDates = days.map((day) => day.date).filter((date) => rowStates[stateKey("schedule", date)] === "dirty" && hasScheduleValue(scheduleDrafts[date]));
+    const scheduleDates = days.map((day) => day.date).filter((date) => rowStates[stateKey("schedule", date)] === "dirty" && isScheduleSavable(scheduleDrafts[date]));
     const menuDates = days.map((day) => day.date).filter((date) => rowStates[stateKey("menu", date)] === "dirty" && (sheetBackedCommonMenu || hasMenuValue(menuDrafts[date])));
     let failed = 0;
     for (const date of scheduleDates) { if (!await saveSchedule(date)) failed++; }
@@ -315,6 +346,21 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
               {(customVenueDates.includes(date) || (!!scheduleDrafts[date]?.venue && !venues.some((venue) => venue.name === scheduleDrafts[date]?.venue))) && <Input className="mt-2" placeholder="場所名を入力" value={scheduleDrafts[date]?.venue ?? ""} onChange={(event) => updateSchedule(date, { venue: event.target.value })} />}
             </div>
           </div>
+          {isScheduleSavable(scheduleDrafts[date]) && (
+            <div>
+              <p className="section-label mb-1.5">対象</p>
+              <SegmentedControl
+                items={[{ key: "all", label: "全体" }, { key: "middle_long", label: "中長距離" }, { key: "short", label: "短距離" }]}
+                value={scheduleDrafts[date]?.scope ?? activeScheduleScope}
+                onChange={(value) => updateSchedule(date, { scope: value as ScheduleScope })}
+              />
+              {(scheduleDrafts[date]?.scope ?? activeScheduleScope) !== activeScheduleScope && (
+                <p className="mt-1 text-xs text-warning">
+                  保存すると、この予定は「{{ all: "全体", middle_long: "中長距離", short: "短距離" }[scheduleDrafts[date]?.scope ?? activeScheduleScope]}」へ移ります。
+                </p>
+              )}
+            </div>
+          )}
           <div>
             <p className="section-label mb-1.5">詳細</p>
             <Textarea autoGrow rows={2} className="min-h-16" placeholder="例: 集合方法、持ち物" value={scheduleDrafts[date]?.note ?? ""} onChange={(event) => updateSchedule(date, { note: event.target.value })} />

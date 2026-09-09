@@ -27,6 +27,7 @@ import { BLOCKS, BLOCK_ORDER, viewerCompetitionBlocks } from "@/lib/constants";
 import { venueShort } from "@/lib/venues";
 import { cn } from "@/lib/utils";
 import { jstToday } from "@/lib/date";
+import { scheduleAttendanceDates } from "@/lib/schedule-days";
 import { MenuEditModal, SheetMenuEditModal } from "@/components/post/MenuForm";
 import { ScheduleManageActions } from "@/components/post/ScheduleForm";
 import { AbsenceAttendanceControl, AttendanceToggle, CancelledBanner, LateAttendanceControl, WeatherStatusBanner, WeatherStatusControl, type AttendanceChange, type LateAttendanceChange } from "@/components/features/AttendanceToggle";
@@ -41,6 +42,44 @@ import type {
   Block,
   PracticeMenu,
 } from "@/types";
+
+/**
+ * 呼び出し元から渡された「自分の出欠」を一覧へ合流させる。
+ * 一覧に自分の行が無いのに出欠だけ渡された場合（呼び出し元が別経路で持っている場合）に、
+ * 初日の行として補う。渡された一覧に自分の行があればそちらを正とする。
+ */
+function seedAttendees(
+  attendees: Attendee[],
+  mine: {
+    userId?: string;
+    attendDate: string;
+    status: AttendanceStatusOrNone;
+    isLate: boolean;
+    lateNote: string | null;
+    absenceNote: string | null;
+    profile?: AuthorMini;
+  },
+): Attendee[] {
+  if (!mine.userId || mine.status === "none" || !mine.profile) return attendees;
+  if (
+    attendees.some(
+      (a) => a.user_id === mine.userId && a.attend_date === mine.attendDate,
+    )
+  )
+    return attendees;
+  return [
+    ...attendees,
+    {
+      user_id: mine.userId,
+      attend_date: mine.attendDate,
+      status: mine.status,
+      is_late: mine.isLate,
+      late_note: mine.lateNote,
+      absence_note: mine.absenceNote,
+      profile: mine.profile,
+    },
+  ];
+}
 
 /** 展開式の練習予定カード */
 export function ScheduleCard({
@@ -79,28 +118,36 @@ export function ScheduleCard({
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  const [attendeesState, setAttendeesState] = useState(attendees);
-  const [attendanceStatus, setAttendanceStatus] = useState(myStatus);
-  const [lateState, setLateState] = useState({ late: myLate, note: myLateNote });
-  const [absenceNote, setAbsenceNote] = useState(myAbsenceNote);
+  // 出欠は日ごとの行（複数日開催なら1日1行）。自分の状態もこの一覧から読む。
+  const [attendeesState, setAttendeesState] = useState<Attendee[]>(() =>
+    seedAttendees(attendees, {
+      userId,
+      attendDate: schedule.schedule_date,
+      status: myStatus,
+      isLate: myLate,
+      lateNote: myLateNote,
+      absenceNote: myAbsenceNote,
+      profile: myProfile,
+    }),
+  );
   const [weatherNote, setWeatherNote] = useState(schedule.weather_note);
   const [weatherNoteUpdatedAt, setWeatherNoteUpdatedAt] = useState(schedule.weather_note_updated_at);
   const [cancelledAt, setCancelledAt] = useState(schedule.cancelled_at);
   const [cancelReason, setCancelReason] = useState(schedule.cancel_reason);
   const cardRef = useRef<HTMLDivElement>(null);
 
-  // 自分の出欠変更をサーバー往復なしで即座に一覧へ反映する
-  function handleAttendanceChanged(change: AttendanceChange) {
-    setAttendanceStatus(change.status);
-    setLateState({ late: change.isLate, note: change.lateNote });
-    setAbsenceNote(change.absenceNote);
+  // 自分の出欠変更をサーバー往復なしで即座に一覧へ反映する（その日の行だけ）
+  function handleAttendanceChanged(attendDate: string, change: AttendanceChange) {
     setAttendeesState((prev) => {
-      const others = prev.filter((a) => a.user_id !== userId);
+      const others = prev.filter(
+        (a) => !(a.user_id === userId && a.attend_date === attendDate),
+      );
       if (change.status === "none" || !userId) return others;
       const mineProfile = myProfile ?? prev.find((a) => a.user_id === userId)?.profile;
       if (!mineProfile) return prev;
       const mine: Attendee = {
         user_id: userId,
+        attend_date: attendDate,
         status: change.status,
         is_late: change.isLate,
         late_note: change.lateNote,
@@ -111,20 +158,30 @@ export function ScheduleCard({
     });
   }
 
-  // 遅刻操作は出欠状態を変更しない。現在の出席行だけを局所更新する。
-  function handleLateChanged(change: LateAttendanceChange) {
-    setLateState({ late: change.isLate, note: change.lateNote });
+  // 遅刻操作は出欠状態を変更しない。その日の出席行だけを局所更新する。
+  function handleLateChanged(attendDate: string, change: LateAttendanceChange) {
     setAttendeesState((previous) =>
       previous.map((attendee) =>
-        attendee.user_id === userId && attendee.status === "present"
+        attendee.user_id === userId &&
+        attendee.attend_date === attendDate &&
+        attendee.status === "present"
           ? { ...attendee, is_late: change.isLate, late_note: change.lateNote }
           : attendee,
       ),
     );
   }
 
-  // ホームの「予定」からタップで来たときは、対象カードまでスクロールする
-  function handleAbsenceNoteChanged(note: string | null) { setAbsenceNote(note); setAttendeesState((previous) => previous.map((attendee) => attendee.user_id === userId && attendee.status === "absent" ? { ...attendee, absence_note: note } : attendee)); }
+  function handleAbsenceNoteChanged(attendDate: string, note: string | null) {
+    setAttendeesState((previous) =>
+      previous.map((attendee) =>
+        attendee.user_id === userId &&
+        attendee.attend_date === attendDate &&
+        attendee.status === "absent"
+          ? { ...attendee, absence_note: note }
+          : attendee,
+      ),
+    );
+  }
 
   useEffect(() => {
     if (defaultOpen) {
@@ -170,6 +227,8 @@ export function ScheduleCard({
   }
   if (generalMenus.length > 0) menuGroups.push({ key: "general", label: "全体", block: null, menus: generalMenus });
   const showAttendance = userId && ATTENDANCE_TYPES.includes(schedule.schedule_type);
+  const attendanceDays = scheduleAttendanceDates(schedule.schedule_date, schedule.end_date);
+  const multiDayAttendance = attendanceDays.length > 1;
   // 中止・対応状況は出欠の有無に関わらず出す（記録会も中止になりうるため）。
   // 編集の導線は当日・翌日か、すでに対応状況が入っている予定だけ。
   const canEditWeather = canDecidePractice && (!!weatherNote || schedule.schedule_date <= jstToday(1));
@@ -289,20 +348,54 @@ export function ScheduleCard({
       {/* 出欠行（中止のあいだは出さない） */}
       {showAttendance && !cancelledAt && (
         <div className="-mt-1 space-y-2 px-4 pb-3 lg:px-3 lg:pb-2.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <AttendanceToggle scheduleId={schedule.id} userId={userId!} initial={myStatus} onChanged={handleAttendanceChanged} />
-            <AttendeesButton attendees={attendeesState} defaultBlock={attendanceDefaultBlock} />
-          </div>
-          {attendanceStatus === "absent" && <AbsenceAttendanceControl scheduleId={schedule.id} userId={userId!} initialNote={absenceNote} onChanged={handleAbsenceNoteChanged} />}
-          {schedule.schedule_date === jstToday() && attendanceStatus === "present" && (
-            <LateAttendanceControl
-              scheduleId={schedule.id}
-              userId={userId!}
-              initialLate={lateState.late}
-              initialNote={lateState.note}
-              onChanged={handleLateChanged}
-            />
-          )}
+          {attendanceDays.map((day) => {
+            // 複数日開催は日ごとに出欠を出す。単日の予定は従来どおり1行だけ。
+            const dayAttendees = multiDayAttendance
+              ? attendeesState.filter((a) => a.attend_date === day)
+              : attendeesState;
+            const mine = attendeesState.find(
+              (a) => a.user_id === userId && a.attend_date === day,
+            );
+            const status = mine?.status ?? "none";
+            return (
+              <div key={day} className="space-y-2">
+                {multiDayAttendance && (
+                  <p className="text-caption font-medium">
+                    {format(new Date(`${day}T00:00:00`), "M/d (E)", { locale: ja })}
+                  </p>
+                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  <AttendanceToggle
+                    scheduleId={schedule.id}
+                    attendDate={day}
+                    userId={userId!}
+                    initial={status}
+                    onChanged={(change) => handleAttendanceChanged(day, change)}
+                  />
+                  <AttendeesButton attendees={dayAttendees} defaultBlock={attendanceDefaultBlock} />
+                </div>
+                {status === "absent" && (
+                  <AbsenceAttendanceControl
+                    scheduleId={schedule.id}
+                    attendDate={day}
+                    userId={userId!}
+                    initialNote={mine?.absence_note ?? null}
+                    onChanged={(note) => handleAbsenceNoteChanged(day, note)}
+                  />
+                )}
+                {day === jstToday() && status === "present" && (
+                  <LateAttendanceControl
+                    scheduleId={schedule.id}
+                    attendDate={day}
+                    userId={userId!}
+                    initialLate={mine?.is_late ?? false}
+                    initialNote={mine?.late_note ?? null}
+                    onChanged={(change) => handleLateChanged(day, change)}
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 

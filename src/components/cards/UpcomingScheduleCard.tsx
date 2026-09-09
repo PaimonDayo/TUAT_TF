@@ -11,6 +11,8 @@ import { AttendanceToggle, type AttendanceChange } from "@/components/features/A
 import { attendanceCounts } from "@/components/features/AttendeesButton";
 import { SCHEDULE_TYPES } from "@/lib/constants";
 import { venueShort } from "@/lib/venues";
+import { jstToday } from "@/lib/date";
+import { currentAttendanceDate, scheduleAttendanceDates } from "@/lib/schedule-days";
 import type {
   Attendee,
   AttendanceDefaultBlock,
@@ -42,18 +44,28 @@ export function UpcomingScheduleCard({
   /** 自分の出欠を即時反映するための最小プロフィール */
   myProfile: AuthorMini;
 }) {
+  // 複数日開催はまだ終わっていない最初の日を出す（残りの日は予定ページで日ごとに提出する）。
+  const days = scheduleAttendanceDates(schedule.schedule_date, schedule.end_date);
+  const attendDate = currentAttendanceDate(days, jstToday());
   const [status, setStatus] = useState<AttendanceStatusOrNone>(initialStatus);
   const [attendeesState, setAttendeesState] = useState(attendees);
   const meta = SCHEDULE_TYPES[schedule.schedule_type];
-  const counted = attendanceCounts(attendeesState, attendanceDefaultBlock);
+  const counted = attendanceCounts(
+    attendeesState.filter((attendee) => attendee.attend_date === attendDate),
+    attendanceDefaultBlock,
+  );
 
   function handleChanged(change: AttendanceChange) {
     setStatus(change.status);
     setAttendeesState((previous) => {
-      const others = previous.filter((attendee) => attendee.user_id !== userId);
+      const others = previous.filter(
+        (attendee) =>
+          !(attendee.user_id === userId && attendee.attend_date === attendDate),
+      );
       if (change.status === "none") return others;
       const mine: Attendee = {
         user_id: userId,
+        attend_date: attendDate,
         status: change.status,
         is_late: change.isLate,
         late_note: change.lateNote,
@@ -103,6 +115,7 @@ export function UpcomingScheduleCard({
       </Link>
       <AttendanceToggle
         scheduleId={schedule.id}
+        attendDate={attendDate}
         userId={userId}
         initial={status}
         onChanged={handleChanged}

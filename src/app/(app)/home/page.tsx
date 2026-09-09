@@ -126,7 +126,12 @@ async function SchedulesSection({ profile }: { profile: Profile }) {
     const snapshot = await fetchMiddleLongMenuSnapshot(middleLongMenuMonths(schedules));
     schedules = applyMiddleLongMenuSnapshot(schedules, snapshot);
   }
-  const todaySchedules = schedules.filter((schedule) => schedule.schedule_date === today);
+  // 複数日開催は最終日まで「本日の予定」に出す（初日を過ぎても消えない）。
+  const todaySchedules = schedules.filter(
+    (schedule) =>
+      schedule.schedule_date <= today &&
+      (schedule.end_date ?? schedule.schedule_date) >= today,
+  );
   const upcomingSchedules = schedules.filter((schedule) => schedule.schedule_date > today).slice(0, 3);
   const displayed = [...todaySchedules, ...upcomingSchedules];
   if (displayed.length === 0) return null;
@@ -134,7 +139,7 @@ async function SchedulesSection({ profile }: { profile: Profile }) {
   const attendeesBySchedule = new Map<string, Attendee[]>();
   for (const row of attendance) {
     const rows = attendeesBySchedule.get(row.schedule_id) ?? [];
-    rows.push({ user_id: row.user_id, status: row.status, is_late: row.is_late, late_note: row.late_note, absence_note: row.absence_note, profile: row.profile });
+    rows.push({ user_id: row.user_id, attend_date: row.attend_date, status: row.status, is_late: row.is_late, late_note: row.late_note, absence_note: row.absence_note, profile: row.profile });
     attendeesBySchedule.set(row.schedule_id, rows);
   }
 
@@ -145,7 +150,7 @@ async function SchedulesSection({ profile }: { profile: Profile }) {
         <div className="space-y-2">
           {todaySchedules.map((schedule) => {
             const attendees = attendeesBySchedule.get(schedule.id) ?? [];
-            const mine = attendees.find((attendee) => attendee.user_id === profile.id);
+            const mine = attendees.find((attendee) => attendee.user_id === profile.id && attendee.attend_date === schedule.schedule_date);
             return <ScheduleCard key={schedule.id} schedule={{ ...schedule, menus: schedule.menus ?? [] }} viewerBlocks={profile.blocks} userId={profile.id} myProfile={profile} myStatus={mine?.status ?? "none"} myLate={mine?.is_late ?? false} myLateNote={mine?.late_note ?? null} myAbsenceNote={mine?.absence_note ?? null} attendees={attendees} attendanceDefaultBlock={profile.attendance_default_block} canDecidePractice={perms.decidePractice} />;
           })}
         </div>
@@ -157,7 +162,12 @@ async function SchedulesSection({ profile }: { profile: Profile }) {
         <div className="space-y-2">
           {upcomingSchedules.map((schedule) => {
             const attendees = attendeesBySchedule.get(schedule.id) ?? [];
-            const mine = attendees.find((attendee) => attendee.user_id === profile.id);
+            // コンパクトカードが出すのは初日（まだ来ていない予定なので初日が対象日）。
+            const mine = attendees.find(
+              (attendee) =>
+                attendee.user_id === profile.id &&
+                attendee.attend_date === schedule.schedule_date,
+            );
             return (
               <UpcomingScheduleCard
                 key={schedule.id}

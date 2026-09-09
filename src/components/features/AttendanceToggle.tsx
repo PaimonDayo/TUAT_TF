@@ -37,15 +37,20 @@ export type LateAttendanceChange = {
   lateNote: string | null;
 };
 
-/** 未回答→出席→欠席→未回答の1タップ操作。失敗時は表示を戻してエラーを知らせる。 */
+/**
+ * 未回答→出席→欠席→未回答の1タップ操作。失敗時は表示を戻してエラーを知らせる。
+ * 複数日開催の予定は日ごとに1行ずつ置くので、attendDate でその日の出欠を指す。
+ */
 export function AttendanceToggle({
   scheduleId,
+  attendDate,
   userId,
   initial,
   refreshOnChange = false,
   onChanged,
 }: {
   scheduleId: string;
+  attendDate: string;
   userId: string;
   initial: AttendanceStatusOrNone;
   refreshOnChange?: boolean;
@@ -67,10 +72,10 @@ export function AttendanceToggle({
     const supabase = createClient();
     const result =
       next === "none"
-        ? await supabase.from("attendances").delete().eq("schedule_id", scheduleId).eq("user_id", userId).select("id")
+        ? await supabase.from("attendances").delete().eq("schedule_id", scheduleId).eq("attend_date", attendDate).eq("user_id", userId).select("id")
         : await supabase.from("attendances").upsert(
-            { schedule_id: scheduleId, user_id: userId, status: next, is_late: false, late_note: null, absence_note: null, updated_at: new Date().toISOString() },
-            { onConflict: "schedule_id,user_id" },
+            { schedule_id: scheduleId, attend_date: attendDate, user_id: userId, status: next, is_late: false, late_note: null, absence_note: null, updated_at: new Date().toISOString() },
+            { onConflict: "schedule_id,user_id,attend_date" },
           ).select("status, is_late, late_note, absence_note").single();
     setBusy(false);
     if (result.error || (next !== "none" && !result.data)) {
@@ -103,12 +108,14 @@ type SaveState = "idle" | "saving" | "saved" | "error";
 /** 当日の出席者だけに表示する遅刻設定。出欠チップと同じ見た目に揃え、送信状況を必ず表示する。 */
 export function LateAttendanceControl({
   scheduleId,
+  attendDate,
   userId,
   initialLate,
   initialNote,
   onChanged,
 }: {
   scheduleId: string;
+  attendDate: string;
   userId: string;
   initialLate: boolean;
   initialNote: string | null;
@@ -135,6 +142,7 @@ export function LateAttendanceControl({
       .from("attendances")
       .update({ late_note: normalized, updated_at: new Date().toISOString() })
       .eq("schedule_id", scheduleId)
+      .eq("attend_date", attendDate)
       .eq("user_id", userId)
       .eq("status", "present")
       .eq("is_late", true)
@@ -162,6 +170,7 @@ export function LateAttendanceControl({
       .from("attendances")
       .update({ is_late: next, late_note: nextNote, updated_at: new Date().toISOString() })
       .eq("schedule_id", scheduleId)
+      .eq("attend_date", attendDate)
       .eq("user_id", userId)
       .eq("status", "present")
       .select("is_late, late_note")
@@ -218,7 +227,7 @@ export function LateAttendanceControl({
 }
 
 
-export function AbsenceAttendanceControl({ scheduleId, userId, initialNote, onChanged }: { scheduleId: string; userId: string; initialNote: string | null; onChanged?: (note: string | null) => void; }) {
+export function AbsenceAttendanceControl({ scheduleId, attendDate, userId, initialNote, onChanged }: { scheduleId: string; attendDate: string; userId: string; initialNote: string | null; onChanged?: (note: string | null) => void; }) {
   const { showToast } = useToast();
   const [note, setNote] = useState(initialNote ?? "");
   const [noteState, setNoteState] = useState<SaveState>(initialNote ? "saved" : "idle");
@@ -226,7 +235,7 @@ export function AbsenceAttendanceControl({ scheduleId, userId, initialNote, onCh
   useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
   async function persist(value: string) {
     const normalized = value.trim() || null; setNoteState("saving");
-    const { data, error } = await createClient().from("attendances").update({ absence_note: normalized, updated_at: new Date().toISOString() }).eq("schedule_id", scheduleId).eq("user_id", userId).eq("status", "absent").select("absence_note").maybeSingle();
+    const { data, error } = await createClient().from("attendances").update({ absence_note: normalized, updated_at: new Date().toISOString() }).eq("schedule_id", scheduleId).eq("attend_date", attendDate).eq("user_id", userId).eq("status", "absent").select("absence_note").maybeSingle();
     if (error || !data) { setNoteState("error"); showToast("連絡事項を送信できませんでした", "error"); return; }
     setNoteState("saved"); onChanged?.(normalized);
   }

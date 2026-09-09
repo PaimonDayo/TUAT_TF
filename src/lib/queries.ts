@@ -364,6 +364,14 @@ function filterSchedulesForViewer<T extends { target_blocks?: string[] | null }>
   });
 }
 
+/**
+ * 「今後の予定」に残す条件。複数日開催（大会など）は初日を過ぎても
+ * 最終日までは今後の予定に出し続ける。終了日が無い予定は開催日そのもので判定する。
+ */
+export function stillRunningOrUpcoming(today: string) {
+  return `schedule_date.gte.${today},end_date.gte.${today}`;
+}
+
 export async function getUpcomingSchedules(
   viewerBlocks: Block[],
   canManage: boolean,
@@ -385,7 +393,7 @@ export async function getUpcomingSchedules(
         )
       )
     `)
-    .gte("schedule_date", today)
+    .or(stillRunningOrUpcoming(today))
     .order("schedule_date", { ascending: true })
     .order("meeting_time", { ascending: true, nullsFirst: false });
   if (type && type !== "all") q = q.eq("schedule_type", type);
@@ -419,6 +427,7 @@ export async function getUpcomingSchedulesWithAttendances(
       ),
       attendances(
         schedule_id,
+        attend_date,
         user_id,
         status,
         is_late,
@@ -427,7 +436,7 @@ export async function getUpcomingSchedulesWithAttendances(
         profile:profiles!user_id(id, display_name, avatar_url, blocks, grade)
       )
     `)
-    .gte("schedule_date", today)
+    .or(stillRunningOrUpcoming(today))
     .order("schedule_date", { ascending: true })
     .order("meeting_time", { ascending: true, nullsFirst: false })
     .limit(limit);
@@ -647,7 +656,7 @@ export async function getAttendanceSchedules(
   const { data, error } = await supabase
     .from("practice_schedules")
     .select("*")
-    .gte("schedule_date", today)
+    .or(stillRunningOrUpcoming(today))
     .in("schedule_type", ["practice", "meet", "event"])
     .order("schedule_date", { ascending: true })
     .order("meeting_time", { ascending: true, nullsFirst: false })
@@ -662,7 +671,7 @@ export async function getAttendancesForSchedules(scheduleIds: string[]) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("attendances")
-    .select("schedule_id, user_id, status, is_late, late_note, absence_note, profile:profiles!user_id(id, display_name, avatar_url, blocks, grade)")
+    .select("schedule_id, attend_date, user_id, status, is_late, late_note, absence_note, profile:profiles!user_id(id, display_name, avatar_url, blocks, grade)")
     .in("schedule_id", scheduleIds);
   if (error) throw new Error("Failed to load attendances: " + error.message);
   return (data ?? []).flatMap((row) => {

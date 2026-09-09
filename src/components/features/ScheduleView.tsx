@@ -100,7 +100,7 @@ export function ScheduleView({
                 )}
                 <div className="mb-3 min-w-0">
                   <ScheduleCard
-                    key={[s.id, (s.menus ?? []).map((menu) => `${menu.id}:${menu.updated_at}`).join(","), myStatusBySchedule[s.id] ?? "none", myLateNoteBySchedule[s.id] ?? "", myAbsenceNoteBySchedule[s.id] ?? "", (attendeesBySchedule[s.id] ?? []).map((a) => [a.user_id, a.status, a.is_late, a.late_note, a.absence_note].join(":")).join(",")].join("|")}
+                    key={[s.id, (s.menus ?? []).map((menu) => `${menu.id}:${menu.updated_at}`).join(","), myStatusBySchedule[s.id] ?? "none", myLateNoteBySchedule[s.id] ?? "", myAbsenceNoteBySchedule[s.id] ?? "", (attendeesBySchedule[s.id] ?? []).map((a) => [a.user_id, a.attend_date, a.status, a.is_late, a.late_note, a.absence_note].join(":")).join(",")].join("|")}
                     schedule={s}
                     viewerBlocks={viewerBlocks}
                     canEditMenu={canEditMenu}

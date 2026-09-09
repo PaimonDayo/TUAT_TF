@@ -401,6 +401,8 @@ export interface Attendance {
 /** 出席者の表示用 */
 export interface Attendee {
   user_id: string;
+  /** 出欠を出した日。複数日開催の予定は日ごとに1行ずつ持つ */
+  attend_date: string;
   status: AttendanceStatus;
   is_late: boolean;
   late_note: string | null;
