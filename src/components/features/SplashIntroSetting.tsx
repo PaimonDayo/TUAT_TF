@@ -46,7 +46,7 @@ export function SplashIntroSetting() {
     <Toggle
       variant="row"
       label="起動画面をスキップ"
-      description="次にアプリを開くときから、起動画面を表示しません。"
+      description="1日の最初にアプリを開いたときの、大会までのカウントダウンを表示しません。"
       checked={skip}
       onChange={toggle}
     />

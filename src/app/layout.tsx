@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { APP_NAME, APP_DESCRIPTION } from "@/lib/app";
-import SplashIntro from "@/components/SplashIntro";
+import SplashCountdown from "@/components/SplashCountdown";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 
 export const metadata: Metadata = {
@@ -57,19 +57,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ja" className="h-full">
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `try{if(sessionStorage.getItem("tuat-splash-played")==="1"||localStorage.getItem("tuat-splash-disabled")==="1")document.documentElement.dataset.tuatSplashSkip="1"}catch(e){}`,
-          }}
-        />
-        <style>{`html[data-tuat-splash-skip="1"] .tuat-splash-root{display:none!important}`}</style>
-      </head>
       <body className="min-h-full">
         {process.env.NEXT_PUBLIC_PC_TRIAL === "true" && <div className="bg-amber-100 px-4 py-2 text-center text-xs text-amber-950"><p role="status">PC試験版・本人限定｜変更はPC内のみ。スプシ同期・Push通知・画像変更・リアルタイム配信は停止中</p><form method="post" action="/_pc/logout"><button type="submit" className="mt-1 underline">試験版からログアウト</button></form></div>}
         {children}
         {process.env.NEXT_PUBLIC_PC_TRIAL !== "true" && <ServiceWorkerRegistrar />}
-        <SplashIntro />
+        <SplashCountdown />
       </body>
     </html>
   );
