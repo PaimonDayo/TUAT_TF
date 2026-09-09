@@ -68,15 +68,9 @@ export async function HomeContent() {
 }
 
 async function CompetitionSection() {
-  const result = await getHomeCompetition();
-  if (!result) return null;
-  return (
-    <CompetitionHome
-      competition={result.competition}
-      goalCount={result.goalCount}
-      initialToday={jstToday()}
-    />
-  );
+  const competition = await getHomeCompetition();
+  if (!competition) return null;
+  return <CompetitionHome competition={competition} initialToday={jstToday()} />;
 }
 
 async function NoticesSection({ userId }: { userId: string }) {

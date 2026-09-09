@@ -6,7 +6,10 @@ import { RefreshCw } from "lucide-react";
 /**
  * 新しいバージョンが公開されたら、更新バナーを表示する。
  * 起動時に取得したバージョンと、定期取得したバージョンが異なれば「更新あり」。
+ * デプロイは1日に何度もあるものではないので、定期取得は控えめにし、
+ * 画面に戻ってきたときの確認を主にする（通信の大半はこちらで足りる）。
  */
+const CHECK_INTERVAL_MS = 5 * 60_000;
 export function VersionWatcher() {
   const [stale, setStale] = useState(false);
   const loaded = useRef<string | null>(null);
@@ -35,7 +38,9 @@ export function VersionWatcher() {
       if (document.visibilityState === "visible") check();
     };
     document.addEventListener("visibilitychange", onVisible);
-    const id = setInterval(check, 60_000);
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") check();
+    }, CHECK_INTERVAL_MS);
 
     return () => {
       active = false;

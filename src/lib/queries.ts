@@ -1063,20 +1063,19 @@ export async function getCompetitionEvents() {
   return data ?? [];
 }
 
-/** ホームのカウントダウン。管理者が選んだ大会（無ければ非表示） */
+/**
+ * ホームのカウントダウン。管理者が選んだ大会（無ければ非表示）。
+ * 目標はマイページ→目標が入口なので、ここでは目標の件数を数えない。
+ */
 export async function getHomeCompetition() {
   const supabase = await createClient();
-  const { data: competition, error } = await supabase
+  const { data, error } = await supabase
     .from("competitions")
     .select(COMPETITION_SELECT)
     .eq("is_countdown", true)
     .maybeSingle();
-  if (error || !competition) return null;
-  const { count } = await supabase
-    .from("competition_goals")
-    .select("user_id", { count: "exact", head: true })
-    .eq("competition_id", competition.id);
-  return { competition: competition as CompetitionRow, goalCount: count ?? 0 };
+  if (error || !data) return null;
+  return data as CompetitionRow;
 }
 
 /** 目標一覧ページ（大会別）。目標の横に出す本人のPBも一緒に読む */

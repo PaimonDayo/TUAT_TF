@@ -5,6 +5,14 @@ import Link from "next/link";
 import { Bell } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
+/**
+ * PC運用中は Realtime を使えないので未読数をポーリングで見に行く。
+ * この通信はブラウザ→Vercelの中継→PCのDBを毎回通るため、アプリ全体で
+ * 一番回数の多い呼び出しになる。お知らせは秒単位の即時性を要さないので
+ * 間隔を広めに取り、画面を見ていない間は止める（戻った瞬間に取り直す）。
+ */
+const PC_POLL_INTERVAL_MS = 120_000;
+
 export function NotificationBell({
   userId,
   initialUnread,
@@ -40,14 +48,32 @@ export function NotificationBell({
       )
       .subscribe();
 
-    function visible() {
-      if (document.visibilityState === "visible") void refreshUnread();
+    const polls = process.env.NEXT_PUBLIC_PC_BACKEND === "true";
+    let timer: number | undefined;
+
+    function stopTimer() {
+      if (timer !== undefined) window.clearInterval(timer);
+      timer = undefined;
     }
+    // 表示中だけタイマーを動かす。裏に回っている間は1回も投げない。
+    function startTimer() {
+      if (!polls || timer !== undefined) return;
+      timer = window.setInterval(() => void refreshUnread(), PC_POLL_INTERVAL_MS);
+    }
+    function visible() {
+      if (document.visibilityState !== "visible") {
+        stopTimer();
+        return;
+      }
+      void refreshUnread();
+      startTimer();
+    }
+
     document.addEventListener("visibilitychange", visible);
-    const timer = process.env.NEXT_PUBLIC_PC_BACKEND === "true" ? window.setInterval(visible, 30_000) : undefined;
+    if (document.visibilityState === "visible") startTimer();
     return () => {
       document.removeEventListener("visibilitychange", visible);
-      if (timer !== undefined) window.clearInterval(timer);
+      stopTimer();
       if (channel) void supabase.removeChannel(channel);
     };
   }, [refreshUnread, userId]);
