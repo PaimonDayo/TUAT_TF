@@ -1112,3 +1112,37 @@ export async function getCompetitionById(id: string) {
     .maybeSingle();
   return (data as CompetitionRow | null) ?? null;
 }
+
+/**
+ * 目標ページ（マイページ→目標）のハブ用。
+ * 大会を「これから／終わった」に分け、自分が設定済みの目標件数を大会ごとに数える。
+ * 終了日が無い大会は開催日そのものを終了日として扱う。
+ */
+export async function getGoalHub(userId: string) {
+  const supabase = await createClient();
+  const today = jstToday();
+  const [competitions, { data: goals }] = await Promise.all([
+    getCompetitions(),
+    supabase
+      .from("competition_goals")
+      .select("competition_id")
+      .eq("user_id", userId),
+  ]);
+  const myGoalCounts = new Map<string, number>();
+  for (const row of goals ?? [])
+    myGoalCounts.set(
+      row.competition_id,
+      (myGoalCounts.get(row.competition_id) ?? 0) + 1,
+    );
+  const isOver = (row: CompetitionRow) =>
+    (row.ends_on ?? row.starts_on) < today;
+  return {
+    upcoming: competitions
+      .filter((row) => !isOver(row))
+      .sort((a, b) => a.starts_on.localeCompare(b.starts_on)),
+    past: competitions
+      .filter(isOver)
+      .sort((a, b) => b.starts_on.localeCompare(a.starts_on)),
+    myGoalCounts,
+  };
+}

@@ -11,7 +11,6 @@ import { Linkify } from "@/components/common/Linkify";
 import { ActivityFeed } from "@/components/features/ActivityFeed";
 import { MyTrainingChartCached } from "@/components/features/MyTrainingChartCached";
 import { EditProfileButton } from "@/components/features/MyPageActions";
-import { GoalEditor } from "@/components/features/GoalEditor";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getUserRecords, getUserActivity } from "@/lib/queries";
 import { gradeShort } from "@/lib/constants";
@@ -106,9 +105,8 @@ export default async function MyPage({
 
         {/* リンク（1枚にまとめた区切り線リスト） */}
         <Card className="divide-y divide-separator/70 overflow-hidden">
-          <GoalEditor userId={profile.id} goal={profile.goal} />
+          <RowLink href="/goals" icon={<Target size={20} className="text-accent" />} label="目標" />
           <RowLink href="/mypage/pb" icon={<Medal size={20} className="text-warning" />} label="大会・記録会の結果" />
-          <RowLink href="/competitions" icon={<Trophy size={20} className="text-warning" />} label="大会" />
           <RowLink href="/members" icon={<Users size={20} className="text-accent" />} label="メンバー一覧" />
           <RowLink href="/blog" icon={<Rss size={20} className="text-accent" />} label="ブログ" />
           <RowLink href="/mypage/settings" icon={<Settings size={20} className="text-muted2" />} label="設定" />
@@ -139,7 +137,10 @@ export default async function MyPage({
                 <RowLink href="/venues" icon={<MapPin size={20} className="text-accent" />} label="練習場所" />
               )}
               {perms.manageSystem && (
-                <RowLink href="/events" icon={<ListOrdered size={20} className="text-accent" />} label="種目" />
+                <>
+                  <RowLink href="/competitions" icon={<Trophy size={20} className="text-accent" />} label="大会" />
+                  <RowLink href="/events" icon={<ListOrdered size={20} className="text-accent" />} label="種目" />
+                </>
               )}
             </Card>
           </section>

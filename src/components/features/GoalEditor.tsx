@@ -10,15 +10,17 @@ import { Button } from "@/components/ui/button";
 import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 
 /**
- * 目標（自由入力）の表示＆編集ボタン。
- * 「大会・記録会の結果」と同じ並びに置くカード型のボタン。
+ * 目標（自由入力）の編集ボタン。目標ページ（/goals）の自由入力カードに置く。
+ * 大会ごとの種目別の目標は /competitions/[id]/goals が担当する。
  */
 export function GoalEditor({
   userId,
   goal: initialGoal,
+  label = "目標",
 }: {
   userId: string;
   goal: string | null;
+  label?: string;
 }) {
   const router = useRouter();
   const [goal, setGoal] = useState(initialGoal ?? "");
@@ -61,7 +63,7 @@ export function GoalEditor({
         className="flex w-full items-center gap-3 p-4 text-left active:bg-bg"
       >
         <Target size={20} className="text-accent" />
-        <span className="flex-1 text-headline">目標</span>
+        <span className="flex-1 text-headline">{label}</span>
         <ChevronRight size={18} className="text-muted" />
       </button>
 
