@@ -3,13 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarDays, ChevronRight, Plus } from "lucide-react";
+import { CalendarDays, ChevronRight, Plus, SlidersHorizontal } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
+import { ReorderList } from "@/components/ui/reorder-list";
 import { Toggle } from "@/components/ui/toggle";
 import { useToast } from "@/components/ui/toast";
 import { formatRecordedOn } from "@/lib/competition-record";
@@ -31,6 +32,26 @@ export function CompetitionManager({
   const [items, setItems] = useState(initial);
   const [editing, setEditing] = useState<CompetitionRow | null>(null);
   const [creating, setCreating] = useState(false);
+  const [reorderMode, setReorderMode] = useState(false);
+
+  /** ドラッグした順に 10 刻みで振り直す（数字を手で入れなくてよいように） */
+  async function reorder(next: CompetitionRow[]) {
+    const previous = items;
+    const renumbered = next.map((c, index) => ({
+      ...c,
+      sort_order: (index + 1) * 10,
+    }));
+    setItems(renumbered);
+    const { error } = await createClient()
+      .from("competitions")
+      .upsert(renumbered);
+    if (error) {
+      setItems(previous);
+      showToast("並び順を更新できませんでした");
+      return;
+    }
+    router.refresh();
+  }
 
   async function setCountdown(target: CompetitionRow) {
     const previous = items;
@@ -84,8 +105,25 @@ export function CompetitionManager({
         </Card>
       )}
 
-      <div className="space-y-2">
-        {items.map((c) => (
+      {canManage && items.length > 1 && (
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            size="sm"
+            variant={reorderMode ? "primary" : "outline"}
+            onClick={() => setReorderMode((value) => !value)}
+          >
+            <SlidersHorizontal size={16} />
+            {reorderMode ? "完了" : "並べ替え"}
+          </Button>
+        </div>
+      )}
+
+      <ReorderList
+        items={items}
+        enabled={canManage && reorderMode}
+        onReorder={(next) => void reorder(next)}
+        renderItem={(c) => (
           <Card key={c.id} className="p-3">
             <div className="flex items-start gap-2">
               <Link
@@ -109,7 +147,7 @@ export function CompetitionManager({
               </Link>
               <div className="flex shrink-0 items-center gap-1">
                 <ChevronRight size={16} className="text-muted" />
-                {canManage && (
+                {canManage && !reorderMode && (
                   <ActionMenu
                     onEdit={() => setEditing(c)}
                     onDelete={() => remove(c)}
@@ -120,7 +158,7 @@ export function CompetitionManager({
                 )}
               </div>
             </div>
-            {canManage && (
+            {canManage && !reorderMode && (
               <Toggle
                 label="ホームのカウントダウンに出す"
                 checked={c.is_countdown}
@@ -129,8 +167,8 @@ export function CompetitionManager({
               />
             )}
           </Card>
-        ))}
-      </div>
+        )}
+      />
 
       {canManage && (
         <Button
@@ -189,7 +227,7 @@ function CompetitionForm({
   const [name, setName] = useState(competition?.name ?? "");
   const [startsOn, setStartsOn] = useState(competition?.starts_on ?? "");
   const [endsOn, setEndsOn] = useState(competition?.ends_on ?? "");
-  const [sort, setSort] = useState(sortOrder);
+  const sort = sortOrder;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -256,16 +294,6 @@ function CompetitionForm({
           type="date"
           value={endsOn}
           onChange={(e) => setEndsOn(e.target.value)}
-        />
-      </div>
-      <div>
-        <p className="section-label mb-1.5">表示順（小さい順）</p>
-        <Input
-          type="number"
-          min={0}
-          step={1}
-          value={sort}
-          onChange={(e) => setSort(Number(e.target.value))}
         />
       </div>
       {error && <p className="text-caption text-danger text-center">{error}</p>}

@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, SlidersHorizontal } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
+import { ReorderList } from "@/components/ui/reorder-list";
 import { useToast } from "@/components/ui/toast";
 import {
   MEASURE_TYPE_LABEL,
@@ -44,6 +45,23 @@ export function CompetitionEventManager({
   );
   const [mergeTo, setMergeTo] = useState("");
   const [busy, setBusy] = useState(false);
+  const [reorderMode, setReorderMode] = useState(false);
+
+  /** ドラッグした順に 10 刻みで振り直す（数字を手で入れなくてよいように） */
+  async function reorder(next: CompetitionEvent[]) {
+    const previous = items;
+    const renumbered = next.map((e, index) => ({ ...e, sort_order: (index + 1) * 10 }));
+    setItems(renumbered);
+    const { error } = await createClient()
+      .from("competition_events")
+      .upsert(renumbered);
+    if (error) {
+      setItems(previous);
+      showToast("並び順を更新できませんでした");
+      return;
+    }
+    router.refresh();
+  }
 
   async function remove(event: CompetitionEvent) {
     const { error } = await createClient()
@@ -142,31 +160,57 @@ export function CompetitionEventManager({
       )}
 
       <section className="space-y-2">
-        <p className="section-label">登録済みの種目</p>
-        {items.map((e) => (
-          <Card key={e.name} className="p-3">
-            <div className="flex items-start gap-2">
-              <div className="min-w-0 flex-1">
-                <p className="text-headline break-words">{e.name}</p>
-                <p className="text-caption">
-                  {MEASURE_TYPE_LABEL[
-                    (isMeasureType(e.measure_type)
-                      ? e.measure_type
-                      : "time") as MeasureType
-                  ]}
-                  ・表示順 {e.sort_order}
-                </p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="section-label">登録済みの種目</p>
+          <Button
+            type="button"
+            size="sm"
+            variant={reorderMode ? "primary" : "outline"}
+            disabled={busy || items.length < 2}
+            onClick={() => setReorderMode((value) => !value)}
+          >
+            <SlidersHorizontal size={16} />
+            {reorderMode ? "完了" : "並べ替え"}
+          </Button>
+        </div>
+        <ReorderList
+          items={items.map((e) => ({ ...e, id: e.name }))}
+          enabled={reorderMode}
+          onReorder={(next) =>
+            void reorder(
+              next.map(({ name, sort_order, measure_type }) => ({
+                name,
+                sort_order,
+                measure_type,
+              })),
+            )
+          }
+          renderItem={(e) => (
+            <Card key={e.name} className="p-3">
+              <div className="flex items-start gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-headline break-words">{e.name}</p>
+                  <p className="text-caption">
+                    {MEASURE_TYPE_LABEL[
+                      (isMeasureType(e.measure_type)
+                        ? e.measure_type
+                        : "time") as MeasureType
+                    ]}
+                  </p>
+                </div>
+                {!reorderMode && (
+                  <ActionMenu
+                    onEdit={() => setEditing(e)}
+                    onDelete={() => remove(e)}
+                    deleteTitle={`「${e.name}」を削除しますか？`}
+                    deleteDescription="目標が登録されている種目は削除できません。"
+                    triggerLabel={`${e.name}のメニュー`}
+                  />
+                )}
               </div>
-              <ActionMenu
-                onEdit={() => setEditing(e)}
-                onDelete={() => remove(e)}
-                deleteTitle={`「${e.name}」を削除しますか？`}
-                deleteDescription="目標が登録されている種目は削除できません。"
-                triggerLabel={`${e.name}のメニュー`}
-              />
-            </div>
-          </Card>
-        ))}
+            </Card>
+          )}
+        />
       </section>
 
       <Button
@@ -256,7 +300,7 @@ function EventForm({
   onSaved: (saved: CompetitionEvent, previousName?: string) => void;
 }) {
   const [name, setName] = useState(event?.name ?? "");
-  const [sort, setSort] = useState(sortOrder);
+  const sort = sortOrder;
   const [measure, setMeasure] = useState<MeasureType>(
     event && isMeasureType(event.measure_type) ? event.measure_type : "time",
   );
@@ -264,8 +308,8 @@ function EventForm({
   const [error, setError] = useState<string | null>(null);
 
   async function submit() {
-    if (!name.trim() || !Number.isInteger(sort) || sort < 0) {
-      setError("種目名と0以上の表示順を入力してください");
+    if (!name.trim()) {
+      setError("種目名を入力してください");
       return;
     }
     setSaving(true);
@@ -326,18 +370,8 @@ function EventForm({
           ))}
         </select>
         <p className="mt-1 text-caption">
-          結果の入力欄がこの設定で切り替わります。
+          結果の入力欄がこの設定で切り替わります。並び順は一覧の「並べ替え」から変えられます。
         </p>
-      </div>
-      <div>
-        <p className="section-label mb-1.5">表示順（小さい順）</p>
-        <Input
-          type="number"
-          min={0}
-          step={1}
-          value={sort}
-          onChange={(e) => setSort(Number(e.target.value))}
-        />
       </div>
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <FormModalFooter>
