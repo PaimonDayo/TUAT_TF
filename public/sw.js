@@ -1,6 +1,13 @@
 const CACHE_PREFIX = 'tuat-tf-';
 const OFFLINE_CACHE = 'tuat-tf-public-offline-v1';
 const OFFLINE_ASSETS = ['/offline', '/branding/summer-icon-192.png'];
+// アプリの部品（JS・CSS・フォント）を置いておく場所。中身が変わるとURLも変わる作りなので、
+// 一度取れたものはそのまま使ってよい。これが無いと起動のたびに部品を取り直すことになり、
+// 電波の悪いところではそこが待ち時間の大半になる。
+const STATIC_CACHE = 'tuat-tf-static-v1';
+const KEPT_CACHES = [OFFLINE_CACHE, STATIC_CACHE];
+// 古い版の部品は消えずに溜まるので、増えすぎたらまとめて捨てて入れ直す。
+const STATIC_CACHE_MAX_ENTRIES = 250;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(OFFLINE_CACHE).then((cache) => cache.addAll(OFFLINE_ASSETS)));
@@ -8,22 +15,42 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) => Promise.all(
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(
       keys
-        .filter((key) => key.startsWith(CACHE_PREFIX) && key !== OFFLINE_CACHE)
+        .filter((key) => key.startsWith(CACHE_PREFIX) && !KEPT_CACHES.includes(key))
         .map((key) => caches.delete(key)),
-    )),
-  );
+    );
+    const cache = await caches.open(STATIC_CACHE);
+    if ((await cache.keys()).length > STATIC_CACHE_MAX_ENTRIES) await caches.delete(STATIC_CACHE);
+  })());
   self.clients.claim();
 });
 
-// Never cache authenticated HTML, RSC payloads, or API responses.
+// Cache only the app's own content-hashed assets. Authenticated HTML, RSC payloads,
+// and API responses are never cached.
 // For failed navigations, serve only the public offline explanation page.
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET' || event.request.mode !== 'navigate') return;
+  const request = event.request;
+  if (request.method !== 'GET') return;
+
+  const url = new URL(request.url);
+  if (url.origin === self.location.origin && url.pathname.startsWith('/_next/static/')) {
+    event.respondWith((async () => {
+      const cache = await caches.open(STATIC_CACHE);
+      const stored = await cache.match(request);
+      if (stored) return stored;
+      const response = await fetch(request);
+      if (response.ok) cache.put(request, response.clone());
+      return response;
+    })());
+    return;
+  }
+
+  if (request.mode !== 'navigate') return;
   event.respondWith(
-    fetch(event.request).catch(async () =>
+    fetch(request).catch(async () =>
       (await caches.match('/offline')) || Response.error(),
     ),
   );
