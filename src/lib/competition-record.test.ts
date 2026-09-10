@@ -69,7 +69,7 @@ describe("dates and grouping", () => {
     expect(formatRecordedOn(null, "day")).toBe("");
   });
   it("groups every pre-university record together", () => {
-    expect(recordGroupKey({ stage: "pre_university", recorded_on: "2022-06-01" })).toBe("大学以前");
+    expect(recordGroupKey({ stage: "pre_university", recorded_on: "2022-06-01" })).toBe("高校以前");
     expect(recordGroupKey({ stage: "university", recorded_on: "2026-06-01" })).toBe("2026年");
     expect(recordGroupKey({ stage: "university", recorded_on: null })).toBe("日付未設定");
   });

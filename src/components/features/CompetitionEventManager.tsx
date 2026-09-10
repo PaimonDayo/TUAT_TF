@@ -12,9 +12,11 @@ import { Input } from "@/components/ui/input";
 import { ReorderList } from "@/components/ui/reorder-list";
 import { useToast } from "@/components/ui/toast";
 import {
-  MEASURE_TYPE_LABEL,
-  isMeasureType,
-  type MeasureType,
+  RECORD_FORMAT_LABEL,
+  isRecordFormat,
+  fromRecordFormat,
+  recordFormatOf,
+  type RecordFormat,
 } from "@/lib/competition-record";
 import type { CompetitionEvent } from "@/lib/competition-goals";
 
@@ -85,8 +87,9 @@ export function CompetitionEventManager({
         name,
         sort_order: Math.max(0, ...items.map((e) => e.sort_order)) + 10,
         measure_type: "time",
+        time_format: "minutes",
       })
-      .select("name,sort_order,measure_type")
+      .select("name,sort_order,measure_type,time_format")
       .single();
     setBusy(false);
     if (error || !data) {
@@ -178,10 +181,11 @@ export function CompetitionEventManager({
           enabled={reorderMode}
           onReorder={(next) =>
             void reorder(
-              next.map(({ name, sort_order, measure_type }) => ({
+              next.map(({ name, sort_order, measure_type, time_format }) => ({
                 name,
                 sort_order,
                 measure_type,
+                time_format,
               })),
             )
           }
@@ -191,11 +195,7 @@ export function CompetitionEventManager({
                 <div className="min-w-0 flex-1">
                   <p className="text-headline break-words">{e.name}</p>
                   <p className="text-caption">
-                    {MEASURE_TYPE_LABEL[
-                      (isMeasureType(e.measure_type)
-                        ? e.measure_type
-                        : "time") as MeasureType
-                    ]}
+                    {RECORD_FORMAT_LABEL[recordFormatOf([e], e.name)]}
                   </p>
                 </div>
                 {!reorderMode && (
@@ -301,8 +301,8 @@ function EventForm({
 }) {
   const [name, setName] = useState(event?.name ?? "");
   const sort = sortOrder;
-  const [measure, setMeasure] = useState<MeasureType>(
-    event && isMeasureType(event.measure_type) ? event.measure_type : "time",
+  const [format, setFormat] = useState<RecordFormat>(
+    event ? recordFormatOf([event], event.name) : "minutes",
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -318,19 +318,19 @@ function EventForm({
     const payload = {
       name: name.trim(),
       sort_order: sort,
-      measure_type: measure,
+      ...fromRecordFormat(format),
     };
     const { data, error: saveError } = event
       ? await supabase
           .from("competition_events")
           .update(payload)
           .eq("name", event.name)
-          .select("name,sort_order,measure_type")
+          .select("name,sort_order,measure_type,time_format")
           .single()
       : await supabase
           .from("competition_events")
           .insert(payload)
-          .select("name,sort_order,measure_type")
+          .select("name,sort_order,measure_type,time_format")
           .single();
     if (saveError || !data) {
       setError("保存できませんでした。同じ名前の種目がないか確認してください");
@@ -352,20 +352,18 @@ function EventForm({
         />
       </div>
       <div>
-        <p className="section-label mb-1.5">記録の測り方</p>
+        <p className="section-label mb-1.5">記録の書き方</p>
         <select
-          aria-label="記録の測り方"
+          aria-label="記録の書き方"
           className={selectClass}
-          value={measure}
+          value={format}
           onChange={(e) =>
-            setMeasure(
-              isMeasureType(e.target.value) ? e.target.value : "time",
-            )
+            setFormat(isRecordFormat(e.target.value) ? e.target.value : "minutes")
           }
         >
-          {(Object.keys(MEASURE_TYPE_LABEL) as MeasureType[]).map((key) => (
+          {(Object.keys(RECORD_FORMAT_LABEL) as RecordFormat[]).map((key) => (
             <option key={key} value={key}>
-              {MEASURE_TYPE_LABEL[key]}
+              {RECORD_FORMAT_LABEL[key]}
             </option>
           ))}
         </select>

@@ -20,11 +20,17 @@ import {
   formatRecord,
   fromCentiseconds,
   measureTypeOf,
+  recordFormatOf,
+  parseDecimalSeconds,
+  parseDecimalMetres,
+  decimalSecondsInput,
+  decimalMetresInput,
   parseRecordText,
   toCentiseconds,
   type DatePrecision,
   type RecordStage,
   type ResultStatus,
+  type TimeFormat,
 } from "@/lib/competition-record";
 import { cn } from "@/lib/utils";
 import type { CompetitionEvent } from "@/lib/competition-goals";
@@ -36,7 +42,38 @@ const selectClass =
 
 export type ResultFormHandle = { save: () => void };
 
-/** 数値だけを受け取る小さな入力欄（空文字は未入力） */
+
+/** 小数で入れる欄（秒・メートル）。小数点は1つだけ、小数部は2桁まで。 */
+function DecimalField({
+  label,
+  value,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  placeholder?: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="flex-1 text-caption">
+      {label}
+      <Input
+        inputMode="decimal"
+        placeholder={placeholder}
+        value={value}
+        onChange={(event) => {
+          const cleaned = event.target.value.replace(/[^0-9.]/g, "");
+          const [whole, ...rest] = cleaned.split(".");
+          onChange(
+            rest.length ? `${whole}.${rest.join("").slice(0, 2)}` : whole,
+          );
+        }}
+      />
+    </label>
+  );
+}
+
 function NumberField({
   label,
   value,
@@ -100,6 +137,9 @@ export const ResultForm = forwardRef<
   );
   const eventName = eventChoice === OTHER ? eventOther.trim() : eventChoice;
   const measure = measureTypeOf(events, eventName);
+  // 種目ごとに決めた書き方で入力欄を出し分ける（分と秒 / 秒 / メートル / 得点）。
+  const recordFormat = recordFormatOf(events, eventName);
+  const timeFormat: TimeFormat = recordFormat === "seconds" ? "seconds" : "minutes";
 
   const legacy = useMemo(
     () =>
@@ -120,15 +160,13 @@ export const ResultForm = forwardRef<
   const [minutes, setMinutes] = useState(
     parts && (parts.minutes || parts.hours) ? String(parts.minutes) : "",
   );
-  const [seconds, setSeconds] = useState(parts ? String(parts.seconds) : "");
-  const [centis, setCentis] = useState(
-    parts ? String(parts.centis).padStart(2, "0") : "",
+  // 秒は小数で1欄にまとめる（「1/100」という言い方をやめる）。
+  // 秒で書く種目は分へ繰り上げず、61.85 のようにそのまま秒で入れる。
+  const [seconds, setSeconds] = useState(
+    initialCs !== null ? decimalSecondsInput(initialCs, timeFormat) : "",
   );
   const [metres, setMetres] = useState(
-    initialCm !== null ? String(Math.floor(initialCm / 100)) : "",
-  );
-  const [centimetres, setCentimetres] = useState(
-    initialCm !== null ? String(initialCm % 100).padStart(2, "0") : "",
+    initialCm !== null ? decimalMetresInput(initialCm) : "",
   );
   const [points, setPoints] = useState(
     initialPoints !== null ? String(initialPoints) : "",
@@ -169,9 +207,9 @@ export const ResultForm = forwardRef<
     hours,
     minutes,
     seconds,
-    centis,
+
     metres,
-    centimetres,
+
     points,
     status,
     wind,
@@ -203,24 +241,28 @@ export const ResultForm = forwardRef<
   function buildValues() {
     if (status !== "ok")
       return { value_cs: null, value_cm: null, value_points: null };
-    if (measure === "distance") {
-      const cm =
-        Number(metres || 0) * 100 + Number((centimetres || "0").padEnd(2, "0"));
-      return { value_cs: null, value_cm: cm, value_points: null };
-    }
+    if (measure === "distance")
+      return {
+        value_cs: null,
+        value_cm: parseDecimalMetres(metres) ?? 0,
+        value_points: null,
+      };
     if (measure === "points")
       return {
         value_cs: null,
         value_cm: null,
         value_points: Number(points || 0),
       };
+    // 秒で書く種目は秒だけ、分と秒で書く種目は時・分も足して 1/100秒 へ直す。
+    const secondsCs = parseDecimalSeconds(seconds) ?? 0;
     return {
-      value_cs: toCentiseconds({
-        hours: Number(hours || 0),
-        minutes: Number(minutes || 0),
-        seconds: Number(seconds || 0),
-        centis: Number((centis || "0").padEnd(2, "0")),
-      }),
+      value_cs:
+        timeFormat === "seconds"
+          ? secondsCs
+          : toCentiseconds({
+              hours: Number(hours || 0),
+              minutes: Number(minutes || 0),
+            }) + secondsCs,
       value_cm: null,
       value_points: null,
     };
@@ -276,7 +318,7 @@ export const ResultForm = forwardRef<
       ...values,
       result_status: status,
       wind: measure === "points" ? null : windValue,
-      record: formatRecord({ ...values, result_status: status }, measure),
+      record: formatRecord({ ...values, result_status: status }, measure, timeFormat),
       competition_id: meetMode === "catalog" ? competitionId || null : null,
       meet_name:
         meetMode === "catalog"
@@ -285,7 +327,7 @@ export const ResultForm = forwardRef<
       stage,
       ...date,
       is_pb: isPb,
-      is_ub: isUb,
+      is_ub: stage === "university" && isUb,
       is_official: isOfficial,
     };
 
@@ -381,16 +423,23 @@ export const ResultForm = forwardRef<
 
         {status === "ok" && measure === "time" && (
           <div className="mt-2 flex items-end gap-2">
-            <NumberField label="時（任意）" value={hours} onChange={setHours} max={23} />
-            <NumberField label="分" value={minutes} onChange={setMinutes} max={999} />
-            <NumberField label="秒" value={seconds} onChange={setSeconds} max={59} />
-            <NumberField label="1/100" value={centis} onChange={setCentis} max={99} />
+            {timeFormat === "minutes" && (
+              <>
+                <NumberField label="時（任意）" value={hours} onChange={setHours} max={23} />
+                <NumberField label="分" value={minutes} onChange={setMinutes} max={999} />
+              </>
+            )}
+            <DecimalField
+              label="秒"
+              placeholder={timeFormat === "seconds" ? "61.85" : "32.40"}
+              value={seconds}
+              onChange={setSeconds}
+            />
           </div>
         )}
         {status === "ok" && measure === "distance" && (
           <div className="mt-2 flex items-end gap-2">
-            <NumberField label="m" value={metres} onChange={setMetres} max={99} />
-            <NumberField label="cm" value={centimetres} onChange={setCentimetres} max={99} />
+            <DecimalField label="m" placeholder="6.85" value={metres} onChange={setMetres} />
           </div>
         )}
         {status === "ok" && measure === "points" && (
@@ -527,18 +576,21 @@ export const ResultForm = forwardRef<
         checked={isPb}
         onChange={() => setIsPb((v) => !v)}
       />
-      <Toggle
-        label="UB（大学ベスト）として記録"
-        checked={isUb}
-        onChange={() => setIsUb((v) => !v)}
-      />
+      {/* UB は大学の記録に対する印なので、高校以前には出さない。 */}
+      {stage === "university" && (
+        <Toggle
+          label="UB（大学ベスト）として記録"
+          checked={isUb}
+          onChange={() => setIsUb((v) => !v)}
+        />
+      )}
       <Toggle
         label="公認記録"
         checked={isOfficial}
         onChange={() => setIsOfficial((v) => !v)}
       />
       <p className="text-caption">
-        PB・UB は種目ごとに1件だけ付きます。新しく付けると、同じ種目の前の記録からは外れます。
+        PB・UB は種目ごとに1件だけ付きます。新しく付けると、同じ種目の前の記録からは外れます。UBは大学の記録だけに付きます。
       </p>
 
       {error && <p className="text-caption text-danger text-center">{error}</p>}

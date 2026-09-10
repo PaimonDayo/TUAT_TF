@@ -1057,7 +1057,7 @@ export async function getCompetitionEvents() {
   const supabase = await createClient();
   const { data } = await supabase
     .from("competition_events")
-    .select("name,sort_order,measure_type")
+    .select("name,sort_order,measure_type,time_format")
     .order("sort_order")
     .order("name");
   return data ?? [];

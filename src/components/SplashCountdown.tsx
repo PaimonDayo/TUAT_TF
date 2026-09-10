@@ -18,10 +18,15 @@ import styles from "./SplashCountdown.module.css";
 const EXIT_AFTER_MS = 2600;
 const REMOVE_AFTER_MS = 3050;
 
-const TAB_ROUTES = [
-  "/home", "/schedule", "/timeline", "/notes", "/mypage",
-  "/members", "/notices", "/ranking", "/venues", "/blog",
-];
+/**
+ * 起動直後に先読みするのは下のタブだけ（ホームはいま開いている画面なので除く）。
+ * 先読み1本ごとにサーバーがその画面を丸ごと組み立て直し、DBを何度も往復する。
+ * 起動と同時に10画面ぶん投げると、その全部が、いま出そうとしているホームと
+ * 同じDBを取り合って、ホームの表示自体を遅くする。
+ */
+const TAB_ROUTES = ["/schedule", "/timeline", "/notes", "/mypage"];
+const PREFETCH_AFTER_LOAD_MS = 800;
+const PREFETCH_GAP_MS = 500;
 
 /**
  * 起動画面。アプリを開くたびに、次の大会まであと何日かをカウンタで見せる。
@@ -59,21 +64,30 @@ export default function SplashCountdown() {
     // 覚えている日付を1日1回だけ取り直す。ログイン前は読めないので、そのときは何もしない。
     if (!cache || cache.fetchedOn !== today) void refreshCache(today);
 
-    if (!show) return;
+    // タブの先読みは、いま開いている画面が出そろってから始める。起動画面を切っている
+    // 人にも同じように効かせたいので、表示するかどうかとは切り離しておく。
+    const timers: number[] = [];
+    const queuePrefetch = () => {
+      timers.push(
+        window.setTimeout(() => {
+          TAB_ROUTES.forEach((route, index) => {
+            timers.push(window.setTimeout(() => router.prefetch(route), index * PREFETCH_GAP_MS));
+          });
+        }, PREFETCH_AFTER_LOAD_MS),
+      );
+    };
+    if (document.readyState === "complete") queuePrefetch();
+    else window.addEventListener("load", queuePrefetch, { once: true });
 
-    const rollTimer = window.setTimeout(() => setRolled(true), 60);
-    const prefetchTimer = window.setTimeout(() => {
-      TAB_ROUTES.forEach((route, index) => {
-        window.setTimeout(() => router.prefetch(route), index * 130);
-      });
-    }, 200);
-    const exitTimer = window.setTimeout(() => setExiting(true), EXIT_AFTER_MS);
-    const removeTimer = window.setTimeout(() => setShown(null), REMOVE_AFTER_MS);
+    if (show) {
+      timers.push(window.setTimeout(() => setRolled(true), 60));
+      timers.push(window.setTimeout(() => setExiting(true), EXIT_AFTER_MS));
+      timers.push(window.setTimeout(() => setShown(null), REMOVE_AFTER_MS));
+    }
+
     return () => {
-      window.clearTimeout(rollTimer);
-      window.clearTimeout(prefetchTimer);
-      window.clearTimeout(exitTimer);
-      window.clearTimeout(removeTimer);
+      window.removeEventListener("load", queuePrefetch);
+      timers.forEach((timer) => window.clearTimeout(timer));
     };
   }, [router]);
 

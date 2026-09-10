@@ -15,9 +15,9 @@ export type Database = {
   public: {
     Tables: {
       competition_events: {
-        Row: { name: string; sort_order: number; measure_type: string }
-        Insert: { name: string; sort_order?: number; measure_type?: string }
-        Update: { name?: string; sort_order?: number; measure_type?: string }
+        Row: { name: string; sort_order: number; measure_type: string; time_format: string }
+        Insert: { name: string; sort_order?: number; measure_type?: string; time_format?: string }
+        Update: { name?: string; sort_order?: number; measure_type?: string; time_format?: string }
         Relationships: []
       }
       note_image_cleanup: {

@@ -29,11 +29,12 @@ const getStoredProfile = cache(async (): Promise<Profile> => {
 
   // ロール取得とは切り離してプロフィール本体を取得する。
   // （roles テーブル未適用などでロール取得に失敗しても、名前等は表示できるように）
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .maybeSingle();
+  // ロールとプロフィール本体は互いに依存しないので必ず同時に投げる。直列にすると
+  // 全ページの描画がDBへの往復1回ぶん遅れる（PC中継では1往復が数百ミリ秒かかる）。
+  const [{ data: profile, error: profileError }, rolesMap] = await Promise.all([
+    supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
+    fetchRolesByProfileIds(supabase, [user.id]),
+  ]);
 
   if (profileError) {
     throw new Error(`Failed to load current profile: ${profileError.message}`);
@@ -73,7 +74,6 @@ const getStoredProfile = cache(async (): Promise<Profile> => {
     };
   }
 
-  const rolesMap = await fetchRolesByProfileIds(supabase, [user.id]);
   return normalizeProfileRow(profile, rolesMap.get(user.id) ?? []);
 });
 

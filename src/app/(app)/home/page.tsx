@@ -6,7 +6,7 @@ import { ja } from "date-fns/locale";
 import { ChevronRight, Folder } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
-import { HomeSkeleton } from "@/components/ui/page-skeletons";
+import { Skeleton } from "@/components/ui/skeleton";
 import { HomeFeed } from "@/components/features/HomeFeed";
 import { CompetitionHome } from "@/components/features/CompetitionHome";
 
@@ -37,33 +37,40 @@ import type {
   NoteWithRelations,
   PracticeRecord,
   ScheduleWithMenus,
-  Profile,
 } from "@/types";
 
+/**
+ * 見出しはプロフィールを待たずに出し、中身の節はそれぞれ独立に流し込む。
+ * 1つのSuspenseで全部を包むと、いちばん遅い節（予定＝スプレッドシート取得を含む）が
+ * 終わるまで画面が何も出ない。節ごとに分けると、届いたものから順に見えるようになる。
+ */
 export default function HomePage() {
-  return <Suspense fallback={<HomeSkeleton />}><HomeContent /></Suspense>;
-}
-
-export async function HomeContent() {
-  const profile = await getCurrentProfile();
   const nowJst = jstNow();
-
   return (
     <>
       <Header title="ホーム" large besideTitle={<time dateTime={jstToday()} className="truncate text-[13px] text-muted">{format(nowJst, "M月d日 (E)", { locale: ja })}</time>} />
       <div className="space-y-5 px-4 pt-1">
-        <NoticesSection userId={profile.id} />
-        <CompetitionSection />
+        <Suspense fallback={<SectionFallback cards={1} />}><NoticesSection /></Suspense>
+        <Suspense fallback={<Skeleton className="h-[92px] w-full rounded-[16px]" />}><CompetitionSection /></Suspense>
         <InstallPrompt />
-
-        {profile.blocks.includes("middle_long") && (
-          <WeeklySummary userId={profile.id} nowJst={nowJst} />
-        )}
-        <SchedulesSection profile={profile} />
-        <NotesSection />
-        <FeedSection profile={profile} />
+        <Suspense fallback={null}><WeeklySummarySection nowJst={nowJst} /></Suspense>
+        <Suspense fallback={<SectionFallback cards={2} />}><SchedulesSection /></Suspense>
+        <Suspense fallback={null}><NotesSection /></Suspense>
+        <Suspense fallback={<SectionFallback cards={2} tall />}><FeedSection /></Suspense>
       </div>
     </>
+  );
+}
+
+/** 節が届くまでの場所取り。見出し1行＋カードの高さだけを確保する。 */
+function SectionFallback({ cards, tall = false }: { cards: number; tall?: boolean }) {
+  return (
+    <section className="space-y-2" aria-hidden="true">
+      <Skeleton className="h-3 w-24" />
+      {Array.from({ length: cards }).map((_, index) => (
+        <Skeleton key={index} className={`w-full rounded-[16px] ${tall ? "h-[132px]" : "h-[76px]"}`} />
+      ))}
+    </section>
   );
 }
 
@@ -79,14 +86,17 @@ async function CompetitionSection() {
   );
 }
 
-async function NoticesSection({ userId }: { userId: string }) {
-  const notices = await getHomeNotices(userId);
+async function NoticesSection() {
+  const profile = await getCurrentProfile();
+  const notices = await getHomeNotices(profile.id);
   return <HomeNotices notices={notices as NoticeWithReactions[]} />;
 }
 
-async function WeeklySummary({ userId, nowJst }: { userId: string; nowJst: Date }) {
+async function WeeklySummarySection({ nowJst }: { nowJst: Date }) {
+  const profile = await getCurrentProfile();
+  if (!profile.blocks.includes("middle_long")) return null;
   const sevenDaysAgo = format(subDays(nowJst, 6), "yyyy-MM-dd");
-  const records = (await getUserRecords(userId, sevenDaysAgo)) as PracticeRecord[];
+  const records = (await getUserRecords(profile.id, sevenDaysAgo)) as PracticeRecord[];
   const weekKm = records.reduce(
     (sum, record) => sum + displayedDistance(record),
     0,
@@ -113,7 +123,8 @@ async function WeeklySummary({ userId, nowJst }: { userId: string; nowJst: Date 
   );
 }
 
-async function SchedulesSection({ profile }: { profile: Profile }) {
+async function SchedulesSection() {
+  const profile = await getCurrentProfile();
   const perms = permissionsOf(profile.roles);
   const today = jstToday();
   let schedules = (await getAttendanceSchedules(
@@ -122,10 +133,6 @@ async function SchedulesSection({ profile }: { profile: Profile }) {
     10,
   )) as ScheduleWithMenus[];
   schedules = schedules.map((schedule) => ({ ...schedule, menus: schedule.menus ?? [] }));
-  if (profile.blocks.includes("middle_long") || profile.blocks.includes("manager") || profile.menu_view_all_blocks) {
-    const snapshot = await fetchMiddleLongMenuSnapshot(middleLongMenuMonths(schedules));
-    schedules = applyMiddleLongMenuSnapshot(schedules, snapshot);
-  }
   // 複数日開催は最終日まで「本日の予定」に出す（初日を過ぎても消えない）。
   const todaySchedules = schedules.filter(
     (schedule) =>
@@ -135,7 +142,16 @@ async function SchedulesSection({ profile }: { profile: Profile }) {
   const upcomingSchedules = schedules.filter((schedule) => schedule.schedule_date > today).slice(0, 3);
   const displayed = [...todaySchedules, ...upcomingSchedules];
   if (displayed.length === 0) return null;
-  const attendance = await getAttendancesForSchedules(displayed.map((schedule) => schedule.id));
+  // 出欠はどの予定を出すかだけで決まり、スプレッドシートのメニューには依存しない。
+  // 直列にすると外部サイトの応答を待ってから出欠を取りに行くことになるので同時に投げる。
+  const wantsSheetMenus =
+    profile.blocks.includes("middle_long") || profile.blocks.includes("manager") || profile.menu_view_all_blocks;
+  const [attendance, snapshot] = await Promise.all([
+    getAttendancesForSchedules(displayed.map((schedule) => schedule.id)),
+    wantsSheetMenus ? fetchMiddleLongMenuSnapshot(middleLongMenuMonths(displayed)) : null,
+  ]);
+  const withMenus = snapshot ? applyMiddleLongMenuSnapshot(displayed, snapshot) : displayed;
+  const menusById = new Map(withMenus.map((schedule) => [schedule.id, schedule.menus ?? []]));
   const attendeesBySchedule = new Map<string, Attendee[]>();
   for (const row of attendance) {
     const rows = attendeesBySchedule.get(row.schedule_id) ?? [];
@@ -151,7 +167,7 @@ async function SchedulesSection({ profile }: { profile: Profile }) {
           {todaySchedules.map((schedule) => {
             const attendees = attendeesBySchedule.get(schedule.id) ?? [];
             const mine = attendees.find((attendee) => attendee.user_id === profile.id && attendee.attend_date === schedule.schedule_date);
-            return <ScheduleCard key={schedule.id} schedule={{ ...schedule, menus: schedule.menus ?? [] }} viewerBlocks={profile.blocks} userId={profile.id} myProfile={profile} myStatus={mine?.status ?? "none"} myLate={mine?.is_late ?? false} myLateNote={mine?.late_note ?? null} myAbsenceNote={mine?.absence_note ?? null} attendees={attendees} attendanceDefaultBlock={profile.attendance_default_block} canDecidePractice={perms.decidePractice} />;
+            return <ScheduleCard key={schedule.id} schedule={{ ...schedule, menus: menusById.get(schedule.id) ?? [] }} viewerBlocks={profile.blocks} userId={profile.id} myProfile={profile} myStatus={mine?.status ?? "none"} myLate={mine?.is_late ?? false} myLateNote={mine?.late_note ?? null} myAbsenceNote={mine?.absence_note ?? null} attendees={attendees} attendanceDefaultBlock={profile.attendance_default_block} canDecidePractice={perms.decidePractice} />;
           })}
         </div>
       </section>
@@ -171,7 +187,7 @@ async function SchedulesSection({ profile }: { profile: Profile }) {
             return (
               <UpcomingScheduleCard
                 key={schedule.id}
-                schedule={{ ...schedule, menus: schedule.menus ?? [] }}
+                schedule={{ ...schedule, menus: menusById.get(schedule.id) ?? [] }}
                 initialStatus={mine?.status ?? "none"}
                 attendees={attendees}
                 attendanceDefaultBlock={profile.attendance_default_block}
@@ -212,7 +228,8 @@ async function NotesSection() {
   );
 }
 
-async function FeedSection({ profile }: { profile: Profile }) {
+async function FeedSection() {
+  const profile = await getCurrentProfile();
   const [feed, cookieStore] = await Promise.all([getFeed(profile.id, 3), cookies()]);
   const showRecordSource =
     permissionsOf(profile.roles).manageSystem &&

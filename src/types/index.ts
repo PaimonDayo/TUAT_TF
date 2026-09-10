@@ -482,7 +482,7 @@ export interface PbRecord {
   recorded_on: string | null;
   /** 記録日をどこまで入力したか（日・月・年） */
   date_precision: "day" | "month" | "year";
-  /** 大学 / 大学以前。大学以前は日付を入れなくてよい */
+  /** 大学 / 高校以前。高校以前は日付を入れなくてよい */
   stage: "university" | "pre_university";
   result_status: "ok" | "DNS" | "DNF" | "DQ" | "NM";
   wind: number | null;

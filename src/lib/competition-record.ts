@@ -4,15 +4,58 @@
  * 旧データは自由入力の文字列しか持たないため、値が無いときは元の文字列をそのまま見せる。
  */
 export type MeasureType = "time" | "distance" | "points";
+/** 時間の書き方。短距離は 61.85 のように秒だけ、長距離は 15分32.40 と分けて書く。 */
+export type TimeFormat = "minutes" | "seconds";
 export type ResultStatus = "ok" | "DNS" | "DNF" | "DQ" | "NM";
 export type RecordStage = "university" | "pre_university";
 export type DatePrecision = "day" | "month" | "year";
 
-export const MEASURE_TYPE_LABEL: Record<MeasureType, string> = {
-  time: "時間（分・秒）",
-  distance: "距離（m・cm）",
-  points: "得点",
+/** 種目マスタで選ぶ「記録の書き方」。測り方と時間の書き方をひとつの選択にまとめる。 */
+export type RecordFormat = "minutes" | "seconds" | "meters" | "points";
+
+export const RECORD_FORMAT_LABEL: Record<RecordFormat, string> = {
+  minutes: "分と秒（例 15分32.40）",
+  seconds: "秒（例 61.85）",
+  meters: "メートル（例 6.85）",
+  points: "得点（例 5432）",
 };
+
+export function isTimeFormat(value: string): value is TimeFormat {
+  return value === "minutes" || value === "seconds";
+}
+
+export function isRecordFormat(value: string): value is RecordFormat {
+  return value === "minutes" || value === "seconds" || value === "meters" || value === "points";
+}
+
+/** 種目マスタの2列（測り方・時間の書き方）と、画面で選ぶ1つの書き方を行き来する。 */
+export function toRecordFormat(measure: MeasureType, timeFormat: TimeFormat): RecordFormat {
+  if (measure === "distance") return "meters";
+  if (measure === "points") return "points";
+  return timeFormat;
+}
+
+export function fromRecordFormat(format: RecordFormat): {
+  measure_type: MeasureType;
+  time_format: TimeFormat;
+} {
+  if (format === "meters") return { measure_type: "distance", time_format: "minutes" };
+  if (format === "points") return { measure_type: "points", time_format: "minutes" };
+  return { measure_type: "time", time_format: format };
+}
+
+/** 種目名から、その種目の書き方を引く。登録が無ければ分と秒として扱う。 */
+export function recordFormatOf(
+  events: { name: string; measure_type: string; time_format?: string | null }[],
+  eventName: string,
+): RecordFormat {
+  const found = events.find((e) => e.name === eventName);
+  if (!found) return "minutes";
+  const measure = isMeasureType(found.measure_type) ? found.measure_type : "time";
+  const timeFormat =
+    found.time_format && isTimeFormat(found.time_format) ? found.time_format : "minutes";
+  return toRecordFormat(measure, timeFormat);
+}
 
 export const RESULT_STATUS_LABEL: Record<ResultStatus, string> = {
   ok: "記録あり",
@@ -24,7 +67,7 @@ export const RESULT_STATUS_LABEL: Record<ResultStatus, string> = {
 
 export const STAGE_LABEL: Record<RecordStage, string> = {
   university: "大学",
-  pre_university: "大学以前",
+  pre_university: "高校以前",
 };
 
 export function isMeasureType(value: string): value is MeasureType {
@@ -67,13 +110,51 @@ export function fromCentiseconds(value: number) {
 
 const pad = (value: number, length = 2) => String(value).padStart(length, "0");
 
-/** 1/100秒 → 表示（1時間以上 1:02:33.45 / 1分以上 15'32"40 / 1分未満 11"32） */
-export function formatCentiseconds(value: number): string {
+/**
+ * 時間の表示。
+ * 分と秒で書く種目は 1:02:33.45 / 15'32"40 / 11"32。
+ * 秒で書く種目は 61.85 のように、分へ繰り上げずそのまま秒で見せる。
+ */
+export function formatCentiseconds(value: number, format: TimeFormat = "minutes"): string {
   const { hours, minutes, seconds, centis } = fromCentiseconds(value);
+  if (format === "seconds")
+    return `${hours * 3600 + minutes * 60 + seconds}.${pad(centis)}`;
   if (hours > 0)
     return `${hours}:${pad(minutes)}:${pad(seconds)}.${pad(centis)}`;
   if (minutes > 0) return `${minutes}'${pad(seconds)}"${pad(centis)}`;
   return `${seconds}"${pad(centis)}`;
+}
+
+/** 「32.40」「61.85」のような秒の入力 → 1/100秒。小数は2桁までで丸める。 */
+export function parseDecimalSeconds(text: string): number | null {
+  const value = text.normalize("NFKC").trim().replace(/[秒"”]/g, "");
+  if (!value) return null;
+  const m = /^(\d{1,5})(?:[.．](\d{1,2}))?$/.exec(value);
+  if (!m) return null;
+  return Number(m[1]) * 100 + (m[2] ? Number(m[2].padEnd(2, "0")) : 0);
+}
+
+/** 「6.85」のようなメートルの入力 → cm。小数は2桁までで丸める。 */
+export function parseDecimalMetres(text: string): number | null {
+  const value = text.normalize("NFKC").trim().replace(/[mｍ]/gi, "");
+  if (!value) return null;
+  const m = /^(\d{1,3})(?:[.．](\d{1,2}))?$/.exec(value);
+  if (!m) return null;
+  return Number(m[1]) * 100 + (m[2] ? Number(m[2].padEnd(2, "0")) : 0);
+}
+
+/** 1/100秒 → 入力欄に戻す「32.40」形式（分は別欄なので秒の端数だけ） */
+export function decimalSecondsInput(value: number, format: TimeFormat): string {
+  const { hours, minutes, seconds, centis } = fromCentiseconds(value);
+  const whole = format === "seconds" ? hours * 3600 + minutes * 60 + seconds : seconds;
+  return centis > 0 ? `${whole}.${pad(centis)}` : String(whole);
+}
+
+/** cm → 入力欄に戻す「6.85」形式 */
+export function decimalMetresInput(value: number): string {
+  const centimetres = value % 100;
+  const metres = Math.floor(value / 100);
+  return centimetres > 0 ? `${metres}.${pad(centimetres)}` : String(metres);
 }
 
 /** cm → 6m85 */
@@ -102,7 +183,11 @@ export type RecordValues = {
 };
 
 /** 一覧・カードに出す記録の文字列。構造化された値が無ければ旧テキストを返す。 */
-export function formatRecord(row: RecordValues, measure?: MeasureType): string {
+export function formatRecord(
+  row: RecordValues,
+  measure?: MeasureType,
+  timeFormat: TimeFormat = "minutes",
+): string {
   const status = row.result_status ?? "ok";
   if (status !== "ok")
     return RESULT_STATUS_LABEL[status as ResultStatus]?.replace(/（.+）/, "") ?? status;
@@ -112,8 +197,8 @@ export function formatRecord(row: RecordValues, measure?: MeasureType): string {
   if (type === "points" && row.value_points != null)
     return formatPoints(row.value_points);
   if ((type === "time" || type == null) && row.value_cs != null)
-    return formatCentiseconds(row.value_cs);
-  if (row.value_cs != null) return formatCentiseconds(row.value_cs);
+    return formatCentiseconds(row.value_cs, timeFormat);
+  if (row.value_cs != null) return formatCentiseconds(row.value_cs, timeFormat);
   if (row.value_cm != null) return formatCentimeters(row.value_cm);
   if (row.value_points != null) return formatPoints(row.value_points);
   return row.record ?? "";
@@ -131,12 +216,12 @@ export function formatRecordedOn(
   return `${Number(year)}/${Number(month)}/${Number(day)}`;
 }
 
-/** 年でまとめるときの見出し。大学以前は年をまたいで1つにまとめる。 */
+/** 年でまとめるときの見出し。高校以前は年をまたいで1つにまとめる。 */
 export function recordGroupKey(row: {
   stage?: string | null;
   recorded_on: string | null;
 }): string {
-  if (row.stage === "pre_university") return "大学以前";
+  if (row.stage === "pre_university") return "高校以前";
   return row.recorded_on ? `${row.recorded_on.slice(0, 4)}年` : "日付未設定";
 }
 
@@ -193,4 +278,12 @@ export function parseRecordText(
       centis: fraction ? Number(fraction.padEnd(2, "0")) : 0,
     }),
   };
+}
+
+/** 種目名から時間の書き方だけを引く（表示側で使う） */
+export function timeFormatOf(
+  events: { name: string; measure_type: string; time_format?: string | null }[],
+  eventName: string,
+): TimeFormat {
+  return recordFormatOf(events, eventName) === "seconds" ? "seconds" : "minutes";
 }

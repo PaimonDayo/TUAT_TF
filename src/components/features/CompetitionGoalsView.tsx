@@ -10,7 +10,7 @@ import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
 import { useToast } from "@/components/ui/toast";
 import { createClient } from "@/lib/supabase/client";
-import { formatRecord, measureTypeOf } from "@/lib/competition-record";
+import { formatRecord, measureTypeOf, timeFormatOf } from "@/lib/competition-record";
 import {
   normalizeGoalDrafts,
   sortCompetitionEvents,
@@ -63,7 +63,7 @@ export function CompetitionGoalsView({
   const bestByKey = useMemo(() => {
     const map = new Map<string, string>();
     for (const row of personalBests) {
-      const text = formatRecord(row, measureTypeOf(events, row.event_name));
+      const text = formatRecord(row, measureTypeOf(events, row.event_name), timeFormatOf(events, row.event_name));
       if (text) map.set(`${row.user_id} ${row.event_name}`, text);
     }
     return map;

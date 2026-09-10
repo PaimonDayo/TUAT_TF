@@ -14,6 +14,7 @@ import {
   formatRecordedOn,
   formatWind,
   measureTypeOf,
+  timeFormatOf,
 } from "@/lib/competition-record";
 import { sortCompetitionEvents } from "@/lib/competition-goals";
 
@@ -96,7 +97,7 @@ export default async function CompetitionPage({
                       )}
                     </div>
                     <span className="text-title tabular-nums">
-                      {formatRecord(row, measureTypeOf(events, row.event_name))}
+                      {formatRecord(row, measureTypeOf(events, row.event_name), timeFormatOf(events, row.event_name))}
                     </span>
                   </div>
                 ))}

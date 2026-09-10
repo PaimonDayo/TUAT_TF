@@ -8,7 +8,14 @@ const BASE_URL = "https://docs.google.com/spreadsheets/d";
 const MENU_SHEET_NAME = /^(\d{1,2})月メニュー$/;
 const FETCH_TIMEOUT_MS = 6_000;
 const META_CACHE_MS = 60_000;
+const ROWS_CACHE_MS = 60_000;
 let metadataCache: { spreadsheetId: string; expiresAt: number; tabs: SheetTab[] } | null = null;
+/**
+ * 取り込んだ月のメニューを短時間だけ覚えておく。ホームと予定は開くたびにここを通るので、
+ * 覚えていないと1画面ごとにGoogleへ数本の取得が走り、その分だけ表示が遅れる。
+ * 60秒で捨てるので、シートを直した内容が長く古いまま出ることはない。
+ */
+const rowsCache = new Map<string, { expiresAt: number; rows: MiddleLongSheetMenuRow[] }>();
 
 
 type SheetTab = { name: string; gid: string; month: number };
@@ -117,13 +124,18 @@ export async function fetchMiddleLongMenuSnapshot(months: number[]): Promise<Mid
     const tabs = (await fetchMenuTabs(id)).filter((tab) => wanted.has(tab.month));
     const results = await Promise.allSettled(
       tabs.map(async (tab) => {
+        const cacheKey = `${id}:${tab.gid}`;
+        const cached = rowsCache.get(cacheKey);
+        if (cached && cached.expiresAt > Date.now()) return { month: tab.month, rows: cached.rows };
         const response = await fetchWithTimeout(
           `${BASE_URL}/${encodeURIComponent(id)}/export?format=csv&gid=${encodeURIComponent(tab.gid)}&t=${Date.now()}`,
         );
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const csv = await response.text();
         if (/^\s*(?:<!doctype|<html)/i.test(csv)) throw new Error("HTML response");
-        return { month: tab.month, rows: parseMiddleLongMenuCsv(csv, tab.month) };
+        const rows = parseMiddleLongMenuCsv(csv, tab.month);
+        rowsCache.set(cacheKey, { expiresAt: Date.now() + ROWS_CACHE_MS, rows });
+        return { month: tab.month, rows };
       }),
     );
     const loadedMonths: number[] = [];

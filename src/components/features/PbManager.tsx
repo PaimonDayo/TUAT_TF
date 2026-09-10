@@ -4,7 +4,6 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
 import { FormModal } from "@/components/ui/form-modal";
 import { useToast } from "@/components/ui/toast";
 import { ResultsList } from "@/components/features/ResultsList";
@@ -63,11 +62,17 @@ export function PbManager({
     <>
       <div className="space-y-3">
         <ResultsList results={items} events={events} onEdit={openEdit} onDelete={remove} />
-
-        <Button variant="outline" size="lg" onClick={openAdd} className="gap-2">
-          <Plus size={18} /> {addLabel}
-        </Button>
       </div>
+
+      {/* 追加は他の画面と同じくFABから。一覧の下にボタンを置かない（規約: 書く=FAB） */}
+      <button
+        type="button"
+        onClick={openAdd}
+        aria-label={addLabel}
+        className="fixed bottom-24 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-xl active:opacity-80"
+      >
+        <Plus size={26} />
+      </button>
 
       {open && (
         <FormModal

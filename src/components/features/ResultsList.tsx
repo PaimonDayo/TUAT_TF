@@ -10,6 +10,7 @@ import {
   formatRecordedOn,
   formatWind,
   measureTypeOf,
+  timeFormatOf,
   recordGroupKey,
 } from "@/lib/competition-record";
 import type { CompetitionEvent } from "@/lib/competition-goals";
@@ -20,7 +21,7 @@ const PREVIEW = 5;
 /**
  * 大会・記録会の結果リスト。
  * - 既定は直近 PREVIEW 件、「すべて見る」で全件展開
- * - 大学は年ごと、大学以前はひとまとめに表示
+ * - 大学は年ごと、高校以前はひとまとめに表示
  * - onEdit / onDelete を渡すと各行に操作メニュー（本人とシステム管理者）
  */
 export function ResultsList({
@@ -72,17 +73,11 @@ export function ResultsList({
       {results.length > PREVIEW && (
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="w-full h-11 rounded-xl border border-separator bg-card text-[14px] font-semibold text-accent inline-flex items-center justify-center gap-1 active:bg-bg"
+          aria-expanded={expanded}
+          aria-label={expanded ? "結果を閉じる" : `残りの結果を表示（全${results.length}件）`}
+          className="inline-flex h-11 w-full items-center justify-center rounded-xl text-accent active:bg-bg"
         >
-          {expanded ? (
-            <>
-              <ChevronUp size={16} /> 閉じる
-            </>
-          ) : (
-            <>
-              <ChevronDown size={16} /> すべて見る（{results.length}件）
-            </>
-          )}
+          {expanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
         </button>
       )}
     </div>
@@ -131,7 +126,7 @@ function ResultRow({
         {detail && <p className="text-caption">{detail}</p>}
       </div>
       <span className="text-title tabular-nums">
-        {formatRecord(pb, measureTypeOf(events, pb.event_name))}
+        {formatRecord(pb, measureTypeOf(events, pb.event_name), timeFormatOf(events, pb.event_name))}
       </span>
       {(onEdit || onDelete) && (
         <ActionMenu
@@ -147,8 +142,8 @@ function ResultRow({
 }
 
 /**
- * 大学は年ごと、大学以前はまとめて表示する。
- * 大学以前は年が付いていても最後に置く（大学の年に混ざると読み違えるため）。
+ * 大学は年ごと、高校以前はまとめて表示する。
+ * 高校以前は年が付いていても最後に置く（大学の年に混ざると読み違えるため）。
  */
 function groupRows(rows: PbRecord[]): [string, PbRecord[]][] {
   const map = new Map<string, PbRecord[]>();
@@ -159,6 +154,6 @@ function groupRows(rows: PbRecord[]): [string, PbRecord[]][] {
     map.set(key, arr);
   }
   const groups = [...map.entries()];
-  const rank = (key: string) => (key === "大学以前" ? 2 : key === "日付未設定" ? 1 : 0);
+  const rank = (key: string) => (key === "高校以前" ? 2 : key === "日付未設定" ? 1 : 0);
   return groups.sort(([a], [b]) => rank(a) - rank(b));
 }
