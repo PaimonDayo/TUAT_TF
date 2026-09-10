@@ -23,7 +23,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <SessionKeepAlive />
             <PullToRefresh />
             {children}
-            <Suspense fallback={null}><AuthenticatedFab /></Suspense>
+            <Suspense fallback={<FabPlaceholder />}><AuthenticatedFab /></Suspense>
             <Suspense fallback={null}><BottomNav /></Suspense>
             <VersionWatcher />
             {process.env.NEXT_PUBLIC_PC_TRIAL !== "true" && <PushSubscriptionSync />}
@@ -33,6 +33,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
     </ToastProvider>
     </AppQueryProvider>
+  );
+}
+
+/** 作成ボタンが出るまでの場所取り。位置と大きさはFAB本体と揃えてある。 */
+function FabPlaceholder() {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-40 mx-auto h-0 w-full max-w-md md:inset-x-auto md:right-3 md:w-0 md:max-w-none lg:right-[max(0px,calc((100vw-1160px)/2))]"
+    >
+      <div className="absolute right-5 bottom-[calc(74px+env(safe-area-inset-bottom))] h-14 w-14 rounded-full bg-separator/60 lg:bottom-8 lg:right-8 lg:h-12 lg:w-12" />
+    </div>
   );
 }
 

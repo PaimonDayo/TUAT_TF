@@ -120,7 +120,7 @@ serve(async (req) => {
       body: bodyText,
       data: { url }
     });
-    const sendPromises = subscriptions.map(async (sub) => {
+    const results = await Promise.all(subscriptions.map(async (sub) => {
       const pushSubscription = {
         endpoint: sub.endpoint,
         keys: {
@@ -131,25 +131,43 @@ serve(async (req) => {
 
       try {
         await webPush.sendNotification(pushSubscription, payload);
+        return { sent: true, dropped: false };
       } catch (err: unknown) {
         const statusCode =
           typeof err === "object" && err !== null && "statusCode" in err
             ? Number((err as { statusCode: unknown }).statusCode)
             : undefined;
-        if (statusCode === 410 || statusCode === 404) {
+        const body =
+          typeof err === "object" && err !== null && "body" in err
+            ? String((err as { body: unknown }).body)
+            : "";
+        // 配信先が消えた(410/404)ものに加え、いまの鍵では二度と送れない購読も外す。
+        // 鍵を入れ替えると、古い鍵で作られた購読は 403 や VapidPkHashMismatch を返し続け、
+        // 通知のたびに必ず失敗する。残しておいても復活しないので消してよい
+        // （その端末はアプリを開いた時点で購読し直され、新しい行が入る）。
+        const staleKey =
+          statusCode === 403 || body.includes("VapidPkHashMismatch");
+        if (statusCode === 410 || statusCode === 404 || staleKey) {
           await supabaseClient.from('push_subscriptions').delete().eq('id', sub.id);
-        } else {
-          console.error("Error sending push:", err);
+          return { sent: false, dropped: true };
         }
+        console.error("Error sending push:", statusCode, body, err);
+        return { sent: false, dropped: false };
       }
-    });
+    }));
 
-    await Promise.all(sendPromises);
-
-    return new Response(JSON.stringify({ message: "Pushes sent" }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    const sent = results.filter((r) => r.sent).length;
+    const dropped = results.filter((r) => r.dropped).length;
+    const failed = results.length - sent - dropped;
+    // 1件も送れていないのに 200 を返すと、配信が壊れていても気づけない。
+    // 呼び出し側（pg_net の記録）に結果がそのまま残るよう、内訳を返す。
+    return new Response(
+      JSON.stringify({ message: "Pushes sent", sent, dropped, failed }),
+      {
+        status: failed > 0 && sent === 0 ? 502 : 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
 
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Push notification failed";

@@ -55,7 +55,7 @@ export default function HomePage() {
         <InstallPrompt />
         <Suspense fallback={null}><WeeklySummarySection nowJst={nowJst} /></Suspense>
         <Suspense fallback={<SectionFallback cards={2} />}><SchedulesSection /></Suspense>
-        <Suspense fallback={null}><NotesSection /></Suspense>
+        <Suspense fallback={<SectionFallback cards={2} />}><NotesSection /></Suspense>
         <Suspense fallback={<SectionFallback cards={2} tall />}><FeedSection /></Suspense>
       </div>
     </>
@@ -92,11 +92,35 @@ async function NoticesSection() {
   return <HomeNotices notices={notices as NoticeWithReactions[]} />;
 }
 
+/**
+ * 走行距離のカードは中長距離の人にだけ出す。出すかどうかはプロフィールを見るまで
+ * 決まらないので、場所取りもプロフィールが届いてから（出さない人の画面に、あとで
+ * 消える枠を置かないため）。中身の集計はその内側で待たせる。
+ */
 async function WeeklySummarySection({ nowJst }: { nowJst: Date }) {
   const profile = await getCurrentProfile();
   if (!profile.blocks.includes("middle_long")) return null;
+  return (
+    <Suspense fallback={<WeeklySummaryFallback />}>
+      <WeeklySummary userId={profile.id} nowJst={nowJst} />
+    </Suspense>
+  );
+}
+
+function WeeklySummaryFallback() {
+  return (
+    <section className="space-y-2" aria-hidden="true">
+      <div className="grid grid-cols-2 gap-3">
+        <Skeleton className="h-[86px] rounded-[16px]" />
+        <Skeleton className="h-[86px] rounded-[16px]" />
+      </div>
+    </section>
+  );
+}
+
+async function WeeklySummary({ userId, nowJst }: { userId: string; nowJst: Date }) {
   const sevenDaysAgo = format(subDays(nowJst, 6), "yyyy-MM-dd");
-  const records = (await getUserRecords(profile.id, sevenDaysAgo)) as PracticeRecord[];
+  const records = (await getUserRecords(userId, sevenDaysAgo)) as PracticeRecord[];
   const weekKm = records.reduce(
     (sum, record) => sum + displayedDistance(record),
     0,
