@@ -7,7 +7,6 @@ export type SplashCountdownCache = {
 };
 
 export const SPLASH_CACHE_KEY = "tuat-countdown";
-export const SPLASH_SHOWN_KEY = "tuat-splash-day";
 export const SPLASH_DISABLED_KEY = "tuat-splash-disabled";
 
 export function readSplashCache(raw: string | null): SplashCountdownCache | null {
@@ -28,19 +27,17 @@ export function readSplashCache(raw: string | null): SplashCountdownCache | null
 }
 
 /**
- * 起動画面を出すか。1日の最初の起動だけ、開催前の大会があるときに出す。
+ * 起動画面を出すか。アプリを開くたびに、開催前の大会があるときは出す。
+ * 見たくない人は設定でオフにできるので、回数では制限しない。
  * 大会が終わっていたり、まだ何も覚えていなければ出さない（初回は静かに覚えるだけ）。
  */
 export function shouldShowSplash(input: {
   cache: SplashCountdownCache | null;
-  shownOn: string | null;
   disabled: boolean;
-  today: string;
   days: number | null;
 }): boolean {
   if (input.disabled) return false;
   if (!input.cache) return false;
-  if (input.shownOn === input.today) return false;
   return input.days !== null && input.days >= 0;
 }
 

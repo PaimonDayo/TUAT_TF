@@ -17,18 +17,11 @@ describe("readSplashCache", () => {
 });
 
 describe("shouldShowSplash", () => {
-  const base = { cache, shownOn: null, disabled: false, today: "2026-09-10", days: 11 };
+  const base = { cache, disabled: false, days: 11 };
 
-  it("その日の最初の起動なら出す", () => {
+  it("開くたびに出す", () => {
     expect(shouldShowSplash(base)).toBe(true);
-  });
-
-  it("その日にもう出していれば出さない", () => {
-    expect(shouldShowSplash({ ...base, shownOn: "2026-09-10" })).toBe(false);
-  });
-
-  it("日をまたげばまた出す", () => {
-    expect(shouldShowSplash({ ...base, shownOn: "2026-09-09" })).toBe(true);
+    expect(shouldShowSplash(base)).toBe(true);
   });
 
   it("設定でスキップにしていれば出さない", () => {

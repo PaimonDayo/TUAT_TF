@@ -8,7 +8,6 @@ import { jstToday } from "@/lib/date";
 import {
   SPLASH_CACHE_KEY,
   SPLASH_DISABLED_KEY,
-  SPLASH_SHOWN_KEY,
   readSplashCache,
   reelCells,
   shouldShowSplash,
@@ -25,7 +24,8 @@ const TAB_ROUTES = [
 ];
 
 /**
- * 起動画面。その日の最初の起動だけ、次の大会まであと何日かをカウンタで見せる。
+ * 起動画面。アプリを開くたびに、次の大会まであと何日かをカウンタで見せる。
+ * 見たくない人は設定でオフにできるので、表示回数では制限しない。
  *
  * 大会の日付は端末に覚えておいて、開いた瞬間からすぐ出せるようにする（通信を待つと
  * アプリが見えた後に覆いが被さって不自然になるため）。覚え直すのは1日1回だけ。
@@ -39,25 +39,18 @@ export default function SplashCountdown() {
   useEffect(() => {
     const today = jstToday();
     let cache: SplashCountdownCache | null = null;
-    let shownOn: string | null = null;
     let disabled = false;
     try {
       cache = readSplashCache(localStorage.getItem(SPLASH_CACHE_KEY));
-      shownOn = localStorage.getItem(SPLASH_SHOWN_KEY);
       disabled = localStorage.getItem(SPLASH_DISABLED_KEY) === "1";
     } catch {
       // Storage may be unavailable in a restricted browser context.
     }
 
     const days = cache ? competitionDays(cache.startsOn, today) : null;
-    const show = shouldShowSplash({ cache, shownOn, disabled, today, days });
+    const show = shouldShowSplash({ cache, disabled, days });
 
     if (show && cache && days !== null) {
-      try {
-        localStorage.setItem(SPLASH_SHOWN_KEY, today);
-      } catch {
-        // Continue even when persistence is unavailable.
-      }
       // 端末に覚えている内容はサーバーでは読めないので、判断はマウント後にしかできない。
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setShown({ name: cache.name, days });
