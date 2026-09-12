@@ -69,7 +69,7 @@ export function FavoriteButton({ targetId, initial }: { targetId: string; initia
       disabled={busy}
       aria-pressed={fav}
       className={cn(
-        "inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold active:opacity-60 disabled:opacity-50",
+        "inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold pressable disabled:opacity-50",
         fav ? "border-accent bg-accent/10 text-accent" : "border-separator bg-card text-muted2",
       )}
     >

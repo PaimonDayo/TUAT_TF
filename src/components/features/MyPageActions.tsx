@@ -34,7 +34,7 @@ export function EditProfileButton({
       <button
         onClick={() => setOpen(true)}
         aria-label="プロフィールを編集"
-        className="h-9 px-1 flex items-center gap-1 text-accent text-[15px] active:opacity-50"
+        className="h-9 px-1 flex items-center gap-1 text-accent text-[15px] pressable"
       >
         <Pencil size={18} />
         編集

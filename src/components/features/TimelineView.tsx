@@ -213,7 +213,7 @@ export function TimelineView({
             aria-label={compact ? "カード表示に戻す" : "一覧表示にする"}
             title={compact ? "カード表示に戻す" : "一覧表示にする"}
             className={cn(
-              "inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full border px-3 text-[12px] font-semibold active:opacity-60",
+              "inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full border px-3 text-[12px] font-semibold pressable",
               compact ? "border-accent bg-accent text-white" : "border-separator bg-card text-muted2",
             )}
           >
@@ -225,7 +225,7 @@ export function TimelineView({
             aria-label={favOnly ? "フォロー中のみを解除" : "フォロー中のみ表示"}
             title="フォロー中"
             className={cn(
-              "h-8 w-8 rounded-full border inline-flex items-center justify-center shrink-0 active:opacity-60",
+              "h-8 w-8 rounded-full border inline-flex items-center justify-center shrink-0 pressable",
               favOnly ? "bg-accent text-white border-accent" : "bg-card border-separator text-muted2",
             )}
           >

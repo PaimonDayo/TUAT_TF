@@ -155,7 +155,7 @@ export function NoticeForm({
                 key={c}
                 type="button"
                 onClick={() => setCategory(c)}
-                className="h-10 rounded-xl border text-[13px] font-semibold transition-active active:opacity-[0.78]"
+                className="h-10 rounded-xl border text-[13px] font-semibold pressable"
                 style={{
                   borderColor: active ? meta.color : "#e5e5ea",
                   backgroundColor: active ? meta.bg : "#fff",

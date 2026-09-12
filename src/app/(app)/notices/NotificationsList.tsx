@@ -115,7 +115,7 @@ export function NotificationsList({
           <button
             type="button"
             onClick={handleMarkAllRead}
-            className="flex items-center gap-1.5 text-sm text-accent active:opacity-50 transition-opacity"
+            className="flex items-center gap-1.5 text-sm text-accent pressable transition-opacity"
           >
             <CheckCircle2 size={16} />
             すべて既読にする

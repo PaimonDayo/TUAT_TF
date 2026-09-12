@@ -82,7 +82,7 @@ export function NoticeReactions({ noticeId, userId, initialCounts, initialMine }
         aria-pressed={checked}
         aria-label={checked ? "確認済みを取り消す。長押しで確認した人を表示" : "確認済みにする。長押しで確認した人を表示"}
         className={cn(
-          "flex select-none touch-manipulation items-center gap-1.5 text-[13px] transition-active active:opacity-50 disabled:opacity-50 [-webkit-touch-callout:none]",
+          "flex select-none touch-manipulation items-center gap-1.5 text-[13px] pressable disabled:opacity-50 [-webkit-touch-callout:none]",
           checked ? "text-accent" : "text-muted",
         )}
       >

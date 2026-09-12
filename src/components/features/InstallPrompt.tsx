@@ -107,7 +107,7 @@ export function InstallPrompt() {
             <button
               type="button"
               onClick={install}
-              className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[13px] font-semibold text-white active:opacity-80"
+              className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[13px] font-semibold text-white pressable"
             >
               <Download size={14} /> 追加する
             </button>

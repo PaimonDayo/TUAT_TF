@@ -31,7 +31,7 @@ export function SegmentedControl<T extends string>({
             aria-pressed={active}
             onClick={() => onChange(it.key)}
             className={cn(
-              "flex-1 min-w-0 rounded-[8px] py-1.5 text-[13px] font-semibold transition-colors active:opacity-70 truncate px-1 lg:rounded-md lg:py-1 lg:text-[12px]",
+              "flex-1 min-w-0 rounded-[8px] py-1.5 text-[13px] font-semibold transition-colors pressable truncate px-1 lg:rounded-md lg:py-1 lg:text-[12px]",
               active ? "bg-white text-ink shadow-sm" : "text-muted2",
             )}
           >

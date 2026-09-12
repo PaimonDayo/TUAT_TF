@@ -58,7 +58,7 @@ export function VersionWatcher() {
         <span className="text-[13px] flex-1">新しいバージョンがあります</span>
         <button
           onClick={() => window.location.reload()}
-          className="text-[13px] font-bold text-accent bg-white rounded-full px-3.5 py-1.5 active:opacity-70"
+          className="text-[13px] font-bold text-accent bg-white rounded-full px-3.5 py-1.5 pressable"
         >
           更新
         </button>

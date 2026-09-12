@@ -97,7 +97,7 @@ export function NoteBodyEditor({
               aria-label="この写真を本文から外す"
               disabled={disabled}
               onClick={() => onChange(removePhotoBlock(blocks, block.key))}
-              className="absolute right-2 top-2 rounded-full bg-black/65 p-1.5 text-white active:opacity-70"
+              className="absolute right-2 top-2 rounded-full bg-black/65 p-1.5 text-white pressable"
             >
               <X size={14} />
             </button>

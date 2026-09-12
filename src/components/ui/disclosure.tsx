@@ -34,7 +34,7 @@ export function Disclosure({
         type="button"
         onClick={toggle}
         aria-expanded={expanded}
-        className="flex min-h-11 w-full items-center justify-between gap-3 py-2 text-left active:opacity-60"
+        className="flex min-h-11 w-full items-center justify-between gap-3 py-2 text-left pressable"
       >
         <span className="min-w-0 flex-1 text-headline">{title}</span>
         <ChevronDown

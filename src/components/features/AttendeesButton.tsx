@@ -73,7 +73,7 @@ export function AttendeesButton({
           e.stopPropagation();
           setOpen(true);
         }}
-        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-bg border border-separator text-[13px] font-semibold text-muted2 active:opacity-60 shrink-0"
+        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-bg border border-separator text-[13px] font-semibold text-muted2 pressable shrink-0"
       >
         <Users size={15} />
         {/* 0でも消さず常に表示。数字は等幅＋2桁ぶんの固定幅で桁が増えてもガクつかない。 */}

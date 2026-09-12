@@ -344,7 +344,7 @@ export function NoteArticleEditor({
                     aria-label={photo.removeLabel}
                     disabled={saving}
                     onClick={photo.remove}
-                    className="absolute right-1 top-1 rounded-full bg-black/65 p-1.5 text-white active:opacity-70"
+                    className="absolute right-1 top-1 rounded-full bg-black/65 p-1.5 text-white pressable"
                   >
                     <X size={14} />
                   </button>
@@ -353,7 +353,7 @@ export function NoteArticleEditor({
                   type="button"
                   disabled={saving}
                   onClick={() => placePhoto(photo.key)}
-                  className="w-full text-[12px] font-semibold text-accent active:opacity-60"
+                  className="w-full text-[12px] font-semibold text-accent pressable"
                 >
                   本文に入れる
                 </button>
@@ -415,7 +415,7 @@ export function NoteArticleEditor({
               onClick={() =>
                 savedOptions.length ? setConfirmRemovePoll(true) : setPollEnabled(false)
               }
-              className="text-[13px] font-semibold text-danger active:opacity-60"
+              className="text-[13px] font-semibold text-danger pressable"
             >
               投票をやめる
             </button>
@@ -475,7 +475,7 @@ export function NoteArticleEditor({
             type="button"
             disabled={saving}
             onClick={() => setNewOptions((old) => [...old, ""])}
-            className="inline-flex items-center gap-1 text-[13px] font-semibold text-accent active:opacity-60"
+            className="inline-flex items-center gap-1 text-[13px] font-semibold text-accent pressable"
           >
             <Plus size={15} />
             選択肢を追加

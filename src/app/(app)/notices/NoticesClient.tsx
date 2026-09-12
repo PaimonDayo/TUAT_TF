@@ -157,7 +157,7 @@ export function NoticesClient({
               {hasConditions ? `${filteredNotices.length}件 / 全${notices.length}件` : `全${notices.length}件`}
             </p>
             {hasConditions && (
-              <button type="button" onClick={resetConditions} className="text-xs font-semibold text-accent active:opacity-60">
+              <button type="button" onClick={resetConditions} className="text-xs font-semibold text-accent pressable">
                 すべて解除
               </button>
             )}
@@ -245,7 +245,7 @@ function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }
       type="button"
       onClick={onRemove}
       aria-label={`${label}の絞り込みを外す`}
-      className="inline-flex h-7 items-center gap-1 rounded-full bg-accent/10 px-2.5 text-[12px] font-semibold text-accent active:opacity-60"
+      className="inline-flex h-7 items-center gap-1 rounded-full bg-accent/10 px-2.5 text-[12px] font-semibold text-accent pressable"
     >
       {label}
       <X size={12} />

@@ -106,7 +106,7 @@ export function CommentLikeButton({
         onPointerCancel={cancelPress}
         onPointerLeave={cancelPress}
         className={cn(
-          "mt-1 inline-flex h-7 select-none touch-manipulation items-center gap-1 rounded-full px-2 text-[12px] transition-active active:opacity-60 disabled:opacity-60 [-webkit-touch-callout:none]",
+          "mt-1 inline-flex h-7 select-none touch-manipulation items-center gap-1 rounded-full px-2 text-[12px] pressable disabled:opacity-60 [-webkit-touch-callout:none]",
           liked ? "text-danger" : "text-muted2",
         )}
       >

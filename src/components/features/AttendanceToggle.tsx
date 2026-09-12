@@ -93,7 +93,7 @@ export function AttendanceToggle({
       onClick={toggle}
       disabled={busy}
       className={cn(
-        "inline-flex h-8 w-[116px] shrink-0 items-center justify-center gap-1 rounded-full border px-3 text-[13px] font-semibold transition-active active:opacity-[0.78] disabled:opacity-60",
+        "inline-flex h-8 w-[116px] shrink-0 items-center justify-center gap-1 rounded-full border px-3 text-[13px] font-semibold pressable disabled:opacity-60",
         style.cls,
       )}
     >
@@ -293,7 +293,7 @@ export function CancelledBanner({
       <p className="flex items-center gap-1.5 text-[13px] font-bold text-danger"><Ban size={15} />この予定は中止です</p>
       {reason && <p className="mt-1 text-[13px] whitespace-pre-wrap">{reason}</p>}
       {canDecide && (
-        <button type="button" onClick={() => setConfirming(true)} className="mt-1.5 text-[12px] text-muted2 active:opacity-60">
+        <button type="button" onClick={() => setConfirming(true)} className="mt-1.5 text-[12px] text-muted2 pressable">
           中止を取り消す
         </button>
       )}
@@ -389,7 +389,7 @@ export function WeatherStatusControl({
       <button
         type="button"
         onClick={(event) => { event.stopPropagation(); setOpen(true); }}
-        className="flex items-center gap-1 text-[12px] text-muted2 active:opacity-60"
+        className="flex items-center gap-1 text-[12px] text-muted2 pressable"
       >
         <CloudRain size={13} />
         対応状況を知らせる
@@ -401,7 +401,7 @@ export function WeatherStatusControl({
     <div className="space-y-1.5 rounded-xl border border-warning/40 bg-warning/10 p-3" onClick={(event) => event.stopPropagation()}>
       <div className="flex items-center justify-between gap-2">
         <p className="flex items-center gap-1 text-[12px] font-semibold text-warning"><CloudRain size={14} />対応状況（雨天時など）</p>
-        <button type="button" onClick={note ? clearNote : () => setOpen(false)} className="text-[12px] text-muted2 active:opacity-60">
+        <button type="button" onClick={note ? clearNote : () => setOpen(false)} className="text-[12px] text-muted2 pressable">
           {note ? "消す" : "閉じる"}
         </button>
       </div>
@@ -425,7 +425,7 @@ export function WeatherStatusControl({
         ) : (
           <span />
         )}
-        <button type="button" onClick={() => setConfirming(true)} className="flex items-center gap-1 text-[12px] font-semibold text-danger active:opacity-60">
+        <button type="button" onClick={() => setConfirming(true)} className="flex items-center gap-1 text-[12px] font-semibold text-danger pressable">
           <Ban size={13} />
           中止にする
         </button>

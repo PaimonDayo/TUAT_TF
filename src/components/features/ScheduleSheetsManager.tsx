@@ -537,7 +537,7 @@ export function ScheduleSheetsManager() {
                     : existing.map((s) => s.id),
                 )
               }
-              className="text-[13px] font-semibold text-accent active:opacity-60"
+              className="text-[13px] font-semibold text-accent pressable"
             >
               {selectedIds.length === existing.length ? "すべて解除" : "すべて選択"}
             </button>

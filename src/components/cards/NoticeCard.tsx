@@ -51,7 +51,7 @@ export function NoticeCard({
         role="button"
         tabIndex={0}
         aria-expanded={expanded}
-        className="flex cursor-pointer items-start gap-2 active:opacity-60"
+        className="flex cursor-pointer items-start gap-2 pressable"
       >
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">

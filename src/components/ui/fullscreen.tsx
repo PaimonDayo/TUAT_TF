@@ -129,7 +129,7 @@ export function FullScreenContent({
         <div className="h-12 shrink-0 box-content grid grid-cols-[1fr_auto_1fr] items-center border-b border-separator bg-bg px-2 pt-[env(safe-area-inset-top)]">
           <Dialog.Close
             aria-label="戻る"
-            className="justify-self-start h-9 pl-1 pr-2 flex items-center gap-0.5 text-accent active:opacity-50 text-[15px]"
+            className="justify-self-start h-9 pl-1 pr-2 flex items-center gap-0.5 text-accent pressable text-[15px]"
           >
             <ChevronLeft size={24} />
             戻る

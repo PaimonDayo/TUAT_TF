@@ -66,7 +66,7 @@ export default async function CompetitionPage({
         <Card>
           <Link
             href={`/competitions/${competition.id}/goals`}
-            className="flex items-center gap-3 p-4 active:opacity-70"
+            className="flex items-center gap-3 p-4 pressable"
           >
             <Target size={20} className="text-accent" />
             <span className="flex-1 text-headline">みんなの目標</span>

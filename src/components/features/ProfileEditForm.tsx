@@ -377,7 +377,7 @@ export function ProfileEditForm({
                 key={b}
                 type="button"
                 onClick={() => selectBlock(b)}
-                className="h-11 rounded-xl border text-[14px] font-semibold transition-active active:opacity-[0.78]"
+                className="h-11 rounded-xl border text-[14px] font-semibold pressable"
                 style={{
                   borderColor: active ? meta.color : "#e5e5ea",
                   backgroundColor: active ? meta.bg : "#fff",
@@ -403,7 +403,7 @@ export function ProfileEditForm({
                   type="button"
                   onClick={() => toggleEvent(ev)}
                   className={cn(
-                    "h-9 rounded-full border px-3.5 text-[13px] font-semibold transition-active active:opacity-[0.78]",
+                    "h-9 rounded-full border px-3.5 text-[13px] font-semibold pressable",
                     active
                       ? "border-accent bg-accent text-white"
                       : "border-separator bg-card text-muted",
@@ -436,7 +436,7 @@ export function ProfileEditForm({
                       type="button"
                       onClick={() => toggleEvent(event)}
                       className={cn(
-                        "h-9 rounded-full border px-3.5 text-[13px] font-semibold transition-active active:opacity-[0.78]",
+                        "h-9 rounded-full border px-3.5 text-[13px] font-semibold pressable",
                         active
                           ? "border-accent bg-accent text-white"
                           : "border-separator bg-card text-muted",
@@ -463,7 +463,7 @@ export function ProfileEditForm({
                 type="button"
                 onClick={() => setGrade(g.value)}
                 className={cn(
-                  "h-11 rounded-xl border text-[14px] font-semibold transition-active active:opacity-[0.78]",
+                  "h-11 rounded-xl border text-[14px] font-semibold pressable",
                   active
                     ? "border-accent bg-accent text-white"
                     : "border-separator bg-card text-muted",

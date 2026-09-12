@@ -75,11 +75,11 @@ export default async function NoteFolderPage({
       <div className="space-y-4 px-4 pt-1">
         {ancestors.length > 0 && (
           <p className="flex flex-wrap items-center gap-1 text-caption">
-            <Link href="/notes" prefetch={false} className="text-accent active:opacity-60">ノート</Link>
+            <Link href="/notes" prefetch={false} className="text-accent pressable">ノート</Link>
             {ancestors.map((ancestor) => (
               <span key={ancestor.id} className="flex items-center gap-1">
                 <span className="text-muted2">/</span>
-                <Link href={`/notes/${ancestor.id}`} prefetch={false} className="text-accent active:opacity-60">
+                <Link href={`/notes/${ancestor.id}`} prefetch={false} className="text-accent pressable">
                   {ancestor.title}
                 </Link>
               </span>

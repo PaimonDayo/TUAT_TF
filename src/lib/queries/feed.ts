@@ -62,15 +62,22 @@ export async function getFeed(
   const twRows = tweetsResult.data;
 
   const records = (recRows ?? []).map(normalizeRecordWithAuthor);
-  const tweets = await attachTweetSocialData(supabase, (twRows ?? []).map(normalizeTweetWithAuthor));
+  const rawTweets = (twRows ?? []).map(normalizeTweetWithAuthor);
 
   const recIds = records.map((r) => r.id);
-  const twIds = tweets.map((t) => t.id);
+  // 投票・メンションの取得（attachTweetSocialData）と、いいね・コメント件数の取得は
+  // どちらも上の1回目の結果だけに依存していて、互いには依存しない。直列に待つと
+  // DBへの往復が1回ぶん余計にかかるので同時に投げる。attachTweetSocialData は
+  // 渡した順序とIDをそのまま返すので、IDはここで先に確定できる。
+  const twIds = rawTweets.map((t) => t.id);
 
   // currentUserId remains part of this function's public contract/query key. The
   // RPC derives the authenticated viewer from auth.uid(), so it cannot be spoofed.
   void currentUserId;
-  const social = await fetchFeedSocialState(supabase, recIds, twIds);
+  const [tweets, social] = await Promise.all([
+    attachTweetSocialData(supabase, rawTweets),
+    fetchFeedSocialState(supabase, recIds, twIds),
+  ]);
 
   const items: FeedItem[] = [
     ...records.map(
@@ -142,8 +149,11 @@ export async function getFeedItemById(
   if (!data || !data.author) return null;
 
   void currentUserId;
-  const { liked, comments } = await fetchTargetSocialState(supabase, "tweet", [id]);
-  const [tweet] = await attachTweetSocialData(supabase, [normalizeTweetWithAuthor(data)]);
+  // 通知から1件を開く経路。ここも2つの取得は互いに依存しないので同時に投げる。
+  const [{ liked, comments }, [tweet]] = await Promise.all([
+    fetchTargetSocialState(supabase, "tweet", [id]),
+    attachTweetSocialData(supabase, [normalizeTweetWithAuthor(data)]),
+  ]);
   return {
     kind: "tweet",
     ...tweet,
@@ -170,10 +180,14 @@ export async function getUserTweets(
     .limit(limit);
   if (error) throw new Error("Failed to load member posts: " + error.message);
 
-  const tweets = await attachTweetSocialData(supabase, (data ?? []).map(normalizeTweetWithAuthor));
-  const ids = tweets.map((tweet) => tweet.id);
+  const rawTweets = (data ?? []).map(normalizeTweetWithAuthor);
+  const ids = rawTweets.map((tweet) => tweet.id);
   void currentUserId;
-  const { liked, comments } = await fetchTargetSocialState(supabase, "tweet", ids);
+  // 投票・メンションと、いいね・コメント件数は互いに依存しない。同時に投げる。
+  const [tweets, { liked, comments }] = await Promise.all([
+    attachTweetSocialData(supabase, rawTweets),
+    fetchTargetSocialState(supabase, "tweet", ids),
+  ]);
   return tweets.map(
     (tweet): FeedItem => ({
       kind: "tweet",

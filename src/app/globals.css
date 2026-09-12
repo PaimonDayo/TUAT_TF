@@ -168,6 +168,23 @@ h1, h2, h3, p {
   transition: opacity 0.12s ease-out, background-color 0.12s ease-out;
 }
 
+/*
+ * 押したことが分かるための共通フィードバック。
+ *
+ * 面（カード・一覧の行）は今までどおり `active:bg-bg` で背景を変える。
+ * アイコンや文字だけのボタンなど、背景を変えられないものはこの .pressable を付ける。
+ *
+ * 以前は同じ種類のボタンなのに active:opacity-50 / 60 / 70 / 80 / [0.78] と
+ * 画面ごとに散らばっていて、押したときの濃さが場所によって違った。共通の Button が
+ * 使っている 0.78 に合わせ、値をここ1か所だけにする（濃さを変えたいときもここだけ）。
+ */
+.pressable {
+  transition: opacity 0.12s ease-out, background-color 0.12s ease-out;
+}
+.pressable:active {
+  opacity: 0.78;
+}
+
 /* iOS Safari: prevent a long press on an action from selecting its card. */
 .no-native-callout,
 .no-native-callout * {
@@ -177,7 +194,8 @@ h1, h2, h3, p {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .transition-active {
+  .transition-active,
+  .pressable {
     transition: none;
   }
 }

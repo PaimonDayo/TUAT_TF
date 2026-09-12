@@ -15,7 +15,7 @@ import { HomeNotices } from "@/components/features/HomeNotices";
 import { InstallPrompt } from "@/components/features/InstallPrompt";
 import { ScheduleCard } from "@/components/cards/ScheduleCard";
 import { UpcomingScheduleCard } from "@/components/cards/UpcomingScheduleCard";
-import { getCurrentProfile } from "@/lib/supabase/auth";
+import { getCurrentProfile, getCurrentUserId } from "@/lib/supabase/auth";
 import { jstNow, jstToday } from "@/lib/date";
 import { formatKm } from "@/lib/utils";
 import { displayedDistance } from "@/lib/record-distance";
@@ -87,8 +87,8 @@ async function CompetitionSection() {
 }
 
 async function NoticesSection() {
-  const profile = await getCurrentProfile();
-  const notices = await getHomeNotices(profile.id);
+  // お知らせは自分のIDだけで引ける。プロフィールは待たない。
+  const notices = await getHomeNotices(await getCurrentUserId());
   return <HomeNotices notices={notices as NoticeWithReactions[]} />;
 }
 
@@ -253,8 +253,13 @@ async function NotesSection() {
 }
 
 async function FeedSection() {
-  const profile = await getCurrentProfile();
-  const [feed, cookieStore] = await Promise.all([getFeed(profile.id, 3), cookies()]);
+  // 投稿は自分のIDだけで引けるので、プロフィールと同時に投げる。
+  const userId = await getCurrentUserId();
+  const [profile, feed, cookieStore] = await Promise.all([
+    getCurrentProfile(),
+    getFeed(userId, 3),
+    cookies(),
+  ]);
   const showRecordSource =
     permissionsOf(profile.roles).manageSystem &&
     cookieStore.get("show-record-source")?.value === "1";

@@ -69,7 +69,7 @@ export function PbManager({
         type="button"
         onClick={openAdd}
         aria-label={addLabel}
-        className="fixed bottom-24 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-xl active:opacity-80"
+        className="fixed bottom-24 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-xl pressable"
       >
         <Plus size={26} />
       </button>

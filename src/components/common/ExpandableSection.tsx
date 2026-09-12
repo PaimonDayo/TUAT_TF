@@ -60,7 +60,7 @@ export function ExpandableSection({
           type="button"
           onClick={() => setExpanded((current) => !current)}
           aria-expanded={expanded}
-          className="mt-1 text-[12px] font-semibold text-accent active:opacity-60"
+          className="mt-1 text-[12px] font-semibold text-accent pressable"
         >
           {expanded ? "閉じる" : "続きを読む"}
         </button>

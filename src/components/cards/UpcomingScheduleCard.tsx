@@ -81,7 +81,7 @@ export function UpcomingScheduleCard({
       <Link
         href={`/schedule?open=${schedule.id}`}
         prefetch={false}
-        className="flex min-w-0 flex-1 items-center gap-3 active:opacity-60"
+        className="flex min-w-0 flex-1 items-center gap-3 pressable"
       >
         <div className="flex w-10 shrink-0 flex-col items-center">
           <span className="text-[10px]" style={{ color: meta.color }}>

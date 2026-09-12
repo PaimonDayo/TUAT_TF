@@ -128,7 +128,7 @@ export function CompetitionManager({
             <div className="flex items-start gap-2">
               <Link
                 href={`/competitions/${c.id}`}
-                className="flex-1 min-w-0 active:opacity-70"
+                className="flex-1 min-w-0 pressable"
               >
                 <p className="text-headline break-words">
                   {c.name}

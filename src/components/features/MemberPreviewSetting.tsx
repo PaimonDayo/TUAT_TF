@@ -43,7 +43,7 @@ export function MemberPreviewSetting({ previewing }: { previewing: boolean }) {
         <button
           type="button"
           onClick={() => apply(false)}
-          className="mt-3 inline-flex min-h-9 items-center rounded-lg bg-accent px-3 text-[13px] font-semibold text-white active:opacity-80"
+          className="mt-3 inline-flex min-h-9 items-center rounded-lg bg-accent px-3 text-[13px] font-semibold text-white pressable"
         >
           元の画面に戻す
         </button>

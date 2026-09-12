@@ -10,22 +10,42 @@ import { MEMBER_PREVIEW_COOKIE } from "@/lib/member-preview";
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>;
 
 /**
- * 現在ログイン中のユーザーのプロフィールを取得する。
- * 未ログインなら /login へリダイレクト。
+ * cookieの中のセッションからログイン中のユーザーを取り出す。未ログインなら /login へ。
  *
  * 画面遷移のセッション検証・トークン更新は proxy.ts で行うため、ここでは
  * ネットワークを使わない getSession でユーザーIDだけ取り出す。API Routeは
  * Proxy対象外なので、各Route HandlerがgetUserまたはBearerで直接認証する。
  * データ自体のアクセス制御は Supabase の RLS が担保する。
  */
-const getStoredProfile = cache(async (): Promise<Profile> => {
+const getSessionUser = cache(async () => {
   const supabase = await createClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  const user = session?.user;
+  if (!session?.user) redirect("/login");
+  return session.user;
+});
 
-  if (!user) redirect("/login");
+/**
+ * ログイン中のユーザーID。**DBへの往復を1回も使わない**。
+ *
+ * 「自分のIDだけあれば投げられる問い合わせ」は、プロフィールの取得を待つ必要がない。
+ * 待たせると、DBへの往復が1回ぶん直列に積み上がる。PC中継では1往復が数百ミリ秒
+ * あるので、タブを切り替えるたびにその時間が丸ごと足される。使い方:
+ *
+ *   const userId = await getCurrentUserId();
+ *   const [profile, feed] = await Promise.all([getCurrentProfile(), getFeed(userId)]);
+ *
+ * プロフィールの中身（所属ブロック・権限など）が要るときは getCurrentProfile() を待つ。
+ */
+export const getCurrentUserId = cache(async (): Promise<string> => (await getSessionUser()).id);
+
+/**
+ * 現在ログイン中のユーザーのプロフィール（ロール込み）。
+ * 未ログインなら /login へリダイレクト。
+ */
+const getStoredProfile = cache(async (): Promise<Profile> => {
+  const [supabase, user] = await Promise.all([createClient(), getSessionUser()]);
 
   // ロール取得とは切り離してプロフィール本体を取得する。
   // （roles テーブル未適用などでロール取得に失敗しても、名前等は表示できるように）

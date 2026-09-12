@@ -72,7 +72,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               type="button"
               onClick={() => dismiss(toast.id)}
               aria-label="通知を閉じる"
-              className="flex h-8 w-8 shrink-0 items-center justify-center text-muted active:opacity-50"
+              className="flex h-8 w-8 shrink-0 items-center justify-center text-muted pressable"
             >
               <X size={17} />
             </button>

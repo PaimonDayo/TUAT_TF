@@ -75,7 +75,7 @@ export function NoteArticleList({
                 type="button"
                 onClick={() => setOpenId(open ? null : article.id)}
                 aria-label={open ? "閉じる" : "開く"}
-                className="shrink-0 text-muted active:opacity-50"
+                className="shrink-0 text-muted pressable"
               >
                 <ChevronDown
                   size={18}
@@ -115,7 +115,7 @@ export function NoteArticleList({
                   <Link
                     href={`/notes/${noteId}/articles/${article.id}`}
                     prefetch={false}
-                    className="mt-2 inline-block text-[13px] font-medium text-accent active:opacity-60"
+                    className="mt-2 inline-block text-[13px] font-medium text-accent pressable"
                   >
                     全文を表示
                   </Link>

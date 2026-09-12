@@ -40,7 +40,7 @@ export function GradeFilter({
         onClick={() => setOpen(true)}
         aria-label="学年で絞り込み"
         className={cn(
-          "inline-flex h-8 shrink-0 items-center gap-1 rounded-full border pl-3 pr-2 text-[13px] font-semibold active:opacity-60",
+          "inline-flex h-8 shrink-0 items-center gap-1 rounded-full border pl-3 pr-2 text-[13px] font-semibold pressable",
           active ? "border-accent bg-accent text-white" : "border-separator bg-card text-muted2",
         )}
       >

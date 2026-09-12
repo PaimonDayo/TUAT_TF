@@ -305,7 +305,7 @@ export function PostActions({
           }}
           onContextMenu={(e) => e.preventDefault()}
           className={cn(
-            "no-native-callout flex touch-none select-none items-center gap-1.5 text-[13px] active:opacity-50 transition-active",
+            "no-native-callout flex touch-none select-none items-center gap-1.5 text-[13px] pressable",
             liked ? "text-danger" : "text-muted",
           )}
         >
@@ -319,7 +319,7 @@ export function PostActions({
           onClick={toggleComments}
           aria-expanded={commentsVisible}
           className={cn(
-            "flex items-center gap-1.5 text-[13px] active:opacity-50",
+            "flex items-center gap-1.5 text-[13px] pressable",
             commentsVisible ? "text-accent" : "text-muted",
           )}
         >

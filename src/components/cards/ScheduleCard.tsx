@@ -463,7 +463,7 @@ export function ScheduleCard({
             </Disclosure>
           )}
           {schedule.venue_url && (
-            <a href={schedule.venue_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[13px] font-medium text-accent active:opacity-50">
+            <a href={schedule.venue_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[13px] font-medium text-accent pressable">
               <MapPin size={14} /> 地図を開く <ExternalLink size={12} className="opacity-50" />
             </a>
           )}
@@ -608,7 +608,7 @@ function MenuCard({
           type="button"
           onClick={publish}
           disabled={publishing}
-          className="mt-2 inline-flex items-center gap-1 rounded-lg bg-accent px-3 py-1.5 text-[12px] font-semibold text-white active:opacity-80 disabled:opacity-50"
+          className="mt-2 inline-flex items-center gap-1 rounded-lg bg-accent px-3 py-1.5 text-[12px] font-semibold text-white pressable disabled:opacity-50"
         >
           {publishing ? "公開中…" : "公開する"}
         </button>

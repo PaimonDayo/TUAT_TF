@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { getCurrentProfile } from "@/lib/supabase/auth";
+import { getCurrentUserId } from "@/lib/supabase/auth";
 import { getUnreadNotificationCount } from "@/lib/queries";
 import { NotificationBell } from "@/components/layout/NotificationBell";
 
@@ -40,14 +40,17 @@ export function Header({
   );
 }
 
-/** ベルだけは未読数のために通信が要るので、ヘッダー本体とは別に読み込む。 */
+/**
+ * ベルだけは未読数のために通信が要るので、ヘッダー本体とは別に読み込む。
+ * 未読数に要るのは自分のIDだけなので、プロフィールの取得は待たない
+ * （待つとどの画面でもDBへの往復が1回ぶん直列に増える）。
+ */
 async function HeaderBell() {
   let unreadCount = 0;
   let userId = "";
   try {
-    const profile = await getCurrentProfile();
-    userId = profile.id;
-    unreadCount = await getUnreadNotificationCount(profile.id);
+    userId = await getCurrentUserId();
+    unreadCount = await getUnreadNotificationCount(userId);
   } catch {
     // Ignore error if not logged in or during static generation
   }

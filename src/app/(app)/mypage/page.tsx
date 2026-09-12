@@ -11,7 +11,7 @@ import { Linkify } from "@/components/common/Linkify";
 import { ActivityFeed } from "@/components/features/ActivityFeed";
 import { MyTrainingChartCached } from "@/components/features/MyTrainingChartCached";
 import { EditProfileButton } from "@/components/features/MyPageActions";
-import { getCurrentProfile } from "@/lib/supabase/auth";
+import { getCurrentProfile, getCurrentUserId } from "@/lib/supabase/auth";
 import { getUserRecords, getUserActivity } from "@/lib/queries";
 import { gradeShort } from "@/lib/constants";
 import { permissionsOf } from "@/lib/permissions";
@@ -22,12 +22,17 @@ export default async function MyPage({
 }: {
   searchParams: Promise<{ setup?: string }>;
 }) {
-  const { setup } = await searchParams;
-  const profile = await getCurrentProfile();
-  const cookieStore = await cookies();
+  // 記録は「自分のID」だけで引けるので、プロフィールの取得と同時に投げる。
+  // 直列にすると、開くたびにDBへの往復が1回ぶん余計にかかる。
+  const userId = await getCurrentUserId();
+  const [{ setup }, profile, cookieStore, records] = await Promise.all([
+    searchParams,
+    getCurrentProfile(),
+    cookies(),
+    // グラフ用の記録だけ先に取得し、重い「これまでの投稿」は下で Suspense ストリーミング。
+    getUserRecords(userId) as Promise<PracticeRecord[]>,
+  ]);
   const showRecordSource = cookieStore.get("show-record-source")?.value === "1";
-  // グラフ用の記録だけ先に取得し、重い「これまでの投稿」は下で Suspense ストリーミング。
-  const records = (await getUserRecords(profile.id)) as PracticeRecord[];
 
   const perms = permissionsOf(profile.roles);
   const showAdminMenu = perms.manageMembers || perms.createSchedule || perms.manageSystem;

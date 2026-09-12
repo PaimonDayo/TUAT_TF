@@ -36,7 +36,7 @@ export function BackButton({
   return (
     <button
       onClick={back}
-      className="justify-self-start h-9 pl-1 pr-2 flex items-center gap-0.5 text-accent active:opacity-50 text-[15px]"
+      className="justify-self-start h-9 pl-1 pr-2 flex items-center gap-0.5 text-accent pressable text-[15px]"
     >
       <ChevronLeft size={24} />
       {label}

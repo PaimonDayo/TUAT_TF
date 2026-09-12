@@ -65,7 +65,7 @@ export function ActionMenu({
         onClick={() => setMenuOpen(true)}
         aria-label={triggerLabel}
         className={cn(
-          "flex h-8 w-8 shrink-0 items-center justify-center text-muted active:opacity-50",
+          "flex h-8 w-8 shrink-0 items-center justify-center text-muted pressable",
           className,
         )}
       >

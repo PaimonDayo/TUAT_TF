@@ -59,7 +59,7 @@ function PollOptionTabs({
               event.currentTarget.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
             }}
             className={cn(
-              "h-8 min-w-24 max-w-44 shrink-0 snap-center truncate rounded-[8px] px-3 text-[13px] font-semibold transition-colors active:opacity-70",
+              "h-8 min-w-24 max-w-44 shrink-0 snap-center truncate rounded-[8px] px-3 text-[13px] font-semibold transition-colors pressable",
               active ? "bg-white text-ink shadow-sm" : "text-muted2",
             )}
           >
