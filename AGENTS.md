@@ -148,16 +148,18 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 - `docs/CLAUDE-HANDOFF.md` … **最新の進捗・引き継ぎ（まずここ）**
 - `docs/ARCHITECTURE-REFACTOR-PLAN.md` … **巨大ファイルの分割計画**（Phase 1=queries/sheet-sync 実施済み。Phase 2以降の順番と、PC試験版の残骸を消す時期）
 - `ops/laptop/SERVER-HANDOFF.md` … **サーバーを別PCへ引き継ぐ手順**（鍵の選択・R2からの復旧・切替と切り戻し）
-- `docs/UX-ISSUES-2026-06.md` … **UX問題台帳＋確定方針**（文脈FAB・ガクつき禁止・スワイプ編集削除・記録ブロック別・ノート再設計 等。根拠つき）
-- `docs/UI-UNIFICATION.md` … UI・操作・システムの **統一規約**（書く=全画面 / 選ぶ=シート、**編集削除=スワイプ＋長押し**、ガクつき禁止、共通部品、取得=queries.ts、キャッシュ方針）
-- `docs/UI-AUDIT.md` … ガラパゴス棚卸し＋ **FAB再設計案**（残課題と確定方針）
+- `docs/UI-UNIFICATION.md` … UI・操作・システムの **統一規約**（書く=全画面 / 選ぶ=シート、**編集削除=⋯ ActionMenu**、ガクつき禁止、押下は `active:bg-bg` か `pressable` の2種だけ、取得=`lib/queries/`、DBへの往復を直列に積まない、`staleTimes`/`cacheComponents` 禁止）
 - `docs/WORDING-GUIDELINES.md` … **文言ガイドライン**（部員向けの言葉づかい統一。開発用語→平易語の対応表・エラー文の型・適用チェックリスト）
-- `docs/SCHEDULE-MENU-PLAN.md` … 予定のブロック対象化＋メニュー刷新
-- `docs/NOTES-PLAN.md` … ノート機能
-- `docs/SHEETS-IMPORT-PLAN.md` … 予定のスプレッドシート一括入力
 - `docs/NOTIFICATIONS-PLAN.md` … 通知機能（通知センター・受信設定・Web Push）※実装・本番投入済み
-- `docs/QA-CHECKLIST.md` … 実機QA項目
-- `docs/ui-data-guidelines.md` … UI/データの細目
+- `docs/SHEETS-SYNC-PLAN.md` … 練習記録のスプレッドシート同期（コードのコメントから参照している）
+- `docs/COMPETITION-RESULTS-PLAN.md` … 大会記録の入力と既存データ正規化（正規化は未完）
+- `docs/R2-MIGRATION.md` / `docs/EGRESS-AUDIT.md` / `docs/SERVICE-STATUS.md` … 画像のR2移行・通信量・外部サービスの状態画面
+
+> **2026-09-13に削除した文書**: `UX-ISSUES-2026-06.md` / `UI-AUDIT.md` / `SCHEDULE-MENU-PLAN.md` /
+> `NOTES-PLAN.md` / `SHEETS-IMPORT-PLAN.md` / `QA-CHECKLIST.md` / `ui-data-guidelines.md` /
+> `CONSISTENCY-AUDIT.md` / `TASK-codex.md` / `TASK-claude-ui-2026-06-21.md` / `SPA-TAB-ARCHITECTURE-REVIEW.md`。
+> いずれも**実装済み機能の当時の指示書**で、済んだ項目を未着手のまま載せていた。内容はGitの履歴にある。
+> 今も効いている規約は `UI-UNIFICATION.md` に取り込んである。
 
 ## 実装バックログ（2026-07-03 全体コードレビュー → オーナー確定。ここが現在の実装指示）
 
@@ -452,9 +454,12 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 - 2026-06-21 / Claude Code / AGENTS.md 運用ルール整理（署名・報告ルール・HANDOFF優先）→ ed4c8c4
 
 ## 着手前の確認：何が「未実装」かを誤認しない
-- **未実装かどうかの判断は必ず `docs/CLAUDE-HANDOFF.md`（最新の実装状況）を正とする。**
-- `docs/UX-ISSUES-2026-06.md` / `docs/UI-AUDIT.md` / `docs/UI-UNIFICATION.md` は**過去の課題台帳・方針**で、**すでに実装済みの項目を「未実装」と書いたまま残している**ことがある。これらを根拠に「作り直し」をしない（完成済み機能を壊す事故の原因）。
-- 「直す前」に対象機能の現状コードを確認し、すでに動いているなら HANDOFF を信じてスキップ／微修正に留める。
+- **未実装かどうかの判断は、最終的に現状のコードを正とする。** 文書は遅れることがある。
+- 済んだ指示書を未着手と読み違える事故が続いたため、**2026-09-13に当時の指示書・課題台帳を削除した**（上の索引の注記）。
+  残した文書も「いつ書かれたか」を見て、**古い記述を根拠に作り直さない**。
+- `docs/UI-UNIFICATION.md` は現在も有効な規約だが、§3・§6 のように「当時こうだった」を
+  明示して直した節がある。日付の付いた記述はその日時点の判断として読む。
+- 「直す前」に対象機能の現状コードを確認し、すでに動いているなら微修正に留める。
 
 ## 実装の型（要点）
 - 初期データは Server Component ＋ `src/lib/queries.ts` に集約（画面に直接 supabase を書かない）。操作系は Client Component。

@@ -3,6 +3,11 @@
 陸上競技部向けの、練習記録・予定・ランキング共有アプリです。
 Next.js 16 (App Router) + Supabase + Tailwind CSS v4 で作られています。
 
+> **開発する人へ**: このファイルは**ゼロから自分の環境を立てる人向け**の手引き。
+> 実際の開発ルール・現在の実装状況・本番構成は **`AGENTS.md`** を正とする。
+> 本番（https://tuat-tf.vercel.app ）のDBは2026-09-09から所有者PCのWSL内Supabaseで動いていて、
+> 下の手順で作る新しいクラウドプロジェクトとは別物。運用は `ops/laptop/` の各文書を見る。
+
 ---
 
 ## セットアップ手順（はじめての方向け）
@@ -15,10 +20,16 @@ Next.js 16 (App Router) + Supabase + Tailwind CSS v4 で作られています。
 2. 「New project」を押し、名前・パスワード（メモしておく）・リージョン（Tokyo 推奨）を設定して作成
 3. 数分待つと使えるようになります
 
-### ② データベースを作る（SQL を貼って実行するだけ）
-1. Supabase 左メニュー → **SQL Editor**
-2. このリポジトリの `supabase/schema.sql` の中身を**全部コピー**して貼り付け
-3. 右下の **Run** を押す → テーブルとセキュリティ設定が一括で作られます
+### ② データベースを作る（マイグレーションを流す）
+`supabase/migrations/` に141個のマイグレーションが入っている。これを順に適用する。
+
+```bash
+npx supabase link --project-ref <プロジェクトID>
+npx supabase db push
+```
+
+> 以前この手順は `supabase/schema.sql` を貼り付けるものだったが、**そのファイルはもう無い**。
+> テーブル定義はマイグレーションの積み重ねが正になっている。
 
 ### ③ 鍵（キー）を取得して .env.local に貼る
 1. Supabase 左メニュー → **Project Settings → API**
@@ -54,10 +65,19 @@ npm run dev
 ブラウザで http://localhost:3000 を開く → Google でログイン
 
 ### ⑥ 自分を管理者にする（初回だけ）
-一度ログインしたあと、Supabase の SQL Editor で次を実行（メールは自分のもの）：
+権限は `roles`（ロール定義）と `profile_roles`（誰がどのロールか）で決まる。
+一度ログインしたあと、Supabase の SQL Editor で自分に管理ロールを付ける：
+
 ```sql
-UPDATE profiles SET role = 'admin' WHERE email = 'あなた@st.大学.ac.jp';
+insert into public.profile_roles (profile_id, role_id)
+select p.id, r.id
+from public.profiles p, public.roles r
+where p.email = 'あなた@st.大学.ac.jp' and r.can_manage_system
+on conflict do nothing;
 ```
+
+> 以前は `UPDATE profiles SET role = 'admin'` と案内していたが、**単一ロール方式はもう使っていない**。
+> 2人目以降はアプリの「ロール管理」画面（マイページ→管理メニュー）から付けられる。
 
 ---
 
@@ -78,13 +98,24 @@ UPDATE profiles SET role = 'admin' WHERE email = 'あなた@st.大学.ac.jp';
 ---
 
 ## 実装状況
-- **Phase 1（完了）**: 認証・プロフィール初回設定・ホーム・練習記録投稿・タイムライン・いいね/コメント・ランキング・マイページ（週間グラフ）
-- **Phase 2（一部完了）**: 練習予定の閲覧（展開式・メニュー表示）・お知らせ（管理者投稿）・他部員プロフィール・PB管理・管理者のロール変更
-- **未実装（今後）**: 練習予定の作成 UI（担当者）・メニュー入力フォーム（`MenuForm`）
+
+**ここには書かない。** 機能は日々増えていて、この欄は放置されると嘘になる
+（実際、完成済みの「練習予定の作成UI」「メニュー入力フォーム」を長いあいだ未実装と書いたままだった）。
+
+現在の実装状況は次を見る:
+- `AGENTS.md` … 作業ログ（新しい順）と実装バックログ。**ここが正**
+- `docs/CLAUDE-HANDOFF.md` … 直近の引き継ぎ
+- `docs/ARCHITECTURE-REFACTOR-PLAN.md` … 分割の進み具合
 
 ## 技術メモ
 - **Next.js 16** では旧 `middleware.ts` が **`proxy.ts`** に改称されています（本プロジェクトは `src/proxy.ts`）。
 - `params` / `searchParams` / `cookies()` はすべて **非同期（await 必須）**です。
 - Tailwind v4 のため、カラー等のデザイントークンは `src/app/globals.css` の `@theme` で定義しています。
-- データ取得は Server Component（`src/lib/queries.ts`）、投稿・いいね等の操作は Client Component で行います。
-- RLS の無限再帰を避けるため、role 判定は `is_admin()` / `is_staff()` 関数経由にしています（`supabase/schema.sql`）。
+- データ取得は Server Component（`src/lib/queries/` のドメイン別モジュール。入口は `@/lib/queries`）、
+  投稿・いいね等の操作は Client Component で行います。
+- 自分のIDだけで引ける取得は `getCurrentUserId()` を使い、プロフィール取得と**同時に**投げます
+  （直列にするとDBへの往復が1回ぶん増える。`docs/UI-UNIFICATION.md` §4.5）。
+- RLS の無限再帰を避けるため、権限判定は `is_admin()` / `is_staff()` / `can_*()` 関数経由にしています
+  （定義は `supabase/migrations/` の各マイグレーション）。
+- `next.config.ts` の `cacheComponents` と `experimental.staleTimes` は**有効化しないこと**
+  （2026-07-12にiOS PWAの全面フリーズを起こした。理由は同ファイルのコメント）。
