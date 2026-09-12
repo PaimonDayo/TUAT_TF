@@ -9,6 +9,7 @@ import { PostDetailSkeleton } from "@/components/ui/page-skeletons";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getFeedItemById } from "@/lib/queries";
 import { permissionsOf } from "@/lib/permissions";
+import { RECORD_SOURCE_COOKIE, showRecordSourceFor } from "@/lib/record-source-display";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -54,9 +55,10 @@ async function PostContent({ params }: { params: Promise<{ kind: string; id: str
   ]);
   if (!item) return <PostMissing />;
 
-  const showRecordSource =
-    permissionsOf(profile.roles).manageSystem &&
-    cookieStore.get("show-record-source")?.value === "1";
+  const showRecordSource = showRecordSourceFor(
+    permissionsOf(profile.roles).manageSystem,
+    cookieStore.get(RECORD_SOURCE_COOKIE)?.value,
+  );
   const currentUser = {
     id: profile.id,
     display_name: profile.display_name,
@@ -74,7 +76,7 @@ async function PostContent({ params }: { params: Promise<{ kind: string; id: str
           showSource={showRecordSource}
         />
       ) : (
-        <TweetCard tweet={item} currentUser={currentUser} commentsExpanded />
+        <TweetCard tweet={item} currentUser={currentUser} commentsExpanded showSource={showRecordSource} />
       )}
     </div>
   );

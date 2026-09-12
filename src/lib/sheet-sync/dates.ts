@@ -26,9 +26,24 @@ export function sheetPullCutoff(today: string, historyImportedAt: string | null)
 }
 
 /**
- * Sheet-imported records use the practice date, never the time they were imported.
- * Otherwise, importing old records incorrectly moves them to the top of the timeline.
+ * スプレッドシート由来の記録を、タイムラインで「いつ投稿されたもの」として扱うか。
+ *
+ * **取り込んだ時刻**を使う（オーナー指示 2026-09-13）。同期は毎晩JST 0時に走るので、
+ * その晩に入った分がタイムラインの一番上に出る。
+ *
+ * 2026-07-12から2026-09-13までは「練習日の0時(JST)」にしていた。当時は数日ぶんを
+ * まとめて取り込むことがあり、取込時刻にすると毎回先頭が団子になって荒れたため。
+ * 毎晩1日ぶんずつ入る今の運用ではその問題が起きないので戻した。
+ *
+ * 同じ取り込みに複数日ぶんが混ざったときは、練習日が新しいものほど上に来るように
+ * ミリ秒だけずらす（人の目には同時刻のまま。並びが毎回変わるのを防ぐだけ）。
  */
-export function sheetRecordCreatedAt(recordedDate: string): string {
-  return recordedDate + "T00:00:00+09:00";
+export function sheetRecordCreatedAt(recordedDate: string, importedAt: Date = new Date()): string {
+  const daysBehind = Math.round(
+    (Date.parse(`${todayJST()}T00:00:00+09:00`) - Date.parse(`${recordedDate}T00:00:00+09:00`)) /
+      86_400_000,
+  );
+  // 未来日や極端に古い日で時刻が飛ばないよう、ずらし幅は0〜1秒に収める。
+  const nudgeMs = Math.min(Math.max(daysBehind, 0), 1000);
+  return new Date(importedAt.getTime() - nudgeMs).toISOString();
 }

@@ -31,6 +31,7 @@ import {
 import { applyMiddleLongMenuSnapshot, middleLongMenuMonths } from "@/lib/middle-long-menu-data";
 import { fetchMiddleLongMenuSnapshot } from "@/lib/middle-long-menu-sheet";
 import { permissionsOf } from "@/lib/permissions";
+import { RECORD_SOURCE_COOKIE, showRecordSourceFor } from "@/lib/record-source-display";
 import type {
   Attendee,
   NoticeWithReactions,
@@ -260,9 +261,10 @@ async function FeedSection() {
     getFeed(userId, 3),
     cookies(),
   ]);
-  const showRecordSource =
-    permissionsOf(profile.roles).manageSystem &&
-    cookieStore.get("show-record-source")?.value === "1";
+  const showRecordSource = showRecordSourceFor(
+    permissionsOf(profile.roles).manageSystem,
+    cookieStore.get(RECORD_SOURCE_COOKIE)?.value,
+  );
   return (
     <section className="space-y-2">
       <SectionHeading title="タイムライン" href="/timeline" />

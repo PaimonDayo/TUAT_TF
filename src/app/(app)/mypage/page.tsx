@@ -15,6 +15,7 @@ import { getCurrentProfile, getCurrentUserId } from "@/lib/supabase/auth";
 import { getUserRecords, getUserActivity } from "@/lib/queries";
 import { gradeShort } from "@/lib/constants";
 import { permissionsOf } from "@/lib/permissions";
+import { RECORD_SOURCE_COOKIE, recordSourceEnabled } from "@/lib/record-source-display";
 import type { PracticeRecord } from "@/types";
 
 export default async function MyPage({
@@ -32,7 +33,7 @@ export default async function MyPage({
     // グラフ用の記録だけ先に取得し、重い「これまでの投稿」は下で Suspense ストリーミング。
     getUserRecords(userId) as Promise<PracticeRecord[]>,
   ]);
-  const showRecordSource = cookieStore.get("show-record-source")?.value === "1";
+  const showRecordSource = recordSourceEnabled(cookieStore.get(RECORD_SOURCE_COOKIE)?.value);
 
   const perms = permissionsOf(profile.roles);
   const showAdminMenu = perms.manageMembers || perms.createSchedule || perms.manageSystem;

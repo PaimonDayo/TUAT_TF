@@ -30,6 +30,7 @@ import {
 } from "@/lib/queries";
 import { gradeShort } from "@/lib/constants";
 import { permissionsOf } from "@/lib/permissions";
+import { RECORD_SOURCE_COOKIE, showRecordSourceFor } from "@/lib/record-source-display";
 import type { FeedItem, PbRecord, Profile, RecordWithAuthor } from "@/types";
 
 export default function MemberPage({
@@ -62,9 +63,10 @@ async function MemberContent({
     getCompetitionEvents(),
     canManageSystem ? getCompetitions() : Promise.resolve([]),
   ]);
-  const showRecordSource =
-    canManageSystem &&
-    cookieStore.get("show-record-source")?.value === "1";
+  const showRecordSource = showRecordSourceFor(
+    canManageSystem,
+    cookieStore.get(RECORD_SOURCE_COOKIE)?.value,
+  );
 
   const authorMini = {
     id: profile.id,

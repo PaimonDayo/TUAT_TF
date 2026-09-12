@@ -33,7 +33,7 @@ export function HomeFeed({
             showSource={showRecordSource}
           />
         ) : (
-          <TweetCard key={`tweet-${item.id}`} tweet={item} currentUser={currentUser} />
+          <TweetCard key={`tweet-${item.id}`} tweet={item} currentUser={currentUser} showSource={showRecordSource} />
         ),
       )}
     </div>

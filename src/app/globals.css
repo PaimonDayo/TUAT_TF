@@ -163,6 +163,23 @@ h1, h2, h3, p {
   }
 }
 
+/*
+ * 起動画面の下地。既定は出さず、`<body>` 先頭のスクリプトが
+ * 「起動画面を出す」と判断したときだけ .is-on を付ける。
+ * 地色は SplashCountdown.module.css の .overlay と同じにすること
+ * （違うと、下地から起動画面へ切り替わる瞬間に色が変わって見える）。
+ */
+#splash-cover {
+  display: none;
+}
+#splash-cover.is-on {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: #f5f4ee;
+}
+
 /* ボタン押下フィードバック */
 .transition-active {
   transition: opacity 0.12s ease-out, background-color 0.12s ease-out;

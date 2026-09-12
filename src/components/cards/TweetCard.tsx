@@ -24,11 +24,14 @@ export function TweetCard({
   currentUser,
   commentsExpanded = false,
   embedded = false,
+  showSource = false,
 }: {
   tweet: TweetWithAuthor;
   currentUser: CommentAuthor;
   commentsExpanded?: boolean;
   embedded?: boolean;
+  /** システム管理者向け。投稿の由来を出す（つぶやきは必ずアプリ由来）。 */
+  showSource?: boolean;
 }) {
   const { author } = tweet;
   const isOwner = currentUser.id === author.id;
@@ -61,6 +64,7 @@ export function TweetCard({
             {tweet.expires_at ? " · ストーリー" : " のつぶやき"}
           </p>
         </div>
+        {showSource && <span className="shrink-0 rounded-full bg-bg px-2 py-0.5 text-micro text-muted2">アプリ由来</span>}
         <span className="shrink-0" onClick={(event) => event.stopPropagation()}>
           <TweetOwnerMenu tweet={{ id: tweet.id, content: tweet.content }} isOwner={isOwner} />
         </span>

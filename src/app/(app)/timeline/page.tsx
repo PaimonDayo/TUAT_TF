@@ -6,6 +6,7 @@ import { FeedSkeleton } from "@/components/ui/page-skeletons";
 import { getCurrentProfile, getCurrentUserId } from "@/lib/supabase/auth";
 import { getFeed, getMyFavoriteIds } from "@/lib/queries";
 import { permissionsOf } from "@/lib/permissions";
+import { RECORD_SOURCE_COOKIE, showRecordSourceFor } from "@/lib/record-source-display";
 
 export default function TimelinePage() {
   return (
@@ -29,9 +30,10 @@ async function TimelineContent() {
     cookies(),
   ]);
   const initialCompact = cookieStore.get("timeline-compact")?.value === "1";
-  const showRecordSource =
-    permissionsOf(profile.roles).manageSystem &&
-    cookieStore.get("show-record-source")?.value === "1";
+  const showRecordSource = showRecordSourceFor(
+    permissionsOf(profile.roles).manageSystem,
+    cookieStore.get(RECORD_SOURCE_COOKIE)?.value,
+  );
 
   return (
     <TimelineView

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { competitionDays } from "@/lib/competition";
@@ -8,6 +8,7 @@ import { jstToday } from "@/lib/date";
 import {
   SPLASH_CACHE_KEY,
   SPLASH_DISABLED_KEY,
+  clearSplashCover,
   readSplashCache,
   reelCells,
   shouldShowSplash,
@@ -57,8 +58,12 @@ export default function SplashCountdown() {
 
     if (show && cache && days !== null) {
       // 端末に覚えている内容はサーバーでは読めないので、判断はマウント後にしかできない。
+      // それまでの間は、body先頭のスクリプトが入れた下地が画面を覆っている。
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setShown({ name: cache.name, days });
+    } else {
+      // 出さないと決まったので下地を外す（下のlayout effectは出すときだけ通る）。
+      clearSplashCover();
     }
 
     // 覚えている日付を1日1回だけ取り直す。ログイン前は読めないので、そのときは何もしない。
@@ -90,6 +95,12 @@ export default function SplashCountdown() {
       timers.forEach((timer) => window.clearTimeout(timer));
     };
   }, [router]);
+
+  // 起動画面がDOMに入った時点で下地を外す。useLayoutEffect なので、
+  // 起動画面を含む描画と同じ回で外れる＝ホームが見える瞬間が生まれない。
+  useLayoutEffect(() => {
+    if (shown) clearSplashCover();
+  }, [shown]);
 
   if (!shown) return null;
 

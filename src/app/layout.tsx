@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { APP_NAME, APP_DESCRIPTION } from "@/lib/app";
 import SplashCountdown from "@/components/SplashCountdown";
+import { SPLASH_COVER_ID, splashCoverScript } from "@/lib/splash-countdown";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 
 export const metadata: Metadata = {
@@ -58,6 +59,12 @@ export default function RootLayout({
   return (
     <html lang="ja" className="h-full">
       <body className="min-h-full">
+        {/*
+          起動画面の下地。本文より前に置き、直後のスクリプトが同期で判定する。
+          これが無いと、Reactがハイドレートして起動画面を出すまでの間ホームが見えてしまう。
+        */}
+        <div id={SPLASH_COVER_ID} aria-hidden="true" />
+        <script dangerouslySetInnerHTML={{ __html: splashCoverScript }} />
         {process.env.NEXT_PUBLIC_PC_TRIAL === "true" && <div className="bg-amber-100 px-4 py-2 text-center text-xs text-amber-950"><p role="status">PC試験版・本人限定｜変更はPC内のみ。スプシ同期・Push通知・画像変更・リアルタイム配信は停止中</p><form method="post" action="/_pc/logout"><button type="submit" className="mt-1 underline">試験版からログアウト</button></form></div>}
         {children}
         {process.env.NEXT_PUBLIC_PC_TRIAL !== "true" && <ServiceWorkerRegistrar />}

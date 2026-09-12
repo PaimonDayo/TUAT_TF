@@ -16,6 +16,7 @@ import { SystemSyncStatus } from "@/components/features/SystemSyncStatus";
 import { MemberPreviewSetting } from "@/components/features/MemberPreviewSetting";
 import { getCurrentProfile, isMemberPreviewActive } from "@/lib/supabase/auth";
 import { permissionsOf } from "@/lib/permissions";
+import { RECORD_SOURCE_COOKIE, recordSourceEnabled } from "@/lib/record-source-display";
 
 /**
  * 設定画面。マイページの中で展開する形だと項目が増えすぎて詰まって見えたため、
@@ -26,7 +27,7 @@ export default async function SettingsPage() {
   const profile = await getCurrentProfile();
   const previewingAsMember = await isMemberPreviewActive();
   const cookieStore = await cookies();
-  const showRecordSource = cookieStore.get("show-record-source")?.value === "1";
+  const showRecordSource = recordSourceEnabled(cookieStore.get(RECORD_SOURCE_COOKIE)?.value);
   const perms = permissionsOf(profile.roles);
 
   return (

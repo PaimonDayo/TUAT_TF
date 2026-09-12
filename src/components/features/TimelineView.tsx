@@ -197,6 +197,7 @@ export function TimelineView({
         currentUser={currentUser}
         commentsExpanded={commentsExpanded}
         embedded={embedded}
+        showSource={showRecordSource}
       />
     );
   }
