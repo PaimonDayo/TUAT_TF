@@ -1,5 +1,10 @@
 # このPCでSupabaseを一時運用する準備
 
+> **別のPCをサーバーにするときは [SERVER-HANDOFF.md](SERVER-HANDOFF.md) を読む。**
+> PC固有の値（WSLのディストリ名・スタックの場所・Composeプロジェクト名）は
+> `ops/laptop/server-profile.mjs` / `server-profile.ps1` に集約し、`.contingency/server.json`
+> で上書きできる。チェックアウト位置は `wslpath -a` で解決するので、フォルダ名は問わない。
+
 ## 2026-09-08 Vercelを残す構成の確認
 
 オーナーはVercelを課金済みと申告。SupabaseだけをPCで代替する構成は可能。アプリの配信・Next.jsのサーバー処理・既存アプリURLはVercelに残し、DB/Auth/APIをPCのself-hosted Supabase、移行済み画像をR2に分担する。Vercelの実使用量・残量は今回取得していない。
@@ -56,7 +61,7 @@ node ops/laptop/smoke-local-api.mjs
 
 prepareはSupabase CLIのdry-runでroles/schema/dataの読み取りコマンドを生成し、接続情報をGit対象外へ保存する。最後に発行した接続情報を共有し、IPv4の公式session pooler（5432）へ接続する。直後にbackupを実行し、有効期限切れは `prepare-backup-wsl.ps1 -RefreshConnection` で再生成する。バックアップはUbuntu内 `/opt/tuat-tf-supabase/backups/<日時>/` にSQL4本とSHA256を保存し、Authユーザーが含まれることを確認する。通常dumpが除外するAuth上のアプリトリガーとStorageポリシーは `managed-schema.sql` に別途取得する。このファイルを省くと新規ユーザーのプロフィール作成や旧Storageの権限制御が欠落する。
 
-restoreはDocker内の `supabase-db` だけが対象。既存の `public.profiles` がある場合は停止する。SHA256、通信隔離、cron停止を検証した後、既存のローカルDBロール `supabase_admin` で1トランザクション復元する（postgresには一部Storage内部テーブルへの権限がない）。失敗時はロールバックし、SQLエラーを無視しない。旧Windowsネイティブ用 `backup.ps1` / `restore-local.ps1` は今回のWSL構成には使用しない。
+restoreはDocker内の `supabase-db` だけが対象。既存の `public.profiles` がある場合は停止する。SHA256、通信隔離、cron停止を検証した後、既存のローカルDBロール `supabase_admin` で1トランザクション復元する（postgresには一部Storage内部テーブルへの権限がない）。失敗時はロールバックし、SQLエラーを無視しない。旧Windowsネイティブ用の `backup.ps1` / `restore-local.ps1` はWSL構成では使わないため2026-09-13に削除した（履歴はGitにある）。
 
 verifyはAPIテスト前に実行する。テストで作るアカウント・目標は最後に削除するが、Authの監査ログは正しく残るため、テスト後は監査ログの件数が元バックアップと異なる。
 

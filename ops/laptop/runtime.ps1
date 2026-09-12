@@ -1,9 +1,11 @@
 param([ValidateSet('start','stop','status')][string]$Action = 'status', [switch]$NoHold)
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'server-profile.ps1')
+$serverProfile = Get-TuatServerProfile
+$distro = $serverProfile.wslDistro
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $pidFile = Join-Path $repoRoot '.contingency/wsl-hold.pid'
-$wslRoot = (& wsl -d Ubuntu -- wslpath -a $repoRoot | Out-String).Trim()
-if ($LASTEXITCODE -ne 0 -or -not $wslRoot.StartsWith('/mnt/')) { throw 'Could not resolve WSL checkout' }
+$wslRoot = Get-TuatWslRepoRoot -Distro $distro
 $holdScript = "$wslRoot/ops/laptop/hold-wsl.sh"
 $holder = $null
 if (Test-Path -LiteralPath $pidFile) {
@@ -12,10 +14,10 @@ if (Test-Path -LiteralPath $pidFile) {
   if ($candidate.Name -eq 'wsl.exe' -and $candidate.CommandLine.Contains($holdScript)) { $holder = $candidate }
 }
 if ($Action -eq 'start' -and -not $holder -and -not $NoHold) {
-  $process = Start-Process -FilePath wsl.exe -ArgumentList "-d Ubuntu -u root -- sh `"$holdScript`"" -WindowStyle Hidden -PassThru
+  $process = Start-Process -FilePath wsl.exe -ArgumentList "-d $distro -u root -- sh `"$holdScript`"" -WindowStyle Hidden -PassThru
   Set-Content -LiteralPath $pidFile -Value $process.Id
 }
-& wsl -d Ubuntu -u root -- sh "$wslRoot/ops/laptop/runtime-wsl.sh" $Action
+& wsl -d $distro -u root -- sh "$wslRoot/ops/laptop/runtime-wsl.sh" $Action
 if ($LASTEXITCODE -ne 0) { throw "Supabase $Action failed" }
 if ($Action -eq 'stop' -and $holder) {
   Stop-Process -Id $holder.ProcessId

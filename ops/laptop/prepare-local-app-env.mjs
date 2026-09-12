@@ -3,12 +3,13 @@ import {resolve} from 'node:path';
 import {parseEnv} from 'node:util';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
+import {serverProfile,wslArgs} from './server-profile.mjs';
 const root=resolve(import.meta.dirname,'../..');
 const output=resolve(root,'.contingency/local-app.env');
 const cloud=parseEnv(readFileSync(resolve(root,'.env.local'),'utf8'));
 // Capture only the two local API keys, never print them or export the cloud environment.
-const script="const fs=require('fs'),u=require('util');const e=u.parseEnv(fs.readFileSync('/opt/tuat-tf-supabase/.env','utf8'));process.stdout.write(JSON.stringify({anon:e.ANON_KEY,service:e.SERVICE_ROLE_KEY}));";
-const local=JSON.parse(execFileSync('wsl',['-d','Ubuntu','-u','root','--','node','-e',script],{encoding:'utf8'}));
+const script="const fs=require('fs'),u=require('util');const e=u.parseEnv(fs.readFileSync(process.argv[1],'utf8'));process.stdout.write(JSON.stringify({anon:e.ANON_KEY,service:e.SERVICE_ROLE_KEY}));";
+const local=JSON.parse(execFileSync('wsl',[...wslArgs(),'node','-e',script,`${serverProfile().stackDir}/.env`],{encoding:'utf8'}));
 if(!cloud.SUPABASE_SERVICE_ROLE_KEY||!local.anon||!local.service)throw new Error('Missing required key');
 const config={NEXT_PUBLIC_SUPABASE_URL:'http://127.0.0.1:8000',NEXT_PUBLIC_SUPABASE_ANON_KEY:local.anon,SUPABASE_SERVICE_ROLE_KEY:local.service,
  GOOGLE_TOKEN_ENCRYPTION_KEY:cloud.GOOGLE_TOKEN_ENCRYPTION_KEY||createHash('sha256').update(cloud.SUPABASE_SERVICE_ROLE_KEY).digest('hex')};

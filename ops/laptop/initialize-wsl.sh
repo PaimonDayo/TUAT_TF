@@ -1,7 +1,12 @@
 #!/bin/sh
 set -eu
 [ "$(id -u)" = 0 ] || exit 1
-source_dir='/mnt/c/Paimon Dayo/TUAT_TF/.contingency/runtime'
+# Argument 1 is this checkout's .contingency/runtime seen from WSL. It used to be
+# the first production PC's folder, which made this script unusable on any other
+# machine. Pass it explicitly when taking the server over on a new PC:
+#   sh initialize-wsl.sh "$(wslpath -a 'C:\path\to\TUAT_TF')/.contingency/runtime"
+source_dir=${1:-'/mnt/c/Paimon Dayo/TUAT_TF/.contingency/runtime'}
+[ -d "$source_dir" ] || { echo "Runtime template not found: $source_dir"; exit 1; }
 runtime_dir='/opt/tuat-tf-supabase'
 if [ -e "$runtime_dir" ]; then echo 'Runtime already exists; preserving it'; exit 1; fi
 install -d -m 0700 "$runtime_dir"

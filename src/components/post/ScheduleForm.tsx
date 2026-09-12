@@ -16,7 +16,6 @@ import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import { ScheduleSheetsManager } from "@/components/features/ScheduleSheetsManager";
 import {
-  EDITABLE_BLOCK_ORDER,
   BLOCKS,
   ENTRY_PERIOD_TYPES,
   SCHEDULE_TYPE_OPTIONS,

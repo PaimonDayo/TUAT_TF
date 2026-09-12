@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { parseEnv } from 'node:util';
 import { directory, readConfig, writePrivate } from './backend-files.mjs';
+import { serverProfile, wslArgs, wslRepoRoot, composeCommand } from './server-profile.mjs';
 
 const input = resolve(directory, 'google-oauth.env');
 if (!existsSync(input)) {
@@ -37,6 +38,8 @@ const doc = { networks: {
 const output = resolve(directory, 'compose.auth.json');
 writePrivate(output, JSON.stringify(doc));
 if (process.argv.includes('--prepare-only')) { console.log('Prepared private Auth/network configuration; runtime unchanged.'); process.exit(0); }
-const script = "set -eu; cd /opt/tuat-tf-supabase; install -m 0600 '/mnt/c/Paimon Dayo/TUAT_TF/.contingency/backend/compose.auth.json' compose.auth.json; docker compose -p tuat-contingency -f docker-compose.yml -f compose.local.yml -f compose.rehearsal.yml -f compose.auth.json up -d --no-deps --wait auth";
-execFileSync('wsl', ['-d', 'Ubuntu', '-u', 'root', '--', 'bash', '-c', script], { stdio: 'pipe', timeout: 120_000 });
+const profile = serverProfile();
+const composeAuth = `${wslRepoRoot()}/.contingency/backend/compose.auth.json`;
+const script = `set -eu; cd ${profile.stackDir}; install -m 0600 '${composeAuth}' compose.auth.json; ${composeCommand(profile)} -f compose.auth.json up -d --no-deps --wait auth`;
+execFileSync('wsl', [...wslArgs(), 'bash', '-c', script], { stdio: 'pipe', timeout: 120_000 });
 console.log('PC Google authentication configured. Existing cloud provider and user identities were preserved.');

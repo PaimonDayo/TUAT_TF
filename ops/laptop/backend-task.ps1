@@ -1,4 +1,6 @@
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'server-profile.ps1')
+$serverProfile = Get-TuatServerProfile
 $backendRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $backendDirectory = Join-Path $backendRoot '.contingency/backend'
 $taskMutex = [Threading.Mutex]::new($false, 'Local\TUAT-PC-Backend')
@@ -10,7 +12,9 @@ try {
   # Keep this temporary server awake; the request is automatically released on exit.
   [void][PcBackendPower]::SetThreadExecutionState(2147483649)
   # The holder is a sibling of the startup script so -Wait does not wait for it.
-  $taskHolder = Start-Process -FilePath wsl.exe -ArgumentList '-d Ubuntu -u root -- sh "/mnt/c/Paimon Dayo/TUAT_TF/ops/laptop/hold-wsl.sh"' -WindowStyle Hidden -PassThru
+  # Resolve the checkout inside WSL instead of assuming the first PC's folder.
+  $holdScript = "$(Get-TuatWslRepoRoot -Distro $serverProfile.wslDistro)/ops/laptop/hold-wsl.sh"
+  $taskHolder = Start-Process -FilePath wsl.exe -ArgumentList "-d $($serverProfile.wslDistro) -u root -- sh `"$holdScript`"" -WindowStyle Hidden -PassThru
   $runtimeProcess = Start-Process -FilePath powershell.exe -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $PSScriptRoot 'runtime.ps1') + '" start -NoHold') -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput (Join-Path $backendDirectory 'runtime-start.log') -RedirectStandardError (Join-Path $backendDirectory 'runtime-start-error.log')
   if ($runtimeProcess.ExitCode -ne 0) { throw 'PC runtime did not start' }
   $nodePath = (Get-Content -LiteralPath (Join-Path $backendDirectory 'task-runtime.json') -Raw | ConvertFrom-Json).node

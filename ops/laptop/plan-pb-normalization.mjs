@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { writePrivate, directory } from './backend-files.mjs';
+import { serverProfile, wslArgs } from './server-profile.mjs';
 const require = createRequire(import.meta.url);
 const ts = require('typescript');
 const compiled = resolve('.contingency/normalize-runtime');
@@ -17,8 +18,8 @@ for (const name of ['competition-record','pb-normalize']) {
 const { planPbNormalization } = require(resolve(compiled,'pb-normalize.js'));
 const label = process.argv[2];
 if (!['rehearsal-migrated','pc-migrated','pc-normalization-before'].includes(label)) throw Error('Use an explicit migration snapshot');
-const source = `/opt/tuat-tf-supabase/transfer/competition-v2/${label}.jsonl`;
-const raw = execFileSync('wsl',['-d','Ubuntu','-u','root','--','cat',source],{encoding:'utf8',maxBuffer:64*1024*1024,windowsHide:true});
+const source = `${serverProfile().stackDir}/transfer/competition-v2/${label}.jsonl`;
+const raw = execFileSync('wsl',[...wslArgs(),'cat',source],{encoding:'utf8',maxBuffer:64*1024*1024,windowsHide:true});
 const tables = raw.split('\n').filter(l=>l.startsWith('{')).map(l=>JSON.parse(l));
 const rows = tables.find(t=>t.schema==='public' && t.name==='pb_records').rows;
 const events = tables.find(t=>t.schema==='public' && t.name==='competition_events').rows;
