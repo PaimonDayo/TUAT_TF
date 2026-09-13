@@ -47,7 +47,8 @@ export function ScheduleCachedView({ initialData, openId }: { initialData: Sched
     queryKey: ["middle-long-menu-csv", initialData.userId, months.join(",")],
     queryFn: ({ signal }) => loadMiddleLongMenus(months, signal),
     initialData: data.middleLongMenuSnapshot ?? undefined,
-    enabled: data.middleLongMenuSnapshot !== null && months.length > 0,
+    // サーバーはもうシートを取らない（待たせないため）。出す相手かどうかで判断する。
+    enabled: data.wantsSheetMenus && months.length > 0,
     staleTime: 0,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
