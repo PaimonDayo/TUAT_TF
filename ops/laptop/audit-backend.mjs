@@ -14,7 +14,11 @@ async function check(path, expected, init = {}) {
 }
 const settings = await (await check('/auth/v1/settings', 200)).json();
 assert.equal(settings.external.google, true);
-assert.equal(settings.disable_signup, true);
+// Members who have never signed in must still be able to create their account;
+// blocking this bounced every new Google account back to /login (2026-09-14).
+assert.equal(settings.disable_signup, false);
+assert.equal(settings.external.email, false);
+assert.equal(settings.external.anonymous_users, false);
 await check('/rest/v1/profiles?select=id&limit=1', 401);
 await check('/auth/v1/admin/users', 403);
 await check('/auth/v1/token?grant_type=refresh_token', 403, { method: 'POST', headers: { origin: 'https://example.com', 'content-type': 'application/json' }, body: '{}' });
