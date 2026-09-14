@@ -16,6 +16,10 @@ export default function LoginPage() {
     // userAgent はブラウザでのみ確定するため、マウント後に案内を切り替える。
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setEmbeddedBrowser(detectEmbeddedBrowser(window.navigator.userAgent));
+    // /auth/callback は失敗を ?error= に載せて戻す。表示しないと、押しても
+    // 何も起きずログイン画面に戻ったようにしか見えない。
+    const reason = new URLSearchParams(window.location.search).get("error");
+    if (reason) setError(loginErrorMessage(reason));
   }, []);
 
   async function signInWithGoogle() {
@@ -124,6 +128,17 @@ export default function LoginPage() {
       </div>
     </main>
   );
+}
+
+/** /auth/callback が付けてくる ?error= を、部員に分かる言葉にする。 */
+function loginErrorMessage(reason: string): string {
+  const domain = process.env.NEXT_PUBLIC_UNIVERSITY_DOMAIN;
+  if (reason === "domain") {
+    return domain
+      ? `大学のGoogleアカウント（@${domain}）でログインしてください`
+      : "大学のGoogleアカウントでログインしてください";
+  }
+  return "ログインを完了できませんでした。もう一度お試しください";
 }
 
 type EmbeddedBrowser = { name: string; android: boolean };

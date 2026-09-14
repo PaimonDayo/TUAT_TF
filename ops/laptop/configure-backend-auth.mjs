@@ -31,7 +31,9 @@ const doc = { networks: {
     GOTRUE_EXTERNAL_GOOGLE_SKIP_NONCE_CHECK: 'false',
     GOTRUE_EXTERNAL_GOOGLE_ALLOW_NO_EMAIL: 'false',
     GOTRUE_EXTERNAL_EMAIL_ENABLED: 'false',
-    GOTRUE_DISABLE_SIGNUP: 'true',
+    // Members who have never signed in yet still need to create their account here.
+    // Blocking signups bounced every new Google account straight back to /login (2026-09-14).
+    GOTRUE_DISABLE_SIGNUP: 'false',
     GOTRUE_SECURITY_CAPTCHA_ENABLED: 'false',
   },
 } } };
