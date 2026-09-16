@@ -524,6 +524,23 @@ export interface CompetitionRow {
   sort_order: number;
   /** ホームのカウントダウンに出す大会（同時に1つだけ） */
   is_countdown: boolean;
+  /** 速報サイトのタイムテーブルURL。設定した大会だけプログラムを自動取込する */
+  program_source_url: string | null;
+}
+
+/** 大会プログラム1件（速報サイトから取り込んだ、農工大の出場種目・出場選手） */
+export interface CompetitionProgramEntryRow {
+  id: string;
+  competition_id: string;
+  event_date: string;
+  block: "track" | "field";
+  sort_order: number;
+  time_label: string | null;
+  round_key: string | null;
+  event_label: string;
+  status: string | null;
+  tuat_entries: { heat: number | null; lane: number; bib: string | null; name: string; grade: string }[];
+  created_at: string;
 }
 
 export interface WeeklyRankingRow {

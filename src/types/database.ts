@@ -87,6 +87,7 @@ export type Database = {
           id: string
           is_countdown: boolean
           name: string
+          program_source_url: string | null
           sort_order: number
           starts_on: string
         }
@@ -95,6 +96,7 @@ export type Database = {
           id: string
           is_countdown?: boolean
           name: string
+          program_source_url?: string | null
           sort_order?: number
           starts_on: string
         }
@@ -103,10 +105,61 @@ export type Database = {
           id?: string
           is_countdown?: boolean
           name?: string
+          program_source_url?: string | null
           sort_order?: number
           starts_on?: string
         }
         Relationships: []
+      }
+      competition_program_entries: {
+        Row: {
+          block: string
+          competition_id: string
+          created_at: string
+          event_date: string
+          event_label: string
+          id: string
+          round_key: string | null
+          sort_order: number
+          status: string | null
+          time_label: string | null
+          tuat_entries: Json
+        }
+        Insert: {
+          block: string
+          competition_id: string
+          created_at?: string
+          event_date: string
+          event_label: string
+          id?: string
+          round_key?: string | null
+          sort_order?: number
+          status?: string | null
+          time_label?: string | null
+          tuat_entries?: Json
+        }
+        Update: {
+          block?: string
+          competition_id?: string
+          created_at?: string
+          event_date?: string
+          event_label?: string
+          id?: string
+          round_key?: string | null
+          sort_order?: number
+          status?: string | null
+          time_label?: string | null
+          tuat_entries?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competition_program_entries_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "competitions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       competition_goals: {
         Row: {

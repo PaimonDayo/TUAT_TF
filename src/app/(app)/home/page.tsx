@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { HomeFeed } from "@/components/features/HomeFeed";
 import { CompetitionHome } from "@/components/features/CompetitionHome";
+import { CompetitionProgramCard } from "@/components/features/CompetitionProgramCard";
 
 
 import { HomeNotices } from "@/components/features/HomeNotices";
@@ -23,6 +24,7 @@ import {
   getHomeCompetition,
   getAttendanceSchedules,
   getAttendancesForSchedules,
+  getCompetitionProgramEntries,
   getFeed,
   getHomeNotices,
   getRecentSharedNotes,
@@ -78,12 +80,18 @@ function SectionFallback({ cards, tall = false }: { cards: number; tall?: boolea
 async function CompetitionSection() {
   const result = await getHomeCompetition();
   if (!result) return null;
+  const programEntries = result.competition.program_source_url
+    ? await getCompetitionProgramEntries(result.competition.id)
+    : [];
   return (
-    <CompetitionHome
-      competition={result.competition}
-      goalCount={result.goalCount}
-      initialToday={jstToday()}
-    />
+    <div className="space-y-2">
+      <CompetitionProgramCard competition={result.competition} entries={programEntries} />
+      <CompetitionHome
+        competition={result.competition}
+        goalCount={result.goalCount}
+        initialToday={jstToday()}
+      />
+    </div>
   );
 }
 

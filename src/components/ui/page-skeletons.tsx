@@ -83,6 +83,10 @@ export function ResultsSkeleton() {
   return <div className="pb-6"><SubTitle /><div className="px-4 pt-2"><Rows count={6} /></div></div>;
 }
 
+export function CompetitionProgramSkeleton() {
+  return <div className="pb-6"><SubTitle /><div className="space-y-4 px-4 pt-2">{[0, 1].map((i) => <section key={i} className="space-y-2"><Label /><Rows count={3} /></section>)}</div></div>;
+}
+
 export function BlogListSkeleton() {
   return <div className="pb-6"><SubTitle /><div className="space-y-4 px-4 pt-1 md:px-6"><div className="space-y-1.5"><Skeleton className="h-4 w-56" /><Skeleton className="h-2.5 w-32" /></div><div className="space-y-3">{[0, 1, 2, 3].map((i) => <div key={i} className="space-y-2 rounded-[16px] border border-separator bg-card p-4"><Skeleton className="h-2.5 w-24" /><Skeleton className="h-4 w-4/5" /><Skeleton className="h-3 w-full" /><Skeleton className="h-3 w-1/2" /></div>)}</div></div></div>;
 }

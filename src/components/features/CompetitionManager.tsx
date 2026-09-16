@@ -227,6 +227,7 @@ function CompetitionForm({
   const [name, setName] = useState(competition?.name ?? "");
   const [startsOn, setStartsOn] = useState(competition?.starts_on ?? "");
   const [endsOn, setEndsOn] = useState(competition?.ends_on ?? "");
+  const [programSourceUrl, setProgramSourceUrl] = useState(competition?.program_source_url ?? "");
   const sort = sortOrder;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -248,6 +249,7 @@ function CompetitionForm({
       starts_on: startsOn,
       ends_on: endsOn || null,
       sort_order: Number.isInteger(sort) && sort >= 0 ? sort : 0,
+      program_source_url: programSourceUrl.trim() || null,
     };
     const { data, error: saveError } = competition
       ? await supabase
@@ -295,6 +297,18 @@ function CompetitionForm({
           value={endsOn}
           onChange={(e) => setEndsOn(e.target.value)}
         />
+      </div>
+      <div>
+        <p className="section-label mb-1.5">プログラムの取得元URL（任意）</p>
+        <Input
+          type="url"
+          placeholder="速報サイトのタイムテーブルURL"
+          value={programSourceUrl}
+          onChange={(e) => setProgramSourceUrl(e.target.value)}
+        />
+        <p className="mt-1 text-micro text-muted">
+          設定すると、農工大の出場種目・出場選手を定期的に自動取込し、ホームにプログラムのカードが出ます。
+        </p>
       </div>
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <FormModalFooter>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronRight, Target } from "lucide-react";
+import { ChevronRight, ListOrdered, Target } from "lucide-react";
 import { SubHeader } from "@/components/layout/SubHeader";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -63,7 +63,17 @@ export default async function CompetitionPage({
             : ""}
         </p>
 
-        <Card>
+        <Card className="divide-y divide-separator">
+          {competition.program_source_url && (
+            <Link
+              href={`/competitions/${competition.id}/program`}
+              className="flex items-center gap-3 p-4 pressable"
+            >
+              <ListOrdered size={20} className="text-accent" />
+              <span className="flex-1 text-headline">プログラム（出場選手）</span>
+              <ChevronRight size={16} className="text-muted" />
+            </Link>
+          )}
           <Link
             href={`/competitions/${competition.id}/goals`}
             className="flex items-center gap-3 p-4 pressable"
