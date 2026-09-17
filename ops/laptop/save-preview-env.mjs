@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { resolve } from 'node:path';
 import { directory, writePrivate, cloudEnv } from './backend-files.mjs';
-const cli = 'C:/Users/rainb/AppData/Local/npm-cache/_npx/c5e9bca3acff8f7b/node_modules/vercel/dist/vc.js';
+const cli = 'C:/Users/rainb/AppData/Local/npm-cache/_npx/69f9afb961c37556/node_modules/vercel/dist/vc.js';
 const production = process.argv.includes('--production');
 const restoreCloud = process.argv.includes('--restore-cloud');
 if (restoreCloud && (!production || !process.argv.includes('--cloud-data-verified'))) throw Error('Cloud return requires production scope and verified imported data');

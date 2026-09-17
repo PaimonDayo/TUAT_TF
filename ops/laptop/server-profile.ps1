@@ -29,7 +29,8 @@ function Get-TuatServerProfile {
 # existed on the first production PC.
 function Get-TuatWslRepoRoot {
   param([string]$Distro = (Get-TuatServerProfile).wslDistro)
-  $path = (& wsl -d $Distro -- wslpath -a $script:TuatRepoRoot | Out-String).Trim()
+  # wsl.exe eats backslashes in arguments, so `C:\a\b` reaches wslpath as `C:ab`.
+  $path = (& wsl -d $Distro -- wslpath -a $script:TuatRepoRoot.Replace('\', '/') | Out-String).Trim()
   if ($LASTEXITCODE -ne 0 -or -not $path.StartsWith('/mnt/')) { throw 'Could not resolve this checkout inside WSL' }
   $path
 }

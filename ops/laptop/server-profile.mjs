@@ -46,7 +46,8 @@ export function wslArgs({ user = 'root' } = {}) {
  * 直接書いていたため、別のPC・別のフォルダ名では動かなかった。
  */
 export function wslRepoRoot() {
-  const path = execFileSync('wsl', ['-d', serverProfile().wslDistro, '--', 'wslpath', '-a', root],
+  // wsl.exe eats backslashes in arguments, so `C:\a\b` reaches wslpath as `C:ab`.
+  const path = execFileSync('wsl', ['-d', serverProfile().wslDistro, '--', 'wslpath', '-a', root.replace(/\\/g, '/')],
     { encoding: 'utf8', timeout: 15_000, windowsHide: true }).trim();
   if (!path.startsWith('/mnt/')) throw new Error('Could not resolve this checkout inside WSL');
   return path;
