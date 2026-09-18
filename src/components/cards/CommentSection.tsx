@@ -3,7 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { FileSpreadsheet } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { sheetRepliesWithoutAppDuplicates } from "@/lib/sheet-replies";
+import {
+  sheetRepliesWithoutAppDuplicates,
+  sortRepliesInWrittenOrder,
+} from "@/lib/sheet-replies";
 import { Avatar } from "@/components/common/Avatar";
 import { CommentLikeButton } from "@/components/cards/CommentLikeButton";
 import { Linkify } from "@/components/common/Linkify";
@@ -25,22 +28,13 @@ type SheetReply = {
 type DisplayReply = AppReply | SheetReply;
 type CommentLike = { liked: boolean; count: number };
 
-function spreadsheetReplyIndex(reply: DisplayReply): number | null {
-  return reply.kind === "sheet" ? reply.reply_index : reply.sheet_reply_index ?? null;
-}
-
 function sortRepliesFromLeftToRight(replies: DisplayReply[]): DisplayReply[] {
-  return [...replies].sort((a, b) => {
-    const aIndex = spreadsheetReplyIndex(a);
-    const bIndex = spreadsheetReplyIndex(b);
-    if (aIndex != null && bIndex != null) return aIndex - bIndex;
-    if (aIndex != null) return -1;
-    if (bIndex != null) return 1;
-    if (a.kind === "app" && b.kind === "app") {
-      return a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id);
-    }
-    return a.id.localeCompare(b.id);
-  });
+  return sortRepliesInWrittenOrder(replies, (reply) => ({
+    id: reply.id,
+    createdAt: reply.kind === "app" ? reply.created_at : null,
+    sheetReplyIndex:
+      reply.kind === "sheet" ? reply.reply_index : reply.sheet_reply_index ?? null,
+  }));
 }
 
 export function CommentSection({

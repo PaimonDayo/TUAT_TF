@@ -106,3 +106,64 @@ export function matchAppReplyIndexes(
   }
   return matches;
 }
+
+export type ReplyOrderInput = {
+  id: string;
+  /** アプリ返信の投稿時刻。スプレッドシートにだけある返信は持たない。 */
+  createdAt: string | null;
+  /** スプレッドシートの返信列（左から0）。書き込み前と書き込み失敗では null。 */
+  sheetReplyIndex: number | null;
+};
+
+/**
+ * 返信を書かれた順に並べる。
+ *
+ * スプレッドシートの返信列は左から古い順なので、列を持つ返信はその順に並ぶ。
+ * 列を持たない返信（書き込み前・作者が未連携・書き込み失敗）は、
+ * それ自体の投稿時刻より前に書かれたアプリ返信の列へ寄せる。
+ *
+ * 列の有無で先後を決めてしまうと、アプリから返信した直後は列が無いので末尾に出て、
+ * 書き込みが終わって列が届いた瞬間に前へ跳ねる。寄せる先を時刻で決めておけば、
+ * 列が付く前後で並びは変わらない。
+ */
+export function sortRepliesInWrittenOrder<T>(
+  replies: T[],
+  describe: (reply: T) => ReplyOrderInput,
+): T[] {
+  // 時刻と列の両方を知っているのは、シートへ書き終えたアプリ返信だけ。
+  const anchors = replies
+    .map(describe)
+    .flatMap((reply) =>
+      reply.createdAt != null && reply.sheetReplyIndex != null
+        ? [{ createdAt: reply.createdAt, column: reply.sheetReplyIndex }]
+        : [],
+    )
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+
+  const columnWrittenBefore = (createdAt: string) => {
+    let column = -1;
+    for (const anchor of anchors) {
+      if (anchor.createdAt >= createdAt) break;
+      if (anchor.column > column) column = anchor.column;
+    }
+    return column;
+  };
+
+  return replies
+    .map((reply) => {
+      const { id, createdAt, sheetReplyIndex } = describe(reply);
+      return {
+        reply,
+        column:
+          sheetReplyIndex ?? (createdAt != null ? columnWrittenBefore(createdAt) : -1),
+        // 同じ列へ寄った中では、その列の返信が先。後から続く返信は投稿順。
+        after: sheetReplyIndex != null ? "" : createdAt ?? "",
+        id,
+      };
+    })
+    .sort(
+      (a, b) =>
+        a.column - b.column || a.after.localeCompare(b.after) || a.id.localeCompare(b.id),
+    )
+    .map(({ reply }) => reply);
+}
