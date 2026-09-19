@@ -102,7 +102,7 @@ export function PbManager({
           />
         </FormModal>
       )}
-      <UnsavedChangesDialog open={confirmClose} busy={false} onContinue={() => setConfirmClose(false)} onDiscard={() => { setDirty(false); setConfirmClose(false); setOpen(false); }} onSave={() => { setConfirmClose(false); formRef.current?.save(); }} />
+      <UnsavedChangesDialog open={confirmClose} busy={false} intent={editTarget ? "update" : "post"} onContinue={() => setConfirmClose(false)} onDiscard={() => { setDirty(false); setConfirmClose(false); setOpen(false); }} onSave={() => { setConfirmClose(false); formRef.current?.save(); }} />
     </>
   );
 }

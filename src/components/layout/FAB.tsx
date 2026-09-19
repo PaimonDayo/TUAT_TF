@@ -386,7 +386,7 @@ function ContextualFAB({
         <ResultForm ref={resultRef} userId={userId} events={catalog.events} competitions={catalog.competitions} onDirtyChange={setResultDirty} onDone={() => closeTimelineForm("result")} />
       </FormModal>
 
-      <UnsavedChangesDialog open={pendingTimelineClose !== null} busy={false} onContinue={() => setPendingTimelineClose(null)} onDiscard={() => { if (pendingTimelineClose) closeTimelineForm(pendingTimelineClose); }} onSave={savePendingTimelineForm} />
+      <UnsavedChangesDialog open={pendingTimelineClose !== null} busy={false} intent="post" onContinue={() => setPendingTimelineClose(null)} onDiscard={() => { if (pendingTimelineClose) closeTimelineForm(pendingTimelineClose); }} onSave={savePendingTimelineForm} />
 
       <FormModal open={directForm === "planning"} onOpenChange={(open) => { if (!open) { if (scheduleType === "practice" && planningDirty) setConfirmPlanningClose(true); else closeDirectForm(); } }} title="予定">
         <div className="space-y-5">
