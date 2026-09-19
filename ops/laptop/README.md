@@ -1,6 +1,7 @@
 # このPCでSupabaseを一時運用する準備
 
 > **別のPCをサーバーにするときは [SERVER-HANDOFF.md](SERVER-HANDOFF.md) を読む。**
+> **つけっぱなしの消費電力を下げる手順は [POWER-SAVING.md](POWER-SAVING.md)。**
 > PC固有の値（WSLのディストリ名・スタックの場所・Composeプロジェクト名）は
 > `ops/laptop/server-profile.mjs` / `server-profile.ps1` に集約し、`.contingency/server.json`
 > で上書きできる。チェックアウト位置は `wslpath -a` で解決するので、フォルダ名は問わない。
