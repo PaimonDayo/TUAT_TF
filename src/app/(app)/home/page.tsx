@@ -32,6 +32,7 @@ import {
 } from "@/lib/queries";
 import { applyMiddleLongMenuSnapshot, middleLongMenuMonths } from "@/lib/middle-long-menu-data";
 import { fetchMiddleLongMenuSnapshot } from "@/lib/middle-long-menu-sheet";
+import { folderContentsLabel } from "@/lib/note-contents";
 import { permissionsOf } from "@/lib/permissions";
 import { RECORD_SOURCE_COOKIE, showRecordSourceFor } from "@/lib/record-source-display";
 import type {
@@ -249,7 +250,7 @@ async function NotesSection() {
                 <Folder size={19} className="mt-0.5 shrink-0 text-accent" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-headline">{note.title}</p>
-                  <p className="mt-1 text-caption">{note.articles?.length ?? 0}件の記事</p>
+                  <p className="mt-1 text-caption">{folderContentsLabel(note)}</p>
                 </div>
                 <ChevronRight size={18} className="mt-0.5 shrink-0 text-muted" />
               </div>

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronRight, Folder, Pin } from "lucide-react";
 import { searchNoteArticles, type NoteArticleSearchResult } from "@/app/(app)/notes/actions";
+import { folderContentsLabel } from "@/lib/note-contents";
 import { Avatar } from "@/components/common/Avatar";
 import { FolderRowActions } from "@/components/features/FolderRowActions";
 import { ThreadList } from "@/components/features/ThreadList";
@@ -189,9 +190,7 @@ export function NoteList({
                   {note.status === "draft" && <Badge>下書き</Badge>}
                 </div>
                   {note.pinned && <Pin size={14} className="shrink-0 fill-accent text-accent" aria-label="ピン留め" />}
-                <p className="mt-1 text-caption">
-                  {note.articles?.length ?? 0}件の記事
-                </p>
+                <p className="mt-1 text-caption">{folderContentsLabel(note)}</p>
                 {note.description && (
                   <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-caption">
                     {note.description}

@@ -10,6 +10,8 @@ const NOTE_SELECT = `
   author:profiles!author_id(id, display_name, avatar_url, blocks, grade),
   theme:note_themes(*),
   articles:note_articles(id),
+  children:notes!parent_id(id),
+  threads:threads!folder_id(id),
   editors:note_editors(
     user_id,
     profile:profiles!user_id(id, display_name, avatar_url, blocks, grade)

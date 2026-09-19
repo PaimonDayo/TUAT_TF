@@ -180,7 +180,37 @@ export interface Tweet {
   poll_multiple: boolean;
   poll_anonymous: boolean;
   poll_allow_options: boolean;
+  /** 引用した投稿の種類。quoted_id と対で入る（引用していなければ null） */
+  quoted_type?: QuotedPostKind | null;
+  quoted_id?: string | null;
 }
+
+export type QuotedPostKind = "record" | "tweet";
+
+/**
+ * 引用元の中身。引用した投稿カードの中に小さく表示するぶんだけを持つ。
+ * 引用元は外部キーではないので、削除済みなら kind: "missing" で返す。
+ */
+export type QuotedPost =
+  | {
+      kind: "tweet";
+      id: string;
+      author: AuthorMini;
+      created_at: string;
+      content: string;
+      hasImage: boolean;
+    }
+  | {
+      kind: "record";
+      id: string;
+      author: AuthorMini;
+      created_at: string;
+      recorded_date: string;
+      distanceKm: number;
+      summary: string;
+    }
+  | { kind: "missing"; id: string };
+
 export interface TweetPollVoter {
   profile_id: string;
   display_name: string;
@@ -216,6 +246,8 @@ export interface TweetWithAuthor extends Tweet {
   comments_count?: number;
   poll?: TweetPoll;
   mentions?: TweetMention[];
+  /** 引用した投稿の中身。quoted_id があるときだけ入る */
+  quoted?: QuotedPost;
 }
 
 export interface Like {
@@ -590,6 +622,10 @@ export interface NoteWithRelations extends NoteRow {
   theme: NoteTheme | null;
   editors?: { user_id: string; profile?: AuthorMini | null }[];
   articles?: { id: string }[];
+  /** このフォルダ直下のサブフォルダ */
+  children?: { id: string }[];
+  /** このフォルダ直下のスレッド */
+  threads?: { id: string }[];
 }
 
 export interface ThreadRow {

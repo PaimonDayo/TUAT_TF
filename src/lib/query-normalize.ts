@@ -21,12 +21,21 @@ type NoteQueryRow = Row<"notes"> & {
   author: AuthorInput;
   theme: Row<"note_themes"> | null;
   articles?: { id: string }[];
+  // PostgREST は notes!parent_id をサブフォルダ（配列）として返すが、生成型は
+  // 自己参照を親（1件）と推測する。実物に合わせてどちらの形でも受け、配列へ揃える。
+  children?: { id: string }[] | { id: string } | null;
+  threads?: { id: string }[] | { id: string } | null;
   editors?: { user_id: string; profile: AuthorInput | null }[];
 };
 
 const NOTE_SCOPES = new Set<NoteScope>(["shared", "personal"]);
 const NOTE_STATUSES = new Set<NoteStatus>(["draft", "published"]);
 const NOTE_POLICIES = new Set<NoteEditPolicy>(["everyone", "specified", "author"]);
+
+function toRelationArray<T>(value: T[] | T | null | undefined): T[] {
+  if (Array.isArray(value)) return value;
+  return value ? [value] : [];
+}
 
 export function normalizeNoteRow(row: NoteQueryRow): NoteWithRelations | null {
   if (
@@ -42,6 +51,8 @@ export function normalizeNoteRow(row: NoteQueryRow): NoteWithRelations | null {
     status: row.status as NoteStatus,
     edit_policy: row.edit_policy as NoteEditPolicy,
     author: normalizeAuthorRow(row.author),
+    children: toRelationArray(row.children),
+    threads: toRelationArray(row.threads),
     editors: row.editors?.map((editor) => ({
       user_id: editor.user_id,
       profile: editor.profile ? normalizeAuthorRow(editor.profile) : null,
