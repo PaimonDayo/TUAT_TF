@@ -20,18 +20,22 @@ import { Toggle } from "@/components/ui/toggle";
 import { FormModalFooter } from "@/components/ui/form-modal";
 import { cn } from "@/lib/utils";
 import { prepareTweetImage, validateTweetImage } from "@/lib/tweet-image";
+import { QuotedPostCard } from "@/components/cards/QuotedPostCard";
+import type { QuotedPost } from "@/types";
 
 /** つぶやきフォーム。tweet を渡すと編集モード */
 export type TweetFormHandle = { save: () => void };
 export const TweetForm = forwardRef<
   TweetFormHandle,
   {
-    tweet?: { id: string; content: string };
+    tweet?: { id: string; content: string; quoted?: QuotedPost };
     initialStory?: boolean;
+    /** 引用する投稿。新規作成時だけ指定でき、あとから引用先は変えられない。 */
+    quote?: Exclude<QuotedPost, { kind: "missing" }>;
     onDone: () => void;
     onDirtyChange?: (dirty: boolean) => void;
   }
->(function TweetForm({ tweet, initialStory = false, onDone, onDirtyChange }, ref) {
+>(function TweetForm({ tweet, initialStory = false, quote, onDone, onDirtyChange }, ref) {
   const router = useRouter();
   const editing = !!tweet;
   const [content, setContent] = useState(tweet?.content ?? "");
@@ -149,6 +153,8 @@ export const TweetForm = forwardRef<
       const expiresAt = expiresIn24Hours ? new Date(Date.now() + 86400000).toISOString() : null;
       const { error } = await supabase.from("tweets").insert({
         id, user_id: user.id, content: text, image_path: imagePath, expires_at: expiresAt,
+        quoted_type: quote?.kind ?? null,
+        quoted_id: quote?.id ?? null,
         poll_multiple: pollEnabled && pollMultiple,
         poll_anonymous: pollAnonymous,
         poll_allow_options: pollEnabled && pollAllowOptions,
@@ -201,7 +207,7 @@ export const TweetForm = forwardRef<
           aria-label="つぶやき本文"
           rows={7}
           maxLength={TWEET_RAW_MAX_LENGTH}
-          placeholder="つぶやきを入力"
+          placeholder={quote ? "ひとこと添える（なくても投稿できます）" : "つぶやきを入力"}
           value={content}
           onKeyDown={(event) => {
             // Keep Enter as a newline in the post body. In particular, do not
@@ -289,6 +295,10 @@ export const TweetForm = forwardRef<
           </div>
         </div>
       </section>
+
+      {(quote ?? tweet?.quoted) && (
+        <QuotedPostCard quoted={(quote ?? tweet?.quoted)!} linked={false} />
+      )}
 
       {!editing && (
         <div className="space-y-2">
@@ -405,7 +415,7 @@ export const TweetForm = forwardRef<
       )}
 
       <FormModalFooter>
-        <Button size="lg" onClick={submit} disabled={saving || (!content.trim() && !imageFile && !pollEnabled) || overLimit}>
+        <Button size="lg" onClick={submit} disabled={saving || (!content.trim() && !imageFile && !pollEnabled && !quote) || overLimit}>
           {saving ? (
             <>
               <LoaderCircle size={18} className="animate-spin" />

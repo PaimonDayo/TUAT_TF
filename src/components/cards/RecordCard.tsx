@@ -14,6 +14,7 @@ import { RecordOwnerMenu } from "@/components/cards/PostOwnerMenu";
 import { CONDITIONS, gradeShort } from "@/lib/constants";
 import { recordFieldHidden, recordFieldLabel } from "@/lib/record-fields";
 import { displayedDistance } from "@/lib/record-distance";
+import { recordSummaryText } from "@/lib/post-summary";
 import type { CommentAuthor, RecordFieldDef, RecordWithAuthor } from "@/types";
 
 const NON_DETAIL_KEYS = new Set(["dist_low", "dist_mid", "dist_high", "dist_speed", "dist_actual", "strides", "condition"]);
@@ -87,7 +88,7 @@ export function RecordCard({
           {/* 本人には保存元だけ知らせる。システム管理者には由来を対で出す（設定でオフにできる）。 */}
           {isOwner && !showSource && record.from_sheet && <span className="rounded-full bg-bg px-2 py-0.5 text-micro text-muted2">スプレッドシート</span>}
           {showSource && <span className="rounded-full bg-bg px-2 py-0.5 text-micro text-muted2">{record.from_sheet ? "スプレッドシート由来" : "アプリ由来"}</span>}
-          <span onClick={(event) => event.stopPropagation()}><RecordOwnerMenu record={record} isOwner={isOwner} isMiddleLong={author.blocks?.includes("middle_long") ?? false} recordSource={author.record_source} recordFields={recordFields} systemRecordForm={currentUser.systemRecordForm === true && hasTimelineConfig} /></span>
+          <span onClick={(event) => event.stopPropagation()}><RecordOwnerMenu record={record} isOwner={isOwner} isMiddleLong={author.blocks?.includes("middle_long") ?? false} recordSource={author.record_source} recordFields={recordFields} systemRecordForm={currentUser.systemRecordForm === true && hasTimelineConfig} quote={{ kind: "record", id: record.id, author, created_at: record.created_at, recorded_date: record.recorded_date, distanceKm: totalDistance, summary: recordSummaryText(record) }} /></span>
         </div>
       </div>
 

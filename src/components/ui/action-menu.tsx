@@ -1,18 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { MoreHorizontal, Pencil, Pin, PinOff, Share2, Trash2 } from "lucide-react";
+import { MoreHorizontal, Pencil, Pin, PinOff, Quote, Share2, Trash2 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
 export function ActionMenu({
   onEdit,
+  onQuote,
   onShare,
   onPin,
   pinned = false,
   onDelete,
   editLabel = "編集する",
+  quoteLabel = "投稿を引用",
   shareLabel = "共有リンクをコピー",
   deleteLabel = "削除する",
   deleteTitle = "削除しますか？",
@@ -21,11 +23,13 @@ export function ActionMenu({
   className,
 }: {
   onEdit?: () => void;
+  onQuote?: () => void;
   onShare?: () => void | Promise<void>;
   onDelete?: () => void | boolean | Promise<void | boolean>;
   onPin?: () => void | Promise<void>;
   pinned?: boolean;
   editLabel?: string;
+  quoteLabel?: string;
   shareLabel?: string;
   deleteLabel?: string;
   deleteTitle?: string;
@@ -37,14 +41,14 @@ export function ActionMenu({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  function edit() {
+  function openForm(open?: () => void) {
     setMenuOpen(false);
     // このメニュー(Sheet=Radixダイアログ)が閉じるのと、編集フォーム(別のRadix
     // ダイアログ)が開くのが同じコミットで重なると、react-remove-scroll の
     // スクロールロックの受け渡しが競合する。iOS ではこの瞬間にロックが外れ、
     // 入力欄にフォーカスするとページがスクロールして入力欄がキーボードの
     // 裏（画面外）へ隠れる。Sheet を閉じ切ってから編集フォームを開く。
-    window.setTimeout(() => onEdit?.(), 220);
+    window.setTimeout(() => open?.(), 220);
   }
 
   async function remove() {
@@ -78,11 +82,21 @@ export function ActionMenu({
             {onEdit && (
               <button
                 type="button"
-                onClick={edit}
+                onClick={() => openForm(onEdit)}
                 className="flex w-full items-center gap-3 rounded-xl border border-separator bg-card p-3.5 active:bg-bg"
               >
                 <Pencil size={20} className="text-accent" />
                 <span className="text-headline">{editLabel}</span>
+              </button>
+            )}
+            {onQuote && (
+              <button
+                type="button"
+                onClick={() => openForm(onQuote)}
+                className="flex w-full items-center gap-3 rounded-xl border border-separator bg-card p-3.5 active:bg-bg"
+              >
+                <Quote size={20} className="text-accent" />
+                <span className="text-headline">{quoteLabel}</span>
               </button>
             )}
             {onShare && (

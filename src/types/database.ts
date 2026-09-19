@@ -1994,6 +1994,8 @@ export type Database = {
           expires_at: string | null
           likes_count: number
           image_path: string | null
+          quoted_type: string | null
+          quoted_id: string | null
           user_id: string
         }
         Insert: {
@@ -2007,6 +2009,8 @@ export type Database = {
           expires_at?: string | null
           user_id: string
           image_path?: string | null
+          quoted_type?: string | null
+          quoted_id?: string | null
         }
         Update: {
           content?: string
@@ -2018,8 +2022,10 @@ export type Database = {
           likes_count?: number
           user_id?: string
           expires_at?: string | null
-        }
           image_path?: string | null
+          quoted_type?: string | null
+          quoted_id?: string | null
+        }
         Relationships: [
           {
             foreignKeyName: "tweets_user_id_fkey"

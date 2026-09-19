@@ -5,7 +5,7 @@ import { jstToday } from "@/lib/date";
 import { normalizeRecordWithAuthor, normalizeTweetWithAuthor } from "@/lib/profile-normalize";
 import { RECORD_NONEMPTY_OR } from "@/lib/record-content";
 import type { FeedItem } from "@/types";
-import { AUTHOR_SELECT, TWEET_AUTHOR_SELECT, attachTweetSocialData, SHEET_TIMELINE_OR, fetchFeedSocialState, fetchTargetSocialState } from "./internal";
+import { AUTHOR_SELECT, TWEET_AUTHOR_SELECT, attachTweetSocialData, SHEET_TIMELINE_OR, fetchFeedSocialState, fetchQuotedPosts, fetchTargetSocialState, withQuotedPost } from "./internal";
 
 /**
  * タイムライン用フィード（練習記録 + つぶやき）を取得し、
@@ -74,9 +74,10 @@ export async function getFeed(
   // currentUserId remains part of this function's public contract/query key. The
   // RPC derives the authenticated viewer from auth.uid(), so it cannot be spoofed.
   void currentUserId;
-  const [tweets, social] = await Promise.all([
+  const [tweets, social, quoted] = await Promise.all([
     attachTweetSocialData(supabase, rawTweets),
     fetchFeedSocialState(supabase, recIds, twIds),
+    fetchQuotedPosts(supabase, rawTweets),
   ]);
 
   const items: FeedItem[] = [
@@ -91,7 +92,7 @@ export async function getFeed(
     ...tweets.map(
       (t): FeedItem => ({
         kind: "tweet",
-        ...t,
+        ...withQuotedPost(t, quoted),
         liked_by_me: social.liked.has(`tweet:${t.id}`),
         comments_count: social.comments.get(`tweet:${t.id}`) ?? 0,
       }),
@@ -150,13 +151,14 @@ export async function getFeedItemById(
 
   void currentUserId;
   // 通知から1件を開く経路。ここも2つの取得は互いに依存しないので同時に投げる。
-  const [{ liked, comments }, [tweet]] = await Promise.all([
+  const [{ liked, comments }, [tweet], quoted] = await Promise.all([
     fetchTargetSocialState(supabase, "tweet", [id]),
     attachTweetSocialData(supabase, [normalizeTweetWithAuthor(data)]),
+    fetchQuotedPosts(supabase, [data]),
   ]);
   return {
     kind: "tweet",
-    ...tweet,
+    ...withQuotedPost(tweet, quoted),
     liked_by_me: liked.has(id),
     comments_count: comments.get(id) ?? 0,
   };
@@ -184,14 +186,15 @@ export async function getUserTweets(
   const ids = rawTweets.map((tweet) => tweet.id);
   void currentUserId;
   // 投票・メンションと、いいね・コメント件数は互いに依存しない。同時に投げる。
-  const [tweets, { liked, comments }] = await Promise.all([
+  const [tweets, { liked, comments }, quoted] = await Promise.all([
     attachTweetSocialData(supabase, rawTweets),
     fetchTargetSocialState(supabase, "tweet", ids),
+    fetchQuotedPosts(supabase, rawTweets),
   ]);
   return tweets.map(
     (tweet): FeedItem => ({
       kind: "tweet",
-      ...tweet,
+      ...withQuotedPost(tweet, quoted),
       liked_by_me: liked.has(tweet.id),
       comments_count: comments.get(tweet.id) ?? 0,
     }),

@@ -13,6 +13,7 @@ import { MentionText } from "@/components/common/MentionText";
 import { ExpandableSection } from "@/components/common/ExpandableSection";
 import { TweetPoll } from "@/components/features/TweetPoll";
 import { TweetOwnerMenu } from "@/components/cards/PostOwnerMenu";
+import { QuotedPostCard } from "@/components/cards/QuotedPostCard";
 import { cn } from "@/lib/utils";
 import { gradeShort } from "@/lib/constants";
 import type { CommentAuthor, TweetWithAuthor } from "@/types";
@@ -66,7 +67,18 @@ export function TweetCard({
         </div>
         {showSource && <span className="shrink-0 rounded-full bg-bg px-2 py-0.5 text-micro text-muted2">アプリ由来</span>}
         <span className="shrink-0" onClick={(event) => event.stopPropagation()}>
-          <TweetOwnerMenu tweet={{ id: tweet.id, content: tweet.content }} isOwner={isOwner} />
+          <TweetOwnerMenu
+            tweet={{ id: tweet.id, content: tweet.content, quoted: tweet.quoted }}
+            isOwner={isOwner}
+            quote={tweet.expires_at ? undefined : {
+              kind: "tweet",
+              id: tweet.id,
+              author,
+              created_at: tweet.created_at,
+              content: tweet.content,
+              hasImage: tweet.image_path !== null,
+            }}
+          />
         </span>
       </div>
 
@@ -75,6 +87,8 @@ export function TweetCard({
           <MentionText text={tweet.content} mentions={tweet.mentions} />
         </p>
       </ExpandableSection>
+      {tweet.quoted && <QuotedPostCard quoted={tweet.quoted} />}
+
       {tweet.poll && (
         <TweetPoll
           tweetId={tweet.id}

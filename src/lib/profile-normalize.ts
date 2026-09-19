@@ -121,6 +121,8 @@ export function normalizeTweetWithAuthor(
 ): TweetWithAuthor {
   return {
     ...row,
+    // 引用元の種類は自由入力の列（CHECK制約はDB側）。想定外の値はここで落とす。
+    quoted_type: row.quoted_type === "record" || row.quoted_type === "tweet" ? row.quoted_type : null,
     author: normalizeAuthorRow(row.author),
   };
 }
