@@ -5,7 +5,7 @@ import type { RecordFieldDef } from "@/types";
 import { relevantSheetHeaderSignature } from "@/lib/sheet-field-config";
 import { sheetContentSignature } from "@/lib/sheet-public-csv";
 import type { SyncOptions, SyncResult } from "./types";
-import { SHEET_HISTORY_START, todayJST, sheetPullCutoff } from "./dates";
+import { SHEET_HISTORY_START, todayJST, sheetPullCutoff, sheetReplyCutoff } from "./dates";
 import { resolveFieldMap, appToCellsFull, appToCellsNonEmpty } from "./field-map";
 import type { DbRecord } from "./field-map";
 import { gasPost, fetchAllRaw } from "./gas-client";
@@ -244,7 +244,7 @@ export async function runSheetSync(
         admin,
         processedProfiles.map((profile) => ({ id: profile.id, sheet_name: profile.sheet_name })),
         members,
-        sheetPullCutoff(today, nowIso),
+        sheetReplyCutoff(today),
         today,
         true,
       );
@@ -316,7 +316,7 @@ export async function runSheetSync(
       admin,
       processedProfiles.map((profile) => ({ id: profile.id, sheet_name: profile.sheet_name })),
       members,
-      sheetPullCutoff(today, nowIso),
+      sheetReplyCutoff(today),
       today,
     );
     result.sheetReplies = replySync.synced;

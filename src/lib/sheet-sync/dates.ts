@@ -26,6 +26,21 @@ export function sheetPullCutoff(today: string, historyImportedAt: string | null)
 }
 
 /**
+ * スプレッドシートの返信列を突き合わせる範囲。**直近1週間だけ**を見る
+ * （オーナー確定 2026-09-19）。
+ *
+ * 返信は書かれてすぐ取り込めればよく、それ以前の分は取込済みで毎時見直す必要がない。
+ * 記録の取り込み（sheetPullCutoff＝1か月）と同じ幅で毎時確認すると、
+ * 部員×日数ぶんの照合を無駄に繰り返すことになるため分けている。
+ * 範囲から外れた日の返信は消さない（触らないだけ）。
+ */
+export function sheetReplyCutoff(today: string, days = 7): string {
+  const date = new Date(`${today}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - days);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
  * スプレッドシート由来の記録を、タイムラインで「いつ投稿されたもの」として扱うか。
  *
  * **取り込んだ時刻**を使う（オーナー指示 2026-09-13）。同期は毎晩JST 0時に走るので、

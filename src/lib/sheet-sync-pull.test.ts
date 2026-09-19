@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appToCellsFull, computeMemberPull, resolveFieldMap, sheetPullCutoff, sheetRecordsWithoutPendingPushes, type DbRecord, type FieldMap } from "./sheet-sync";
+import { appToCellsFull, computeMemberPull, resolveFieldMap, sheetPullCutoff, sheetReplyCutoff, sheetRecordsWithoutPendingPushes, type DbRecord, type FieldMap } from "./sheet-sync";
 
 const fieldMap = {
   builtin: new Map([["memo", { header: "memo", column: 0, numeric: false }]]),
@@ -264,5 +264,16 @@ describe("sheetPullCutoff", () => {
 
   it("clamps month-end dates", () => {
     expect(sheetPullCutoff("2026-03-31", "2026-03-01T00:00:00Z")).toBe("2026-02-28");
+  });
+});
+
+describe("sheetReplyCutoff", () => {
+  it("looks at the last week only", () => {
+    expect(sheetReplyCutoff("2026-09-19")).toBe("2026-09-12");
+  });
+
+  it("crosses month and year boundaries", () => {
+    expect(sheetReplyCutoff("2026-03-03")).toBe("2026-02-24");
+    expect(sheetReplyCutoff("2026-01-04")).toBe("2025-12-28");
   });
 });
