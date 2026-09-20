@@ -36,6 +36,42 @@ powershell -NoProfile -File ops/laptop/restart-backend.ps1
 
 Wi-Fi変更時は中継先を再取得してR2へ署名保存するため、利用者URLやGoogle設定の変更は不要。Quick Tunnelには稼働保証がなく、再接続中は通信できない。McAfeeの不要なVPN経路は解除後に疎通確認済み。ウイルス対策/Firewallは無効化していない。WSLはmirrored networking、DNS tunneling、firewall有効。Dockerのサブネットはテザリングとの重複を避けている。
 
+## 再起動すると止まる（2026-09-21 実際に起きた）
+
+2026-09-20 23:20にPCが再起動し、翌朝05:40に所有者がログインするまで**約6時間25分、本番のDB/Authが停止した**。
+アプリ（Vercel）は生きているのでログイン画面は開くが、その先が全部失敗する。
+
+原因は2つ。
+
+1. **起動タスクが `LogonType=Interactive`** で、所有者のデスクトップセッションの中でしか動かない。
+   再起動後は誰かがログインするまで自動では戻らない。
+2. ログイン後の最初の2回の起動も失敗していた。**外付けHDDからの初回起動は遅く、DBの準備を待つ
+   `supabase-storage` が一度 unhealthy に倒れる**。`compose up --wait` はその瞬間に諦めるため
+   `runtime.ps1 start` が例外を投げ、`backend-task.ps1` が中継を起動する前に終了していた。
+   1分ごとの再試行に救われて3回目で起動した。
+
+2の方は修正済み（`runtime-wsl.sh`）。`--wait` が早々に諦めたら、そこで終わらせず実際に回復するかを
+最大420秒見届ける。`sh runtime-wsl.sh wait [秒]` で単独でも使える。
+
+1の方は**管理者権限が要るので所有者の操作が必要**。順番は次のとおり。
+
+```powershell
+# 1. まず確かめる（本番のタスクには触らない。読み取り専用の別タスクを作って消すだけ）
+powershell -NoProfile -File ops/laptop/check-logon-free-start.ps1
+
+# 2. 「届いています」と出たら本番タスクを切り替える（パスワードは預けないS4U方式）
+powershell -NoProfile -File ops/laptop/install-backend-task.ps1 -WithoutLogon
+
+# 元に戻すときはスイッチ無しで同じコマンド
+powershell -NoProfile -File ops/laptop/install-backend-task.ps1
+```
+
+1で「届きませんでした」と出た場合は、WSLがデスクトップの無いセッションから使えない構成なので、
+**自動ログイン**（電源投入で自動的にサインインさせる）に切り替える。Windows 11 HomeではHyper-Vの
+常駐VMが使えないため、この2つが現実的な選択肢になる。
+
+切り替えると中継が一度作り直されるので、**部員が使っていない時間に実行する**（30秒程度）。
+
 ## 秘密情報と保存先
 
 - 本番機 `C:\Paimon Dayo\TUAT_TF`、WSL `Ubuntu`、`/opt/tuat-tf-supabase`、Docker project `tuat-contingency`。
