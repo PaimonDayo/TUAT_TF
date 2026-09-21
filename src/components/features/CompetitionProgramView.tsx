@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
@@ -17,6 +17,8 @@ import {
   groupProgramByDate,
 } from "@/lib/competition-program";
 import type { CompetitionProgramEntryRow, CompetitionRow } from "@/types";
+
+import { CompetitionInProgress } from "./CompetitionInProgress";
 
 const BLOCK_LABEL = { track: "トラック", field: "フィールド" } as const;
 
@@ -37,15 +39,6 @@ export function CompetitionProgramView({
   const [view, setView] = useState(initialView);
   const [syncing, setSyncing] = useState(false);
 
-  useEffect(() => {
-    const refresh = () => {
-      const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
-      if (document.visibilityState === "visible" && initialEntries.some(row => row.event_date === today)) router.refresh();
-    };
-    const timer = window.setInterval(refresh, 60000);
-    window.addEventListener("focus", refresh);
-    return () => { window.clearInterval(timer); window.removeEventListener("focus", refresh); };
-  }, [initialEntries, router]);
 
   const groups = groupProgramByDate(initialEntries.map(fromStoredProgramRow))
     .map((group) => ({
@@ -80,6 +73,7 @@ export function CompetitionProgramView({
 
   return (
     <div className="space-y-4 px-4 pb-8 pt-2">
+      <CompetitionInProgress entries={initialEntries} />
       <div className="flex gap-2" role="group" aria-label="表示内容">
         <Button variant={view === "program" ? "primary" : "outline"} onClick={() => setView("program")} aria-pressed={view === "program"}>プログラム</Button>
         <Button variant={view === "results" ? "primary" : "outline"} onClick={() => setView("results")} aria-pressed={view === "results"}>速報</Button>
@@ -121,7 +115,7 @@ export function CompetitionProgramView({
                           <span className="shrink-0 text-caption tabular-nums text-muted">
                             {row.timeLabel ?? "--:--"}
                           </span>
-                          <span className="min-w-0 flex-1 truncate text-headline">
+                          <span className="min-w-0 flex-1 text-headline">
                             {formatProgramEventLabel(row.eventLabel)}
                           </span>
                         </div>
@@ -129,9 +123,9 @@ export function CompetitionProgramView({
                           {row.tuatEntries.map(formatAthletePosition).join("、")}
                         </p>}
                         {row.tuatEntries.filter(entry => entry.result).map((entry, index) => (
-                          <div key={index} className="flex items-baseline justify-between gap-3 pl-[52px] text-[13px]">
+                          <div key={index} className="rounded-lg bg-accent/5 px-2 py-1.5 text-[13px] sm:ml-[52px]">
                             <span>{formatAthleteLabel(entry)} {entry.heat ? entry.heat + "組" : ""}{entry.result?.place ? " " + entry.result.place + (block === "field" ? "位" : "着") : ""}</span>
-                            <span className="font-semibold tabular-nums">{entry.result?.record}{entry.result?.wind ? " (風 " + entry.result.wind + ")" : ""}</span>
+                            <span className="block font-semibold tabular-nums">結果：{entry.result?.record}{entry.result?.wind ? " (風 " + entry.result.wind + ")" : ""}</span>
                           </div>
                         ))}
                         {competition.program_source_url && <a className="block pl-[52px] text-micro text-accent" href={competition.program_source_url.split("#")[0] + "#" + row.roundKey} target="_blank" rel="noopener noreferrer">公式の種目詳細</a>}

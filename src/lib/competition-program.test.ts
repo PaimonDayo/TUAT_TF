@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   currentProgramRow,
+  currentProgramRows,
+  nextProgramRows,
   formatAthleteLabel,
   formatAthleteList,
   formatAthletePosition,
@@ -115,11 +117,8 @@ describe("groupProgramByDate", () => {
 describe("currentProgramRow", () => {
   const rows = parseCompetitionProgram(fixture, 2026);
 
-  it("picks the latest track row at or before now that has 農工大 entrants", () => {
-    // 10:00の予選(entrants有)と10:30の準決勝(entrants無)のうち、10:30時点では
-    // 予選が「いま行われている」ことになる(準決勝はエントリー未確定なので対象外)。
-    const current = currentProgramRow(rows, "2026-09-21", "10:31", "track");
-    expect(current?.roundKey).toBe("1-0");
+  it("does not keep the previous race active after the next race starts without TUAT entrants", () => {
+    expect(currentProgramRow(rows, "2026-09-21", "10:31", "track")).toBeNull();
   });
 
   it("moves on to a later row once its time has passed, if it has entrants", () => {
@@ -154,5 +153,40 @@ describe("type sanity", () => {
       tuatEntries: [],
     };
     expect(row.block).toBe("track");
+  });
+});
+
+describe("currentProgramRows concurrent fields", () => {
+  const athlete = { heat: null, lane: 1, bib: "1", name: "テスト", grade: "B1" };
+  const field: ParsedProgramRow = { eventDate: "2026-09-22", block: "field", sortOrder: 1, timeLabel: "10:00", roundKey: "f1", eventLabel: "走幅跳", status: "未入力", tuatEntries: [athlete] };
+  it("keeps fields with different start times alongside the current track race", () => {
+    const rows = [field, { ...field, roundKey: "f2", timeLabel: "10:30" }, { ...field, block: "track" as const, roundKey: "t1", timeLabel: "10:40" }];
+    expect(currentProgramRows(rows, "2026-09-22", "10:40").map(row => row.roundKey)).toEqual(["f1", "f2", "t1"]);
+  });
+  it("excludes completed, cancelled, future, unknown-time and different-day fields", () => {
+    const rows = [{ ...field, status: "完了" }, { ...field, status: "中止" }, { ...field, timeLabel: "11:00" }, { ...field, timeLabel: null }, { ...field, eventDate: "2026-09-21" }];
+    expect(currentProgramRows(rows, "2026-09-22", "10:30")).toEqual([]);
+  });
+  it("keeps field attempts active until the official event is complete", () => {
+    const finished = { ...athlete, result: { place: "1", record: "6m50" } };
+    expect(currentProgramRows([{ ...field, tuatEntries: [finished, athlete] }], "2026-09-22", "10:30")).toHaveLength(1);
+    expect(currentProgramRows([{ ...field, tuatEntries: [finished] }], "2026-09-22", "10:30")).toHaveLength(1);
+    expect(currentProgramRows([{ ...field, status: "完了", tuatEntries: [finished] }], "2026-09-22", "10:30")).toEqual([]);
+  });
+});
+
+describe("nextProgramRows", () => {
+  const entry = { heat: null, lane: 1, bib: "1", name: "テスト", grade: "B1" };
+  const row: ParsedProgramRow = { eventDate: "2026-09-22", block: "track", sortOrder: 1, timeLabel: "10:00", roundKey: "t1", eventLabel: "100m", status: "未入力", tuatEntries: [entry] };
+  it("shows the next TUAT track and concurrent fields, skipping races without entrants", () => {
+    const rows = [row, { ...row, timeLabel: "11:00", roundKey: "t2" }, { ...row, timeLabel: "10:30", tuatEntries: [] }, { ...row, block: "field" as const, roundKey: "f1", timeLabel: "10:45" }, { ...row, block: "field" as const, roundKey: "f2", timeLabel: "10:45" }];
+    expect(nextProgramRows(rows, "2026-09-22", "10:00").map(row => row.roundKey)).toEqual(["f1", "f2", "t2"]);
+  });
+  it("moves to the next day and returns nothing after the final event", () => {
+    expect(nextProgramRows([row], "2026-09-21", "23:59")).toEqual([row]);
+    expect(nextProgramRows([row], "2026-09-22", "10:00")).toEqual([]);
+  });
+  it("ignores unknown times, completed and cancelled events", () => {
+    expect(nextProgramRows([{ ...row, timeLabel: null }, { ...row, status: "完了" }, { ...row, status: "中止" }, { ...row, tuatEntries: [{ ...entry, result: { place: null, record: "欠場" } }] }], "2026-09-22", "09:00")).toEqual([]);
   });
 });

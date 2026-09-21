@@ -261,26 +261,35 @@ export function fromStoredProgramRow(row: {
   };
 }
 
-/**
- * 「いま行われている」種目を1件返す（無ければnull）。対象日・ブロックの中で、
- * 開始時刻が現在時刻以下の行のうち最も遅いものを選び、農工大の出場者がいない回は対象外にする
- * （名前を出せない「競技中」表示は避ける）。
- */
-export function currentProgramRow(
-  rows: ParsedProgramRow[],
-  todayIso: string,
-  nowLabel: string,
-  block: ProgramBlock,
-): ParsedProgramRow | null {
-  const candidates = rows.filter(
-    (row) =>
-      row.eventDate === todayIso &&
-      row.block === block &&
-      row.timeLabel !== null &&
-      row.timeLabel <= nowLabel &&
-      row.tuatEntries.length > 0,
-  );
-  if (candidates.length === 0) return null;
-  candidates.sort((a, b) => a.timeLabel!.localeCompare(b.timeLabel!) || a.sortOrder - b.sortOrder);
-  return candidates[candidates.length - 1];
+/** 開始予定時刻に基づく目安。フィールドは並行開催されるため全件を残す。 */
+export function currentProgramRows(
+  rows: ParsedProgramRow[], todayIso: string, nowLabel: string,
+): ParsedProgramRow[] {
+  const started = rows.filter(row => row.eventDate === todayIso && row.timeLabel !== null && row.timeLabel <= nowLabel);
+  // 農工大の出場者がいない次種目も、トラックの進行境界として扱う。
+  const latestTrackTime = started.filter(row => row.block === "track").reduce((latest, row) => row.timeLabel! > latest ? row.timeLabel! : latest, "");
+  return started.filter(row =>
+    row.tuatEntries.length > 0 &&
+    !/完了|終了|中止/.test(row.status ?? "") &&
+    (row.block === "field" || !row.tuatEntries.every(entry => entry.result)) &&
+    (row.block === "field" || row.timeLabel === latestTrackTime)
+  ).sort((a, b) => a.timeLabel!.localeCompare(b.timeLabel!) || a.sortOrder - b.sortOrder);
+}
+
+/** 1件だけ必要な呼び出し向け。複数フィールドの表示には currentProgramRows を使う。 */
+export function currentProgramRow(rows: ParsedProgramRow[], todayIso: string, nowLabel: string, block: ProgramBlock): ParsedProgramRow | null {
+  return currentProgramRows(rows, todayIso, nowLabel).filter(row => row.block === block).at(-1) ?? null;
+}
+
+/** 次に農工大が出場するトラック・フィールドをそれぞれ返す。同時刻は全件表示。 */
+export function nextProgramRows(rows: ParsedProgramRow[], todayIso: string, nowLabel: string): ParsedProgramRow[] {
+  const future = rows.filter(row => row.timeLabel !== null &&
+    (row.eventDate > todayIso || (row.eventDate === todayIso && row.timeLabel > nowLabel)) &&
+    row.tuatEntries.length > 0 && !/完了|終了|中止/.test(row.status ?? "") &&
+    !row.tuatEntries.every(entry => entry.result)
+  ).sort((a, b) => a.eventDate.localeCompare(b.eventDate) || a.timeLabel!.localeCompare(b.timeLabel!) || a.sortOrder - b.sortOrder);
+  return future.filter(row => {
+    const first = future.find(candidate => candidate.block === row.block)!;
+    return row.eventDate === first.eventDate && row.timeLabel === first.timeLabel;
+  });
 }
