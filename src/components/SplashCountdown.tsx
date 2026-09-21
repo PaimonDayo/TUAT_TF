@@ -118,7 +118,7 @@ export default function SplashCountdown() {
       className={`${styles.overlay} ${exiting ? styles.exiting : ""}`}
     >
       <div className={styles.card}>
-        <p className={styles.meet}>{shown.days === 0 ? shown.name : `${shown.name}まで`}</p>
+        <p className={styles.meet}>{`${shown.name}まであと`}</p>
 
         <div className={styles.countRow} aria-label={`あと${shown.days}日`}>
             {digits.map((digit, index) => {

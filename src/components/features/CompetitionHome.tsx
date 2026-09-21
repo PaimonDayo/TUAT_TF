@@ -38,7 +38,7 @@ export function CompetitionHome({
     <section aria-label={`${competition.name}`} className="grid grid-cols-2 gap-3">
       <MeetTile
         href={`/competitions/${competition.id}`}
-        label={days >= 0 ? `${competition.name}まで` : competition.name}
+        label={days >= 0 ? `${competition.name}まであと` : competition.name}
         ariaLabel={`${competition.name}のページを開く`}
       >
         {days >= 0 ? (
