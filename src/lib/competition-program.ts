@@ -10,7 +10,7 @@ export interface ProgramAthlete {
   bib: string | null;
   name: string;
   grade: string;
-  result?: { place: string | null; record: string; wind?: string };
+  result?: { place: string | null; record: string; wind?: string; overallPlace?: string };
 }
 
 export interface ParsedProgramRow {
@@ -76,7 +76,8 @@ function cellText(html: string): string {
 
 function parseResultRows(segment: string, isRelay: boolean): ProgramAthlete[] {
   const entries: ProgramAthlete[] = [];
-  const wind = segment.match(/風(?:速)?\s*[:：]?\s*([+-]?\d+\.\d+)/)?.[1];
+  const wind = segment.match(/風(?:速)?\s*[:：]?\s*([+-]?\d+\.\d+)/)?.[1]
+    ?? segment.match(/結果\s*<\/b>[\s\S]{0,40}?[（(]\s*([+-]?\d+\.\d+)\s*[ｍm]\s*[)）]/i)?.[1];
   for (const row of segment.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
     const cells = [...row[1].matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map(m => cellText(m[1]));
     const team = cells[isRelay ? 2 : 4];
@@ -94,8 +95,27 @@ function parseResultRows(segment: string, isRelay: boolean): ProgramAthlete[] {
   return entries;
 }
 
+/**
+ * タイムレースの種目は、組ごとの表のあとに「<H2>総合</H2>」の一覧が続く。
+ * これを最終組の一部として読むと同じ選手が二重に出るため切り離し、
+ * 総合順位と（組表には無い）風だけを各選手へ足す。
+ */
+function applyOverallSection(entries: ProgramAthlete[], overall: string, isRelay: boolean): ProgramAthlete[] {
+  const ranked = parseResultRows(overall, isRelay);
+  return entries.map(entry => {
+    const match = ranked.find(r => r.name === entry.name && r.grade === entry.grade);
+    if (!entry.result || !match?.result?.place) return entry;
+    const wind = match.result.record.match(/[（(]\s*([+-]?\d+\.\d+)\s*[)）]/)?.[1];
+    return { ...entry, result: { ...entry.result, overallPlace: match.result.place, ...(wind ? { wind } : {}) } };
+  });
+}
+
 function parseDetailBlock(raw: string | undefined, isRelay: boolean): ProgramAthlete[] {
   if (!raw) return [];
+  // 組ごとの表のあとに続く集計節（「総合」「部門別」など、A Name を持たない <H2>）を切り離す。
+  const overallIdx = raw.search(/<H2>(?!\s*<A\s+Name)/i);
+  const overall = overallIdx === -1 ? null : raw.slice(overallIdx);
+  if (overallIdx !== -1) raw = raw.slice(0, overallIdx);
   const heatSplit = raw.split(/【(\d+)組】/);
   const entries: ProgramAthlete[] = [];
   const read = (segment: string, heat: number | null) => {
@@ -108,7 +128,7 @@ function parseDetailBlock(raw: string | undefined, isRelay: boolean): ProgramAth
   };
   if (heatSplit.length === 1) read(raw, null);
   else for (let i = 1; i < heatSplit.length; i += 2) read(heatSplit[i + 1] ?? "", Number(heatSplit[i]));
-  return entries;
+  return overall ? applyOverallSection(entries, overall, isRelay) : entries;
 }
 
 /** Result pages replace bib/lane columns; keep earlier start positions only for an unambiguous match. */
@@ -210,7 +230,7 @@ export function formatProgramEventLabel(label: string): string {
     .replace(/対校/g, "")
     // 「110mH[1.067m/9.14m]」のような器具の規格は部員向けには不要な長さになる。
     .replace(/\s*\[[^\]]*\]/g, "")
-    .replace(/(\S)(予選|準決勝|決勝|タイムレース)/, "$1 $2")
+    .replace(/(\S)(予選|準決勝|決勝|タイムレース)$/, "$1 $2")
     .replace(/\s+/g, " ")
     .trim();
 }

@@ -31,3 +31,57 @@ describe('official live result format', () => {
    expect(()=>validateProgramImport(header+'</HTML>',rows,1)).not.toThrow();
  });
 });
+
+// 実在する終了済み大会（sairiku.net の静的ページ）と同じ構造。2026-09-22 に実データで確認した。
+describe("finished-meet result pages", () => {
+  const timedFinal = (team: string) => `<HTML><H3>08/01</H3>
+<table><tr><td colspan=3><B>トラック</B></td></tr>
+<tr><td>10:00</td><td><A Href='#8-0'>女子 １００ｍ予選(13組タイムレース)</A></td><td>完了</td></tr></table>
+<H2><A Name='8-0'>女子 １００ｍ予選(13組タイムレース)</A></H2>
+【4組】<font color='red'><b>結果</b></font>(-0.9ｍ)<br>
+<table border=1>
+<tr><td>1</td><td>12.72</td><td>髙橋 祐生弥</td><td>1</td><td>${team}･埼玉</td></tr>
+<tr><td>&nbsp;</td><td>欠場</td><td>佐伯 海愛</td><td>2</td><td>滑川総合高･埼玉</td></tr>
+</table>
+<H2>総合</H2>
+<table border=1>
+<tr><td>1</td><td>12.72(+0.2)</td><td>髙橋 祐生弥</td><td>1</td><td>${team}･埼玉</td></tr>
+<tr><td>2</td><td>12.76(+0.7)</td><td>岡田 裕佳</td><td>4</td><td>${team}･埼玉</td></tr>
+</table></html>`;
+
+  it("does not repeat an athlete who also appears in the 総合 summary table", () => {
+    const row = parseCompetitionProgram(timedFinal("農工大"), 2026)[0];
+    expect(row.tuatEntries).toHaveLength(1);
+    expect(row.tuatEntries[0].heat).toBe(4);
+  });
+
+  it("takes the overall place and its wind from the 総合 table", () => {
+    const entry = parseCompetitionProgram(timedFinal("農工大"), 2026)[0].tuatEntries[0];
+    expect(entry.result).toEqual({ place: "1", record: "12.72", wind: "+0.2", overallPlace: "1" });
+  });
+
+  it("falls back to the wind printed next to 結果 when there is no 総合 table", () => {
+    const html = timedFinal("農工大").replace(/<H2>総合<\/H2>[\s\S]*<\/table>/, "");
+    expect(parseCompetitionProgram(html, 2026)[0].tuatEntries[0].result)
+      .toEqual({ place: "1", record: "12.72", wind: "-0.9" });
+  });
+
+  it("ignores the whole event when no TUAT athlete is in it", () => {
+    expect(parseCompetitionProgram(timedFinal("大東大"), 2026)[0].tuatEntries).toHaveLength(0);
+  });
+
+  it("reads a relay result as one team record shared by its runners, DQ reason included", () => {
+    const html = `<HTML><H3>08/01</H3>
+<table><tr><td colspan=3><B>トラック</B></td></tr>
+<tr><td>15:00</td><td><A Href='#3-2'>男子 ４×１００ｍＲ決勝(2組)</A></td><td>完了</td></tr></table>
+<H2><A Name='3-2'>男子 ４×１００ｍＲ決勝(2組)</A></H2>
+【1組】<font color='red'><b>結果</b></font><br>
+<table border=1>
+<tr><td>&nbsp;</td><td>失格<br>TR24.6</td><td>農工大 </td><td>二宮 仙諮1</td><td>林 翔大2</td><td>忽滑谷 悠人2</td><td>東久保 和真2</td></tr>
+</table></html>`;
+    const entries = parseCompetitionProgram(html, 2026)[0].tuatEntries;
+    expect(entries).toHaveLength(4);
+    expect(entries.map((e) => e.grade + e.name.split(" ")[0])).toEqual(["B1二宮", "B2林", "B2忽滑谷", "B2東久保"]);
+    expect(new Set(entries.map((e) => e.result?.record))).toEqual(new Set(["失格 TR24.6"]));
+  });
+});

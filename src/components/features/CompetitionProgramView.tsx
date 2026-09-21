@@ -29,7 +29,16 @@ const BLOCK_LABEL = { track: "トラック", field: "フィールド" } as const
 function resultText(entry: ProgramAthlete, block: "track" | "field"): string {
   const place = entry.result?.place ? `${entry.result.place}${block === "field" ? "位" : "着"} ` : "";
   const wind = entry.result?.wind ? `（風 ${entry.result.wind}）` : "";
-  return `${place}${entry.result?.record ?? ""}${wind}`;
+  // タイムレースは組ごとの着順より総合順位のほうが意味がある。
+  const overall = entry.result?.overallPlace ? ` 総合${entry.result.overallPlace}位` : "";
+  return `${place}${entry.result?.record ?? ""}${wind}${overall}`;
+}
+
+/** 同じ組・レーンの全員が同一の結果（＝リレーのチーム記録）かどうか。 */
+function sharedResult(entries: ProgramAthlete[]): boolean {
+  if (entries.length < 2 || !entries[0].result) return false;
+  const first = JSON.stringify(entries[0].result);
+  return entries.every((entry) => JSON.stringify(entry.result) === first);
 }
 
 /** 1種目ぶんの行。タップで出場者ごとの組・レーン・結果を開く。 */
@@ -63,14 +72,22 @@ function ProgramRow({ row }: { row: ParsedProgramRow }) {
           {groupEntriesByPosition(row.tuatEntries).map(({ position, entries }, index) => (
             <li key={index} className="rounded-lg bg-bg px-2.5 py-2 text-[13px]">
               {position && <p className="text-micro text-muted2">{position}</p>}
-              {entries.map((entry, i) => (
-                <p key={i} className="flex items-baseline justify-between gap-2">
-                  <span>{formatAthleteLabel(entry)}</span>
-                  <span className="shrink-0 font-semibold tabular-nums">
-                    {entry.result ? resultText(entry, row.block) : <span className="font-normal text-muted2">結果待ち</span>}
-                  </span>
+              {sharedResult(entries) ? (
+                // リレーはチーム1つの記録なので、4人ぶん同じ行を繰り返さない。
+                <p className="flex items-baseline justify-between gap-2">
+                  <span className="min-w-0">{entries.map(formatAthleteLabel).join("・")}</span>
+                  <span className="shrink-0 font-semibold tabular-nums">{resultText(entries[0], row.block)}</span>
                 </p>
-              ))}
+              ) : (
+                entries.map((entry, i) => (
+                  <p key={i} className="flex items-baseline justify-between gap-2">
+                    <span>{formatAthleteLabel(entry)}</span>
+                    <span className="shrink-0 font-semibold tabular-nums">
+                      {entry.result ? resultText(entry, row.block) : <span className="font-normal text-muted2">結果待ち</span>}
+                    </span>
+                  </p>
+                ))
+              )}
             </li>
           ))}
         </ul>
