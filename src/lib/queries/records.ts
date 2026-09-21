@@ -5,7 +5,7 @@ import { jstToday } from "@/lib/date";
 import { normalizePracticeRecord } from "@/lib/profile-normalize";
 import { RECORD_NONEMPTY_OR } from "@/lib/record-content";
 import type { PbRecord, PracticeRecord } from "@/types";
-import { fetchTargetSocialState } from "./internal";
+import { RECORD_LIST_SELECT, attachRecordFieldGroups, fetchTargetSocialState } from "./internal";
 
 /** ユーザーの期間内の練習記録（マイページ・週間集計に使用） */
 export async function getUserRecords(userId: string, fromDate?: string) {
@@ -15,14 +15,14 @@ export async function getUserRecords(userId: string, fromDate?: string) {
   defaultFromDate.setDate(defaultFromDate.getDate() - 400);
   const q = supabase
     .from("practice_records")
-    .select("*")
+    .select(RECORD_LIST_SELECT)
     .eq("user_id", userId)
     .lte("recorded_date", jstToday()) // 未来日は除外
     .or(RECORD_NONEMPTY_OR) // 空の記録は除外
     .gte("recorded_date", fromDate ?? defaultFromDate.toISOString().slice(0, 10))
     .order("recorded_date", { ascending: false });
   const { data } = await q;
-  return (data ?? []).map(normalizePracticeRecord);
+  return attachRecordFieldGroups(supabase, (data ?? []).map((row) => normalizePracticeRecord({ ...row, record_fields_snapshot: null })));
 }
 
 /** 他部員ページ用。記録に閲覧者本人のいいね状態とコメント数を付与する。 */

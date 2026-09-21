@@ -2101,6 +2101,10 @@ export type Database = {
       }
     }
     Functions: {
+      get_record_field_groups: {
+        Args: { requested_record_ids: string[] }
+        Returns: { record_ids: string[]; record_fields_version: number | null; fields: Json }[]
+      }
       get_feed_social_state: {
         Args: { record_ids: string[]; tweet_ids: string[] }
         Returns: {

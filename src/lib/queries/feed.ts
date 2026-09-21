@@ -5,7 +5,7 @@ import { jstToday } from "@/lib/date";
 import { normalizeRecordWithAuthor, normalizeTweetWithAuthor } from "@/lib/profile-normalize";
 import { RECORD_NONEMPTY_OR } from "@/lib/record-content";
 import type { FeedItem } from "@/types";
-import { AUTHOR_SELECT, TWEET_AUTHOR_SELECT, attachTweetSocialData, SHEET_TIMELINE_OR, fetchFeedSocialState, fetchQuotedPosts, fetchTargetSocialState, withQuotedPost } from "./internal";
+import { RECORD_LIST_SELECT, RECORD_LIST_AUTHOR_SELECT, attachRecordFieldGroups, AUTHOR_SELECT, TWEET_AUTHOR_SELECT, attachTweetSocialData, SHEET_TIMELINE_OR, fetchFeedSocialState, fetchQuotedPosts, fetchTargetSocialState, withQuotedPost } from "./internal";
 
 /**
  * タイムライン用フィード（練習記録 + つぶやき）を取得し、
@@ -23,7 +23,7 @@ export async function getFeed(
 
   let recordsQuery = supabase
     .from("practice_records")
-    .select(`*, ${AUTHOR_SELECT}`)
+    .select(`${RECORD_LIST_SELECT}, ${RECORD_LIST_AUTHOR_SELECT}`)
     .lte("recorded_date", jstToday())
     .or(RECORD_NONEMPTY_OR)
     .or(SHEET_TIMELINE_OR)
@@ -61,10 +61,10 @@ export async function getFeed(
   const recRows = recordsResult.data;
   const twRows = tweetsResult.data;
 
-  const records = (recRows ?? []).map(normalizeRecordWithAuthor);
+  const baseRecords = (recRows ?? []).map((row) => normalizeRecordWithAuthor({ ...row, record_fields_snapshot: null }));
   const rawTweets = (twRows ?? []).map(normalizeTweetWithAuthor);
 
-  const recIds = records.map((r) => r.id);
+  const recIds = baseRecords.map((r) => r.id);
   // 投票・メンションの取得（attachTweetSocialData）と、いいね・コメント件数の取得は
   // どちらも上の1回目の結果だけに依存していて、互いには依存しない。直列に待つと
   // DBへの往復が1回ぶん余計にかかるので同時に投げる。attachTweetSocialData は
@@ -74,7 +74,8 @@ export async function getFeed(
   // currentUserId remains part of this function's public contract/query key. The
   // RPC derives the authenticated viewer from auth.uid(), so it cannot be spoofed.
   void currentUserId;
-  const [tweets, social, quoted] = await Promise.all([
+  const [records, tweets, social, quoted] = await Promise.all([
+    attachRecordFieldGroups(supabase, baseRecords),
     attachTweetSocialData(supabase, rawTweets),
     fetchFeedSocialState(supabase, recIds, twIds),
     fetchQuotedPosts(supabase, rawTweets),
@@ -221,7 +222,7 @@ export async function getUserActivity(
   const [recordsResult, tweetItems] = await Promise.all([
     supabase
       .from("practice_records")
-      .select(`*, ${AUTHOR_SELECT}`)
+      .select(`${RECORD_LIST_SELECT}, ${RECORD_LIST_AUTHOR_SELECT}`)
       .eq("user_id", userId)
       .lte("recorded_date", jstToday())
       .or(RECORD_NONEMPTY_OR)
@@ -233,10 +234,13 @@ export async function getUserActivity(
   ]);
   if (recordsResult.error) throw new Error("Failed to load member records: " + recordsResult.error.message);
 
-  const records = (recordsResult.data ?? []).map(normalizeRecordWithAuthor);
-  const recIds = records.map((r) => r.id);
+  const baseRecords = (recordsResult.data ?? []).map((row) => normalizeRecordWithAuthor({ ...row, record_fields_snapshot: null }));
+  const recIds = baseRecords.map((r) => r.id);
   void currentUserId;
-  const { liked: recLiked, comments: recComments } = await fetchTargetSocialState(supabase, "record", recIds);
+  const [records, { liked: recLiked, comments: recComments }] = await Promise.all([
+    attachRecordFieldGroups(supabase, baseRecords),
+    fetchTargetSocialState(supabase, "record", recIds),
+  ]);
 
   return sortFeedItems([
     ...records.map(

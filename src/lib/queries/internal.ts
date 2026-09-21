@@ -1,11 +1,27 @@
 // queries/ 内だけで共有する select 文とソーシャル情報の付与処理。
 // アプリ側からは @/lib/queries を使う（このモジュールは公開しない）。
 
+import { hydrateRecordFieldGroups } from "@/lib/record-field-groups";
+import type { PracticeRecord } from "@/types";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeAuthorRow } from "@/lib/profile-normalize";
 import { recordSummaryText } from "@/lib/post-summary";
 import { displayedDistance } from "@/lib/record-distance";
 import type { Notice, NoticeReaction, NoticeWithReactions, QuotedPost, QuotedPostKind, TweetWithAuthor } from "@/types";
+
+export const RECORD_LIST_SELECT = "condition, created_at, custom, dist_actual, dist_high, dist_low, dist_mid, dist_speed, focus_text, from_sheet, id, likes_count, memo, menu_text, pending_sheet_push, record_fields_version, recorded_date, result_text, strength_text, strides, synced_at, updated_at, user_id";
+export const RECORD_LIST_AUTHOR_SELECT = "author:profiles!user_id(id, display_name, avatar_url, blocks, grade, record_source)";
+
+export async function attachRecordFieldGroups<T extends PracticeRecord>(
+  supabase: Awaited<ReturnType<typeof createClient>>, records: T[],
+): Promise<T[]> {
+  if (records.length === 0) return records;
+  const { data, error } = await supabase.rpc("get_record_field_groups", {
+    requested_record_ids: records.map((record) => record.id),
+  });
+  if (error) throw new Error(`Failed to load record definitions: ${error.message}`);
+  return hydrateRecordFieldGroups(records, data ?? []);
+}
 
 export const AUTHOR_SELECT = "author:profiles!user_id(id, display_name, avatar_url, blocks, grade, record_source, record_fields)";
 // Tweets never render practice-record fields. Avoid repeating every author's
