@@ -14,7 +14,7 @@ type TestPushResult = {
  * VAPID の秘密鍵をこのアプリ側へ持ち出さないため、ここでは配信結果までは分からない
  * （届いたかどうかは部員本人が端末で確認する）。
  */
-export async function POST() {
+export async function POST(request: Request) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -26,7 +26,11 @@ export async function POST() {
     );
   }
 
-  const { data, error } = await supabase.rpc("send_test_push");
+  const body = await request.json().catch(() => null);
+  if (typeof body?.endpoint !== "string" || !body.endpoint.startsWith("https://") || body.endpoint.length > 4096) {
+    return NextResponse.json({ ok: false, message: "この端末の通知設定を確認してください" }, { status: 400 });
+  }
+  const { data, error } = await supabase.rpc("send_test_push_to_subscription", { subscription_endpoint: body.endpoint });
   if (error) {
     console.error(error);
     return NextResponse.json(

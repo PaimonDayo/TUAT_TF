@@ -2186,6 +2186,7 @@ export type Database = {
         Returns: undefined
       }
       send_test_push: { Args: never; Returns: Json }
+      send_test_push_to_subscription: { Args: { subscription_endpoint: string }; Returns: Json }
       replace_sheet_record_replies: {
         Args: { reply_rows: Json; target_record_id: string }
         Returns: undefined

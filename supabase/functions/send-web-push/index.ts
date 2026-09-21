@@ -63,10 +63,14 @@ serve(async (req) => {
 
     const notification = body.record;
     
-    const { data: subscriptions, error } = await supabaseClient
+    let subscriptionQuery = supabaseClient
       .from('push_subscriptions')
       .select('*')
       .eq('user_id', notification.user_id);
+    if (notification.type === 'test' && notification.subscription_id) {
+      subscriptionQuery = subscriptionQuery.eq('id', notification.subscription_id);
+    }
+    const { data: subscriptions, error } = await subscriptionQuery;
 
     if (error) {
       throw error;
@@ -118,7 +122,7 @@ serve(async (req) => {
     const payload = JSON.stringify({
       title,
       body: bodyText,
-      data: { url }
+      data: { url, notificationId: notification.id }
     });
     const results = await Promise.all(subscriptions.map(async (sub) => {
       const pushSubscription = {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Toggle } from "@/components/ui/toggle";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
@@ -34,6 +34,7 @@ export function NotificationSettings({
   const [isStandalone, setIsStandalone] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
+  const testPending = useRef(false);
 
   const supabase = createClient();
 
@@ -145,16 +146,24 @@ export function NotificationSettings({
 
   // 実際にこの端末へ通知を1件送ってみる。届いたかどうかは端末の画面で確認してもらう。
   const handleTestPush = async () => {
-    if (isTesting) return;
+    if (testPending.current) return;
+    testPending.current = true;
     setIsTesting(true);
     try {
-      const res = await fetch('/api/push/test', { method: 'POST' });
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      if (!subscription) { showToast('この端末の通知をオンにしてください'); return; }
+      const res = await fetch('/api/push/test', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ endpoint: subscription.endpoint }),
+      });
       const data = (await res.json().catch(() => ({}))) as { message?: string };
       showToast(data.message ?? 'テスト通知を送れませんでした。時間をおいてお試しください');
     } catch (e) {
       console.error(e);
       showToast('テスト通知を送れませんでした。時間をおいてお試しください');
     } finally {
+      testPending.current = false;
       setIsTesting(false);
     }
   };

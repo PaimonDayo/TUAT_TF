@@ -62,6 +62,7 @@ self.addEventListener('push', (event) => {
     const data = event.data.json();
     const options = {
       body: data.body,
+      ...(data.data?.notificationId ? { tag: `notification-${data.data.notificationId}`, renotify: false } : {}),
       icon: '/branding/summer-icon-192.png',
       data: data.data || {},
     };
