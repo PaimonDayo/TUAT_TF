@@ -149,25 +149,25 @@ export function CompetitionGoalsView({
   }
 
   return (
-    <div className="px-4 pb-24">
+    <div className="px-4 pb-24 pt-2">
       {competitions.length > 1 && (
-        <div className="-mx-4 mb-2 flex gap-2 overflow-x-auto px-4 pb-1">
+        <nav aria-label="大会を選択" className="mb-3 flex gap-1 overflow-x-auto rounded-xl bg-separator/30 p-1">
           {competitions.map((item) => (
             <Link
               key={item.id}
               href={`/competitions/${item.id}/goals`}
               aria-current={item.id === competition.id ? "page" : undefined}
               className={cn(
-                "shrink-0 rounded-full border px-3 py-1.5 text-[13px]",
+                "shrink-0 rounded-lg px-3 py-2 text-[13px] transition-colors",
                 item.id === competition.id
-                  ? "border-accent bg-accent/10 font-semibold text-accent"
-                  : "border-separator text-muted",
+                  ? "bg-card font-semibold shadow-sm"
+                  : "text-muted2 active:bg-card/60",
               )}
             >
               {item.name}
             </Link>
           ))}
-        </div>
+        </nav>
       )}
 
       <CompetitionGoalBoard

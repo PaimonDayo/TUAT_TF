@@ -478,6 +478,7 @@ export interface PracticeMenuTarget {
 }
 
 export interface Notice {
+  archived_at?: string | null;
   id: string;
   author_id: string;
   category: NoticeCategory;

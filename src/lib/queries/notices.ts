@@ -26,6 +26,7 @@ export async function getHomeNotices(userId: string): Promise<NoticeWithReaction
     supabase
       .from("notices")
       .select("*")
+      .is("archived_at", null)
       .or(`deadline.is.null,deadline.gte.${today}`)
       .order("created_at", { ascending: false }),
     supabase.from("notice_dismissals").select("notice_id").eq("user_id", userId),

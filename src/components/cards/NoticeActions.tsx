@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ActionMenu } from "@/components/ui/action-menu";
@@ -14,6 +14,24 @@ export function NoticeActions({ notice }: { notice: Notice }) {
   const router = useRouter();
   const { showToast } = useToast();
   const [editing, setEditing] = useState(false);
+  const archiving = useRef(false);
+
+  async function toggleArchive() {
+    if (archiving.current) return;
+    archiving.current = true;
+    try {
+      const { data, error } = await createClient().from("notices")
+        .update({ archived_at: notice.archived_at ? null : new Date().toISOString() })
+        .eq("id", notice.id).select("id");
+      if (error || data?.length !== 1) throw new Error("Archive failed");
+      showToast(notice.archived_at ? "アーカイブを解除しました" : "アーカイブしました");
+      router.refresh();
+    } catch {
+      showToast("アーカイブの状態を変更できませんでした");
+    } finally {
+      archiving.current = false;
+    }
+  }
 
   async function remove() {
     const supabase = createClient();
@@ -30,6 +48,8 @@ export function NoticeActions({ notice }: { notice: Notice }) {
     <>
       <ActionMenu
         onEdit={() => setEditing(true)}
+        onArchive={toggleArchive}
+        archived={!!notice.archived_at}
         onDelete={remove}
         deleteTitle="お知らせを削除しますか？"
         deleteDescription="削除したお知らせは元に戻せません。"

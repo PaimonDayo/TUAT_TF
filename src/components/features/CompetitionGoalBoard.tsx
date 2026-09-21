@@ -71,7 +71,7 @@ export function CompetitionGoalBoard({
 
   return (
     <div className="pb-20">
-      <div className="sticky -top-3 z-10 -mx-4 space-y-2 border-b border-separator bg-bg px-4 pb-3 pt-3">
+      <div className="space-y-3 pb-1 pt-2">
         <div className="flex items-center justify-between gap-2">
           <p className="min-w-0 truncate text-caption">
             {meetName} · {new Set(goals.map((g) => g.user_id)).size}人 /{" "}
@@ -148,20 +148,20 @@ export function CompetitionGoalBoard({
           .filter((group) => group.rows.length > 0)
           .map((group) => (
             <section key={group.id} aria-label={`${group.title}の目標`}>
-              <h3 className="mb-2 flex items-center gap-2 text-headline">
+              <h3 className="section-label mb-2 flex items-center gap-2" style={{ textTransform: "none" }}>
                 {group.title}
-                <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-normal text-accent">
+                <span className="text-caption font-normal text-muted">
                   {group.rows.length}人
                 </span>
               </h3>
-              <div className="overflow-hidden rounded-xl border border-separator bg-card">
+              <div className="overflow-hidden rounded-2xl border border-separator/70 bg-card">
                 <table className="w-full table-fixed border-collapse text-left">
                   <colgroup>
-                    <col className="w-[30%] md:w-[24%]" />
+                    <col className="w-[36%] md:w-[28%]" />
                     <col />
                     <col className="w-10" />
                   </colgroup>
-                  <thead className="border-b border-separator bg-bg">
+                  <thead className="border-b border-separator/70">
                     <tr>
                       <th
                         scope="col"
@@ -189,12 +189,7 @@ export function CompetitionGoalBoard({
                       return (
                         <tr
                           key={g.id}
-                          className={cn(
-                            "border-b border-separator/70 last:border-0",
-                            g.user_id === userId
-                              ? "bg-accent/[0.05]"
-                              : "even:bg-bg/50",
-                          )}
+                          className="border-b border-separator/70 last:border-0"
                         >
                           <th
                             scope="row"

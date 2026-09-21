@@ -11,8 +11,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import {
   formatAthleteLabel,
-  formatAthleteList,
-  formatProgramEventLabel,
   fromStoredProgramRow,
   groupEntriesByPosition,
   groupProgramByDate,
@@ -21,6 +19,7 @@ import type { ProgramAthlete, ParsedProgramRow } from "@/lib/competition-program
 import type { CompetitionProgramEntryRow, CompetitionRow } from "@/types";
 
 import { CompetitionInProgress } from "./CompetitionInProgress";
+import { ProgramEventSummary } from "./ProgramEventSummary";
 
 const BLOCK_LABEL = { track: "トラック", field: "フィールド" } as const;
 
@@ -47,12 +46,10 @@ function ProgramRow({ row }: { row: ParsedProgramRow }) {
   return (
     <div className="p-3.5">
       <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-start gap-2 text-left pressable">
-        <span className="shrink-0 pt-0.5 text-caption tabular-nums text-muted">{row.timeLabel ?? "--:--"}</span>
         <span className="min-w-0 flex-1">
-          <span className="block text-headline">{formatProgramEventLabel(row.eventLabel)}</span>
-          <span className="mt-1 block text-[13px] text-muted">{formatAthleteList(row.tuatEntries)}</span>
+          <ProgramEventSummary row={row} />
           {finished.length > 0 && !open && (
-            <span className="mt-1 block text-[13px] font-semibold tabular-nums text-accent">
+            <span className="ml-15 mt-1 block text-caption tabular-nums text-accent">
               結果{finished.length}件（タップで表示）
             </span>
           )}
@@ -135,7 +132,10 @@ export function CompetitionProgramView({
 
   return (
     <div className="space-y-4 px-4 pb-8 pt-2">
-      <CompetitionInProgress entries={initialEntries} />
+      <Card className="p-4">
+        <p className="mb-3 text-headline">{competition.name}</p>
+        <CompetitionInProgress entries={initialEntries} />
+      </Card>
       <div className="flex items-center justify-between gap-2 rounded-xl border border-separator bg-card p-3">
         <p className="text-micro text-muted2">
           {lastSyncedAt

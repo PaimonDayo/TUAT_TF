@@ -21,18 +21,14 @@ export function CompetitionProgramCard({
     <Link
       href={`/competitions/${competition.id}/program`}
       aria-label={`${competition.name}のプログラムを開く`}
-      className="relative block overflow-hidden rounded-[16px] bg-[#1c1c1e] p-4 text-white transition-active active:bg-[#2a2a2e]"
+      className="block overflow-hidden rounded-2xl border border-separator bg-card p-4 transition-colors active:bg-bg"
     >
-      <span
-        aria-hidden="true"
-        className="absolute inset-x-0 top-0 h-[3px] bg-[linear-gradient(90deg,#4a8ae4,#8a5ad0,#e878c0)]"
-      />
-      <p className="flex items-center justify-between gap-1 text-caption text-white/70">
-        <span className="truncate">{competition.name}プログラム</span>
-        <ChevronRight size={14} className="shrink-0" />
+      <p className="flex items-center justify-between gap-2 text-headline">
+        <span className="truncate">{competition.name}</span>
+        <span className="flex shrink-0 items-center text-caption font-normal text-accent">プログラム<ChevronRight size={14} /></span>
       </p>
-      <p className="mt-1 text-caption text-white/60">{totalAthletes}名 出場予定</p>
-      <CompetitionInProgress entries={entries} dark />
+      <p className="mb-4 mt-1 text-caption text-muted">{totalAthletes}名 出場予定</p>
+      <CompetitionInProgress entries={entries} />
     </Link>
   );
 }

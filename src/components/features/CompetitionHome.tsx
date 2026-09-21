@@ -10,9 +10,7 @@ import type { CompetitionRow } from "@/types";
 /**
  * ホーム最上部の大会カード（カウントダウンと目標の件数）。
  *
- * 下に続く練習系のカードは白地の四角。ここだけは「いつもと少し違う」ものとして、
- * 濃い地に細い縁を置いた対の札にする。並び・大きさ・角の丸みは他のカードと同じなので、
- * 画面の中で浮かずに、そこだけ手前にあるように見える。
+ * プログラムと同じ白地・細い境界線で揃える。
  * 目標の一覧・追加は /competitions/[id]/goals、大会の管理は管理メニューの /competitions。
  */
 export function CompetitionHome({
@@ -34,7 +32,7 @@ export function CompetitionHome({
       document.removeEventListener("visibilitychange", update);
     };
   }, []);
-  const days = competitionDays(competition.starts_on, today);
+  const days = competitionDays(competition.starts_on, today, competition.ends_on);
 
   return (
     <section aria-label={`${competition.name}`} className="grid grid-cols-2 gap-3">
@@ -43,13 +41,11 @@ export function CompetitionHome({
         label={days >= 0 ? `${competition.name}まで` : competition.name}
         ariaLabel={`${competition.name}のページを開く`}
       >
-        {days > 0 ? (
+        {days >= 0 ? (
           <>
             <span className="text-large-title tabular-nums">{days}</span>
-            <span className="ml-1 text-body text-white/60">日</span>
+            <span className="ml-1 text-body text-muted">日</span>
           </>
-        ) : days === 0 ? (
-          <span className="text-title2">いよいよ今日</span>
         ) : (
           <span className="text-title2">開幕しました</span>
         )}
@@ -61,7 +57,7 @@ export function CompetitionHome({
         ariaLabel={`${competition.name}の目標を開く`}
       >
         <span className="text-large-title tabular-nums">{goalCount}</span>
-        <span className="ml-1 text-body text-white/60">件</span>
+        <span className="ml-1 text-body text-muted">件</span>
       </MeetTile>
     </section>
   );
@@ -83,14 +79,9 @@ function MeetTile({
     <Link
       href={href}
       aria-label={ariaLabel}
-      className="relative block overflow-hidden rounded-[16px] bg-[#1c1c1e] p-4 text-white transition-active active:bg-[#2a2a2e]"
+      className="block overflow-hidden rounded-2xl border border-separator/70 bg-card p-4 transition-colors active:bg-bg"
     >
-      {/* 上端の細い光。起動画面の下線と同じ色づかいで、大会まわりだと分かるようにする。 */}
-      <span
-        aria-hidden="true"
-        className="absolute inset-x-0 top-0 h-[3px] bg-[linear-gradient(90deg,#4a8ae4,#8a5ad0,#e878c0)]"
-      />
-      <p className="flex items-center justify-between gap-1 text-caption text-white/70">
+      <p className="flex items-center justify-between gap-1 text-caption text-muted2">
         <span className="truncate">{label}</span>
         <ChevronRight size={14} className="shrink-0" />
       </p>

@@ -53,7 +53,7 @@ export default function SplashCountdown() {
       // Storage may be unavailable in a restricted browser context.
     }
 
-    const days = cache ? competitionDays(cache.startsOn, today) : null;
+    const days = cache ? competitionDays(cache.startsOn, today, cache.endsOn) : null;
     const show = shouldShowSplash({ cache, disabled, days });
 
     if (show && cache && days !== null) {
@@ -118,13 +118,9 @@ export default function SplashCountdown() {
       className={`${styles.overlay} ${exiting ? styles.exiting : ""}`}
     >
       <div className={styles.card}>
-        {/* 当日は「まで」が付くと読みが崩れるので、大会名だけを置く。 */}
         <p className={styles.meet}>{shown.days === 0 ? shown.name : `${shown.name}まで`}</p>
 
-        {shown.days === 0 ? (
-          <p className={styles.opened}>いよいよ今日</p>
-        ) : (
-          <div className={styles.countRow} aria-label={`あと${shown.days}日`}>
+        <div className={styles.countRow} aria-label={`あと${shown.days}日`}>
             {digits.map((digit, index) => {
               // 上の桁ほど早く止める。一の位がいちばん長く回る。
               const spins = 2 + (digits.length - index);
@@ -152,7 +148,6 @@ export default function SplashCountdown() {
             })}
             <span className={styles.unit}>日</span>
           </div>
-        )}
 
         <div className={styles.rule} />
         <p className={styles.hint}>タップで閉じる</p>
@@ -166,13 +161,14 @@ async function refreshCache(today: string) {
   try {
     const { data } = await createClient()
       .from("competitions")
-      .select("name,starts_on")
+      .select("name,starts_on,ends_on")
       .eq("is_countdown", true)
       .maybeSingle();
     if (!data) return;
     const next: SplashCountdownCache = {
       name: data.name,
       startsOn: data.starts_on,
+      endsOn: data.ends_on,
       fetchedOn: today,
     };
     localStorage.setItem(SPLASH_CACHE_KEY, JSON.stringify(next));

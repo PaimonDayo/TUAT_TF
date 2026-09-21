@@ -8,4 +8,10 @@ describe("competition calendar countdown", () => {
     expect(competitionDays("2026-09-21", "2026-09-20")).toBe(1);
     expect(competitionDays("2026-09-21", "2026-09-22")).toBe(-1);
   });
+  it("keeps the countdown at zero throughout a multi-day event", () => {
+    expect(competitionDays("2026-09-21", "2026-09-21", "2026-09-23")).toBe(0);
+    expect(competitionDays("2026-09-21", "2026-09-22", "2026-09-23")).toBe(0);
+    expect(competitionDays("2026-09-21", "2026-09-24", "2026-09-23")).toBe(-3);
+    expect(competitionDays("2026-09-21", "2026-09-22", null)).toBe(-1);
+  });
 });

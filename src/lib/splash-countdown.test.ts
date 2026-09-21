@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readSplashCache, reelCells, shouldShowSplash } from "./splash-countdown";
 
-const cache = { name: "27大戦", startsOn: "2026-09-21", fetchedOn: "2026-09-10" };
+const cache = { name: "27大戦", startsOn: "2026-09-21", endsOn: "2026-09-23", fetchedOn: "2026-09-10" };
 
 describe("readSplashCache", () => {
   it("覚えた内容を読み戻す", () => {

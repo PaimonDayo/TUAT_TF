@@ -56,6 +56,7 @@ export function NoticeCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <Badge style={{ backgroundColor: meta.bg, color: meta.color }}>{meta.label}</Badge>
+            {notice.archived_at && <span className="text-micro text-muted">アーカイブ済み</span>}
             <span className="text-micro ml-auto">
               {format(new Date(notice.created_at), "M月d日", { locale: ja })}
             </span>

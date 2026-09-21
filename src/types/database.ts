@@ -891,6 +891,7 @@ export type Database = {
       }
       notices: {
         Row: {
+          archived_at: string | null
           author_id: string
           category: string
           content: string
@@ -912,6 +913,7 @@ export type Database = {
           author_id: string
           category: string
           content: string
+          archived_at?: string | null
           created_at?: string
           deadline?: string | null
           id?: string
@@ -930,6 +932,7 @@ export type Database = {
           author_id?: string
           category?: string
           content?: string
+          archived_at?: string | null
           created_at?: string
           deadline?: string | null
           id?: string

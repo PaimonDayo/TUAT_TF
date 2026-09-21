@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MoreHorizontal, Pencil, Pin, PinOff, Quote, Share2, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, MoreHorizontal, Pencil, Pin, PinOff, Quote, Share2, Trash2 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -11,6 +11,8 @@ export function ActionMenu({
   onQuote,
   onShare,
   onPin,
+  onArchive,
+  archived = false,
   pinned = false,
   onDelete,
   editLabel = "編集する",
@@ -27,6 +29,8 @@ export function ActionMenu({
   onShare?: () => void | Promise<void>;
   onDelete?: () => void | boolean | Promise<void | boolean>;
   onPin?: () => void | Promise<void>;
+  onArchive?: () => void | Promise<void>;
+  archived?: boolean;
   pinned?: boolean;
   editLabel?: string;
   quoteLabel?: string;
@@ -123,6 +127,13 @@ export function ActionMenu({
               >
                 {pinned ? <PinOff size={20} className="text-accent" /> : <Pin size={20} className="text-accent" />}
                 <span className="text-headline">{pinned ? "ピン留めを外す" : "ピン留めする"}</span>
+              </button>
+            )}
+            {onArchive && (
+              <button type="button" onClick={() => { setMenuOpen(false); void onArchive(); }}
+                className="flex w-full items-center gap-3 rounded-xl border border-separator bg-card p-3.5 active:bg-bg">
+                {archived ? <ArchiveRestore size={20} className="text-accent" /> : <Archive size={20} className="text-accent" />}
+                <span className="text-left"><span className="block text-headline">{archived ? "アーカイブを解除" : "アーカイブする"}</span><span className="block text-caption text-muted">{archived ? "ホームの表示対象に戻します" : "全員のホームから非表示にします"}</span></span>
               </button>
             )}
             {onDelete && (
