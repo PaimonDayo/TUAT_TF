@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createCipheriv, createDecipheriv, randomBytes, createHash } from 'node:crypto';
 import { PutObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
-import { readFileSync, readdirSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readConfig, directory, writePrivate, r2Client } from './backend-files.mjs';
@@ -70,6 +70,15 @@ export async function backupBackend() {
     renameSync(recoveryLocal, resolve(directory, `recovery-${stamp}${UPLOADED_SUFFIX}`));
     pruneLocalBackups();
     console.log(`Encrypted backup verified: ${encrypted.length} bytes`);
+    // Retention follows a verified upload; failure must not invalidate that backup.
+    const retentionStatus = resolve(directory, 'retention-status.json');
+    try {
+      const last = existsSync(retentionStatus) ? JSON.parse(readFileSync(retentionStatus, 'utf8')).completedAt : null;
+      if (!last || Date.now() - Date.parse(last) >= 24 * 60 * 60_000) {
+        const { retainRemoteBackups } = await import('./backup-retention.mjs');
+        await retainRemoteBackups({ apply: true });
+      }
+    } catch { console.error('Backup verified, but remote retention failed; retry on next backup.'); }
     return key;
   } finally { client.destroy(); }
 }

@@ -174,3 +174,9 @@ bridgeKey/instanceIdへ戻す。旧PCのDBは消していないので、切替�
 handoff-restore.mjsはDBと復旧材料を両方検証して .contingency/backend/handoff-restore.dump と handoff-restore.recovery.json へ出す。両方とも秘密扱いとし、表示・Git追加をしない。復元時はPush鍵を保護されたpush.envへ戻し、Vaultは復号済み値をvault.create_secret/update_secretで新DBへ再登録する。Vault暗号文だけを別DBへ移しても復号できるとは限らない。cronは初めに無効状態で戻し、Vercel側との二重実行がないことを確認してから必要なジョブのみ有効にする。cron.installed=falseなら、無かったpg_cronを勝手に追加しない。
 
 Push配備はチェックアウトのops/laptop/configure-push-wsl.pyをWSLから snapshot → env → restart-functions → vault-dry-run → vault → check の順で実行する。4つのComposeファイルが必須で、再作成はfunctionsだけ。他コンテナIDの不変を確認する。envは送信関数ソースも配備し、外向きネットワークも設定する。Google認証再設定時にもPush構成を保持する。Vercelの公開鍵とPCの公開鍵が一致し、アプリ再表示後に端末の再購読と実受信を確認するまで、実機確認済みとしない。
+
+## R2の世代保持（2026-09-21）
+
+backup-retention.mjsは引数なしでdry-run、--applyで削除する。対象はops/pc-backend/配下の既知形式のDBバックアップだけ。直近24時間は全件、以前はJSTで1日1件を30日間残す。旧PCの最後の1世代は期限後も保護し、別途引き継ぎ完了を判断する。復旧設定はDBと組で保持し、単独の復旧設定や未知のファイルは削除しない。削除前に台帳をPCへ保存し、新旧PCそれぞれの最新世代が復号できることを確認する。削除はETag条件付きで行う。
+
+新バックアップ処理では、検証済みR2アップロード後に保持処理を1日1回実行する。失敗はログへ記録し次回バックアップで再試行する。retention-status.jsonのcompletedAtとdeletedで結果を確認する。常駐プロセスが古いモジュールを読み込んだままなら、承認した停止時間にrestart-backend.ps1で再起動するまで自動処理は切り替わらない。
