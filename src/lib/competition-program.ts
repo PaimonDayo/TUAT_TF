@@ -6,10 +6,11 @@ export type ProgramBlock = "track" | "field";
 
 export interface ProgramAthlete {
   heat: number | null;
-  lane: number;
+  lane: number | null;
   bib: string | null;
   name: string;
   grade: string;
+  result?: { place: string | null; record: string; wind?: string };
 }
 
 export interface ParsedProgramRow {
@@ -66,23 +67,71 @@ function parseRelayRows(segment: string): Omit<ProgramAthlete, "heat">[] {
   return out;
 }
 
-function parseDetailBlock(raw: string | undefined, isRelay: boolean): ProgramAthlete[] {
-  if (!raw) return [];
-  const heatSplit = raw.split(/【(\d+)組】/);
+function cellText(html: string): string {
+  return html.replace(/<br\s*\/?\s*>/gi, " ").replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;|&#160;/gi, " ").replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
+    .replace(/\s+/g, " ").trim();
+}
+
+function parseResultRows(segment: string, isRelay: boolean): ProgramAthlete[] {
   const entries: ProgramAthlete[] = [];
-  if (heatSplit.length === 1) {
-    const parsed = isRelay ? parseRelayRows(raw) : parseIndividualRows(raw);
-    for (const p of parsed) entries.push({ heat: null, ...p });
-  } else {
-    for (let i = 1; i < heatSplit.length; i += 2) {
-      const heatNo = Number(heatSplit[i]);
-      const segment = heatSplit[i + 1] ?? "";
-      const parsed = isRelay ? parseRelayRows(segment) : parseIndividualRows(segment);
-      for (const p of parsed) entries.push({ heat: heatNo, ...p });
+  const wind = segment.match(/風(?:速)?\s*[:：]?\s*([+-]?\d+\.\d+)/)?.[1];
+  for (const row of segment.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
+    const cells = [...row[1].matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map(m => cellText(m[1]));
+    const team = cells[isRelay ? 2 : 4];
+    if (!team?.startsWith(TUAT_ABBREVIATION) || !cells[1]) continue;
+    const result = { place: /^\d+$/.test(cells[0]) ? cells[0] : null, record: cells[1], ...(wind ? { wind } : {}) };
+    if (isRelay) {
+      for (const cell of cells.slice(3)) {
+        const name = cell.match(/^(.+?)\s?((?:[BMD])?\d{1,2})$/);
+        if (name) entries.push({ heat: null, lane: null, bib: null, name: name[1].trim(), grade: gradeShortFromRaw(name[2]), result });
+      }
+    } else {
+      entries.push({ heat: null, lane: null, bib: null, name: cells[2], grade: gradeShortFromRaw(cells[3]), result });
     }
   }
   return entries;
 }
+
+function parseDetailBlock(raw: string | undefined, isRelay: boolean): ProgramAthlete[] {
+  if (!raw) return [];
+  const heatSplit = raw.split(/【(\d+)組】/);
+  const entries: ProgramAthlete[] = [];
+  const read = (segment: string, heat: number | null) => {
+    if (/<b>\s*結果\s*<\/b>/i.test(segment)) {
+      entries.push(...parseResultRows(segment, isRelay).map(entry => ({ ...entry, heat })));
+    } else {
+      const parsed = isRelay ? parseRelayRows(segment) : parseIndividualRows(segment);
+      entries.push(...parsed.map(entry => ({ ...entry, heat })));
+    }
+  };
+  if (heatSplit.length === 1) read(raw, null);
+  else for (let i = 1; i < heatSplit.length; i += 2) read(heatSplit[i + 1] ?? "", Number(heatSplit[i]));
+  return entries;
+}
+
+/** Result pages replace bib/lane columns; keep earlier start positions only for an unambiguous match. */
+export function retainProgramPositions(rows: ParsedProgramRow[], previous: ParsedProgramRow[]): ParsedProgramRow[] {
+  return rows.map(row => {
+    const old = previous.find(p => p.roundKey === row.roundKey && p.eventDate === row.eventDate);
+    return { ...row, tuatEntries: row.tuatEntries.map(entry => {
+      if (!entry.result || !old) return entry;
+      const matches = old.tuatEntries.filter(e => e.name === entry.name && e.grade === entry.grade && e.heat === entry.heat);
+      return matches.length === 1 ? { ...entry, lane: matches[0].lane, bib: matches[0].bib } : entry;
+    }) };
+  });
+}
+
+export function validateProgramImport(html: string, rows: ParsedProgramRow[], previousCount: number): void {
+  if (!/<\/html>/i.test(html) || rows.length === 0 || rows.length < previousCount * 0.8) {
+    throw new Error("取得ページが不完全なため、前回のプログラムを保持しました");
+  }
+  if (new Set(rows.map(r => `${r.eventDate}/${r.block}/${r.roundKey}`)).size !== rows.length) {
+    throw new Error("プログラムの種目が重複しています");
+  }
+}
+
 
 /** タイムテーブルHTML（デコード済みテキスト）を解析し、農工大の出場エントリー付きでプログラム順の行を返す。 */
 export function parseCompetitionProgram(html: string, year: number): ParsedProgramRow[] {
@@ -160,7 +209,7 @@ export function formatAthleteList(entries: ProgramAthlete[]): string {
 /** プログラム詳細ページ向け。組・レーン番号も添える（例: 「2組3番 B2山田」）。 */
 export function formatAthletePosition(entry: ProgramAthlete): string {
   const heat = entry.heat ? `${entry.heat}組` : "";
-  return `${heat}${entry.lane}番 ${formatAthleteLabel(entry)}`;
+  return `${heat}${entry.lane !== null ? `${entry.lane}番` : ""} ${formatAthleteLabel(entry)}`.trim();
 }
 
 export interface ProgramDateGroup {

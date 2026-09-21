@@ -84,6 +84,7 @@ export default async function CompetitionPage({
           </Link>
         </Card>
 
+        {competition.program_source_url && <Link href={`/competitions/${competition.id}/program?view=results`} className="block rounded-xl border border-separator bg-card p-4 text-headline text-accent">大会公式の速報を見る →</Link>}
         <p className="section-label">結果（{results.length}件）</p>
         {groups.length === 0 ? (
           <Card>

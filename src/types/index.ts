@@ -571,7 +571,7 @@ export interface CompetitionProgramEntryRow {
   round_key: string | null;
   event_label: string;
   status: string | null;
-  tuat_entries: { heat: number | null; lane: number; bib: string | null; name: string; grade: string }[];
+  tuat_entries: import("@/lib/competition-program").ProgramAthlete[];
   created_at: string;
 }
 

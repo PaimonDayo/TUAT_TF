@@ -2101,6 +2101,7 @@ export type Database = {
       }
     }
     Functions: {
+      replace_competition_program: { Args: { target_competition_id: string; program_rows: Json }; Returns: number }
       get_record_field_groups: {
         Args: { requested_record_ids: string[] }
         Returns: { record_ids: string[]; record_fields_version: number | null; fields: Json }[]

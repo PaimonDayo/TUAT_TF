@@ -7,8 +7,10 @@ import { permissionsOf } from "@/lib/permissions";
 
 export default async function CompetitionProgramPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ view?: string }>;
 }) {
   const { id } = await params;
   const [profile, competition] = await Promise.all([
@@ -25,6 +27,7 @@ export default async function CompetitionProgramPage({
       <CompetitionProgramView
         competition={competition}
         initialEntries={entries}
+        initialView={(await searchParams).view === "results" ? "results" : "program"}
         canManage={permissionsOf(profile.roles).manageSystem}
       />
     </>

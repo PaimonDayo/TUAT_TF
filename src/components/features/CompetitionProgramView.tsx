@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import {
   formatAthletePosition,
+  formatAthleteLabel,
   formatProgramEventLabel,
   fromStoredProgramRow,
   groupProgramByDate,
@@ -24,20 +25,33 @@ export function CompetitionProgramView({
   competition,
   initialEntries,
   canManage,
+  initialView = "program",
 }: {
   competition: CompetitionRow;
   initialEntries: CompetitionProgramEntryRow[];
   canManage: boolean;
+  initialView?: "program" | "results";
 }) {
   const router = useRouter();
   const { showToast } = useToast();
+  const [view, setView] = useState(initialView);
   const [syncing, setSyncing] = useState(false);
+
+  useEffect(() => {
+    const refresh = () => {
+      const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+      if (document.visibilityState === "visible" && initialEntries.some(row => row.event_date === today)) router.refresh();
+    };
+    const timer = window.setInterval(refresh, 60000);
+    window.addEventListener("focus", refresh);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", refresh); };
+  }, [initialEntries, router]);
 
   const groups = groupProgramByDate(initialEntries.map(fromStoredProgramRow))
     .map((group) => ({
       ...group,
-      track: group.track.filter((row) => row.tuatEntries.length > 0),
-      field: group.field.filter((row) => row.tuatEntries.length > 0),
+      track: group.track.filter((row) => row.tuatEntries.length > 0 && (view === "program" || row.tuatEntries.some(entry => entry.result))),
+      field: group.field.filter((row) => row.tuatEntries.length > 0 && (view === "program" || row.tuatEntries.some(entry => entry.result))),
     }))
     .filter((group) => group.track.length > 0 || group.field.length > 0);
   const lastSyncedAt = initialEntries.reduce<string | null>(
@@ -66,23 +80,29 @@ export function CompetitionProgramView({
 
   return (
     <div className="space-y-4 px-4 pb-8 pt-2">
-      {canManage && (
+      <div className="flex gap-2" role="group" aria-label="表示内容">
+        <Button variant={view === "program" ? "primary" : "outline"} onClick={() => setView("program")} aria-pressed={view === "program"}>プログラム</Button>
+        <Button variant={view === "results" ? "primary" : "outline"} onClick={() => setView("results")} aria-pressed={view === "results"}>速報</Button>
+      </div>
+      {(
         <div className="flex items-center justify-between gap-2 rounded-xl border border-separator bg-card p-3">
           <p className="text-micro text-muted2">
             {lastSyncedAt
               ? `最終取得: ${format(new Date(lastSyncedAt), "M月d日 HH:mm", { locale: ja })}`
               : "まだ取得していません"}
           </p>
-          <Button size="sm" variant="outline" disabled={syncing} onClick={() => void sync()}>
+          {canManage && <Button size="sm" variant="outline" disabled={syncing} onClick={() => void sync()}>
             <RefreshCw size={14} className={syncing ? "animate-spin" : undefined} />
             {syncing ? "取得中…" : "今すぐ取得"}
-          </Button>
+          </Button>}
         </div>
       )}
 
+      <p className="text-micro text-muted2">開催期間は約5分ごとに公式情報を取得します。記録は速報値です。</p>
+      {competition.program_source_url && <a href={competition.program_source_url} target="_blank" rel="noopener noreferrer" className="text-caption text-accent underline">大会公式のプログラム・速報を見る</a>}
       {groups.length === 0 ? (
         <Card>
-          <EmptyState title="まだ出場種目の情報がありません" />
+          <EmptyState title={view === "results" ? "農工大の結果はまだ掲載されていません" : "まだ出場種目の情報がありません"} />
         </Card>
       ) : (
         groups.map((group) => (
@@ -105,9 +125,16 @@ export function CompetitionProgramView({
                             {formatProgramEventLabel(row.eventLabel)}
                           </span>
                         </div>
-                        <p className="pl-[52px] text-[13px] text-muted2">
+                        {view === "program" && <p className="pl-[52px] text-[13px] text-muted2">
                           {row.tuatEntries.map(formatAthletePosition).join("、")}
-                        </p>
+                        </p>}
+                        {row.tuatEntries.filter(entry => entry.result).map((entry, index) => (
+                          <div key={index} className="flex items-baseline justify-between gap-3 pl-[52px] text-[13px]">
+                            <span>{formatAthleteLabel(entry)} {entry.heat ? entry.heat + "組" : ""}{entry.result?.place ? " " + entry.result.place + (block === "field" ? "位" : "着") : ""}</span>
+                            <span className="font-semibold tabular-nums">{entry.result?.record}{entry.result?.wind ? " (風 " + entry.result.wind + ")" : ""}</span>
+                          </div>
+                        ))}
+                        {competition.program_source_url && <a className="block pl-[52px] text-micro text-accent" href={competition.program_source_url.split("#")[0] + "#" + row.roundKey} target="_blank" rel="noopener noreferrer">公式の種目詳細</a>}
                       </div>
                     ))}
                   </Card>
