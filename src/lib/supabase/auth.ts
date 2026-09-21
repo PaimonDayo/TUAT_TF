@@ -1,3 +1,4 @@
+import { getSharedRoleCatalog } from "@/lib/supabase/role-catalog";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -53,7 +54,7 @@ const getStoredProfile = cache(async (): Promise<Profile> => {
   // 全ページの描画がDBへの往復1回ぶん遅れる（PC中継では1往復が数百ミリ秒かかる）。
   const [{ data: profile, error: profileError }, rolesMap] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
-    fetchRolesByProfileIds(supabase, [user.id]),
+    fetchRolesByProfileIds(supabase, [user.id], { useCachedCatalog: true }),
   ]);
 
   if (profileError) {
@@ -140,30 +141,35 @@ export const getCurrentProfile = cache(async (): Promise<Profile> => {
 export async function fetchRolesByProfileIds(
   supabase: SupabaseServer,
   ids: string[],
+  options: { useCachedCatalog?: boolean } = {},
 ): Promise<Map<string, AppRole[]>> {
   const map = new Map<string, AppRole[]>();
   if (ids.length === 0) return map;
 
-  const [{ data, error }, { data: everyoneRoles }] = await Promise.all([
-    supabase
-      .from("profile_roles")
-      .select("profile_id, role:roles(*)")
-      .in("profile_id", ids),
-    supabase.from("roles").select("*").eq("is_everyone", true),
-  ]);
-
-  if (error || !data) return map;
-
-  const globalRoles = (everyoneRoles ?? []) as AppRole[];
-  for (const id of ids) map.set(id, [...globalRoles]);
-
-  for (const row of data) {
-    if (!row.role || row.role.is_everyone) continue;
-    const arr = map.get(row.profile_id) ?? [];
-    arr.push(row.role);
-    map.set(row.profile_id, arr);
-  }  for (const roles of map.values()) {
-    roles.sort((a, b) => a.sort_order - b.sort_order);
+  // Authorization callers default to fresh definitions. Only display callers opt in.
+  try {
+    const [assignments, catalog] = await Promise.all([
+      supabase.from("profile_roles").select("profile_id, role_id").in("profile_id", ids),
+      options.useCachedCatalog
+        ? getSharedRoleCatalog()
+        : supabase.from("roles").select("*").then(({ data, error }) => {
+          if (error || !data) throw new Error("Failed to load role definitions");
+          return data;
+        }),
+    ]);
+    if (assignments.error || !assignments.data) return map;
+    const byId = new Map(catalog.map((role) => [role.id, role]));
+    const globalRoles = catalog.filter((role) => role.is_everyone);
+    for (const id of ids) map.set(id, [...globalRoles]);
+    for (const row of assignments.data) {
+      const role = byId.get(row.role_id);
+      if (!role || role.is_everyone) continue;
+      map.get(row.profile_id)?.push(role);
+    }
+    for (const roles of map.values()) roles.sort((a, b) => a.sort_order - b.sort_order);
+    return map;
+  } catch {
+    // Failed reads never grant permissions or poison the shared cache with [].
+    return map;
   }
-  return map;
 }

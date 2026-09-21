@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { getCurrentUserId } from "@/lib/supabase/client-auth";
 import { createClient } from "@/lib/supabase/client";
 import { BLOCKS, EDITABLE_BLOCK_ORDER } from "@/lib/constants";
 import type { AuthorMini, Block, PracticeMenu, PracticeSchedule, VenueRow } from "@/types";
@@ -195,7 +196,7 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
     const draft = scheduleDrafts[date]; if (!isScheduleSavable(draft)) return schedules[date] ?? null;
     if (!canSchedule) return null;
     setRowStates((current) => ({ ...current, [stateKey("schedule", date)]: "saving" }));
-    const supabase = createClient(); const { data: { user } } = await supabase.auth.getUser(); if (!user) return null;
+    const supabase = createClient(); const userId = await getCurrentUserId(supabase); if (!userId) return null;
     const scope = draft.scope ?? activeScheduleScope;
     // 対象を付け替えるときは、移動先に同じ日の予定が既にないか確かめる（同じ対象の重複を作らない）。
     if (draft.id && scope !== scopeOf(schedules[date]?.target_blocks ?? [])) {
@@ -213,7 +214,7 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
       }
     }
     const payload = { schedule_date: date, schedule_type: "practice", meeting_time: draft.time || null, venue_name: draft.venue || null, note: draft.note || null, target_blocks: blocksOf(scope) };
-    const result = draft.id ? await supabase.from("practice_schedules").update(payload).eq("id", draft.id).select("*").single() : await supabase.from("practice_schedules").insert({ ...payload, created_by: user.id }).select("*").single();
+    const result = draft.id ? await supabase.from("practice_schedules").update(payload).eq("id", draft.id).select("*").single() : await supabase.from("practice_schedules").insert({ ...payload, created_by: userId }).select("*").single();
     if (result.error || !result.data) { setRowStates((current) => ({ ...current, [stateKey("schedule", date)]: "error" })); return null; }
     const saved = result.data as PracticeSchedule; setSchedules((current) => ({ ...current, [date]: saved })); setScheduleDrafts((current) => ({ ...current, [date]: { ...current[date], id: saved.id, scope: scopeOf(saved.target_blocks) } })); setRowStates((current) => ({ ...current, [stateKey("schedule", date)]: "saved" })); return saved;
   }
@@ -222,12 +223,12 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
     if (schedules[date]) return schedules[date];
     const saved = await saveSchedule(date); if (saved) return saved;
     const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser(); if (!user) return null;
+    const userId = await getCurrentUserId(supabase); if (!userId) return null;
     const targetBlock = tab === "menu" ? block : scheduleScope;
     const { data } = await supabase.from("practice_schedules").insert({
       schedule_date: date,
       schedule_type: "practice",
-      created_by: user.id,
+      created_by: userId,
       target_blocks: targetBlock === "all" ? [] : [targetBlock],
     }).select("*").single();
     if (!data) return null;

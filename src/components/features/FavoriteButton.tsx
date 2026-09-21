@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { UserPlus, UserCheck } from "lucide-react";
+import { getCurrentUserId } from "@/lib/supabase/client-auth";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
@@ -29,8 +30,8 @@ export function FavoriteButton({ targetId, initial }: { targetId: string; initia
     queryClient.setQueryData(stateKey, { favorited: next, busy: true });
 
     const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const userId = await getCurrentUserId(supabase);
+    if (!userId) {
       queryClient.setQueryData(stateKey, previous);
       showToast("ログイン状態を確認できませんでした");
       return;
@@ -40,7 +41,7 @@ export function FavoriteButton({ targetId, initial }: { targetId: string; initia
       ? await supabase
           .from("favorites")
           .upsert(
-            { user_id: user.id, favorite_user_id: targetId },
+            { user_id: userId, favorite_user_id: targetId },
             { onConflict: "user_id,favorite_user_id" },
           )
           .select("favorite_user_id")
@@ -48,7 +49,7 @@ export function FavoriteButton({ targetId, initial }: { targetId: string; initia
       : await supabase
           .from("favorites")
           .delete()
-          .eq("user_id", user.id)
+          .eq("user_id", userId)
           .eq("favorite_user_id", targetId)
           .select("favorite_user_id");
 

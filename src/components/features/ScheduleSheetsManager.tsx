@@ -20,6 +20,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { Select } from "@/components/ui/select";
+import { getCurrentUserId } from "@/lib/supabase/client-auth";
 import { createClient } from "@/lib/supabase/client";
 import { jstToday } from "@/lib/date";
 import { BLOCKS, SCHEDULE_TYPE_OPTIONS } from "@/lib/constants";
@@ -222,10 +223,8 @@ export function ScheduleSheetsManager() {
     setLoading(true);
     setError(null);
     const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
+    const userId = await getCurrentUserId(supabase);
+    if (!userId) {
       setLoading(false);
       return;
     }
@@ -235,7 +234,7 @@ export function ScheduleSheetsManager() {
       const { data, error: createError } = await supabase
         .from("schedule_sheets")
         .insert({
-          author_id: user.id,
+          author_id: userId,
           target_year: kind === "practice" ? year : null,
           target_month: kind === "practice" ? month : null,
           kind,

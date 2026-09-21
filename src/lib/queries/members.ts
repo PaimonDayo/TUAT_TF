@@ -11,7 +11,7 @@ export async function getProfileById(id: string) {
   const { data, error } = await supabase.from("profiles").select("*").eq("id", id).maybeSingle();
   if (error) throw new Error(`Failed to load profile: ${error.message}`);
   if (!data) return null;
-  const rolesMap = await fetchRolesByProfileIds(supabase, [id]);
+  const rolesMap = await fetchRolesByProfileIds(supabase, [id], { useCachedCatalog: true });
   return normalizeProfileRow(data, rolesMap.get(id) ?? []);
 }
 
@@ -27,6 +27,7 @@ export async function getAllProfiles() {
   const rolesMap = await fetchRolesByProfileIds(
     supabase,
     rows.map((p) => p.id as string),
+    { useCachedCatalog: true },
   );
   return rows.map((profile) => normalizeProfileRow(profile, rolesMap.get(profile.id) ?? []));
 }

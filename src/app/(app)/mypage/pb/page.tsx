@@ -1,6 +1,6 @@
 import { SubHeader } from "@/components/layout/SubHeader";
 import { PbManager } from "@/components/features/PbManager";
-import { getCurrentProfile } from "@/lib/supabase/auth";
+import { getCurrentUserId } from "@/lib/supabase/auth";
 import {
   getCompetitionEvents,
   getCompetitions,
@@ -10,9 +10,9 @@ import type { CompetitionEvent } from "@/lib/competition-goals";
 import type { PbRecord } from "@/types";
 
 export default async function PbPage() {
-  const profile = await getCurrentProfile();
+  const userId = await getCurrentUserId();
   const [pbs, events, competitions] = await Promise.all([
-    getPbRecords(profile.id) as Promise<PbRecord[]>,
+    getPbRecords(userId) as Promise<PbRecord[]>,
     getCompetitionEvents(),
     getCompetitions(),
   ]);
@@ -23,7 +23,7 @@ export default async function PbPage() {
 
       <div className="px-4 pt-2">
         <PbManager
-          userId={profile.id}
+          userId={userId}
           initial={pbs}
           events={events as CompetitionEvent[]}
           competitions={competitions}

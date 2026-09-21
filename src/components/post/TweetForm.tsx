@@ -4,6 +4,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { BarChart3, Check, Clock3, ImagePlus, Link2, LoaderCircle, Plus, Send, X } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { getCurrentUserId } from "@/lib/supabase/client-auth";
 import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import {
@@ -118,10 +119,8 @@ export const TweetForm = forwardRef<
         return;
       }
     } else {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
+      const userId = await getCurrentUserId(supabase);
+      if (!userId) {
         setError("ログイン情報を確認できませんでした");
         setSaving(false);
         return;
@@ -152,7 +151,7 @@ export const TweetForm = forwardRef<
       }
       const expiresAt = expiresIn24Hours ? new Date(Date.now() + 86400000).toISOString() : null;
       const { error } = await supabase.from("tweets").insert({
-        id, user_id: user.id, content: text, image_path: imagePath, expires_at: expiresAt,
+        id, user_id: userId, content: text, image_path: imagePath, expires_at: expiresAt,
         quoted_type: quote?.kind ?? null,
         quoted_id: quote?.id ?? null,
         poll_multiple: pollEnabled && pollMultiple,
@@ -172,7 +171,7 @@ export const TweetForm = forwardRef<
           cleanPollOptions.map((option, sortOrder) => ({
             tweet_id: id,
             text: option,
-            created_by: user.id,
+            created_by: userId,
             sort_order: sortOrder,
           })),
         );

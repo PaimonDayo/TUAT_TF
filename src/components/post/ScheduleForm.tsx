@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LoaderCircle, X } from "lucide-react";
+import { getCurrentUserId } from "@/lib/supabase/client-auth";
 import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { ActionMenu } from "@/components/ui/action-menu";
@@ -88,9 +89,7 @@ export function ScheduleForm({
     let active = true;
     (async () => {
       const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getCurrentUserId(supabase);
       const [venueResult, previousTimeResult] = await Promise.all([
         supabase
           .from("venues")
@@ -98,11 +97,11 @@ export function ScheduleForm({
           .eq("pinned", true)
           .order("sort", { ascending: true })
           .order("name", { ascending: true }),
-        !schedule && user
+        !schedule && userId
           ? supabase
               .from("practice_schedules")
               .select("meeting_time")
-              .eq("created_by", user.id)
+              .eq("created_by", userId)
               .eq("schedule_type", "practice")
               .not("meeting_time", "is", null)
               .order("created_at", { ascending: false })
@@ -143,10 +142,8 @@ export function ScheduleForm({
     setSaving(true);
     setError(null);
     const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
+    const userId = await getCurrentUserId(supabase);
+    if (!userId) {
       setSaving(false);
       return;
     }
@@ -185,7 +182,7 @@ export function ScheduleForm({
     } else {
       const { error } = await supabase
         .from("practice_schedules")
-        .insert({ ...payload, created_by: user.id });
+        .insert({ ...payload, created_by: userId });
       if (error) {
         setError("保存できませんでした。もう一度お試しください");
         setSaving(false);

@@ -2,12 +2,12 @@ import { notFound } from "next/navigation";
 import { ScrollAwareSubHeader } from "@/components/layout/ScrollAwareSubHeader";
 import { Card } from "@/components/ui/card";
 import { getBlogArticle } from "@/lib/blog-feed";
-import { getCurrentProfile } from "@/lib/supabase/auth";
+import { getCurrentUserId } from "@/lib/supabase/auth";
 
 const dateFormatter = new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric" });
 
 export default async function BlogArticlePage({ params }: { params: Promise<{ id: string }> }) {
-  await getCurrentProfile();
+  await getCurrentUserId();
   const { id } = await params;
   const article = await getBlogArticle(id);
   if (!article) notFound();

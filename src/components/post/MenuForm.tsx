@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
+import { getCurrentUserId } from "@/lib/supabase/client-auth";
 import { createClient } from "@/lib/supabase/client";
 import { jstToday } from "@/lib/date";
 import { MenuSheetImportManager } from "@/components/features/MenuSheetImportManager";
@@ -174,9 +175,7 @@ function MenuEditor({
     async function load() {
       const supabase = createClient();
       const today = jstToday();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = await getCurrentUserId(supabase);
       const [scheduleResult, memberResult, previousMenuResult] = await Promise.all([
         fixedScheduleId
           ? Promise.resolve({ data: [] })
@@ -190,11 +189,11 @@ function MenuEditor({
           .select("id, display_name, avatar_url, blocks, grade")
           .eq("status", "active")
           .order("display_name", { ascending: true }),
-        user
+        userId
           ? supabase
               .from("practice_menus")
               .select("targets:practice_menu_targets!inner(user_id)")
-              .eq("author_id", user.id)
+              .eq("author_id", userId)
               .is("target_block", null)
               .order("created_at", { ascending: false })
               .limit(1)
@@ -211,7 +210,7 @@ function MenuEditor({
       }
       setMembers(memberRows);
 
-      if (user) {
+      if (userId) {
 
         // 直近値の自動初期値（対象者引き継ぎ）: 新規作成時だけ、直前に作った
         // 個別メニューの対象者をプリロードする。

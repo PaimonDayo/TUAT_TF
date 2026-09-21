@@ -17,6 +17,13 @@ import { useToast } from "@/components/ui/toast";
 import { PERMISSION_LIST } from "@/lib/permissions";
 import type { AppRole, Permission, Profile, RoleCategory } from "@/types";
 
+async function refreshRoleCatalog() {
+  try {
+    const response = await fetch("/api/roles/refresh", { method: "POST" });
+    return response.ok;
+  } catch { return false; }
+}
+
 const ROLE_COLORS = ["#007aff", "#34c759", "#ff9500", "#ff3b30", "#af52de", "#5ac8fa", "#8e8e93", "#5856d6"];
 const PERM_COLUMN: Record<Permission, keyof AppRole> = {
   manage_system: "can_manage_system",
@@ -42,6 +49,7 @@ export function RoleManager({ roles: initialRoles, members, categories: initialC
     setRoles(next);
     const { error } = await createClient().rpc("reorder_roles", { role_ids: next.map((role) => role.id) });
     if (error) { setRoles(previous); showToast("並び順を更新できませんでした"); }
+    else if (!(await refreshRoleCatalog())) showToast("並び順は保存しました。表示の反映に時間がかかる場合があります");
   }
 
   function renderRole(role: AppRole) {
@@ -101,6 +109,7 @@ function RoleRow({ role, members, categories, onUpdated, onDeleted, onMembersUpd
   async function remove() {
     const { data, error } = await createClient().rpc("delete_custom_role", { target_role_id: role.id });
     if (error || !data) { onError("ロールを削除できませんでした"); return false; }
+    if (!(await refreshRoleCatalog())) onError("削除しました。表示の反映に時間がかかる場合があります");
     onDeleted(); return true;
   }
 
@@ -115,6 +124,7 @@ function RoleRow({ role, members, categories, onUpdated, onDeleted, onMembersUpd
 }
 
 function RoleEditor({ open, onClose, onSaved, sortOrder, role, categories, canManageSystem }: { open: boolean; onClose: () => void; onSaved: (role: AppRole) => void; sortOrder: number; role?: AppRole; categories: RoleCategory[]; canManageSystem: boolean }) {
+  const { showToast } = useToast();
   const [name, setName] = useState(role?.name ?? "");
   const [flags, setFlags] = useState<Record<Permission, boolean>>({ manage_system: role?.can_manage_system ?? false, manage_members: role?.can_manage_members ?? false, create_schedule: role?.can_create_schedule ?? false, create_menu: role?.can_create_menu ?? false, create_notice: role?.can_create_notice ?? false, decide_practice: role?.can_decide_practice ?? false });
   const [color, setColor] = useState(role?.color ?? ROLE_COLORS[0]);
@@ -129,6 +139,7 @@ function RoleEditor({ open, onClose, onSaved, sortOrder, role, categories, canMa
     const query = role ? createClient().from("roles").update(payload).eq("id", role.id) : createClient().from("roles").insert(payload);
     const { data, error: saveError } = await query.select("*").single();
     if (saveError || !data) { setError("保存できませんでした。もう一度お試しください"); setSaving(false); return; }
+    if (!(await refreshRoleCatalog())) showToast("保存しました。表示の反映に時間がかかる場合があります");
     setSaving(false); onSaved(data as AppRole);
   }
 

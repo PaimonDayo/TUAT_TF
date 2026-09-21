@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LoaderCircle } from "lucide-react";
+import { getCurrentUserId } from "@/lib/supabase/client-auth";
 import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { FormModalFooter } from "@/components/ui/form-modal";
@@ -110,15 +111,13 @@ export function NoticeForm({
       return;
     }
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
+    const userId = await getCurrentUserId(supabase);
+    if (!userId) {
       setSaving(false);
       return;
     }
     const { error } = await supabase.from("notices").insert({
-      author_id: user.id,
+      author_id: userId,
       category,
       title: title.trim(),
       content: content.trim(),
