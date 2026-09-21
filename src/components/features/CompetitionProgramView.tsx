@@ -11,13 +11,11 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import {
   formatAthleteLabel,
-  formatEntryPositions,
+  formatAthleteList,
   formatProgramEventLabel,
-  formatTuatHeats,
   fromStoredProgramRow,
   groupEntriesByPosition,
   groupProgramByDate,
-  programRoundNote,
 } from "@/lib/competition-program";
 import type { ProgramAthlete, ParsedProgramRow } from "@/lib/competition-program";
 import type { CompetitionProgramEntryRow, CompetitionRow } from "@/types";
@@ -44,8 +42,6 @@ function sharedResult(entries: ProgramAthlete[]): boolean {
 /** 1種目ぶんの行。タップで出場者ごとの組・レーン・結果を開く。 */
 function ProgramRow({ row }: { row: ParsedProgramRow }) {
   const [open, setOpen] = useState(false);
-  const note = programRoundNote(row.eventLabel);
-  const heats = formatTuatHeats(row.tuatEntries);
   const finished = row.tuatEntries.filter((entry) => entry.result);
 
   return (
@@ -54,11 +50,7 @@ function ProgramRow({ row }: { row: ParsedProgramRow }) {
         <span className="shrink-0 pt-0.5 text-caption tabular-nums text-muted">{row.timeLabel ?? "--:--"}</span>
         <span className="min-w-0 flex-1">
           <span className="block text-headline">{formatProgramEventLabel(row.eventLabel)}</span>
-          <span className="mt-0.5 block text-micro text-muted2">
-            {heats ? `農工大は${heats}` : "組分けなし"}
-            {note ? `（${note}）` : ""}
-          </span>
-          <span className="mt-1 block text-[13px] text-muted">{formatEntryPositions(row.tuatEntries)}</span>
+          <span className="mt-1 block text-[13px] text-muted">{formatAthleteList(row.tuatEntries)}</span>
           {finished.length > 0 && !open && (
             <span className="mt-1 block text-[13px] font-semibold tabular-nums text-accent">
               結果{finished.length}件（タップで表示）
