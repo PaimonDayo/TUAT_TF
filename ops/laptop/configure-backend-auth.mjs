@@ -37,6 +37,13 @@ const doc = { networks: {
     GOTRUE_SECURITY_CAPTCHA_ENABLED: 'false',
   },
 } } };
+// Preserve Push wiring when OAuth is reconfigured after a recovery.
+if (existsSync(resolve(directory, 'push.env'))) {
+  doc.services.functions = {
+    networks: { default: {}, auth_outbound: {} },
+    environment: Object.fromEntries(['NEXT_PUBLIC_VAPID_PUBLIC_KEY','VAPID_PRIVATE_KEY','VAPID_SUBJECT','PUSH_WEBHOOK_SECRET'].map(key => [key, '${' + key + '}'])),
+  };
+}
 const output = resolve(directory, 'compose.auth.json');
 writePrivate(output, JSON.stringify(doc));
 if (process.argv.includes('--prepare-only')) { console.log('Prepared private Auth/network configuration; runtime unchanged.'); process.exit(0); }

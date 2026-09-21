@@ -1,8 +1,10 @@
 // Web Push の鍵と webhook の合言葉を作り、秘密の側はPC内の保護ファイルだけへ書く。
 // 標準出力へ出すのは公開鍵だけ（公開鍵はブラウザにも配る前提の値）。
 import { generateKeyPairSync, randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+
+import { writePrivate } from "./backend-files.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
 const target = resolve(root, ".contingency/backend/push.env");
@@ -20,8 +22,7 @@ const privateKeyB64 = privateKey.export({ format: "jwk" }).d;
 if (!privateKeyB64) throw new Error("Missing private scalar");
 
 const webhookSecret = randomBytes(32).toString("base64url");
-mkdirSync(resolve(root, ".contingency/backend"), { recursive: true });
-writeFileSync(
+writePrivate(
   target,
   [
     `NEXT_PUBLIC_VAPID_PUBLIC_KEY=${publicKeyB64}`,
@@ -30,7 +31,6 @@ writeFileSync(
     `PUSH_WEBHOOK_SECRET=${webhookSecret}`,
     "",
   ].join("\n"),
-  { mode: 0o600 },
 );
 
 console.log(publicKeyB64);

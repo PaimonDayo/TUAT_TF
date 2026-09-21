@@ -16,7 +16,7 @@ import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3';
 import { directory, writePrivate, r2Client, configPath, readConfig, cloudEnv } from './backend-files.mjs';
-import { decryptBackup } from './backup-backend.mjs';
+import { decryptBackup, downloadRecovery } from './backup-backend.mjs';
 
 const PREFIX = 'ops/pc-backend/';
 const args = process.argv.slice(2);
@@ -64,7 +64,8 @@ try {
     console.log('\n引き継ぎ元のinstanceIdを選び、--from-instance <uuid> で取り出す。');
   } else {
     const prefix = `${PREFIX}${instance}/backups/`;
-    const { keys } = await listAll(prefix);
+    const listing = await listAll(prefix);
+    const keys = listing.keys.filter(item => item.key.endsWith('.dump.enc'));
     if (!keys.length) throw new Error(`No backups under ${prefix}`);
     // キーはISOのタイムスタンプなので、辞書順＝新しい順で並ぶ。
     const newest = keys.sort((a, b) => (a.key < b.key ? -1 : 1)).at(-1);
@@ -79,6 +80,10 @@ try {
       // 復号が通ること自体が改ざん検出（AES-256-GCM の認証タグ）。
       const dump = decryptBackup(encrypted, backupKey);
       if (dump.subarray(0, 5).toString() !== 'PGDMP') throw new Error('Decrypted file is not a PostgreSQL dump');
+      if (result.Metadata?.recovery) {
+        const recovery = await downloadRecovery(client, bucket, result.Metadata.recovery, backupKey, dump, instance);
+        writePrivate(resolve(directory, 'handoff-restore.recovery.json'), recovery);
+      } else console.warn('Legacy backup has no Push/Vault/cron metadata; recover those separately before cutover.');
       const output = resolve(directory, 'handoff-restore.dump');
       writePrivate(output, dump);
       console.log(JSON.stringify({ source: newest.key, uploadedAt: newest.at, encryptedBytes: encrypted.length, dumpBytes: dump.length, checksumVerified: Boolean(recorded), output }, null, 2));

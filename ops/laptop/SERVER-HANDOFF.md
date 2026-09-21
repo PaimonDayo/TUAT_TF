@@ -166,3 +166,11 @@ bridgeKey/instanceIdへ戻す。旧PCのDBは消していないので、切替�
 
 どちらも既定値は現行PCと同じで、`.contingency/server.json` があればそれで上書きする。
 チェックアウト位置は `wslpath -a` で毎回解決するので、フォルダ名は自由。
+
+## Push・Vault・cronの復旧材料（2026-09-21）
+
+新しいバックアップは同一時刻の .dump.enc と .recovery.json.enc の組で保存する。後者は同じAES-256-GCM鍵で暗号化し、Vaultの復号済み値、Push鍵4項目、cronの有無とジョブ設定を含む。DBダンプのSHA256とinstanceIdも結び付けて検証する。復号鍵はR2に保存しない。旧DB単体バックアップにはこの材料がないため、警告を無視して切替を完了扱いしない。
+
+handoff-restore.mjsはDBと復旧材料を両方検証して .contingency/backend/handoff-restore.dump と handoff-restore.recovery.json へ出す。両方とも秘密扱いとし、表示・Git追加をしない。復元時はPush鍵を保護されたpush.envへ戻し、Vaultは復号済み値をvault.create_secret/update_secretで新DBへ再登録する。Vault暗号文だけを別DBへ移しても復号できるとは限らない。cronは初めに無効状態で戻し、Vercel側との二重実行がないことを確認してから必要なジョブのみ有効にする。cron.installed=falseなら、無かったpg_cronを勝手に追加しない。
+
+Push配備はチェックアウトのops/laptop/configure-push-wsl.pyをWSLから snapshot → env → restart-functions → vault-dry-run → vault → check の順で実行する。4つのComposeファイルが必須で、再作成はfunctionsだけ。他コンテナIDの不変を確認する。envは送信関数ソースも配備し、外向きネットワークも設定する。Google認証再設定時にもPush構成を保持する。Vercelの公開鍵とPCの公開鍵が一致し、アプリ再表示後に端末の再購読と実受信を確認するまで、実機確認済みとしない。

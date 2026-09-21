@@ -6,7 +6,7 @@ import { readFileSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readConfig, directory, writePrivate, r2Client } from './backend-files.mjs';
-import { wslArgs } from './server-profile.mjs';
+import { wslArgs, wslRepoRoot } from './server-profile.mjs';
 
 // 15分ごとのバックアップをローカルにも残すが、R2へ検証済みで上がった分だけ
 // 世代を絞る。R2へ上げられなかったファイル（.enc のまま）はここでは消さない
@@ -17,6 +17,7 @@ function pruneLocalBackups() {
   const uploaded = readdirSync(directory).filter((name) => name.startsWith('backup-') && name.endsWith(UPLOADED_SUFFIX)).sort();
   for (const name of uploaded.slice(0, Math.max(0, uploaded.length - KEEP_LOCAL_BACKUPS))) {
     rmSync(resolve(directory, name), { force: true });
+    rmSync(resolve(directory, name.replace('backup-', 'recovery-')), { force: true });
   }
 }
 
@@ -38,24 +39,57 @@ export async function backupBackend() {
     'pg_dump', '-U', 'supabase_admin', '-d', 'postgres', '--format=custom', '--schema=public', '--schema=auth', '--schema=storage'],
     { maxBuffer: 128 * 1024 * 1024, timeout: 120_000, encoding: 'buffer', windowsHide: true });
   if (dump.subarray(0, 5).toString() !== 'PGDMP') throw new Error('Database backup is incomplete');
+  const { stdout: recoveryBytes } = await promisify(execFile)('wsl', [...wslArgs(), 'python3', wslRepoRoot() + '/ops/laptop/export-backend-recovery.py'],
+    { maxBuffer: 16 * 1024 * 1024, timeout: 60_000, encoding: 'buffer', windowsHide: true });
+  const recovery = JSON.parse(recoveryBytes.toString('utf8'));
+  recovery.instanceId = config.instanceId;
+  recovery.databaseDumpSha256 = createHash('sha256').update(dump).digest('hex');
+  const recoveryEncrypted = encryptBackup(Buffer.from(JSON.stringify(recovery)), config.backupKey);
+  verifyRecovery(decryptBackup(recoveryEncrypted, config.backupKey), dump, config.instanceId);
   const encrypted = encryptBackup(dump, config.backupKey);
   if (!decryptBackup(encrypted, config.backupKey).equals(dump)) throw new Error('Backup encryption verification failed');
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const local = resolve(directory, `backup-${stamp}.enc`);
   writePrivate(local, encrypted);
   const key = `ops/pc-backend/${config.instanceId}/backups/${stamp}.dump.enc`;
+  const recoveryKey = key.replace('.dump.enc', '.recovery.json.enc');
+  const recoveryHash = createHash('sha256').update(recoveryEncrypted).digest('hex');
+  const recoveryLocal = resolve(directory, `recovery-${stamp}.enc`);
+  writePrivate(recoveryLocal, recoveryEncrypted);
   const hash = createHash('sha256').update(encrypted).digest('hex');
   const { client, bucket } = r2Client();
   try {
-    await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: encrypted, ContentType: 'application/octet-stream', IfNoneMatch: '*', Metadata: { sha256: hash } }), { abortSignal: AbortSignal.timeout(30_000) });
+    await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: encrypted, ContentType: 'application/octet-stream', IfNoneMatch: '*', Metadata: { sha256: hash, recovery: recoveryKey } }), { abortSignal: AbortSignal.timeout(30_000) });
     const head = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }), { abortSignal: AbortSignal.timeout(10_000) });
     if (head.ContentLength !== encrypted.length || head.Metadata?.sha256 !== hash) throw new Error('Remote backup verification failed');
-    writePrivate(resolve(directory, 'backup-status.json'), JSON.stringify({ completedAt: new Date().toISOString(), key, bytes: encrypted.length, sha256: hash }));
+    await client.send(new PutObjectCommand({ Bucket: bucket, Key: recoveryKey, Body: recoveryEncrypted, ContentType: 'application/octet-stream', IfNoneMatch: '*', Metadata: { sha256: recoveryHash } }), { abortSignal: AbortSignal.timeout(30_000) });
+    const recoveryHead = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: recoveryKey }), { abortSignal: AbortSignal.timeout(10_000) });
+    if (recoveryHead.ContentLength !== recoveryEncrypted.length || recoveryHead.Metadata?.sha256 !== recoveryHash) throw new Error('Recovery backup verification failed');
+    writePrivate(resolve(directory, 'backup-status.json'), JSON.stringify({ completedAt: new Date().toISOString(), key, bytes: encrypted.length, sha256: hash, recoveryKey, recoverySha256: recoveryHash, recoveryBytes: recoveryEncrypted.length }));
     renameSync(local, resolve(directory, `backup-${stamp}${UPLOADED_SUFFIX}`));
+    renameSync(recoveryLocal, resolve(directory, `recovery-${stamp}${UPLOADED_SUFFIX}`));
     pruneLocalBackups();
     console.log(`Encrypted backup verified: ${encrypted.length} bytes`);
     return key;
   } finally { client.destroy(); }
+}
+export function verifyRecovery(bytes, dump, instanceId) {
+  const value = JSON.parse(bytes.toString('utf8'));
+  if (value.version !== 1 || value.instanceId !== instanceId || !Array.isArray(value.vault) ||
+      typeof value.cron?.installed !== 'boolean' || !Array.isArray(value.cron?.jobs) ||
+      (value.pushEnv !== null && typeof value.pushEnv !== 'string') ||
+      value.databaseDumpSha256 !== createHash('sha256').update(dump).digest('hex')) throw new Error('Recovery metadata does not match database backup');
+  return value;
+}
+export async function downloadRecovery(client, bucket, key, backupKey, dump, instanceId) {
+  const expectedPrefix = `ops/pc-backend/${instanceId}/backups/`;
+  if (!key.startsWith(expectedPrefix) || !key.endsWith('.recovery.json.enc')) throw new Error('Unexpected recovery key');
+  const result = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }), { abortSignal: AbortSignal.timeout(30_000) });
+  const encrypted = Buffer.from(await result.Body.transformToByteArray());
+  if (!result.Metadata?.sha256 || createHash('sha256').update(encrypted).digest('hex') !== result.Metadata.sha256) throw new Error('Recovery checksum mismatch');
+  const bytes = decryptBackup(encrypted, backupKey);
+  verifyRecovery(bytes, dump, instanceId);
+  return bytes;
 }
 export async function downloadAndVerifyLatest() {
   const config = readConfig();
@@ -67,6 +101,10 @@ export async function downloadAndVerifyLatest() {
     const encrypted = Buffer.from(await result.Body.transformToByteArray());
     if (createHash('sha256').update(encrypted).digest('hex') !== status.sha256) throw new Error('Backup checksum mismatch');
     const dump = decryptBackup(encrypted, config.backupKey);
+    if (status.recoveryKey) {
+      const bytes = await downloadRecovery(client, bucket, status.recoveryKey, config.backupKey, dump, config.instanceId);
+      writePrivate(resolve(directory, 'restore-rehearsal.recovery.json'), bytes);
+    } else console.warn('Legacy database-only backup: Push/Vault/cron recovery metadata is absent.');
     const path = resolve(directory, 'restore-rehearsal.dump');
     writePrivate(path, dump);
     console.log('Downloaded backup checksum and authenticated decryption verified.');
