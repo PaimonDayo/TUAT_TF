@@ -191,9 +191,42 @@ function toHalfWidth(text: string): string {
   return text.replace(/[！-～]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0));
 }
 
+/** 種目名の末尾に付く「(2組2着+2)」のような組数・通過条件の注記。 */
+const ROUND_NOTE_RE = /[（(]\s*(\d+)組([^（()）]*)[)）]\s*$/;
+
 /** 表示用に全角数字・記号を半角へ、「オープン」を「OP」へ整える（ホームカードの限られた幅向け）。 */
-export function formatProgramEventLabel(label: string): string {
+function normalizeEventText(label: string): string {
   return toHalfWidth(label.replace(/オープン/g, "OP")).replace(/\s+/g, " ").trim();
+}
+
+/**
+ * 表示用の種目名。末尾の「(2組2着+2)」は種目全体の組数であって農工大が出る組ではなく、
+ * 組番号と読み違えられるため外す（注記は programRoundNote で別に出す）。
+ */
+export function formatProgramEventLabel(label: string): string {
+  return normalizeEventText(label)
+    .replace(ROUND_NOTE_RE, "")
+    // 「男子対校」は既定なので落とし、「男子オープン」はOPとして残す（区別が要るのはこちらだけ）。
+    .replace(/対校/g, "")
+    // 「110mH[1.067m/9.14m]」のような器具の規格は部員向けには不要な長さになる。
+    .replace(/\s*\[[^\]]*\]/g, "")
+    .replace(/(\S)(予選|準決勝|決勝|タイムレース)/, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** 「全2組・2着+2」のような種目全体の注記。無ければ null。 */
+export function programRoundNote(label: string): string | null {
+  const match = normalizeEventText(label).match(ROUND_NOTE_RE);
+  if (!match) return null;
+  const condition = match[2].trim();
+  return condition ? `全${match[1]}組・${condition}` : `全${match[1]}組`;
+}
+
+/** 農工大が出る組だけを「1組・3組」の形で返す。組の情報が無ければ null。 */
+export function formatTuatHeats(entries: ProgramAthlete[]): string | null {
+  const heats = [...new Set(entries.map((entry) => entry.heat).filter((heat): heat is number => heat !== null))];
+  return heats.length === 0 ? null : heats.sort((a, b) => a - b).map((heat) => `${heat}組`).join("・");
 }
 
 /** 「B2山田」のように学年+苗字だけの短い表示にする。 */
@@ -206,10 +239,36 @@ export function formatAthleteList(entries: ProgramAthlete[]): string {
   return entries.map(formatAthleteLabel).join("、");
 }
 
+/** 「2組3番」のような出走位置だけ。無ければ空文字。 */
+export function formatPosition(entry: ProgramAthlete): string {
+  return `${entry.heat ? `${entry.heat}組` : ""}${entry.lane !== null ? `${entry.lane}番` : ""}`;
+}
+
 /** プログラム詳細ページ向け。組・レーン番号も添える（例: 「2組3番 B2山田」）。 */
 export function formatAthletePosition(entry: ProgramAthlete): string {
-  const heat = entry.heat ? `${entry.heat}組` : "";
-  return `${heat}${entry.lane !== null ? `${entry.lane}番` : ""} ${formatAthleteLabel(entry)}`.trim();
+  return `${formatPosition(entry)} ${formatAthleteLabel(entry)}`.trim();
+}
+
+/**
+ * 同じ組・レーンの選手（リレーの4人など）をひとまとめにする。
+ * 「2組3番 B2山田 → 2組3番 B3佐藤 → …」と位置が繰り返されるのを防ぐ。
+ */
+export function groupEntriesByPosition(entries: ProgramAthlete[]): { position: string; entries: ProgramAthlete[] }[] {
+  const groups: { position: string; entries: ProgramAthlete[] }[] = [];
+  for (const entry of entries) {
+    const position = formatPosition(entry);
+    const last = groups.at(-1);
+    if (last && last.position === position) last.entries.push(entry);
+    else groups.push({ position, entries: [entry] });
+  }
+  return groups;
+}
+
+/** 位置をまとめた1行表示（例: 「2組3番 B2山田・B3佐藤」）。 */
+export function formatEntryPositions(entries: ProgramAthlete[]): string {
+  return groupEntriesByPosition(entries)
+    .map(({ position, entries: members }) => `${position} ${members.map(formatAthleteLabel).join("・")}`.trim())
+    .join("、");
 }
 
 export interface ProgramDateGroup {

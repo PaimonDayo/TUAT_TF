@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { jstNow, jstToday } from "@/lib/date";
-import { currentProgramRows, nextProgramRows, formatAthleteList, formatProgramEventLabel, fromStoredProgramRow } from "@/lib/competition-program";
+import { currentProgramRows, nextProgramRows, formatEntryPositions, formatProgramEventLabel, fromStoredProgramRow } from "@/lib/competition-program";
 import type { CompetitionProgramEntryRow } from "@/types";
 
 /** ホームとプログラムで同じ進行目安を表示する。 */
@@ -41,7 +41,7 @@ export function CompetitionInProgress({ entries, dark = false }: { entries: Comp
             <span className="shrink-0 tabular-nums">{row.eventDate !== clock?.today && <span className="mr-1">{Number(row.eventDate.slice(5, 7))}/{Number(row.eventDate.slice(8, 10))}</span>}{row.timeLabel}</span>
             <span>{formatProgramEventLabel(row.eventLabel)}</span>
           </p>
-          <p className={"mt-0.5 text-[12px] " + muted}>{formatAthleteList(row.tuatEntries)}</p>
+          <p className={"mt-0.5 text-[12px] " + muted}>{formatEntryPositions(row.tuatEntries)}</p>
         </li>)}
       </ul> : <p className={"mt-2 text-caption " + muted}>{clock ? empty : "時刻を確認しています…"}</p>}
     </section>)}</div>

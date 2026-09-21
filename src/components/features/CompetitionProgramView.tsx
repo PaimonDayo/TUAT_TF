@@ -4,47 +4,100 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { RefreshCw } from "lucide-react";
+import { ChevronDown, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import {
-  formatAthletePosition,
   formatAthleteLabel,
+  formatEntryPositions,
   formatProgramEventLabel,
+  formatTuatHeats,
   fromStoredProgramRow,
+  groupEntriesByPosition,
   groupProgramByDate,
+  programRoundNote,
 } from "@/lib/competition-program";
+import type { ProgramAthlete, ParsedProgramRow } from "@/lib/competition-program";
 import type { CompetitionProgramEntryRow, CompetitionRow } from "@/types";
 
 import { CompetitionInProgress } from "./CompetitionInProgress";
 
 const BLOCK_LABEL = { track: "トラック", field: "フィールド" } as const;
 
-/** 大会プログラム（速報サイトから取り込んだ農工大の出場種目・出場選手）の一覧。日付→トラック/フィールドの順。 */
+function resultText(entry: ProgramAthlete, block: "track" | "field"): string {
+  const place = entry.result?.place ? `${entry.result.place}${block === "field" ? "位" : "着"} ` : "";
+  const wind = entry.result?.wind ? `（風 ${entry.result.wind}）` : "";
+  return `${place}${entry.result?.record ?? ""}${wind}`;
+}
+
+/** 1種目ぶんの行。タップで出場者ごとの組・レーン・結果を開く。 */
+function ProgramRow({ row }: { row: ParsedProgramRow }) {
+  const [open, setOpen] = useState(false);
+  const note = programRoundNote(row.eventLabel);
+  const heats = formatTuatHeats(row.tuatEntries);
+  const finished = row.tuatEntries.filter((entry) => entry.result);
+
+  return (
+    <div className="p-3.5">
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-start gap-2 text-left pressable">
+        <span className="shrink-0 pt-0.5 text-caption tabular-nums text-muted">{row.timeLabel ?? "--:--"}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-headline">{formatProgramEventLabel(row.eventLabel)}</span>
+          <span className="mt-0.5 block text-micro text-muted2">
+            {heats ? `農工大は${heats}` : "組分けなし"}
+            {note ? `（${note}）` : ""}
+          </span>
+          <span className="mt-1 block text-[13px] text-muted">{formatEntryPositions(row.tuatEntries)}</span>
+          {finished.length > 0 && !open && (
+            <span className="mt-1 block text-[13px] font-semibold tabular-nums text-accent">
+              結果{finished.length}件（タップで表示）
+            </span>
+          )}
+        </span>
+        <ChevronDown size={16} className={"mt-1 shrink-0 text-muted transition-transform " + (open ? "rotate-180" : "")} />
+      </button>
+      {open && (
+        <ul className="mt-2 space-y-1.5 sm:ml-[52px]">
+          {groupEntriesByPosition(row.tuatEntries).map(({ position, entries }, index) => (
+            <li key={index} className="rounded-lg bg-bg px-2.5 py-2 text-[13px]">
+              {position && <p className="text-micro text-muted2">{position}</p>}
+              {entries.map((entry, i) => (
+                <p key={i} className="flex items-baseline justify-between gap-2">
+                  <span>{formatAthleteLabel(entry)}</span>
+                  <span className="shrink-0 font-semibold tabular-nums">
+                    {entry.result ? resultText(entry, row.block) : <span className="font-normal text-muted2">結果待ち</span>}
+                  </span>
+                </p>
+              ))}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** 大会プログラム（速報サイトから取り込んだ農工大の出場種目・出場選手と、その結果）。 */
 export function CompetitionProgramView({
   competition,
   initialEntries,
   canManage,
-  initialView = "program",
 }: {
   competition: CompetitionRow;
   initialEntries: CompetitionProgramEntryRow[];
   canManage: boolean;
-  initialView?: "program" | "results";
 }) {
   const router = useRouter();
   const { showToast } = useToast();
-  const [view, setView] = useState(initialView);
   const [syncing, setSyncing] = useState(false);
-
 
   const groups = groupProgramByDate(initialEntries.map(fromStoredProgramRow))
     .map((group) => ({
       ...group,
-      track: group.track.filter((row) => row.tuatEntries.length > 0 && (view === "program" || row.tuatEntries.some(entry => entry.result))),
-      field: group.field.filter((row) => row.tuatEntries.length > 0 && (view === "program" || row.tuatEntries.some(entry => entry.result))),
+      track: group.track.filter((row) => row.tuatEntries.length > 0),
+      field: group.field.filter((row) => row.tuatEntries.length > 0),
     }))
     .filter((group) => group.track.length > 0 || group.field.length > 0);
   const lastSyncedAt = initialEntries.reduce<string | null>(
@@ -74,29 +127,23 @@ export function CompetitionProgramView({
   return (
     <div className="space-y-4 px-4 pb-8 pt-2">
       <CompetitionInProgress entries={initialEntries} />
-      <div className="flex gap-2" role="group" aria-label="表示内容">
-        <Button variant={view === "program" ? "primary" : "outline"} onClick={() => setView("program")} aria-pressed={view === "program"}>プログラム</Button>
-        <Button variant={view === "results" ? "primary" : "outline"} onClick={() => setView("results")} aria-pressed={view === "results"}>速報</Button>
+      <div className="flex items-center justify-between gap-2 rounded-xl border border-separator bg-card p-3">
+        <p className="text-micro text-muted2">
+          {lastSyncedAt
+            ? `最終取得: ${format(new Date(lastSyncedAt), "M月d日 HH:mm", { locale: ja })}`
+            : "まだ取得していません"}
+        </p>
+        {canManage && <Button size="sm" variant="outline" disabled={syncing} onClick={() => void sync()}>
+          <RefreshCw size={14} className={syncing ? "animate-spin" : undefined} />
+          {syncing ? "取得中…" : "今すぐ取得"}
+        </Button>}
       </div>
-      {(
-        <div className="flex items-center justify-between gap-2 rounded-xl border border-separator bg-card p-3">
-          <p className="text-micro text-muted2">
-            {lastSyncedAt
-              ? `最終取得: ${format(new Date(lastSyncedAt), "M月d日 HH:mm", { locale: ja })}`
-              : "まだ取得していません"}
-          </p>
-          {canManage && <Button size="sm" variant="outline" disabled={syncing} onClick={() => void sync()}>
-            <RefreshCw size={14} className={syncing ? "animate-spin" : undefined} />
-            {syncing ? "取得中…" : "今すぐ取得"}
-          </Button>}
-        </div>
-      )}
 
       <p className="text-micro text-muted2">開催期間は約5分ごとに公式情報を取得します。記録は速報値です。</p>
       {competition.program_source_url && <a href={competition.program_source_url} target="_blank" rel="noopener noreferrer" className="text-caption text-accent underline">大会公式のプログラム・速報を見る</a>}
       {groups.length === 0 ? (
         <Card>
-          <EmptyState title={view === "results" ? "農工大の結果はまだ掲載されていません" : "まだ出場種目の情報がありません"} />
+          <EmptyState title="まだ出場種目の情報がありません" />
         </Card>
       ) : (
         groups.map((group) => (
@@ -109,28 +156,7 @@ export function CompetitionProgramView({
                 <div key={block} className="space-y-1.5">
                   <p className="text-caption text-muted">{BLOCK_LABEL[block]}</p>
                   <Card className="divide-y divide-separator">
-                    {group[block].map((row) => (
-                      <div key={row.roundKey} className="space-y-1 p-3.5">
-                        <div className="flex items-baseline gap-2">
-                          <span className="shrink-0 text-caption tabular-nums text-muted">
-                            {row.timeLabel ?? "--:--"}
-                          </span>
-                          <span className="min-w-0 flex-1 text-headline">
-                            {formatProgramEventLabel(row.eventLabel)}
-                          </span>
-                        </div>
-                        {view === "program" && <p className="pl-[52px] text-[13px] text-muted2">
-                          {row.tuatEntries.map(formatAthletePosition).join("、")}
-                        </p>}
-                        {row.tuatEntries.filter(entry => entry.result).map((entry, index) => (
-                          <div key={index} className="rounded-lg bg-accent/5 px-2 py-1.5 text-[13px] sm:ml-[52px]">
-                            <span>{formatAthleteLabel(entry)} {entry.heat ? entry.heat + "組" : ""}{entry.result?.place ? " " + entry.result.place + (block === "field" ? "位" : "着") : ""}</span>
-                            <span className="block font-semibold tabular-nums">結果：{entry.result?.record}{entry.result?.wind ? " (風 " + entry.result.wind + ")" : ""}</span>
-                          </div>
-                        ))}
-                        {competition.program_source_url && <a className="block pl-[52px] text-micro text-accent" href={competition.program_source_url.split("#")[0] + "#" + row.roundKey} target="_blank" rel="noopener noreferrer">公式の種目詳細</a>}
-                      </div>
-                    ))}
+                    {group[block].map((row) => <ProgramRow key={row.roundKey} row={row} />)}
                   </Card>
                 </div>
               ),

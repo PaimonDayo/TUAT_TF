@@ -7,7 +7,10 @@ import {
   formatAthleteLabel,
   formatAthleteList,
   formatAthletePosition,
+  formatEntryPositions,
   formatProgramEventLabel,
+  formatTuatHeats,
+  programRoundNote,
   groupProgramByDate,
   parseCompetitionProgram,
   type ParsedProgramRow,
@@ -70,12 +73,52 @@ describe("parseCompetitionProgram", () => {
 });
 
 describe("formatProgramEventLabel", () => {
-  it("converts full-width digits and letters to half-width", () => {
-    expect(formatProgramEventLabel("男子対校 １００ｍ予選(2組2着+2)")).toBe("男子対校 100m予選(2組2着+2)");
+  it("converts full-width digits to half-width and drops 対校 (the default) and the heat-count note", () => {
+    expect(formatProgramEventLabel("男子対校 １００ｍ予選(2組2着+2)")).toBe("男子 100m 予選");
   });
 
-  it("shortens オープン to OP", () => {
-    expect(formatProgramEventLabel("男子オープン １５００ｍ決勝(2組)")).toBe("男子OP 1500m決勝(2組)");
+  it("shortens オープン to OP because that distinction matters", () => {
+    expect(formatProgramEventLabel("男子オープン １５００ｍ決勝(2組)")).toBe("男子OP 1500m 決勝");
+  });
+
+  it("drops the implement/hurdle spec in brackets", () => {
+    expect(formatProgramEventLabel("男子対校 １１０ｍH[1.067m/9.14m]決勝(7組)")).toBe("男子 110mH 決勝");
+    expect(formatProgramEventLabel("男子対校 砲丸投[7.260kg]決勝")).toBe("男子 砲丸投 決勝");
+  });
+
+  it("leaves a label without a round note alone", () => {
+    expect(formatProgramEventLabel("女子対校 走高跳決勝")).toBe("女子 走高跳 決勝");
+  });
+});
+
+describe("programRoundNote / formatTuatHeats", () => {
+  it("keeps the heat count and advancement rule as a separate note", () => {
+    expect(programRoundNote("男子対校 １００ｍ予選(2組2着+2)")).toBe("全2組・2着+2");
+    expect(programRoundNote("男子オープン １５００ｍ決勝(2組)")).toBe("全2組");
+    expect(programRoundNote("女子対校 走高跳決勝")).toBeNull();
+  });
+
+  it("reports only the heats TUAT actually runs in", () => {
+    expect(formatTuatHeats([
+      { heat: 3, lane: 1, bib: "1", name: "山田 太郎", grade: "B2" },
+      { heat: 1, lane: 2, bib: "2", name: "佐藤 花子", grade: "M1" },
+      { heat: 3, lane: 4, bib: "3", name: "鈴木 一郎", grade: "B3" },
+    ])).toBe("1組・3組");
+    expect(formatTuatHeats([{ heat: null, lane: 1, bib: "1", name: "山田 太郎", grade: "B2" }])).toBeNull();
+  });
+});
+
+describe("formatEntryPositions", () => {
+  it("prints a relay team's shared heat and lane once instead of per runner", () => {
+    const relay = [1, 2, 3, 4].map((i) => ({ heat: 2, lane: 3, bib: null, name: `走者${i} 太郎`, grade: "B2" }));
+    expect(formatEntryPositions(relay)).toBe("2組3番 B2走者1・B2走者2・B2走者3・B2走者4");
+  });
+
+  it("still separates athletes who are in different heats or lanes", () => {
+    expect(formatEntryPositions([
+      { heat: 1, lane: 3, bib: "1", name: "山田 太郎", grade: "B2" },
+      { heat: 2, lane: 5, bib: "2", name: "佐藤 花子", grade: "M1" },
+    ])).toBe("1組3番 B2山田、2組5番 M1佐藤");
   });
 });
 
