@@ -7,6 +7,7 @@ import {
   formatAthleteLabel,
   formatAthleteList,
   formatAthletePosition,
+  describeResult,
   formatEntryPositions,
   formatProgramEventLabel,
   formatTuatHeats,
@@ -14,6 +15,7 @@ import {
   groupProgramByDate,
   parseCompetitionProgram,
   type ParsedProgramRow,
+  type ProgramAthlete,
 } from "./competition-program";
 
 const fixture = readFileSync(new URL("./__fixtures__/competition-program-sample.html", import.meta.url), "utf8");
@@ -231,5 +233,30 @@ describe("nextProgramRows", () => {
   });
   it("ignores unknown times, completed and cancelled events", () => {
     expect(nextProgramRows([{ ...row, timeLabel: null }, { ...row, status: "完了" }, { ...row, status: "中止" }, { ...row, tuatEntries: [{ ...entry, result: { place: null, record: "欠場" } }] }], "2026-09-22", "09:00")).toEqual([]);
+  });
+});
+
+describe("describeResult", () => {
+  const entry = (over: Partial<ProgramAthlete>): ProgramAthlete => ({
+    heat: null, lane: null, bib: null, name: "山田 太郎", grade: "B2", ...over,
+  });
+
+  it("calls a timed-final heat placing 着 and waits for the 総合 table for the 位", () => {
+    const row = entry({ heat: 7, result: { place: "1", record: "15.07", wind: "-2.3" } });
+    expect(describeResult(row, "男子対校 １１０ｍＨ決勝(7組)")).toBe("1着 15.07 風 -2.3");
+  });
+
+  it("shows the overall place as the 位 once the official summary is out", () => {
+    const row = entry({ heat: 7, result: { place: "1", record: "15.07", wind: "-2.3", overallPlace: "5" } });
+    expect(describeResult(row, "男子対校 １１０ｍＨ決勝(7組)")).toBe("5位 1着 15.07 風 -2.3");
+  });
+
+  it("treats the place as the 位 directly when the event is a single race", () => {
+    expect(describeResult(entry({ result: { place: "3", record: "14m15 +1.2" } }), "男子対校 三段跳決勝")).toBe("3位 14m15 +1.2");
+  });
+
+  it("prints a scratch on its own, with no place and no wind", () => {
+    expect(describeResult(entry({ heat: 1, result: { place: null, record: "欠場" } }), "女子対校 ２００ｍ決勝(5組)")).toBe("欠場");
+    expect(describeResult(entry({ heat: 1, result: { place: "2", record: "失格 TR24.6", wind: "+0.5" } }), "男子 ４×１００ｍＲ決勝(4組)")).toBe("失格 TR24.6");
   });
 });

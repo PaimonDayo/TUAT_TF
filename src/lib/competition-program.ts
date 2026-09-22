@@ -59,8 +59,10 @@ function parseIndividualRows(segment: string, wind?: string): Omit<ProgramAthlet
     const athlete = { name: cells[2], grade: gradeShortFromRaw(cells[3]) };
     if (looksLikeRecord(cells[1])) {
       const record = SCRATCH_RE.test(cells[0]) ? "欠場" : cells[1];
+      // 欠場・失格には風も順位も付けない。
+      const blank = isNonMarkResult(record);
       out.push({ ...athlete, lane: null, bib: null,
-        result: { place: /^\d+$/.test(cells[0]) ? cells[0] : null, record, ...(wind ? { wind } : {}) } });
+        result: { place: blank ? null : (/^\d+$/.test(cells[0]) ? cells[0] : null), record, ...(wind && !blank ? { wind } : {}) } });
       continue;
     }
     if (!cells[1]) continue;
@@ -114,7 +116,8 @@ function parseResultRows(segment: string, isRelay: boolean): ProgramAthlete[] {
     const cells = [...row[1].matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map(m => cellText(m[1]));
     const team = cells[isRelay ? 2 : 4];
     if (!team?.startsWith(TUAT_ABBREVIATION) || !cells[1]) continue;
-    const result = { place: /^\d+$/.test(cells[0]) ? cells[0] : null, record: cells[1], ...(wind ? { wind } : {}) };
+    const blank = isNonMarkResult(cells[1]);
+    const result = { place: blank ? null : (/^\d+$/.test(cells[0]) ? cells[0] : null), record: cells[1], ...(wind && !blank ? { wind } : {}) };
     if (isRelay) {
       for (const cell of cells.slice(3)) {
         const name = cell.match(/^(.+?)\s?((?:[BMD])?\d{1,2})$/);
@@ -136,7 +139,7 @@ function applyOverallSection(entries: ProgramAthlete[], overall: string, isRelay
   const ranked = parseResultRows(overall, isRelay);
   return entries.map(entry => {
     const match = ranked.find(r => r.name === entry.name && r.grade === entry.grade);
-    if (!entry.result || !match?.result?.place) return entry;
+    if (!entry.result || isNonMarkResult(entry.result.record) || !match?.result?.place) return entry;
     const wind = match.result.record.match(/[（(]\s*([+-]?\d+\.\d+)\s*[)）]/)?.[1];
     return { ...entry, result: { ...entry.result, overallPlace: match.result.place, ...(wind ? { wind } : {}) } };
   });
@@ -403,4 +406,41 @@ export function nextProgramRows(rows: ParsedProgramRow[], todayIso: string, nowL
     const first = future.find(candidate => candidate.block === row.block)!;
     return row.eventDate === first.eventDate && row.timeLabel === first.timeLabel;
   });
+}
+
+/** 記録ではない結果（欠場・失格など）。風や順位を添えても意味がない。 */
+const NON_MARK_RE = /^(欠場|欠|失格|棄権|記録なし|DNS|DNF|DQ|NM|NS)/;
+
+export function isNonMarkResult(record: string): boolean {
+  return NON_MARK_RE.test(record.trim());
+}
+
+/** 種目全体の組数。「(7組2着+2)」なら7。組の区別がなければ null。 */
+export function programHeatCount(label: string): number | null {
+  const match = toHalfWidth(label).match(/[（(]\s*(\d+)組/);
+  return match ? Number(match[1]) : null;
+}
+
+/**
+ * 結果の1行ぶんの文。
+ * 組がいくつもあるタイムレースでは、組の中の着順は大会の順位ではないので
+ * 「組1着」と書き分け、順位は公式の総合表が出てから「5位」として出す。
+ */
+export function describeResult(entry: ProgramAthlete, eventLabel: string): string {
+  const result = entry.result;
+  if (!result) return "";
+  if (isNonMarkResult(result.record)) return result.record;
+
+  const heats = programHeatCount(eventLabel) ?? 0;
+  const inHeats = heats > 1 && entry.heat !== null;
+  const rank = result.overallPlace ?? (inHeats ? null : result.place);
+  const heatPlace = inHeats ? result.place : null;
+
+  const parts = [
+    rank ? `${rank}位` : null,
+    heatPlace ? `${heatPlace}着` : null,
+    result.record,
+    result.wind ? `風 ${result.wind}` : null,
+  ].filter(Boolean);
+  return parts.join(" ");
 }

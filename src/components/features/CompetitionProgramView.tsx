@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import {
+  describeResult,
   formatAthleteLabel,
   fromStoredProgramRow,
   groupEntriesByPosition,
@@ -24,19 +25,24 @@ import { useCompetitionProgram } from "./useCompetitionProgram";
 
 const BLOCK_LABEL = { track: "トラック", field: "フィールド" } as const;
 
-function resultText(entry: ProgramAthlete, block: "track" | "field"): string {
-  const place = entry.result?.place ? `${entry.result.place}${block === "field" ? "位" : "着"} ` : "";
-  const wind = entry.result?.wind ? `（風 ${entry.result.wind}）` : "";
-  // タイムレースは組ごとの着順より総合順位のほうが意味がある。
-  const overall = entry.result?.overallPlace ? ` 総合${entry.result.overallPlace}位` : "";
-  return `${place}${entry.result?.record ?? ""}${wind}${overall}`;
-}
-
 /** 同じ組・レーンの全員が同一の結果（＝リレーのチーム記録）かどうか。 */
 function sharedResult(entries: ProgramAthlete[]): boolean {
   if (entries.length < 2 || !entries[0].result) return false;
   const first = JSON.stringify(entries[0].result);
   return entries.every((entry) => JSON.stringify(entry.result) === first);
+}
+
+/** 結果が出ている人を、同じ結果（リレーのチーム記録）ごとにまとめた一覧行にする。 */
+function summarizeFinished(row: ParsedProgramRow): { names: string; text: string }[] {
+  const out: { names: string; text: string }[] = [];
+  for (const entry of row.tuatEntries) {
+    if (!entry.result) continue;
+    const text = describeResult(entry, row.eventLabel);
+    const last = out.at(-1);
+    if (last && last.text === text) last.names += `・${formatAthleteLabel(entry)}`;
+    else out.push({ names: formatAthleteLabel(entry), text });
+  }
+  return out;
 }
 
 /** 1種目ぶんの行。タップで出場者ごとの組・レーン・結果を開く。 */
@@ -50,8 +56,14 @@ function ProgramRow({ row }: { row: ParsedProgramRow }) {
         <span className="min-w-0 flex-1">
           <ProgramEventSummary row={row} />
           {finished.length > 0 && !open && (
-            <span className="ml-15 mt-1 block text-caption tabular-nums text-accent">
-              結果{finished.length}件（タップで表示）
+            // 順位・記録は開かなくても読めるようにする（開くと組・レーン・風も出る）。
+            <span className="ml-15 mt-1 block space-y-0.5">
+              {summarizeFinished(row).map(({ names, text }, index) => (
+                <span key={index} className="block text-caption text-accent">
+                  {names}{" "}
+                  <span className="font-semibold tabular-nums">{text}</span>
+                </span>
+              ))}
             </span>
           )}
         </span>
@@ -66,14 +78,14 @@ function ProgramRow({ row }: { row: ParsedProgramRow }) {
                 // リレーはチーム1つの記録なので、4人ぶん同じ行を繰り返さない。
                 <p className="flex items-baseline justify-between gap-2">
                   <span className="min-w-0">{entries.map(formatAthleteLabel).join("・")}</span>
-                  <span className="shrink-0 font-semibold tabular-nums">{resultText(entries[0], row.block)}</span>
+                  <span className="shrink-0 font-semibold tabular-nums">{describeResult(entries[0], row.eventLabel)}</span>
                 </p>
               ) : (
                 entries.map((entry, i) => (
                   <p key={i} className="flex items-baseline justify-between gap-2">
                     <span>{formatAthleteLabel(entry)}</span>
                     <span className="shrink-0 font-semibold tabular-nums">
-                      {entry.result ? resultText(entry, row.block) : <span className="font-normal text-muted2">結果待ち</span>}
+                      {entry.result ? describeResult(entry, row.eventLabel) : <span className="font-normal text-muted2">結果待ち</span>}
                     </span>
                   </p>
                 ))
