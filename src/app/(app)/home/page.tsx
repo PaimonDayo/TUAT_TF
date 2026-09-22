@@ -6,20 +6,17 @@ import { ja } from "date-fns/locale";
 import { ChevronRight, Folder } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { HomeSkeleton } from "@/components/ui/page-skeletons";
 import { HomeFeed } from "@/components/features/HomeFeed";
 import { CompetitionHome } from "@/components/features/CompetitionHome";
 import { CompetitionProgramCard } from "@/components/features/CompetitionProgramCard";
-
-
 import { HomeNotices } from "@/components/features/HomeNotices";
 import { InstallPrompt } from "@/components/features/InstallPrompt";
-import { ScheduleCard } from "@/components/cards/ScheduleCard";
+import { HomeScheduleCard } from "@/components/cards/HomeScheduleCard";
 import { UpcomingScheduleCard } from "@/components/cards/UpcomingScheduleCard";
 import { getCurrentProfile, getCurrentUserId } from "@/lib/supabase/auth";
 import { jstNow, jstToday } from "@/lib/date";
 import { formatKm } from "@/lib/utils";
-import { displayedDistance } from "@/lib/record-distance";
 import {
   getHomeCompetition,
   getAttendanceSchedules,
@@ -28,10 +25,8 @@ import {
   getFeed,
   getHomeNotices,
   getRecentSharedNotes,
-  getUserRecords,
+  getUserTrainingSummary,
 } from "@/lib/queries";
-import { applyMiddleLongMenuSnapshot, middleLongMenuMonths } from "@/lib/middle-long-menu-data";
-import { fetchMiddleLongMenuSnapshot } from "@/lib/middle-long-menu-sheet";
 import { folderContentsLabel } from "@/lib/note-contents";
 import { permissionsOf } from "@/lib/permissions";
 import { RECORD_SOURCE_COOKIE, showRecordSourceFor } from "@/lib/record-source-display";
@@ -39,42 +34,44 @@ import type {
   Attendee,
   NoticeWithReactions,
   NoteWithRelations,
-  PracticeRecord,
   ScheduleWithMenus,
 } from "@/types";
 
 /**
- * 見出しはプロフィールを待たずに出し、中身の節はそれぞれ独立に流し込む。
- * 1つのSuspenseで全部を包むと、いちばん遅い節（予定＝スプレッドシート取得を含む）が
- * 終わるまで画面が何も出ない。節ごとに分けると、届いたものから順に見えるようになる。
+ * 見出しは先に表示し、本文は並列取得して一度に置き換える。
+ * 外部シートは予定を開いたときに取得するため、この待ち時間には含めない。
  */
 export default function HomePage() {
   const nowJst = jstNow();
   return (
     <>
       <Header title="ホーム" large besideTitle={<time dateTime={jstToday()} className="truncate text-[13px] text-muted">{format(nowJst, "M月d日 (E)", { locale: ja })}</time>} />
-      <div className="space-y-5 px-4 pt-1">
-        <Suspense fallback={<SectionFallback cards={1} />}><NoticesSection /></Suspense>
-        <Suspense fallback={<Skeleton className="h-[92px] w-full rounded-[16px]" />}><CompetitionSection /></Suspense>
-        <InstallPrompt />
-        <Suspense fallback={null}><WeeklySummarySection nowJst={nowJst} /></Suspense>
-        <Suspense fallback={<SectionFallback cards={2} />}><SchedulesSection /></Suspense>
-        <Suspense fallback={<SectionFallback cards={2} />}><NotesSection /></Suspense>
-        <Suspense fallback={<SectionFallback cards={2} tall />}><FeedSection /></Suspense>
-      </div>
+      <Suspense fallback={<HomeSkeleton withHeader={false} />}>
+        <HomeContent nowJst={nowJst} />
+      </Suspense>
     </>
   );
 }
 
-/** 節が届くまでの場所取り。見出し1行＋カードの高さだけを確保する。 */
-function SectionFallback({ cards, tall = false }: { cards: number; tall?: boolean }) {
+async function HomeContent({ nowJst }: { nowJst: Date }) {
+  const [notices, competition, summary, schedules, notes, feed] = await Promise.all([
+    NoticesSection(),
+    CompetitionSection(),
+    WeeklySummarySection({ nowJst }),
+    SchedulesSection(),
+    NotesSection(),
+    FeedSection(),
+  ]);
   return (
-    <section className="space-y-2" aria-hidden="true">
-      <Skeleton className="h-3 w-24" />
-      {Array.from({ length: cards }).map((_, index) => (
-        <Skeleton key={index} className={`w-full rounded-[16px] ${tall ? "h-[132px]" : "h-[76px]"}`} />
-      ))}
-    </section>
+    <div className="space-y-5 px-4 pt-1">
+      {notices}
+      {competition}
+      {summary}
+      {schedules}
+      {notes}
+      {feed}
+      <InstallPrompt />
+    </div>
   );
 }
 
@@ -102,39 +99,12 @@ async function NoticesSection() {
   return <HomeNotices notices={notices as NoticeWithReactions[]} />;
 }
 
-/**
- * 走行距離のカードは中長距離の人にだけ出す。出すかどうかはプロフィールを見るまで
- * 決まらないので、場所取りもプロフィールが届いてから（出さない人の画面に、あとで
- * 消える枠を置かないため）。中身の集計はその内側で待たせる。
- */
+/** 週間集計も本文と一緒に確定させ、後から予定の上へ割り込ませない。 */
 async function WeeklySummarySection({ nowJst }: { nowJst: Date }) {
   const profile = await getCurrentProfile();
   if (!profile.blocks.includes("middle_long")) return null;
-  return (
-    <Suspense fallback={<WeeklySummaryFallback />}>
-      <WeeklySummary userId={profile.id} nowJst={nowJst} />
-    </Suspense>
-  );
-}
-
-function WeeklySummaryFallback() {
-  return (
-    <section className="space-y-2" aria-hidden="true">
-      <div className="grid grid-cols-2 gap-3">
-        <Skeleton className="h-[86px] rounded-[16px]" />
-        <Skeleton className="h-[86px] rounded-[16px]" />
-      </div>
-    </section>
-  );
-}
-
-async function WeeklySummary({ userId, nowJst }: { userId: string; nowJst: Date }) {
   const sevenDaysAgo = format(subDays(nowJst, 6), "yyyy-MM-dd");
-  const records = (await getUserRecords(userId, sevenDaysAgo)) as PracticeRecord[];
-  const weekKm = records.reduce(
-    (sum, record) => sum + displayedDistance(record),
-    0,
-  );
+  const { distance: weekKm, count } = await getUserTrainingSummary(profile.id, sevenDaysAgo);
   return (
     <section className="space-y-2">
       <div className="grid grid-cols-2 gap-3">
@@ -148,7 +118,7 @@ async function WeeklySummary({ userId, nowJst }: { userId: string; nowJst: Date 
         <Card className="p-4">
           <p className="text-caption">直近7日間の練習回数</p>
           <p className="mt-1 text-large-title tabular-nums">
-            {records.length}
+            {count}
             <span className="ml-1 text-body text-muted">回</span>
           </p>
         </Card>
@@ -176,16 +146,10 @@ async function SchedulesSection() {
   const upcomingSchedules = schedules.filter((schedule) => schedule.schedule_date > today).slice(0, 3);
   const displayed = [...todaySchedules, ...upcomingSchedules];
   if (displayed.length === 0) return null;
-  // 出欠はどの予定を出すかだけで決まり、スプレッドシートのメニューには依存しない。
-  // 直列にすると外部サイトの応答を待ってから出欠を取りに行くことになるので同時に投げる。
+  // 折りたたんだ予定にはCSVの本文を使わない。展開時だけクライアントで取得する。
   const wantsSheetMenus =
     profile.blocks.includes("middle_long") || profile.blocks.includes("manager") || profile.menu_view_all_blocks;
-  const [attendance, snapshot] = await Promise.all([
-    getAttendancesForSchedules(displayed.map((schedule) => schedule.id)),
-    wantsSheetMenus ? fetchMiddleLongMenuSnapshot(middleLongMenuMonths(displayed)) : null,
-  ]);
-  const withMenus = snapshot ? applyMiddleLongMenuSnapshot(displayed, snapshot) : displayed;
-  const menusById = new Map(withMenus.map((schedule) => [schedule.id, schedule.menus ?? []]));
+  const attendance = await getAttendancesForSchedules(displayed.map((schedule) => schedule.id));
   const attendeesBySchedule = new Map<string, Attendee[]>();
   for (const row of attendance) {
     const rows = attendeesBySchedule.get(row.schedule_id) ?? [];
@@ -201,7 +165,7 @@ async function SchedulesSection() {
           {todaySchedules.map((schedule) => {
             const attendees = attendeesBySchedule.get(schedule.id) ?? [];
             const mine = attendees.find((attendee) => attendee.user_id === profile.id && attendee.attend_date === schedule.schedule_date);
-            return <ScheduleCard key={schedule.id} schedule={{ ...schedule, menus: menusById.get(schedule.id) ?? [] }} viewerBlocks={profile.blocks} userId={profile.id} myProfile={profile} myStatus={mine?.status ?? "none"} myLate={mine?.is_late ?? false} myLateNote={mine?.late_note ?? null} myAbsenceNote={mine?.absence_note ?? null} attendees={attendees} attendanceDefaultBlock={profile.attendance_default_block} canDecidePractice={perms.decidePractice} />;
+            return <HomeScheduleCard key={schedule.id} schedule={schedule} loadSheetMenus={wantsSheetMenus} viewerBlocks={profile.blocks} userId={profile.id} myProfile={profile} myStatus={mine?.status ?? "none"} myLate={mine?.is_late ?? false} myLateNote={mine?.late_note ?? null} myAbsenceNote={mine?.absence_note ?? null} attendees={attendees} attendanceDefaultBlock={profile.attendance_default_block} canDecidePractice={perms.decidePractice} />;
           })}
         </div>
       </section>
@@ -221,7 +185,7 @@ async function SchedulesSection() {
             return (
               <UpcomingScheduleCard
                 key={schedule.id}
-                schedule={{ ...schedule, menus: menusById.get(schedule.id) ?? [] }}
+                schedule={schedule}
                 initialStatus={mine?.status ?? "none"}
                 attendees={attendees}
                 attendanceDefaultBlock={profile.attendance_default_block}
@@ -244,7 +208,7 @@ async function NotesSection() {
       <SectionHeading title="ノート" href="/notes" />
       <div className="space-y-2">
         {notes.map((note) => (
-          <Link key={note.id} href={`/notes/${note.id}`} prefetch={false}>
+          <Link key={note.id} href={`/notes/${note.id}`} prefetch={false} className="block">
             <Card className="p-4 active:bg-bg">
               <div className="flex items-start gap-3">
                 <Folder size={19} className="mt-0.5 shrink-0 text-accent" />

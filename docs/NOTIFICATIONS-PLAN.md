@@ -136,4 +136,4 @@ ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
 2. 受信設定3トグル（`profiles`列＋マイページUI）。トリガーは設定を見て生成。
 3. PWA Service Worker＋`push_subscriptions`＋VAPID＋有効化フロー＋Edge Function配信＋iOS案内。
 
-各フェーズ完了ごとに `docs/CLAUDE-HANDOFF.md`（または専用の引き継ぎ節）へ結果を記録し、`AGENTS.md` 作業ログに commit を追記すること。
+変更の結果は日付付きの文書へ記録し、`AGENTS.md` 作業ログに commit を追記すること。文書の入口は [文書案内](README.md)。この設計書の各フェーズを未実装と判断する前に、最新コードと作業ログを確認する。

@@ -1,3 +1,3 @@
 @AGENTS.md
 
-@ops/laptop/CLAUDE-PRODUCTION-UPDATE.md
+@ops/laptop/PC-PRODUCTION-HANDOFF.md

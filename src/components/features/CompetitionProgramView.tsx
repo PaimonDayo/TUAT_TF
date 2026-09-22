@@ -119,7 +119,9 @@ export function CompetitionProgramView({
       track: group.track.filter((row) => row.tuatEntries.length > 0),
       field: group.field.filter((row) => row.tuatEntries.length > 0),
     }))
-    .filter((group) => group.track.length > 0 || group.field.length > 0);
+    .filter((group) => group.track.length > 0 || group.field.length > 0)
+    // 後半の日程を上へ。種目は各日の開始時刻順を維持する。
+    .sort((a, b) => b.date.localeCompare(a.date));
   const lastSyncedAt = entries.reduce<string | null>(
     (latest, row) => (!latest || row.created_at > latest ? row.created_at : latest),
     null,

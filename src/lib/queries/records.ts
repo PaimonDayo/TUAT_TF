@@ -4,10 +4,29 @@ import { createClient } from "@/lib/supabase/server";
 import { jstToday } from "@/lib/date";
 import { normalizePracticeRecord } from "@/lib/profile-normalize";
 import { RECORD_NONEMPTY_OR } from "@/lib/record-content";
+import { displayedDistance } from "@/lib/record-distance";
 import type { PbRecord, PracticeRecord } from "@/types";
 import { RECORD_LIST_SELECT, attachRecordFieldGroups, fetchTargetSocialState } from "./internal";
 
-/** ユーザーの期間内の練習記録（マイページ・週間集計に使用） */
+/** 週間カード用。本文・プロフィール・項目定義を取得せず、同じ対象日の距離と件数を集計する。 */
+export async function getUserTrainingSummary(userId: string, fromDate: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("practice_records")
+    .select("dist_low,dist_mid,dist_high,dist_speed,dist_actual")
+    .eq("user_id", userId)
+    .gte("recorded_date", fromDate)
+    .lte("recorded_date", jstToday())
+    .or(RECORD_NONEMPTY_OR);
+  if (error) throw error;
+  const records = data ?? [];
+  return {
+    distance: records.reduce((sum, record) => sum + displayedDistance(record), 0),
+    count: records.length,
+  };
+}
+
+/** ユーザーの期間内の練習記録（マイページに使用） */
 export async function getUserRecords(userId: string, fromDate?: string) {
   const supabase = await createClient();
   // fromDate省略時も無期限取得はしない（TrainingChartの最大表示期間は12ヶ月分）。

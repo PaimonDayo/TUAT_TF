@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 import {
@@ -98,6 +98,8 @@ export function ScheduleCard({
   attendees = [],
   attendanceDefaultBlock = "all",
   defaultOpen = false,
+  onOpenChange,
+  menuStatus,
 }: {
   schedule: ScheduleWithMenus;
   viewerBlocks?: Block[];
@@ -116,6 +118,9 @@ export function ScheduleCard({
   attendees?: Attendee[];
   attendanceDefaultBlock?: import("@/types").AttendanceDefaultBlock;
   defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** 外部メニューの読み込み・空状態を詳細内に表示する。 */
+  menuStatus?: ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   // 出欠は日ごとの行（複数日開催なら1日1行）。自分の状態もこの一覧から読む。
@@ -191,6 +196,13 @@ export function ScheduleCard({
   const meta = SCHEDULE_TYPES[schedule.schedule_type];
   const date = new Date(schedule.schedule_date + "T00:00:00");
   const [menusState, setMenusState] = useState<PracticeMenu[]>(schedule.menus ?? []);
+  // 一覧のCSV取得やrouter.refreshで届いたメニューを反映する。
+  // 同じ入力の再描画ではローカル編集を保持する。
+  const [menusSource, setMenusSource] = useState(schedule.menus);
+  if (menusSource !== schedule.menus) {
+    setMenusSource(schedule.menus);
+    setMenusState(schedule.menus ?? []);
+  }
   const hasMenus = menusState.length > 0;
   // 並び順は作成日時に依存させない（練習日ごとに入力順が違うと毎回バラつくため）。
   // ブロック全体メニュー→個別メニュー、個別は対象者名の固定順で安定化する。
@@ -245,6 +257,7 @@ export function ScheduleCard({
     schedule.note ||
     hasEntry ||
     hasMenus ||
+    !!menuStatus ||
     canEditMenu ||
     canManage;
 
@@ -253,7 +266,11 @@ export function ScheduleCard({
       <button
         type="button"
         disabled={!hasDetail}
-        onClick={() => hasDetail && setOpen((v) => !v)}
+        onClick={() => {
+          if (!hasDetail) return;
+          setOpen(!open);
+          onOpenChange?.(!open);
+        }}
         aria-expanded={hasDetail ? open : undefined}
         className="w-full p-4 flex items-center gap-3 text-left transition-colors duration-100 enabled:active:bg-bg disabled:cursor-default motion-reduce:transition-none lg:gap-2.5 lg:p-3"
       >
@@ -412,6 +429,7 @@ export function ScheduleCard({
             <Detail icon={<Info size={14} />} label="詳細情報" value={schedule.note} />
           )}
 
+          {menuStatus}
           {hasMenus && (
             <div>
               <p className="section-label mb-1.5">練習メニュー</p>

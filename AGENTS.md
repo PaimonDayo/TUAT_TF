@@ -1,3 +1,7 @@
+## 2026-09-23 ホーム表示・取得処理・文書の整理
+
+Codex: ホーム本文を並列取得後に一括表示し、loadingと本文で共通スケルトンを使用。中長距離メニューCSVは本日の予定を開く時だけ取得、予定一覧とQuery定義共用・60秒キャッシュ・短距離予定は対象外。週間集計は距離5列だけ取得し項目定義RPCを省略。遅れて届くメニューの反映も修正。27大戦プログラムは9/23→9/22（各日は時刻順）。古い4文書を削除しREADME・文書案内・運用/UI規約を更新。現行391テスト（別作業の監視込み395）・tsc・対象eslint・PC本番設定build成功。390px/320px合成UIで展開・読み込み・再試行・日付順を確認、iOS実機未確認。詳細: docs/HOME-2026-09-23.md。
+
 ## 2026-09-23 現行アプリのUI・通信改善
 
 Codex: 下部タブと全画面フォームを可視viewportへ追従、予定SSR直後の重複取得と復帰時の通信連発を抑制、引き下げ更新の二重取得を削減。フォーム遅延読み込み・スケルトン・見出し先行表示・中長距離以外の不要グラフ取得省略。現行アプリ383テスト（別作業の監視4件を含めると387）・tsc・対象eslint・PC本番設定build成功。390px/320px合成UIで下部配置・フォーム開閉・改行・横はみ出しなし確認。iOS実機での再発と本番速度の改善率は未確認。DB/認証/cron/新アプリ変更なし。詳細: docs/UI-PERFORMANCE-2026-09-23.md。
@@ -173,7 +177,7 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 - 途中で止めるとき（レビューを挟みたい・オーナーの判断が要る）は、**どこまで進めたか**と**本番にはまだ出ていないこと**を明示する。黙ってブランチ止まりにしない。
 
 ## ドキュメント索引
-- `docs/CLAUDE-HANDOFF.md` … **最新の進捗・引き継ぎ（まずここ）**
+- `docs/README.md` … **現行の文書案内（運用・規約・日付付きの検証記録）**
 - `docs/ARCHITECTURE-REFACTOR-PLAN.md` … **巨大ファイルの分割計画**（Phase 1=queries/sheet-sync 実施済み。Phase 2以降の順番と、PC試験版の残骸を消す時期）
 - `ops/laptop/SERVER-HANDOFF.md` … **サーバーを別PCへ引き継ぐ手順**（鍵の選択・R2からの復旧・切替と切り戻し）
 - `docs/UI-UNIFICATION.md` … UI・操作・システムの **統一規約**（書く=全画面 / 選ぶ=シート、**編集削除=⋯ ActionMenu**、ガクつき禁止、押下は `active:bg-bg` か `pressable` の2種だけ、取得=`lib/queries/`、DBへの往復を直列に積まない、`staleTimes`/`cacheComponents` 禁止）
@@ -356,7 +360,7 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 - **作業は1体ずつ。`git pull`→作業→検証→push まで終えてから次のエージェントに渡す**（push 前の中途半端な状態で別の体に着手させない）。
 - 着手したら**着手前に必ず `git pull`**（受け渡し直後でも省略しない）。
 - **着手前**：下の「作業ログ」に1行追加（日付・エージェント名・これから触る範囲）。
-- **完了後**：同じ行に結果（commit ハッシュ・要点）を追記。大きな変更は `docs/CLAUDE-HANDOFF.md` に詳細を書く。
+- **完了後**：同じ行に結果（commit ハッシュ・要点）を追記。大きな変更は日付付きの文書へ詳細を書き、`docs/README.md` から参照できるようにする。
 - 他AIが直前に触った範囲は、ログを見て**現状コードを確認してから**触る（古い前提で上書きしない）。
 
 ## 作業ログ（着手前に追記・新しいものを上へ）
@@ -512,13 +516,13 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 - 「直す前」に対象機能の現状コードを確認し、すでに動いているなら微修正に留める。
 
 ## 実装の型（要点）
-- 初期データは Server Component ＋ `src/lib/queries.ts` に集約（画面に直接 supabase を書かない）。操作系は Client Component。
+- 初期データは Server Component ＋ `src/lib/queries/` に集約（入口は `@/lib/queries`、画面に直接 supabase を書かない）。操作系は Client Component。
 - 権限：UI は `permissionsOf(profile.roles)`、DB は `can_*()` / `is_admin()` / `is_staff()` で RLS。ロールは `profile_roles`×`roles`（複数ロールを OR で判定）。
 - 学年表記は `B1/B2/B3/B4 ・ M1/M2 ・ D1/D2/D3`（`gradeShort` / `GRADE_OPTIONS`）。
 - **update は RLS で弾かれても「エラー無し・0件」で無言失敗する**。重要な更新は `.select()` で件数確認し、0件なら `auth.refreshSession()`→再試行→明示エラー（実例 `src/components/post/ScheduleForm.tsx`）。
 
 ## 注意：README は人間向けセットアップ用
-`README.md` の「実装状況」欄や `profiles.role='admin'`（旧シングルロール方式）は **古い**。最新の状態は本ファイルと `docs/CLAUDE-HANDOFF.md` を正とする。
+`README.md` は2026-09-23に現行構成・複数ロール方式・検証コマンドへ更新した。作業ルールは本ファイル、現在の運用は `ops/laptop/PC-PRODUCTION-HANDOFF.md`、文書の入口は `docs/README.md` を参照する。削除済みの `docs/CLAUDE-HANDOFF.md` への古い作業ログ内の参照はGit履歴用であり、現在の指示ではない。
 
 ## Claude handoff — 2026-07-12 tab lab D result and queued UX work
 

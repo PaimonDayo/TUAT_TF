@@ -1,121 +1,49 @@
-# 陸上部ログ 🏃
+# TUAT T&F
 
-陸上競技部向けの、練習記録・予定・ランキング共有アプリです。
-Next.js 16 (App Router) + Supabase + Tailwind CSS v4 で作られています。
+陸上競技部向けの練習記録・予定・出欠・大会結果・ノート共有アプリ。Next.js 16 / React 19 / Supabase / Tailwind CSS v4 を使用する。
 
-> **開発する人へ**: このファイルは**ゼロから自分の環境を立てる人向け**の手引き。
-> 実際の開発ルール・現在の実装状況・本番構成は **`AGENTS.md`** を正とする。
-> 本番（https://tuat-tf.vercel.app ）のDBは2026-09-09から所有者PCのWSL内Supabaseで動いていて、
-> 下の手順で作る新しいクラウドプロジェクトとは別物。運用は `ops/laptop/` の各文書を見る。
+本番は [tuat-tf.vercel.app](https://tuat-tf.vercel.app)。アプリはVercel、DB/Authは所有者PCのWSL内Supabase、画像は非公開R2。旧クラウドSupabaseへ接続先だけを戻してはいけない。
 
----
+開発ルールと完了条件は [AGENTS.md](AGENTS.md)、運用は [PC本番運用](ops/laptop/PC-PRODUCTION-HANDOFF.md)、文書全体は [文書案内](docs/README.md) を参照する。
 
-## セットアップ手順（はじめての方向け）
+## 開発環境
 
-プログラミングに詳しくなくても進められるよう、順番に説明します。
-**①〜⑤ を上から順にやれば動きます。**
+ルートディレクトリが現行アプリ。新アプリの `tuat-tf-next/` は別packageで、現行アプリのビルド・lint・テスト対象から除外している。
 
-### ① Supabase プロジェクトを作る
-1. https://supabase.com にアクセスし、GitHub か Google でサインアップ
-2. 「New project」を押し、名前・パスワード（メモしておく）・リージョン（Tokyo 推奨）を設定して作成
-3. 数分待つと使えるようになります
+1. Node.js 22.12以降（この変更は24系で検証）を用意する。
+2. `npm ci` でロックファイルに合わせて依存を導入する。
+3. [.env.example](.env.example) を参照して、開発先に対応した `.env.local` を用意する。Supabase、Googleログイン、画像、通知、同期の設定は別々で、最初の4変数だけで全機能が動く構成ではない。秘密値はGitやログへ出さない。
+4. `npm run dev` を実行し、`http://localhost:3000` を開く。
 
-### ② データベースを作る（マイグレーションを流す）
-`supabase/migrations/` に141個のマイグレーションが入っている。これを順に適用する。
+独立した検証DBを新規構築する場合、スキーマは `supabase/migrations/` の履歴を基に準備する。既存のCLIリンクや `.env.local` が現在の本番DBを指すとは限らない。DB変更は対象接続先・バックアップ・dry-run・適用履歴を確認してから行う。現在のPC本番に対する手順を、新規クラウドプロジェクト向けコマンドで代用しない。
 
-```bash
-npx supabase link --project-ref <プロジェクトID>
-npx supabase db push
-```
+GoogleログインにはAuthプロバイダーとコールバック設定が必要。権限は `roles` と `profile_roles` の複数ロール方式で、アプリのロール管理とDBのRLSにより制御する。
 
-> 以前この手順は `supabase/schema.sql` を貼り付けるものだったが、**そのファイルはもう無い**。
-> テーブル定義はマイグレーションの積み重ねが正になっている。
+## 確認コマンド
 
-### ③ 鍵（キー）を取得して .env.local に貼る
-1. Supabase 左メニュー → **Project Settings → API**
-2. 次の3つをコピーして、プロジェクト直下の `.env.local` に貼り付けます：
+| コマンド | 用途 |
+| --- | --- |
+| `npm run dev` | ローカル開発 |
+| `npm test` | 現行アプリのVitest |
+| `npx tsc --noEmit` | 型検査 |
+| `npx eslint <変更ファイル>` | 変更箇所のlint |
+| `npm run lint` | リポジトリのlint（既存の指摘も含む） |
+| `npm run build` | 現在の環境設定でビルド |
+| `npm start` | ビルドしたアプリを起動 |
 
-```
-NEXT_PUBLIC_SUPABASE_URL=（Project URL）
-NEXT_PUBLIC_SUPABASE_ANON_KEY=（anon public キー）
-SUPABASE_SERVICE_ROLE_KEY=（service_role キー：人に見せない）
-NEXT_PUBLIC_UNIVERSITY_DOMAIN=st.あなたの大学.ac.jp
-```
+所有者PCでの本番設定ビルドは `node ops/laptop/build-production-local.mjs`。非公開設定が必要なので、他のPCで同名フォルダを作って代用しない。
 
-> `NEXT_PUBLIC_UNIVERSITY_DOMAIN` には、部員の大学メールのドメイン（@ の右側）を入れます。
-> ここに入れたドメインのアカウントだけがログインできます。
+## 本番反映
 
-### ④ Google ログインを有効にする
-1. Supabase 左メニュー → **Authentication → Sign In / Providers → Google** を ON
-2. Google 側の設定（OAuth クライアント）が必要です：
-   - https://console.cloud.google.com → 「APIとサービス → 認証情報」
-   - 「OAuth クライアント ID」を作成（種類: ウェブアプリケーション）
-   - **承認済みリダイレクト URI** に Supabase の画面に表示される
-     `https://xxxx.supabase.co/auth/v1/callback` を登録
-   - 発行された **クライアント ID / シークレット**を Supabase の Google 設定に貼る
-3. Supabase の **Authentication → URL Configuration** で
-   - Site URL に `http://localhost:3000`（開発時）／本番は Vercel の URL
-   - Redirect URLs に `http://localhost:3000/auth/callback` を追加
+既存のVercelプロジェクト `tuat-tf` はmasterの更新でデプロイされる。検証後にmasterへ統合・pushし、対象SHAのProductionがREADYになったことと、本番 `/api/version` がそのSHAを返すことを確認する。Previewの成功だけでは本番反映完了ではない。東京リージョン `hnd1` を維持する。
 
-### ⑤ 起動する
-```bash
-npm install      # 初回のみ
-npm run dev
-```
-ブラウザで http://localhost:3000 を開く → Google でログイン
+一般Previewへ本番のDB/管理キーを複製しない。デプロイ・DB・環境変数の同時変更を複数担当で行わない。
 
-### ⑥ 自分を管理者にする（初回だけ）
-権限は `roles`（ロール定義）と `profile_roles`（誰がどのロールか）で決まる。
-一度ログインしたあと、Supabase の SQL Editor で自分に管理ロールを付ける：
+## 実装の要点
 
-```sql
-insert into public.profile_roles (profile_id, role_id)
-select p.id, r.id
-from public.profiles p, public.roles r
-where p.email = 'あなた@st.大学.ac.jp' and r.can_manage_system
-on conflict do nothing;
-```
-
-> 以前は `UPDATE profiles SET role = 'admin'` と案内していたが、**単一ロール方式はもう使っていない**。
-> 2人目以降はアプリの「ロール管理」画面（マイページ→管理メニュー）から付けられる。
-
----
-
-## 開発コマンド
-| コマンド | 内容 |
-|----------|------|
-| `npm run dev` | 開発サーバー起動 |
-| `npm run build` | 本番ビルド |
-| `npm start` | 本番サーバー起動 |
-| `npm run lint` | Lint チェック |
-
-## デプロイ（Vercel）
-1. このリポジトリを GitHub に push
-2. https://vercel.com で Import
-3. 環境変数（`.env.local` の4つ）を Vercel のプロジェクト設定に登録
-4. Deploy。完了後、その URL を Supabase の Site URL / Redirect URLs にも追加
-
----
-
-## 実装状況
-
-**ここには書かない。** 機能は日々増えていて、この欄は放置されると嘘になる
-（実際、完成済みの「練習予定の作成UI」「メニュー入力フォーム」を長いあいだ未実装と書いたままだった）。
-
-現在の実装状況は次を見る:
-- `AGENTS.md` … 作業ログ（新しい順）と実装バックログ。**ここが正**
-- `docs/CLAUDE-HANDOFF.md` … 直近の引き継ぎ
-- `docs/ARCHITECTURE-REFACTOR-PLAN.md` … 分割の進み具合
-
-## 技術メモ
-- **Next.js 16** では旧 `middleware.ts` が **`proxy.ts`** に改称されています（本プロジェクトは `src/proxy.ts`）。
-- `params` / `searchParams` / `cookies()` はすべて **非同期（await 必須）**です。
-- Tailwind v4 のため、カラー等のデザイントークンは `src/app/globals.css` の `@theme` で定義しています。
-- データ取得は Server Component（`src/lib/queries/` のドメイン別モジュール。入口は `@/lib/queries`）、
-  投稿・いいね等の操作は Client Component で行います。
-- 自分のIDだけで引ける取得は `getCurrentUserId()` を使い、プロフィール取得と**同時に**投げます
-  （直列にするとDBへの往復が1回ぶん増える。`docs/UI-UNIFICATION.md` §4.5）。
-- RLS の無限再帰を避けるため、権限判定は `is_admin()` / `is_staff()` / `can_*()` 関数経由にしています
-  （定義は `supabase/migrations/` の各マイグレーション）。
-- `next.config.ts` の `cacheComponents` と `experimental.staleTimes` は**有効化しないこと**
-  （2026-07-12にiOS PWAの全面フリーズを起こした。理由は同ファイルのコメント）。
+- 初期取得はServer Componentから `@/lib/queries` を呼ぶ。実体は `src/lib/queries/` の機能別モジュール。
+- 互いに依存しない取得は並列化する。自分のIDだけで引けるデータはプロフィール取得を待たない。
+- ホームは見出しと共通スケルトンを先に出し、本文を一括表示する。外部シートのメニューは予定を開いたときに取得する。
+- 軽い操作はローカルstateで即時反映し、保存後の整合はサーバーの取得結果と合わせる。
+- `cacheComponents` と `experimental.staleTimes` は再導入しない。過去のiOS PWAフリーズの経緯はAGENTSと `next.config.ts` のコメントを参照する。
+- UI・文言の詳細は [UI統一](docs/UI-UNIFICATION.md) と [文言規約](docs/WORDING-GUIDELINES.md) に集約する。

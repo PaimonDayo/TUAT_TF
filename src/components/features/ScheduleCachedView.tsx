@@ -6,9 +6,8 @@ import { ScheduleView } from "@/components/features/ScheduleView";
 import type { SchedulePageData } from "@/lib/schedule-page-data";
 import {
   applyMiddleLongMenuSnapshot,
-  middleLongMenuMonths,
-  type MiddleLongMenuSnapshot,
 } from "@/lib/middle-long-menu-data";
+import { middleLongMenuQueryOptions } from "@/lib/client/middle-long-menus";
 
 
 async function loadSchedulePageData(signal: AbortSignal): Promise<SchedulePageData> {
@@ -18,14 +17,6 @@ async function loadSchedulePageData(signal: AbortSignal): Promise<SchedulePageDa
   });
   if (!response.ok) throw new Error("Failed to load schedule data");
   return response.json() as Promise<SchedulePageData>;
-}
-async function loadMiddleLongMenus(months: number[], signal: AbortSignal): Promise<MiddleLongMenuSnapshot> {
-  const response = await fetch(`/api/middle-long-menus?months=${months.join(",")}`, {
-    cache: "no-store",
-    signal,
-  });
-  if (!response.ok) throw new Error("Failed to load middle-long menus");
-  return response.json() as Promise<MiddleLongMenuSnapshot>;
 }
 
 
@@ -43,17 +34,12 @@ export function ScheduleCachedView({ initialData, openId }: { initialData: Sched
   });
   // サーバーが新しいデータを返したらセッションキャッシュにも反映する
   // （initialDataは初回マウント時のみ有効。無いと予定の編集・出欠変更が古いまま見える）。
-  const months = useMemo(() => middleLongMenuMonths(data.schedules), [data.schedules]);
-  const menuQuery = useQuery({
-    queryKey: ["middle-long-menu-csv", initialData.userId, months.join(",")],
-    queryFn: ({ signal }) => loadMiddleLongMenus(months, signal),
+  const menuQuery = useQuery(middleLongMenuQueryOptions({
+    userId: initialData.userId,
+    schedules: data.schedules,
     initialData: data.middleLongMenuSnapshot ?? undefined,
-    // サーバーはもうシートを取らない（待たせないため）。出す相手かどうかで判断する。
-    enabled: data.wantsSheetMenus && months.length > 0,
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
-    retry: false,
-  });
+    enabled: data.wantsSheetMenus,
+  }));
 
   useEffect(() => {
     queryClient.setQueryData(queryKey, initialData);

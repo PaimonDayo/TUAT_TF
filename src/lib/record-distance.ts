@@ -1,9 +1,9 @@
 import type { PracticeRecord } from "@/types";
 
-type DistanceRecord = Pick<
+type DistanceRecord = { [Field in keyof Pick<
   PracticeRecord,
   "dist_low" | "dist_mid" | "dist_high" | "dist_speed" | "dist_actual"
->;
+>]: number | null };
 
 export function intensityDistance(record: DistanceRecord): number {
   return (

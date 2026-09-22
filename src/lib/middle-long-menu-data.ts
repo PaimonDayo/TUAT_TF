@@ -73,6 +73,7 @@ export function middleLongMenuMonths(schedules: ScheduleWithMenus[]): number[] {
   const months = new Set<number>();
   for (const schedule of schedules) {
     if (schedule.schedule_type !== "practice") continue;
+    if (schedule.target_blocks.length > 0 && !schedule.target_blocks.includes("middle_long")) continue;
     const month = Number(schedule.schedule_date.slice(5, 7));
     months.add(month);
     months.add(month === 1 ? 12 : month - 1);

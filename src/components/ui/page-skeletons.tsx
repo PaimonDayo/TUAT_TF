@@ -12,8 +12,20 @@ function Card({ lines = 2 }: { lines?: number }) {
   return <div className="space-y-3 rounded-[16px] border border-separator bg-card p-4"><div className="flex items-center gap-2.5"><Skeleton className="h-10 w-10 rounded-full" /><div className="flex-1 space-y-2"><Skeleton className="h-3.5 w-28" /><Skeleton className="h-2.5 w-20" /></div></div>{Array.from({ length: lines }).map((_, i) => <Skeleton key={i} className={`h-3 ${i === lines - 1 ? "w-2/3" : "w-full"}`} />)}</div>;
 }
 
-export function HomeSkeleton() {
-  return <div className="pb-6"><Title action /><div className="space-y-5 px-4 pt-1"><Skeleton className="h-3 w-24" /><section className="space-y-2"><Skeleton className="h-3 w-20" /><Card lines={2} /></section><section className="space-y-2"><Skeleton className="h-3 w-24" />{[0, 1].map((i) => <Card key={i} lines={i === 0 ? 3 : 1} />)}</section><section className="space-y-2"><Skeleton className="h-3 w-16" />{[0, 1].map((i) => <Skeleton key={i} className="h-[76px] w-full rounded-[16px]" />)}</section><section className="space-y-2"><Skeleton className="h-3 w-24" /><Card lines={2} /></section></div></div>;
+export function HomeSkeleton({ withHeader = true }: { withHeader?: boolean } = {}) {
+  return <div className="pb-6" role="status" aria-label="ホームを読み込み中">
+    {withHeader && <Title action />}
+    <div className="space-y-5 px-4 pt-1" aria-hidden="true">
+      <Skeleton className="h-12 w-full rounded-[16px]" />
+      <div className="grid grid-cols-2 gap-3">
+        <Skeleton className="h-[92px] rounded-[16px]" /><Skeleton className="h-[92px] rounded-[16px]" />
+      </div>
+      <section className="space-y-2"><Skeleton className="h-3 w-20" /><Skeleton className="h-[112px] w-full rounded-[16px]" /></section>
+      <section className="space-y-2"><Skeleton className="h-3 w-20" />{[0, 1, 2].map(i => <Skeleton key={i} className="h-[76px] w-full rounded-[16px]" />)}</section>
+      <section className="space-y-2"><Skeleton className="h-3 w-16" /><Skeleton className="h-[76px] w-full rounded-[16px]" /></section>
+      <section className="space-y-2"><Skeleton className="h-3 w-24" /><Card lines={2} /></section>
+    </div>
+  </div>;
 }
 
 export function ScheduleSkeleton({ withHeader = true }: { withHeader?: boolean } = {}) {
