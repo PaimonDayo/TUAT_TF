@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Bell } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { startVisiblePolling } from "@/lib/visible-poll";
 
 /**
  * PC運用中は Realtime を使えないので未読数をポーリングで見に行く。
@@ -34,6 +35,19 @@ export function NotificationBell({
 
   useEffect(() => {
     const supabase = createClient();
+    if (process.env.NEXT_PUBLIC_PC_BACKEND === "true") {
+      return startVisiblePolling({
+        intervalMs: PC_POLL_INTERVAL_MS,
+        load: async (signal) => {
+          const { count, error } = await supabase.from("notifications")
+            .select("*", { count: "exact", head: true })
+            .eq("user_id", userId).eq("is_read", false).abortSignal(signal);
+          if (error) throw error;
+          return count;
+        },
+        receive: (count) => { if (typeof count === "number") setUnread(count); },
+      });
+    }
     const channel = process.env.NEXT_PUBLIC_PC_BACKEND === "true" ? null : supabase
       .channel(`notification-bell-${userId}`)
       .on(
@@ -48,32 +62,14 @@ export function NotificationBell({
       )
       .subscribe();
 
-    const polls = process.env.NEXT_PUBLIC_PC_BACKEND === "true";
-    let timer: number | undefined;
-
-    function stopTimer() {
-      if (timer !== undefined) window.clearInterval(timer);
-      timer = undefined;
-    }
-    // 表示中だけタイマーを動かす。裏に回っている間は1回も投げない。
-    function startTimer() {
-      if (!polls || timer !== undefined) return;
-      timer = window.setInterval(() => void refreshUnread(), PC_POLL_INTERVAL_MS);
-    }
     function visible() {
-      if (document.visibilityState !== "visible") {
-        stopTimer();
-        return;
-      }
+      if (document.visibilityState !== "visible") return;
       void refreshUnread();
-      startTimer();
     }
 
     document.addEventListener("visibilitychange", visible);
-    if (document.visibilityState === "visible") startTimer();
     return () => {
       document.removeEventListener("visibilitychange", visible);
-      stopTimer();
       if (channel) void supabase.removeChannel(channel);
     };
   }, [refreshUnread, userId]);

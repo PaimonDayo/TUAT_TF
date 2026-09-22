@@ -4,6 +4,7 @@ import * as React from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { syncVisualViewport } from "@/lib/viewport-sync";
 
 /**
  * 全画面モーダル。高さが固定なので、中身の量が変わっても
@@ -18,35 +19,6 @@ export const FullScreen = Dialog.Root;
  * （以前は useSyncExternalStore で毎イベント再描画していたため、キーボードの
  *   開閉アニメに追従しきれず「ぐらつき」が出ていた）
  */
-function useViewportSync(ref: React.RefObject<HTMLDivElement | null>) {
-  React.useEffect(() => {
-    const el = ref.current;
-    const vv = window.visualViewport;
-    if (!el || !vv) return;
-
-    let raf = 0;
-    const apply = () => {
-      raf = 0;
-      el.style.height = `${vv.height}px`;
-      el.style.transform = vv.offsetTop ? `translateY(${vv.offsetTop}px)` : "";
-    };
-    const schedule = () => {
-      if (!raf) raf = requestAnimationFrame(apply);
-    };
-
-    apply();
-    vv.addEventListener("resize", schedule);
-    vv.addEventListener("scroll", schedule);
-    return () => {
-      vv.removeEventListener("resize", schedule);
-      vv.removeEventListener("scroll", schedule);
-      if (raf) cancelAnimationFrame(raf);
-      el.style.height = "";
-      el.style.transform = "";
-    };
-  }, [ref]);
-}
-
 export function FullScreenContent({
   title,
   children,
@@ -63,7 +35,14 @@ export function FullScreenContent({
   floatingAction?: React.ReactNode;
 }) {
   const contentRef = React.useRef<HTMLDivElement | null>(null);
-  useViewportSync(contentRef);
+  // Dialog.Portal mounts after its parent effect, and may open much later.
+  // Attach on the actual DOM mount, including every reopen (React 19 ref cleanup).
+  const attachContent = React.useCallback((element: HTMLDivElement | null) => {
+    contentRef.current = element;
+    if (!element) return;
+    const detach = syncVisualViewport(element, "full");
+    return () => { detach(); contentRef.current = null; };
+  }, []);
   return (
     <Dialog.Portal>
       <Dialog.Overlay className="sheet-overlay fixed inset-0 z-50 bg-black/30">
@@ -71,7 +50,7 @@ export function FullScreenContent({
         <div aria-hidden="true" className="mx-auto h-full w-full max-w-md bg-bg md:max-w-2xl" />
       </Dialog.Overlay>
       <Dialog.Content
-        ref={contentRef}
+        ref={attachContent}
         onKeyDownCapture={(event) => {
           // このモーダルは Portal で描画されるが、React の合成イベントは
           // 「開いた元のカード」の React ツリーを通って伝播する。カードは

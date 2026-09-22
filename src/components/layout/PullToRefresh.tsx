@@ -82,7 +82,11 @@ export function PullToRefresh() {
         refreshingRef.current = true;
         setIsRefreshing(true);
         router.refresh();
-        void queryClient.invalidateQueries();
+        // SSR refresh supplies these queries. Fetch only browser-only data here,
+        // instead of duplicating every page query (and all loaded feed pages).
+        void queryClient.invalidateQueries({
+          predicate: (query) => !["schedule", "notes", "timeline", "my-training-records"].includes(String(query.queryKey[0])),
+        });
         if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
         refreshTimer.current = window.setTimeout(() => {
           refreshingRef.current = false;

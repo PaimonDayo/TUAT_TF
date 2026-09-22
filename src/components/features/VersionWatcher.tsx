@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
+import { startVisiblePolling } from "@/lib/visible-poll";
 
 /**
  * 新しいバージョンが公開されたら、更新バナーを表示する。
@@ -15,38 +16,23 @@ export function VersionWatcher() {
   const loaded = useRef<string | null>(null);
 
   useEffect(() => {
-    let active = true;
-
-    async function check() {
-      try {
-        const res = await fetch("/api/version", { cache: "no-store" });
-        if (!res.ok) return;
-        const { version } = (await res.json()) as { version: string };
-        if (!active || !version) return;
+    return startVisiblePolling({
+      intervalMs: CHECK_INTERVAL_MS,
+      immediate: true,
+      load: async (signal) => {
+        const res = await fetch("/api/version", { cache: "no-store", signal });
+        if (!res.ok) throw new Error("Version unavailable");
+        return (await res.json()) as { version: string };
+      },
+      receive: ({ version }) => {
+        if (!version) return;
         if (loaded.current === null) {
           loaded.current = version;
         } else if (version !== loaded.current) {
           setStale(true);
         }
-      } catch {
-        // ネット不調などは無視
-      }
-    }
-
-    check();
-    const onVisible = () => {
-      if (document.visibilityState === "visible") check();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    const id = setInterval(() => {
-      if (document.visibilityState === "visible") check();
-    }, CHECK_INTERVAL_MS);
-
-    return () => {
-      active = false;
-      document.removeEventListener("visibilitychange", onVisible);
-      clearInterval(id);
-    };
+      },
+    });
   }, []);
 
   if (!stale) return null;

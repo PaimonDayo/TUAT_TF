@@ -17,21 +17,19 @@ import { gradeShort } from "@/lib/constants";
 import { permissionsOf } from "@/lib/permissions";
 import { RECORD_SOURCE_COOKIE, recordSourceEnabled } from "@/lib/record-source-display";
 import type { PracticeRecord } from "@/types";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default async function MyPage({
   searchParams,
 }: {
   searchParams: Promise<{ setup?: string }>;
 }) {
-  // 記録は「自分のID」だけで引けるので、プロフィールの取得と同時に投げる。
-  // 直列にすると、開くたびにDBへの往復が1回ぶん余計にかかる。
+  // プロフィールを先に表示し、重いグラフと投稿は独立した節で読み込む。
   const userId = await getCurrentUserId();
-  const [{ setup }, profile, cookieStore, records] = await Promise.all([
+  const [{ setup }, profile, cookieStore] = await Promise.all([
     searchParams,
     getCurrentProfile(),
     cookies(),
-    // グラフ用の記録だけ先に取得し、重い「これまでの投稿」は下で Suspense ストリーミング。
-    getUserRecords(userId) as Promise<PracticeRecord[]>,
   ]);
   const showRecordSource = recordSourceEnabled(cookieStore.get(RECORD_SOURCE_COOKIE)?.value);
 
@@ -103,11 +101,11 @@ export default async function MyPage({
         </Card>
 
         {/* 練習量の推移（日/週/月・横スライド） */}
-        <MyTrainingChartCached
-          userId={profile.id}
-          initialRecords={records}
-          showIntensitySummary={profile.blocks.includes("middle_long")}
-        />
+        {profile.blocks.includes("middle_long") && (
+          <Suspense fallback={<Skeleton className="h-[172px] w-full rounded-[16px]" />}>
+            <MyTraining userId={userId} />
+          </Suspense>
+        )}
 
         {/* リンク（1枚にまとめた区切り線リスト） */}
         <Card className="divide-y divide-separator/70 overflow-hidden">
@@ -171,6 +169,12 @@ export default async function MyPage({
       </div>
     </>
   );
+}
+
+/** グラフを表示する中長距離の部員だけ取得する。 */
+async function MyTraining({ userId }: { userId: string }) {
+  const records = await getUserRecords(userId) as PracticeRecord[];
+  return <MyTrainingChartCached userId={userId} initialRecords={records} showIntensitySummary />;
 }
 
 /** 自分の投稿一覧（記録＋つぶやき）。Suspense で遅延読み込み */

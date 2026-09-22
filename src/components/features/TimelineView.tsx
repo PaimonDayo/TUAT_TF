@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { List, UserCheck } from "lucide-react";
 import { RecordCard } from "@/components/cards/RecordCard";
 import { TweetCard } from "@/components/cards/TweetCard";
@@ -61,6 +61,7 @@ function isInteractiveFeedTarget(target: EventTarget | null, row: HTMLElement) {
  */
 export function TimelineView({
   initialItems,
+  initialFetchedAt,
   currentUser,
   favoriteIds = [],
   initialCompact = false,
@@ -68,6 +69,7 @@ export function TimelineView({
   showRecordSource = false,
 }: {
   initialItems: FeedItem[];
+  initialFetchedAt: number;
   currentUser: CommentAuthor;
   favoriteIds?: string[];
   /** 一覧表示の初期値（Cookieから復元し、初期表示のちらつきを防ぐ） */
@@ -76,11 +78,13 @@ export function TimelineView({
   initialBlock?: BlockViewDefault;
   showRecordSource?: boolean;
 }) {
+  const queryClient = useQueryClient();
   const feedQuery = useInfiniteQuery({
     queryKey: ["timeline", currentUser.id],
     queryFn: ({ pageParam }) => loadFeed(pageParam ?? {}, PAGE),
     initialPageParam: null as FeedCursor,
     initialData: { pages: [initialItems], pageParams: [null as FeedCursor] },
+    initialDataUpdatedAt: initialFetchedAt,
     staleTime: 60_000,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
@@ -95,7 +99,17 @@ export function TimelineView({
       };
     },
   });
-
+  // A server refresh must replace the old first page too. Otherwise initialData
+  // is ignored on revisits, leaving the timeline stale despite another DB read.
+  useEffect(() => {
+    const key = ["timeline", currentUser.id];
+    // Back navigation can reuse the same RSC snapshot. Keep loaded older pages
+    // and newer client mutations in that case, instead of truncating the feed.
+    if ((queryClient.getQueryState(key)?.dataUpdatedAt ?? 0) >= initialFetchedAt) return;
+    queryClient.setQueryData(key, {
+      pages: [initialItems], pageParams: [null as FeedCursor],
+    }, { updatedAt: initialFetchedAt });
+  }, [initialItems, initialFetchedAt, currentUser.id, queryClient]);
 
   const items = useMemo(
     () => uniqueFeedItems(feedQuery.data.pages.flat()),

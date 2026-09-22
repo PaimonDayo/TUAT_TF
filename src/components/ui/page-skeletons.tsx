@@ -1,7 +1,11 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
 function Title({ action = false }: { action?: boolean }) {
-  return <div className="flex h-12 items-center justify-between px-4"><Skeleton className="h-6 w-28" />{action && <Skeleton className="h-8 w-8 rounded-full" />}</div>;
+  return <div className="pt-[env(safe-area-inset-top)] lg:pt-0"><div className="flex h-12 items-center justify-between px-4 md:px-6 lg:h-16"><Skeleton className="h-6 w-28" />{action && <Skeleton className="h-9 w-9 rounded-full" />}</div></div>;
+}
+
+export function FormSkeleton() {
+  return <div role="status" aria-label="フォームを読み込み中" className="space-y-5 py-2"><span className="sr-only">フォームを読み込み中</span>{[0, 1, 2].map(i => <div key={i} className="space-y-2"><Skeleton className="h-3 w-24" /><Skeleton className={i === 2 ? "h-28 w-full" : "h-10 w-full"} /></div>)}</div>;
 }
 
 function Card({ lines = 2 }: { lines?: number }) {
@@ -12,13 +16,13 @@ export function HomeSkeleton() {
   return <div className="pb-6"><Title action /><div className="space-y-5 px-4 pt-1"><Skeleton className="h-3 w-24" /><section className="space-y-2"><Skeleton className="h-3 w-20" /><Card lines={2} /></section><section className="space-y-2"><Skeleton className="h-3 w-24" />{[0, 1].map((i) => <Card key={i} lines={i === 0 ? 3 : 1} />)}</section><section className="space-y-2"><Skeleton className="h-3 w-16" />{[0, 1].map((i) => <Skeleton key={i} className="h-[76px] w-full rounded-[16px]" />)}</section><section className="space-y-2"><Skeleton className="h-3 w-24" /><Card lines={2} /></section></div></div>;
 }
 
-export function ScheduleSkeleton() {
-  return <div className="pb-6"><Title action /><div className="space-y-2 px-4 pb-3 pt-1 md:px-6"><Skeleton className="h-9 w-full rounded-lg md:max-w-[520px]" /><Skeleton className="h-9 w-full rounded-lg md:max-w-[520px]" /></div><div className="space-y-3 px-4 pt-1 md:px-6"><Skeleton className="h-3 w-20" />{[0, 1, 2, 3].map((i) => <Card key={i} lines={i === 0 ? 3 : 1} />)}</div></div>;
+export function ScheduleSkeleton({ withHeader = true }: { withHeader?: boolean } = {}) {
+  return <div className="pb-6">{withHeader && <Title action />}<div className="space-y-2 px-4 pb-3 pt-1 md:px-6"><Skeleton className="h-9 w-full rounded-lg md:max-w-[520px]" /><Skeleton className="h-9 w-full rounded-lg md:max-w-[520px]" /></div><div className="space-y-3 px-4 pt-1 md:px-6"><Skeleton className="h-3 w-20" />{[0, 1, 2, 3].map((i) => <Card key={i} lines={i === 0 ? 3 : 1} />)}</div></div>;
 }
 
 
-export function NotesSkeleton() {
-  return <div className="pb-6"><Title action /><div className="space-y-4 px-4 pt-1 md:px-6 lg:space-y-3"><Skeleton className="h-9 w-full rounded-lg md:max-w-[360px]" /><Skeleton className="h-10 w-full rounded-xl" /><div className="grid gap-2 md:grid-cols-2 md:gap-3">{[0, 1, 2, 3].map((i) => <div key={i} className="rounded-[16px] border border-separator bg-card p-4"><div className="flex items-start gap-3"><Skeleton className="h-5 w-5 shrink-0 rounded" /><div className="flex-1 space-y-2"><Skeleton className="h-3.5 w-32" /><Skeleton className="h-2.5 w-16" />{i < 2 && <Skeleton className="h-2.5 w-4/5" />}</div><Skeleton className="h-5 w-5 rounded-full" /></div></div>)}</div></div></div>;
+export function NotesSkeleton({ withHeader = true }: { withHeader?: boolean } = {}) {
+  return <div className="pb-6">{withHeader && <Title action />}<div className="space-y-4 px-4 pt-1 md:px-6 lg:space-y-3"><Skeleton className="h-9 w-full rounded-lg md:max-w-[360px]" /><Skeleton className="h-10 w-full rounded-xl" /><div className="grid gap-2 md:grid-cols-2 md:gap-3">{[0, 1, 2, 3].map((i) => <div key={i} className="rounded-[16px] border border-separator bg-card p-4"><div className="flex items-start gap-3"><Skeleton className="h-5 w-5 shrink-0 rounded" /><div className="flex-1 space-y-2"><Skeleton className="h-3.5 w-32" /><Skeleton className="h-2.5 w-16" />{i < 2 && <Skeleton className="h-2.5 w-4/5" />}</div><Skeleton className="h-5 w-5 rounded-full" /></div></div>)}</div></div></div>;
 }
 export function FeedSkeleton({ withHeader = true }: { withHeader?: boolean } = {}) {
   return <div className="pb-6">
@@ -42,7 +46,7 @@ export function MyPageSkeleton() {
 
 /** サブページ共通の見出し（左に戻る・中央にタイトル）。SubHeader と同じ高さ。 */
 function SubTitle() {
-  return <div className="grid h-12 grid-cols-[1fr_auto_1fr] items-center px-2 md:px-4 lg:h-16"><Skeleton className="h-5 w-14" /><Skeleton className="h-5 w-32" /><span /></div>;
+  return <div className="pt-[env(safe-area-inset-top)] lg:pt-0"><div className="grid h-12 grid-cols-[1fr_auto_1fr] items-center px-2 md:px-4 lg:h-16"><Skeleton className="h-5 w-14" /><Skeleton className="h-5 w-32" /><span /></div></div>;
 }
 
 function Label() {

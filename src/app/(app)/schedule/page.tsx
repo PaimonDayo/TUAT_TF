@@ -1,8 +1,14 @@
 import { Header } from "@/components/layout/Header";
 import { ScheduleCachedView } from "@/components/features/ScheduleCachedView";
 import { getSchedulePageData } from "@/lib/schedule-page-data";
+import { Suspense } from "react";
+import { ScheduleSkeleton } from "@/components/ui/page-skeletons";
 
-export default async function SchedulePage({
+export default function SchedulePage(props: { searchParams: Promise<{ compose?: string; open?: string }> }) {
+  return <><Header title="予定" large /><Suspense fallback={<ScheduleSkeleton withHeader={false} />}><ScheduleContent {...props} /></Suspense></>;
+}
+
+async function ScheduleContent({
   searchParams,
 }: {
   searchParams: Promise<{ compose?: string; open?: string }>;
@@ -10,7 +16,6 @@ export default async function SchedulePage({
   const [{ open }, data] = await Promise.all([searchParams, getSchedulePageData()]);
   return (
     <>
-      <Header title="予定" large />
       <ScheduleCachedView initialData={data} openId={open} />
     </>
   );

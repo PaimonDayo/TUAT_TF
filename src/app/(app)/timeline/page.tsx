@@ -34,10 +34,14 @@ async function TimelineContent() {
     permissionsOf(profile.roles).manageSystem,
     cookieStore.get(RECORD_SOURCE_COOKIE)?.value,
   );
+  // Request-local timestamp for the completed RSC fetch, not client render state.
+  // eslint-disable-next-line react-hooks/purity
+  const fetchedAt = Date.now();
 
   return (
     <TimelineView
       initialItems={feed}
+      initialFetchedAt={fetchedAt}
       currentUser={{
         id: profile.id,
         display_name: profile.display_name,

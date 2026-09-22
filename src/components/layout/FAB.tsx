@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -18,19 +19,28 @@ import {
 import { FormModal } from "@/components/ui/form-modal";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
-import { MonthlyPlanningEditorV2, type MonthlyPlanningEditorHandle } from "@/components/features/MonthlyPlanningEditorV2";
-import { NoteArticleEditor } from "@/components/features/NoteArticleEditor";
-import { ThreadComposer } from "@/components/features/ThreadList";
-import { NoteComposer } from "@/components/features/NoteComposer";
-import { NoticeForm } from "@/components/post/NoticeForm";
-import { RecordForm, type RecordFormHandle } from "@/components/post/RecordForm";
-import { ResultForm, type ResultFormHandle } from "@/components/post/ResultForm";
+import type { MonthlyPlanningEditorHandle } from "@/components/features/MonthlyPlanningEditorV2";
+import type { RecordFormHandle } from "@/components/post/RecordForm";
+import type { ResultFormHandle } from "@/components/post/ResultForm";
 import { useCompetitionCatalog } from "@/components/post/use-competition-catalog";
-import { ScheduleCreatePanel, ScheduleForm } from "@/components/post/ScheduleForm";
-import { TweetForm, type TweetFormHandle } from "@/components/post/TweetForm";
+import type { TweetFormHandle } from "@/components/post/TweetForm";
+import { FormSkeleton } from "@/components/ui/page-skeletons";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { AuthorMini, RecordFieldDef, ScheduleType } from "@/types";
+
+// Download form code when a dialog opens, keeping the persistent navigation light.
+
+const MonthlyPlanningEditorV2 = dynamic(() => import("@/components/features/MonthlyPlanningEditorV2").then(m => m.MonthlyPlanningEditorV2), { loading: FormSkeleton });
+const NoteArticleEditor = dynamic(() => import("@/components/features/NoteArticleEditor").then(m => m.NoteArticleEditor), { loading: FormSkeleton });
+const ThreadComposer = dynamic(() => import("@/components/features/ThreadList").then(m => m.ThreadComposer), { loading: FormSkeleton });
+const NoteComposer = dynamic(() => import("@/components/features/NoteComposer").then(m => m.NoteComposer), { loading: FormSkeleton });
+const NoticeForm = dynamic(() => import("@/components/post/NoticeForm").then(m => m.NoticeForm), { loading: FormSkeleton });
+const RecordForm = dynamic(() => import("@/components/post/RecordForm").then(m => m.RecordForm), { loading: FormSkeleton });
+const ResultForm = dynamic(() => import("@/components/post/ResultForm").then(m => m.ResultForm), { loading: FormSkeleton });
+const TweetForm = dynamic(() => import("@/components/post/TweetForm").then(m => m.TweetForm), { loading: FormSkeleton });
+const ScheduleForm = dynamic(() => import("@/components/post/ScheduleForm").then(m => m.ScheduleForm), { loading: FormSkeleton });
+const ScheduleCreatePanel = dynamic(() => import("@/components/post/ScheduleForm").then(m => m.ScheduleCreatePanel), { loading: FormSkeleton });
 
 export type FabPermissions = {
   createSchedule: boolean;

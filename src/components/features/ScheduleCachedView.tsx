@@ -36,8 +36,9 @@ export function ScheduleCachedView({ initialData, openId }: { initialData: Sched
     queryKey,
     queryFn: ({ signal }) => loadSchedulePageData(signal),
     initialData,
-    staleTime: 0,
-    refetchOnMount: "always",
+    // The route already fetched these data. Do not immediately repeat the DB work.
+    staleTime: 60_000,
+    refetchOnMount: false,
     retry: false,
   });
   // サーバーが新しいデータを返したらセッションキャッシュにも反映する
@@ -49,9 +50,8 @@ export function ScheduleCachedView({ initialData, openId }: { initialData: Sched
     initialData: data.middleLongMenuSnapshot ?? undefined,
     // サーバーはもうシートを取らない（待たせないため）。出す相手かどうかで判断する。
     enabled: data.wantsSheetMenus && months.length > 0,
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
     retry: false,
   });
 

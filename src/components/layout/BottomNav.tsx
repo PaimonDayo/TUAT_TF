@@ -6,6 +6,9 @@ import { useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { Home, Newspaper, CalendarDays, NotebookTabs, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { syncVisualViewport } from "@/lib/viewport-sync";
+
+const attachNav = (element: HTMLElement | null) => element ? syncVisualViewport(element, "bottom") : undefined;
 
 const ITEMS = [
   { href: "/home", label: "ホーム", icon: Home },
@@ -38,13 +41,15 @@ function TabContent({
   const highlighted = active || pending;
   return (
     <span
+      aria-busy={pending}
       className={cn(
         "flex h-full flex-col items-center justify-center gap-0.5 transition-colors duration-150",
         highlighted ? "text-accent" : "text-muted",
       )}
     >
-      <Icon size={22} strokeWidth={highlighted ? 2.4 : 2} />
+      <Icon size={22} strokeWidth={highlighted ? 2.4 : 2} className={pending ? "motion-safe:animate-pulse" : undefined} />
       <span className="text-[10px] font-medium leading-none">{label}</span>
+      {pending && <span className="sr-only" role="status">読み込み中</span>}
     </span>
   );
 }
@@ -57,8 +62,10 @@ export function BottomNav() {
 
   return createPortal(
     <nav
+      ref={attachNav}
+      data-no-pull-refresh
       aria-label="メインナビゲーション"
-      className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md border-t border-separator bg-card/90 backdrop-blur-xl pb-[env(safe-area-inset-bottom)] md:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md border-t border-separator bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
     >
       <div className="h-[52px] flex items-stretch">
         {ITEMS.map(({ href, label, icon: Icon }) => {
@@ -72,6 +79,12 @@ export function BottomNav() {
             <Link
               key={href}
               href={href}
+              onClick={(event) => {
+                if (pathname === href && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+                  event.preventDefault();
+                  window.scrollTo({ top: 0, behavior: "instant" });
+                }
+              }}
               aria-current={active ? "page" : undefined}
               className="flex-1"
             >
