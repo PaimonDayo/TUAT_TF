@@ -77,20 +77,34 @@ function parseIndividualRows(segment: string, wind?: string): Omit<ProgramAthlet
   return out;
 }
 
-function parseRelayRows(segment: string): Omit<ProgramAthlete, "heat">[] {
-  const re = /<tr[^>]*><td[^>]*>(\d+)<\/td><td[^>]*>([^<]*)<\/td><td[^>]*>([^<]*)<\/td><td[^>]*>([^<]*)<\/td><td[^>]*>([^<]*)<\/td><td[^>]*>([^<]*)<\/td><td[^>]*>([^<]*)<\/td><td[^>]*>([^<]*)<\/td><\/tr>/g;
+/** 「後藤 練B2」「正岡 優1」のような、氏名と学年がつながったリレーの欄。 */
+function parseRunnerCell(cell: string): { name: string; grade: string } | null {
+  const match = cell.trim().match(/^(.+?)\s?((?:[BMD])?\d{1,2})$/);
+  return match ? { name: match[1].trim(), grade: gradeShortFromRaw(match[2]) } : null;
+}
+
+/**
+ * リレーの1チーム分の行。走者の欄数は種目や大会で変わり、空欄で埋められることも
+ * あるため（4×100mRは走者4人のうしろに空欄が4つ付く）、列数を決め打ちにしない。
+ * スタートリスト [レーン, 大学, 走者…] と結果 [順位, 記録, 大学, 走者…] の
+ * どちらも、大学名がどの列に来るかで見分ける。
+ */
+function parseRelayRows(segment: string, wind?: string): Omit<ProgramAthlete, "heat">[] {
   const out: Omit<ProgramAthlete, "heat">[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(segment))) {
-    const lane = Number(m[1]);
-    const univ = m[2].trim();
-    if (univ !== TUAT_ABBREVIATION) continue;
-    for (let i = 3; i <= 8; i++) {
-      const cell = m[i].trim();
-      if (!cell || cell.includes("&nbsp;")) continue;
-      const nm = cell.match(/^(.+?)\s?((?:[BMD])?\d{1,2})$/);
-      if (!nm) continue;
-      out.push({ lane, bib: null, name: nm[1].trim(), grade: gradeShortFromRaw(nm[2]) });
+  for (const row of segment.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) {
+    const cells = [...row[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(m => cellText(m[1]));
+    const teamIndex = cells[1]?.startsWith(TUAT_ABBREVIATION) ? 1
+      : cells[2]?.startsWith(TUAT_ABBREVIATION) ? 2 : -1;
+    if (teamIndex === -1) continue;
+    const isResult = teamIndex === 2;
+    const blank = isResult && isNonMarkResult(cells[1]);
+    const result = isResult
+      ? { place: blank ? null : (/^\d+$/.test(cells[0]) ? cells[0] : null), record: cells[1], ...(wind && !blank ? { wind } : {}) }
+      : undefined;
+    const lane = !isResult && /^\d+$/.test(cells[0]) ? Number(cells[0]) : null;
+    for (const cell of cells.slice(teamIndex + 1)) {
+      const runner = parseRunnerCell(cell);
+      if (runner) out.push({ ...runner, lane, bib: null, ...(result ? { result } : {}) });
     }
   }
   return out;
@@ -153,13 +167,12 @@ function parseDetailBlock(raw: string | undefined, isRelay: boolean): ProgramAth
   if (overallIdx !== -1) raw = raw.slice(0, overallIdx);
   const heatSplit = raw.split(/【(\d+)組】/);
   const entries: ProgramAthlete[] = [];
+  // スタートリストか結果かは「結果」の見出しではなく行の形で見分ける。
+  // 見出しは種目によって付かないことがあり、それで種目が丸ごと落ちていた。
   const read = (segment: string, heat: number | null) => {
-    if (/<b>\s*結果\s*<\/b>/i.test(segment)) {
-      entries.push(...parseResultRows(segment, isRelay).map(entry => ({ ...entry, heat })));
-    } else {
-      const parsed = isRelay ? parseRelayRows(segment) : parseIndividualRows(segment, windOf(segment));
-      entries.push(...parsed.map(entry => ({ ...entry, heat })));
-    }
+    const wind = windOf(segment);
+    const parsed = isRelay ? parseRelayRows(segment, wind) : parseIndividualRows(segment, wind);
+    entries.push(...parsed.map(entry => ({ ...entry, heat })));
   };
   if (heatSplit.length === 1) read(raw, null);
   else for (let i = 1; i < heatSplit.length; i += 2) read(heatSplit[i + 1] ?? "", Number(heatSplit[i]));

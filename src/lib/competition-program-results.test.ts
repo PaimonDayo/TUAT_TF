@@ -125,3 +125,41 @@ ${body}</html>`;
     expect(entry.result).toBeUndefined();
   });
 });
+
+// 4×100mRは走者4人のうしろに空欄が4つ付き、4×400mRは6人ぶんの欄が並ぶ。
+// 列数を決め打ちにしていたため、4×100mRだけ丸ごと0人になっていた。
+describe("relay rows whose column count varies", () => {
+  const relay = (body: string) => `<HTML><H3>09/22</H3>
+<table><tr><td colspan=3><B>トラック</B></td></tr>
+<tr><td>16:20</td><td><A Href='#12-2'>男子対校 ４×１００ｍＲ決勝(4組)</A></td><td></td></tr></table>
+<H2><A Name='12-2'>男子対校 ４×１００ｍＲ決勝(4組)</A></H2>
+${body}</html>`;
+
+  it("reads a start list padded with empty columns", () => {
+    const html = relay(`【3組】<font color='blue'><b>スタートリスト</b></font><br>
+<table border=1>
+<tr><td>2</td><td>農工大</td><td>林 夏輝2</td><td>岸田 健斗3</td><td>最上 瑛介2</td><td>後藤 練B2</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+</table>`);
+    const entries = parseCompetitionProgram(html, 2026)[0].tuatEntries;
+    expect(entries.map((e) => e.grade + e.name.split(" ")[0])).toEqual(["B2林", "B3岸田", "B2最上", "B2後藤"]);
+    expect(entries.every((e) => e.heat === 3 && e.lane === 2)).toBe(true);
+  });
+
+  it("reads a six-runner squad (4x400mR lists reserves)", () => {
+    const html = relay(`【4組】<font color='blue'><b>スタートリスト</b></font><br>
+<table border=1>
+<tr><td>7</td><td>農工大</td><td>東井 良太M1</td><td>陣立 智弘B4</td><td>正岡 優1</td><td>後藤 練B2</td><td>室井 維月1</td><td>八城 悠真1</td></tr>
+</table>`);
+    expect(parseCompetitionProgram(html, 2026)[0].tuatEntries).toHaveLength(6);
+  });
+
+  it("reads a relay result row even without the 結果 heading", () => {
+    const html = relay(`【3組】
+<table border=1>
+<tr><td>2</td><td>42.55</td><td>農工大</td><td>林 夏輝2</td><td>岸田 健斗3</td><td>最上 瑛介2</td><td>後藤 練B2</td></tr>
+</table>`);
+    const entries = parseCompetitionProgram(html, 2026)[0].tuatEntries;
+    expect(entries).toHaveLength(4);
+    expect(entries[0].result).toEqual({ place: "2", record: "42.55" });
+  });
+});
