@@ -35,21 +35,48 @@ function gradeShortFromRaw(raw: string): string {
   return /^\d+$/.test(trimmed) ? `B${trimmed}` : trimmed;
 }
 
-function parseIndividualRows(segment: string): Omit<ProgramAthlete, "heat">[] {
-  const re = /<tr><td>(\d+)<\/td><td>([^<]*)<\/td><td>([^<]*)<\/td><td>([^<]*)<\/td><td>([^<]*)<\/td><\/tr>/g;
+/** スタートリストの「1725」のような番号か、「14m15」「2:05.11」「欠場」のような記録か。 */
+function looksLikeRecord(cell: string): boolean {
+  return !/^\d+$/.test(cell);
+}
+
+const SCRATCH_RE = /^(欠|欠場|DNS|DNF|DQ|失格)$/;
+
+/**
+ * 個人種目の1人ぶんの行。公式ページは同じ [?, ?, 氏名, 学年, 所属] の並びで
+ *   - スタートリスト: [レーン, ナンバー, …]
+ *   - 結果:           [順位, 記録, …, 各試技]
+ * を出し、フィールド種目では「結果」の見出しを付けずに結果表へ差し替わる。
+ * 見出しではなく2列目の形で判別する（三段跳が丸ごと落ちていた原因）。
+ * 欠場者は <tr bgcolor='gray'> と属性付きで来るため、<tr> の属性も許す。
+ */
+function parseIndividualRows(segment: string, wind?: string): Omit<ProgramAthlete, "heat">[] {
   const out: Omit<ProgramAthlete, "heat">[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(segment))) {
-    const [, lane, bib, name, grade, univ] = m;
-    if (!bib.trim() || bib.includes("&nbsp;")) continue;
-    if (!univ.startsWith(TUAT_ABBREVIATION)) continue;
-    out.push({ lane: Number(lane), bib: bib.trim(), name: name.trim(), grade: gradeShortFromRaw(grade) });
+  for (const row of segment.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) {
+    const cells = [...row[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(m => cellText(m[1]));
+    if (cells.length < 5) continue;
+    if (!cells[4].startsWith(TUAT_ABBREVIATION) || !cells[2]) continue;
+    const athlete = { name: cells[2], grade: gradeShortFromRaw(cells[3]) };
+    if (looksLikeRecord(cells[1])) {
+      const record = SCRATCH_RE.test(cells[0]) ? "欠場" : cells[1];
+      out.push({ ...athlete, lane: null, bib: null,
+        result: { place: /^\d+$/.test(cells[0]) ? cells[0] : null, record, ...(wind ? { wind } : {}) } });
+      continue;
+    }
+    if (!cells[1]) continue;
+    out.push({
+      ...athlete,
+      lane: /^\d+$/.test(cells[0]) ? Number(cells[0]) : null,
+      bib: cells[1],
+      // スタートリスト上で既に欠場が決まっている人。
+      ...(SCRATCH_RE.test(cells[0]) ? { result: { place: null, record: "欠場" } } : {}),
+    });
   }
   return out;
 }
 
 function parseRelayRows(segment: string): Omit<ProgramAthlete, "heat">[] {
-  const re = /<tr><td>(\d+)<\/td><td>([^<]*)<\/td><td>([^<]*)<\/td><td>([^<]*)<\/td><td>([^<]*)<\/td><td>([^<]*)<\/td><td>([^<]*)<\/td><td>([^<]*)<\/td><\/tr>/g;
+  const re = /<tr[^>]*><td[^>]*>(\d+)<\/td><td[^>]*>([^<]*)<\/td><td[^>]*>([^<]*)<\/td><td[^>]*>([^<]*)<\/td><td[^>]*>([^<]*)<\/td><td[^>]*>([^<]*)<\/td><td[^>]*>([^<]*)<\/td><td[^>]*>([^<]*)<\/td><\/tr>/g;
   const out: Omit<ProgramAthlete, "heat">[] = [];
   let m: RegExpExecArray | null;
   while ((m = re.exec(segment))) {
@@ -74,10 +101,15 @@ function cellText(html: string): string {
     .replace(/\s+/g, " ").trim();
 }
 
+/** この組の風。公式ページは「結果(-1.6ｍ)」の形で書く。 */
+function windOf(segment: string): string | undefined {
+  return segment.match(/風(?:速)?\s*[:：]?\s*([+-]?\d+\.\d+)/)?.[1]
+    ?? segment.match(/(?:結果|スタートリスト)\s*<\/b>[\s\S]{0,40}?[（(]\s*([+-]?\d+\.\d+)\s*[ｍm]\s*[)）]/i)?.[1];
+}
+
 function parseResultRows(segment: string, isRelay: boolean): ProgramAthlete[] {
   const entries: ProgramAthlete[] = [];
-  const wind = segment.match(/風(?:速)?\s*[:：]?\s*([+-]?\d+\.\d+)/)?.[1]
-    ?? segment.match(/結果\s*<\/b>[\s\S]{0,40}?[（(]\s*([+-]?\d+\.\d+)\s*[ｍm]\s*[)）]/i)?.[1];
+  const wind = windOf(segment);
   for (const row of segment.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
     const cells = [...row[1].matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map(m => cellText(m[1]));
     const team = cells[isRelay ? 2 : 4];
@@ -122,7 +154,7 @@ function parseDetailBlock(raw: string | undefined, isRelay: boolean): ProgramAth
     if (/<b>\s*結果\s*<\/b>/i.test(segment)) {
       entries.push(...parseResultRows(segment, isRelay).map(entry => ({ ...entry, heat })));
     } else {
-      const parsed = isRelay ? parseRelayRows(segment) : parseIndividualRows(segment);
+      const parsed = isRelay ? parseRelayRows(segment) : parseIndividualRows(segment, windOf(segment));
       entries.push(...parsed.map(entry => ({ ...entry, heat })));
     }
   };

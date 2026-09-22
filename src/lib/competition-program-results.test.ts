@@ -85,3 +85,43 @@ describe("finished-meet result pages", () => {
     expect(new Set(entries.map((e) => e.result?.record))).toEqual(new Set(["失格 TR24.6"]));
   });
 });
+
+// 2026-09-22 の27大戦・本番ページで実際に取りこぼしていた2つの形。
+describe("rows the official page writes differently", () => {
+  const event = (label: string, body: string) => `<HTML><H3>09/22</H3>
+<table><tr><td colspan=3><B>フィールド</B></td></tr>
+<tr><td>09:30</td><td><A Href='#17-2'>${label}</A></td><td></td></tr></table>
+<H2><A Name='17-2'>${label}</A></H2>
+${body}</html>`;
+
+  it("reads a field result table that has no 結果 heading (三段跳 was dropped entirely)", () => {
+    const html = event("男子対校 三段跳決勝", `<table border=1>
+<tr><td>3</td><td>14m15 +1.2</td><td>和田 佳大</td><td>3</td><td>農工大･福島</td><td>13m94<br>+4.3</td><td>14m15<br>+1.2</td><td><br></td></tr>
+</table>`);
+    const entries = parseCompetitionProgram(html, 2026)[0].tuatEntries;
+    expect(entries).toHaveLength(1);
+    expect(entries[0].result).toEqual({ place: "3", record: "14m15 +1.2" });
+  });
+
+  it("keeps a scratched athlete whose row carries attributes (<tr bgcolor='gray'>)", () => {
+    const html = event("女子対校 ２００ｍ決勝(5組)", `【1組】<font color='blue'><b>スタートリスト</b></font><br>
+<table border=1>
+<tr bgcolor='gray'><td>欠</td><td>1725</td><td>熊谷 千尋</td><td>M1</td><td>農工大･長野</td></tr>
+<tr><td>3</td><td>1730</td><td>石崎 花</td><td>2</td><td>農工大･東京</td></tr>
+</table>`);
+    const entries = parseCompetitionProgram(html, 2026)[0].tuatEntries;
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toMatchObject({ heat: 1, name: "熊谷 千尋", grade: "M1", result: { record: "欠場" } });
+    expect(entries[1]).toMatchObject({ heat: 1, lane: 3, bib: "1730", name: "石崎 花" });
+    expect(entries[1].result).toBeUndefined();
+  });
+
+  it("still tells a start-list number apart from a record in the same column", () => {
+    const html = event("男子対校 走幅跳決勝", `<table border=1>
+<tr><td>5</td><td>39</td><td>和田 佳大</td><td>3</td><td>農工大･福島</td></tr>
+</table>`);
+    const entry = parseCompetitionProgram(html, 2026)[0].tuatEntries[0];
+    expect(entry).toMatchObject({ lane: 5, bib: "39" });
+    expect(entry.result).toBeUndefined();
+  });
+});
