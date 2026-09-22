@@ -20,6 +20,7 @@ import type { CompetitionProgramEntryRow, CompetitionRow } from "@/types";
 
 import { CompetitionInProgress } from "./CompetitionInProgress";
 import { ProgramEventSummary } from "./ProgramEventSummary";
+import { useCompetitionProgram } from "./useCompetitionProgram";
 
 const BLOCK_LABEL = { track: "トラック", field: "フィールド" } as const;
 
@@ -98,15 +99,16 @@ export function CompetitionProgramView({
   const router = useRouter();
   const { showToast } = useToast();
   const [syncing, setSyncing] = useState(false);
+  const entries = useCompetitionProgram(competition, initialEntries);
 
-  const groups = groupProgramByDate(initialEntries.map(fromStoredProgramRow))
+  const groups = groupProgramByDate(entries.map(fromStoredProgramRow))
     .map((group) => ({
       ...group,
       track: group.track.filter((row) => row.tuatEntries.length > 0),
       field: group.field.filter((row) => row.tuatEntries.length > 0),
     }))
     .filter((group) => group.track.length > 0 || group.field.length > 0);
-  const lastSyncedAt = initialEntries.reduce<string | null>(
+  const lastSyncedAt = entries.reduce<string | null>(
     (latest, row) => (!latest || row.created_at > latest ? row.created_at : latest),
     null,
   );
@@ -134,7 +136,7 @@ export function CompetitionProgramView({
     <div className="space-y-4 px-4 pb-8 pt-2">
       <Card className="p-4">
         <p className="mb-3 text-headline">{competition.name}</p>
-        <CompetitionInProgress entries={initialEntries} />
+        <CompetitionInProgress entries={entries} />
       </Card>
       <div className="flex items-center justify-between gap-2 rounded-xl border border-separator bg-card p-3">
         <p className="text-micro text-muted2">

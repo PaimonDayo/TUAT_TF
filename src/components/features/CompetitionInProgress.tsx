@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { jstNow, jstToday } from "@/lib/date";
 import { currentProgramRows, nextProgramRows, fromStoredProgramRow } from "@/lib/competition-program";
 import { ProgramEventSummary } from "./ProgramEventSummary";
@@ -9,22 +8,20 @@ import type { CompetitionProgramEntryRow } from "@/types";
 
 /** ホームとプログラムで同じ進行目安を表示する。 */
 export function CompetitionInProgress({ entries }: { entries: CompetitionProgramEntryRow[] }) {
-  const router = useRouter();
   const [clock, setClock] = useState<{ today: string; time: string } | null>(null);
   useEffect(() => {
-    const update = (refresh: boolean) => {
+    // 時刻に応じた進行表示は端末内だけで更新する。
+    const update = () => {
       if (document.visibilityState !== "visible") return;
       const now = jstNow();
       const today = jstToday();
       setClock({ today, time: String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0") });
-      if (refresh && entries.some(row => row.event_date === today)) router.refresh();
     };
-    update(false);
-    const resume = () => update(true);
-    const timer = window.setInterval(resume, 60_000);
-    document.addEventListener("visibilitychange", resume);
-    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", resume); };
-  }, [entries, router]);
+    update();
+    const timer = window.setInterval(update, 60_000);
+    document.addEventListener("visibilitychange", update);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", update); };
+  }, []);
   const parsed = entries.map(fromStoredProgramRow);
   const panels = [
     { title: "競技中", rows: clock ? currentProgramRows(parsed, clock.today, clock.time) : [], empty: "現在、該当する農工大の出場種目はありません" },

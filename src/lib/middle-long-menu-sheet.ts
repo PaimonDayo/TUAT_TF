@@ -16,6 +16,9 @@ let metadataCache: { spreadsheetId: string; expiresAt: number; tabs: SheetTab[] 
  * 60秒で捨てるので、シートを直した内容が長く古いまま出ることはない。
  */
 const rowsCache = new Map<string, { expiresAt: number; rows: MiddleLongSheetMenuRow[] }>();
+// キャッシュが空・期限切れの瞬間も、同じ取得を人数分並べない。
+const pendingMetadata = new Map<string, Promise<SheetTab[]>>();
+const pendingRows = new Map<string, Promise<MiddleLongSheetMenuRow[]>>();
 
 
 type SheetTab = { name: string; gid: string; month: number };
@@ -108,11 +111,38 @@ async function fetchMenuTabs(id: string): Promise<SheetTab[]> {
   if (metadataCache?.spreadsheetId === id && metadataCache.expiresAt > Date.now()) {
     return metadataCache.tabs;
   }
-  const response = await fetchWithTimeout(`${BASE_URL}/${encodeURIComponent(id)}/htmlview`);
-  if (!response.ok) return [];
-  const tabs = parseMenuTabs(await response.text());
-  metadataCache = { spreadsheetId: id, expiresAt: Date.now() + META_CACHE_MS, tabs };
-  return tabs;
+  const pending = pendingMetadata.get(id);
+  if (pending) return pending;
+  const request = (async () => {
+    const response = await fetchWithTimeout(`${BASE_URL}/${encodeURIComponent(id)}/htmlview`);
+    if (!response.ok) return [];
+    const tabs = parseMenuTabs(await response.text());
+    metadataCache = { spreadsheetId: id, expiresAt: Date.now() + META_CACHE_MS, tabs };
+    return tabs;
+  })();
+  pendingMetadata.set(id, request);
+  try { return await request; } finally { pendingMetadata.delete(id); }
+}
+
+async function fetchMenuRows(id: string, tab: SheetTab): Promise<MiddleLongSheetMenuRow[]> {
+  const cacheKey = `${id}:${tab.gid}:${tab.month}`;
+  const cached = rowsCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.rows;
+  const pending = pendingRows.get(cacheKey);
+  if (pending) return pending;
+  const request = (async () => {
+    const response = await fetchWithTimeout(
+      `${BASE_URL}/${encodeURIComponent(id)}/export?format=csv&gid=${encodeURIComponent(tab.gid)}&t=${Date.now()}`,
+    );
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const csv = await response.text();
+    if (/^\s*(?:<!doctype|<html)/i.test(csv)) throw new Error("HTML response");
+    const rows = parseMiddleLongMenuCsv(csv, tab.month);
+    rowsCache.set(cacheKey, { expiresAt: Date.now() + ROWS_CACHE_MS, rows });
+    return rows;
+  })();
+  pendingRows.set(cacheKey, request);
+  try { return await request; } finally { pendingRows.delete(cacheKey); }
 }
 
 /** 必要な月のCSVだけを並列取得する。失敗月はloadedMonthsに含めない。 */
@@ -124,17 +154,7 @@ export async function fetchMiddleLongMenuSnapshot(months: number[]): Promise<Mid
     const tabs = (await fetchMenuTabs(id)).filter((tab) => wanted.has(tab.month));
     const results = await Promise.allSettled(
       tabs.map(async (tab) => {
-        const cacheKey = `${id}:${tab.gid}`;
-        const cached = rowsCache.get(cacheKey);
-        if (cached && cached.expiresAt > Date.now()) return { month: tab.month, rows: cached.rows };
-        const response = await fetchWithTimeout(
-          `${BASE_URL}/${encodeURIComponent(id)}/export?format=csv&gid=${encodeURIComponent(tab.gid)}&t=${Date.now()}`,
-        );
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const csv = await response.text();
-        if (/^\s*(?:<!doctype|<html)/i.test(csv)) throw new Error("HTML response");
-        const rows = parseMiddleLongMenuCsv(csv, tab.month);
-        rowsCache.set(cacheKey, { expiresAt: Date.now() + ROWS_CACHE_MS, rows });
+        const rows = await fetchMenuRows(id, tab);
         return { month: tab.month, rows };
       }),
     );

@@ -2,10 +2,10 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { jstToday } from "@/lib/date";
+import { readCompetitionProgramEntries } from "@/lib/competition-program-query";
 import type {
   CompetitionRow,
   CompetitionGoalRow,
-  CompetitionProgramEntryRow,
   PersonalBestRow,
   PbRecord,
 } from "@/types";
@@ -111,14 +111,7 @@ export async function getUnregisteredEventNames() {
 /** 大会プログラム（速報サイトから取り込んだ、農工大の出場種目・出場選手）。プログラム順。 */
 export async function getCompetitionProgramEntries(competitionId: string) {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("competition_program_entries")
-    .select("id,competition_id,event_date,block,sort_order,time_label,round_key,event_label,status,tuat_entries,created_at")
-    .eq("competition_id", competitionId)
-    .order("event_date")
-    .order("block")
-    .order("sort_order");
-  return (data ?? []) as unknown as CompetitionProgramEntryRow[];
+  return readCompetitionProgramEntries(supabase, competitionId).catch(() => []);
 }
 
 export async function getCompetitionById(id: string) {

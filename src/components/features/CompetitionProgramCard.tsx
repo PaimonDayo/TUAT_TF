@@ -4,15 +4,17 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { fromStoredProgramRow } from "@/lib/competition-program";
 import { CompetitionInProgress } from "./CompetitionInProgress";
+import { useCompetitionProgram } from "./useCompetitionProgram";
 import type { CompetitionProgramEntryRow, CompetitionRow } from "@/types";
 
 export function CompetitionProgramCard({
   competition,
-  entries,
+  entries: initialEntries,
 }: {
   competition: CompetitionRow;
   entries: CompetitionProgramEntryRow[];
 }) {
+  const entries = useCompetitionProgram(competition, initialEntries);
   if (entries.length === 0) return null;
   const rows = entries.map(fromStoredProgramRow);
   const totalAthletes = new Set(rows.flatMap((row) => row.tuatEntries.map((e) => `${e.grade}${e.name}`))).size;
