@@ -116,8 +116,8 @@ export function CompetitionProgramView({
   const groups = groupProgramByDate(entries.map(fromStoredProgramRow))
     .map((group) => ({
       ...group,
-      track: group.track.filter((row) => row.tuatEntries.length > 0),
-      field: group.field.filter((row) => row.tuatEntries.length > 0),
+      track: group.track.filter((row) => row.tuatEntries.length > 0 || row.status?.includes("エントリー未確定")),
+      field: group.field.filter((row) => row.tuatEntries.length > 0 || row.status?.includes("エントリー未確定")),
     }))
     .filter((group) => group.track.length > 0 || group.field.length > 0)
     // 後半の日程を上へ。種目は各日の開始時刻順を維持する。

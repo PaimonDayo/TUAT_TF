@@ -271,7 +271,9 @@ export function parseCompetitionProgram(html: string, year: number): ParsedProgr
     timeLabel: header.timeLabel,
     roundKey: header.roundKey,
     eventLabel: header.eventLabel,
-    status: header.status || null,
+    status: blocks.get(header.roundKey)?.includes("エントリー未確定")
+      ? [header.status, "エントリー未確定"].filter(Boolean).join("・")
+      : header.status || null,
     tuatEntries: parseDetailBlock(blocks.get(header.roundKey), header.eventLabel.includes("×")),
   }));
 }
