@@ -182,12 +182,27 @@ function parseDetailBlock(raw: string | undefined, isRelay: boolean): ProgramAth
 /** Result pages replace bib/lane columns; keep earlier start positions only for an unambiguous match. */
 export function retainProgramPositions(rows: ParsedProgramRow[], previous: ParsedProgramRow[]): ParsedProgramRow[] {
   return rows.map(row => {
-    const old = previous.find(p => p.roundKey === row.roundKey && p.eventDate === row.eventDate);
+    const old = previous.find(p => p.roundKey === row.roundKey && p.eventDate === row.eventDate && p.block === row.block);
     return { ...row, tuatEntries: row.tuatEntries.map(entry => {
       if (!entry.result || !old) return entry;
       const matches = old.tuatEntries.filter(e => e.name === entry.name && e.grade === entry.grade && e.heat === entry.heat);
       return matches.length === 1 ? { ...entry, lane: matches[0].lane, bib: matches[0].bib } : entry;
     }) };
+  });
+}
+
+/** 途中経過の表には未試技の選手が載らない。競技中だけ既知の出場者を結果待ちで残す。 */
+export function reconcileProgramEntries(rows: ParsedProgramRow[], previous: ParsedProgramRow[]): ParsedProgramRow[] {
+  return retainProgramPositions(rows, previous).map(row => {
+    if (!/競技中|途中経過/.test(row.status ?? "")) return row;
+    const old = previous.find(p => p.eventDate === row.eventDate && p.block === row.block && p.roundKey === row.roundKey);
+    // リレーの交代・補欠は出走者の追加と区別できないため、公式の最新名簿を優先する。
+    if (!old || row.eventLabel.includes("×")) return row;
+    const missing = old.tuatEntries.filter(entry => !row.tuatEntries.some(current =>
+      current.name === entry.name && current.grade === entry.grade && current.heat === entry.heat));
+    return { ...row, tuatEntries: [...row.tuatEntries, ...missing.map(entry => ({
+      heat: entry.heat, lane: entry.lane, bib: entry.bib, name: entry.name, grade: entry.grade,
+    }))] };
   });
 }
 
@@ -197,6 +212,13 @@ export function validateProgramImport(html: string, rows: ParsedProgramRow[], pr
   }
   if (new Set(rows.map(r => `${r.eventDate}/${r.block}/${r.roundKey}`)).size !== rows.length) {
     throw new Error("プログラムの種目が重複しています");
+  }
+  // 全体件数がほぼ同じでも、1種目の解析漏れや詳細表の欠落で出場者が消える。
+  const keys = [...html.matchAll(/<a\b[^>]*href=['"]#([\d-]+)['"]/gi)].map(match => match[1]);
+  const details = new Set([...html.matchAll(/<a\b[^>]*name=['"]([\d-]+)['"]/gi)].map(match => match[1]));
+  if (keys.length !== rows.length || keys.some(key => !rows.some(row => row.roundKey === key)) ||
+      rows.some(row => !details.has(row.roundKey))) {
+    throw new Error("種目一覧と詳細が一致しないため、前回のプログラムを保持しました");
   }
 }
 

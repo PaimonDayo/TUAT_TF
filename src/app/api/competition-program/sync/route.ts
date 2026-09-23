@@ -5,7 +5,7 @@ import { fetchRolesByProfileIds } from "@/lib/supabase/auth";
 import { permissionsOf } from "@/lib/permissions";
 import { timingSafeEqualString } from "@/lib/timing-safe";
 import { forwardPcCron } from "@/lib/pc-cron-forward";
-import { decodeShiftJisHtml, parseCompetitionProgram, retainProgramPositions, validateProgramImport, fromStoredProgramRow } from "@/lib/competition-program";
+import { decodeShiftJisHtml, parseCompetitionProgram, reconcileProgramEntries, validateProgramImport, fromStoredProgramRow } from "@/lib/competition-program";
 import type { CompetitionProgramEntryRow } from "@/types";
 import type { Json } from "@/types/database";
 
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
       if (readError) throw readError;
       const parsed = parseCompetitionProgram(html, year);
       validateProgramImport(html, parsed, previous?.length ?? 0);
-      const rows = retainProgramPositions(parsed, ((previous ?? []) as unknown as CompetitionProgramEntryRow[]).map(fromStoredProgramRow));
+      const rows = reconcileProgramEntries(parsed, ((previous ?? []) as unknown as CompetitionProgramEntryRow[]).map(fromStoredProgramRow));
       const stored = rows.map(row => ({ event_date: row.eventDate, block: row.block, sort_order: row.sortOrder,
         time_label: row.timeLabel, round_key: row.roundKey, event_label: row.eventLabel, status: row.status,
         tuat_entries: row.tuatEntries }));
