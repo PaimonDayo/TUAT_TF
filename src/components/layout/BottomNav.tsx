@@ -80,9 +80,15 @@ export function BottomNav() {
               key={href}
               href={href}
               onClick={(event) => {
-                if (pathname === href && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+                if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+                if (pathname === href) {
                   event.preventDefault();
                   window.scrollTo({ top: 0, behavior: "instant" });
+                } else if (pathname.startsWith("/competitions/") && pathname.endsWith("/program")) {
+                  // iOS PWA can leave the Next router stuck after opening the live program.
+                  // Use the browser's document navigation for bottom tabs from this screen.
+                  event.preventDefault();
+                  window.location.assign(href);
                 }
               }}
               aria-current={active ? "page" : undefined}
