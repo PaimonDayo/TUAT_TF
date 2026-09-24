@@ -19,6 +19,14 @@ export function ObDutyTable({entries,members,duties=[]}:{entries:ObEntry[];membe
   const eventDuties=selectedEvent ? duties.filter((d)=>d.slot_time===selectedEvent.time&&d.event_name===selectedEvent.label&&d.assignment.trim())
     .map((d)=>({duty:d,member:members.find((m)=>m.id===d.profile_id)}))
     .sort((a,b)=>entryGrade(a.member?.grade??null).localeCompare(entryGrade(b.member?.grade??null),"ja") || (a.member?.display_name??"").localeCompare(b.member?.display_name??"","ja")) : [];
+  const roleGroups = new Map<string, { label: string; people: typeof eventDuties }>();
+  for (const person of eventDuties) {
+    const label = person.duty.assignment.trim();
+    const key = label.normalize("NFKC").replace(/\s+/gu, " ");
+    const group = roleGroups.get(key);
+    if (group) group.people.push(person);
+    else roleGroups.set(key, { label, people: [person] });
+  }
   const findDuty=(profileId:string,time:string,event:string)=>duties.find((d)=>d.profile_id===profileId&&d.slot_time===time&&d.event_name===event);
   const rows=dutyRows(entries,members).filter((row)=>normalizeEntryName(row.name+row.grade).includes(normalizeEntryName(search)));
   function download() {
@@ -53,7 +61,7 @@ export function ObDutyTable({entries,members,duties=[]}:{entries:ObEntry[];membe
   </div></Card>{editing && <ObDutyEditor target={editing} onClose={()=>setEditing(null)} />}
   {selectedEvent && <FormModal open title="補助員一覧" autoFocus={false} onOpenChange={(open)=>{if(!open)setSelectedEvent(null);}}>
     <div className="space-y-4"><div><h2 className="text-headline">{selectedEvent.time}　{selectedEvent.label}</h2><p className="text-caption">{eventDuties.length}人</p></div>
-      {eventDuties.length ? <ul className="divide-y divide-separator">{eventDuties.map(({duty,member})=><li key={duty.profile_id} className="py-3"><p className="text-headline"><span className="mr-2 text-caption">{entryGrade(member?.grade??null)}</span>{member?.display_name??"名簿情報を確認してください"}</p><p className="mt-1 whitespace-pre-wrap break-words text-body">{duty.assignment}</p></li>)}</ul> : <p className="text-body text-muted2">補助員はまだ登録されていません。</p>}
+      {eventDuties.length ? <div className="divide-y divide-separator">{[...roleGroups.entries()].map(([key,group])=><section key={key} className="py-3"><h3 className="text-headline whitespace-pre-wrap break-words">{group.label}<span className="ml-2 text-caption">{group.people.length}人</span></h3><ul className="mt-2 flex flex-wrap gap-x-5 gap-y-2">{group.people.map(({duty,member})=><li key={duty.profile_id} className="text-body"><span className="mr-2 text-caption">{entryGrade(member?.grade??null)}</span>{member?.display_name??"名簿情報を確認してください"}</li>)}</ul></section>)}</div> : <p className="text-body text-muted2">補助員はまだ登録されていません。</p>}
     </div>
   </FormModal>}</div>;
 }
