@@ -10,14 +10,15 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import { confirmEntryMember } from "@/app/(app)/ob-entries/actions";
-import { entryGrade, matchEntryMember, normalizeEntryName, type ObEntry, type EntryMember } from "@/lib/ob-entries";
+import { entryEventRows, type ObEntry } from "@/lib/ob-entries";
+import { entryGrade, matchEntryMember, normalizeEntryName, type EntryMember, type ConfirmedEntryIdentity } from "@/lib/entry-identity";
 
-export function ObEntryReview({ initial, members, viewerId }: { initial: ObEntry[]; members: EntryMember[]; viewerId: string }) {
+export function ObEntryReview({ initial, members, viewerId, history = [] }: { initial: ObEntry[]; members: EntryMember[]; viewerId: string; history?: ConfirmedEntryIdentity[] }) {
   const [search, setSearch] = useState("");
-  const [mine, setMine] = useState(false);
+  const [mine, setMine] = useState(true);
   const [unlinked, setUnlinked] = useState(false);
   const query = normalizeEntryName(search).toLowerCase();
-  const visible = initial.filter((e) => (!mine || e.profile_id === viewerId) && (!unlinked || !e.profile_id) &&
+  const visible = initial.filter((e) => (!mine || e.profile_id === viewerId) && (mine || !unlinked || !e.profile_id) &&
     normalizeEntryName([e.submitted_name, e.grade, ...e.events].join(" ")).toLowerCase().includes(query));
   return <div className="space-y-3 px-4 pb-8 pt-2">
     <Card className="space-y-2 p-4">
@@ -28,25 +29,28 @@ export function ObEntryReview({ initial, members, viewerId }: { initial: ObEntry
     </Card>
     <Input aria-label="氏名・種目・学年で検索" placeholder="氏名・種目・学年で検索" value={search} onChange={(event) => setSearch(event.target.value)} />
     <div className="flex flex-wrap gap-2">
-      <Button size="sm" variant={mine ? "primary" : "outline"} aria-pressed={mine} onClick={() => setMine(!mine)}>自分のみ</Button>
-      <Button size="sm" variant={unlinked ? "primary" : "outline"} aria-pressed={unlinked} onClick={() => setUnlinked(!unlinked)}>未確認のみ</Button>
+      <Button size="sm" variant={mine ? "primary" : "outline"} aria-pressed={mine} onClick={() => { setMine(true); setSearch(""); }}>自分のエントリー</Button>
+      <Button size="sm" variant={!mine ? "primary" : "outline"} aria-pressed={!mine} onClick={() => { setMine(false); setSearch(""); }}>全員・本人照合</Button>
+      {!mine && <Button size="sm" variant={unlinked ? "primary" : "outline"} aria-pressed={unlinked} onClick={() => setUnlinked(!unlinked)}>未確認のみ</Button>}
     </div>
-    {mine && <p className="text-caption">「自分のみ」には、アプリの本人と紐付け済みのエントリーが表示されます。</p>}
+    <p className="text-caption">資格記録はフォームの申告内容です。未回答と、フォームに記録欄がない種目は区別して表示します。</p>
+    {mine && <p className="text-caption">確認済みの部員IDで自分の回答を表示しています。</p>}
     <p className="section-label">{visible.length}人</p>
-    {visible.length === 0 ? <Card><EmptyState title="条件に合うエントリーはありません" /></Card> : visible.map((entry) =>
-      <EntryCard key={`${entry.id}:${entry.revision}`} entry={entry} members={members} />)}
+    {visible.length === 0 ? <Card><EmptyState title={mine && !search ? "自分に紐付いたエントリーはありません" : "条件に合うエントリーはありません"} />
+      {mine && !search && <p className="px-4 pb-4 text-caption">「全員・本人照合」から自分の回答を探し、部員との紐付けを確認してください。</p>}</Card> : visible.map((entry) =>
+      <EntryCard key={`${entry.id}:${entry.revision}`} entry={entry} members={members} history={history} />)}
   </div>;
 }
 
-function EntryCard({ entry, members }: { entry: ObEntry; members: EntryMember[] }) {
+function EntryCard({ entry, members, history }: { entry: ObEntry; members: EntryMember[]; history: ConfirmedEntryIdentity[] }) {
   const [open, setOpen] = useState(false);
-  const match = matchEntryMember(entry, members);
-  const [selected, setSelected] = useState(entry.profile_id ?? (match.status === "exact" ? match.candidates[0].id : ""));
+  const match = matchEntryMember(entry, members, history);
+  const [selected, setSelected] = useState(entry.profile_id ?? (match.status === "exact" || match.status === "previous" ? match.candidates[0].id : ""));
   const [saving, setSaving] = useState(false);
   const router = useRouter();
   const { showToast } = useToast();
   const linked = members.find((member) => member.id === entry.profile_id);
-  const status = entry.profile_id ? "本人確認済み" : match.status === "exact" ? "氏名・学年一致（未確認）" : match.status === "grade_check" ? "氏名一致・学年の確認が必要" : match.status === "ambiguous" ? "同名の候補が複数あります" : "一致する表示名がありません";
+  const status = entry.profile_id ? "本人確認済み" : match.status === "previous" ? "過去に確認した部員（再確認）" : match.status === "exact" ? "氏名・学年一致（未確認）" : match.status === "grade_check" ? "氏名一致・学年の確認が必要" : match.status === "ambiguous" ? "同名の候補が複数あります" : "一致する表示名がありません";
   async function save() {
     setSaving(true);
     try {
@@ -59,7 +63,13 @@ function EntryCard({ entry, members }: { entry: ObEntry; members: EntryMember[] 
   }
   return <Card className="p-4">
     <p className="text-headline">{entry.grade} {entry.submitted_name}</p>
-    <p className="mt-1 break-words text-body">{entry.events.join("・")}</p>
+    <table className="mt-3 w-full table-fixed text-left text-body">
+      <caption className="sr-only">{entry.submitted_name}の出場種目と資格記録</caption>
+      <thead><tr className="border-b border-separator"><th scope="col" className="w-1/2 py-2 pr-2 font-medium">出場種目</th><th scope="col" className="py-2 font-medium">資格記録</th></tr></thead>
+      <tbody>{entryEventRows(entry).map(({ event, mark }) => <tr key={event} className="border-b border-separator last:border-0">
+        <th scope="row" className="break-words py-2 pr-2 align-top font-normal">{event}</th><td className="whitespace-pre-wrap break-words py-2 align-top">{mark}</td>
+      </tr>)}</tbody>
+    </table>
     <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="mt-3 flex w-full items-center justify-between gap-2 text-left text-caption text-accent">
       <span>{status}{linked ? `：${linked.display_name}` : ""}</span><ChevronDown size={16} className={open ? "rotate-180 shrink-0" : "shrink-0"} />
     </button>

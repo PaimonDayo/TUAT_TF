@@ -1,25 +1,12 @@
 export type ObEntry = {
   id: string; meet_key: string; submitted_name: string; grade: string; events: string[];
   profile_id: string | null; revision: number; imported_at: string;
+  qualification_marks: Record<string, string | null>;
 };
-export type EntryMember = { id: string; display_name: string; grade: string | null };
+export { entryGrade, matchEntryMember, normalizeEntryName, type EntryMember } from "./entry-identity";
 
-export function normalizeEntryName(name: string): string {
-  return name.normalize("NFKC").replace(/\s+/gu, "");
-}
-
-export function entryGrade(grade: string | null): string {
-  const text = (grade ?? "").normalize("NFKC").trim().toUpperCase();
-  return /^[1-4]$/.test(text) ? `B${text}` : text;
-}
-
-/** 候補提示のみ。表記が一致してもユーザーIDは人が確認してから保存する。 */
-export function matchEntryMember(entry: Pick<ObEntry, "submitted_name" | "grade">, members: EntryMember[]) {
-  const name = normalizeEntryName(entry.submitted_name);
-  const candidates = name ? members.filter((m) => normalizeEntryName(m.display_name) === name) : [];
-  const sameGrade = candidates.filter((m) => entryGrade(m.grade) === entryGrade(entry.grade));
-  return {
-    candidates: sameGrade.length ? sameGrade : candidates,
-    status: candidates.length === 0 ? "none" : candidates.length > 1 ? "ambiguous" : sameGrade.length === 1 ? "exact" : "grade_check",
-  } as const;
+/** 種目の回答順と自由記述を保持する。未回答とフォームに欄がない場合を区別する。 */
+export function entryEventRows(entry: Pick<ObEntry, "events" | "qualification_marks">) {
+  return entry.events.map((event) => ({ event, mark: Object.hasOwn(entry.qualification_marks, event)
+    ? entry.qualification_marks[event]?.trim() || "未回答" : "記録欄なし" }));
 }

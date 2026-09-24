@@ -7,7 +7,7 @@ type EntryDatabase = Omit<Database, "public"> & {
     Tables: Database["public"]["Tables"] & {
       ob_meet_entries: {
         Row: ObEntry;
-        Insert: { id?: string; meet_key: string; submitted_name: string; grade: string; events: string[]; profile_id?: string | null; revision?: number; imported_at?: string };
+        Insert: { id?: string; meet_key: string; submitted_name: string; grade: string; events: string[]; qualification_marks?: Record<string, string | null>; profile_id?: string | null; revision?: number; imported_at?: string };
         Update: Partial<ObEntry>;
         Relationships: [];
       };
