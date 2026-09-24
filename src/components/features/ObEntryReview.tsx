@@ -15,11 +15,14 @@ import { entryGrade, matchEntryMember, normalizeEntryName, type EntryMember, typ
 import { ObEntryEditor } from "./ObEntryEditor";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { ActionMenu } from "@/components/ui/action-menu";
+import { ObPartyView } from "./ObPartyView";
+import { ObDutyTable } from "./ObDutyTable";
+import { OB_PROGRAM, type ObPartyResponse } from "@/lib/ob-meet";
 import { OB_ENTRY_EVENTS, entryDivision } from "@/lib/ob-entry-edit";
 
-export function ObEntryReview({ initial, members, viewerId, history = [] }: { initial: ObEntry[]; members: EntryMember[]; viewerId: string; history?: ConfirmedEntryIdentity[] }) {
+export function ObEntryReview({ initial, members, viewerId, history = [], party = [] }: { initial: ObEntry[]; members: EntryMember[]; viewerId: string; party?: ObPartyResponse[]; history?: ConfirmedEntryIdentity[] }) {
   const [search, setSearch] = useState("");
-  const [view, setView] = useState<"events" | "mine" | "identity">("events");
+  const [view, setView] = useState<"events" | "mine" | "identity" | "party" | "duty">("events");
   const [unlinked, setUnlinked] = useState(false);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -32,23 +35,29 @@ export function ObEntryReview({ initial, members, viewerId, history = [] }: { in
   const groups = eventNames.filter((event) => division === "all" || event.startsWith(division)).map((event) => ({ event, entries: visible.filter((entry) => entry.events.includes(event) && normalizeEntryName([entry.submitted_name, entry.grade, event].join(" ")).toLowerCase().includes(query)) })).filter((group) => group.entries.length);
   return <div className="space-y-4 px-4 pb-8 pt-2">
     <Card className="p-4">
-      <div className="flex items-center justify-between gap-3"><div><h2 className="text-headline">OB戦エントリー</h2><p className="mt-1 text-caption">{initial.filter((e) => e.events.length).length}人・{initial.reduce((sum, e) => sum + e.events.length, 0)}エントリー</p></div><Button size="sm" variant="outline" onClick={() => setAdding(true)}>追加</Button></div>
+      <div className="flex items-center justify-between gap-3"><div><h2 className="text-headline">OB戦エントリー</h2><p className="mt-1 text-caption">{initial.filter((e) => e.events.length).length}人・{initial.reduce((sum, e) => sum + e.events.length, 0)}エントリー</p></div><Button size="sm" variant="outline" onClick={() => setAdding(true)}>新規登録</Button></div>
       <p className="mt-2 text-micro text-muted2">システムロール限定</p>
     </Card>
-    <SegmentedControl items={[{key:"events",label:"種目別"},{key:"mine",label:"自分"},{key:"identity",label:"本人照合"}]} value={view} onChange={(value) => {setView(value);setSearch("");}} />
-    {view !== "mine" && <Input aria-label="氏名・種目・学年で検索" placeholder="氏名・種目・学年で検索" value={search} onChange={(event) => setSearch(event.target.value)} />}
+    <SegmentedControl items={[{key:"events",label:"予定"},{key:"mine",label:"回答"},{key:"party",label:"懇親会"},{key:"duty",label:"補助員"}]} value={view === "identity" ? "mine" : view} onChange={(value) => {setView(value);setSearch("");}} />
+    {(view === "mine" || view === "identity") && <SegmentedControl items={[{key:"mine",label:"自分の回答"},{key:"identity",label:"本人照合"}]} value={view} onChange={(value)=>{setView(value);setSearch("");}} />}
+    {(view === "events" || view === "identity") && <Input aria-label="氏名・種目・学年で検索" placeholder="氏名・種目・学年で検索" value={search} onChange={(event) => setSearch(event.target.value)} />}
     {view === "events" && <SegmentedControl items={[{key:"all",label:"すべて"},{key:"男子",label:"男子"},{key:"女子",label:"女子"}]} value={division} onChange={setDivision} />}
     {view === "identity" && <Button size="sm" variant={unlinked ? "primary" : "outline"} aria-pressed={unlinked} onClick={() => setUnlinked(!unlinked)}>未確認のみ</Button>}
-    {adding && <ObEntryEditor members={members.filter((m) => !initial.some((e) => e.profile_id === m.id))} initialProfileId={view === "mine" && !initial.some((e) => e.profile_id === viewerId) ? viewerId : ""} onClose={() => setAdding(false)} />}
-    {editing && <ObEntryEditor key={`${editing.id}:${editing.revision}`} entry={editing} members={members} onClose={() => setEditingId(null)} />}
-    {view === "events" ? groups.length ? ["トラック", "フィールド"].map((block) => {
-      const rows = groups.filter(({event}) => /m(?:H)?$/.test(event) === (block === "トラック"));
-      return rows.length ? <section key={block} className="space-y-2"><h2 className="text-caption font-semibold text-muted2">{block}</h2>
-        <Card className="divide-y divide-separator">{rows.map(({event,entries}) => <EntryProgramRow key={`${event}:${query}`} event={event} entries={entries} viewerId={viewerId} searching={!!query} onEdit={setEditingId} />)}</Card>
-      </section> : null;
-    }) : <EmptyState title="条件に合うエントリーはありません" /> : visible.length === 0 ? <Card><EmptyState title={view === "mine" ? "自分に紐付いたエントリーはありません" : "条件に合うエントリーはありません"} />
+    {adding && <ObEntryEditor parties={party} members={members.filter((m) => !initial.some((e) => e.profile_id === m.id))} initialProfileId={view === "mine" && !initial.some((e) => e.profile_id === viewerId) ? viewerId : ""} onClose={() => setAdding(false)} />}
+    {editing && <ObEntryEditor key={`${editing.id}:${editing.revision}`} entry={editing} party={party.find((p)=>p.entry_id===editing.id)} members={members} onClose={() => setEditingId(null)} />}
+    {view === "party" ? <ObPartyView responses={party} /> : view === "duty" ? <ObDutyTable entries={initial} members={members} /> : view === "events" ? <div className="space-y-3">
+      <p className="text-caption">プログラム（予定）・競技を開くと出場者と資格記録が見られます。</p>
+      {OB_PROGRAM.map((slot) => {
+        const rows=groups.filter(({event})=>slot.events.includes(event.slice(2)));
+        if (query && !rows.length) return null;
+        return <section key={slot.time} className="space-y-2"><h2 className="text-caption font-semibold text-muted2"><span className="tabular-nums">{slot.time}</span>　{slot.label}</h2>
+          {slot.events.length ? <Card className="divide-y divide-separator">{rows.length ? rows.map(({event,entries})=><EntryProgramRow key={`${event}:${query}`} event={event} entries={entries} viewerId={viewerId} searching={!!query} onEdit={setEditingId} />) : <p className="p-3.5 text-caption">該当する出場登録はありません</p>}</Card> : slot.note ? <Card className="p-3.5 text-body">{slot.note}</Card> : null}
+        </section>;
+      })}
+      {query && !groups.length && <EmptyState title="条件に合うエントリーはありません" />}
+    </div> : visible.length === 0 ? <Card><EmptyState title={view === "mine" ? "自分に紐付いたエントリーはありません" : "条件に合うエントリーはありません"} />
       {view === "mine" && <p className="px-4 pb-4 text-caption">「本人照合」から自分の回答を確認できます。</p>}</Card> : visible.map((entry) =>
-      <EntryCard key={`${entry.id}:${entry.revision}:${view}`} entry={entry} members={members} history={history} identity={view === "identity"} />)}
+      <EntryCard key={`${entry.id}:${entry.revision}:${view}`} entry={entry} members={members} history={history} party={party.find((p)=>p.entry_id===entry.id)} identity={view === "identity"} />)}
     <p className="text-micro text-muted">変更はアプリ内のみ。Googleフォームには反映されません。</p>
   </div>;
 }
@@ -75,7 +84,7 @@ function EntryProgramRow({ event, entries, viewerId, searching, onEdit }: { even
   </div>;
 }
 
-function EntryCard({ entry, members, history, identity }: { entry: ObEntry; members: EntryMember[]; history: ConfirmedEntryIdentity[]; identity: boolean }) {
+function EntryCard({ entry, members, history, identity, party }: { party?: ObPartyResponse; entry: ObEntry; members: EntryMember[]; history: ConfirmedEntryIdentity[]; identity: boolean }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const match = matchEntryMember(entry, members, history);
@@ -99,7 +108,8 @@ function EntryCard({ entry, members, history, identity }: { entry: ObEntry; memb
     <div className="flex items-center justify-between gap-2"><p className="text-headline"><span className="mr-2 text-caption">{entry.grade}</span>{entry.submitted_name}</p>
     <ActionMenu onEdit={() => setEditing(true)} editLabel={entry.events.length ? "エントリーを編集" : "再エントリー"} triggerLabel={`${entry.submitted_name}の操作`} /></div>
     <p className="mt-1 text-caption">出場区分：{entryDivision(entry) ?? "未登録"}</p>
-    {!entry.events.length && <p className="mt-2 text-body">エントリー取り消し済み</p>}
+    {!entry.events.length && <p className="mt-2 text-body">競技の出場登録なし</p>}
+    {!identity && <p className="mt-2 text-body">懇親会：{party?.status ?? "未回答"}</p>}
     {!identity && <table className="mt-2 w-full table-fixed text-left text-body">
       <caption className="sr-only">{entry.submitted_name}の出場種目と資格記録</caption>
       <thead><tr className="border-b border-separator"><th scope="col" className="w-1/2 py-2 pr-2 font-medium">出場種目</th><th scope="col" className="py-2 font-medium">資格記録</th></tr></thead>
@@ -107,7 +117,7 @@ function EntryCard({ entry, members, history, identity }: { entry: ObEntry; memb
         <th scope="row" className="break-words py-2 pr-2 align-top font-normal">{event}</th><td className="whitespace-pre-wrap break-words py-2 align-top">{mark}</td>
       </tr>)}</tbody>
     </table>}
-    {editing && <ObEntryEditor entry={entry} members={members} onClose={() => setEditing(false)} />}
+    {editing && <ObEntryEditor entry={entry} party={party} members={members} onClose={() => setEditing(false)} />}
     {identity && <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="mt-2 flex min-h-9 w-full items-center justify-between gap-2 text-left text-caption text-accent">
       <span>{status}{linked ? `：${linked.display_name}` : ""}</span><ChevronDown size={16} className={open ? "rotate-180 shrink-0" : "shrink-0"} />
     </button>}

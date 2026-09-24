@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { fetchRolesByProfileIds, isMemberPreviewActive } from "@/lib/supabase/auth";
 import { permissionsOf } from "@/lib/permissions";
 import { entryClient } from "@/lib/ob-entries-db";
+import { validPartyEdit, type PartyEdit } from "@/lib/ob-meet";
 import { validEntryEdit, type EntryEdit } from "@/lib/ob-entry-edit";
 
 async function editClient() {
@@ -16,14 +17,16 @@ async function editClient() {
   return client;
 }
 
-export async function saveEntry(input: EntryEdit): Promise<{ ok: boolean; message?: string }> {
-  if (!validEntryEdit(input)) return { ok: false, message: "種目と資格記録を確認してください（記録は1000文字以内）" };
+export async function saveEntry(input: EntryEdit, party?: PartyEdit): Promise<{ ok: boolean; message?: string }> {
+  if ((party !== undefined && !validPartyEdit(party)) || !validEntryEdit(input, !!party && party.status !== "未回答")) return { ok: false, message: "種目と資格記録を確認してください（記録は1000文字以内）" };
   const client = await editClient();
   if (!client) return { ok: false, message: "権限がありません" };
-  const result = await client.rpc("save_ob_entry", { p_entry_id: input.entryId, p_profile_id: input.profileId, p_revision: input.revision, p_events: input.events, p_marks: input.marks });
+  const args = { p_entry_id: input.entryId, p_profile_id: input.profileId, p_revision: input.revision, p_events: input.events, p_marks: input.marks };
+  const result = party ? await client.rpc("save_ob_registration", { ...args, p_party_id: party.id, p_party_revision: party.revision, p_party_status: party.status }) : await client.rpc("save_ob_entry", args);
   if (result.error) {
-    const message = result.error.code === "23505" ? "この部員のエントリーは既にあります。全員一覧で確認してください"
+    const message = result.error.code === "23505" ? "この部員の回答は既にあります。エントリー・懇親会の一覧から確認してください"
       : result.error.message.includes("entry_conflict") ? "他の操作で更新されています。画面を更新してからやり直してください"
+      : result.error.message.includes("party_identity_required") ? "懇親会の回答と選択した部員が一致しません。本人照合を確認してください"
       : result.error.message.includes("entry_division_") ? "登録済みの男女区分と種目が一致しません。画面を更新して確認してください"
       : result.error.message.includes("entry_member_missing") ? "在籍中で氏名・学年が登録された部員を選んでください" : "保存できませんでした";
     return { ok: false, message };
@@ -51,4 +54,14 @@ export async function confirmEntryMember(entryId: string, profileId: string | nu
   if (!saved.data) return { ok: false, message: "他の操作で更新されています。画面を更新してください" };
   revalidatePath("/ob-entries");
   return { ok: true };
+}
+
+export async function saveParty(input: PartyEdit): Promise<{ ok: boolean; message?: string }> {
+  if (!validPartyEdit(input) || !input.id || input.revision === null) return {ok:false,message:"出欠を確認してください"};
+  const client = await editClient();
+  if (!client) return {ok:false,message:"権限がありません"};
+  const result = await client.rpc("save_ob_party", {p_id:input.id,p_revision:input.revision,p_status:input.status});
+  if (result.error) return {ok:false,message:result.error.message.includes("entry_conflict") ? "他の操作で更新されています。画面を更新してください" : "保存できませんでした。本人が確認できている回答か確認してください"};
+  revalidatePath("/ob-entries");
+  return {ok:true};
 }

@@ -1,0 +1,53 @@
+import type { ObEntry } from "./ob-entries";
+import { entryGrade, type EntryMember } from "./entry-identity";
+
+export const OB_PARTY = { time: "19:00〜", venue: "ミライザカ 府中並木通り店", fee: 3500 };
+export const PARTY_STATUSES = ["参加", "不参加", "未回答"] as const;
+export type PartyStatus = typeof PARTY_STATUSES[number];
+export type ObPartyResponse = { id: string; meet_key: string; submitted_name: string; group_label: string; status: PartyStatus; entry_id: string | null; revision: number; needs_review: boolean };
+export type PartyEdit = { id: string | null; revision: number | null; status: PartyStatus };
+export function validPartyEdit(value: PartyEdit): boolean {
+  return !!value && PARTY_STATUSES.includes(value.status) && (value.id === null ? value.revision === null :
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.id) && Number.isSafeInteger(value.revision) && value.revision! >= 0);
+}
+export const OB_PROGRAM: { time: string; label: string; events: string[]; note?: string }[] = [
+  { time: "09:00", label: "受付開始", events: [] },
+  { time: "09:30", label: "開会式", events: [] },
+  { time: "10:00", label: "1500m", events: ["1500m"] },
+  { time: "10:30", label: "ジャベリックスロー・立ち五段跳び", events: ["ジャベリックスロー", "立ち五段"] },
+  { time: "11:00", label: "100m・砲丸投げ", events: ["100m", "砲丸投げ"] },
+  { time: "11:40", label: "300mH", events: ["300mH"] },
+  { time: "12:20", label: "OB・OG総会", events: [] },
+  { time: "13:00", label: "走り高跳び", events: ["走り高跳び"] },
+  { time: "13:30", label: "300m", events: ["300m"] },
+  { time: "14:30", label: "やり投げ・走り幅跳び", events: ["やり投げ", "走り幅跳び"] },
+  { time: "15:00", label: "3000m", events: ["3000m"] },
+  { time: "15:30", label: "4×300mリレー", events: [], note: "当日エントリー" },
+  { time: "16:00", label: "閉会式", events: [] },
+];
+export const OB_DUTY_SLOTS = OB_PROGRAM.filter((slot) => slot.events.length || slot.note);
+
+/** No finish times or warm-up durations have been provided: absence of an entry is not availability. */
+export function dutyCell(entry: Pick<ObEntry, "events"> | undefined, slot: typeof OB_PROGRAM[number]): string {
+  if (slot.note) return "当日確認";
+  if (!entry) return "回答なし";
+  const events = entry.events.filter((event) => slot.events.includes(event.slice(2))).map((event) => event.slice(2));
+  return events.length ? events.join("・") : "出場登録なし";
+}
+export function dutyRows(entries: ObEntry[], members: EntryMember[]) {
+  return [
+    ...members.map((m) => ({ id: m.id, name: m.display_name, grade: entryGrade(m.grade), entry: entries.find((e) => e.profile_id === m.id), linked: true })),
+    ...entries.filter((e) => !e.profile_id || !members.some((m) => m.id === e.profile_id)).map((e) => ({ id: e.id, name: e.submitted_name, grade: e.grade, entry: e, linked: false })),
+  ].sort((a,b) => a.grade.localeCompare(b.grade,"ja") || a.name.localeCompare(b.name,"ja"));
+}
+export function partyCounts(responses: ObPartyResponse[]) {
+  return { attending: responses.filter((p) => !p.needs_review && p.status === "参加").length,
+    absent: responses.filter((p) => !p.needs_review && p.status === "不参加").length,
+    unknown: responses.filter((p) => !p.needs_review && p.status === "未回答").length,
+    held: responses.filter((p) => p.needs_review).length };
+}
+export function obCsvCell(value: string): string {
+  // Neutralise spreadsheet formula injection in user-authored names and marks.
+  const safe = /^[\s]*[=+@-]/.test(value) ? "'" + value : value;
+  return '"' + safe.replaceAll('"', '""') + '"';
+}
