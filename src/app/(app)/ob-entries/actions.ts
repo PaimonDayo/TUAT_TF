@@ -24,6 +24,7 @@ export async function saveEntry(input: EntryEdit): Promise<{ ok: boolean; messag
   if (result.error) {
     const message = result.error.code === "23505" ? "この部員のエントリーは既にあります。全員一覧で確認してください"
       : result.error.message.includes("entry_conflict") ? "他の操作で更新されています。画面を更新してからやり直してください"
+      : result.error.message.includes("entry_division_") ? "登録済みの男女区分と種目が一致しません。画面を更新して確認してください"
       : result.error.message.includes("entry_member_missing") ? "在籍中で氏名・学年が登録された部員を選んでください" : "保存できませんでした";
     return { ok: false, message };
   }

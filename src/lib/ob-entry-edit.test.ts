@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { OB_ENTRY_EVENTS, validEntryEdit, type EntryEdit } from "./ob-entry-edit";
+import { OB_ENTRY_EVENTS, entryDivision, validEntryEdit, type EntryEdit } from "./ob-entry-edit";
 const base: EntryEdit = { entryId: "10000000-0000-4000-8000-000000000001", profileId: null, revision: 1, events: ["男子100m"], marks: { "男子100m": "12秒34" } };
 it("accepts adding a member, changing records and cancelling without deleting the entry", () => {
   expect(validEntryEdit(base)).toBe(true);
@@ -18,4 +18,12 @@ it("keeps the editor catalogue aligned with database validation", () => {
   const sql = readFileSync(new URL("../../supabase/migrations/20260924050000_ob_entry_edit.sql", import.meta.url), "utf8");
   for (const event of OB_ENTRY_EVENTS) expect(sql).toContain(`('${event.slice(2)}')`);
   expect(OB_ENTRY_EVENTS).toHaveLength(22);
+});
+
+it("rejects mixing competition divisions and preserves division after cancellation", () => {
+  expect(validEntryEdit({...base,events:["男子100m","女子300m"],marks:{}})).toBe(false);
+  expect(entryDivision({events:[],competition_division:"女子"})).toBe("女子");
+  expect(entryDivision({events:["女子100m"]})).toBe("女子");
+  expect(entryDivision({events:[]})).toBe(null);
+  expect(entryDivision({events:["男子100m","女子100m"]})).toBe(null);
 });

@@ -2,6 +2,7 @@ export type ObEntry = {
   id: string; meet_key: string; submitted_name: string; grade: string; events: string[];
   profile_id: string | null; revision: number; imported_at: string;
   qualification_marks: Record<string, string | null>;
+  competition_division?: "男子" | "女子" | null;
 };
 export { entryGrade, matchEntryMember, normalizeEntryName, type EntryMember } from "./entry-identity";
 
