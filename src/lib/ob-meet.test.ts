@@ -21,6 +21,10 @@ it("keeps unconfirmed identities separate and avoids duplicating confirmed membe
   const rows=dutyRows([{...entry,profile_id:null}],members);
   expect(rows).toHaveLength(3);expect(rows.filter(r=>!r.linked)).toHaveLength(1);
 });
+it("does not treat alumni competitors as unconfirmed student helpers",()=>{
+  const alumni={...entry,id:"alumni",profile_id:null,grade:"OB・OG"};
+  expect(dutyRows([entry,alumni],[{id:"p",display_name:"確認太郎",grade:"2"}])).toHaveLength(1);
+});
 it("excludes held names from attendance totals",()=>{
   const responses=[{status:"参加",needs_review:false},{status:"参加",needs_review:true},{status:"不参加",needs_review:false},{status:"未回答",needs_review:false}] as ObPartyResponse[];
   expect(partyCounts(responses)).toEqual({attending:1,absent:1,unknown:1,held:1});

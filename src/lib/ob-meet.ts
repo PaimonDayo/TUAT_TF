@@ -1,4 +1,4 @@
-import type { ObEntry } from "./ob-entries";
+import { isAlumniEntry, type ObEntry } from "./ob-entries";
 import { entryGrade, type EntryMember } from "./entry-identity";
 
 export const OB_PARTY = { time: "19:00〜", venue: "ミライザカ 府中並木通り店", fee: 3500 };
@@ -35,6 +35,7 @@ export function dutyCell(entry: Pick<ObEntry, "events"> | undefined, slot: typeo
   return events.length ? events.join("・") : "出場登録なし";
 }
 export function dutyRows(entries: ObEntry[], members: EntryMember[]) {
+  entries = entries.filter((entry) => !isAlumniEntry(entry));
   return [
     ...members.map((m) => ({ id: m.id, name: m.display_name, grade: entryGrade(m.grade), entry: entries.find((e) => e.profile_id === m.id), linked: true })),
     ...entries.filter((e) => !e.profile_id || !members.some((m) => m.id === e.profile_id)).map((e) => ({ id: e.id, name: e.submitted_name, grade: e.grade, entry: e, linked: false })),

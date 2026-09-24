@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import { confirmEntryMember } from "@/app/(app)/ob-entries/actions";
-import { entryEventRows, type ObEntry } from "@/lib/ob-entries";
+import { entryEventRows, isAlumniEntry, type ObEntry } from "@/lib/ob-entries";
 import { entryGrade, matchEntryMember, normalizeEntryName, type EntryMember, type ConfirmedEntryIdentity } from "@/lib/entry-identity";
 import { ObEntryEditor } from "./ObEntryEditor";
 import { SegmentedControl } from "@/components/ui/segmented";
@@ -29,14 +29,14 @@ export function ObEntryReview({ initial, members, viewerId, history = [], party 
   const [division, setDivision] = useState("all");
   const editing = initial.find((entry) => entry.id === editingId);
   const query = normalizeEntryName(search).toLowerCase();
-  const visible = initial.filter((e) => (view !== "mine" || e.profile_id === viewerId) && (view !== "identity" || !unlinked || !e.profile_id) &&
+  const visible = initial.filter((e) => (view !== "mine" || e.profile_id === viewerId) && (view !== "identity" || !isAlumniEntry(e) && (!unlinked || !e.profile_id)) &&
     normalizeEntryName([e.submitted_name, e.grade, ...e.events].join(" ")).toLowerCase().includes(query));
   const eventNames = [...new Set(initial.flatMap((entry) => entry.events))].sort((a, b) => OB_ENTRY_EVENTS.indexOf(a) - OB_ENTRY_EVENTS.indexOf(b));
   const groups = eventNames.filter((event) => division === "all" || event.startsWith(division)).map((event) => ({ event, entries: visible.filter((entry) => entry.events.includes(event) && normalizeEntryName([entry.submitted_name, entry.grade, event].join(" ")).toLowerCase().includes(query)) })).filter((group) => group.entries.length);
   return <div className="space-y-4 px-4 pb-8 pt-2">
     <Card className="p-4">
       <div className="flex items-center justify-between gap-3"><div><h2 className="text-headline">OB戦エントリー</h2><p className="mt-1 text-caption">{initial.filter((e) => e.events.length).length}人・{initial.reduce((sum, e) => sum + e.events.length, 0)}エントリー</p></div><Button size="sm" variant="outline" onClick={() => setAdding(true)}>新規登録</Button></div>
-      <p className="mt-2 text-micro text-muted2">システムロール限定</p>
+      <p className="mt-2 text-micro text-muted2">現役・OB・OGの出場登録／システムロール限定</p>
     </Card>
     <SegmentedControl items={[{key:"events",label:"予定"},{key:"mine",label:"回答"},{key:"party",label:"懇親会"},{key:"duty",label:"補助員"}]} value={view === "identity" ? "mine" : view} onChange={(value) => {setView(value);setSearch("");}} />
     {(view === "mine" || view === "identity") && <SegmentedControl items={[{key:"mine",label:"自分の回答"},{key:"identity",label:"本人照合"}]} value={view} onChange={(value)=>{setView(value);setSearch("");}} />}
