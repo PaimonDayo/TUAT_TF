@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,11 @@ import { ObDutyEditor, type DutyTarget } from "./ObDutyEditor";
 export function ObDutyTable({entries,members,duties=[]}:{entries:ObEntry[];members:EntryMember[];duties?:ObDuty[]}) {
   const [search,setSearch]=useState("");
   const [editing,setEditing]=useState<DutyTarget|null>(null);
+  const tableScroll = useRef<HTMLDivElement>(null);
+  function scrollTable(direction: number) {
+    const table = tableScroll.current;
+    if (table) table.scrollBy({left: direction * Math.max(144, table.clientWidth - 160), behavior: "smooth"});
+  }
   const findDuty=(profileId:string,time:string,event:string)=>duties.find((d)=>d.profile_id===profileId&&d.slot_time===time&&d.event_name===event);
   const rows=dutyRows(entries,members).filter((row)=>normalizeEntryName(row.name+row.grade).includes(normalizeEntryName(search)));
   function download() {
@@ -31,7 +36,11 @@ export function ObDutyTable({entries,members,duties=[]}:{entries:ObEntry[];membe
   </Card>
   <div className="flex items-center gap-2"><Input className="min-w-0 flex-1" aria-label="補助員表の氏名・学年で検索" placeholder="氏名・学年で検索" value={search} onChange={(e)=>setSearch(e.target.value)} /><Button size="sm" variant="outline" onClick={download}>CSV出力</Button></div>
   <p className="text-caption">{rows.length}行・横にスクロールできます。担当欄をタップして登録・編集できます。CSVにも保存済みの担当が出ます。</p>
-  <Card className="overflow-hidden"><div className="max-h-[65dvh] overflow-auto" tabIndex={0} role="region" aria-label="部員別の出場予定表">
+  <div className="flex items-center justify-end gap-2" role="group" aria-label="補助員表の横移動">
+    <Button size="sm" variant="outline" aria-label="補助員表を左へ移動" onClick={()=>scrollTable(-1)}>← 左へ</Button>
+    <Button size="sm" variant="outline" aria-label="補助員表を右へ移動" onClick={()=>scrollTable(1)}>右へ →</Button>
+  </div>
+  <Card className="min-w-0 overflow-hidden"><div ref={tableScroll} className="ob-duty-scroll max-h-[65dvh] overflow-auto" tabIndex={0} role="region" aria-label="部員別の出場予定表">
     <table className="w-full min-w-[1400px] border-collapse text-left text-[13px]"><caption className="sr-only">補助員検討用の出場予定</caption>
       <thead className="sticky top-0 z-20 bg-card"><tr><th scope="col" className="sticky left-0 z-30 min-w-40 bg-card p-3">氏名・学年</th>{OB_DUTY_SLOTS.map((s)=><th key={s.label} scope="col" className="min-w-36 border-l border-separator p-3"><span className="block tabular-nums">{s.time}</span><span className="font-normal">{s.label}</span></th>)}</tr></thead>
       <tbody>{rows.map((row)=><tr key={row.id} className="border-t border-separator"><th scope="row" className="sticky left-0 z-10 bg-card p-3 font-normal"><span className="block text-caption">{row.grade}{!row.linked?"・未照合":""}</span>{row.name}</th>

@@ -115,6 +115,24 @@ h1, h2, h3, p {
   height: 0;
 }
 
+/* Editable wide tables need a visible mouse-operated scrollbar. */
+.ob-duty-scroll {
+  scrollbar-width: auto;
+  scrollbar-color: var(--color-muted) var(--color-card);
+}
+.ob-duty-scroll::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+.ob-duty-scroll::-webkit-scrollbar-track {
+  background: var(--color-card);
+}
+.ob-duty-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-muted);
+  border: 3px solid var(--color-card);
+  border-radius: 999px;
+}
+
 /* ボトムシート アニメーション */
 @keyframes sheet-fade {
   from { opacity: 0; }
