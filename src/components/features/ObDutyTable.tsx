@@ -4,8 +4,9 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FormModal } from "@/components/ui/form-modal";
 import type { EntryMember } from "@/lib/entry-identity";
-import { normalizeEntryName } from "@/lib/entry-identity";
+import { entryGrade, normalizeEntryName } from "@/lib/entry-identity";
 import type { ObEntry } from "@/lib/ob-entries";
 import { OB_DUTY_SLOTS, dutyRows, dutyTimeCell, obCsvCell } from "@/lib/ob-meet";
 import type { ObDuty } from "@/lib/ob-duty";
@@ -14,6 +15,10 @@ import { ObDutyEditor, type DutyTarget } from "./ObDutyEditor";
 export function ObDutyTable({entries,members,duties=[]}:{entries:ObEntry[];members:EntryMember[];duties?:ObDuty[]}) {
   const [search,setSearch]=useState("");
   const [editing,setEditing]=useState<DutyTarget|null>(null);
+  const [selectedEvent,setSelectedEvent]=useState<typeof OB_DUTY_SLOTS[number]|null>(null);
+  const eventDuties=selectedEvent ? duties.filter((d)=>d.slot_time===selectedEvent.time&&d.event_name===selectedEvent.label&&d.assignment.trim())
+    .map((d)=>({duty:d,member:members.find((m)=>m.id===d.profile_id)}))
+    .sort((a,b)=>entryGrade(a.member?.grade??null).localeCompare(entryGrade(b.member?.grade??null),"ja") || (a.member?.display_name??"").localeCompare(b.member?.display_name??"","ja")) : [];
   const findDuty=(profileId:string,time:string,event:string)=>duties.find((d)=>d.profile_id===profileId&&d.slot_time===time&&d.event_name===event);
   const rows=dutyRows(entries,members).filter((row)=>normalizeEntryName(row.name+row.grade).includes(normalizeEntryName(search)));
   function download() {
@@ -30,10 +35,10 @@ export function ObDutyTable({entries,members,duties=[]}:{entries:ObEntry[];membe
     <p className="text-caption">学年を問わず、エントリーがある現役部員を表示しています。未照合の回答は「本人照合」で確認すると担当を登録できます。</p>
   </Card>
   <div className="flex items-center gap-2"><Input className="min-w-0 flex-1" aria-label="補助員表の氏名・学年で検索" placeholder="氏名・学年で検索" value={search} onChange={(e)=>setSearch(e.target.value)} /><Button size="sm" variant="outline" onClick={download}>CSV出力</Button></div>
-  <p className="text-caption">{rows.length}行・横にスクロールできます。担当欄をタップして登録・編集できます。CSVにも保存済みの担当が出ます。</p>
+  <p className="text-caption">{rows.length}行・種目名をタップすると補助員一覧、担当欄をタップすると登録・編集できます。CSVにも保存済みの担当が出ます。</p>
   <Card className="min-w-0 overflow-hidden"><div className="ob-duty-scroll max-h-[65dvh] overflow-auto" tabIndex={0} role="region" aria-label="部員別の出場予定表">
     <table className="w-full min-w-[1888px] table-fixed lg:min-w-[1472px] border-collapse text-left text-[13px]"><caption className="sr-only">補助員検討用の出場予定</caption>
-      <thead className="sticky top-0 z-20 bg-card"><tr><th scope="col" className="sticky left-0 z-30 w-40 bg-card p-3 lg:w-32 lg:px-2 lg:py-1.5">氏名・学年</th>{OB_DUTY_SLOTS.map((s)=><th key={s.label} scope="col" className="w-36 border-l border-separator p-3 lg:w-28 lg:px-2 lg:py-1.5"><span className="block tabular-nums">{s.time}</span><span className="font-normal">{s.label}</span></th>)}</tr></thead>
+      <thead className="sticky top-0 z-20 bg-card"><tr><th scope="col" className="sticky left-0 z-30 w-40 bg-card p-3 lg:w-32 lg:px-2 lg:py-1.5">氏名・学年</th>{OB_DUTY_SLOTS.map((s)=><th key={s.label} scope="col" className="w-36 border-l border-separator lg:w-28"><button type="button" onClick={()=>setSelectedEvent(s)} aria-label={`${s.time} ${s.label}の補助員一覧`} className="min-h-11 w-full p-3 text-left hover:bg-accent/5 focus-visible:outline-2 focus-visible:outline-accent lg:px-2 lg:py-1.5"><span className="block tabular-nums">{s.time}</span><span className="font-normal text-accent underline decoration-accent/30 underline-offset-2">{s.label}</span></button></th>)}</tr></thead>
       <tbody>{rows.map((row)=><tr key={row.id} className="border-t border-separator"><th scope="row" className="sticky left-0 z-10 bg-card p-3 font-normal lg:px-2 lg:py-1.5"><span className="block text-caption">{row.grade}{!row.linked?"・未照合":""}</span>{row.name}</th>
         {OB_DUTY_SLOTS.map((slot)=>{const value=dutyTimeCell(row.entry,slot);const competing=value!=="出場登録なし"&&value!=="エントリー未確認"&&value!=="当日確認";const duty=row.linked?findDuty(row.id,slot.time,slot.label):undefined;return <td key={slot.label} className={`relative border-l border-separator align-top ${competing?"bg-accent/10":""}`}>
           {row.linked ? <div className="min-h-24 p-3 lg:min-h-14 lg:px-2 lg:py-1.5">
@@ -45,5 +50,10 @@ export function ObDutyTable({entries,members,duties=[]}:{entries:ObEntry[];membe
         </td>;})}
       </tr>)}</tbody>
     </table>
-  </div></Card>{editing && <ObDutyEditor target={editing} onClose={()=>setEditing(null)} />}</div>;
+  </div></Card>{editing && <ObDutyEditor target={editing} onClose={()=>setEditing(null)} />}
+  {selectedEvent && <FormModal open title="補助員一覧" autoFocus={false} onOpenChange={(open)=>{if(!open)setSelectedEvent(null);}}>
+    <div className="space-y-4"><div><h2 className="text-headline">{selectedEvent.time}　{selectedEvent.label}</h2><p className="text-caption">{eventDuties.length}人</p></div>
+      {eventDuties.length ? <ul className="divide-y divide-separator">{eventDuties.map(({duty,member})=><li key={duty.profile_id} className="py-3"><p className="text-headline"><span className="mr-2 text-caption">{entryGrade(member?.grade??null)}</span>{member?.display_name??"名簿情報を確認してください"}</p><p className="mt-1 whitespace-pre-wrap break-words text-body">{duty.assignment}</p></li>)}</ul> : <p className="text-body text-muted2">補助員はまだ登録されていません。</p>}
+    </div>
+  </FormModal>}</div>;
 }
