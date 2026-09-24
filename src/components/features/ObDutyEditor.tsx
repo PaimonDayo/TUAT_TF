@@ -32,12 +32,12 @@ export function ObDutyEditor({target,onClose}:{target:DutyTarget;onClose:()=>voi
       <p className={`text-body ${target.competing?"text-danger":""}`}>{target.competing?"この時間帯に出場登録があります：":"出場予定："}{target.entryText}</p>
       <p className="text-caption">競技の終了時刻・アップ・移動を確認して割り当ててください。</p>
       <div><label htmlFor="ob-duty-assignment" className="mb-2 block text-headline">担当内容</label>
-        <Textarea id="ob-duty-assignment" value={assignment} onChange={(e)=>setAssignment(e.target.value)} disabled={saving} maxLength={200} rows={3} placeholder="例：1500mの周回表示、砲丸投げの記録係" />
+        <Textarea id="ob-duty-assignment" value={assignment} onChange={(e)=>setAssignment(e.target.value)} disabled={saving||target.competing} maxLength={200} rows={3} placeholder="例：1500mの周回表示、砲丸投げの記録係" />
         <p className="mt-1 text-caption">200文字以内</p>
       </div>
       {original && <Button variant="ghost" disabled={saving} onClick={()=>setConfirm("clear")}>担当を解除する</Button>}
     </div>
-    <FormModalFooter><Button className="w-full" disabled={saving||!dirty} onClick={()=>original&&!assignment.trim()?setConfirm("clear"):void save(assignment)}>{saving?"保存中…":"担当を保存する"}</Button></FormModalFooter>
+    <FormModalFooter><Button className="w-full" disabled={saving||!dirty||target.competing} onClick={()=>original&&!assignment.trim()?setConfirm("clear"):void save(assignment)}>{saving?"保存中…":"担当を保存する"}</Button></FormModalFooter>
     <ConfirmDialog open={confirm!==null} onOpenChange={(open)=>{if(!open&&!saving)setConfirm(null);}}
       title={confirm==="discard"?"変更を破棄しますか？":"担当を解除しますか？"}
       description={confirm==="discard"?"保存していない変更は失われます。":`${target.name}さんの${target.time} ${target.label}の補助員担当を解除します。競技エントリーは変更しません。`}

@@ -33,13 +33,13 @@ export function ObDutyTable({entries,members,duties=[]}:{entries:ObEntry[];membe
     const values=[
       ["補助員検討用：開始時刻別の出場登録。終了時刻・アップ・移動は未反映。出場登録なしは担当可能の確約ではありません。"],
       ["学年","氏名","本人照合",...OB_DUTY_SLOTS.flatMap((s)=>[`${s.time} ${s.label}：出場予定`,`${s.time} ${s.label}：補助員担当`])],
-      ...rows.map((row)=>[row.grade,row.name,row.linked?"アプリ名簿":"未照合",...OB_DUTY_SLOTS.flatMap((slot)=>[dutyTimeCell(row.entry,slot),row.linked?findDuty(row.id,slot.time,slot.label)?.assignment??"":""])]),
+      ...rows.map((row)=>[row.grade,row.name,row.linked?"アプリ名簿":"未照合",...OB_DUTY_SLOTS.flatMap((slot)=>[(slot.note ? "当日確認" : dutyTimeCell(row.entry,slot)==="出場登録なし" || dutyTimeCell(row.entry,slot)==="エントリー未確認" ? "" : "○"),row.linked?findDuty(row.id,slot.time,slot.label)?.assignment??"":""])]),
     ];
     const blob=new Blob(["\uFEFF"+values.map((row)=>row.map(obCsvCell).join(",")).join("\r\n")],{type:"text/csv;charset=utf-8"});
     const url=URL.createObjectURL(blob); const a=document.createElement("a");a.href=url;a.download="OB戦_補助員検討表.csv";a.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   return <div className="space-y-4"><Card className="space-y-2 p-4"><h2 className="text-headline">補助員の割り当て</h2>
-    <p className="text-caption">種目ごとに担当を登録します。同じ時刻の他種目への出場予定も表示します。アップ・移動・競技終了時刻を確認して担当を決めてください。「出場登録なし」は空き時間の確定ではありません。リレーは当日確認です。</p>
+    <p className="text-caption">種目ごとに担当を登録します。○は同時刻に出場するため補助員に割り当てられない枠です。アップ・移動・競技終了時刻を確認して担当を決めてください。空欄でもアップ・移動時間を考慮してください。リレーは当日確認です。</p>
     <p className="text-caption">学年を問わず、エントリーがある現役部員を表示しています。未照合の回答は「本人照合」で確認すると担当を登録できます。</p>
   </Card>
   <div className="flex items-center gap-2"><Input className="min-w-0 flex-1" aria-label="補助員表の氏名・学年で検索" placeholder="氏名・学年で検索" value={search} onChange={(e)=>setSearch(e.target.value)} /><Button size="sm" variant="outline" onClick={download}>CSV出力</Button></div>
@@ -50,11 +50,11 @@ export function ObDutyTable({entries,members,duties=[]}:{entries:ObEntry[];membe
       <tbody>{rows.map((row)=><tr key={row.id} className="border-t border-separator"><th scope="row" className="sticky left-0 z-10 bg-card p-3 font-normal lg:px-2 lg:py-1.5"><span className="block text-caption">{row.grade}{!row.linked?"・未照合":""}</span>{row.name}</th>
         {OB_DUTY_SLOTS.map((slot)=>{const value=dutyTimeCell(row.entry,slot);const competing=value!=="出場登録なし"&&value!=="エントリー未確認"&&value!=="当日確認";const duty=row.linked?findDuty(row.id,slot.time,slot.label):undefined;return <td key={slot.label} className={`relative border-l border-separator align-top ${competing?"bg-accent/10":""}`}>
           {row.linked ? <div className="min-h-24 p-3 lg:min-h-14 lg:px-2 lg:py-1.5">
-            <p title={value} className={`lg:truncate ${competing?"font-medium text-accent":"text-muted2"}`}>{value}</p>
+            <p title={value} className={`lg:truncate ${competing?"font-medium text-accent":"text-muted2"}`}>{competing ? "○" : slot.note ? "当日確認" : ""}</p>
             {duty?.assignment && <p title={duty.assignment} className="mt-2 lg:mt-0.5 whitespace-pre-wrap break-words text-ink lg:line-clamp-2">{duty.assignment}</p>}
-            <button type="button" aria-label={`${row.name}の${slot.time} ${slot.label}の補助員担当`} className="absolute inset-0 h-full w-full cursor-pointer hover:bg-accent/5 focus-visible:outline-2 focus-visible:outline-accent focus-visible:-outline-offset-2"
+            <button type="button" disabled={competing&&!duty?.assignment} aria-label={`${row.name}の${slot.time} ${slot.label}の補助員担当`} className="absolute inset-0 h-full w-full cursor-pointer disabled:cursor-default hover:bg-accent/5 focus-visible:outline-2 focus-visible:outline-accent focus-visible:-outline-offset-2"
               onClick={()=>setEditing({profileId:row.id,name:row.name,grade:row.grade,time:slot.time,label:slot.label,entryText:value,competing,existing:duty})} />
-          </div> : <div className="p-3 lg:px-2 lg:py-1.5"><p title={value} className={`lg:truncate ${competing?"font-medium text-accent":"text-muted2"}`}>{value}</p><p className="mt-2 lg:mt-0.5 text-caption"><span className="lg:hidden">本人照合後に登録</span><span className="hidden lg:inline">要本人照合</span></p></div>}
+          </div> : <div className="p-3 lg:px-2 lg:py-1.5"><p title={value} className={`lg:truncate ${competing?"font-medium text-accent":"text-muted2"}`}>{competing ? "○" : slot.note ? "当日確認" : ""}</p><p className="mt-2 lg:mt-0.5 text-caption"><span className="lg:hidden">本人照合後に登録</span><span className="hidden lg:inline">要本人照合</span></p></div>}
         </td>;})}
       </tr>)}</tbody>
     </table>
