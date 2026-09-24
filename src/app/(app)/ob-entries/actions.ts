@@ -72,6 +72,6 @@ export async function saveDuty(input: DutyEdit): Promise<{ ok: boolean; message?
   const client=await editClient();
   if (!client) return {ok:false,message:"権限がありません"};
   const result=await client.rpc("save_ob_duty",{p_profile_id:input.profileId,p_slot_time:input.slotTime,p_assignment:input.assignment,p_revision:input.revision});
-  if(result.error) return {ok:false,message:result.error.message.includes("entry_conflict") ? "他の操作で更新されています。画面を更新してからやり直してください" : "保存できませんでした。在籍中の部員か確認してください"};
+  if(result.error) return {ok:false,message:result.error.message.includes("entry_conflict") ? "他の操作で更新されています。画面を更新してからやり直してください" : "保存できませんでした。エントリーがあるB1・B2の部員か確認してください"};
   revalidatePath("/ob-entries");return {ok:true,revision:result.data};
 }

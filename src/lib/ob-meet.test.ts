@@ -17,9 +17,14 @@ it("shows concurrent events without claiming free time or hiding missing answers
 });
 it("keeps unconfirmed identities separate and avoids duplicating confirmed members",()=>{
   const members=[{id:"p",display_name:"確認 太郎",grade:"2"},{id:"q",display_name:"確認花子",grade:"1"}];
-  expect(dutyRows([entry],members)).toHaveLength(2);
+  expect(dutyRows([entry],members)).toHaveLength(1);
   const rows=dutyRows([{...entry,profile_id:null}],members);
-  expect(rows).toHaveLength(3);expect(rows.filter(r=>!r.linked)).toHaveLength(1);
+  expect(rows).toHaveLength(1);expect(rows.filter(r=>!r.linked)).toHaveLength(1);
+});
+it("limits helper rows to B1/B2 entries and excludes unknown entries and senior members",()=>{
+  const members=[{id:"p",display_name:"B2 member",grade:"2"},{id:"q",display_name:"B3 member",grade:"3"},{id:"r",display_name:"no entry",grade:"1"}];
+  const rows=dutyRows([entry,{...entry,id:"senior",profile_id:"q",grade:"B3"},{...entry,id:"junior",profile_id:null,grade:"B1"},{...entry,id:"graduate",profile_id:null,grade:"M1"}],members);
+  expect(rows.map(r=>r.id)).toEqual(["junior","p"]);
 });
 it("does not treat alumni competitors as unconfirmed student helpers",()=>{
   const alumni={...entry,id:"alumni",profile_id:null,grade:"OB・OG"};
