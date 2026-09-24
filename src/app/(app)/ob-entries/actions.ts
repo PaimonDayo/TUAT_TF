@@ -75,3 +75,29 @@ export async function saveDuty(input: DutyEdit): Promise<{ ok: boolean; message?
   if(result.error) return {ok:false,message:result.error.message.includes("entry_competing") ? "この時間帯に出場する部員は補助員に登録できません" : result.error.message.includes("entry_conflict") ? "他の操作で更新されています。画面を更新してからやり直してください" : "保存できませんでした。在籍中の部員か確認してください"};
   revalidatePath("/ob-entries");return {ok:true,revision:result.data};
 }
+
+export async function saveDutyRoles(input: import("@/lib/ob-duty").DutyRolesEdit): Promise<{ok:boolean;message?:string}> {
+  const {validDutyRolesEdit}=await import("@/lib/ob-duty");
+  if(!validDutyRolesEdit(input))return {ok:false,message:"役職を確認してください"};
+  const client=await editClient();if(!client)return {ok:false,message:"権限がありません"};
+  const result=await client.rpc("save_ob_duty_roles",{p_profile_id:input.profileId,p_slot_time:input.slotTime,p_event_name:input.eventName,p_role_ids:input.roleIds,p_revision:input.revision});
+  if(result.error)return {ok:false,message:dutyRoleError(result.error.message)};
+  revalidatePath("/ob-entries");return {ok:true};
+}
+export async function saveDutyRole(input: import("@/lib/ob-duty").DutyRoleEdit): Promise<{ok:boolean;message?:string}> {
+  const {validDutyRoleEdit}=await import("@/lib/ob-duty");
+  if(!validDutyRoleEdit(input))return {ok:false,message:"役職名・略称・必要人数（0〜99人）を確認してください"};
+  const client=await editClient();if(!client)return {ok:false,message:"権限がありません"};
+  const result=await client.rpc("save_ob_duty_role",{p_id:input.id,p_slot_time:input.slotTime,p_event_name:input.eventName,p_name:input.name.trim(),p_abbreviation:input.abbreviation.trim(),p_required_count:input.requiredCount,p_revision:input.revision});
+  if(result.error)return {ok:false,message:dutyRoleError(result.error.message)};
+  revalidatePath("/ob-entries");return {ok:true};
+}
+function dutyRoleError(message:string) {
+  if(message.includes("role_full"))return "必要人数に達した役職があります。画面を更新して確認してください";
+  if(message.includes("role_below_assigned"))return "割当済みの人数より少なくできません。先に担当を解除してください";
+  if(message.includes("role_duplicate"))return "同じ名前の役職が登録されています";
+  if(message.includes("entry_competing"))return "この時間帯に出場するため補助員に登録できません";
+  if(message.includes("entry_conflict"))return "他の操作で更新されています。画面を更新してください";
+  if(message.includes("role_names_too_long"))return "選択した役職名が長すぎます。役職名を短くしてください";
+  return "保存できませんでした。入力内容を確認してください";
+}

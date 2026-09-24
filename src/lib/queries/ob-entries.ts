@@ -3,13 +3,14 @@ import { entryClient } from "@/lib/ob-entries-db";
 
 export async function getObEntries() {
   const client = entryClient(await createClient());
-  const [entries, members, history, party, duties] = await Promise.all([
+  const [entries, members, history, party, duties, dutyRoles] = await Promise.all([
     client.from("ob_meet_entries").select("*").eq("meet_key", "ob-2026").order("grade").order("submitted_name"),
     client.from("profiles").select("id,display_name,grade").eq("status", "active").eq("approved", true).order("display_name"),
     client.from("ob_meet_entries").select("submitted_name,profile_id").neq("meet_key", "ob-2026").not("profile_id", "is", null),
     client.from("ob_party_responses").select("id,meet_key,submitted_name,group_label,status,entry_id,revision,needs_review").eq("meet_key", "ob-2026").order("group_label").order("submitted_name"),
-    client.from("ob_meet_duties").select("meet_key,profile_id,slot_time,event_name,assignment,revision").eq("meet_key", "ob-2026"),
+    client.from("ob_meet_duties").select("meet_key,profile_id,slot_time,event_name,assignment,revision,role_ids").eq("meet_key", "ob-2026"),
+    client.from("ob_duty_roles").select("*").eq("meet_key","ob-2026").order("name"),
   ]);
-  if (entries.error || members.error || history.error || party.error || duties.error) throw new Error("エントリー情報を取得できませんでした");
-  return { entries, members, history, party, duties };
+  if (entries.error || members.error || history.error || party.error || duties.error || dutyRoles.error) throw new Error("エントリー情報を取得できませんでした");
+  return { entries, members, history, party, duties, dutyRoles };
 }

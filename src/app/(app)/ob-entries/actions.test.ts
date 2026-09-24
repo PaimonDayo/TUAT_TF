@@ -3,7 +3,7 @@ const mocks = vi.hoisted(() => ({ user: vi.fn(), roles: vi.fn(), preview: vi.fn(
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: mocks.user }, from: mocks.from, rpc: mocks.rpc }) }));
 vi.mock("@/lib/supabase/auth", () => ({ fetchRolesByProfileIds: mocks.roles, isMemberPreviewActive: mocks.preview }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.refresh }));
-import { confirmEntryMember, saveEntry, saveParty, saveDuty } from "./actions";
+import { confirmEntryMember, saveEntry, saveParty, saveDuty, saveDutyRole, saveDutyRoles } from "./actions";
 const id = "10000000-0000-4000-8000-000000000001";
 
 it("limits duty writes to system users outside preview and rejects invalid slots",async()=>{
@@ -109,4 +109,17 @@ it("preserves uniqueness failures and refreshes only after a successful link cha
   expect(mocks.refresh).not.toHaveBeenCalled();
   expect((await confirmEntryMember(id, null, 0)).ok).toBe(true);
   expect(mocks.refresh).toHaveBeenCalledWith("/ob-entries");
+});
+
+it("checks system permission for staffing configuration and selections",async()=>{
+ const role={id:null,slotTime:"10:00",eventName:"1500m",name:"計時",abbreviation:"計",requiredCount:1,revision:null};
+ mocks.roles.mockResolvedValueOnce(new Map());expect((await saveDutyRole(role)).ok).toBe(false);
+ mocks.preview.mockResolvedValueOnce(true);expect((await saveDutyRoles({profileId:id,slotTime:"10:00",eventName:"1500m",roleIds:[],revision:null})).ok).toBe(false);
+ expect(mocks.rpc).not.toHaveBeenCalled();
+});
+it("reports capacity errors and sends multiple roles atomically",async()=>{
+ const input={profileId:id,slotTime:"10:00",eventName:"1500m",roleIds:[id],revision:null};
+ mocks.rpc.mockResolvedValueOnce({error:{message:"role_full"}});expect((await saveDutyRoles(input)).message).toContain("必要人数");expect(mocks.refresh).not.toHaveBeenCalled();
+ mocks.rpc.mockResolvedValueOnce({data:0,error:null});expect((await saveDutyRoles(input)).ok).toBe(true);
+ expect(mocks.rpc).toHaveBeenLastCalledWith("save_ob_duty_roles",{p_profile_id:id,p_slot_time:"10:00",p_event_name:"1500m",p_role_ids:[id],p_revision:null});
 });

@@ -13,3 +13,21 @@ it("keeps form, schedule and database slot validation aligned",()=>{
   const sql=readFileSync(new URL("../../supabase/migrations/20260924080000_ob_duties.sql",import.meta.url),"utf8");
   for(const time of DUTY_TIMES)expect(sql).toContain(`'${time}'`);
 });
+
+it("validates multiple selected role IDs and rejects duplicates", async()=>{
+ const {validDutyRolesEdit}=await import("./ob-duty");
+ const role="20000000-0000-4000-8000-000000000001";
+ expect(validDutyRolesEdit({...input,roleIds:[]})).toBe(true);
+ expect(validDutyRolesEdit({...input,roleIds:[role]})).toBe(true);
+ expect(validDutyRolesEdit({...input,roleIds:[role,role]})).toBe(false);
+ expect(validDutyRolesEdit({...input,roleIds:["bad"]})).toBe(false);
+});
+it("validates staffing targets and uses updated names and abbreviations by stable role ID",async()=>{
+ const {validDutyRoleEdit,dutyRoleText}=await import("./ob-duty");
+ const role={id:input.profileId,meet_key:"ob-2026",slot_time:"10:00",event_name:"1500m",name:"計時",abbreviation:"計",required_count:2,revision:0};
+ const edit={id:null,slotTime:"10:00",eventName:"1500m",name:"計時",abbreviation:"計",requiredCount:2,revision:null};
+ expect(validDutyRoleEdit(edit)).toBe(true);
+ for(const change of [{requiredCount:-1},{requiredCount:1.5},{requiredCount:100},{name:" "},{abbreviation:""}])expect(validDutyRoleEdit({...edit,...change})).toBe(false);
+ const duty={meet_key:"ob-2026",profile_id:input.profileId,slot_time:"10:00",event_name:"1500m",assignment:"old name",role_ids:[role.id],revision:0};
+ expect(dutyRoleText(duty,[role])).toBe("計時");expect(dutyRoleText(duty,[role],true)).toBe("計");
+});
