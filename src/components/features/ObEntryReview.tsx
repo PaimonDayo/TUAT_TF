@@ -12,20 +12,22 @@ import { useToast } from "@/components/ui/toast";
 import { confirmEntryMember } from "@/app/(app)/ob-entries/actions";
 import { entryEventRows, type ObEntry } from "@/lib/ob-entries";
 import { entryGrade, matchEntryMember, normalizeEntryName, type EntryMember, type ConfirmedEntryIdentity } from "@/lib/entry-identity";
+import { ObEntryEditor, ObEntryHistory } from "./ObEntryEditor";
 
 export function ObEntryReview({ initial, members, viewerId, history = [] }: { initial: ObEntry[]; members: EntryMember[]; viewerId: string; history?: ConfirmedEntryIdentity[] }) {
   const [search, setSearch] = useState("");
   const [mine, setMine] = useState(true);
   const [unlinked, setUnlinked] = useState(false);
+  const [adding, setAdding] = useState(false);
   const query = normalizeEntryName(search).toLowerCase();
   const visible = initial.filter((e) => (!mine || e.profile_id === viewerId) && (mine || !unlinked || !e.profile_id) &&
     normalizeEntryName([e.submitted_name, e.grade, ...e.events].join(" ")).toLowerCase().includes(query));
   return <div className="space-y-3 px-4 pb-8 pt-2">
     <Card className="space-y-2 p-4">
       <p className="text-headline">システムロール限定で確認中</p>
-      <p className="text-caption">フォームの最新回答と確認済みの追記をまとめています。一般部員にはまだ公開していません。</p>
-      <p className="text-caption">{initial.length}人・延べ{initial.reduce((sum, e) => sum + e.events.length, 0)}種目 ／ 本人確認済み {initial.filter((e) => e.profile_id).length}人</p>
-      <p className="text-micro text-muted">氏名未入力の回答と、種目の回答がない人は含めていません。</p>
+      <p className="text-caption">フォームの回答にアプリでの変更を反映しています。一般部員にはまだ公開していません。</p>
+      <p className="text-caption">出場 {initial.filter((e) => e.events.length).length}人・延べ{initial.reduce((sum, e) => sum + e.events.length, 0)}種目 ／ 取り消し済み {initial.filter((e) => !e.events.length).length}人</p>
+      <p className="text-micro text-muted">Googleフォームへの書き戻しは行いません。取り消した回答も履歴とともに保持します。</p>
     </Card>
     <Input aria-label="氏名・種目・学年で検索" placeholder="氏名・種目・学年で検索" value={search} onChange={(event) => setSearch(event.target.value)} />
     <div className="flex flex-wrap gap-2">
@@ -33,7 +35,9 @@ export function ObEntryReview({ initial, members, viewerId, history = [] }: { in
       <Button size="sm" variant={!mine ? "primary" : "outline"} aria-pressed={!mine} onClick={() => { setMine(false); setSearch(""); }}>全員・本人照合</Button>
       {!mine && <Button size="sm" variant={unlinked ? "primary" : "outline"} aria-pressed={unlinked} onClick={() => setUnlinked(!unlinked)}>未確認のみ</Button>}
     </div>
-    <p className="text-caption">資格記録はフォームの申告内容です。未回答と、フォームに記録欄がない種目は区別して表示します。</p>
+    {!adding && <Button size="sm" variant="outline" onClick={() => setAdding(true)}>追加エントリー</Button>}
+    {adding && <Card className="p-4"><ObEntryEditor members={members.filter((m) => !initial.some((e) => e.profile_id === m.id))} initialProfileId={mine && !initial.some((e) => e.profile_id === viewerId) ? viewerId : ""} onClose={() => setAdding(false)} /></Card>}
+    <p className="text-caption">資格記録は申告内容です。未回答と、元フォームに記録欄がない種目は区別して表示します。</p>
     {mine && <p className="text-caption">確認済みの部員IDで自分の回答を表示しています。</p>}
     <p className="section-label">{visible.length}人</p>
     {visible.length === 0 ? <Card><EmptyState title={mine && !search ? "自分に紐付いたエントリーはありません" : "条件に合うエントリーはありません"} />
@@ -44,6 +48,7 @@ export function ObEntryReview({ initial, members, viewerId, history = [] }: { in
 
 function EntryCard({ entry, members, history }: { entry: ObEntry; members: EntryMember[]; history: ConfirmedEntryIdentity[] }) {
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   const match = matchEntryMember(entry, members, history);
   const [selected, setSelected] = useState(entry.profile_id ?? (match.status === "exact" || match.status === "previous" ? match.candidates[0].id : ""));
   const [saving, setSaving] = useState(false);
@@ -63,6 +68,7 @@ function EntryCard({ entry, members, history }: { entry: ObEntry; members: Entry
   }
   return <Card className="p-4">
     <p className="text-headline">{entry.grade} {entry.submitted_name}</p>
+    {!entry.events.length && <p className="mt-2 text-body">エントリー取り消し済み</p>}
     <table className="mt-3 w-full table-fixed text-left text-body">
       <caption className="sr-only">{entry.submitted_name}の出場種目と資格記録</caption>
       <thead><tr className="border-b border-separator"><th scope="col" className="w-1/2 py-2 pr-2 font-medium">出場種目</th><th scope="col" className="py-2 font-medium">資格記録</th></tr></thead>
@@ -70,6 +76,9 @@ function EntryCard({ entry, members, history }: { entry: ObEntry; members: Entry
         <th scope="row" className="break-words py-2 pr-2 align-top font-normal">{event}</th><td className="whitespace-pre-wrap break-words py-2 align-top">{mark}</td>
       </tr>)}</tbody>
     </table>
+    {!editing && <Button className="mt-3" size="sm" variant="outline" onClick={() => setEditing(true)}>{entry.events.length ? "種目・資格記録を編集する" : "再エントリーする"}</Button>}
+    {editing && <ObEntryEditor entry={entry} members={members} onClose={() => setEditing(false)} />}
+    <ObEntryHistory entry={entry} members={members} />
     <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="mt-3 flex w-full items-center justify-between gap-2 text-left text-caption text-accent">
       <span>{status}{linked ? `：${linked.display_name}` : ""}</span><ChevronDown size={16} className={open ? "rotate-180 shrink-0" : "shrink-0"} />
     </button>

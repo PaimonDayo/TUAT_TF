@@ -1,9 +1,9 @@
 import { beforeEach, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ user: vi.fn(), roles: vi.fn(), preview: vi.fn(), from: vi.fn(), update: vi.fn(), eq: vi.fn(), result: vi.fn(), refresh: vi.fn() }));
-vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: mocks.user }, from: mocks.from }) }));
+const mocks = vi.hoisted(() => ({ user: vi.fn(), roles: vi.fn(), preview: vi.fn(), from: vi.fn(), update: vi.fn(), eq: vi.fn(), result: vi.fn(), refresh: vi.fn(), rpc: vi.fn() }));
+vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: mocks.user }, from: mocks.from, rpc: mocks.rpc }) }));
 vi.mock("@/lib/supabase/auth", () => ({ fetchRolesByProfileIds: mocks.roles, isMemberPreviewActive: mocks.preview }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.refresh }));
-import { confirmEntryMember } from "./actions";
+import { confirmEntryMember, saveEntry, getEntryChanges } from "./actions";
 const id = "10000000-0000-4000-8000-000000000001";
 
 beforeEach(() => {
@@ -15,6 +15,25 @@ beforeEach(() => {
   mocks.update.mockReturnValue(chain);
   mocks.eq.mockReturnValue(chain);
   mocks.result.mockResolvedValue({ data: { id }, error: null });
+  mocks.rpc.mockResolvedValue({ data: id, error: null });
+});
+
+it("rejects entry edits and history reads from ordinary members or preview sessions", async () => {
+  const input = { entryId: id, profileId: null, revision: 0, events: ["男子100m"], marks: {} };
+  mocks.roles.mockResolvedValue(new Map());
+  expect((await saveEntry(input)).ok).toBe(false);
+  expect((await getEntryChanges(id)).ok).toBe(false);
+  mocks.roles.mockResolvedValue(new Map([["system", [{ can_manage_system: true }]]]));
+  mocks.preview.mockResolvedValue(true);
+  expect((await saveEntry(input)).ok).toBe(false);
+  expect(mocks.rpc).not.toHaveBeenCalled();
+  expect(mocks.from).not.toHaveBeenCalled();
+});
+
+it("does not report success when concurrent editing invalidates a revision", async () => {
+  mocks.rpc.mockResolvedValue({ error: { message: "entry_conflict" } });
+  expect((await saveEntry({ entryId: id, profileId: null, revision: 0, events: [], marks: {} })).message).toContain("更新されています");
+  expect(mocks.refresh).not.toHaveBeenCalled();
 });
 
 it("refuses anonymous, ordinary members and preview before any data access", async () => {
