@@ -3,7 +3,7 @@ const mocks = vi.hoisted(() => ({ user: vi.fn(), roles: vi.fn(), preview: vi.fn(
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: mocks.user }, from: mocks.from, rpc: mocks.rpc }) }));
 vi.mock("@/lib/supabase/auth", () => ({ fetchRolesByProfileIds: mocks.roles, isMemberPreviewActive: mocks.preview }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.refresh }));
-import { confirmEntryMember, saveEntry, getEntryChanges } from "./actions";
+import { confirmEntryMember, saveEntry } from "./actions";
 const id = "10000000-0000-4000-8000-000000000001";
 
 beforeEach(() => {
@@ -18,11 +18,10 @@ beforeEach(() => {
   mocks.rpc.mockResolvedValue({ data: id, error: null });
 });
 
-it("rejects entry edits and history reads from ordinary members or preview sessions", async () => {
+it("rejects entry edits from ordinary members or preview sessions", async () => {
   const input = { entryId: id, profileId: null, revision: 0, events: ["男子100m"], marks: {} };
   mocks.roles.mockResolvedValue(new Map());
   expect((await saveEntry(input)).ok).toBe(false);
-  expect((await getEntryChanges(id)).ok).toBe(false);
   mocks.roles.mockResolvedValue(new Map([["system", [{ can_manage_system: true }]]]));
   mocks.preview.mockResolvedValue(true);
   expect((await saveEntry(input)).ok).toBe(false);

@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { fetchRolesByProfileIds, isMemberPreviewActive } from "@/lib/supabase/auth";
 import { permissionsOf } from "@/lib/permissions";
 import { entryClient } from "@/lib/ob-entries-db";
-import { validEntryEdit, type EntryEdit, type EntryChange } from "@/lib/ob-entry-edit";
+import { validEntryEdit, type EntryEdit } from "@/lib/ob-entry-edit";
 
 async function editClient() {
   const client = entryClient(await createClient());
@@ -29,14 +29,6 @@ export async function saveEntry(input: EntryEdit): Promise<{ ok: boolean; messag
   }
   revalidatePath("/ob-entries");
   return { ok: true };
-}
-
-export async function getEntryChanges(entryId: string): Promise<{ ok: boolean; changes: EntryChange[] }> {
-  if (!/^[0-9a-f-]{36}$/i.test(entryId)) return { ok: false, changes: [] };
-  const client = await editClient();
-  if (!client) return { ok: false, changes: [] };
-  const result = await client.from("ob_entry_changes").select("id,changed_at,actor_id,before_data,after_data").eq("entry_id", entryId).order("changed_at", { ascending: false }).limit(20);
-  return { ok: !result.error, changes: result.data ?? [] };
 }
 
 export async function confirmEntryMember(entryId: string, profileId: string | null, revision: number): Promise<{ ok: boolean; message?: string }> {
