@@ -7,7 +7,7 @@ import { confirmEntryMember, saveEntry, saveParty, saveDuty } from "./actions";
 const id = "10000000-0000-4000-8000-000000000001";
 
 it("limits duty writes to system users outside preview and rejects invalid slots",async()=>{
-  const input={profileId:id,slotTime:"10:00",assignment:"周回表示",revision:null};
+  const input={profileId:id,slotTime:"10:00",eventName:"1500m",assignment:"周回表示",revision:null};
   mocks.user.mockResolvedValueOnce({data:{user:null}});
   expect((await saveDuty(input)).ok).toBe(false);
   mocks.roles.mockResolvedValueOnce(new Map());
@@ -18,13 +18,13 @@ it("limits duty writes to system users outside preview and rejects invalid slots
   expect(mocks.rpc).not.toHaveBeenCalled();
 });
 it("reports duty conflicts and refreshes only successful saves",async()=>{
-  const input={profileId:id,slotTime:"10:00",assignment:"周回表示",revision:0};
+  const input={profileId:id,slotTime:"10:00",eventName:"1500m",assignment:"周回表示",revision:0};
   mocks.rpc.mockResolvedValueOnce({error:{message:"entry_conflict"}});
   expect((await saveDuty(input)).message).toContain("更新されています");
   expect(mocks.refresh).not.toHaveBeenCalled();
   mocks.rpc.mockResolvedValueOnce({data:1,error:null});
   expect(await saveDuty(input)).toEqual({ok:true,revision:1});
-  expect(mocks.rpc).toHaveBeenLastCalledWith("save_ob_duty",{p_profile_id:id,p_slot_time:"10:00",p_assignment:"周回表示",p_revision:0});
+  expect(mocks.rpc).toHaveBeenLastCalledWith("save_ob_duty",{p_profile_id:id,p_slot_time:"10:00",p_event_name:"1500m",p_assignment:"周回表示",p_revision:0});
   expect(mocks.refresh).toHaveBeenCalledWith("/ob-entries");
 });
 

@@ -21,7 +21,7 @@ export function ObDutyEditor({target,onClose}:{target:DutyTarget;onClose:()=>voi
   async function save(value:string) {
     setSaving(true);
     try {
-      const result=await saveDuty({profileId:target.profileId,slotTime:target.time,assignment:value.trim(),revision:target.existing?.revision??null});
+      const result=await saveDuty({profileId:target.profileId,slotTime:target.time,eventName:target.label,assignment:value.trim(),revision:target.existing?.revision??null});
       if(!result.ok){showToast(result.message??"保存できませんでした");setConfirm(null);return;}
       showToast(value.trim()?"補助員の担当を保存しました":"補助員の担当を解除しました","success");router.refresh();onClose();
     } catch {showToast("保存できませんでした");setConfirm(null);} finally {setSaving(false);}
@@ -40,7 +40,7 @@ export function ObDutyEditor({target,onClose}:{target:DutyTarget;onClose:()=>voi
     <FormModalFooter><Button className="w-full" disabled={saving||!dirty} onClick={()=>original&&!assignment.trim()?setConfirm("clear"):void save(assignment)}>{saving?"保存中…":"担当を保存する"}</Button></FormModalFooter>
     <ConfirmDialog open={confirm!==null} onOpenChange={(open)=>{if(!open&&!saving)setConfirm(null);}}
       title={confirm==="discard"?"変更を破棄しますか？":"担当を解除しますか？"}
-      description={confirm==="discard"?"保存していない変更は失われます。":`${target.name}さんの${target.time}の補助員担当を解除します。競技エントリーは変更しません。`}
+      description={confirm==="discard"?"保存していない変更は失われます。":`${target.name}さんの${target.time} ${target.label}の補助員担当を解除します。競技エントリーは変更しません。`}
       confirmLabel={confirm==="discard"?"破棄する":"解除する"} busy={saving} busyLabel="保存中…" onConfirm={()=>confirm==="discard"?onClose():void save("")} />
   </FormModal>;
 }

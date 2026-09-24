@@ -25,7 +25,12 @@ export const OB_PROGRAM: { time: string; label: string; events: string[]; note?:
   { time: "15:30", label: "4×300mリレー", events: [], note: "当日エントリー" },
   { time: "16:00", label: "閉会式", events: [] },
 ];
-export const OB_DUTY_SLOTS = OB_PROGRAM.filter((slot) => slot.events.length || slot.note);
+export const OB_DUTY_SLOTS = OB_PROGRAM.filter((slot) => slot.events.length || slot.note).flatMap((slot) =>
+  slot.events.length ? slot.events.map((event) => ({ ...slot, label: event === "立ち五段" ? "立ち五段跳び" : event, events: [event] })) : [slot]);
+/** Include concurrent competitions even when the helper assignment belongs to another event. */
+export function dutyTimeCell(entry: Pick<ObEntry, "events"> | undefined, slot: typeof OB_PROGRAM[number]): string {
+  return dutyCell(entry, OB_PROGRAM.find((s) => s.time === slot.time) ?? slot);
+}
 
 /** No finish times or warm-up durations have been provided: absence of an entry is not availability. */
 export function dutyCell(entry: Pick<ObEntry, "events"> | undefined, slot: typeof OB_PROGRAM[number]): string {

@@ -71,7 +71,7 @@ export async function saveDuty(input: DutyEdit): Promise<{ ok: boolean; message?
   if (!validDutyEdit(input)) return {ok:false,message:"部員・時間帯・担当内容を確認してください（200文字以内）"};
   const client=await editClient();
   if (!client) return {ok:false,message:"権限がありません"};
-  const result=await client.rpc("save_ob_duty",{p_profile_id:input.profileId,p_slot_time:input.slotTime,p_assignment:input.assignment,p_revision:input.revision});
+  const result=await client.rpc("save_ob_duty",{p_profile_id:input.profileId,p_slot_time:input.slotTime,p_event_name:input.eventName,p_assignment:input.assignment,p_revision:input.revision});
   if(result.error) return {ok:false,message:result.error.message.includes("entry_conflict") ? "他の操作で更新されています。画面を更新してからやり直してください" : "保存できませんでした。エントリーがあるB1・B2の部員か確認してください"};
   revalidatePath("/ob-entries");return {ok:true,revision:result.data};
 }

@@ -1,8 +1,15 @@
 import { expect,it } from "vitest";
-import { OB_PROGRAM, OB_DUTY_SLOTS, dutyCell, dutyRows, partyCounts, obCsvCell, validPartyEdit, type ObPartyResponse } from "./ob-meet";
+import { OB_PROGRAM, OB_DUTY_SLOTS, dutyCell, dutyTimeCell, dutyRows, partyCounts, obCsvCell, validPartyEdit, type ObPartyResponse } from "./ob-meet";
 import { OB_ENTRY_EVENTS, validEntryEdit } from "./ob-entry-edit";
 import type { ObEntry } from "./ob-entries";
 const entry = {id:"e",grade:"B2",submitted_name:"確認太郎",profile_id:"p",events:["男子100m","男子砲丸投げ"]} as ObEntry;
+it("separates concurrent helper events while retaining concurrent competition warnings",()=>{
+  expect(OB_DUTY_SLOTS).toHaveLength(12);
+  expect(OB_DUTY_SLOTS.filter(s=>s.time==="11:00").map(s=>s.label)).toEqual(["100m","砲丸投げ"]);
+  expect(OB_DUTY_SLOTS.every(s=>s.events.length<=1)).toBe(true);
+  const shot=OB_DUTY_SLOTS.find(s=>s.label==="砲丸投げ")!;
+  expect(dutyTimeCell({events:["男子100m"]},shot)).toBe("100m");
+});
 it("maps all entry events to the supplied program exactly once and keeps relay same-day only",()=>{
   for(const event of OB_ENTRY_EVENTS) expect(OB_PROGRAM.filter(s=>s.events.includes(event.slice(2)))).toHaveLength(1);
   expect(OB_PROGRAM.map(s=>s.time)).toEqual(["09:00","09:30","10:00","10:30","11:00","11:40","12:20","13:00","13:30","14:30","15:00","15:30","16:00"]);
