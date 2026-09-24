@@ -42,7 +42,7 @@ export function dutyCell(entry: Pick<ObEntry, "events"> | undefined, slot: typeo
 export function dutyRows(entries: ObEntry[], members: EntryMember[]) {
   entries = entries.filter((entry) => !isAlumniEntry(entry));
   return [
-    ...members.map((m) => ({ id: m.id, name: m.display_name, grade: entryGrade(m.grade), entry: entries.find((e) => e.profile_id === m.id), linked: true })),
+    ...members.filter((m) => entries.some((e) => e.profile_id === m.id)).map((m) => ({ id: m.id, name: m.display_name, grade: entryGrade(m.grade), entry: entries.find((e) => e.profile_id === m.id), linked: true })),
     ...entries.filter((e) => !e.profile_id || !members.some((m) => m.id === e.profile_id)).map((e) => ({ id: e.id, name: e.submitted_name, grade: e.grade, entry: e, linked: false })),
   ].sort((a,b) => a.grade.localeCompare(b.grade,"ja") || a.name.localeCompare(b.name,"ja"));
 }

@@ -27,7 +27,7 @@ export function ObDutyTable({entries,members,duties=[]}:{entries:ObEntry[];membe
   }
   return <div className="space-y-4"><Card className="space-y-2 p-4"><h2 className="text-headline">補助員の割り当て</h2>
     <p className="text-caption">種目ごとに担当を登録します。同じ時刻の他種目への出場予定も表示します。アップ・移動・競技終了時刻を確認して担当を決めてください。「出場登録なし」は空き時間の確定ではありません。リレーは当日確認です。</p>
-    <p className="text-caption">現役部員全員を表示しています。エントリー未確認の部員も担当を登録できます。未照合の回答は「本人照合」で確認すると担当を登録できます。</p>
+    <p className="text-caption">学年を問わず、エントリーがある現役部員を表示しています。未照合の回答は「本人照合」で確認すると担当を登録できます。</p>
   </Card>
   <div className="flex items-center gap-2"><Input className="min-w-0 flex-1" aria-label="補助員表の氏名・学年で検索" placeholder="氏名・学年で検索" value={search} onChange={(e)=>setSearch(e.target.value)} /><Button size="sm" variant="outline" onClick={download}>CSV出力</Button></div>
   <p className="text-caption">{rows.length}行・横にスクロールできます。担当欄をタップして登録・編集できます。CSVにも保存済みの担当が出ます。</p>
