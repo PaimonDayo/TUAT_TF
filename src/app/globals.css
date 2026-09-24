@@ -282,3 +282,10 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .blog-article-body ol { list-style: decimal; }
 .blog-article-body blockquote { margin: 1em 0; border-left: 3px solid var(--color-separator); padding-left: 1em; color: var(--color-muted2); }
 .blog-article-body a { color: var(--color-accent); text-decoration: underline; }
+
+/* Give the OB editing workspace room on desktop without widening reading pages. */
+@media (min-width: 1024px) {
+  .app-frame:has([data-ob-workspace]) { max-width: 1600px; }
+  .app-main:has([data-ob-workspace]) { max-width: none; }
+  .ob-duty-scroll td p:first-child { white-space: nowrap; text-wrap: nowrap; }
+}

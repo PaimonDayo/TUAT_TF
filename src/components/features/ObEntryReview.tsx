@@ -34,7 +34,7 @@ export function ObEntryReview({ initial, members, viewerId, history = [], party 
     normalizeEntryName([e.submitted_name, e.grade, ...e.events].join(" ")).toLowerCase().includes(query));
   const eventNames = [...new Set(initial.flatMap((entry) => entry.events))].sort((a, b) => OB_ENTRY_EVENTS.indexOf(a) - OB_ENTRY_EVENTS.indexOf(b));
   const groups = eventNames.filter((event) => division === "all" || event.startsWith(division)).map((event) => ({ event, entries: visible.filter((entry) => entry.events.includes(event) && normalizeEntryName([entry.submitted_name, entry.grade, event].join(" ")).toLowerCase().includes(query)) })).filter((group) => group.entries.length);
-  return <div className="space-y-4 px-4 pb-8 pt-2">
+  return <div data-ob-workspace className="space-y-4 px-4 pb-8 pt-2">
     <Card className="p-4">
       <div className="flex items-center justify-between gap-3"><div><h2 className="text-headline">OB戦エントリー</h2><p className="mt-1 text-caption">{initial.filter((e) => e.events.length).length}人・{initial.reduce((sum, e) => sum + e.events.length, 0)}エントリー</p></div><Button size="sm" variant="outline" onClick={() => setAdding(true)}>新規登録</Button></div>
       <p className="mt-2 text-micro text-muted2">現役・OB・OGの出場登録／システムロール限定</p>
