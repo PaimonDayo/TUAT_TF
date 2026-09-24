@@ -30,7 +30,7 @@ export const OB_DUTY_SLOTS = OB_PROGRAM.filter((slot) => slot.events.length || s
 /** No finish times or warm-up durations have been provided: absence of an entry is not availability. */
 export function dutyCell(entry: Pick<ObEntry, "events"> | undefined, slot: typeof OB_PROGRAM[number]): string {
   if (slot.note) return "当日確認";
-  if (!entry) return "回答なし";
+  if (!entry) return "エントリー未確認";
   const events = entry.events.filter((event) => slot.events.includes(event.slice(2))).map((event) => event.slice(2));
   return events.length ? events.join("・") : "出場登録なし";
 }

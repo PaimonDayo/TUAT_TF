@@ -16,11 +16,12 @@ import { ObEntryEditor } from "./ObEntryEditor";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { ObPartyView } from "./ObPartyView";
+import type { ObDuty } from "@/lib/ob-duty";
 import { ObDutyTable } from "./ObDutyTable";
 import { OB_PROGRAM, type ObPartyResponse } from "@/lib/ob-meet";
 import { OB_ENTRY_EVENTS, entryDivision } from "@/lib/ob-entry-edit";
 
-export function ObEntryReview({ initial, members, viewerId, history = [], party = [] }: { initial: ObEntry[]; members: EntryMember[]; viewerId: string; party?: ObPartyResponse[]; history?: ConfirmedEntryIdentity[] }) {
+export function ObEntryReview({ initial, members, viewerId, history = [], party = [], duties = [] }: { initial: ObEntry[]; members: EntryMember[]; viewerId: string; party?: ObPartyResponse[]; duties?: ObDuty[]; history?: ConfirmedEntryIdentity[] }) {
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"events" | "mine" | "identity" | "party" | "duty">("events");
   const [unlinked, setUnlinked] = useState(false);
@@ -45,7 +46,7 @@ export function ObEntryReview({ initial, members, viewerId, history = [], party 
     {view === "identity" && <Button size="sm" variant={unlinked ? "primary" : "outline"} aria-pressed={unlinked} onClick={() => setUnlinked(!unlinked)}>未確認のみ</Button>}
     {adding && <ObEntryEditor parties={party} members={members.filter((m) => !initial.some((e) => e.profile_id === m.id))} initialProfileId={view === "mine" && !initial.some((e) => e.profile_id === viewerId) ? viewerId : ""} onClose={() => setAdding(false)} />}
     {editing && <ObEntryEditor key={`${editing.id}:${editing.revision}`} entry={editing} party={party.find((p)=>p.entry_id===editing.id)} members={members} onClose={() => setEditingId(null)} />}
-    {view === "party" ? <ObPartyView responses={party} /> : view === "duty" ? <ObDutyTable entries={initial} members={members} /> : view === "events" ? <div className="space-y-3">
+    {view === "party" ? <ObPartyView responses={party} /> : view === "duty" ? <ObDutyTable entries={initial} members={members} duties={duties} /> : view === "events" ? <div className="space-y-3">
       <p className="text-caption">プログラム（予定）・競技を開くと出場者と資格記録が見られます。</p>
       {OB_PROGRAM.map((slot) => {
         const rows=groups.filter(({event})=>slot.events.includes(event.slice(2)));

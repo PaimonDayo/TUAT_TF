@@ -3,8 +3,30 @@ const mocks = vi.hoisted(() => ({ user: vi.fn(), roles: vi.fn(), preview: vi.fn(
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: mocks.user }, from: mocks.from, rpc: mocks.rpc }) }));
 vi.mock("@/lib/supabase/auth", () => ({ fetchRolesByProfileIds: mocks.roles, isMemberPreviewActive: mocks.preview }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.refresh }));
-import { confirmEntryMember, saveEntry, saveParty } from "./actions";
+import { confirmEntryMember, saveEntry, saveParty, saveDuty } from "./actions";
 const id = "10000000-0000-4000-8000-000000000001";
+
+it("limits duty writes to system users outside preview and rejects invalid slots",async()=>{
+  const input={profileId:id,slotTime:"10:00",assignment:"周回表示",revision:null};
+  mocks.user.mockResolvedValueOnce({data:{user:null}});
+  expect((await saveDuty(input)).ok).toBe(false);
+  mocks.roles.mockResolvedValueOnce(new Map());
+  expect((await saveDuty(input)).ok).toBe(false);
+  mocks.preview.mockResolvedValueOnce(true);
+  expect((await saveDuty(input)).ok).toBe(false);
+  expect((await saveDuty({...input,slotTime:"00:00"})).ok).toBe(false);
+  expect(mocks.rpc).not.toHaveBeenCalled();
+});
+it("reports duty conflicts and refreshes only successful saves",async()=>{
+  const input={profileId:id,slotTime:"10:00",assignment:"周回表示",revision:0};
+  mocks.rpc.mockResolvedValueOnce({error:{message:"entry_conflict"}});
+  expect((await saveDuty(input)).message).toContain("更新されています");
+  expect(mocks.refresh).not.toHaveBeenCalled();
+  mocks.rpc.mockResolvedValueOnce({data:1,error:null});
+  expect(await saveDuty(input)).toEqual({ok:true,revision:1});
+  expect(mocks.rpc).toHaveBeenLastCalledWith("save_ob_duty",{p_profile_id:id,p_slot_time:"10:00",p_assignment:"周回表示",p_revision:0});
+  expect(mocks.refresh).toHaveBeenCalledWith("/ob-entries");
+});
 
 it("refuses party updates by ordinary members and preview sessions", async () => {
   mocks.roles.mockResolvedValueOnce(new Map());

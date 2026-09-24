@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { fetchRolesByProfileIds, isMemberPreviewActive } from "@/lib/supabase/auth";
 import { permissionsOf } from "@/lib/permissions";
 import { entryClient } from "@/lib/ob-entries-db";
+import { validDutyEdit, type DutyEdit } from "@/lib/ob-duty";
 import { validPartyEdit, type PartyEdit } from "@/lib/ob-meet";
 import { validEntryEdit, type EntryEdit } from "@/lib/ob-entry-edit";
 
@@ -64,4 +65,13 @@ export async function saveParty(input: PartyEdit): Promise<{ ok: boolean; messag
   if (result.error) return {ok:false,message:result.error.message.includes("entry_conflict") ? "他の操作で更新されています。画面を更新してください" : "保存できませんでした。本人が確認できている回答か確認してください"};
   revalidatePath("/ob-entries");
   return {ok:true};
+}
+
+export async function saveDuty(input: DutyEdit): Promise<{ ok: boolean; message?: string; revision?: number }> {
+  if (!validDutyEdit(input)) return {ok:false,message:"部員・時間帯・担当内容を確認してください（200文字以内）"};
+  const client=await editClient();
+  if (!client) return {ok:false,message:"権限がありません"};
+  const result=await client.rpc("save_ob_duty",{p_profile_id:input.profileId,p_slot_time:input.slotTime,p_assignment:input.assignment,p_revision:input.revision});
+  if(result.error) return {ok:false,message:result.error.message.includes("entry_conflict") ? "他の操作で更新されています。画面を更新してからやり直してください" : "保存できませんでした。在籍中の部員か確認してください"};
+  revalidatePath("/ob-entries");return {ok:true,revision:result.data};
 }

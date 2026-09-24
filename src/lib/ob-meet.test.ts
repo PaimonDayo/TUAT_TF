@@ -12,7 +12,7 @@ it("shows concurrent events without claiming free time or hiding missing answers
   const slot=OB_PROGRAM.find(s=>s.time==="11:00")!;
   expect(dutyCell(entry,slot)).toBe("100m・砲丸投げ");
   expect(dutyCell({events:[]},slot)).toBe("出場登録なし");
-  expect(dutyCell(undefined,slot)).toBe("回答なし");
+  expect(dutyCell(undefined,slot)).toBe("エントリー未確認");
   expect(dutyCell(entry,OB_DUTY_SLOTS.at(-1)!)).toBe("当日確認");
 });
 it("keeps unconfirmed identities separate and avoids duplicating confirmed members",()=>{
