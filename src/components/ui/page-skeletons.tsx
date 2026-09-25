@@ -92,7 +92,8 @@ export function CompetitionSkeleton() {
 }
 
 export function CompetitionGoalsSkeleton() {
-  return <div className="pb-6"><SubTitle /><div className="space-y-3 px-4 pt-2"><Skeleton className="h-9 w-full rounded-lg" /><Skeleton className="h-8 w-full rounded-lg" /><Rows count={6} /></div></div>;
+  // 自分の目標 → ブロック切替・検索 → 種目ごとの行（CompetitionGoalBoardと同じ並び）
+  return <div className="pb-6"><SubTitle /><div className="space-y-4 px-4 pt-2"><section className="space-y-2"><Label /><Rows count={1} /></section><section className="space-y-3"><Label /><Skeleton className="h-9 w-full rounded-lg" /><Skeleton className="h-11 w-full rounded-xl" /><Rows count={5} /></section></div></div>;
 }
 
 export function ResultsSkeleton() {

@@ -17,7 +17,7 @@ export default async function CompetitionGoalsPage({
   ]);
   if (!competition) notFound();
 
-  const { goals, events, competitions, personalBests } =
+  const { goals, events, personalBests } =
     await getCompetitionGoals(id);
 
   return (
@@ -28,7 +28,6 @@ export default async function CompetitionGoalsPage({
       />
       <CompetitionGoalsView
         competition={competition}
-        competitions={competitions}
         initialGoals={goals}
         events={events as CompetitionEvent[]}
         personalBests={personalBests}

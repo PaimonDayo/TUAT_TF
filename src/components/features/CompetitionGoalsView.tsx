@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -17,7 +16,6 @@ import {
   type CompetitionEvent,
   type GoalDraft,
 } from "@/lib/competition-goals";
-import { cn } from "@/lib/utils";
 import { CompetitionGoalBoard } from "./CompetitionGoalBoard";
 import type {
   Block,
@@ -28,10 +26,9 @@ import type {
 
 const selectClass = "w-full rounded-xl border border-separator bg-card p-3 text-base";
 
-/** 大会ごとの目標ページ（全画面）。大会の切替・一覧・自分の目標の追加編集 */
+/** 大会ごとの目標ページ（全画面）。その大会の目標一覧と、自分の目標の追加編集。他の大会へは切り替えない */
 export function CompetitionGoalsView({
   competition,
-  competitions,
   initialGoals,
   events,
   personalBests,
@@ -40,7 +37,6 @@ export function CompetitionGoalsView({
   viewerBlocks,
 }: {
   competition: CompetitionRow;
-  competitions: CompetitionRow[];
   initialGoals: CompetitionGoalRow[];
   events: CompetitionEvent[];
   personalBests: PersonalBestRow[];
@@ -150,32 +146,11 @@ export function CompetitionGoalsView({
 
   return (
     <div className="px-4 pb-24 pt-2">
-      {competitions.length > 1 && (
-        <nav aria-label="大会を選択" className="mb-3 flex gap-1 overflow-x-auto rounded-xl bg-separator/30 p-1">
-          {competitions.map((item) => (
-            <Link
-              key={item.id}
-              href={`/competitions/${item.id}/goals`}
-              aria-current={item.id === competition.id ? "page" : undefined}
-              className={cn(
-                "shrink-0 rounded-lg px-3 py-2 text-[13px] transition-colors",
-                item.id === competition.id
-                  ? "bg-card font-semibold shadow-sm"
-                  : "text-muted2 active:bg-card/60",
-              )}
-            >
-              {item.name}
-            </Link>
-          ))}
-        </nav>
-      )}
-
       <CompetitionGoalBoard
         goals={goals}
         events={ordered}
         userId={userId}
         personalBests={bestByKey}
-        meetName={competition.name}
         onEdit={openEditor}
         onDelete={remove}
         busy={busy}

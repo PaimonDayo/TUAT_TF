@@ -75,13 +75,12 @@ export type OfficialResult = {
 /** 目標一覧ページ（大会別）。目標の横に出す本人のPBも一緒に読む */
 export async function getCompetitionGoals(competitionId: string) {
   const supabase = await createClient();
-  const [{ data: goals }, events, competitions] = await Promise.all([
+  const [{ data: goals }, events] = await Promise.all([
     supabase
       .from("competition_goals")
       .select("id,user_id,event,target,author:profiles!user_id(display_name,blocks)")
       .eq("competition_id", competitionId),
     getCompetitionEvents(),
-    getCompetitions(),
   ]);
   const rows = (goals ?? []) as unknown as CompetitionGoalRow[];
   const userIds = [...new Set(rows.map((g) => g.user_id))];
@@ -95,7 +94,6 @@ export async function getCompetitionGoals(competitionId: string) {
   return {
     goals: rows,
     events,
-    competitions,
     personalBests: (bests ?? []) as PersonalBestRow[],
   };
 }
