@@ -121,8 +121,8 @@ export function CompetitionProgramView({
       field: group.field.filter((row) => row.tuatEntries.length > 0 || row.status?.includes("エントリー未確定")),
     }))
     .filter((group) => group.track.length > 0 || group.field.length > 0)
-    // 後半の日程を上へ。種目は各日の開始時刻順を維持する。
-    .sort((a, b) => b.date.localeCompare(a.date));
+    // 日程は初日から順に（2026-09-25 オーナー指示で9/22を上へ）。種目は各日の開始時刻順。
+    .sort((a, b) => a.date.localeCompare(b.date));
   const lastSyncedAt = entries.reduce<string | null>(
     (latest, row) => (!latest || row.created_at > latest ? row.created_at : latest),
     null,
