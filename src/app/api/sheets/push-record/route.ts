@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { pushRecordToSheet, type DbRecord } from "@/lib/sheet-sync";
+import { pushRecordToSheet, processPendingClears, type DbRecord } from "@/lib/sheet-sync";
 import { recordFieldsFromJson } from "@/lib/profile-normalize";
 
 /**
@@ -58,11 +58,19 @@ export async function POST(request: Request) {
       recordFieldsFromJson(profile.record_fields),
       rec as DbRecord,
     );
-    // 成功: pending_sheet_pushをfalseに戻す（毎日0時の再送対象から外す）
+    // 成功: pending_sheet_pushをfalseに戻す（毎日0時の再送対象から外す）。
+    // 送信中に同じ記録が別の保存で変わっていたら（updated_at が違う）送信済みにしない。新しい内容は次回送る。
     await admin
       .from("practice_records")
       .update({ synced_at: new Date().toISOString(), pending_sheet_push: false })
-      .eq("id", recordId);
+      .eq("id", recordId)
+      .eq("updated_at", rec.updated_at);
+    // 日付を変えた保存なら、元の日の欄を空にする予定が入っている。ついでに処理する（失敗しても毎日0時に再試行）。
+    await processPendingClears(admin, {
+      id: profile.id,
+      sheet_name: profile.sheet_name,
+      record_fields: recordFieldsFromJson(profile.record_fields),
+    }).catch(() => undefined);
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     const message = err instanceof Error ? err.message : "スプレッドシートに書き込めませんでした";

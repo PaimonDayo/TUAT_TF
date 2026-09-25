@@ -100,6 +100,8 @@ export function RecordOwnerMenu({
       showToast("練習記録を削除できませんでした");
       return false;
     }
+    // スプシに連携している人は、同じ日の欄も空にする（予定はDBが削除と同時に作る。失敗しても毎日0時に再試行）。
+    void fetch("/api/sheets/clear-deleted", { method: "POST" }).catch(() => undefined);
     router.refresh();
     return true;
   }
@@ -112,7 +114,7 @@ export function RecordOwnerMenu({
         onShare={copyLink}
         onDelete={isOwner && editable ? remove : undefined}
         deleteTitle="練習記録を削除しますか？"
-        deleteDescription="削除した練習記録は元に戻せません。"
+        deleteDescription="削除した練習記録は元に戻せません。スプレッドシートに連携している場合は、その日の欄も空になります。"
         triggerLabel="練習記録のメニュー"
         className="-mr-1"
       />

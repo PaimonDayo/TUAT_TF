@@ -6,12 +6,13 @@ import { relevantSheetHeaderSignature } from "@/lib/sheet-field-config";
 import { sheetContentSignature } from "@/lib/sheet-public-csv";
 import type { SyncOptions, SyncResult } from "./types";
 import { SHEET_HISTORY_START, todayJST, sheetPullCutoff, sheetReplyCutoff } from "./dates";
-import { resolveFieldMap, appToCellsFull, appToCellsNonEmpty } from "./field-map";
+import { resolveFieldMap, appToCellsFull } from "./field-map";
 import type { DbRecord } from "./field-map";
 import { gasPost, fetchAllRaw } from "./gas-client";
 import { sheetRecordsWithoutPendingPushes, computeMemberPull } from "./pull";
 import { reconcileSheetReplies } from "./replies";
 import { fetchAllPages } from "@/lib/fetch-all-pages";
+import { clearCellsFor, sheetRowHasContent, type PendingClear } from "./clear";
 
 // ── 同期本体 ─────────────────────────────────────────────────────────────────
 // 安全方針(docs/SHEETS-SYNC-PLAN.md・事故対策):
@@ -64,7 +65,11 @@ export async function runSheetSync(
 
   const nameById = new Map(linked.map((p) => [p.id, p.sheet_name.trim()]));
   const allUserIds = linked.map((profile) => profile.id);
-  const [{ data: syncStates, error: stateError }, { data: pendingRows, error: pendingError }] = await Promise.all([
+  const [
+    { data: syncStates, error: stateError },
+    { data: pendingRows, error: pendingError },
+    { data: clearRows, error: clearError },
+  ] = await Promise.all([
     admin
       .from("sheet_member_sync_state")
       .select("profile_id, content_signature, config_signature")
@@ -74,9 +79,21 @@ export async function runSheetSync(
       .select("user_id")
       .in("user_id", allUserIds)
       .eq("pending_sheet_push", true),
+    admin
+      .from("sheet_pending_clears")
+      .select("user_id, recorded_date")
+      .in("user_id", allUserIds),
   ]);
   if (stateError) throw stateError;
   if (pendingError) throw pendingError;
+  if (clearError) throw clearError;
+  // アプリで消した（日付を変えた）記録の、スプシ側を空にする予定。user_id -> 日付
+  const clearsByUser = new Map<string, Set<string>>();
+  for (const row of (clearRows ?? []) as PendingClear[]) {
+    const dates = clearsByUser.get(row.user_id) ?? new Set<string>();
+    dates.add(row.recorded_date);
+    clearsByUser.set(row.user_id, dates);
+  }
   const signatureByProfile = new Map((syncStates ?? []).map((state) => [state.profile_id, state.content_signature]));
   const configSignatureByProfile = new Map((syncStates ?? []).map((state) => [state.profile_id, state.config_signature]));
   const profilesWithPendingPush = new Set((pendingRows ?? []).map((row) => row.user_id));
@@ -93,6 +110,7 @@ export async function runSheetSync(
     name: profile.sheet_name,
     previousSignature: signatureByProfile.get(profile.id) ?? null,
     forceParse: profilesWithPendingPush.has(profile.id)
+      || clearsByUser.has(profile.id)
       || configSignatureByProfile.get(profile.id) !== currentConfigSignatures.get(profile.id),
   })));
   result.failedMembers.push(...fetched.failedMembers);
@@ -133,13 +151,20 @@ export async function runSheetSync(
   const inserts: Record<string, unknown>[] = [];
   const updates: { id: string; profileId: string; patch: Record<string, unknown> }[] = [];
   const pushes: {
-    id: string;
+    /** 記録の再送なら記録ID、消した記録の欄を空にする送信なら null */
+    id: string | null;
     memberName: string;
     date: string;
     cells: Record<string, string | number>;
     /** write-through再送分か（成功時にpending_sheet_pushをfalseへ戻す対象） */
     clearsPending?: boolean;
+    /** 送信を組み立てた時点の記録の更新時刻。送信中に内容が変わっていたら送信済みにしない */
+    updatedAt?: string | null;
+    /** 空にする予定（sheet_pending_clears）の送信。成功したら予定を消す */
+    clearQueue?: PendingClear;
   }[] = [];
+  /** 送らずに消してよい空にする予定（その日を作り直した・スプシがもう空） */
+  const resolvedClears: PendingClear[] = [];
   const historyImportCandidates = new Set<string>();
   const historyImportFailures = new Set<string>();
 
@@ -164,76 +189,60 @@ export async function runSheetSync(
     const map = resolveFieldMap(member, profile.record_fields ?? []);
     const appByDate = byUser.get(profile.id)!;
 
-    if (profile.record_source === "sheet") {
-      const pendingPushDates = new Set<string>();
-      // write-through保存がGAS側の一時失敗等で未反映のまま残っている記録があれば、
-      // pullで（古いシート値により）巻き戻される前に非破壊で再送する（タスク16の安全網）。
-      // 判定は専用フラグ pending_sheet_push のみを見る（updated_at/synced_atの大小比較=appIsNewer
-      // は使わない。write-through導入前からの無関係な時刻ズレまで再送対象と誤検知し、
-      // 部員がスプシへ直接入力した内容を古いアプリ値で上書きしかねないことがdry-runで判明したため）。
-      for (const [date, list] of appByDate) {
-        if (!inRange(date) || list.length !== 1) continue;
-        const app = list[0];
-        if (!app.pending_sheet_push) continue;
-        pendingPushDates.add(date);
-        const cells = appToCellsNonEmpty(map, app);
-        if (Object.keys(cells).length > 0) {
-          pushes.push({ id: app.id, memberName: sheetName, date, cells, clearsPending: true });
-        }
-      }
+    // 取り込みから外す日。アプリ側の変更をまだスプシへ送れていない日と、アプリで消してスプシを空にする予定の日。
+    // ここを取り込むと、古いスプシの値で巻き戻したり、消した記録を復活させたりしてしまう。
+    const excludedDates = new Set<string>();
 
-      // pullのみ: シートを正としてアプリへ反映。シートに行が無い日は触らない。
-      // 初回はシート開始日から全履歴を補完し、完了後は直近1か月だけを再取得する。
-      const cutoff = sheetPullCutoff(today, profile.sheet_history_imported_at);
-      if (!profile.sheet_history_imported_at) historyImportCandidates.add(profile.id);
-      const inRangeForProfile = (d: string) => d >= cutoff && d <= today;
-      const pulled = computeMemberPull(
-        profile.id,
-        map,
-        sheetRecordsWithoutPendingPushes(member.records, pendingPushDates),
-        appByDate,
-        inRangeForProfile,
-        nowIso,
-        stagedSheetFlow ? "replace_mapped" : "merge_nonempty",
-      );
-      inserts.push(...pulled.inserts);
-      updates.push(...pulled.updates.map((update) => ({ ...update, profileId: profile.id })));
-      result.inserted += pulled.inserts.length;
-      result.updated += pulled.updates.length;
-      for (const d of pulled.conflicts) result.conflicts.push(`${sheetName} ${d}`); // 複数/日は触らない
-      if (pulled.conflicts.length > 0) historyImportFailures.add(profile.id);
-    } else {
-      // App-main: retry failed pushes, then import only dates missing from the DB.
-      const pendingPushDates = new Set<string>();
-      // updated_at はいいね数等の同期対象外更新でも変わり得るため、再送判定には使わない。
-      for (const [date, list] of appByDate) {
-        if (!inRange(date) || list.length !== 1) continue; // 複数/日は触らない
-        const app = list[0];
-        if (!app.pending_sheet_push) continue;
-        pendingPushDates.add(date);
-        const cells = appToCellsFull(map, app);
-        if (Object.keys(cells).length > 0) {
-          pushes.push({ id: app.id, memberName: sheetName, date, cells, clearsPending: true });
-        }
+    // 書き戻し待ちの再送。判定は専用フラグ pending_sheet_push のみを見る
+    // （updated_at/synced_at の大小比較は、無関係な時刻ズレまで再送対象と誤検知したため使わない）。
+    // アプリでの明示的な編集なので、空にした項目も含めて全部送る（空欄を送らないと、消した値がスプシに残る）。
+    for (const [date, list] of appByDate) {
+      if (!inRange(date) || list.length !== 1) continue; // 複数/日は触らない
+      const app = list[0];
+      if (!app.pending_sheet_push) continue;
+      excludedDates.add(date);
+      const cells = appToCellsFull(map, app);
+      if (Object.keys(cells).length > 0) {
+        pushes.push({ id: app.id, memberName: sheetName, date, cells, clearsPending: true, updatedAt: app.updated_at });
       }
-
-      // Non-empty sheet edits win after pending app pushes are safely excluded.
-      const cutoff = sheetPullCutoff(today, profile.sheet_history_imported_at);
-      if (!profile.sheet_history_imported_at) historyImportCandidates.add(profile.id);
-      const pulled = computeMemberPull(
-        profile.id,
-        map,
-        sheetRecordsWithoutPendingPushes(member.records, pendingPushDates),
-        appByDate,
-        (date) => date >= cutoff && date <= today,
-        nowIso,
-        "merge_nonempty",
-      );
-      inserts.push(...pulled.inserts);
-      result.inserted += pulled.inserts.length;
-      for (const date of pulled.conflicts) result.conflicts.push(`${sheetName} ${date}`);
-      if (pulled.conflicts.length > 0) historyImportFailures.add(profile.id);
     }
+
+    // アプリで消した記録の欄を空にする（オーナー確定 2026-09-26「アプリで消したらスプシも消す」）。
+    for (const date of clearsByUser.get(profile.id) ?? []) {
+      const queued = { user_id: profile.id, recorded_date: date };
+      if (appByDate.has(date)) {
+        // その日を作り直している。記録側の送信がその日を上書きするので、予定だけ消す。
+        resolvedClears.push(queued);
+        continue;
+      }
+      excludedDates.add(date);
+      if (sheetRowHasContent(map, member, date)) {
+        pushes.push({ id: null, memberName: sheetName, date, cells: clearCellsFor(map, date), clearQueue: queued });
+      } else {
+        resolvedClears.push(queued);
+      }
+    }
+
+    // スプシ→アプリの取り込み。初回はシート開始日から全履歴を補完し、完了後は直近1か月だけを再取得する。
+    // スプシが正の部員で見出し確認済みなら、空欄も意図した削除として反映する。
+    // アプリが正の部員も、スプシで直接直した（空でない）値は取り込む（2026-07-27 の方針）。
+    const cutoff = sheetPullCutoff(today, profile.sheet_history_imported_at);
+    if (!profile.sheet_history_imported_at) historyImportCandidates.add(profile.id);
+    const pulled = computeMemberPull(
+      profile.id,
+      map,
+      sheetRecordsWithoutPendingPushes(member.records, excludedDates),
+      appByDate,
+      (date) => date >= cutoff && date <= today,
+      nowIso,
+      profile.record_source === "sheet" && stagedSheetFlow ? "replace_mapped" : "merge_nonempty",
+    );
+    inserts.push(...pulled.inserts);
+    updates.push(...pulled.updates.map((update) => ({ ...update, profileId: profile.id })));
+    result.inserted += pulled.inserts.length;
+    result.updated += pulled.updates.length;
+    for (const d of pulled.conflicts) result.conflicts.push(`${sheetName} ${d}`); // 複数/日は触らない
+    if (pulled.conflicts.length > 0) historyImportFailures.add(profile.id);
   }
 
   const configuredPushLimit = Number.parseInt(process.env.SHEET_SYNC_PUSH_LIMIT ?? "25", 10);
@@ -335,17 +344,40 @@ export async function runSheetSync(
     });
   }
 
+  for (const queued of resolvedClears) {
+    const { error } = await admin
+      .from("sheet_pending_clears")
+      .delete()
+      .eq("user_id", queued.user_id)
+      .eq("recorded_date", queued.recorded_date);
+    if (error) {
+      result.failedMembers.push({ member: nameById.get(queued.user_id) ?? "(空にする予定)", reason: error.message });
+    }
+  }
+
   for (const p of scheduledPushes) {
     try {
       await gasPost({ action: "writeCells", memberName: p.memberName, date: p.date, cells: p.cells });
-      const { error } = await admin
-        .from("practice_records")
-        .update({
-          synced_at: new Date().toISOString(),
-          ...(p.clearsPending ? { pending_sheet_push: false } : {}),
-        })
-        .eq("id", p.id);
-      if (error) throw error;
+      if (p.clearQueue) {
+        const { error } = await admin
+          .from("sheet_pending_clears")
+          .delete()
+          .eq("user_id", p.clearQueue.user_id)
+          .eq("recorded_date", p.clearQueue.recorded_date);
+        if (error) throw error;
+      } else if (p.id) {
+        let query = admin
+          .from("practice_records")
+          .update({
+            synced_at: new Date().toISOString(),
+            ...(p.clearsPending ? { pending_sheet_push: false } : {}),
+          })
+          .eq("id", p.id);
+        // 送信を組み立てた後に内容が変わっていたら、送信済みにしない（新しい内容は次回送る）。
+        if (p.updatedAt) query = query.eq("updated_at", p.updatedAt);
+        const { error } = await query;
+        if (error) throw error;
+      }
       result.pushed++;
     } catch (err) {
       result.failedMembers.push({
