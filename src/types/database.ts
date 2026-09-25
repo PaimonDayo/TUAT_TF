@@ -161,6 +161,57 @@ export type Database = {
           },
         ]
       }
+      competition_result_links: {
+        Row: {
+          competition_id: string
+          entry_grade: string | null
+          entry_name: string
+          event_label: string
+          id: string
+          matched_at: string
+          place: string | null
+          profile_id: string
+          record: string | null
+        }
+        Insert: {
+          competition_id: string
+          entry_grade?: string | null
+          entry_name: string
+          event_label: string
+          id?: string
+          matched_at?: string
+          place?: string | null
+          profile_id: string
+          record?: string | null
+        }
+        Update: {
+          competition_id?: string
+          entry_grade?: string | null
+          entry_name?: string
+          event_label?: string
+          id?: string
+          matched_at?: string
+          place?: string | null
+          profile_id?: string
+          record?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competition_result_links_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "competitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "competition_result_links_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       competition_goals: {
         Row: {
           competition_id: string

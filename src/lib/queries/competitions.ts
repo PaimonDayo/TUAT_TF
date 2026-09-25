@@ -49,6 +49,28 @@ export async function getHomeCompetition() {
   return { competition: competition as CompetitionRow, goalCount: count ?? 0 };
 }
 
+/**
+ * 27大戦などの公式結果のうち、本名一致が機械的に確認できた部員だけの結果。
+ * 呼び出し側（ページ）で can_manage_system を確認してから呼ぶこと（RLSでも二重に絞る）。
+ */
+export async function getCompetitionResultLinks(competitionId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("competition_result_links")
+    .select("id,event_label,entry_name,entry_grade,place,record,profile:profiles!profile_id(id,display_name)")
+    .eq("competition_id", competitionId)
+    .order("event_label");
+  return (data ?? []) as {
+    id: string;
+    event_label: string;
+    entry_name: string;
+    entry_grade: string | null;
+    place: string | null;
+    record: string | null;
+    profile: { id: string; display_name: string } | null;
+  }[];
+}
+
 /** 目標一覧ページ（大会別）。目標の横に出す本人のPBも一緒に読む */
 export async function getCompetitionGoals(competitionId: string) {
   const supabase = await createClient();

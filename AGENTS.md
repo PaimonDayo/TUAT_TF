@@ -381,6 +381,8 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 
 ## 作業ログ（着手前に追記・新しいものを上へ）
 
+- 2026-09-25 / Claude Sonnet 5 / 27大戦の結果を、本名一致が機械的に確認できた部員だけシステムロール限定で反映。既存の速報同期（competition_program_entries、sairiku.net由来、全件洗い替え）に既に格納済みの結果（氏名・学年・順位・記録）を対象に、OB戦と同じ照合ロジック（src/lib/entry-identity.ts、完全一致＋学年一致のみ「確実」扱い、曖昧な候補は自動確定しない）で名簿と突き合わせ。対象76件中「確実」一致53件のみ`competition_result_links`（新規・can_manage_system限定read、他は権限なし）へ投入、非一致23件（現在の名簿に該当なし。OB/OGや退部者等の可能性、曖昧一致は0件）は反映せず。大会詳細ページ（/competitions/[id]）へシステム限定の「公式結果（本名確認済み）」節を追加。個人名を含む中間ファイル・突合スクリプトはコミットしていない（scratchpadのみ）。migrationは本番PC DBへ適用前にBEGIN…ROLLBACKでdry-run確認済み。関東新人・アーカイブ機能・27大戦の公式番組全面取込など、docs/COMPETITION-PREP-2026-09-24.mdにある「本番反映禁止」の広い変更（作業ツリーに未コミットのまま残置されていた）は今回のコミットに含めていない（別のissueとして残る。含めると存在しないarchive_at列参照等でproduction buildが壊れる状態だったため、隔離git worktreeで自分の変更だけを検証してからコミットした）。対象tsc・対象eslint・vitest（459件）・本番設定build成功。実機（iOS PWA）確認は未実施。 → (this commit)
+
 - 2026-09-21 / Codex / 実測監査項目3: 所有者承認後、非公開スナップショットとVaultのrollback検証を経て新VAPID鍵・Vault2設定・送信関数ソース・外向き通信を本番反映。4Compose指定でfunctionsだけを再作成し他コンテナ不変、認証なし401・購読者なし200を確認。Vercel Production公開鍵を更新。Vault/Push鍵/cronをDBダンプと結び付けて暗号化するバックアップと復元検証を実装。tsc・対象eslint・全323テスト・運用テスト5件・build成功。秘密情報を含む復旧材料のR2送信は自動承認審査で停止し所有者の追加承認待ち、常駐バックアップへの適用も中継再起動の承認待ち。実機確認は未実施。 → (this commit)
 
 - 2026-09-21 / Codex / 実測監査項目9: 表示用rolesを3時間のサーバー共有データキャッシュへ変更し、profile_rolesはIDだけ毎回取得。管理APIは既定で最新ロール取得、ロール編集/削除/並替後は認証付きAPIでキャッシュを即時失効。IDのみ必要な3画面とブラウザ9箇所をgetCurrentUserIdへ変更し、JWT検証・RLS・APIの直接認証は維持。実APIで全68人のロール/権限一致、全員分のロール取得は12815→2860 bytes（共通定義の初回6734 bytesは別）を確認。tsc・対象eslint・全323テスト・build成功。1時間単位のトラフィック/CPU再実測と実機確認は未実施。 → (this commit)

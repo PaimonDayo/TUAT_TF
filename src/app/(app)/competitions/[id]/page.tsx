@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import {
   getCompetitionById,
   getCompetitionEvents,
+  getCompetitionResultLinks,
   getCompetitionResults,
 } from "@/lib/queries";
 import {
@@ -17,6 +18,8 @@ import {
   timeFormatOf,
 } from "@/lib/competition-record";
 import { sortCompetitionEvents } from "@/lib/competition-goals";
+import { getCurrentProfile } from "@/lib/supabase/auth";
+import { permissionsOf } from "@/lib/permissions";
 
 /** 大会のページ。その大会の目標への導線と、部員全員の結果を種目別に並べる */
 export default async function CompetitionPage({
@@ -28,9 +31,12 @@ export default async function CompetitionPage({
   const competition = await getCompetitionById(id);
   if (!competition) notFound();
 
-  const [results, events] = await Promise.all([
+  const profile = await getCurrentProfile();
+  const canManageSystem = permissionsOf(profile.roles).manageSystem;
+  const [results, events, resultLinks] = await Promise.all([
     getCompetitionResults(id),
     getCompetitionEvents(),
+    canManageSystem ? getCompetitionResultLinks(id) : Promise.resolve([]),
   ]);
   const ordered = sortCompetitionEvents(events);
   const groups = ordered
@@ -115,6 +121,33 @@ export default async function CompetitionPage({
               </Card>
             </section>
           ))
+        )}
+
+        {canManageSystem && resultLinks.length > 0 && (
+          <section className="space-y-1.5">
+            <p className="section-label">
+              公式結果（本名確認済み・システム限定・{resultLinks.length}件）
+            </p>
+            <Card className="divide-y divide-separator">
+              {resultLinks.map((row) => (
+                <div key={row.id} className="flex items-center gap-3 p-3.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-headline break-words">
+                      {row.profile?.display_name ?? row.entry_name}
+                      {row.entry_grade ? `（${row.entry_grade}）` : ""}
+                    </p>
+                    <p className="text-caption break-words">{row.event_label}</p>
+                  </div>
+                  <span className="text-title tabular-nums text-right">
+                    {row.record ?? "-"}
+                    {row.place ? (
+                      <span className="block text-caption text-muted">{row.place}位</span>
+                    ) : null}
+                  </span>
+                </div>
+              ))}
+            </Card>
+          </section>
         )}
       </div>
     </>
