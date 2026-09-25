@@ -11,6 +11,7 @@ import type { DbRecord } from "./field-map";
 import { gasPost, fetchAllRaw } from "./gas-client";
 import { sheetRecordsWithoutPendingPushes, computeMemberPull } from "./pull";
 import { reconcileSheetReplies } from "./replies";
+import { fetchAllPages } from "@/lib/fetch-all-pages";
 
 // ── 同期本体 ─────────────────────────────────────────────────────────────────
 // 安全方針(docs/SHEETS-SYNC-PLAN.md・事故対策):
@@ -103,19 +104,25 @@ export async function runSheetSync(
 
   const userIds = processedProfiles.map((profile) => profile.id);
   if (userIds.length === 0) return result;
-  const { data: existing, error: rErr } = await admin
-    .from("practice_records")
-    .select(
-      "id, user_id, recorded_date, dist_low, dist_mid, dist_high, dist_speed, dist_actual, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at, pending_sheet_push",
-    )
-    .in("user_id", userIds)
-    .gte("recorded_date", SHEET_HISTORY_START);
-  if (rErr) throw rErr;
+  // DBの窓口は1回に最大1,000行しか返さない。1回で読むと超えた分が「アプリに無い」扱いになり、
+  // 既存の日を重複として取り込もうとして失敗し、書き戻し待ちも見えなくなる（2026-09-26に判明）。
+  // 必ずページに分けて全件読む。
+  const existing = await fetchAllPages<DbRecord>((from, to) =>
+    admin
+      .from("practice_records")
+      .select(
+        "id, user_id, recorded_date, dist_low, dist_mid, dist_high, dist_speed, dist_actual, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at, pending_sheet_push",
+      )
+      .in("user_id", userIds)
+      .gte("recorded_date", SHEET_HISTORY_START)
+      .order("id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{ data: DbRecord[] | null; error: unknown }>,
+  );
 
   // user_id -> date -> 記録の配列（複数/日を検出するため配列で持つ）
   const byUser = new Map<string, Map<string, DbRecord[]>>();
   for (const uid of userIds) byUser.set(uid, new Map());
-  for (const r of (existing ?? []) as DbRecord[]) {
+  for (const r of existing) {
     const m = byUser.get(r.user_id)!;
     const arr = m.get(r.recorded_date) ?? [];
     arr.push(r);
