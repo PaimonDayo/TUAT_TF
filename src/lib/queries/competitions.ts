@@ -49,29 +49,6 @@ export async function getHomeCompetition() {
   return { competition: competition as CompetitionRow, goalCount: count ?? 0 };
 }
 
-/**
- * ある部員の公式結果（大会の速報のうち、本名一致が確認できた分）。大会ごとに新しい順。
- * マイページ・部員ページの「公式記録」に使う。部員なら誰でも読める（RLS）。
- */
-export async function getOfficialResults(profileId: string) {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("competition_result_links")
-    .select("id,event_label,place,record,competition:competitions!competition_id(id,name,starts_on)")
-    .eq("profile_id", profileId);
-  const rows = (data ?? []) as unknown as OfficialResult[];
-  return rows.sort((x, y) =>
-    (y.competition?.starts_on ?? "").localeCompare(x.competition?.starts_on ?? "") || x.event_label.localeCompare(y.event_label, "ja"));
-}
-
-export type OfficialResult = {
-  id: string;
-  event_label: string;
-  place: string | null;
-  record: string | null;
-  competition: { id: string; name: string; starts_on: string } | null;
-};
-
 /** 目標一覧ページ（大会別）。目標の横に出す本人のPBも一緒に読む */
 export async function getCompetitionGoals(competitionId: string) {
   const supabase = await createClient();

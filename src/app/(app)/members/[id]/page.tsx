@@ -16,13 +16,11 @@ import { TrainingChart } from "@/components/features/TrainingChart";
 import { FavoriteButton } from "@/components/features/FavoriteButton";
 import { ListSkeleton } from "@/components/ui/page-skeletons";
 import { NoteList } from "@/components/features/NotesView";
-import { OfficialResultsList } from "@/components/features/OfficialResultsList";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import {
   getProfileById,
   getUserRecordsWithSocialState,
   getPbRecords,
-  getOfficialResults,
   getCompetitionEvents,
   getCompetitions,
   getPublishedPersonalNotes,
@@ -55,7 +53,7 @@ async function MemberContent({
   const viewer = await getCurrentProfile();
   const isSelf = viewer.id === id;
   const canManageSystem = permissionsOf(viewer.roles).manageSystem;
-  const [records, tweets, pbs, notes, favorited, cookieStore, events, competitions, officialResults] = await Promise.all([
+  const [records, tweets, pbs, notes, favorited, cookieStore, events, competitions] = await Promise.all([
     getUserRecordsWithSocialState(id, viewer.id),
     getUserTweets(id, viewer.id),
     getPbRecords(id) as Promise<PbRecord[]>,
@@ -64,7 +62,6 @@ async function MemberContent({
     cookies(),
     getCompetitionEvents(),
     canManageSystem ? getCompetitions() : Promise.resolve([]),
-    getOfficialResults(id),
   ]);
   const showRecordSource = showRecordSourceFor(
     canManageSystem,
@@ -159,13 +156,6 @@ async function MemberContent({
           <section className="space-y-2">
             <p className="section-label">{profile.display_name || "部員"}のノート</p>
             <NoteList notes={notes} currentUser={{ id: viewer.id, display_name: viewer.display_name, avatar_url: viewer.avatar_url, blocks: viewer.blocks, grade: viewer.grade }} />
-          </section>
-        )}
-
-        {officialResults.length > 0 && (
-          <section className="space-y-2">
-            <p className="section-label">公式記録</p>
-            <OfficialResultsList results={officialResults} />
           </section>
         )}
 

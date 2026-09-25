@@ -96,7 +96,7 @@ export default async function CompetitionPage({
 
         {hasProgram ? (
           <p className="text-caption">
-            結果は公式の速報からプログラムにまとめています。自分の記録はマイページの「大会・記録会の結果」で見られます。
+            結果は公式の速報からプログラムにまとめています。
           </p>
         ) : (
           <>
