@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { readSplashCache, reelCells, shouldShowSplash } from "./splash-countdown";
 
 const cache = { name: "27大戦", startsOn: "2026-09-21", endsOn: "2026-09-23", fetchedOn: "2026-09-10" };
@@ -38,6 +38,15 @@ describe("shouldShowSplash", () => {
 
   it("大会が終わっていれば出さない", () => {
     expect(shouldShowSplash({ ...base, days: -1 })).toBe(false);
+  });
+
+  it("アーカイブ時刻以降は日数が残っていても出さない", () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-09-24T23:00:00Z"));
+    try {
+      const archived = { ...cache, archiveAt: "2026-09-25T08:00:00+09:00" };
+      expect(readSplashCache(JSON.stringify(archived))).toEqual(archived);
+      expect(shouldShowSplash({ ...base, cache: archived })).toBe(false);
+    } finally { now.mockRestore(); }
   });
 });
 

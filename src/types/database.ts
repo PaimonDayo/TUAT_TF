@@ -83,6 +83,7 @@ export type Database = {
       }
       competitions: {
         Row: {
+          archive_at: string | null
           ends_on: string | null
           id: string
           is_countdown: boolean
@@ -92,6 +93,7 @@ export type Database = {
           starts_on: string
         }
         Insert: {
+          archive_at?: string | null
           ends_on?: string | null
           id: string
           is_countdown?: boolean
@@ -101,6 +103,7 @@ export type Database = {
           starts_on: string
         }
         Update: {
+          archive_at?: string | null
           ends_on?: string | null
           id?: string
           is_countdown?: boolean

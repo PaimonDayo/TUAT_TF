@@ -47,7 +47,7 @@ export function CompetitionHome({
             <span className="ml-1 text-body text-muted">日</span>
           </>
         ) : (
-          <span className="text-title2">開幕しました</span>
+          <span className="text-title2">終了しました</span>
         )}
       </MeetTile>
 

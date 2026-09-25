@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { isCompetitionArchived } from "@/lib/competition-lifecycle";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
@@ -150,7 +151,9 @@ export function CompetitionProgramView({
     <div className="space-y-4 px-4 pb-8 pt-2">
       <Card className="p-4">
         <p className="mb-3 text-headline">{competition.name}</p>
-        <CompetitionInProgress entries={entries} />
+        {isCompetitionArchived(competition)
+          ? <p className="text-caption">アーカイブ：大会の出場者と記録を保存しています。</p>
+          : <CompetitionInProgress entries={entries} />}
       </Card>
       <div className="flex items-center justify-between gap-2 rounded-xl border border-separator bg-card p-3">
         <p className="text-micro text-muted2">
@@ -164,8 +167,8 @@ export function CompetitionProgramView({
         </Button>}
       </div>
 
-      <p className="text-micro text-muted2">開催期間は約5分ごとに公式情報を取得します。記録は速報値です。</p>
-      {competition.program_source_url && <a href={competition.program_source_url} target="_blank" rel="noopener noreferrer" className="text-caption text-accent underline">大会公式のプログラム・速報を見る</a>}
+      <p className="text-micro text-muted2">{isCompetitionArchived(competition) ? "自動取得は終了しています。記録は最終取得時点の情報です。" : "開催期間は約5分ごとに公式情報を取得します。記録は速報値です。"}</p>
+      {competition.program_source_url && <a href={competition.program_source_url} target="_blank" rel="noopener noreferrer" className="text-caption text-accent underline">大会公式のプログラムを見る</a>}
       {groups.length === 0 ? (
         <Card>
           <EmptyState title="まだ出場種目の情報がありません" />

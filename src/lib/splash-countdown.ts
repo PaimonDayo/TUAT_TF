@@ -3,6 +3,7 @@ export type SplashCountdownCache = {
   name: string;
   startsOn: string;
   endsOn: string | null;
+  archiveAt?: string | null;
   /** 取り直した日（JST）。1日1回だけ取り直す */
   fetchedOn: string;
 };
@@ -31,6 +32,7 @@ var el=document.getElementById(${JSON.stringify(SPLASH_COVER_ID)});if(!el)return
 if(localStorage.getItem(${JSON.stringify(SPLASH_DISABLED_KEY)})==="1")return;
 var raw=localStorage.getItem(${JSON.stringify(SPLASH_CACHE_KEY)});if(!raw)return;
 var c=JSON.parse(raw);
+if(c&&c.archiveAt&&Date.parse(c.archiveAt)<=Date.now())return;
 if(!c||typeof c.name!=="string"||typeof c.fetchedOn!=="string"||typeof c.startsOn!=="string"||!/^\\d{4}-\\d{2}-\\d{2}$/.test(c.startsOn)||!(c.endsOn===null||typeof c.endsOn==="string"&&/^\\d{4}-\\d{2}-\\d{2}$/.test(c.endsOn)))return;
 var t=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tokyo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
 var d=t>=c.startsOn&&t<=(c.endsOn||c.startsOn)?0:Math.round((Date.parse(c.startsOn+"T00:00:00+09:00")-Date.parse(t+"T00:00:00+09:00"))/86400000);
@@ -56,7 +58,7 @@ export function readSplashCache(raw: string | null): SplashCountdownCache | null
       !/^\d{4}-\d{2}-\d{2}$/.test(value.startsOn)
     )
       return null;
-    return { name: value.name, startsOn: value.startsOn, endsOn: value.endsOn, fetchedOn: value.fetchedOn };
+    return { name: value.name, startsOn: value.startsOn, endsOn: value.endsOn, fetchedOn: value.fetchedOn, ...(typeof value.archiveAt === "string" ? { archiveAt: value.archiveAt } : {}) };
   } catch {
     return null;
   }
@@ -74,6 +76,7 @@ export function shouldShowSplash(input: {
 }): boolean {
   if (input.disabled) return false;
   if (!input.cache) return false;
+  if (input.cache.archiveAt && Date.parse(input.cache.archiveAt) <= Date.now()) return false;
   return input.days !== null && input.days >= 0;
 }
 

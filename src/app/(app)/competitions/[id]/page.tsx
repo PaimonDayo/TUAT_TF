@@ -20,6 +20,7 @@ import {
 import { sortCompetitionEvents } from "@/lib/competition-goals";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { permissionsOf } from "@/lib/permissions";
+import { isObCompetition } from "@/lib/ob-meet";
 
 /** 大会のページ。その大会の目標への導線と、部員全員の結果を種目別に並べる */
 export default async function CompetitionPage({
@@ -70,13 +71,14 @@ export default async function CompetitionPage({
         </p>
 
         <Card className="divide-y divide-separator">
-          {competition.program_source_url && (
+          {(competition.program_source_url || (isObCompetition(competition.id) && canManageSystem)) && (
             <Link
               href={`/competitions/${competition.id}/program`}
               className="flex items-center gap-3 p-4 pressable"
             >
               <ListOrdered size={20} className="text-accent" />
-              <span className="flex-1 text-headline">プログラム（出場選手）</span>
+              <span className="flex-1 text-headline">プログラム</span>
+              {isObCompetition(competition.id) && <span className="text-caption text-muted2">システム限定</span>}
               <ChevronRight size={16} className="text-muted" />
             </Link>
           )}
@@ -90,8 +92,7 @@ export default async function CompetitionPage({
           </Link>
         </Card>
 
-        {competition.program_source_url && <Link href={`/competitions/${competition.id}/program`} className="block rounded-xl border border-separator bg-card p-4 text-headline text-accent">プログラム・速報を見る →</Link>}
-        <p className="section-label">結果（{results.length}件）</p>
+        <p className="section-label">部員が登録した記録（{results.length}件）</p>
         {groups.length === 0 ? (
           <Card>
             <EmptyState title="まだこの大会の結果はありません" />

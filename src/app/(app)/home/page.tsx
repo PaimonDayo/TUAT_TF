@@ -8,8 +8,7 @@ import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { HomeSkeleton } from "@/components/ui/page-skeletons";
 import { HomeFeed } from "@/components/features/HomeFeed";
-import { CompetitionHome } from "@/components/features/CompetitionHome";
-import { CompetitionProgramCard } from "@/components/features/CompetitionProgramCard";
+import { CompetitionHomeSection } from "@/components/features/CompetitionHomeSection";
 import { HomeNotices } from "@/components/features/HomeNotices";
 import { InstallPrompt } from "@/components/features/InstallPrompt";
 import { HomeScheduleCard } from "@/components/cards/HomeScheduleCard";
@@ -77,19 +76,17 @@ async function HomeContent({ nowJst }: { nowJst: Date }) {
 
 async function CompetitionSection() {
   const result = await getHomeCompetition();
-  if (!result) return null;
+  if (!result) return <Link href="/competitions" className="block text-right text-caption text-accent">大会一覧・アーカイブ →</Link>;
   const programEntries = result.competition.program_source_url
     ? await getCompetitionProgramEntries(result.competition.id)
     : [];
   return (
-    <div className="space-y-2">
-      <CompetitionProgramCard competition={result.competition} entries={programEntries} />
-      <CompetitionHome
+      <CompetitionHomeSection
         competition={result.competition}
+        entries={programEntries}
         goalCount={result.goalCount}
         initialToday={jstToday()}
       />
-    </div>
   );
 }
 

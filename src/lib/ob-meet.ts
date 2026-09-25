@@ -1,6 +1,16 @@
 import { isAlumniEntry, type ObEntry } from "./ob-entries";
 import { entryGrade, type EntryMember } from "./entry-identity";
 
+/**
+ * OB戦は大会一覧の「OB戦」と同じ大会として扱う。プログラム画面は
+ * /competitions/{competitionId}/program に置き、27大戦などと同じ入口にそろえる。
+ */
+export const OB_MEET = { competitionId: "3e2a2b1e-21d1-49b0-a1e8-40bf595fb7e5", meetKey: "ob-2026" } as const;
+export const OB_PROGRAM_PATH = `/competitions/${OB_MEET.competitionId}/program`;
+export function isObCompetition(competitionId: string): boolean {
+  return competitionId === OB_MEET.competitionId;
+}
+
 export const OB_PARTY = { time: "19:00〜", venue: "ミライザカ 府中並木通り店", fee: 3500 };
 export const PARTY_STATUSES = ["参加", "不参加", "未回答"] as const;
 export type PartyStatus = typeof PARTY_STATUSES[number];

@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { jstToday } from "@/lib/date";
+import { selectHomeCompetition } from "@/lib/competition-lifecycle";
 import { readCompetitionProgramEntries } from "@/lib/competition-program-query";
 import type {
   CompetitionRow,
@@ -10,7 +11,7 @@ import type {
   PbRecord,
 } from "@/types";
 
-export const COMPETITION_SELECT = "id,name,starts_on,ends_on,sort_order,is_countdown,program_source_url";
+export const COMPETITION_SELECT = "id,name,starts_on,ends_on,sort_order,is_countdown,program_source_url,archive_at";
 /** 部で統一している大会（対抗戦など）の一覧 */
 export async function getCompetitions() {
   const supabase = await createClient();
@@ -36,11 +37,10 @@ export async function getCompetitionEvents() {
 /** ホームのカウントダウンとみんなの目標。管理者が選んだ大会（無ければ非表示） */
 export async function getHomeCompetition() {
   const supabase = await createClient();
-  const { data: competition, error } = await supabase
+  const { data, error } = await supabase
     .from("competitions")
-    .select(COMPETITION_SELECT)
-    .eq("is_countdown", true)
-    .maybeSingle();
+    .select(COMPETITION_SELECT);
+  const competition = selectHomeCompetition(data ?? []);
   if (error || !competition) return null;
   const { count } = await supabase
     .from("competition_goals")

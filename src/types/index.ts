@@ -550,6 +550,7 @@ export interface PersonalBestRow {
 
 /** 部で統一している大会（対抗戦など）。管理者が管理する */
 export interface CompetitionRow {
+  archive_at?: string | null;
   id: string;
   name: string;
   starts_on: string;

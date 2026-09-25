@@ -143,7 +143,6 @@ export default async function MyPage({
               {perms.manageSystem && (
                 <>
                   <RowLink href="/competitions" icon={<Trophy size={20} className="text-accent" />} label="大会" />
-                  <RowLink href="/ob-entries" icon={<ListOrdered size={20} className="text-accent" />} label="OB戦エントリー（試験公開）" />
                   <RowLink href="/events" icon={<ListOrdered size={20} className="text-accent" />} label="種目" />
                 </>
               )}

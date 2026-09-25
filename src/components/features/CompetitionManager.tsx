@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CalendarDays, ChevronRight, Plus, SlidersHorizontal } from "lucide-react";
@@ -11,9 +11,11 @@ import { Card } from "@/components/ui/card";
 import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
 import { ReorderList } from "@/components/ui/reorder-list";
+import { SegmentedControl } from "@/components/ui/segmented";
 import { Toggle } from "@/components/ui/toggle";
 import { useToast } from "@/components/ui/toast";
 import { formatRecordedOn } from "@/lib/competition-record";
+import { isCompetitionArchived, selectHomeCompetition } from "@/lib/competition-lifecycle";
 import type { CompetitionRow } from "@/types";
 
 /**
@@ -23,9 +25,11 @@ import type { CompetitionRow } from "@/types";
 export function CompetitionManager({
   initial,
   canManage,
+  initialNow,
 }: {
   initial: CompetitionRow[];
   canManage: boolean;
+  initialNow: number;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -33,6 +37,16 @@ export function CompetitionManager({
   const [editing, setEditing] = useState<CompetitionRow | null>(null);
   const [creating, setCreating] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
+  const [archiveTab, setArchiveTab] = useState(false);
+  const [now, setNow] = useState(initialNow);
+  useEffect(() => {
+    const update = () => setNow(Date.now());
+    const timer = setInterval(update, 30_000);
+    document.addEventListener("visibilitychange", update);
+    return () => { clearInterval(timer); document.removeEventListener("visibilitychange", update); };
+  }, []);
+  const homeId = selectHomeCompetition(items, now)?.id;
+  const visibleItems = reorderMode ? items : items.filter((c) => isCompetitionArchived(c, now) === archiveTab);
 
   /** ドラッグした順に 10 刻みで振り直す（数字を手で入れなくてよいように） */
   async function reorder(next: CompetitionRow[]) {
@@ -119,8 +133,16 @@ export function CompetitionManager({
         </div>
       )}
 
+      {!reorderMode && (
+        <SegmentedControl
+          items={[{ key: "current", label: "大会" }, { key: "archive", label: "アーカイブ" }]}
+          value={archiveTab ? "archive" : "current"}
+          onChange={(key) => setArchiveTab(key === "archive")}
+        />
+      )}
+      {visibleItems.length === 0 && items.length > 0 && <p className="text-caption">{archiveTab ? "まだアーカイブはありません" : "表示する大会はありません"}</p>}
       <ReorderList
-        items={items}
+        items={visibleItems}
         enabled={canManage && reorderMode}
         onReorder={(next) => void reorder(next)}
         renderItem={(c) => (
@@ -132,12 +154,14 @@ export function CompetitionManager({
               >
                 <p className="text-headline break-words">
                   {c.name}
-                  {c.is_countdown && (
+                  {c.id === homeId && (
                     <span className="ml-1.5 rounded border border-accent px-1 text-[10px] font-bold text-accent">
                       ホーム
                     </span>
                   )}
                 </p>
+                {isCompetitionArchived(c, now) && <p className="text-caption">アーカイブ・プログラムと目標を確認できます</p>}
+                {c.archive_at && !isCompetitionArchived(c, now) && <p className="text-caption">{new Date(c.archive_at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}にアーカイブ</p>}
                 <p className="text-caption">
                   {formatRecordedOn(c.starts_on, "day")}
                   {c.ends_on && c.ends_on !== c.starts_on
@@ -158,7 +182,7 @@ export function CompetitionManager({
                 )}
               </div>
             </div>
-            {canManage && !reorderMode && (
+            {canManage && !reorderMode && !isCompetitionArchived(c, now) && (
               <Toggle
                 label="ホームのカウントダウンに出す"
                 checked={c.is_countdown}
@@ -228,6 +252,8 @@ function CompetitionForm({
   const [startsOn, setStartsOn] = useState(competition?.starts_on ?? "");
   const [endsOn, setEndsOn] = useState(competition?.ends_on ?? "");
   const [programSourceUrl, setProgramSourceUrl] = useState(competition?.program_source_url ?? "");
+  const [archiveAt, setArchiveAt] = useState(competition?.archive_at
+    ? new Date(Date.parse(competition.archive_at) + 9 * 3600_000).toISOString().slice(0, 16) : "");
   const sort = sortOrder;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -250,6 +276,7 @@ function CompetitionForm({
       ends_on: endsOn || null,
       sort_order: Number.isInteger(sort) && sort >= 0 ? sort : 0,
       program_source_url: programSourceUrl.trim() || null,
+      archive_at: archiveAt ? new Date(`${archiveAt}:00+09:00`).toISOString() : null,
     };
     const { data, error: saveError } = competition
       ? await supabase
@@ -309,6 +336,11 @@ function CompetitionForm({
         <p className="mt-1 text-micro text-muted">
           設定すると、農工大の出場種目・出場選手を定期的に自動取込し、ホームにプログラムのカードが出ます。
         </p>
+      </div>
+      <div>
+        <p className="section-label mb-1.5">アーカイブ日時（日本時間・任意）</p>
+        <Input type="datetime-local" value={archiveAt} onChange={(e) => setArchiveAt(e.target.value)} />
+        <p className="mt-1 text-micro text-muted">指定時刻以降はホームと自動取得の対象から外れます。プログラム・目標・記録は残ります。空欄に戻すとアーカイブを解除できます。</p>
       </div>
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <FormModalFooter>

@@ -20,8 +20,17 @@ import type { ObDuty, ObDutyRole } from "@/lib/ob-duty";
 import { ObDutyTable } from "./ObDutyTable";
 import { OB_PROGRAM, type ObPartyResponse } from "@/lib/ob-meet";
 import { OB_ENTRY_EVENTS, entryDivision } from "@/lib/ob-entry-edit";
+import { format } from "date-fns";
+import { ja } from "date-fns/locale";
+import type { CompetitionRow } from "@/types";
 
-export function ObEntryReview({ initial, members, viewerId, history = [], party = [], duties = [], dutyRoles = [] }: { initial: ObEntry[]; members: EntryMember[]; viewerId: string; party?: ObPartyResponse[]; duties?: ObDuty[]; dutyRoles?: ObDutyRole[]; history?: ConfirmedEntryIdentity[] }) {
+/** 時刻の列。27大戦などのプログラム（ProgramEventSummary）と同じ幅・書式にそろえる。 */
+function TimeCell({ time }: { time: string }) {
+  return <span className="w-12 shrink-0 pt-0.5 text-caption tabular-nums text-muted2">{time}</span>;
+}
+
+export function ObEntryReview({ competition, initial, members, viewerId, history = [], party = [], duties = [], dutyRoles = [] }: { competition: Pick<CompetitionRow, "name" | "starts_on">; initial: ObEntry[]; members: EntryMember[]; viewerId: string; party?: ObPartyResponse[]; duties?: ObDuty[]; dutyRoles?: ObDutyRole[]; history?: ConfirmedEntryIdentity[] }) {
+  const dateLabel = format(new Date(`${competition.starts_on}T00:00:00`), "M月d日(E)", { locale: ja });
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"events" | "mine" | "identity" | "party" | "duty">("events");
   const [unlinked, setUnlinked] = useState(false);
@@ -36,7 +45,13 @@ export function ObEntryReview({ initial, members, viewerId, history = [], party 
   const groups = eventNames.filter((event) => division === "all" || event.startsWith(division)).map((event) => ({ event, entries: visible.filter((entry) => entry.events.includes(event) && normalizeEntryName([entry.submitted_name, entry.grade, event].join(" ")).toLowerCase().includes(query)) })).filter((group) => group.entries.length);
   return <div data-ob-workspace className="space-y-4 px-4 pb-8 pt-2">
     <Card className="p-4">
-      <div className="flex items-center justify-between gap-3"><div><h2 className="text-headline">OB戦エントリー</h2><p className="mt-1 text-caption">{initial.filter((e) => e.events.length).length}人・{initial.reduce((sum, e) => sum + e.events.length, 0)}エントリー</p></div><Button size="sm" variant="outline" onClick={() => setAdding(true)}>新規登録</Button></div>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-headline">{competition.name}</p>
+          <p className="mt-1 text-caption">{dateLabel}・{initial.filter((e) => e.events.length).length}人・{initial.reduce((sum, e) => sum + e.events.length, 0)}エントリー</p>
+        </div>
+        <Button size="sm" variant="outline" onClick={() => setAdding(true)}>新規登録</Button>
+      </div>
       <p className="mt-2 text-micro text-muted2">現役・OB・OGの出場登録／システムロール限定</p>
     </Card>
     <SegmentedControl items={[{key:"events",label:"予定"},{key:"mine",label:"回答"},{key:"party",label:"懇親会"},{key:"duty",label:"補助員"}]} value={view === "identity" ? "mine" : view} onChange={(value) => {setView(value);setSearch("");}} />
@@ -47,14 +62,25 @@ export function ObEntryReview({ initial, members, viewerId, history = [], party 
     {adding && <ObEntryEditor parties={party} members={members.filter((m) => !initial.some((e) => e.profile_id === m.id))} initialProfileId={view === "mine" && !initial.some((e) => e.profile_id === viewerId) ? viewerId : ""} onClose={() => setAdding(false)} />}
     {editing && <ObEntryEditor key={`${editing.id}:${editing.revision}`} entry={editing} party={party.find((p)=>p.entry_id===editing.id)} members={members} onClose={() => setEditingId(null)} />}
     {view === "party" ? <ObPartyView responses={party} /> : view === "duty" ? <ObDutyTable entries={initial} members={members} duties={duties} roles={dutyRoles} /> : view === "events" ? <div className="space-y-3">
-      <p className="text-caption">プログラム（予定）・競技を開くと出場者と資格記録が見られます。</p>
-      {OB_PROGRAM.map((slot) => {
-        const rows=groups.filter(({event})=>slot.events.includes(event.slice(2)));
-        if (query && !rows.length) return null;
-        return <section key={slot.time} className="space-y-2"><h2 className="text-caption font-semibold text-muted2"><span className="tabular-nums">{slot.time}</span>　{slot.label}</h2>
-          {slot.events.length ? <Card className="divide-y divide-separator">{rows.length ? rows.map(({event,entries})=><EntryProgramRow key={`${event}:${query}`} event={event} entries={entries} viewerId={viewerId} searching={!!query} onEdit={setEditingId} />) : <p className="p-3.5 text-caption">該当する出場登録はありません</p>}</Card> : slot.note ? <Card className="p-3.5 text-body">{slot.note}</Card> : null}
-        </section>;
-      })}
+      <p className="text-micro text-muted2">種目を開くと出場者と資格記録が見られます。</p>
+      <section className="space-y-3">
+        <p className="section-label">{dateLabel}</p>
+        <Card className="divide-y divide-separator">
+          {OB_PROGRAM.flatMap((slot) => {
+            const rows = groups.filter(({ event }) => slot.events.includes(event.slice(2)));
+            if (query && !rows.length) return [];
+            if (rows.length) return rows.map(({ event, entries }) => <EntryProgramRow key={`${event}:${query}`} time={slot.time} event={event} entries={entries} viewerId={viewerId} searching={!!query} onEdit={setEditingId} />);
+            // 開会式などの進行と、出場登録がまだ無い種目の時間帯も、同じ行の形で並べる。
+            return [<div key={slot.time} className="flex items-start gap-3 p-3.5">
+              <TimeCell time={slot.time} />
+              <span className="min-w-0 flex-1">
+                <span className="block text-headline">{slot.label}</span>
+                {(slot.note || slot.events.length > 0) && <span className="mt-1 block text-[13px] text-muted2">{slot.note ?? "出場登録はありません"}</span>}
+              </span>
+            </div>];
+          })}
+        </Card>
+      </section>
       {query && !groups.length && <EmptyState title="条件に合うエントリーはありません" />}
     </div> : visible.length === 0 ? <Card><EmptyState title={view === "mine" ? "自分に紐付いたエントリーはありません" : "条件に合うエントリーはありません"} />
       {view === "mine" && <p className="px-4 pb-4 text-caption">「本人照合」から自分の回答を確認できます。</p>}</Card> : visible.map((entry) =>
@@ -63,16 +89,21 @@ export function ObEntryReview({ initial, members, viewerId, history = [], party 
   </div>;
 }
 
-function EntryProgramRow({ event, entries, viewerId, searching, onEdit }: { event: string; entries: ObEntry[]; viewerId: string; searching: boolean; onEdit: (id: string) => void }) {
+function EntryProgramRow({ time, event, entries, viewerId, searching, onEdit }: { time: string; event: string; entries: ObEntry[]; viewerId: string; searching: boolean; onEdit: (id: string) => void }) {
   const [open, setOpen] = useState(searching);
   const expanded = open;
   return <div className="p-3.5">
     <button type="button" aria-expanded={expanded} onClick={() => setOpen(!open)} className="flex w-full items-start gap-2 text-left pressable">
-      <span className="min-w-0 flex-1"><span className="flex items-baseline justify-between gap-2"><span className="text-headline">{event}</span><span className="shrink-0 text-caption">{entries.length}人</span></span>
-        {!expanded && <span className="mt-1 block truncate text-caption">{entries.map((e) => `${e.grade} ${e.submitted_name}`).join("・")}</span>}
-      </span><ChevronDown size={16} className={`mt-1 shrink-0 text-muted transition-transform ${expanded ? "rotate-180" : ""}`} />
+      <span className="flex min-w-0 flex-1 items-start gap-3">
+        <TimeCell time={time} />
+        <span className="min-w-0 flex-1">
+          <span className="flex items-baseline justify-between gap-2"><span className="text-headline">{event}</span><span className="shrink-0 text-caption">{entries.length}人</span></span>
+          {!expanded && <span className="mt-1 block text-[13px] leading-relaxed text-muted2">{entries.map((e) => `${e.grade} ${e.submitted_name}`).join("・")}</span>}
+        </span>
+      </span>
+      <ChevronDown size={16} className={`mt-1 shrink-0 text-muted transition-transform ${expanded ? "rotate-180" : ""}`} />
     </button>
-    {expanded && <div className="mt-2 space-y-1.5">
+    {expanded && <div className="mt-2 space-y-1.5 sm:ml-[52px]">
       <p className="px-2.5 text-micro text-muted2">出場者・資格記録</p>
       {entries.map((entry) => <div key={entry.id} className="flex items-start gap-1 rounded-lg bg-bg px-2.5 py-2 text-[13px]">
         <div className="min-w-0 flex-1"><div className="grid grid-cols-2 items-baseline gap-2">

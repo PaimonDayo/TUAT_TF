@@ -7,6 +7,9 @@ import { permissionsOf } from "@/lib/permissions";
 export default async function CompetitionsPage() {
   const profile = await getCurrentProfile();
   const competitions = await getCompetitions();
+  // Server Component: リクエスト時刻を初期HTMLとクライアントで共有する。
+  // eslint-disable-next-line react-hooks/purity
+  const initialNow = Date.now();
 
   return (
     <>
@@ -14,6 +17,7 @@ export default async function CompetitionsPage() {
       <div className="space-y-3 px-4 pt-2">
         <CompetitionManager
           initial={competitions}
+          initialNow={initialNow}
           canManage={permissionsOf(profile.roles).manageSystem}
         />
       </div>

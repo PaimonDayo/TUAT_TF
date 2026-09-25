@@ -8,6 +8,7 @@ import { forwardPcCron } from "@/lib/pc-cron-forward";
 import { decodeShiftJisHtml, parseCompetitionProgram, reconcileProgramEntries, validateProgramImport, fromStoredProgramRow } from "@/lib/competition-program";
 import type { CompetitionProgramEntryRow } from "@/types";
 import type { Json } from "@/types/database";
+import { isCompetitionArchived } from "@/lib/competition-lifecycle";
 
 export async function GET(request: Request) { return forwardPcCron(request, POST); }
 
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   let query = admin
     .from("competitions")
-    .select("id,starts_on,ends_on,program_source_url")
+    .select("id,starts_on,ends_on,program_source_url,archive_at")
     .not("program_source_url", "is", null);
   if (onlyCompetitionId) query = query.eq("id", onlyCompetitionId);
   const { data: competitions, error: competitionsError } = await query;
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
   const results: { competitionId: string; ok: boolean; rows?: number; entries?: number; error?: string }[] = [];
 
   for (const competition of competitions ?? []) {
+    if (!onlyCompetitionId && isCompetitionArchived(competition)) continue;
     const sourceUrl = competition.program_source_url;
     if (!sourceUrl) continue;
     try {
@@ -64,12 +66,10 @@ export async function POST(request: Request) {
       if (url.hostname !== "sairiku.net" || !/^https?:$/.test(url.protocol) || !url.pathname.startsWith("/result/") || url.username || url.password || url.port) throw new Error("対応していない取得元URLです");
       const response = await fetch(url, { cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15000) });
       if (!response.ok) throw new Error(`取得に失敗しました（${response.status}）`);
-      const buffer = await response.arrayBuffer();
-      const html = decodeShiftJisHtml(buffer);
-      const year = new Date(competition.starts_on).getFullYear();
+      const html = decodeShiftJisHtml(await response.arrayBuffer());
       const { data: previous, error: readError } = await admin.from("competition_program_entries").select("*").eq("competition_id", competition.id);
       if (readError) throw readError;
-      const parsed = parseCompetitionProgram(html, year);
+      const parsed = parseCompetitionProgram(html, new Date(competition.starts_on).getFullYear());
       validateProgramImport(html, parsed, previous?.length ?? 0);
       const rows = reconcileProgramEntries(parsed, ((previous ?? []) as unknown as CompetitionProgramEntryRow[]).map(fromStoredProgramRow));
       const stored = rows.map(row => ({ event_date: row.eventDate, block: row.block, sort_order: row.sortOrder,

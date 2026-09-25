@@ -6,8 +6,10 @@ import { fetchRolesByProfileIds, isMemberPreviewActive } from "@/lib/supabase/au
 import { permissionsOf } from "@/lib/permissions";
 import { entryClient } from "@/lib/ob-entries-db";
 import { validDutyEdit, type DutyEdit } from "@/lib/ob-duty";
-import { validPartyEdit, type PartyEdit } from "@/lib/ob-meet";
+import { OB_PROGRAM_PATH, validPartyEdit, type PartyEdit } from "@/lib/ob-meet";
 import { validEntryEdit, type EntryEdit } from "@/lib/ob-entry-edit";
+/** 旧URL（転送のみ）と、大会ページ配下のプログラムの両方を更新する。 */
+function refreshObPages() { revalidatePath("/ob-entries"); revalidatePath(OB_PROGRAM_PATH); }
 
 async function editClient() {
   const client = entryClient(await createClient());
@@ -32,7 +34,7 @@ export async function saveEntry(input: EntryEdit, party?: PartyEdit): Promise<{ 
       : result.error.message.includes("entry_member_missing") ? "在籍中で氏名・学年が登録された部員を選んでください" : "保存できませんでした";
     return { ok: false, message };
   }
-  revalidatePath("/ob-entries");
+  refreshObPages();
   return { ok: true };
 }
 
@@ -53,7 +55,7 @@ export async function confirmEntryMember(entryId: string, profileId: string | nu
   if (saved.error?.code === "23505") return { ok: false, message: "この部員は別のエントリーに紐付いています" };
   if (saved.error) return { ok: false, message: "保存できませんでした" };
   if (!saved.data) return { ok: false, message: "他の操作で更新されています。画面を更新してください" };
-  revalidatePath("/ob-entries");
+  refreshObPages();
   return { ok: true };
 }
 
@@ -63,7 +65,7 @@ export async function saveParty(input: PartyEdit): Promise<{ ok: boolean; messag
   if (!client) return {ok:false,message:"権限がありません"};
   const result = await client.rpc("save_ob_party", {p_id:input.id,p_revision:input.revision,p_status:input.status});
   if (result.error) return {ok:false,message:result.error.message.includes("entry_conflict") ? "他の操作で更新されています。画面を更新してください" : "保存できませんでした。本人が確認できている回答か確認してください"};
-  revalidatePath("/ob-entries");
+  refreshObPages();
   return {ok:true};
 }
 
@@ -73,7 +75,7 @@ export async function saveDuty(input: DutyEdit): Promise<{ ok: boolean; message?
   if (!client) return {ok:false,message:"権限がありません"};
   const result=await client.rpc("save_ob_duty",{p_profile_id:input.profileId,p_slot_time:input.slotTime,p_event_name:input.eventName,p_assignment:input.assignment,p_revision:input.revision});
   if(result.error) return {ok:false,message:result.error.message.includes("entry_competing") ? "この時間帯に出場する部員は補助員に登録できません" : result.error.message.includes("entry_conflict") ? "他の操作で更新されています。画面を更新してからやり直してください" : "保存できませんでした。在籍中の部員か確認してください"};
-  revalidatePath("/ob-entries");return {ok:true,revision:result.data};
+  refreshObPages();return {ok:true,revision:result.data};
 }
 
 export async function saveDutyRoles(input: import("@/lib/ob-duty").DutyRolesEdit): Promise<{ok:boolean;message?:string}> {
@@ -82,7 +84,7 @@ export async function saveDutyRoles(input: import("@/lib/ob-duty").DutyRolesEdit
   const client=await editClient();if(!client)return {ok:false,message:"権限がありません"};
   const result=await client.rpc("save_ob_duty_roles",{p_profile_id:input.profileId,p_slot_time:input.slotTime,p_event_name:input.eventName,p_role_ids:input.roleIds,p_revision:input.revision});
   if(result.error)return {ok:false,message:dutyRoleError(result.error.message)};
-  revalidatePath("/ob-entries");return {ok:true};
+  refreshObPages();return {ok:true};
 }
 export async function saveDutyRole(input: import("@/lib/ob-duty").DutyRoleEdit): Promise<{ok:boolean;message?:string}> {
   const {validDutyRoleEdit}=await import("@/lib/ob-duty");
@@ -90,7 +92,7 @@ export async function saveDutyRole(input: import("@/lib/ob-duty").DutyRoleEdit):
   const client=await editClient();if(!client)return {ok:false,message:"権限がありません"};
   const result=await client.rpc("save_ob_duty_role",{p_id:input.id,p_slot_time:input.slotTime,p_event_name:input.eventName,p_name:input.name.trim(),p_abbreviation:input.abbreviation.trim(),p_required_count:input.requiredCount,p_revision:input.revision});
   if(result.error)return {ok:false,message:dutyRoleError(result.error.message)};
-  revalidatePath("/ob-entries");return {ok:true};
+  refreshObPages();return {ok:true};
 }
 function dutyRoleError(message:string) {
   if(message.includes("role_full"))return "必要人数に達した役職があります。画面を更新して確認してください";

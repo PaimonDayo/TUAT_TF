@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { competitionDays } from "@/lib/competition";
+import { selectHomeCompetition } from "@/lib/competition-lifecycle";
 import { jstToday } from "@/lib/date";
 import {
   SPLASH_CACHE_KEY,
@@ -67,7 +68,7 @@ export default function SplashCountdown() {
     }
 
     // 覚えている日付を1日1回だけ取り直す。ログイン前は読めないので、そのときは何もしない。
-    if (!cache || cache.fetchedOn !== today) void refreshCache(today);
+    if (!cache || cache.fetchedOn !== today || (cache.archiveAt && Date.parse(cache.archiveAt) <= Date.now())) void refreshCache(today);
 
     // タブの先読みは、いま開いている画面が出そろってから始める。起動画面を切っている
     // 人にも同じように効かせたいので、表示するかどうかとは切り離しておく。
@@ -159,16 +160,17 @@ export default function SplashCountdown() {
 /** カウントダウン対象の大会を読み直して端末へ覚えさせる（1日1回） */
 async function refreshCache(today: string) {
   try {
-    const { data } = await createClient()
+    const { data: competitions, error } = await createClient()
       .from("competitions")
-      .select("name,starts_on,ends_on")
-      .eq("is_countdown", true)
-      .maybeSingle();
-    if (!data) return;
+      .select("name,starts_on,ends_on,archive_at,is_countdown");
+    if (error) return;
+    const data = selectHomeCompetition(competitions ?? []);
+    if (!data) { localStorage.removeItem(SPLASH_CACHE_KEY); return; }
     const next: SplashCountdownCache = {
       name: data.name,
       startsOn: data.starts_on,
       endsOn: data.ends_on,
+      archiveAt: data.archive_at,
       fetchedOn: today,
     };
     localStorage.setItem(SPLASH_CACHE_KEY, JSON.stringify(next));
