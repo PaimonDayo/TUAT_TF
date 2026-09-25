@@ -47,6 +47,12 @@ powershell -NoProfile -File ops/laptop/restart-backend.ps1
 
 Wi-Fi変更時は中継先を再取得してR2へ署名保存するため、利用者URLやGoogle設定の変更は不要。Quick Tunnelには稼働保証がなく、再接続中は通信できない。McAfeeの不要なVPN経路は解除後に疎通確認済み。ウイルス対策/Firewallは無効化していない。WSLはmirrored networking、DNS tunneling、firewall有効。Dockerのサブネットはテザリングとの重複を避けている。
 
+## DBの置き場所（2026-09-26更新）
+
+WSL Ubuntu（DB/Authのコンテナを含む）の仮想ディスクは **内蔵NVMe SSDの `D:\WSL\Ubuntu\ext4.vhdx`**。9/17〜9/26は外付けHDD(E:)に置いていた。移設前の複製は `E:\WSL\Ubuntu-pre-ssd-20260926\`。下の節の「外付けHDDからの初回起動は遅い」は移設前の記録。
+
+中継（run-backend.mjs）は `D:\TUAT_TF\node_modules` の依存（@aws-sdk など）を読み込む。空にすると、次に再起動した時点で本番が止まる。
+
 ## 再起動すると止まる（2026-09-21 実際に起きた）
 
 2026-09-20 23:20にPCが再起動し、翌朝05:40に所有者がログインするまで**約6時間25分、本番のDB/Authが停止した**。
