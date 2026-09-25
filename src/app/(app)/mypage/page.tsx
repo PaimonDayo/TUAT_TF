@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
-import { Trophy, Medal, ChevronRight, Settings, Shield, ShieldCheck, Users, Target, MapPin, ListOrdered, Rss } from "lucide-react";
+import { Trophy, Medal, ChevronRight, Settings, Shield, ShieldCheck, Users, Target, MapPin, ListOrdered, Rss, Flag } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -110,6 +110,8 @@ export default async function MyPage({
         {/* リンク（1枚にまとめた区切り線リスト） */}
         <Card className="divide-y divide-separator/70 overflow-hidden">
           <RowLink href="/goals" icon={<Target size={20} className="text-accent" />} label="目標" />
+          {/* 大会は全員に。追加・編集・並べ替えは大会画面の中で管理者にだけ出る */}
+          <RowLink href="/competitions" icon={<Flag size={20} className="text-accent" />} label="大会" />
           <RowLink href="/mypage/pb" icon={<Medal size={20} className="text-warning" />} label="大会・記録会の結果" />
           <RowLink href="/members" icon={<Users size={20} className="text-accent" />} label="メンバー一覧" />
           <RowLink href="/blog" icon={<Rss size={20} className="text-accent" />} label="ブログ" />
@@ -141,10 +143,7 @@ export default async function MyPage({
                 <RowLink href="/venues" icon={<MapPin size={20} className="text-accent" />} label="練習場所" />
               )}
               {perms.manageSystem && (
-                <>
-                  <RowLink href="/competitions" icon={<Trophy size={20} className="text-accent" />} label="大会" />
-                  <RowLink href="/events" icon={<ListOrdered size={20} className="text-accent" />} label="種目" />
-                </>
+                <RowLink href="/events" icon={<ListOrdered size={20} className="text-accent" />} label="種目" />
               )}
             </Card>
           </section>

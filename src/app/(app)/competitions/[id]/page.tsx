@@ -7,7 +7,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import {
   getCompetitionById,
   getCompetitionEvents,
-  getCompetitionResultLinks,
   getCompetitionResults,
 } from "@/lib/queries";
 import {
@@ -22,7 +21,11 @@ import { getCurrentProfile } from "@/lib/supabase/auth";
 import { permissionsOf } from "@/lib/permissions";
 import { isObCompetition } from "@/lib/ob-meet";
 
-/** 大会のページ。その大会の目標への導線と、部員全員の結果を種目別に並べる */
+/**
+ * 大会のページ。結果の見せ場所は1つにする（2026-09-25 オーナー確定）。
+ * プログラムがある大会は公式の結果がプログラムに載るので、ここでは一覧を出さない。
+ * プログラムが無い大会だけ、部員が登録した記録を結果一覧として並べる。
+ */
 export default async function CompetitionPage({
   params,
 }: {
@@ -34,11 +37,10 @@ export default async function CompetitionPage({
 
   const profile = await getCurrentProfile();
   const canManageSystem = permissionsOf(profile.roles).manageSystem;
-  const [results, events, resultLinks] = await Promise.all([
-    getCompetitionResults(id),
-    getCompetitionEvents(),
-    canManageSystem ? getCompetitionResultLinks(id) : Promise.resolve([]),
-  ]);
+  const hasProgram = Boolean(competition.program_source_url);
+  const [results, events] = hasProgram
+    ? [[], []]
+    : await Promise.all([getCompetitionResults(id), getCompetitionEvents()]);
   const ordered = sortCompetitionEvents(events);
   const groups = ordered
     .map((event) => ({
@@ -77,7 +79,7 @@ export default async function CompetitionPage({
               className="flex items-center gap-3 p-4 pressable"
             >
               <ListOrdered size={20} className="text-accent" />
-              <span className="flex-1 text-headline">プログラム</span>
+              <span className="flex-1 text-headline">{hasProgram ? "プログラム・結果" : "プログラム"}</span>
               {isObCompetition(competition.id) && <span className="text-caption text-muted2">システム限定</span>}
               <ChevronRight size={16} className="text-muted" />
             </Link>
@@ -92,63 +94,44 @@ export default async function CompetitionPage({
           </Link>
         </Card>
 
-        <p className="section-label">部員が登録した記録（{results.length}件）</p>
-        {groups.length === 0 ? (
-          <Card>
-            <EmptyState title="まだこの大会の結果はありません" />
-          </Card>
+        {hasProgram ? (
+          <p className="text-caption">
+            結果は公式の速報からプログラムにまとめています。自分の記録はマイページの「大会・記録会の結果」で見られます。
+          </p>
         ) : (
-          groups.map((group) => (
-            <section key={group.name} className="space-y-1.5">
-              <p className="section-label">{group.name}</p>
-              <Card className="divide-y divide-separator">
-                {group.rows.map((row) => (
-                  <div key={row.id} className="flex items-center gap-3 p-3.5">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-headline break-words">
-                        {row.author?.display_name ?? "部員"}
-                      </p>
-                      {row.wind !== null && (
-                        <p className="text-caption">
-                          風速 {formatWind(row.wind)}
-                        </p>
-                      )}
-                    </div>
-                    <span className="text-title tabular-nums">
-                      {formatRecord(row, measureTypeOf(events, row.event_name), timeFormatOf(events, row.event_name))}
-                    </span>
-                  </div>
-                ))}
-              </Card>
-            </section>
-          ))
-        )}
-
-        {canManageSystem && resultLinks.length > 0 && (
-          <section className="space-y-1.5">
-            <p className="section-label">
-              公式結果（本名確認済み・システム限定・{resultLinks.length}件）
-            </p>
-            <Card className="divide-y divide-separator">
-              {resultLinks.map((row) => (
-                <div key={row.id} className="flex items-center gap-3 p-3.5">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-headline break-words">
-                      {row.profile?.display_name ?? row.entry_name}
-                      {row.entry_grade ? `（${row.entry_grade}）` : ""}
-                    </p>
-                    <p className="text-caption break-words">{row.event_label}</p>
-                  </div>
-                  <span className="text-title tabular-nums text-right">
-                    {row.record ?? "-"}
-                    {row.place ? (
-                      <span className="block text-caption text-muted">{row.place}位</span>
-                    ) : null}
-                  </span>
-                </div>
-              ))}
+          <>
+          <p className="section-label">結果（{results.length}件）</p>
+          {groups.length === 0 ? (
+            <Card>
+              <EmptyState title="まだこの大会の結果はありません" />
             </Card>
-          </section>
+          ) : (
+            groups.map((group) => (
+              <section key={group.name} className="space-y-1.5">
+                <p className="section-label">{group.name}</p>
+                <Card className="divide-y divide-separator">
+                  {group.rows.map((row) => (
+                    <div key={row.id} className="flex items-center gap-3 p-3.5">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-headline break-words">
+                          {row.author?.display_name ?? "部員"}
+                        </p>
+                        {row.wind !== null && (
+                          <p className="text-caption">
+                            風速 {formatWind(row.wind)}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-title tabular-nums">
+                        {formatRecord(row, measureTypeOf(events, row.event_name), timeFormatOf(events, row.event_name))}
+                      </span>
+                    </div>
+                  ))}
+                </Card>
+              </section>
+            ))
+          )}
+          </>
         )}
       </div>
     </>
