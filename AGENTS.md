@@ -490,6 +490,7 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 
 ## 作業ログ（着手前に追記・新しいものを上へ）
 
+- 2026-09-26 / Claude Opus 5.5 / オーナー依頼2件。①大会のアーカイブを⋯メニューの「アーカイブする／解除」1操作に（押した時点でアーカイブ、日時入力欄は撤去。既存のarchive_atは編集保存で変えない）。アーカイブ一覧は終了日（無ければ初日）の新しい順。②システムロール向け「日別の記録」（/mypage/daily-records、管理メニュー）: 日付の前後移動・日付指定、全体/中長距離/短距離、学年→名前順に距離・メニュー/結果・感想、タップで記録を開く、未入力の部員（マネージャーのみの人を除く）。460テスト・tsc・対象eslint・build成功。実機確認は未実施。 → (this commit)
 - 2026-09-26 / Claude Opus 5.5 / 9/22監査のスプシ同期P1×3とP2を修正（上の「現在の状態」参照）。migration 20260926010000 を、実在の連携済み部員の記録で削除・日付変更・本文のみ編集・未連携部員の削除を試すBEGIN…ROLLBACKで確認（予定2件のみ作成、一般部員は読めない）してから本番PCへ適用。460テスト・tsc・対象eslint・build成功。index.ts の古い「アプリ主入力の既存日は上書きしない」説明を更新。 → (this commit)
 - 2026-09-26 / Claude Opus 5.5 / オーナーが管理者PowerShellで `install-backend-task.ps1 -WithoutLogon` を実行し、本番タスクを S4U（ログオン不要）へ切替。LogonType=S4U・Running・中継healthy・maintenance=false・本番Auth 200・Node 22を確認。**無人再起動（ログインせずに再起動→Auth疎通）の実試験は未実施**（オーナーの都合のよい時間に行う）。9/22監査の項目6はこれで設定済み・実試験待ち。 → (this commit)
 - 2026-09-26 / Claude Opus 5.5 / オーナー指示でDBを外付けHDDから内蔵SSDへ移設。01:10の自動バックアップ完了を待って停止（タスク無効化→中継停止→WSL停止。コンテナの個別停止はコマンドの受け渡し不具合で1台しか効かず、DBはWSL停止と同時に停止。起動時に自動回復）。vhdxをE:上へ複製（328秒・同サイズ）→`wsl --manage --move`でD:へ（127秒）→タスク再開。中継が `ERR_MODULE_NOT_FOUND` で起動せず、main の node_modules が空だったことが判明、npm ci で復旧。停止は約19分（01:10〜01:29）。全11コンテナhealthy、audit通過、記録4,202件で変化なし、本番画面とCloudflare中継の読み込みを確認。 → (this commit)

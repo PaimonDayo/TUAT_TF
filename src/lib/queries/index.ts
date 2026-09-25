@@ -10,3 +10,4 @@ export * from "./rankings";
 export * from "./venues";
 export * from "./notes";
 export * from "./competitions";
+export * from "./daily-records";

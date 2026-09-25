@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
-import { Trophy, Medal, ChevronRight, Settings, Shield, ShieldCheck, Users, Target, MapPin, ListOrdered, Rss, Flag } from "lucide-react";
+import { Trophy, Medal, ChevronRight, Settings, Shield, ShieldCheck, Users, Target, MapPin, ListOrdered, Rss, Flag, CalendarDays } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -143,7 +143,10 @@ export default async function MyPage({
                 <RowLink href="/venues" icon={<MapPin size={20} className="text-accent" />} label="練習場所" />
               )}
               {perms.manageSystem && (
-                <RowLink href="/events" icon={<ListOrdered size={20} className="text-accent" />} label="種目" />
+                <>
+                  <RowLink href="/mypage/daily-records" icon={<CalendarDays size={20} className="text-accent" />} label="日別の記録" />
+                  <RowLink href="/events" icon={<ListOrdered size={20} className="text-accent" />} label="種目" />
+                </>
               )}
             </Card>
           </section>

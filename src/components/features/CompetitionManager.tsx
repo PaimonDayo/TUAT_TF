@@ -46,7 +46,33 @@ export function CompetitionManager({
     return () => { clearInterval(timer); document.removeEventListener("visibilitychange", update); };
   }, []);
   const homeId = selectHomeCompetition(items, now)?.id;
-  const visibleItems = reorderMode ? items : items.filter((c) => isCompetitionArchived(c, now) === archiveTab);
+  const visibleItems = reorderMode
+    ? items
+    : items
+        .filter((c) => isCompetitionArchived(c, now) === archiveTab)
+        // アーカイブは終わった日が新しい大会を上に（並べ替えは開催前の大会だけで使う）
+        .sort((a, b) => (archiveTab ? (b.ends_on ?? b.starts_on).localeCompare(a.ends_on ?? a.starts_on) : 0));
+
+  /** その場でアーカイブする／解除する（日時の入力は不要。押した時刻でアーカイブになる） */
+  async function toggleArchive(target: CompetitionRow) {
+    const previous = items;
+    // 画面が持つ現在時刻（30秒ごとに更新）で付ける。押した直後からアーカイブとして表示される。
+    const archiveAt = isCompetitionArchived(target, now) ? null : new Date(now).toISOString();
+    setItems((old) => old.map((c) => (c.id === target.id ? { ...c, archive_at: archiveAt } : c)));
+    const { error } = await createClient()
+      .from("competitions")
+      .update({ archive_at: archiveAt })
+      .eq("id", target.id)
+      .select("id")
+      .single();
+    if (error) {
+      setItems(previous);
+      showToast(archiveAt ? "アーカイブできませんでした" : "アーカイブを解除できませんでした");
+      return;
+    }
+    showToast(archiveAt ? `「${target.name}」をアーカイブしました` : `「${target.name}」をアーカイブから戻しました`, "success");
+    router.refresh();
+  }
 
   /** ドラッグした順に 10 刻みで振り直す（数字を手で入れなくてよいように） */
   async function reorder(next: CompetitionRow[]) {
@@ -174,6 +200,8 @@ export function CompetitionManager({
                 {canManage && !reorderMode && (
                   <ActionMenu
                     onEdit={() => setEditing(c)}
+                    onArchive={() => toggleArchive(c)}
+                    archived={isCompetitionArchived(c, now)}
                     onDelete={() => remove(c)}
                     deleteTitle={`「${c.name}」を削除しますか？`}
                     deleteDescription="この大会に登録された目標も消えます。結果の大会の紐付けは外れますが、結果自体は残ります。"
@@ -252,8 +280,6 @@ function CompetitionForm({
   const [startsOn, setStartsOn] = useState(competition?.starts_on ?? "");
   const [endsOn, setEndsOn] = useState(competition?.ends_on ?? "");
   const [programSourceUrl, setProgramSourceUrl] = useState(competition?.program_source_url ?? "");
-  const [archiveAt, setArchiveAt] = useState(competition?.archive_at
-    ? new Date(Date.parse(competition.archive_at) + 9 * 3600_000).toISOString().slice(0, 16) : "");
   const sort = sortOrder;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -276,7 +302,6 @@ function CompetitionForm({
       ends_on: endsOn || null,
       sort_order: Number.isInteger(sort) && sort >= 0 ? sort : 0,
       program_source_url: programSourceUrl.trim() || null,
-      archive_at: archiveAt ? new Date(`${archiveAt}:00+09:00`).toISOString() : null,
     };
     const { data, error: saveError } = competition
       ? await supabase
@@ -336,11 +361,6 @@ function CompetitionForm({
         <p className="mt-1 text-micro text-muted">
           設定すると、農工大の出場種目・出場選手を定期的に自動取込し、ホームにプログラムのカードが出ます。
         </p>
-      </div>
-      <div>
-        <p className="section-label mb-1.5">アーカイブ日時（日本時間・任意）</p>
-        <Input type="datetime-local" value={archiveAt} onChange={(e) => setArchiveAt(e.target.value)} />
-        <p className="mt-1 text-micro text-muted">指定時刻以降はホームと自動取得の対象から外れます。プログラム・目標・記録は残ります。空欄に戻すとアーカイブを解除できます。</p>
       </div>
       {error && <p className="text-caption text-danger text-center">{error}</p>}
       <FormModalFooter>
