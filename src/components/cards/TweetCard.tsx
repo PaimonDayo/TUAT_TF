@@ -109,7 +109,7 @@ export function TweetCard({
         <button
           type="button"
           aria-label="画像を拡大"
-          className="block w-full overflow-hidden rounded-2xl border border-separator bg-bg"
+          className="block w-full overflow-hidden rounded-card border border-separator bg-bg"
           onClick={(event) => { event.stopPropagation(); setImageOpen(true); }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}

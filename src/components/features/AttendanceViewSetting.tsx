@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { useToast } from "@/components/ui/toast";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
@@ -21,7 +20,6 @@ export function AttendanceViewSetting({
   userId: string;
   initial: AttendanceDefaultBlock;
 }) {
-  const router = useRouter();
   const { showToast } = useToast();
   const [selected, setSelected] = useState(initial);
   const [busy, setBusy] = useState(false);
@@ -47,7 +45,8 @@ export function AttendanceViewSetting({
       showToast(safeUpdateMessage(result.reason));
       return;
     }
-    router.refresh();
+    // router.refresh() はしない。この設定を使う画面は開くたびサーバーで描画し直すため、
+    // 画面全体を取り直さなくても次に開いたときに反映される。
   }
 
   return (

@@ -406,7 +406,7 @@ export function NoteArticleEditor({
       </p>
 
       {pollEnabled && (
-        <section className="space-y-3 rounded-[16px] border border-separator bg-bg p-3">
+        <section className="space-y-3 rounded-card border border-separator bg-bg p-3">
           <div className="flex items-center justify-between">
             <p className="section-label">投票</p>
             <button

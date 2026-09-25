@@ -368,23 +368,26 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
       }
     }
 
-    // write-through: 連携シートがある場合は、保存直後にGASで1回だけ反映する。
-    // 未連携ならAPI側がskippedで返し、失敗時はDBの再送フラグを毎日0時の連携が処理する。
-    const pushResult = await pushRecordToSheet(savedId);
-    if (!pushResult.ok) {
-      showToast(
-        `記録は保存できました。スプレッドシートへの書き込みは、あとでもう一度自動で試します: ${pushResult.error}`,
-        "error",
-      );
-    } else if (pushResult.unmapped && pushResult.unmapped.length > 0) {
-      showToast(
-        `スプレッドシートに次の項目の欄がなかったので、その項目だけ書き込めませんでした: ${pushResult.unmapped.join("・")}`,
-        "error",
-      );
-    }
-
+    // DBへの保存はここで完了しているので、先にフォームを閉じる。
     router.refresh();
     onDone();
+
+    // write-through: 連携シートがある場合は、閉じた後に裏でGASへ1回だけ反映する（応答を待たない）。
+    // 保存の時点でDBトリガーが pending_sheet_push を立てており、取り込み側はその日を上書きしない。
+    // 書き込めなかった分は毎日0時の連携が再送する。未連携ならAPI側がskippedで返す。
+    void pushRecordToSheet(savedId).then((pushResult) => {
+      if (!pushResult.ok) {
+        showToast(
+          `記録は保存できました。スプレッドシートへの書き込みは、あとでもう一度自動で試します: ${pushResult.error}`,
+          "error",
+        );
+      } else if (pushResult.unmapped && pushResult.unmapped.length > 0) {
+        showToast(
+          `スプレッドシートに次の項目の欄がなかったので、その項目だけ書き込めませんでした: ${pushResult.unmapped.join("・")}`,
+          "error",
+        );
+      }
+    });
   }
 
   return (

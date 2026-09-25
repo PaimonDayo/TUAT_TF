@@ -23,7 +23,7 @@ export function CompetitionProgramCard({
     <Link
       href={`/competitions/${competition.id}/program`}
       aria-label={`${competition.name}のプログラムを開く`}
-      className="block overflow-hidden rounded-2xl border border-separator bg-card p-4 transition-colors active:bg-bg"
+      className="block overflow-hidden rounded-card border border-separator bg-card p-4 transition-colors active:bg-bg"
     >
       <p className="flex items-center justify-between gap-2 text-headline">
         <span className="truncate">{competition.name}</span>

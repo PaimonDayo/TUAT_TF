@@ -80,7 +80,7 @@ export function InstallPrompt() {
   if (!show) return null;
 
   return (
-    <div className="rounded-2xl border border-accent/30 bg-accent/8 p-3.5">
+    <div className="rounded-card border border-accent/30 bg-accent/8 p-3.5">
       <div className="flex items-start gap-3">
         <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
           <Download size={18} />

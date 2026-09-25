@@ -14,7 +14,7 @@ import type { QuotedPost } from "@/types";
 export function QuotedPostCard({ quoted, linked = true }: { quoted: QuotedPost; linked?: boolean }) {
   if (quoted.kind === "missing") {
     return (
-      <p className="rounded-2xl border border-separator bg-bg/60 px-3 py-2.5 text-caption">
+      <p className="rounded-card border border-separator bg-bg/60 px-3 py-2.5 text-caption">
         この投稿は削除されました
       </p>
     );
@@ -27,7 +27,7 @@ export function QuotedPostCard({ quoted, linked = true }: { quoted: QuotedPost; 
   const text = quoted.kind === "record" ? quoted.summary : quoted.content;
 
   const body = (
-    <div className="rounded-2xl border border-separator bg-bg/60 px-3 py-2.5">
+    <div className="rounded-card border border-separator bg-bg/60 px-3 py-2.5">
       <div className="flex items-center gap-2">
         <Avatar
           name={quoted.author.display_name}

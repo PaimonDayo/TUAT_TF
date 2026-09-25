@@ -154,7 +154,7 @@ export function CompetitionGoalBoard({
                   {group.rows.length}人
                 </span>
               </h3>
-              <div className="overflow-hidden rounded-2xl border border-separator/70 bg-card">
+              <div className="overflow-hidden rounded-card border border-separator/70 bg-card">
                 <table className="w-full table-fixed border-collapse text-left">
                   <colgroup>
                     <col className="w-[36%] md:w-[28%]" />

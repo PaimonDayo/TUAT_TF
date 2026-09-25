@@ -21,7 +21,7 @@ export function DesktopNav() {
       <Link
         href="/home"
         aria-label="ホーム"
-        className="mx-2 flex items-center justify-center gap-3 rounded-2xl px-2 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent lg:justify-start lg:px-3"
+        className="mx-2 flex items-center justify-center gap-3 rounded-card px-2 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent lg:justify-start lg:px-3"
       >
         <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-sm font-black tracking-tight text-white shadow-sm">
           TF

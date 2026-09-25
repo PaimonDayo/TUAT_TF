@@ -115,7 +115,7 @@ export function SheetHeaderSetupDialog({
           「{data.sheetName}」の見出しから作成します。日付・曜日は自動で判別し、スプレッドシートにない項目は表示しません。
         </div>
 
-        {isMiddleLong && fixed.length > 0 && <section className="rounded-2xl border border-separator bg-card p-3">
+        {isMiddleLong && fixed.length > 0 && <section className="rounded-card border border-separator bg-card p-3">
           <div className="mb-2 flex items-center gap-2"><Check size={17} className="text-accent" /><h3 className="text-[14px] font-semibold">標準項目</h3></div>
           <p className="mb-2 text-micro text-muted2">入力フォームとタイムラインに設定済みです</p>
           <div className="flex flex-wrap gap-2">{fixed.map((column) => <span key={column.index} className="rounded-full bg-accent/10 px-2.5 py-1 text-micro font-semibold text-accent">{column.label}</span>)}</div>
@@ -126,7 +126,7 @@ export function SheetHeaderSetupDialog({
           <div className="space-y-2">
             {selectable.map((column) => {
               const checked = selected.includes(column.index);
-              return <div key={column.index} className={`rounded-2xl border p-3 ${checked ? "border-accent/40 bg-accent/5" : "border-separator bg-card"}`}>
+              return <div key={column.index} className={`rounded-card border p-3 ${checked ? "border-accent/40 bg-accent/5" : "border-separator bg-card"}`}>
                 <button type="button" onClick={() => toggleInput(column.index)} className="flex min-h-8 w-full items-center gap-2 text-left">
                   <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${checked ? "border-accent bg-accent text-white" : "border-separator bg-card"}`}>{checked && <Check size={14} strokeWidth={3} />}</span>
                   <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{column.label}</span>

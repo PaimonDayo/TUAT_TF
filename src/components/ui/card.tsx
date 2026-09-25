@@ -13,7 +13,7 @@ export function Card({
     <div
       ref={ref}
       className={cn(
-        "rounded-[16px] bg-card border border-separator/70",
+        "rounded-card bg-card border border-separator/70",
         className,
       )}
       {...props}

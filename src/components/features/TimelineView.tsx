@@ -274,7 +274,7 @@ export function TimelineView({
                       <span className="text-[10px] text-muted">・{group.items.length}件</span>
                     </div>
                     {compact ? (
-                      <div className="divide-y divide-separator/70 overflow-hidden rounded-[16px] border border-separator/70 bg-card">
+                      <div className="divide-y divide-separator/70 overflow-hidden rounded-card border border-separator/70 bg-card">
                         {group.items.map((item, index) => {
                           const key = `${item.kind}-${item.id}`;
                           const collapsed = isCompact(key);

@@ -102,7 +102,7 @@ export default async function MyPage({
 
         {/* 練習量の推移（日/週/月・横スライド） */}
         {profile.blocks.includes("middle_long") && (
-          <Suspense fallback={<Skeleton className="h-[172px] w-full rounded-[16px]" />}>
+          <Suspense fallback={<Skeleton className="h-[172px] w-full rounded-card" />}>
             <MyTraining userId={userId} />
           </Suspense>
         )}
@@ -199,7 +199,7 @@ function ActivitySkeleton() {
   return (
     <div className="space-y-3 animate-pulse">
       {[0, 1].map((i) => (
-        <div key={i} className="rounded-[16px] bg-card border border-separator p-4 space-y-3">
+        <div key={i} className="rounded-card bg-card border border-separator p-4 space-y-3">
           <div className="flex items-center gap-2.5">
             <div className="h-10 w-10 rounded-full bg-separator" />
             <div className="flex-1 space-y-1.5">

@@ -22,7 +22,7 @@ export function RankingMonthNav({
   const canGoNext = next <= currentMonth;
 
   return (
-    <div className="flex items-center justify-between rounded-[16px] border border-separator bg-card p-1">
+    <div className="flex items-center justify-between rounded-card border border-separator bg-card p-1">
       <Link
         href={`/ranking?month=${previous}`}
         prefetch={false}

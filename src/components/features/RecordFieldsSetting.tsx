@@ -149,7 +149,7 @@ export function RecordFieldsSetting({ profileId, initial, isMiddleLong }: { prof
           isCondition={field.key === "condition"}
         />)}
 
-        {hiddenBuiltins.length > 0 && <div className="rounded-2xl border border-dashed border-separator bg-bg/50 p-3">
+        {hiddenBuiltins.length > 0 && <div className="rounded-card border border-dashed border-separator bg-bg/50 p-3">
           <p className="section-label mb-2">フォームから外した項目</p>
           <div className="flex flex-wrap gap-2">{hiddenBuiltins.map((field) => <button
             key={field.key}
@@ -164,7 +164,7 @@ export function RecordFieldsSetting({ profileId, initial, isMiddleLong }: { prof
             <ArrowUpDown size={16} />{reorderMode ? "並び替えを完了" : "項目を並び替え"}
           </Button>
         </div>}
-        <ReorderList items={fields} enabled={reorderMode} onReorder={setFields} renderItem={(field) => <div className="relative rounded-2xl border-2 border-accent/25 bg-card p-3 shadow-sm">
+        <ReorderList items={fields} enabled={reorderMode} onReorder={setFields} renderItem={(field) => <div className="relative rounded-card border-2 border-accent/25 bg-card p-3 shadow-sm">
           <button type="button" onClick={() => setFields((current) => current.filter((item) => item.key !== field.key))} aria-label={`${field.label || "追加項目"}を削除`} className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full bg-danger text-white shadow"><X size={15} strokeWidth={3} /></button>
           <p className="section-label mb-1.5">項目名（変更できます）</p>
           <Input aria-label="項目名" value={field.label} onChange={(event) => setFields((current) => current.map((item) => item.key === field.key ? { ...item, label: event.target.value } : item))} placeholder="項目名を入力" maxLength={30} className="mb-2 h-10 font-semibold" />
@@ -178,7 +178,7 @@ export function RecordFieldsSetting({ profileId, initial, isMiddleLong }: { prof
           </Button>
         </div>
 
-        <button type="button" onClick={() => setAddOpen(true)} className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-accent/35 bg-accent/5 text-[14px] font-semibold text-accent active:bg-accent/10"><Plus size={19} />新しい入力項目を追加</button>
+        <button type="button" onClick={() => setAddOpen(true)} className="flex min-h-14 w-full items-center justify-center gap-2 rounded-card border-2 border-dashed border-accent/35 bg-accent/5 text-[14px] font-semibold text-accent active:bg-accent/10"><Plus size={19} />新しい入力項目を追加</button>
         {message && <p className="text-center text-caption text-danger">{message}</p>}
         <FormModalFooter><Button size="lg" onClick={save} disabled={saving}>{saving ? "保存中…" : "保存する"}</Button></FormModalFooter>
       </div>
@@ -195,11 +195,11 @@ export function RecordFieldsSetting({ profileId, initial, isMiddleLong }: { prof
 function toDraft(fields: RecordFieldDef[]): DraftField[] { return fields.map((field) => ({ ...field, id: field.key })); }
 
 function LockedField({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="relative rounded-2xl border border-separator bg-card p-3"><div className="mb-1.5 flex items-center justify-between"><p className="section-label">{label}</p><span className="rounded-full bg-bg px-2 py-0.5 text-micro text-muted">固定</span></div>{children}</div>;
+  return <div className="relative rounded-card border border-separator bg-card p-3"><div className="mb-1.5 flex items-center justify-between"><p className="section-label">{label}</p><span className="rounded-full bg-bg px-2 py-0.5 text-micro text-muted">固定</span></div>{children}</div>;
 }
 
 function EditableBuiltinField({ label, onLabelChange, onRemove, type, isCondition }: { label: string; onLabelChange: (label: string) => void; onRemove: () => void; type: "text" | "number"; isCondition: boolean }) {
-  return <div className="relative rounded-2xl border border-separator bg-card p-3">
+  return <div className="relative rounded-card border border-separator bg-card p-3">
     <button type="button" onClick={onRemove} aria-label={`${label}をフォームから外す`} className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full text-muted active:bg-bg"><X size={17} /></button>
     <p className="section-label mb-1.5 pr-9">項目名（変更できます）</p>
     <Input aria-label="既定項目名" value={label} onChange={(event) => onLabelChange(event.target.value)} maxLength={30} className="mb-2 h-10 pr-10 font-semibold" />

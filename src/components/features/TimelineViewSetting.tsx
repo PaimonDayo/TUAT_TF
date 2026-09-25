@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { useToast } from "@/components/ui/toast";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
@@ -21,7 +20,6 @@ export function TimelineViewSetting({
   userId: string;
   initial: TimelineDefaultBlock;
 }) {
-  const router = useRouter();
   const { showToast } = useToast();
   const [selected, setSelected] = useState(initial);
   const [busy, setBusy] = useState(false);
@@ -43,7 +41,7 @@ export function TimelineViewSetting({
       showToast(safeUpdateMessage(result.reason));
       return;
     }
-    router.refresh();
+    // router.refresh() はしない（出欠一覧の初期表示と同じ理由）。
   }
 
   return (

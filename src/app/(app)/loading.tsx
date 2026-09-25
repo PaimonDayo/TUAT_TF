@@ -12,11 +12,11 @@ export default function Loading() {
       {/* コンテンツのスケルトン */}
       <div className="px-4 pt-1 space-y-3">
         <div className="grid grid-cols-2 gap-3">
-          <Skeleton className="h-20 rounded-[16px]" />
-          <Skeleton className="h-20 rounded-[16px]" />
+          <Skeleton className="h-20 rounded-card" />
+          <Skeleton className="h-20 rounded-card" />
         </div>
         {[0, 1, 2].map((i) => (
-          <div key={i} className="rounded-[16px] bg-card border border-separator p-4 space-y-3">
+          <div key={i} className="rounded-card bg-card border border-separator p-4 space-y-3">
             <div className="flex items-center gap-2.5">
               <Skeleton className="h-10 w-10 rounded-full" />
               <div className="flex-1 space-y-1.5">

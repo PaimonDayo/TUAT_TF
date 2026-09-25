@@ -82,7 +82,7 @@ export default function LoginPage() {
 
       <div className="w-full space-y-3">
         {embeddedBrowser ? (
-          <div className="space-y-3 rounded-2xl border border-warning/40 bg-warning/8 p-4">
+          <div className="space-y-3 rounded-card border border-warning/40 bg-warning/8 p-4">
             <div>
               <p className="text-headline">ブラウザで開いてください</p>
               <p className="mt-1 text-[13px] leading-relaxed text-muted2">

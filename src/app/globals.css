@@ -33,7 +33,7 @@
   --color-int-high: #ff9500;
   --color-int-speed: #ff3b30;
 
-  /* 角丸 */
+  /* 角丸。16pxのカード・入力枠は rounded-card に統一する（rounded-2xl / rounded-[16px] と書かない）。 */
   --radius-card: 16px;
 
   /* フォント */

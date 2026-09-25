@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Toggle } from "@/components/ui/toggle";
 import { useToast } from "@/components/ui/toast";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
@@ -18,7 +17,6 @@ export function MenuViewSetting({
   userId: string;
   initial: boolean;
 }) {
-  const router = useRouter();
   const { showToast } = useToast();
   const [on, setOn] = useState(initial);
   const [busy, setBusy] = useState(false);
@@ -41,8 +39,8 @@ export function MenuViewSetting({
       showToast(safeUpdateMessage(result.reason));
       return;
     }
-    // サーバー側のキャッシュを更新（戻ってきたときに状態が戻らない・メニュー表示も即反映）
-    router.refresh();
+    // router.refresh() はしない。メニューを表示する画面は開くたびサーバーで描画し直すため
+    // 次に開いたときに反映される（設定画面自体は手元の状態で表示済み）。
   }
 
   return (

@@ -17,7 +17,7 @@ export default function AppError({
 
   return (
     <main className="mx-auto flex min-h-[60dvh] max-w-md items-center justify-center px-6">
-      <div className="w-full rounded-2xl border border-separator bg-card p-6 text-center">
+      <div className="w-full rounded-card border border-separator bg-card p-6 text-center">
         <AlertTriangle className="mx-auto text-danger" size={28} aria-hidden="true" />
         <h1 className="mt-3 text-title">{"\u30c7\u30fc\u30bf\u3092\u53d6\u5f97\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f"}</h1>
         <p className="mt-2 text-body text-muted2">

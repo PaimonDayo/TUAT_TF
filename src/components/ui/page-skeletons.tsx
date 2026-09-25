@@ -9,20 +9,20 @@ export function FormSkeleton() {
 }
 
 function Card({ lines = 2 }: { lines?: number }) {
-  return <div className="space-y-3 rounded-[16px] border border-separator bg-card p-4"><div className="flex items-center gap-2.5"><Skeleton className="h-10 w-10 rounded-full" /><div className="flex-1 space-y-2"><Skeleton className="h-3.5 w-28" /><Skeleton className="h-2.5 w-20" /></div></div>{Array.from({ length: lines }).map((_, i) => <Skeleton key={i} className={`h-3 ${i === lines - 1 ? "w-2/3" : "w-full"}`} />)}</div>;
+  return <div className="space-y-3 rounded-card border border-separator bg-card p-4"><div className="flex items-center gap-2.5"><Skeleton className="h-10 w-10 rounded-full" /><div className="flex-1 space-y-2"><Skeleton className="h-3.5 w-28" /><Skeleton className="h-2.5 w-20" /></div></div>{Array.from({ length: lines }).map((_, i) => <Skeleton key={i} className={`h-3 ${i === lines - 1 ? "w-2/3" : "w-full"}`} />)}</div>;
 }
 
 export function HomeSkeleton({ withHeader = true }: { withHeader?: boolean } = {}) {
   return <div className="pb-6" role="status" aria-label="ホームを読み込み中">
     {withHeader && <Title action />}
     <div className="space-y-5 px-4 pt-1" aria-hidden="true">
-      <Skeleton className="h-12 w-full rounded-[16px]" />
+      <Skeleton className="h-12 w-full rounded-card" />
       <div className="grid grid-cols-2 gap-3">
-        <Skeleton className="h-[92px] rounded-[16px]" /><Skeleton className="h-[92px] rounded-[16px]" />
+        <Skeleton className="h-[92px] rounded-card" /><Skeleton className="h-[92px] rounded-card" />
       </div>
-      <section className="space-y-2"><Skeleton className="h-3 w-20" /><Skeleton className="h-[112px] w-full rounded-[16px]" /></section>
-      <section className="space-y-2"><Skeleton className="h-3 w-20" />{[0, 1, 2].map(i => <Skeleton key={i} className="h-[76px] w-full rounded-[16px]" />)}</section>
-      <section className="space-y-2"><Skeleton className="h-3 w-16" /><Skeleton className="h-[76px] w-full rounded-[16px]" /></section>
+      <section className="space-y-2"><Skeleton className="h-3 w-20" /><Skeleton className="h-[112px] w-full rounded-card" /></section>
+      <section className="space-y-2"><Skeleton className="h-3 w-20" />{[0, 1, 2].map(i => <Skeleton key={i} className="h-[76px] w-full rounded-card" />)}</section>
+      <section className="space-y-2"><Skeleton className="h-3 w-16" /><Skeleton className="h-[76px] w-full rounded-card" /></section>
       <section className="space-y-2"><Skeleton className="h-3 w-24" /><Card lines={2} /></section>
     </div>
   </div>;
@@ -34,7 +34,7 @@ export function ScheduleSkeleton({ withHeader = true }: { withHeader?: boolean }
 
 
 export function NotesSkeleton({ withHeader = true }: { withHeader?: boolean } = {}) {
-  return <div className="pb-6">{withHeader && <Title action />}<div className="space-y-4 px-4 pt-1 md:px-6 lg:space-y-3"><Skeleton className="h-9 w-full rounded-lg md:max-w-[360px]" /><Skeleton className="h-10 w-full rounded-xl" /><div className="grid gap-2 md:grid-cols-2 md:gap-3">{[0, 1, 2, 3].map((i) => <div key={i} className="rounded-[16px] border border-separator bg-card p-4"><div className="flex items-start gap-3"><Skeleton className="h-5 w-5 shrink-0 rounded" /><div className="flex-1 space-y-2"><Skeleton className="h-3.5 w-32" /><Skeleton className="h-2.5 w-16" />{i < 2 && <Skeleton className="h-2.5 w-4/5" />}</div><Skeleton className="h-5 w-5 rounded-full" /></div></div>)}</div></div></div>;
+  return <div className="pb-6">{withHeader && <Title action />}<div className="space-y-4 px-4 pt-1 md:px-6 lg:space-y-3"><Skeleton className="h-9 w-full rounded-lg md:max-w-[360px]" /><Skeleton className="h-10 w-full rounded-xl" /><div className="grid gap-2 md:grid-cols-2 md:gap-3">{[0, 1, 2, 3].map((i) => <div key={i} className="rounded-card border border-separator bg-card p-4"><div className="flex items-start gap-3"><Skeleton className="h-5 w-5 shrink-0 rounded" /><div className="flex-1 space-y-2"><Skeleton className="h-3.5 w-32" /><Skeleton className="h-2.5 w-16" />{i < 2 && <Skeleton className="h-2.5 w-4/5" />}</div><Skeleton className="h-5 w-5 rounded-full" /></div></div>)}</div></div></div>;
 }
 export function FeedSkeleton({ withHeader = true }: { withHeader?: boolean } = {}) {
   return <div className="pb-6">
@@ -49,11 +49,11 @@ export function PostDetailSkeleton({ withHeader = false }: { withHeader?: boolea
 }
 
 export function ListSkeleton() {
-  return <div className="space-y-4 pb-6"><Title action /><div className="space-y-3 px-4"><Skeleton className="h-10 w-full rounded-xl" /><Skeleton className="h-3 w-16" /><div className="overflow-hidden rounded-[16px] border border-separator bg-card">{[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="flex items-center gap-3 border-b border-separator px-4 py-3 last:border-0"><Skeleton className="h-9 w-9 rounded-full" /><Skeleton className="h-3.5 w-28" /></div>)}</div></div></div>;
+  return <div className="space-y-4 pb-6"><Title action /><div className="space-y-3 px-4"><Skeleton className="h-10 w-full rounded-xl" /><Skeleton className="h-3 w-16" /><div className="overflow-hidden rounded-card border border-separator bg-card">{[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="flex items-center gap-3 border-b border-separator px-4 py-3 last:border-0"><Skeleton className="h-9 w-9 rounded-full" /><Skeleton className="h-3.5 w-28" /></div>)}</div></div></div>;
 }
 
 export function MyPageSkeleton() {
-  return <div className="pb-6"><Title action /><div className="space-y-5 px-4 pt-1"><div className="flex items-center gap-4 rounded-[16px] border border-separator bg-card p-4"><Skeleton className="h-16 w-16 shrink-0 rounded-full" /><div className="flex-1 space-y-2"><Skeleton className="h-5 w-32" /><Skeleton className="h-3 w-20" /><Skeleton className="h-5 w-28 rounded-full" /></div></div><div className="space-y-3 rounded-[16px] border border-separator bg-card p-4"><div className="flex items-center justify-between"><Skeleton className="h-3 w-24" /><Skeleton className="h-7 w-36 rounded-lg" /></div><Skeleton className="h-[100px] w-full" /></div><div className="overflow-hidden rounded-[16px] border border-separator bg-card">{[0, 1, 2, 3, 4].map((i) => <div key={i} className="flex h-[53px] items-center gap-3 border-b border-separator px-4 last:border-0"><Skeleton className="h-5 w-5 rounded" /><Skeleton className="h-3.5 w-32" /></div>)}</div><section className="space-y-2"><Skeleton className="h-3 w-20" /><div className="overflow-hidden rounded-[16px] border border-separator bg-card"><Skeleton className="m-4 h-5 w-40" /></div></section><section className="space-y-2"><Skeleton className="h-3 w-24" />{[0, 1].map((i) => <Card key={i} lines={1} />)}</section></div></div>;
+  return <div className="pb-6"><Title action /><div className="space-y-5 px-4 pt-1"><div className="flex items-center gap-4 rounded-card border border-separator bg-card p-4"><Skeleton className="h-16 w-16 shrink-0 rounded-full" /><div className="flex-1 space-y-2"><Skeleton className="h-5 w-32" /><Skeleton className="h-3 w-20" /><Skeleton className="h-5 w-28 rounded-full" /></div></div><div className="space-y-3 rounded-card border border-separator bg-card p-4"><div className="flex items-center justify-between"><Skeleton className="h-3 w-24" /><Skeleton className="h-7 w-36 rounded-lg" /></div><Skeleton className="h-[100px] w-full" /></div><div className="overflow-hidden rounded-card border border-separator bg-card">{[0, 1, 2, 3, 4].map((i) => <div key={i} className="flex h-[53px] items-center gap-3 border-b border-separator px-4 last:border-0"><Skeleton className="h-5 w-5 rounded" /><Skeleton className="h-3.5 w-32" /></div>)}</div><section className="space-y-2"><Skeleton className="h-3 w-20" /><div className="overflow-hidden rounded-card border border-separator bg-card"><Skeleton className="m-4 h-5 w-40" /></div></section><section className="space-y-2"><Skeleton className="h-3 w-24" />{[0, 1].map((i) => <Card key={i} lines={1} />)}</section></div></div>;
 }
 
 /** サブページ共通の見出し（左に戻る・中央にタイトル）。SubHeader と同じ高さ。 */
@@ -67,12 +67,12 @@ function Label() {
 
 /** カード1枚に区切り線で行を並べた形（一覧・設定系で共通） */
 function Rows({ count, height = 56 }: { count: number; height?: number }) {
-  return <div className="overflow-hidden rounded-[16px] border border-separator bg-card">{Array.from({ length: count }).map((_, i) => <div key={i} className="flex items-center gap-3 border-b border-separator px-4 last:border-0" style={{ height }}><Skeleton className="h-3.5 flex-1 max-w-[60%]" /><Skeleton className="ml-auto h-3.5 w-12" /></div>)}</div>;
+  return <div className="overflow-hidden rounded-card border border-separator bg-card">{Array.from({ length: count }).map((_, i) => <div key={i} className="flex items-center gap-3 border-b border-separator px-4 last:border-0" style={{ height }}><Skeleton className="h-3.5 flex-1 max-w-[60%]" /><Skeleton className="ml-auto h-3.5 w-12" /></div>)}</div>;
 }
 
 export function GoalsSkeleton() {
   return <div className="pb-6"><SubTitle /><div className="space-y-5 px-4 pt-2">
-    <section className="space-y-2"><Label /><div className="space-y-3 rounded-[16px] border border-separator bg-card p-4"><Skeleton className="h-3 w-full" /><Skeleton className="h-3 w-2/3" /><Skeleton className="h-9 w-32 rounded-lg" /></div></section>
+    <section className="space-y-2"><Label /><div className="space-y-3 rounded-card border border-separator bg-card p-4"><Skeleton className="h-3 w-full" /><Skeleton className="h-3 w-2/3" /><Skeleton className="h-9 w-32 rounded-lg" /></div></section>
     <section className="space-y-2"><Label /><Rows count={3} /><Skeleton className="mx-1 h-2.5 w-56" /></section>
     <section className="space-y-2"><Label /><Rows count={1} /></section>
   </div></div>;
@@ -88,7 +88,7 @@ export function CatalogueSkeleton() {
 }
 
 export function CompetitionSkeleton() {
-  return <div className="pb-6"><SubTitle /><div className="space-y-3 px-4 pt-2"><Skeleton className="h-3 w-32" /><Skeleton className="h-[60px] w-full rounded-[16px]" />{[0, 1].map((i) => <section key={i} className="space-y-2"><Label /><Rows count={3} /></section>)}</div></div>;
+  return <div className="pb-6"><SubTitle /><div className="space-y-3 px-4 pt-2"><Skeleton className="h-3 w-32" /><Skeleton className="h-[60px] w-full rounded-card" />{[0, 1].map((i) => <section key={i} className="space-y-2"><Label /><Rows count={3} /></section>)}</div></div>;
 }
 
 export function CompetitionGoalsSkeleton() {
@@ -104,16 +104,16 @@ export function CompetitionProgramSkeleton() {
 }
 
 export function BlogListSkeleton() {
-  return <div className="pb-6"><SubTitle /><div className="space-y-4 px-4 pt-1 md:px-6"><div className="space-y-1.5"><Skeleton className="h-4 w-56" /><Skeleton className="h-2.5 w-32" /></div><div className="space-y-3">{[0, 1, 2, 3].map((i) => <div key={i} className="space-y-2 rounded-[16px] border border-separator bg-card p-4"><Skeleton className="h-2.5 w-24" /><Skeleton className="h-4 w-4/5" /><Skeleton className="h-3 w-full" /><Skeleton className="h-3 w-1/2" /></div>)}</div></div></div>;
+  return <div className="pb-6"><SubTitle /><div className="space-y-4 px-4 pt-1 md:px-6"><div className="space-y-1.5"><Skeleton className="h-4 w-56" /><Skeleton className="h-2.5 w-32" /></div><div className="space-y-3">{[0, 1, 2, 3].map((i) => <div key={i} className="space-y-2 rounded-card border border-separator bg-card p-4"><Skeleton className="h-2.5 w-24" /><Skeleton className="h-4 w-4/5" /><Skeleton className="h-3 w-full" /><Skeleton className="h-3 w-1/2" /></div>)}</div></div></div>;
 }
 
 export function BlogArticleSkeleton() {
-  return <div className="pb-8"><SubTitle /><div className="px-4 pt-1 md:px-6"><div className="rounded-[16px] border border-separator bg-card px-4 py-5 sm:px-6"><div className="space-y-2 border-b border-separator pb-4"><Skeleton className="h-2.5 w-28" /><Skeleton className="h-5 w-3/4" /></div><div className="space-y-3 pt-4">{[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className={`h-3 ${i % 3 === 2 ? "w-2/3" : "w-full"}`} />)}</div></div></div></div>;
+  return <div className="pb-8"><SubTitle /><div className="px-4 pt-1 md:px-6"><div className="rounded-card border border-separator bg-card px-4 py-5 sm:px-6"><div className="space-y-2 border-b border-separator pb-4"><Skeleton className="h-2.5 w-28" /><Skeleton className="h-5 w-3/4" /></div><div className="space-y-3 pt-4">{[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className={`h-3 ${i % 3 === 2 ? "w-2/3" : "w-full"}`} />)}</div></div></div></div>;
 }
 
 export function MemberSkeleton() {
   return <div className="pb-6"><SubTitle /><div className="space-y-5 px-4 pt-1">
-    <div className="flex items-center gap-4 rounded-[16px] border border-separator bg-card p-4"><Skeleton className="h-16 w-16 shrink-0 rounded-full" /><div className="flex-1 space-y-2"><Skeleton className="h-5 w-32" /><Skeleton className="h-3 w-20" /><Skeleton className="h-5 w-28 rounded-full" /></div></div>
+    <div className="flex items-center gap-4 rounded-card border border-separator bg-card p-4"><Skeleton className="h-16 w-16 shrink-0 rounded-full" /><div className="flex-1 space-y-2"><Skeleton className="h-5 w-32" /><Skeleton className="h-3 w-20" /><Skeleton className="h-5 w-28 rounded-full" /></div></div>
     <section className="space-y-2"><Label />{[0, 1].map((i) => <Card key={i} lines={(i % 2) + 1} />)}</section>
   </div></div>;
 }
@@ -123,13 +123,13 @@ export function NoteFolderSkeleton() {
 }
 
 export function NoteArticleSkeleton() {
-  return <div className="pb-6"><SubTitle /><div className="px-4 pt-1"><div className="space-y-4 rounded-[16px] border border-separator bg-card p-4"><Skeleton className="h-5 w-2/3" /><Skeleton className="h-2.5 w-32" />{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className={`h-3 ${i === 4 ? "w-1/2" : "w-full"}`} />)}</div></div></div>;
+  return <div className="pb-6"><SubTitle /><div className="px-4 pt-1"><div className="space-y-4 rounded-card border border-separator bg-card p-4"><Skeleton className="h-5 w-2/3" /><Skeleton className="h-2.5 w-32" />{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className={`h-3 ${i === 4 ? "w-1/2" : "w-full"}`} />)}</div></div></div>;
 }
 
 export function ThreadSkeleton() {
-  return <div className="pb-6"><SubTitle /><div className="space-y-4 px-4 pt-1"><Skeleton className="h-5 w-2/3" />{[0, 1, 2].map((i) => <Card key={i} lines={(i % 2) + 1} />)}<Skeleton className="h-24 w-full rounded-[16px]" /></div></div>;
+  return <div className="pb-6"><SubTitle /><div className="space-y-4 px-4 pt-1"><Skeleton className="h-5 w-2/3" />{[0, 1, 2].map((i) => <Card key={i} lines={(i % 2) + 1} />)}<Skeleton className="h-24 w-full rounded-card" /></div></div>;
 }
 
 export function ServiceStatusSkeleton() {
-  return <div className="pb-6"><SubTitle /><div className="space-y-3 px-4 pt-2">{[0, 1, 2].map((i) => <div key={i} className="space-y-3 rounded-[16px] border border-separator bg-card p-4"><Skeleton className="h-3.5 w-32" /><Skeleton className="h-3 w-full" /><Skeleton className="h-3 w-2/3" /></div>)}</div></div>;
+  return <div className="pb-6"><SubTitle /><div className="space-y-3 px-4 pt-2">{[0, 1, 2].map((i) => <div key={i} className="space-y-3 rounded-card border border-separator bg-card p-4"><Skeleton className="h-3.5 w-32" /><Skeleton className="h-3 w-full" /><Skeleton className="h-3 w-2/3" /></div>)}</div></div>;
 }

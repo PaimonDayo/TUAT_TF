@@ -19,6 +19,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import { FormModalFooter } from "@/components/ui/form-modal";
+import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { prepareTweetImage, validateTweetImage } from "@/lib/tweet-image";
 import { QuotedPostCard } from "@/components/cards/QuotedPostCard";
@@ -38,6 +39,7 @@ export const TweetForm = forwardRef<
   }
 >(function TweetForm({ tweet, initialStory = false, quote, onDone, onDirtyChange }, ref) {
   const router = useRouter();
+  const { showToast } = useToast();
   const editing = !!tweet;
   const [content, setContent] = useState(tweet?.content ?? "");
   const [saving, setSaving] = useState(false);
@@ -187,9 +189,13 @@ export const TweetForm = forwardRef<
         return member ? text.includes(`@${member.display_name}`) : false;
       });
       if (activeMentionIds.length) {
-        await supabase.from("tweet_mentions").insert(
+        const { error: mentionError } = await supabase.from("tweet_mentions").insert(
           activeMentionIds.map((profileId) => ({ tweet_id: id, profile_id: profileId })),
         );
+        // 投稿自体は保存済みなので取り消さない。黙って通知だけ届かない状態にしないよう知らせる。
+        if (mentionError) {
+          showToast("投稿しました。メンションした相手への通知は送れませんでした", "error");
+        }
       }
     }
     setContent("");
@@ -201,7 +207,7 @@ export const TweetForm = forwardRef<
 
   return (
     <div className="space-y-3 pb-4">
-      <section className="overflow-hidden rounded-[16px] border border-separator/80 bg-card transition-colors focus-within:border-accent/50">
+      <section className="overflow-hidden rounded-card border border-separator/80 bg-card transition-colors focus-within:border-accent/50">
         <Textarea
           aria-label="つぶやき本文"
           rows={7}
@@ -338,7 +344,7 @@ export const TweetForm = forwardRef<
             </SheetContent>
           </Sheet>
           {pollEnabled && (
-            <section className="space-y-3 rounded-[16px] border border-separator bg-card p-3">
+            <section className="space-y-3 rounded-card border border-separator bg-card p-3">
               <p className="text-[14px] font-semibold">投票</p>
               <div className="space-y-2">
                 {pollOptions.map((option, index) => (
@@ -380,7 +386,7 @@ export const TweetForm = forwardRef<
                 <span className="text-micro">24時間</span>
               </div>
               {imagePreview && (
-                <div className="relative overflow-hidden rounded-2xl border border-separator">
+                <div className="relative overflow-hidden rounded-card border border-separator">
                   <img src={imagePreview} alt="投稿画像のプレビュー" className="max-h-80 w-full object-contain" />
                   <button type="button" aria-label="画像を外す" onClick={() => setImageFile(null)} className="absolute right-2 top-2 rounded-full bg-black/65 p-2 text-white">
                     <X size={17} />

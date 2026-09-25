@@ -189,7 +189,7 @@ export function PollView({
   }
 
   return (
-    <section ref={pollRef} className="space-y-2 rounded-[16px] border border-separator bg-bg p-3">
+    <section ref={pollRef} className="space-y-2 rounded-card border border-separator bg-bg p-3">
       {options.map((option) => {
         const percent = totalVotes ? Math.round(option.vote_count / totalVotes * 100) : 0;
         return (
@@ -247,7 +247,7 @@ export function PollView({
             <div className="shrink-0 pb-3">
               <PollOptionTabs options={options} value={detailOption.id} onChange={setDetailOptionId} />
             </div>
-            <section className="min-h-0 flex-1 overflow-y-auto rounded-[16px] border border-separator bg-card">
+            <section className="min-h-0 flex-1 overflow-y-auto rounded-card border border-separator bg-card">
               <div className="border-b border-separator px-4 py-3">
                 <p className="text-[15px] font-semibold">{detailOption.text}</p>
                 <p className="text-micro">{detailOption.vote_count}{"\u7968"}</p>

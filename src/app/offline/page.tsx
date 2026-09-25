@@ -4,7 +4,7 @@ import { WifiOff } from "lucide-react";
 export default function OfflinePage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-md items-center justify-center bg-bg px-6">
-      <div className="w-full rounded-2xl border border-separator bg-card p-6 text-center">
+      <div className="w-full rounded-card border border-separator bg-card p-6 text-center">
         <WifiOff className="mx-auto text-muted2" size={30} aria-hidden="true" />
         <h1 className="mt-3 text-title">{"\u30aa\u30d5\u30e9\u30a4\u30f3\u3067\u3059"}</h1>
         <p className="mt-2 text-body text-muted2">
