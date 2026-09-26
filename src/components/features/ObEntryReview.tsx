@@ -140,10 +140,10 @@ function EntryCard({ entry, members, history, identity, party }: { party?: ObPar
     finally { setSaving(false); }
   }
   return <Card className="p-3">
-    <div className="flex items-center justify-between gap-2"><p className="text-headline"><span className="mr-2 text-caption">{entry.grade}</span>{entry.submitted_name}</p>
+    <div className="flex items-center justify-between gap-2"><p className="min-w-0 truncate text-headline"><span className="mr-2 text-caption">{entry.grade}</span>{entry.submitted_name}{identity && <span className="ml-2 text-caption">{entryDivision(entry) ?? "区分未登録"}{entry.events.length ? "" : "・出場なし"}</span>}</p>
     <ActionMenu onEdit={() => setEditing(true)} editLabel={entry.events.length ? "エントリーを編集" : "再エントリー"} triggerLabel={`${entry.submitted_name}の操作`} /></div>
-    <p className="mt-1 text-caption">出場区分：{entryDivision(entry) ?? "未登録"}</p>
-    {!entry.events.length && <p className="mt-2 text-body">競技の出場登録なし</p>}
+    {!identity && <p className="mt-1 text-caption">出場区分：{entryDivision(entry) ?? "未登録"}</p>}
+    {!identity && !entry.events.length && <p className="mt-2 text-body">競技の出場登録なし</p>}
     {!identity && <p className="mt-2 text-body">懇親会：{party?.status ?? "未回答"}</p>}
     {!identity && <table className="mt-2 w-full table-fixed text-left text-body">
       <caption className="sr-only">{entry.submitted_name}の出場種目と資格記録</caption>
@@ -153,7 +153,7 @@ function EntryCard({ entry, members, history, identity, party }: { party?: ObPar
       </tr>)}</tbody>
     </table>}
     {editing && <ObEntryEditor entry={entry} party={party} members={members} onClose={() => setEditing(false)} />}
-    {identity && <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="mt-2 flex min-h-9 w-full items-center justify-between gap-2 text-left text-caption text-accent">
+    {identity && <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="mt-1 flex min-h-8 w-full items-center justify-between gap-2 text-left text-caption text-accent">
       <span>{status}{linked ? `：${linked.display_name}` : ""}</span><ChevronDown size={16} className={open ? "rotate-180 shrink-0" : "shrink-0"} />
     </button>}
     {open && <div className="mt-3 space-y-3 border-t border-separator pt-3">
