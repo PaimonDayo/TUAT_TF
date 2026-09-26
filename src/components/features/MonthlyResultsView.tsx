@@ -65,7 +65,8 @@ export function MonthlyResultsView({
   const groups = new Map<string, { date: string; meet: string; rows: MonthlyResult[] }>();
   for (const r of visible) {
     const meet = r.competition?.name ?? r.meet_name ?? "大会名なし";
-    const key = `${r.recorded_on} ${meet}`;
+    // 大会を選んだ結果と、同じ大会名を自由入力した結果は同じまとまりにする（全角半角・空白の違いは無視）
+    const key = `${r.recorded_on} ${meet.normalize("NFKC").replace(/\s+/gu, "")}`;
     const group = groups.get(key) ?? { date: r.recorded_on ?? "", meet, rows: [] };
     group.rows.push(r);
     groups.set(key, group);

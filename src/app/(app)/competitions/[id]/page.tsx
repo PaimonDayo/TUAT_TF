@@ -40,7 +40,7 @@ export default async function CompetitionPage({
   const hasProgram = Boolean(competition.program_source_url);
   const [results, events] = hasProgram
     ? [[], []]
-    : await Promise.all([getCompetitionResults(id), getCompetitionEvents()]);
+    : await Promise.all([getCompetitionResults(id, competition.name), getCompetitionEvents()]);
   const ordered = sortCompetitionEvents(events);
   const groups = ordered
     .map((event) => ({

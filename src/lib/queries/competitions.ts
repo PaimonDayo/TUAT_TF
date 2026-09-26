@@ -75,17 +75,29 @@ export async function getCompetitionGoals(competitionId: string) {
   };
 }
 
-/** ある大会の結果（大会別の一覧ページ用） */
-export async function getCompetitionResults(competitionId: string) {
+/** 大会名の比べ方（全角半角・空白の違いは同じとみなす） */
+export function sameMeetName(a: string | null | undefined, b: string | null | undefined): boolean {
+  const norm = (v: string | null | undefined) => (v ?? "").normalize("NFKC").replace(/\s+/gu, "");
+  return !!norm(a) && norm(a) === norm(b);
+}
+
+/**
+ * ある大会の結果（大会別の一覧ページ用）。大会を選んで登録した結果に加え、大会名を自由入力して
+ * その名前が大会名と一致する結果も含める（2026-09-26 オーナー確定）。
+ */
+export async function getCompetitionResults(competitionId: string, competitionName: string) {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("pb_records")
-    .select("*,author:profiles!user_id(display_name)")
-    .eq("competition_id", competitionId)
-    .order("event_name");
-  return (data ?? []) as unknown as (PbRecord & {
-    author: { display_name: string } | null;
-  })[];
+  const select = "*,author:profiles!user_id(display_name)";
+  // 自由入力の大会名は表記ゆれ（全角・空白）があるので、名前が入っている未選択の結果を読んで比べる。
+  const [{ data: linked }, { data: typed }] = await Promise.all([
+    supabase.from("pb_records").select(select).eq("competition_id", competitionId),
+    supabase.from("pb_records").select(select).is("competition_id", null).not("meet_name", "is", null),
+  ]);
+  const rows = [
+    ...(linked ?? []),
+    ...(typed ?? []).filter((r) => sameMeetName((r as { meet_name: string | null }).meet_name, competitionName)),
+  ] as unknown as (PbRecord & { author: { display_name: string } | null })[];
+  return rows.sort((a, b) => a.event_name.localeCompare(b.event_name, "ja"));
 }
 
 /** 結果に入力されているがマスタに無い種目名（表記統一の入口） */
