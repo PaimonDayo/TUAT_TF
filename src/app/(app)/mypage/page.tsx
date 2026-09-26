@@ -144,7 +144,7 @@ export default async function MyPage({
               )}
               {perms.manageSystem && (
                 <>
-                  <RowLink href="/mypage/monthly-results" icon={<CalendarDays size={20} className="text-accent" />} label="月別の大会結果" />
+                  <RowLink href="/mypage/monthly-results" icon={<CalendarDays size={20} className="text-accent" />} label="大会結果（月別・年別・新着）" />
                   <RowLink href="/events" icon={<ListOrdered size={20} className="text-accent" />} label="種目" />
                 </>
               )}

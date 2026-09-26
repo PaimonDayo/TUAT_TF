@@ -33,6 +33,7 @@ import {
   type TimeFormat,
 } from "@/lib/competition-record";
 import { cn } from "@/lib/utils";
+import { competitionDays } from "@/lib/competition-days";
 import type { CompetitionEvent } from "@/lib/competition-goals";
 import type { CompetitionRow, PbRecord } from "@/types";
 
@@ -502,9 +503,38 @@ export const ResultForm = forwardRef<
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-caption">
-              選ぶと記録日に大会の初日が入ります。
-            </p>
+            {(() => {
+              const chosen = competitions.find((c) => c.id === competitionId);
+              const days = chosen ? competitionDays(chosen.starts_on, chosen.ends_on) : [];
+              if (stage !== "university" || days.length < 2) {
+                return <p className="mt-1 text-caption">選ぶと記録日に大会の初日が入ります。</p>;
+              }
+              // 複数日の大会は何日目の記録かを選ぶ
+              return (
+                <div className="mt-2">
+                  <p className="text-caption">何日目の記録ですか</p>
+                  <div className="mt-1.5 flex flex-wrap gap-2">
+                    {days.map((day, i) => {
+                      const active = precision === "day" && recordedOn === day;
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => { setRecordedOn(day); setPrecision("day"); }}
+                          className={cn(
+                            "rounded-xl border px-3 py-2 text-body pressable",
+                            active ? "border-accent bg-accent/10 font-semibold text-accent" : "border-separator bg-card",
+                          )}
+                        >
+                          {i + 1}日目 <span className="text-caption tabular-nums">{Number(day.slice(5, 7))}/{Number(day.slice(8, 10))}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </>
         ) : (
           <Input
