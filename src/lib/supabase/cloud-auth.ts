@@ -32,6 +32,18 @@ export const CLOUD_AUTH_COOKIE = "sb-tuat-auth";
 
 const DATA_API = /^\/(rest|storage|functions)\/v1(?:\/|$)/;
 
+/** クラウドの URL あてのデータの API（ログイン以外）か */
+export function isCloudDataUrl(url: URL, cloud: CloudAuth): boolean {
+  return `${url.origin}${url.pathname}`.startsWith(cloud.url) && DATA_API.test(url.pathname);
+}
+
+/**
+ * PCが止まっていてクラウドSupabaseのデータを使ったことを知らせる応答ヘッダー（値は "cloud"）。
+ * ブラウザはこれを見て、しばらくクラウドへ直接つなぐ。503 と一緒なら「PCへは届いていない」
+ * （送り直しても二重にならない）という意味。
+ */
+export const BACKEND_MODE_HEADER = "x-tuat-backend";
+
 /**
  * クラウドの URL あての呼び出しのうち、データの API だけを dataBase（PCの入口）へ付け替える。
  * ログイン（/auth/v1）はそのまま通す。
@@ -45,7 +57,7 @@ export function routeDataToPc(
   const base = dataBase.replace(/\/$/, "");
   return (input, init) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
-    if (!`${url.origin}${url.pathname}`.startsWith(cloud.url) || !DATA_API.test(url.pathname)) return fetcher(input, init);
+    if (!isCloudDataUrl(url, cloud)) return fetcher(input, init);
     const target = `${base}${url.pathname}${url.search}`;
     const headers = new Headers(input instanceof Request ? input.headers : undefined);
     new Headers(init?.headers).forEach((value, name) => headers.set(name, value));
@@ -64,5 +76,37 @@ export function pcServerHeaders(cloud: CloudAuth, pcAnonKey: string) {
   return (headers: Headers) => {
     headers.set("apikey", pcAnonKey);
     if (headers.get("authorization") === `Bearer ${cloud.anonKey}`) headers.set("authorization", `Bearer ${pcAnonKey}`);
+  };
+}
+
+/** PCが止まっていると分かったら、この時間はデータもクラウドSupabaseへ直接つなぐ。 */
+export const CLOUD_DIRECT_MS = 2 * 60 * 1000;
+const sharedFailover = { until: 0 };
+
+/**
+ * ブラウザ用。ふだんは toPc（PCの入口）へ送り、応答に BACKEND_MODE_HEADER: cloud が付いていたら
+ * CLOUD_DIRECT_MS の間はデータの API をクラウドへ直接送る。503 と一緒なら要求はPCへ届いていないので、
+ * その要求もクラウドへ送り直す（保存も二重にならない）。
+ */
+export function withCloudFailover(
+  toPc: typeof fetch,
+  direct: typeof fetch,
+  cloud: CloudAuth,
+  options: { now?: () => number; state?: { until: number } } = {},
+): typeof fetch {
+  const now = options.now ?? Date.now;
+  const state = options.state ?? sharedFailover;
+  return async (input, init) => {
+    const data = isCloudDataUrl(new URL(input instanceof Request ? input.url : String(input)), cloud);
+    if (data && now() < state.until) return direct(input, init);
+    const response = await toPc(input, init);
+    if (data && response.headers.get(BACKEND_MODE_HEADER) === "cloud") {
+      state.until = now() + CLOUD_DIRECT_MS;
+      if (response.status === 503) {
+        await response.body?.cancel().catch(() => {});
+        return direct(input, init);
+      }
+    }
+    return response;
   };
 }

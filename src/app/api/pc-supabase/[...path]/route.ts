@@ -1,4 +1,5 @@
-import { pcBackendFetch } from "@/lib/pc-backend";
+import { pcAvailable, pcBackendFetch } from "@/lib/pc-backend";
+import { BACKEND_MODE_HEADER, cloudAuthConfig } from "@/lib/supabase/cloud-auth";
 import { allowedPcBrowserApi, isMemberBearer } from "@/lib/pc-browser-api";
 
 export const runtime = "nodejs";
@@ -39,9 +40,16 @@ async function handle(request: Request) {
     }
     body = Buffer.concat(chunks);
   }
+  // PCが止まっている間は、データをクラウドSupabaseから読み書きする（ログインがクラウドのときだけ）。
+  const cloud = cloudAuthConfig();
+  const toCloud = !!cloud && /^\/(rest|storage|functions)\/v1\//.test(path) && !(await pcAvailable());
   try {
-    const result = await pcBackendFetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}${path}${url.search}`, { method: request.method, headers, body: body as BodyInit | undefined });
+    if (toCloud) headers.set("apikey", cloud.anonKey);
+    const result = toCloud
+      ? await fetch(`${cloud.url}${path}${url.search}`, { method: request.method, headers, body: body as BodyInit | undefined, cache: "no-store", redirect: "manual", signal: AbortSignal.timeout(25_000) })
+      : await pcBackendFetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}${path}${url.search}`, { method: request.method, headers, body: body as BodyInit | undefined });
     const out = new Headers({ "cache-control": "private, no-store", "x-content-type-options": "nosniff", "referrer-policy": "same-origin" });
+    if (toCloud) out.set(BACKEND_MODE_HEADER, "cloud");
     for (const name of ["content-type", "content-range", "range-unit", "preference-applied", "retry-after", "www-authenticate"]) {
       const value = result.headers.get(name); if (value) out.set(name, value);
     }

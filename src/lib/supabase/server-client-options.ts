@@ -1,14 +1,15 @@
-import { pcBackendFetch } from "../pc-backend";
+import { pcAvailable, pcBackendFetch } from "../pc-backend";
 import { pcServerOptions } from "./pc-server-options";
-import { CLOUD_AUTH_COOKIE, cloudAuthConfig, pcServerHeaders, routeDataToPc, type CloudAuth } from "./cloud-auth";
+import { CLOUD_AUTH_COOKIE, cloudAuthConfig, isCloudDataUrl, pcServerHeaders, routeDataToPc, type CloudAuth } from "./cloud-auth";
 
 /**
  * クラウドの URL あての呼び出しのうち、データの API はPCへ（pcBackendFetch で PC の入口へ届ける）、
- * ログインはそのままクラウドへ送る fetch。
+ * ログインはそのままクラウドへ送る fetch。PCが止まっているときは、データもクラウドへそのまま送る
+ * （クラウドには名簿などの全件と直近3日分の投稿を写してあり、そこへの書き込みはPCの復帰後に書き戻す）。
  */
 function pcRoutedFetch(cloud: CloudAuth): typeof fetch {
   const pcOrigin = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).origin;
-  return routeDataToPc(
+  const toPc = routeDataToPc(
     (input, init) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
       return url.origin === pcOrigin ? pcBackendFetch(input, init) : fetch(input, init);
@@ -17,6 +18,11 @@ function pcRoutedFetch(cloud: CloudAuth): typeof fetch {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     pcServerHeaders(cloud, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!),
   );
+  return async (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    if (isCloudDataUrl(url, cloud) && !(await pcAvailable())) return fetch(input, init);
+    return toPc(input, init);
+  };
 }
 
 /**

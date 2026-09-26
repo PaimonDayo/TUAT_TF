@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { pcServerHeaders, routeDataToPc } from "./cloud-auth";
+import { BACKEND_MODE_HEADER, CLOUD_DIRECT_MS, pcServerHeaders, routeDataToPc, withCloudFailover } from "./cloud-auth";
 
 const cloud = { url: "https://cloud.example.supabase.co", anonKey: "cloud-anon" };
 const pcBase = "https://app.example.test/api/pc-supabase";
@@ -42,5 +42,54 @@ describe("routeDataToPc", () => {
     headers = new Headers(fetcher.mock.calls[1][1]?.headers);
     expect(headers.get("apikey")).toBe("pc-anon");
     expect(headers.get("authorization")).toBe("Bearer member-token");
+  });
+});
+
+describe("withCloudFailover", () => {
+  const data = `${cloud.url}/rest/v1/tweets?select=id`;
+  function setup(pcResponse: () => Response) {
+    let time = 1_000;
+    const state = { until: 0 };
+    const toPc = vi.fn<typeof fetch>(async () => pcResponse());
+    const direct = vi.fn<typeof fetch>(async () => new Response("cloud"));
+    const routed = withCloudFailover(toPc, direct, cloud, { now: () => time, state });
+    return { toPc, direct, routed, advance: (ms: number) => { time += ms; } };
+  }
+
+  it("uses the PC while it answers normally", async () => {
+    const { toPc, direct, routed } = setup(() => new Response("pc"));
+    expect(await (await routed(data)).text()).toBe("pc");
+    expect(toPc).toHaveBeenCalledTimes(1);
+    expect(direct).not.toHaveBeenCalled();
+  });
+
+  it("resends an undelivered request to the cloud and stays there for a while", async () => {
+    const { toPc, direct, routed, advance } = setup(() => new Response(null, { status: 503, headers: { [BACKEND_MODE_HEADER]: "cloud" } }));
+    expect(await (await routed(data, { method: "POST", body: "{}" })).text()).toBe("cloud");
+    await routed(data);
+    expect(toPc).toHaveBeenCalledTimes(1);
+    expect(direct).toHaveBeenCalledTimes(2);
+    advance(CLOUD_DIRECT_MS + 1);
+    await routed(data);
+    expect(toPc).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a cloud answer relayed by the app server without sending it twice", async () => {
+    const { direct, routed } = setup(() => new Response("via-app", { headers: { [BACKEND_MODE_HEADER]: "cloud" } }));
+    expect(await (await routed(data, { method: "POST", body: "{}" })).text()).toBe("via-app");
+    expect(direct).not.toHaveBeenCalled();
+  });
+
+  it("does not resend a plain 503, which may have reached the PC", async () => {
+    const { direct, routed } = setup(() => new Response(null, { status: 503 }));
+    expect((await routed(data, { method: "POST", body: "{}" })).status).toBe(503);
+    expect(direct).not.toHaveBeenCalled();
+  });
+
+  it("never moves login calls", async () => {
+    const { toPc, direct, routed } = setup(() => new Response(null, { status: 503, headers: { [BACKEND_MODE_HEADER]: "cloud" } }));
+    await routed(`${cloud.url}/auth/v1/user`);
+    expect(toPc).toHaveBeenCalledTimes(1);
+    expect(direct).not.toHaveBeenCalled();
   });
 });

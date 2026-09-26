@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CLOUD_AUTH_TEST_COOKIE, cloudAuthConfig } from "@/lib/supabase/cloud-auth";
+import { pcAvailable } from "@/lib/pc-backend";
 
 /**
  * Google OAuth コールバック。
@@ -43,7 +44,8 @@ export async function GET(request: NextRequest) {
 
   // ログインをクラウドで行っているときは、データを置いているPCにも同じIDのアカウントを用意する
   // （部員名簿がアカウントを参照しているため。PCのトリガーが部員名簿も作る）。
-  if (cloudAuthConfig(request.cookies.get(CLOUD_AUTH_TEST_COOKIE)?.value === "1")) {
+  // PCが止まっているときは作らない（復帰後の書き戻しがクラウドのアカウントをPCに作る）。
+  if (cloudAuthConfig(request.cookies.get(CLOUD_AUTH_TEST_COOKIE)?.value === "1") && await pcAvailable()) {
     const admin = createAdminClient();
     const { data: existing } = await admin.auth.admin.getUserById(user.id);
     if (!existing?.user) {

@@ -43,8 +43,13 @@ describe("role catalog isolation", () => {
   it("failed assignments or definitions fail closed", async () => {
     mocks.catalog.mockResolvedValue([role("everyone",true)]);
     expect((await fetchRolesByProfileIds(client([],[],true).supabase,["a"],{useCachedCatalog:true})).size).toBe(0);
+  });
+  it("reads definitions as the member when the shared catalog is unavailable (PC down)", async () => {
     mocks.catalog.mockRejectedValue(new Error("unavailable"));
-    expect((await fetchRolesByProfileIds(client([],[]).supabase,["a"],{useCachedCatalog:true})).size).toBe(0);
+    const c = client([], [role("everyone", true)]);
+    const result = await fetchRolesByProfileIds(c.supabase, ["a"], { useCachedCatalog: true });
+    expect(result.get("a")?.map((r) => r.id)).toEqual(["everyone"]);
+    expect(c.from).toHaveBeenCalledWith("roles");
   });
   it("empty requests make no database or catalog calls", async () => {
     const c=client([],[]);

@@ -2,14 +2,16 @@ import { createBrowserClient } from "@supabase/ssr";
 import type { Database } from "@/types/database";
 import { createCoalescedFetch } from "@/lib/coalesced-fetch";
 import { createPcBrowserTransport } from "@/lib/pc-browser-transport";
-import { CLOUD_AUTH_COOKIE, browserCloudAuthOptIn, cloudAuthConfig, routeDataToPc } from "./cloud-auth";
+import { CLOUD_AUTH_COOKIE, browserCloudAuthOptIn, cloudAuthConfig, routeDataToPc, withCloudFailover } from "./cloud-auth";
 
 const coalescedFetch = createCoalescedFetch((input, init) => {
   if (typeof window === "undefined") return fetch(input, init);
   const transport = createPcBrowserTransport(fetch, window.location.origin, process.env.NEXT_PUBLIC_PC_REST_RELAY_ORIGIN);
   const cloud = cloudAuthConfig(browserCloudAuthOptIn());
+  if (!cloud) return transport(input, init);
   // ログインがクラウドのときは、データの API だけPCの入口（/api/pc-supabase、さらに中継）へ付け替える。
-  return cloud ? routeDataToPc(transport, cloud, `${window.location.origin}/api/pc-supabase`)(input, init) : transport(input, init);
+  // PCが止まっていると分かったら、しばらくクラウドへ直接つなぐ。
+  return withCloudFailover(routeDataToPc(transport, cloud, `${window.location.origin}/api/pc-supabase`), fetch, cloud)(input, init);
 });
 
 /** ブラウザ（Client Component）用 Supabase クライアント */

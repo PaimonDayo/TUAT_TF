@@ -67,3 +67,21 @@ export async function pcBackendFetch(input: RequestInfo | URL, init?: RequestIni
     signal: AbortSignal.any([request.signal, AbortSignal.timeout(25_000)]),
   });
 }
+
+let downUntil = 0;
+
+/**
+ * PCのDBへつながるか（PCが最近「接続先」を更新しているか）。PCは20秒ごとに180秒有効の接続先を
+ * R2へ書くので、止まってから最大3分で false になる。false の間はクラウドSupabaseを使う（予備構成）。
+ * 接続先を読めなかったときは15秒間それを覚え、要求のたびにR2を読みに行かない。
+ */
+export async function pcAvailable(): Promise<boolean> {
+  if (Date.now() < downUntil) return false;
+  try {
+    await getPcEndpoint();
+    return true;
+  } catch {
+    downUntil = Date.now() + 15_000;
+    return false;
+  }
+}

@@ -138,6 +138,13 @@ export const getCurrentProfile = cache(async (): Promise<Profile> => {
  * 指定プロフィール群のロールをまとめて取得する。
  * roles / profile_roles 未適用やエラー時は空マップを返す（プロフィール表示は壊さない）。
  */
+function loadRoles(supabase: SupabaseServer): Promise<AppRole[]> {
+  return Promise.resolve(supabase.from("roles").select("*")).then(({ data, error }) => {
+    if (error || !data) throw new Error("Failed to load role definitions");
+    return data;
+  });
+}
+
 export async function fetchRolesByProfileIds(
   supabase: SupabaseServer,
   ids: string[],
@@ -151,11 +158,9 @@ export async function fetchRolesByProfileIds(
     const [assignments, catalog] = await Promise.all([
       supabase.from("profile_roles").select("profile_id, role_id").in("profile_id", ids),
       options.useCachedCatalog
-        ? getSharedRoleCatalog()
-        : supabase.from("roles").select("*").then(({ data, error }) => {
-          if (error || !data) throw new Error("Failed to load role definitions");
-          return data;
-        }),
+        // 共有の一覧は管理用の接続でPCから読む。PCが止まっているときはログイン中の部員として読む。
+        ? getSharedRoleCatalog().catch(() => loadRoles(supabase))
+        : loadRoles(supabase),
     ]);
     if (assignments.error || !assignments.data) return map;
     const byId = new Map(catalog.map((role) => [role.id, role]));
