@@ -3,26 +3,27 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRolesByProfileIds, isMemberPreviewActive } from "@/lib/supabase/auth";
-import { permissionsOf } from "@/lib/permissions";
 import { entryClient } from "@/lib/ob-entries-db";
 import { validDutyEdit, type DutyEdit } from "@/lib/ob-duty";
-import { OB_PROGRAM_PATH, validPartyEdit, type PartyEdit } from "@/lib/ob-meet";
+import { OB_PROGRAM_PATH, canManageObMeet, validPartyEdit, type PartyEdit } from "@/lib/ob-meet";
 import { validEntryEdit, type EntryEdit } from "@/lib/ob-entry-edit";
 /** 旧URL（転送のみ）と、大会ページ配下のプログラムの両方を更新する。 */
 function refreshObPages() { revalidatePath("/ob-entries"); revalidatePath(OB_PROGRAM_PATH); }
 
-async function editClient() {
+/** 係（システム・OB戦2026ロール）だけに返す。allowSelf なら一般部員にも返す（本人の分かどうかはDBが確認する）。 */
+async function editClient(allowSelf = false) {
   const client = entryClient(await createClient());
   const { data: { user } } = await client.auth.getUser();
-  if (!user) return null;
+  if (!user || await isMemberPreviewActive()) return null;
+  if (allowSelf) return client;
   const roles = await fetchRolesByProfileIds(await createClient(), [user.id]);
-  if (!permissionsOf(roles.get(user.id)).manageSystem || await isMemberPreviewActive()) return null;
+  if (!canManageObMeet(roles.get(user.id))) return null;
   return client;
 }
 
 export async function saveEntry(input: EntryEdit, party?: PartyEdit): Promise<{ ok: boolean; message?: string }> {
   if ((party !== undefined && !validPartyEdit(party)) || !validEntryEdit(input, !!party && party.status !== "未回答")) return { ok: false, message: "種目と資格記録を確認してください（記録は1000文字以内）" };
-  const client = await editClient();
+  const client = await editClient(true);
   if (!client) return { ok: false, message: "権限がありません" };
   const args = { p_entry_id: input.entryId, p_profile_id: input.profileId, p_revision: input.revision, p_events: input.events, p_marks: input.marks };
   const result = party ? await client.rpc("save_ob_registration", { ...args, p_party_id: party.id, p_party_revision: party.revision, p_party_status: party.status }) : await client.rpc("save_ob_entry", args);
@@ -31,6 +32,7 @@ export async function saveEntry(input: EntryEdit, party?: PartyEdit): Promise<{ 
       : result.error.message.includes("entry_conflict") ? "他の操作で更新されています。画面を更新してからやり直してください"
       : result.error.message.includes("party_identity_required") ? "懇親会の回答と選択した部員が一致しません。本人照合を確認してください"
       : result.error.message.includes("entry_division_") ? "登録済みの男女区分と種目が一致しません。画面を更新して確認してください"
+      : result.error.message.includes("entry_forbidden") ? "自分のエントリーだけ登録・編集できます"
       : result.error.message.includes("entry_member_missing") ? "在籍中で氏名・学年が登録された部員を選んでください" : "保存できませんでした";
     return { ok: false, message };
   }
@@ -45,7 +47,7 @@ export async function confirmEntryMember(entryId: string, profileId: string | nu
   const { data: { user } } = await client.auth.getUser();
   if (!user) return { ok: false, message: "ログインしてください" };
   const roles = await fetchRolesByProfileIds(await createClient(), [user.id]);
-  if (!permissionsOf(roles.get(user.id)).manageSystem || await isMemberPreviewActive()) return { ok: false, message: "権限がありません" };
+  if (!canManageObMeet(roles.get(user.id)) || await isMemberPreviewActive()) return { ok: false, message: "権限がありません" };
   if (profileId) {
     const member = await client.from("profiles").select("id").eq("id", profileId).eq("status", "active").eq("approved", true).maybeSingle();
     if (member.error || !member.data) return { ok: false, message: "在籍中の部員を選んでください" };

@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined }) }));
 vi.mock("@/lib/supabase/auth", () => ({ getCurrentProfile: mocks.profile, getCurrentUserId: async () => "me" }));
+vi.mock("@/lib/queries/ob-entries", () => ({ getMyObEntry: async () => null, getMyObEntryCandidates: async () => [] }));
 vi.mock("@/lib/queries", () => ({
   getHomeNotices: mocks.notices, getHomeCompetition: mocks.competition,
   getAttendanceSchedules: mocks.schedules, getAttendancesForSchedules: mocks.attendance,

@@ -17,8 +17,6 @@ import {
   timeFormatOf,
 } from "@/lib/competition-record";
 import { sortCompetitionEvents } from "@/lib/competition-goals";
-import { getCurrentProfile } from "@/lib/supabase/auth";
-import { permissionsOf } from "@/lib/permissions";
 import { isObCompetition } from "@/lib/ob-meet";
 
 /**
@@ -35,8 +33,6 @@ export default async function CompetitionPage({
   const competition = await getCompetitionById(id);
   if (!competition) notFound();
 
-  const profile = await getCurrentProfile();
-  const canManageSystem = permissionsOf(profile.roles).manageSystem;
   const hasProgram = Boolean(competition.program_source_url);
   const [results, events] = hasProgram
     ? [[], []]
@@ -73,14 +69,13 @@ export default async function CompetitionPage({
         </p>
 
         <Card className="divide-y divide-separator">
-          {(competition.program_source_url || (isObCompetition(competition.id) && canManageSystem)) && (
+          {(competition.program_source_url || isObCompetition(competition.id)) && (
             <Link
               href={`/competitions/${competition.id}/program`}
               className="flex items-center gap-3 p-4 pressable"
             >
               <ListOrdered size={20} className="text-accent" />
               <span className="flex-1 text-headline">{hasProgram ? "プログラム・結果" : "プログラム"}</span>
-              {isObCompetition(competition.id) && <span className="text-caption text-muted2">システム限定</span>}
               <ChevronRight size={16} className="text-muted" />
             </Link>
           )}

@@ -10,12 +10,13 @@ import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { useToast } from "@/components/ui/toast";
 import { saveEntry } from "@/app/(app)/ob-entries/actions";
 import { Card } from "@/components/ui/card";
+import { Disclosure } from "@/components/ui/disclosure";
 import { OB_ENTRY_EVENTS, entryDivision } from "@/lib/ob-entry-edit";
 import { entryGrade, normalizeEntryName, type EntryMember } from "@/lib/entry-identity";
-import { OB_PARTY, PARTY_STATUSES, compareByGrade, type ObPartyResponse, type PartyStatus } from "@/lib/ob-meet";
+import { OB_PARTY, OB_PROGRAM, PARTY_STATUSES, compareByGrade, obEventTime, type ObPartyResponse, type PartyStatus } from "@/lib/ob-meet";
 import { type ObEntry } from "@/lib/ob-entries";
 
-export function ObEntryEditor({ entry, members, initialProfileId = "", party, parties = [], registered, onEditExisting, onClose }: { entry?: ObEntry; party?: ObPartyResponse; parties?: ObPartyResponse[]; members: EntryMember[]; initialProfileId?: string;
+export function ObEntryEditor({ entry, members, initialProfileId = "", party, parties = [], registered, onEditExisting, onClose, self = false }: { self?: boolean; entry?: ObEntry; party?: ObPartyResponse; parties?: ObPartyResponse[]; members: EntryMember[]; initialProfileId?: string;
   /** 新規登録で、すでにエントリーがある部員（部員ID→エントリーID）。選ぶとその人の編集に切り替える */
   registered?: Map<string, string>; onEditExisting?: (entryId: string) => void; onClose: () => void }) {
   function findParty(id: string) {return party ?? parties.find((p)=>!p.entry_id&&!p.needs_review&&normalizeEntryName(p.submitted_name)===normalizeEntryName(members.find((m)=>m.id===id)?.display_name??""));}
@@ -48,7 +49,9 @@ export function ObEntryEditor({ entry, members, initialProfileId = "", party, pa
     onOpenChange={(open) => { if (!open && !saving && !confirm) { if (dirty) setConfirm("close"); else onClose(); } }}>
     <section className="space-y-3" aria-label="エントリー編集">
     {entry && <p className="text-headline">{entry.grade} {entry.submitted_name}</p>}
-    {!entry && <Select value={profileId} onValueChange={(value)=>{
+    <ObProgramDisclosure />
+    {!entry && self && <p className="text-headline">{members[0] ? `${entryGrade(members[0].grade)} ${members[0].display_name}` : ""}</p>}
+    {!entry && !self && <Select value={profileId} onValueChange={(value)=>{
       const existing = registered?.get(value);
       if (existing && onEditExisting) { onEditExisting(existing); return; }
       setProfileId(value);
@@ -79,7 +82,8 @@ export function ObEntryEditor({ entry, members, initialProfileId = "", party, pa
             <label className="flex min-h-12 cursor-pointer items-center gap-3 py-3 text-body">
               <input type="checkbox" className="h-5 w-5 shrink-0 accent-accent" checked={selected} disabled={saving} aria-label={event}
                 onChange={() => { setEvents(selected ? events.filter((e) => e !== event) : [...events, event]); if (!selected && !Object.hasOwn(marks, event)) setMarks({ ...marks, [event]: null }); }} />
-              <span>{event.slice(2)}</span>
+              <span className="flex-1">{event.slice(2)}</span>
+              {obEventTime(event) && <span className="text-caption tabular-nums">{obEventTime(event)}〜</span>}
             </label>
             {selected && <div className="pb-3 pl-8">
               <label htmlFor={`mark-${event}`} className="mb-1 block text-caption">資格記録（任意）</label>
@@ -101,4 +105,16 @@ export function ObEntryEditor({ entry, members, initialProfileId = "", party, pa
       confirmLabel={confirm === "division" ? "変更する" : confirm === "close" ? "破棄する" : "取り消して保存する"} busyLabel="保存中…" busy={saving}
       onConfirm={() => { if (confirm === "division") { setGender(pendingDivision ?? ""); setEvents([]); setMarks({}); setConfirm(null); } else if (confirm === "close") onClose(); else void save(); }} />
   </section></FormModal>;
+}
+
+/** エントリー中もプログラム（時刻と種目）を確認できるように、編集画面の先頭に置く。 */
+export function ObProgramDisclosure({ defaultOpen = false }: { defaultOpen?: boolean }) {
+  return <Disclosure title="プログラム（タイムテーブル）" defaultOpen={defaultOpen}>
+    <ul className="divide-y divide-separator text-body">
+      {OB_PROGRAM.map((slot) => <li key={slot.time + slot.label} className="flex gap-3 py-2">
+        <span className="w-12 shrink-0 tabular-nums text-muted2">{slot.time}</span>
+        <span className={slot.events.length || slot.note ? "font-medium" : "text-muted2"}>{slot.label}{slot.note ? `（${slot.note}）` : ""}</span>
+      </li>)}
+    </ul>
+  </Disclosure>;
 }

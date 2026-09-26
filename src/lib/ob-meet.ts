@@ -11,6 +11,17 @@ export function isObCompetition(competitionId: string): boolean {
   return competitionId === OB_MEET.competitionId;
 }
 
+/** このロールの人はOB戦の中だけシステムロールと同じ操作ができる（DB側は can_manage_ob_meet）。 */
+export const OB_STAFF_ROLE = "OB戦2026";
+export function canManageObMeet(roles: { name: string; can_manage_system: boolean }[] | null | undefined): boolean {
+  return !!roles?.some((r) => r.can_manage_system || r.name === OB_STAFF_ROLE);
+}
+/** 種目名（"男子100m" など）の開始時刻。プログラムを見ながらエントリーできるようにする。 */
+export function obEventTime(event: string): string | undefined {
+  const name = event.replace(/^(男子|女子)/, "");
+  return OB_PROGRAM.find((slot) => slot.events.includes(name))?.time;
+}
+
 export const OB_PARTY = { time: "19:00〜", venue: "ミライザカ 府中並木通り店", fee: 3500 };
 export const PARTY_STATUSES = ["参加", "不参加", "未回答"] as const;
 export type PartyStatus = typeof PARTY_STATUSES[number];

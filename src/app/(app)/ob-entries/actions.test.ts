@@ -54,10 +54,8 @@ beforeEach(() => {
   mocks.rpc.mockResolvedValue({ data: id, error: null });
 });
 
-it("rejects entry edits from ordinary members or preview sessions", async () => {
+it("rejects entry edits from preview sessions (ordinary members are limited to their own entry by the DB)", async () => {
   const input = { entryId: id, profileId: null, revision: 0, events: ["男子100m"], marks: {} };
-  mocks.roles.mockResolvedValue(new Map());
-  expect((await saveEntry(input)).ok).toBe(false);
   mocks.roles.mockResolvedValue(new Map([["system", [{ can_manage_system: true }]]]));
   mocks.preview.mockResolvedValue(true);
   expect((await saveEntry(input)).ok).toBe(false);
