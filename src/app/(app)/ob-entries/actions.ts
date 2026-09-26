@@ -28,7 +28,7 @@ export async function saveEntry(input: EntryEdit, party?: PartyEdit): Promise<{ 
   const args = { p_entry_id: input.entryId, p_profile_id: input.profileId, p_revision: input.revision, p_events: input.events, p_marks: input.marks };
   const result = party ? await client.rpc("save_ob_registration", { ...args, p_party_id: party.id, p_party_revision: party.revision, p_party_status: party.status }) : await client.rpc("save_ob_entry", args);
   if (result.error) {
-    const message = result.error.code === "23505" ? "この部員の回答は既にあります。エントリー・懇親会の一覧から確認してください"
+    const message = result.error.code === "23505" ? "同じ名前の回答がすでにあります。フォームで回答済みなら「回答したときの本名」から呼び出してください"
       : result.error.message.includes("entry_conflict") ? "他の操作で更新されています。画面を更新してからやり直してください"
       : result.error.message.includes("party_identity_required") ? "懇親会の回答と選択した部員が一致しません。本人照合を確認してください"
       : result.error.message.includes("entry_division_") ? "登録済みの男女区分と種目が一致しません。画面を更新して確認してください"
@@ -104,4 +104,21 @@ function dutyRoleError(message:string) {
   if(message.includes("entry_conflict"))return "他の操作で更新されています。画面を更新してください";
   if(message.includes("role_names_too_long"))return "選択した役職名が長すぎます。役職名を短くしてください";
   return "保存できませんでした。入力内容を確認してください";
+}
+
+/** 本人が本名を入れて、紐付け前の自分の回答を呼び出す（照合の条件はDBの claim_ob_entry）。 */
+export async function claimMyEntry(name: string): Promise<{ ok: boolean; message?: string }> {
+  const trimmed = name.trim();
+  if (!trimmed || trimmed.length > 100) return { ok: false, message: "本名を入力してください" };
+  const client = await editClient(true);
+  if (!client) return { ok: false, message: "権限がありません" };
+  const result = await client.rpc("claim_ob_entry", { p_name: trimmed });
+  if (result.error) {
+    const m = result.error.message;
+    return { ok: false, message: m.includes("claim_not_found") ? "この本名・学年の回答が見つかりません。回答していなければ新しくエントリーしてください"
+      : m.includes("claim_ambiguous") ? "同じ本名の回答が複数あります。係に本人照合を依頼してください"
+      : result.error.code === "23505" ? "すでに自分のエントリーがあります" : "呼び出せませんでした" };
+  }
+  refreshObPages();
+  return { ok: true };
 }
