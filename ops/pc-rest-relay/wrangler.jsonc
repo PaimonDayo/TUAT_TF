@@ -1,0 +1,12 @@
+{
+  "name": "tuat-pc-rest-relay",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-08-06",
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": { "enabled": false },
+  "vars": { "APP_ORIGIN": "https://tuat-tf.vercel.app", "PC_BACKEND_INSTANCE_ID": "REPLACE_AFTER_APPROVAL" },
+  "r2_buckets": [{ "binding": "ENDPOINTS", "bucket_name": "REPLACE_AFTER_APPROVAL" }]
+  // Secrets: PC_BACKEND_BRIDGE_KEY, SUPABASE_ANON_KEY. No service-role/JWT signing key.
+  // Deliberately not deployable until the reviewed account/bucket/origin are supplied.
+}
