@@ -10,10 +10,13 @@ import { permissionsOf } from "@/lib/permissions";
 
 export default async function CompetitionProgramPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ edit?: string }>;
 }) {
   const { id } = await params;
+  const { edit } = await searchParams;
   const [profile, competition] = await Promise.all([
     getCurrentProfile(),
     getCompetitionById(id),
@@ -34,6 +37,7 @@ export default async function CompetitionProgramPage({
           initial={entries.data ?? []}
           members={members.data ?? []}
           viewerId={profile.id}
+          openMine={edit === "mine"}
           party={party.data ?? []}
           duties={duties.data ?? []}
           dutyRoles={dutyRoles.data ?? []}

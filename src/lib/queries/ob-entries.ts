@@ -14,3 +14,12 @@ export async function getObEntries() {
   if (entries.error || members.error || history.error || party.error || duties.error || dutyRoles.error) throw new Error("エントリー情報を取得できませんでした");
   return { entries, members, history, party, duties, dutyRoles };
 }
+
+/** ホーム用: 自分に紐付いたOB戦のエントリーだけを取る（システムロール限定。RLSでも同じ範囲）。 */
+export async function getMyObEntry(profileId: string) {
+  const client = entryClient(await createClient());
+  const { data, error } = await client.from("ob_meet_entries")
+    .select("id,events,qualification_marks").eq("meet_key", "ob-2026").eq("profile_id", profileId).limit(1).maybeSingle();
+  if (error) return null;
+  return data as { id: string; events: string[]; qualification_marks: Record<string, string | null> } | null;
+}

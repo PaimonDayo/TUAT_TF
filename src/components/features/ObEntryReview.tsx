@@ -29,13 +29,15 @@ function TimeCell({ time }: { time: string }) {
   return <span className="w-12 shrink-0 pt-0.5 text-caption tabular-nums text-muted2">{time}</span>;
 }
 
-export function ObEntryReview({ competition, initial, members, viewerId, history = [], party = [], duties = [], dutyRoles = [] }: { competition: Pick<CompetitionRow, "name" | "starts_on">; initial: ObEntry[]; members: EntryMember[]; viewerId: string; party?: ObPartyResponse[]; duties?: ObDuty[]; dutyRoles?: ObDutyRole[]; history?: ConfirmedEntryIdentity[] }) {
+export function ObEntryReview({ competition, initial, members, viewerId, history = [], party = [], duties = [], dutyRoles = [], openMine = false }: { openMine?: boolean; competition: Pick<CompetitionRow, "name" | "starts_on">; initial: ObEntry[]; members: EntryMember[]; viewerId: string; party?: ObPartyResponse[]; duties?: ObDuty[]; dutyRoles?: ObDutyRole[]; history?: ConfirmedEntryIdentity[] }) {
   const dateLabel = format(new Date(`${competition.starts_on}T00:00:00`), "M月d日(E)", { locale: ja });
   const [search, setSearch] = useState("");
-  const [view, setView] = useState<"events" | "mine" | "identity" | "party" | "duty">("events");
+  const mineId = openMine ? initial.find((e) => e.profile_id === viewerId)?.id ?? null : null;
+  // ホームの「編集する」から来たときは自分の回答を開き、エントリーがあればそのまま編集画面、無ければ新規登録を出す。
+  const [view, setView] = useState<"events" | "mine" | "identity" | "party" | "duty">(openMine ? "mine" : "events");
   const [unlinked, setUnlinked] = useState(false);
-  const [adding, setAdding] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(openMine && !mineId);
+  const [editingId, setEditingId] = useState<string | null>(mineId);
   const [division, setDivision] = useState("all");
   const editing = initial.find((entry) => entry.id === editingId);
   const query = normalizeEntryName(search).toLowerCase();

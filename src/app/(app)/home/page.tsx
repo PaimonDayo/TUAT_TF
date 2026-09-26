@@ -3,7 +3,10 @@ import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { format, subDays } from "date-fns";
 import { ja } from "date-fns/locale";
-import { ChevronRight, Folder } from "lucide-react";
+import { ChevronRight, Folder, Pencil } from "lucide-react";
+import { getMyObEntry } from "@/lib/queries/ob-entries";
+import { entryEventRows } from "@/lib/ob-entries";
+import { OB_PROGRAM_PATH } from "@/lib/ob-meet";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { HomeSkeleton } from "@/components/ui/page-skeletons";
@@ -53,9 +56,10 @@ export default function HomePage() {
 }
 
 async function HomeContent({ nowJst }: { nowJst: Date }) {
-  const [notices, competition, summary, schedules, notes, feed] = await Promise.all([
+  const [notices, competition, obEntry, summary, schedules, notes, feed] = await Promise.all([
     NoticesSection(),
     CompetitionSection(),
+    ObEntrySection(),
     WeeklySummarySection({ nowJst }),
     SchedulesSection(),
     NotesSection(),
@@ -65,12 +69,48 @@ async function HomeContent({ nowJst }: { nowJst: Date }) {
     <div className="space-y-5 px-4 pt-1">
       {notices}
       {competition}
+      {obEntry}
       {summary}
       {schedules}
       {notes}
       {feed}
       <InstallPrompt />
     </div>
+  );
+}
+
+/** OB戦の自分のエントリー。OB戦は今回システムロール限定なので、その人にだけ出す。 */
+async function ObEntrySection() {
+  const profile = await getCurrentProfile();
+  if (!permissionsOf(profile.roles).manageSystem) return null;
+  const entry = await getMyObEntry(profile.id);
+  const rows = entry ? entryEventRows(entry) : [];
+  return (
+    <section className="space-y-2">
+      <p className="section-label">OB戦の自分のエントリー</p>
+      <Link href={`${OB_PROGRAM_PATH}?edit=mine`} prefetch={false} className="block">
+        <Card className="p-4 active:bg-bg">
+          {rows.length ? (
+            <ul className="space-y-1">
+              {rows.map((row) => (
+                <li key={row.event} className="flex items-baseline justify-between gap-3 text-[15px]">
+                  <span className="font-medium">{row.event}</span>
+                  <span className="truncate text-caption">{row.mark}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[15px] text-muted">まだエントリーしていません</p>
+          )}
+          <div className="mt-3 flex items-center justify-between border-t border-separator pt-3">
+            <span className="text-caption">{entry ? "種目の追加・取り消し、資格記録を変更できます" : "ここからエントリーできます"}</span>
+            <span className="flex shrink-0 items-center gap-1 text-[14px] font-semibold text-accent">
+              <Pencil size={14} />{entry ? "編集する" : "エントリーする"}
+            </span>
+          </div>
+        </Card>
+      </Link>
+    </section>
   );
 }
 
