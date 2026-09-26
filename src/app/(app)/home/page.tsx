@@ -96,7 +96,7 @@ async function ObEntrySection() {
   );
   return (
     <section className="space-y-2">
-      <p className="section-label">OB戦の自分のエントリー</p>
+      <p className="section-label">OB戦エントリー</p>
       <Card className="p-4">
         {entry ? (
           <>

@@ -25,8 +25,8 @@ it("pairs marks with selected events without inventing marks for blank or missin
   expect(entryEventRows({ events: ["男子100m", "男子1500m", "男子走り幅跳び"], qualification_marks: {
     "男子100m": "12秒34（手動）\n参考記録", "男子1500m": null, "男子3000m": "未選択の記録",
   } })).toEqual([
-    { event: "男子100m", mark: "12秒34（手動）\n参考記録" },
     { event: "男子1500m", mark: "未回答" },
+    { event: "男子100m", mark: "12秒34（手動）\n参考記録" },
     { event: "男子走り幅跳び", mark: "記録欄なし" },
   ]);
 });

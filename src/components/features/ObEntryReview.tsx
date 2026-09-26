@@ -19,7 +19,7 @@ import { ObPartyView } from "./ObPartyView";
 import type { ObDuty, ObDutyRole } from "@/lib/ob-duty";
 import { ObDutyTable } from "./ObDutyTable";
 import { OB_PROGRAM, compareByGrade, type ObPartyResponse } from "@/lib/ob-meet";
-import { OB_ENTRY_EVENTS, entryDivision } from "@/lib/ob-entry-edit";
+import { compareObEvents, entryDivision } from "@/lib/ob-entry-edit";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 import type { CompetitionRow } from "@/types";
@@ -43,7 +43,7 @@ export function ObEntryReview({ competition, initial, members, viewerId, history
   const query = normalizeEntryName(search).toLowerCase();
   const visible = initial.filter((e) => (view !== "mine" || e.profile_id === viewerId) && (view !== "identity" || !isAlumniEntry(e) && (!unlinked || !e.profile_id)) &&
     normalizeEntryName([e.submitted_name, e.grade, ...e.events].join(" ")).toLowerCase().includes(query));
-  const eventNames = [...new Set(initial.flatMap((entry) => entry.events))].sort((a, b) => OB_ENTRY_EVENTS.indexOf(a) - OB_ENTRY_EVENTS.indexOf(b));
+  const eventNames = [...new Set(initial.flatMap((entry) => entry.events))].sort(compareObEvents);
   const groups = eventNames.filter((event) => division === "all" || event.startsWith(division)).map((event) => ({ event, entries: visible.filter((entry) => entry.events.includes(event) && normalizeEntryName([entry.submitted_name, entry.grade, event].join(" ")).toLowerCase().includes(query)).sort((a, b) => compareByGrade({ grade: a.grade, name: a.submitted_name }, { grade: b.grade, name: b.submitted_name })) })).filter((group) => group.entries.length);
   return <div data-ob-workspace className="space-y-4 px-4 pb-8 pt-2">
     <Card className="p-4">
@@ -102,7 +102,6 @@ function EntryProgramRow({ time, event, entries, viewerId, searching, onEdit }: 
         <TimeCell time={time} />
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline justify-between gap-2"><span className="text-headline">{event}</span><span className="shrink-0 text-caption">{entries.length}人</span></span>
-          {!expanded && <span className="mt-1 block text-[13px] leading-relaxed text-muted2">{entries.map((e) => `${e.grade} ${e.submitted_name}`).join("・")}</span>}
         </span>
       </span>
       <ChevronDown size={16} className={`mt-1 shrink-0 text-muted transition-transform ${expanded ? "rotate-180" : ""}`} />

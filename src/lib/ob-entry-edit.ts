@@ -1,5 +1,12 @@
+/** 種目は当日の実施順（プログラムの時刻順、同じ時刻は並びどおり）。 */
+export const OB_EVENT_ORDER = ["1500m", "ジャベリックスロー", "立ち五段", "100m", "砲丸投げ", "300mH", "走り高跳び", "300m", "やり投げ", "走り幅跳び", "3000m"];
+/** 実施順で並べる（同じ種目は男子→女子）。 */
+export function compareObEvents(a: string, b: string): number {
+  const rank = (e: string) => OB_EVENT_ORDER.indexOf(e.slice(2)) * 2 + (e.startsWith("女子") ? 1 : 0);
+  return rank(a) - rank(b);
+}
 export const OB_ENTRY_EVENTS = ["男子", "女子"].flatMap((gender) =>
-  ["100m", "300m", "300mH", "1500m", "3000m", "走り幅跳び", "走り高跳び", "立ち五段", "砲丸投げ", "やり投げ", "ジャベリックスロー"].map((event) => gender + event));
+  OB_EVENT_ORDER.map((event) => gender + event));
 export type EntryEdit = { entryId: string | null; profileId: string | null; revision: number | null; events: string[]; marks: Record<string, string | null> };
 export function entryDivision(entry: { events: string[]; competition_division?: "男子" | "女子" | null }): "男子" | "女子" | null {
   if (entry.competition_division) return entry.competition_division;
