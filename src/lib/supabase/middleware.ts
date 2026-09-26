@@ -34,10 +34,16 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  // getUser() を呼ぶことでセッションが検証・更新される（重要）
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // セッションの確認と更新（重要）。getClaims は期限切れならトークンを更新し、署名を公開鍵で確かめる。
+  // 公開鍵方式（クラウドのログイン、ES256）ではログインサーバーへ問い合わせずに済む（公開鍵は10分ごとに取得）。
+  // 共通鍵のトークン（PCのログイン）は従来どおり getUser で確かめる。
+  let user: { id: string } | null = null;
+  try {
+    const { data } = await supabase.auth.getClaims();
+    user = data?.claims?.sub ? { id: data.claims.sub } : null;
+  } catch {
+    user = null;
+  }
 
   const { pathname } = request.nextUrl;
   const isPublic =
