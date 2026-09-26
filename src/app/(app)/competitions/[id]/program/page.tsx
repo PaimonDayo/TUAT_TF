@@ -24,7 +24,10 @@ export default async function CompetitionProgramPage({
   ]);
   if (!competition) notFound();
   const canManage = permissionsOf(profile.roles).manageSystem;
-  const header = <SubHeader title={`${competition.name}プログラム`} backHref={`/competitions/${competition.id}`} />;
+  // OB戦はホームから開く人が多いので、戻るは必ずホームへ。
+  const header = isObCompetition(competition.id)
+    ? <SubHeader title={`${competition.name}プログラム`} backHref="/home" forceBackHref />
+    : <SubHeader title={`${competition.name}プログラム`} backHref={`/competitions/${competition.id}`} />;
 
   // OB戦のプログラムは出場登録そのもの。今回はシステムロール限定で公開している。
   if (isObCompetition(competition.id)) {

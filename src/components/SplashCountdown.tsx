@@ -8,7 +8,7 @@ import { selectHomeCompetition } from "@/lib/competition-lifecycle";
 import { jstToday } from "@/lib/date";
 import {
   SPLASH_CACHE_KEY,
-  SPLASH_DISABLED_KEY,
+  SPLASH_DISABLED_KEY, SPLASH_SESSION_KEY,
   clearSplashCover,
   readSplashCache,
   reelCells,
@@ -50,6 +50,8 @@ export default function SplashCountdown() {
     try {
       cache = readSplashCache(localStorage.getItem(SPLASH_CACHE_KEY));
       disabled = localStorage.getItem(SPLASH_DISABLED_KEY) === "1";
+      if (sessionStorage.getItem(SPLASH_SESSION_KEY) === "1") disabled = true;
+      sessionStorage.setItem(SPLASH_SESSION_KEY, "1");
     } catch {
       // Storage may be unavailable in a restricted browser context.
     }

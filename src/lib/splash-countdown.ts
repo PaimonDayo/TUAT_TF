@@ -10,6 +10,8 @@ export type SplashCountdownCache = {
 
 export const SPLASH_CACHE_KEY = "tuat-countdown";
 export const SPLASH_DISABLED_KEY = "tuat-splash-disabled";
+/** 1回の起動（同じタブ）で一度だけ出す。途中でページが読み直されても出し直さない。 */
+export const SPLASH_SESSION_KEY = "tuat-splash-shown";
 
 /** 最初のペイントから画面を覆っておく下地。起動画面と同じ地色。 */
 export const SPLASH_COVER_ID = "splash-cover";
@@ -29,6 +31,7 @@ const SPLASH_COVER_FAILSAFE_MS = 4000;
  */
 export const splashCoverScript = `(function(){try{
 var el=document.getElementById(${JSON.stringify(SPLASH_COVER_ID)});if(!el)return;
+try{if(sessionStorage.getItem(${JSON.stringify(SPLASH_SESSION_KEY)})==="1")return;}catch(e){}
 if(localStorage.getItem(${JSON.stringify(SPLASH_DISABLED_KEY)})==="1")return;
 var raw=localStorage.getItem(${JSON.stringify(SPLASH_CACHE_KEY)});if(!raw)return;
 var c=JSON.parse(raw);
