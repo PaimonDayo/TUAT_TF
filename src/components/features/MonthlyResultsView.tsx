@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -10,6 +11,13 @@ import { SIMPLE_BLOCK_ITEMS, gradeShort, matchSimpleBlock, type SimpleBlockFilte
 import { formatRecord, formatWind, measureTypeOf, timeFormatOf } from "@/lib/competition-record";
 import type { CompetitionEvent } from "@/lib/competition-goals";
 import type { MonthlyResult } from "@/lib/queries";
+import type { CompetitionRow } from "@/types";
+import { ActionMenu } from "@/components/ui/action-menu";
+import { FormModal } from "@/components/ui/form-modal";
+import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
+import { useToast } from "@/components/ui/toast";
+import { createClient } from "@/lib/supabase/client";
+import { ResultForm, type ResultFormHandle } from "@/components/post/ResultForm";
 
 const PATH = "/mypage/monthly-results";
 
@@ -23,15 +31,36 @@ function shiftMonth(month: string, delta: number): string {
 export function MonthlyResultsView({
   month,
   current,
-  results,
+  results: initialResults,
   events,
+  competitions,
 }: {
   month: string;
   current: string;
   results: MonthlyResult[];
   events: CompetitionEvent[];
+  competitions: CompetitionRow[];
 }) {
   const [block, setBlock] = useState<SimpleBlockFilter>("all");
+  const [results, setResults] = useState(initialResults);
+  const [editing, setEditing] = useState<MonthlyResult | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const formRef = useRef<ResultFormHandle>(null);
+  const router = useRouter();
+  const { showToast } = useToast();
+  async function remove(id: string) {
+    const previous = results;
+    setResults((rows) => rows.filter((r) => r.id !== id));
+    const { error } = await createClient().from("pb_records").delete().eq("id", id);
+    if (error) {
+      setResults(previous);
+      showToast("結果を削除できませんでした");
+      return false;
+    }
+    router.refresh();
+    return true;
+  }
   const visible = results.filter((r) => matchSimpleBlock(r.author?.blocks, block));
   const groups = new Map<string, { date: string; meet: string; rows: MonthlyResult[] }>();
   for (const r of visible) {
@@ -99,12 +128,50 @@ export function MonthlyResultsView({
                     <span className="text-title tabular-nums">
                       {formatRecord(r, measureTypeOf(events, r.event_name), timeFormatOf(events, r.event_name))}
                     </span>
+                    <ActionMenu
+                      onEdit={() => setEditing(r)}
+                      onDelete={() => remove(r.id)}
+                      deleteDescription={`${r.author?.display_name ?? "部員"}さんの${r.event_name}の結果を削除します。元に戻せません。`}
+                      triggerLabel={`${r.author?.display_name ?? "部員"}の${r.event_name}の操作`}
+                    />
                   </div>
                 ))}
             </Card>
           </section>
         ))
       )}
+
+      {editing && (
+        <FormModal
+          open
+          onOpenChange={(next) => { if (!next) { if (dirty) setConfirmClose(true); else setEditing(null); } }}
+          title={`${editing.author?.display_name ?? "部員"}さんの結果を編集`}
+        >
+          <ResultForm
+            ref={formRef}
+            key={editing.id}
+            onDirtyChange={setDirty}
+            userId={editing.user_id}
+            events={events}
+            competitions={competitions}
+            initial={editing}
+            onDone={(saved) => {
+              if (saved) {
+                // 大会名は選び直した大会から引き直す（一覧のまとまりが変わるため）
+                const competition = competitions.find((c) => c.id === saved.competition_id);
+                // 高校以前に変えた・別の月へ日付を変えたものは、この月の一覧から外す
+                const stays = saved.stage === "university" && (saved.recorded_on ?? "").startsWith(month);
+                setResults((rows) => rows.flatMap((r) => (r.id !== saved.id ? [r]
+                  : stays ? [{ ...r, ...saved, competition: competition ? { name: competition.name } : null }] : [])));
+                router.refresh();
+              }
+              setDirty(false);
+              setEditing(null);
+            }}
+          />
+        </FormModal>
+      )}
+      <UnsavedChangesDialog open={confirmClose} busy={false} intent="update" onContinue={() => setConfirmClose(false)} onDiscard={() => { setDirty(false); setConfirmClose(false); setEditing(null); }} onSave={() => { setConfirmClose(false); formRef.current?.save(); }} />
     </div>
   );
 }

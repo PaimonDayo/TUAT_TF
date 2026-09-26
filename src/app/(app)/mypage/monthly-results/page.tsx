@@ -3,7 +3,7 @@ import { SubHeader } from "@/components/layout/SubHeader";
 import { MonthlyResultsView } from "@/components/features/MonthlyResultsView";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { permissionsOf } from "@/lib/permissions";
-import { getCompetitionEvents, getMonthlyResults } from "@/lib/queries";
+import { getCompetitionEvents, getCompetitions, getMonthlyResults } from "@/lib/queries";
 import { jstToday } from "@/lib/date";
 import type { CompetitionEvent } from "@/lib/competition-goals";
 
@@ -18,12 +18,12 @@ export default async function MonthlyResultsPage({
   const { month: requested } = await searchParams;
   const current = jstToday().slice(0, 7);
   const month = requested && /^\d{4}-(0[1-9]|1[0-2])$/.test(requested) && requested <= current ? requested : current;
-  const [results, events] = await Promise.all([getMonthlyResults(month), getCompetitionEvents()]);
+  const [results, events, competitions] = await Promise.all([getMonthlyResults(month), getCompetitionEvents(), getCompetitions()]);
 
   return (
     <>
       <SubHeader title="月別の大会結果" backHref="/mypage" />
-      <MonthlyResultsView month={month} current={current} results={results} events={events as CompetitionEvent[]} />
+      <MonthlyResultsView key={month} month={month} current={current} results={results} events={events as CompetitionEvent[]} competitions={competitions} />
     </>
   );
 }
