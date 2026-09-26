@@ -1,11 +1,12 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { SubHeader } from "@/components/layout/SubHeader";
 import { CompetitionProgramView } from "@/components/features/CompetitionProgramView";
 import { ObEntryReview } from "@/components/features/ObEntryReview";
+import { ObMyEntry } from "@/components/features/ObMyEntry";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getCompetitionById, getCompetitionProgramEntries } from "@/lib/queries";
-import { getObEntries } from "@/lib/queries/ob-entries";
-import { isObCompetition } from "@/lib/ob-meet";
+import { getMyObEntryFull, getObEntries } from "@/lib/queries/ob-entries";
+import { canManageObMeet, isObCompetition } from "@/lib/ob-meet";
 import { permissionsOf } from "@/lib/permissions";
 
 export default async function CompetitionProgramPage({
@@ -27,7 +28,16 @@ export default async function CompetitionProgramPage({
 
   // OB戦のプログラムは出場登録そのもの。今回はシステムロール限定で公開している。
   if (isObCompetition(competition.id)) {
-    if (!canManage) redirect(`/competitions/${competition.id}`);
+    // 係（システム・OB戦2026ロール）は全員分、それ以外の部員は自分のエントリーだけを扱う。
+    if (!canManageObMeet(profile.roles)) {
+      const mine = await getMyObEntryFull(profile.id);
+      return (
+        <>
+          {header}
+          <ObMyEntry entry={mine.entry} party={mine.party ?? undefined} me={{ id: profile.id, display_name: profile.display_name, grade: profile.grade }} openEditor={edit === "mine"} />
+        </>
+      );
+    }
     const { entries, members, history, party, duties, dutyRoles } = await getObEntries();
     return (
       <>

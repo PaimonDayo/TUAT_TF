@@ -6,7 +6,7 @@ import { ja } from "date-fns/locale";
 import { ChevronRight, Folder, Pencil } from "lucide-react";
 import { getMyObEntry, getMyObEntryCandidates } from "@/lib/queries/ob-entries";
 import { entryEventRows } from "@/lib/ob-entries";
-import { OB_PROGRAM_PATH } from "@/lib/ob-meet";
+import { OB_PROGRAM_PATH, canManageObMeet } from "@/lib/ob-meet";
 import { ObHomeIdentity } from "@/components/features/ObHomeIdentity";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
@@ -80,12 +80,13 @@ async function HomeContent({ nowJst }: { nowJst: Date }) {
   );
 }
 
-/** OB戦の自分のエントリー。OB戦は今回システムロール限定なので、その人にだけ出す。 */
+/** OB戦の自分のエントリー。全員に出し、未登録ならここからエントリーできる。 */
 async function ObEntrySection() {
   const profile = await getCurrentProfile();
-  if (!permissionsOf(profile.roles).manageSystem) return null;
+  const staff = canManageObMeet(profile.roles);
   const entry = await getMyObEntry(profile.id);
-  const candidates = entry ? [] : await getMyObEntryCandidates(profile.id);
+  // 本人照合は係だけ（一般部員は未紐付けの回答を読めない）。
+  const candidates = entry || !staff ? [] : await getMyObEntryCandidates(profile.id);
   const rows = entry ? entryEventRows(entry) : [];
   const footer = (label: string, hint: string, href: string) => (
     <Link href={href} prefetch={false} className="mt-3 flex items-center justify-between gap-3 border-t border-separator pt-3">
@@ -117,9 +118,9 @@ async function ObEntrySection() {
           <>
             {candidates.length
               ? <ObHomeIdentity candidates={candidates} profileId={profile.id} />
-              : <p className="text-[15px] text-muted">自分に紐付いたエントリーはありません</p>}
-            {footer("本人照合", "回答一覧から自分の回答を探して紐付けられます", `${OB_PROGRAM_PATH}?edit=identity`)}
-            <Link href={`${OB_PROGRAM_PATH}?edit=mine`} prefetch={false} className="mt-2 block text-right text-caption text-accent">回答していなければ新しくエントリー →</Link>
+              : <p className="text-[15px] text-muted">まだエントリーしていません</p>}
+            {footer("エントリーする", "種目・資格記録と懇親会の出欠を登録できます", `${OB_PROGRAM_PATH}?edit=mine`)}
+            {staff && <Link href={`${OB_PROGRAM_PATH}?edit=identity`} prefetch={false} className="mt-2 block text-right text-caption text-accent">回答済みなら本人照合で探す →</Link>}
           </>
         )}
       </Card>

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { entryClient } from "@/lib/ob-entries-db";
 import { isAlumniEntry, matchEntryMember, type ObEntry } from "@/lib/ob-entries";
+import type { ObPartyResponse } from "@/lib/ob-meet";
 
 export async function getObEntries() {
   const client = entryClient(await createClient());
@@ -37,4 +38,14 @@ export async function getMyObEntryCandidates(profileId: string) {
         ? [{ id: e.id, revision: e.revision, submitted_name: e.submitted_name, grade: e.grade, events: e.events, sure: match.status === "exact" || match.status === "previous" }]
         : [];
     });
+}
+
+/** 一般部員の画面用: 自分のエントリーと懇親会の回答（RLSで本人の分だけ読める）。 */
+export async function getMyObEntryFull(profileId: string) {
+  const client = entryClient(await createClient());
+  const { data: entry } = await client.from("ob_meet_entries").select("*").eq("meet_key", "ob-2026").eq("profile_id", profileId).limit(1).maybeSingle();
+  const party = entry
+    ? (await client.from("ob_party_responses").select("id,meet_key,submitted_name,group_label,status,entry_id,revision,needs_review").eq("entry_id", entry.id).maybeSingle()).data
+    : null;
+  return { entry: (entry ?? null) as ObEntry | null, party: party as ObPartyResponse | null };
 }

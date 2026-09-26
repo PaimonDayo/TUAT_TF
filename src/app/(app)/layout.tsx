@@ -11,6 +11,9 @@ import { ToastProvider } from "@/components/ui/toast";
 import { AppQueryProvider } from "@/components/providers/QueryProvider";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { permissionsOf } from "@/lib/permissions";
+import { ObEntryPrompt } from "@/components/features/ObEntryPrompt";
+import { getMyObEntry } from "@/lib/queries/ob-entries";
+import { jstToday } from "@/lib/date";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -25,6 +28,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {children}
             <Suspense fallback={<FabPlaceholder />}><AuthenticatedFab /></Suspense>
             <Suspense fallback={null}><BottomNav /></Suspense>
+            <Suspense fallback={null}><AuthenticatedObEntryPrompt /></Suspense>
             <VersionWatcher />
             {process.env.NEXT_PUBLIC_PC_TRIAL !== "true" && <PushSubscriptionSync />}
             {process.env.NEXT_PUBLIC_PC_TRIAL !== "true" && <Suspense fallback={null}><AuthenticatedSheetHeaderGuard /></Suspense>}
@@ -87,4 +91,12 @@ async function AuthenticatedSheetHeaderGuard() {
       recordFields={profile.record_fields}
     />
   );
+}
+
+/** OB戦のエントリー確認。まずはシステムロールだけに出して様子を見る（オーナー指示 2026-09-26）。 */
+async function AuthenticatedObEntryPrompt() {
+  const profile = await getCurrentProfile();
+  if (!permissionsOf(profile.roles).manageSystem) return null;
+  const entry = await getMyObEntry(profile.id);
+  return <ObEntryPrompt hasEntry={!!entry} today={jstToday()} />;
 }
