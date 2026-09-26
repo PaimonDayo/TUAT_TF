@@ -73,6 +73,24 @@ launchTunnel();
 process.on('exit', () => tunnel?.kill());
 await tick();
 const timer = setInterval(tick, 20_000);
+// PC→クラウドSupabaseへの写し（PCが止まったときの予備構成）。別プロセスで動かし、失敗しても中継・バックアップには影響させない。
+let mirrorRunning = false;
+function runCloudMirror() {
+  if (mirrorRunning || stopping || !existsSync(resolve(root, '.contingency/backend/production-rollback-env.json'))) return;
+  mirrorRunning = true;
+  const startedAt = new Date().toISOString();
+  const child = spawn(process.execPath, [resolve(root, 'ops/laptop/cloud-mirror.mjs'), '--apply'], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], timeout: 4 * 60_000 });
+  let output = '';
+  child.stdout.on('data', (chunk) => { output += chunk; });
+  child.stderr.on('data', (chunk) => { output += chunk; });
+  child.on('close', (code) => {
+    mirrorRunning = false;
+    writePrivate(resolve(directory, 'cloud-mirror-status.json'), JSON.stringify({ startedAt, finishedAt: new Date().toISOString(), ok: code === 0, error: code === 0 ? null : output.trim().slice(-500) }));
+    if (code !== 0) console.error('Cloud mirror failed; will retry.');
+  });
+}
+setTimeout(runCloudMirror, 60_000).unref();
+setInterval(runCloudMirror, 5 * 60_000).unref();
 // The task host can be terminated by Windows without delivering a Node signal.
 // Do not leave an unsupervised child holding port 3109 and blocking its successor.
 if (process.platform === 'win32') setInterval(() => {
