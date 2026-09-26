@@ -1,7 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "@/types/database";
-import { pcServerOptions } from "./pc-server-options";
+import { sessionClientConfig } from "./server-client-options";
+import { CLOUD_AUTH_TEST_COOKIE } from "./cloud-auth";
 
 /**
  * サーバー（Server Component / Route Handler / Server Action）用 Supabase クライアント。
@@ -9,14 +10,13 @@ import { pcServerOptions } from "./pc-server-options";
  */
 export async function createClient() {
   const cookieStore = await cookies();
+  const session = sessionClientConfig(cookieStore.get(CLOUD_AUTH_TEST_COOKIE)?.value === "1");
 
   return createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    session.url,
+    session.key,
     {
-      ...pcServerOptions(),
-      ...(process.env.NEXT_PUBLIC_PC_BACKEND === "true" ? { cookieOptions: { name: "sb-pc-backend-auth" } } : {}),
-      ...(process.env.NEXT_PUBLIC_PC_TRIAL === "true" ? { cookieOptions: { name: "sb-pc-trial-auth" } } : {}),
+      ...session.options,
       cookies: {
         getAll() {
           return cookieStore.getAll();

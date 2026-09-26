@@ -1,7 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database";
-import { pcServerOptions } from "./pc-server-options";
+import { sessionClientConfig } from "./server-client-options";
+import { CLOUD_AUTH_TEST_COOKIE } from "./cloud-auth";
 
 /**
  * リクエストごとにセッションを更新し、未認証ユーザーを /login へ誘導する。
@@ -10,13 +11,12 @@ import { pcServerOptions } from "./pc-server-options";
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
+  const session = sessionClientConfig(request.cookies.get(CLOUD_AUTH_TEST_COOKIE)?.value === "1");
   const supabase = createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    session.url,
+    session.key,
     {
-      ...pcServerOptions(),
-      ...(process.env.NEXT_PUBLIC_PC_BACKEND === "true" ? { cookieOptions: { name: "sb-pc-backend-auth" } } : {}),
-      ...(process.env.NEXT_PUBLIC_PC_TRIAL === "true" ? { cookieOptions: { name: "sb-pc-trial-auth" } } : {}),
+      ...session.options,
       cookies: {
         getAll() {
           return request.cookies.getAll();

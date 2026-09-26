@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { CLOUD_AUTH_TEST_COOKIE, cloudAuthConfig } from "@/lib/supabase/cloud-auth";
 
 /**
  * Google OAuth コールバック。
@@ -37,6 +39,26 @@ export async function GET(request: NextRequest) {
   if (domain && !email.endsWith(`@${domain}`)) {
     await supabase.auth.signOut();
     return NextResponse.redirect(`${origin}/login?error=domain`);
+  }
+
+  // ログインをクラウドで行っているときは、データを置いているPCにも同じIDのアカウントを用意する
+  // （部員名簿がアカウントを参照しているため。PCのトリガーが部員名簿も作る）。
+  if (cloudAuthConfig(request.cookies.get(CLOUD_AUTH_TEST_COOKIE)?.value === "1")) {
+    const admin = createAdminClient();
+    const { data: existing } = await admin.auth.admin.getUserById(user.id);
+    if (!existing?.user) {
+      const { error: createError } = await admin.auth.admin.createUser({
+        id: user.id,
+        email,
+        email_confirm: true,
+        user_metadata: user.user_metadata,
+        app_metadata: { provider: "google", providers: ["google"] },
+      });
+      if (createError) {
+        console.error("Failed to create the PC account during auth callback", createError.message);
+        return NextResponse.redirect(`${origin}/login?error=profile`);
+      }
+    }
   }
 
   // プロフィール確認（trigger で自動作成されるが、無い場合は upsert を試みる）
