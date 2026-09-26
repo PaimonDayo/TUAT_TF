@@ -8,6 +8,7 @@ import type { ObPartyResponse } from "./ob-meet";
 type EntryDatabase = Omit<Database, "public"> & {
   public: Omit<Database["public"], "Tables" | "Functions"> & {
     Functions: Database["public"]["Functions"] & {
+      claim_ob_entry: { Args: { p_name: string }; Returns: string };
       save_ob_duty_roles: { Args: {p_profile_id:string;p_slot_time:string;p_event_name:string;p_role_ids:string[];p_revision:number|null}; Returns:number };
       save_ob_duty_role: { Args: {p_id:string|null;p_slot_time:string;p_event_name:string;p_name:string;p_abbreviation:string;p_required_count:number;p_revision:number|null}; Returns:string };
       save_ob_duty: { Args: { p_profile_id: string; p_slot_time: string; p_event_name: string; p_assignment: string; p_revision: number | null }; Returns: number };
