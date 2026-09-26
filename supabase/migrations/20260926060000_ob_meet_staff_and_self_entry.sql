@@ -151,18 +151,17 @@ DECLARE r public.ob_duty_roles%ROWTYPE; used integer; label text; rev integer; B
  RETURN rev;
 END $$;
 
--- 紐付け前の回答（Googleフォームの本名）を、本人が本名を入力して自分のものにする。
--- 取り違え防止: 未紐付け・現役・本名（空白と全半角を無視）と学年が一致する回答が1件だけのときに限る。係はあとから本人照合で直せる。
-CREATE OR REPLACE FUNCTION public.claim_ob_entry(p_name text)
+-- 紐付け前の回答（Googleフォーム）を、本人が自分のものとして呼び出す。照合はアプリの名前で行う。
+-- 取り違え防止: 未紐付け・現役・アプリの名前（空白と全半角を無視）と学年が一致する回答が1件だけのときに限る。係はあとから本人照合で直せる。
+CREATE OR REPLACE FUNCTION public.claim_ob_entry()
 RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE member public.profiles%ROWTYPE; hits uuid[]; key text;
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'entry_forbidden' USING ERRCODE='42501'; END IF;
-  IF p_name IS NULL OR length(btrim(p_name)) NOT BETWEEN 1 AND 100 THEN RAISE EXCEPTION 'entry_invalid'; END IF;
   SELECT * INTO member FROM public.profiles WHERE id=auth.uid() AND approved AND status='active';
   IF NOT FOUND OR member.grade IS NULL THEN RAISE EXCEPTION 'entry_member_missing'; END IF;
   IF EXISTS(SELECT 1 FROM public.ob_meet_entries WHERE meet_key='ob-2026' AND profile_id=auth.uid()) THEN RAISE EXCEPTION 'entry_duplicate' USING ERRCODE='23505'; END IF;
-  key:=regexp_replace(normalize(p_name,NFKC),'[[:space:]　]','','g');
+  key:=regexp_replace(normalize(member.display_name,NFKC),'[[:space:]　]','','g');
   SELECT array_agg(id) INTO hits FROM public.ob_meet_entries
    WHERE meet_key='ob-2026' AND profile_id IS NULL AND grade<>'OB・OG'
      AND regexp_replace(normalize(submitted_name,NFKC),'[[:space:]　]','','g')=key
@@ -172,7 +171,7 @@ BEGIN
   UPDATE public.ob_meet_entries SET profile_id=auth.uid(),revision=revision+1 WHERE id=hits[1] AND profile_id IS NULL;
   RETURN hits[1];
 END $$;
-REVOKE ALL ON FUNCTION public.claim_ob_entry(text) FROM PUBLIC,anon;
-GRANT EXECUTE ON FUNCTION public.claim_ob_entry(text) TO authenticated;
+REVOKE ALL ON FUNCTION public.claim_ob_entry() FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.claim_ob_entry() TO authenticated;
 
 NOTIFY pgrst,'reload schema';
