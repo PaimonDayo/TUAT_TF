@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { entryClient } from "@/lib/ob-entries-db";
+import { isAlumniEntry, matchEntryMember, type ObEntry } from "@/lib/ob-entries";
 
 export async function getObEntries() {
   const client = entryClient(await createClient());
@@ -22,4 +23,18 @@ export async function getMyObEntry(profileId: string) {
     .select("id,events,qualification_marks").eq("meet_key", "ob-2026").eq("profile_id", profileId).limit(1).maybeSingle();
   if (error) return null;
   return data as { id: string; events: string[]; qualification_marks: Record<string, string | null> } | null;
+}
+
+/** ホーム用: まだ誰にも紐付いていない回答のうち、氏名照合で自分が候補に挙がるもの（自動確定はしない）。 */
+export async function getMyObEntryCandidates(profileId: string) {
+  const { entries, members, history } = await getObEntries();
+  const all = members.data ?? [];
+  const confirmed = (history.data ?? []).flatMap((h) => h.profile_id ? [{ submitted_name: h.submitted_name, profile_id: h.profile_id }] : []);
+  return (entries.data ?? []).filter((e: ObEntry) => !e.profile_id && !isAlumniEntry(e))
+    .flatMap((e: ObEntry) => {
+      const match = matchEntryMember(e, all, confirmed);
+      return match.candidates.some((c) => c.id === profileId)
+        ? [{ id: e.id, revision: e.revision, submitted_name: e.submitted_name, grade: e.grade, events: e.events, sure: match.status === "exact" || match.status === "previous" }]
+        : [];
+    });
 }

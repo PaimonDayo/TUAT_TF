@@ -38,6 +38,7 @@ export default async function CompetitionProgramPage({
           members={members.data ?? []}
           viewerId={profile.id}
           openMine={edit === "mine"}
+          openIdentity={edit === "identity"}
           party={party.data ?? []}
           duties={duties.data ?? []}
           dutyRoles={dutyRoles.data ?? []}
