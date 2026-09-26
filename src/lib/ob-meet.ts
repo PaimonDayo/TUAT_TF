@@ -49,12 +49,26 @@ export function dutyCell(entry: Pick<ObEntry, "events"> | undefined, slot: typeo
   const events = entry.events.filter((event) => slot.events.includes(event.slice(2))).map((event) => event.slice(2));
   return events.length ? events.join("・") : "出場登録なし";
 }
+/** 学年の並び順（B1→B4→M1→M2→D1→D3、OB・OG・不明は後ろ）。 */
+const GRADE_ORDER = ["B1", "B2", "B3", "B4", "M1", "M2", "D1", "D2", "D3"];
+export function obGradeRank(grade: string | null): number {
+  const i = GRADE_ORDER.indexOf(entryGrade(grade));
+  return i >= 0 ? i : GRADE_ORDER.length + (grade === "OB・OG" ? 1 : 0);
+}
+/** 学年順（B1から）→氏名順 */
+export function compareByGrade(a: { grade: string | null; name: string }, b: { grade: string | null; name: string }): number {
+  return obGradeRank(a.grade) - obGradeRank(b.grade) || (a.grade ?? "").localeCompare(b.grade ?? "", "ja") || a.name.localeCompare(b.name, "ja");
+}
+/** その時間帯に出場するか（リレーの当日確認・出場登録なし・未確認は出場しない扱い） */
+export function isCompeting(cell: string): boolean {
+  return cell !== "出場登録なし" && cell !== "エントリー未確認" && cell !== "当日確認";
+}
 export function dutyRows(entries: ObEntry[], members: EntryMember[]) {
   entries = entries.filter((entry) => !isAlumniEntry(entry));
   return [
     ...members.filter((m) => entries.some((e) => e.profile_id === m.id)).map((m) => ({ id: m.id, name: m.display_name, grade: entryGrade(m.grade), entry: entries.find((e) => e.profile_id === m.id), linked: true })),
     ...entries.filter((e) => !e.profile_id || !members.some((m) => m.id === e.profile_id)).map((e) => ({ id: e.id, name: e.submitted_name, grade: e.grade, entry: e, linked: false })),
-  ].sort((a,b) => a.grade.localeCompare(b.grade,"ja") || a.name.localeCompare(b.name,"ja"));
+  ].sort(compareByGrade);
 }
 export function partyCounts(responses: ObPartyResponse[]) {
   return { attending: responses.filter((p) => !p.needs_review && p.status === "参加").length,

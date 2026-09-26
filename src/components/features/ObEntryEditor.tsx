@@ -12,7 +12,7 @@ import { saveEntry } from "@/app/(app)/ob-entries/actions";
 import { Card } from "@/components/ui/card";
 import { OB_ENTRY_EVENTS, entryDivision } from "@/lib/ob-entry-edit";
 import { entryGrade, normalizeEntryName, type EntryMember } from "@/lib/entry-identity";
-import { OB_PARTY, PARTY_STATUSES, type ObPartyResponse, type PartyStatus } from "@/lib/ob-meet";
+import { OB_PARTY, PARTY_STATUSES, compareByGrade, type ObPartyResponse, type PartyStatus } from "@/lib/ob-meet";
 import { type ObEntry } from "@/lib/ob-entries";
 
 export function ObEntryEditor({ entry, members, initialProfileId = "", party, parties = [], registered, onEditExisting, onClose }: { entry?: ObEntry; party?: ObPartyResponse; parties?: ObPartyResponse[]; members: EntryMember[]; initialProfileId?: string;
@@ -56,7 +56,7 @@ export function ObEntryEditor({ entry, members, initialProfileId = "", party, pa
       setSelectedParty(answer);
       setPartyStatus(answer?.status??"未回答");
     }} disabled={saving} ariaLabel="追加する部員"
-      options={[{ value: "", label: "部員を選択" }, ...members.map((m) => ({ value: m.id, label: `${entryGrade(m.grade)} ${m.display_name}${registered?.has(m.id) ? "（登録済み・編集）" : ""}` }))]} />}
+      options={[{ value: "", label: "部員を選択" }, ...[...members].sort((a, b) => compareByGrade({ grade: a.grade, name: a.display_name }, { grade: b.grade, name: b.display_name })).map((m) => ({ value: m.id, label: `${entryGrade(m.grade)} ${m.display_name}${registered?.has(m.id) ? "（登録済み・編集）" : ""}` }))]} />}
     {!entry && registered && registered.size > 0 && <p className="text-caption">すでにエントリーしている部員を選ぶと、その人のエントリーの編集に切り替わります。</p>}
     <Card className="space-y-2 p-3.5"><h3 className="text-headline">懇親会の出欠</h3>
       <p className="text-caption">{OB_PARTY.time} {OB_PARTY.venue}<br />参加費 {OB_PARTY.fee.toLocaleString()}円</p>

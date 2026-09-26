@@ -18,7 +18,7 @@ import { ActionMenu } from "@/components/ui/action-menu";
 import { ObPartyView } from "./ObPartyView";
 import type { ObDuty, ObDutyRole } from "@/lib/ob-duty";
 import { ObDutyTable } from "./ObDutyTable";
-import { OB_PROGRAM, type ObPartyResponse } from "@/lib/ob-meet";
+import { OB_PROGRAM, compareByGrade, type ObPartyResponse } from "@/lib/ob-meet";
 import { OB_ENTRY_EVENTS, entryDivision } from "@/lib/ob-entry-edit";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
@@ -42,7 +42,7 @@ export function ObEntryReview({ competition, initial, members, viewerId, history
   const visible = initial.filter((e) => (view !== "mine" || e.profile_id === viewerId) && (view !== "identity" || !isAlumniEntry(e) && (!unlinked || !e.profile_id)) &&
     normalizeEntryName([e.submitted_name, e.grade, ...e.events].join(" ")).toLowerCase().includes(query));
   const eventNames = [...new Set(initial.flatMap((entry) => entry.events))].sort((a, b) => OB_ENTRY_EVENTS.indexOf(a) - OB_ENTRY_EVENTS.indexOf(b));
-  const groups = eventNames.filter((event) => division === "all" || event.startsWith(division)).map((event) => ({ event, entries: visible.filter((entry) => entry.events.includes(event) && normalizeEntryName([entry.submitted_name, entry.grade, event].join(" ")).toLowerCase().includes(query)) })).filter((group) => group.entries.length);
+  const groups = eventNames.filter((event) => division === "all" || event.startsWith(division)).map((event) => ({ event, entries: visible.filter((entry) => entry.events.includes(event) && normalizeEntryName([entry.submitted_name, entry.grade, event].join(" ")).toLowerCase().includes(query)).sort((a, b) => compareByGrade({ grade: a.grade, name: a.submitted_name }, { grade: b.grade, name: b.submitted_name })) })).filter((group) => group.entries.length);
   return <div data-ob-workspace className="space-y-4 px-4 pb-8 pt-2">
     <Card className="p-4">
       <div className="flex items-start justify-between gap-3">
@@ -85,7 +85,7 @@ export function ObEntryReview({ competition, initial, members, viewerId, history
       </section>
       {query && !groups.length && <EmptyState title="条件に合うエントリーはありません" />}
     </div> : visible.length === 0 ? <Card><EmptyState title={view === "mine" ? "自分に紐付いたエントリーはありません" : "条件に合うエントリーはありません"} />
-      {view === "mine" && <p className="px-4 pb-4 text-caption">「本人照合」から自分の回答を確認できます。</p>}</Card> : visible.map((entry) =>
+      {view === "mine" && <p className="px-4 pb-4 text-caption">「本人照合」から自分の回答を確認できます。</p>}</Card> : [...visible].sort((a, b) => compareByGrade({ grade: a.grade, name: a.submitted_name }, { grade: b.grade, name: b.submitted_name })).map((entry) =>
       <EntryCard key={`${entry.id}:${entry.revision}:${view}`} entry={entry} members={members} history={history} party={party.find((p)=>p.entry_id===entry.id)} identity={view === "identity"} />)}
     <p className="text-micro text-muted">変更はアプリ内のみ。Googleフォームには反映されません。</p>
   </div>;

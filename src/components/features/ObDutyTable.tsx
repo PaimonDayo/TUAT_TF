@@ -48,6 +48,6 @@ export function ObDutyTable({entries,members,duties=[],roles=[]}:{entries:ObEntr
       </tr>)}</tbody>
     </table>
   </div></Card>{editing && <ObDutyEditor target={editing} roles={roles.filter(r=>r.slot_time===editing.time&&r.event_name===editing.label)} duties={duties} members={members} onClose={()=>setEditing(null)} />}
-  {selectedEvent && <ObDutyRoleManager time={selectedEvent.time} event={selectedEvent.label} roles={roles.filter(r=>r.slot_time===selectedEvent.time&&r.event_name===selectedEvent.label)} duties={duties} members={members} onClose={()=>setSelectedEvent(null)}/>}
+  {selectedEvent && <ObDutyRoleManager entries={entries} time={selectedEvent.time} event={selectedEvent.label} roles={roles.filter(r=>r.slot_time===selectedEvent.time&&r.event_name===selectedEvent.label)} duties={duties} members={members} onClose={()=>setSelectedEvent(null)}/>}
   </div>;
 }
