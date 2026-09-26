@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { claimMyEntry } from "@/app/(app)/ob-entries/actions";
 import { Pencil } from "lucide-react";
@@ -37,16 +36,15 @@ export function ObMyEntry({ entry, party, me, openEditor = false }: { entry: ObE
   </div>;
 }
 
-/** Googleフォームで回答済みだが、まだアプリの自分と紐付いていない人向け。回答したときの本名で呼び出す。 */
+/** Googleフォームで回答済みだが、まだアプリの自分と紐付いていない人向け。アプリの名前と学年で呼び出す。 */
 function ClaimCard() {
-  const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const router = useRouter();
   const { showToast } = useToast();
   async function claim() {
     setSaving(true);
     try {
-      const result = await claimMyEntry(name);
+      const result = await claimMyEntry();
       if (!result.ok) { showToast(result.message ?? "呼び出せませんでした"); return; }
       showToast("自分の回答を呼び出しました", "success");
       router.refresh();
@@ -55,10 +53,7 @@ function ClaimCard() {
   }
   return <Card className="space-y-2 p-4">
     <p className="text-headline">フォームで回答済みの人</p>
-    <p className="text-caption">回答したときの本名を入力すると、その回答を自分のエントリーとして編集できます（学年も一致する回答に限ります）。</p>
-    <div className="flex gap-2">
-      <Input className="flex-1" value={name} onChange={(e) => setName(e.target.value)} placeholder="例: 農工 太郎" aria-label="回答したときの本名" maxLength={100} disabled={saving} />
-      <Button disabled={saving || !name.trim()} onClick={() => void claim()}>{saving ? "確認中…" : "呼び出す"}</Button>
-    </div>
+    <p className="text-caption">アプリの名前・学年と同じ回答を、自分のエントリーとして呼び出して編集できます。</p>
+    <Button variant="outline" className="w-full" disabled={saving} onClick={() => void claim()}>{saving ? "確認中…" : "自分の回答を呼び出す"}</Button>
   </Card>;
 }
