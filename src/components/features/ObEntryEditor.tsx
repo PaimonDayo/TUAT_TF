@@ -15,7 +15,9 @@ import { entryGrade, normalizeEntryName, type EntryMember } from "@/lib/entry-id
 import { OB_PARTY, PARTY_STATUSES, type ObPartyResponse, type PartyStatus } from "@/lib/ob-meet";
 import { type ObEntry } from "@/lib/ob-entries";
 
-export function ObEntryEditor({ entry, members, initialProfileId = "", party, parties = [], onClose }: { entry?: ObEntry; party?: ObPartyResponse; parties?: ObPartyResponse[]; members: EntryMember[]; initialProfileId?: string; onClose: () => void }) {
+export function ObEntryEditor({ entry, members, initialProfileId = "", party, parties = [], registered, onEditExisting, onClose }: { entry?: ObEntry; party?: ObPartyResponse; parties?: ObPartyResponse[]; members: EntryMember[]; initialProfileId?: string;
+  /** 新規登録で、すでにエントリーがある部員（部員ID→エントリーID）。選ぶとその人の編集に切り替える */
+  registered?: Map<string, string>; onEditExisting?: (entryId: string) => void; onClose: () => void }) {
   function findParty(id: string) {return party ?? parties.find((p)=>!p.entry_id&&!p.needs_review&&normalizeEntryName(p.submitted_name)===normalizeEntryName(members.find((m)=>m.id===id)?.display_name??""));}
   const [selectedParty,setSelectedParty]=useState(()=>findParty(initialProfileId));
   const [partyStatus, setPartyStatus] = useState<PartyStatus>(selectedParty?.status ?? "未回答");
@@ -47,12 +49,15 @@ export function ObEntryEditor({ entry, members, initialProfileId = "", party, pa
     <section className="space-y-3" aria-label="エントリー編集">
     {entry && <p className="text-headline">{entry.grade} {entry.submitted_name}</p>}
     {!entry && <Select value={profileId} onValueChange={(value)=>{
+      const existing = registered?.get(value);
+      if (existing && onEditExisting) { onEditExisting(existing); return; }
       setProfileId(value);
       const answer=findParty(value);
       setSelectedParty(answer);
       setPartyStatus(answer?.status??"未回答");
     }} disabled={saving} ariaLabel="追加する部員"
-      options={[{ value: "", label: "部員を選択" }, ...members.map((m) => ({ value: m.id, label: `${entryGrade(m.grade)} ${m.display_name}` }))]} />}
+      options={[{ value: "", label: "部員を選択" }, ...members.map((m) => ({ value: m.id, label: `${entryGrade(m.grade)} ${m.display_name}${registered?.has(m.id) ? "（登録済み・編集）" : ""}` }))]} />}
+    {!entry && registered && registered.size > 0 && <p className="text-caption">すでにエントリーしている部員を選ぶと、その人のエントリーの編集に切り替わります。</p>}
     <Card className="space-y-2 p-3.5"><h3 className="text-headline">懇親会の出欠</h3>
       <p className="text-caption">{OB_PARTY.time} {OB_PARTY.venue}<br />参加費 {OB_PARTY.fee.toLocaleString()}円</p>
       {selectedParty && !entry && <p className="text-caption">懇親会の既存回答：{selectedParty.group_label} {selectedParty.submitted_name}。同じ本人であることを確認して保存してください。</p>}
