@@ -163,9 +163,18 @@ function handleFetchAllRaw() {
 
 // 部員1人だけを軽量取得（write-through保存直後の反映確認・個人の記録画面用。
 // 100人規模でも毎回全員分(fetchAllRaw)を読まずに済む）
+function findMemberSheet(memberName) {
+  const ss = getSpreadsheet();
+  const exact = ss.getSheetByName(memberName);
+  if (exact) return exact;
+  const normalized = memberName.normalize('NFC').trim();
+  const matches = ss.getSheets().filter(sheet => sheet.getName().normalize('NFC').trim() === normalized);
+  if (matches.length > 1) throw new Error('同じ名前のシートが複数あります。タブ名を確認してください。');
+  return matches[0] || null;
+}
 function handleFetchMember(memberName) {
   if (!memberName) return createJsonResponse({ error: 'memberName は必須です。' });
-  const sheet = getSpreadsheet().getSheetByName(memberName);
+  const sheet = findMemberSheet(memberName);
   if (!sheet) return createJsonResponse({ error: 'シート「' + memberName + '」が見つかりません。' });
   const member = readMemberSheet(sheet);
   if (!member) return createJsonResponse({ error: '見出し行（日付）が見つかりません。' });
@@ -179,7 +188,7 @@ function writeCellsRecord(data) {
   const cells = data.cells || {};
   if (!memberName || !date) throw new Error('memberName と date は必須です。');
 
-  const sheet = getSpreadsheet().getSheetByName(memberName);
+  const sheet = findMemberSheet(memberName);
   if (!sheet) throw new Error('シート「' + memberName + '」が見つかりません。');
 
   const values = sheet.getDataRange().getValues();
@@ -303,7 +312,7 @@ function writeReplyRecord(data) {
   const sourceId = (data.sourceId || '').toString().replace(/[^A-Za-z0-9_-]/g, '');
   if (!memberName || !date || !text) throw new Error('memberName, date, text は必須です。');
 
-  const sheet = getSpreadsheet().getSheetByName(memberName);
+  const sheet = findMemberSheet(memberName);
   if (!sheet) throw new Error('シート「' + memberName + '」が見つかりません。');
 
   const values = sheet.getDataRange().getValues();

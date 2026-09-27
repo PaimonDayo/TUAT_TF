@@ -8,6 +8,9 @@ $name='TUAT PC Jobs'
 if(Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue){throw 'Existing task requires review'}
 $backend=Get-ScheduledTask -TaskName 'TUAT PC Backend Temporary'
 if($backend.State -ne 'Running'){throw 'Existing backend must be running'}
+$account=$backend.Principal.UserId
+& icacls.exe $config.stateDirectory /grant:r "${account}:(OI)(CI)(F)" 'SYSTEM:(OI)(CI)(F)' /T /Q | Out-Null
+if($LASTEXITCODE -ne 0){throw 'Private state permissions failed'}
 $principal=New-ScheduledTaskPrincipal -UserId $backend.Principal.UserId -LogonType S4U -RunLevel Highest
 $script=Join-Path $PSScriptRoot 'task.ps1'
 $action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -ExecutionPolicy Bypass -File "'+$script+'" -NodePath "'+$NodePath+'" -ConfigPath "'+$ConfigPath+'"') -WorkingDirectory ([IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..')))

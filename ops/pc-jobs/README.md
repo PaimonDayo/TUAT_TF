@@ -1,15 +1,14 @@
-# PC定期処理（2026-09-27、準備中）
+# PC定期処理（2026-09-27、稼働中）
 
 現行Nextアプリを127.0.0.1だけで起動し、既存APIを同じ頻度で呼ぶ。画面はVercelを維持する。
 
 | 処理 | 日本時間 | API |
 | --- | --- | --- |
 | 記録同期 | 毎日0時 | POST /api/sheets/sync |
-
 | 大会同期 | 5分ごと | POST /api/competition-program/sync |
 | 期限切れ整理 | 毎日12:17 | GET /api/cron/cleanup-stories |
 
-**本番はまだVercelの4cron。** PC候補は無効。最新検証と不足設定は [9/27記録](../../docs/OPERATIONS-2026-09-27.md)。古い隔離候補や合成buildを本番へ使わない。
+**Vercel cronは0件。TUAT PC Jobsが3処理を実行中。** 15:32 JSTに切替、アプリ固定リリースはffbbd96。記録同期・期限切れ整理の初回実行と大会同期の定刻実行が成功。最新検証は [9/27記録](../../docs/OPERATIONS-2026-09-27.md)。古い隔離候補や合成buildを本番へ使わない。
 
 ## 準備と検証
 
