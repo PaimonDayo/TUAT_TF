@@ -6,16 +6,22 @@
 // - クラウドへの書き込みにはヘッダー x-tuat-mirror: 1 を付ける（通知・プッシュなどのトリガーが動かないように。
 //   migration 20260926030000）。
 // - 追加の npm パッケージに頼らない（node_modules が消えても動くように）。
+// - クラウドの転送量（無料枠 月5GB）を使わないよう、前回クラウドへ書いた内容の要約を
+//   .contingency/backend/cloud-mirror-state.json に覚えてPCと比べる。クラウドを丸ごと読んで
+//   確かめ直すのは1日1回（または --full）。アカウントの突き合わせは1時間に1回。
 // - 写す前に、PCが止まっている間にクラウドへ入った書き込み（failover_changes、migration 20260926050000）を
 //   PCへ書き戻す。書き戻せていない行は写しで上書き・削除しない。
 //
 // 使い方: node ops/laptop/cloud-mirror.mjs          … 差分を数えるだけ（書き込まない）
 //         node ops/laptop/cloud-mirror.mjs --apply  … クラウドへ反映する
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, renameSync } from "node:fs";
 import { resolve } from "node:path";
+import { createHash } from "node:crypto";
 
 const WINDOW_DAYS = 3;
+const FULL_CHECK_MS = 24 * 3600_000;
+const AUTH_CHECK_MS = 3600_000;
 const PAGE = 1000;
 const BATCH = 500;
 const root = resolve(import.meta.dirname, "../../.contingency");
@@ -68,12 +74,24 @@ async function readAll(side, table, pk, filter = "") {
 }
 
 const keyOf = (pk) => (row) => pk.map((c) => String(row[c])).join("|");
+const pkOf = (pk, row) => Object.fromEntries(pk.map((c) => [c, row[c]]));
+
+const STATE_FILE = resolve(root, "backend/cloud-mirror-state.json");
+function loadState() {
+  try { return JSON.parse(readFileSync(STATE_FILE, "utf8")); } catch { return null; }
+}
+function saveState(state) {
+  const tmp = `${STATE_FILE}.tmp`;
+  writeFileSync(tmp, JSON.stringify(state));
+  renameSync(tmp, STATE_FILE);
+}
 const inList = (values) => `(${values.map((v) => `"${String(v).replaceAll('"', '\\"')}"`).join(",")})`;
 
 // クラウド側のトリガーが値を変える列は、差分の判定に使わない（毎回書き直さないように）。
 const VOLATILE = new Set(["updated_at", "synced_at", "pending_sheet_push", "likes_count"]);
 const comparable = (row) =>
   JSON.stringify(Object.keys(row).sort().filter((k) => !VOLATILE.has(k)).map((k) => [k, row[k]]));
+const digest = (row) => createHash("sha1").update(comparable(row)).digest("base64");
 
 const today = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10); // JST
 const windowStartDate = new Date(Date.parse(`${today}T00:00:00Z`) - WINDOW_DAYS * 86400_000).toISOString().slice(0, 10);
@@ -266,10 +284,11 @@ async function readChanges() {
 }
 
 /** クラウドへ入った書き込みを古い順にPCへ書く。成功した記録は消し、失敗は回数と理由を残す。 */
-async function writeBack(apply) {
-  const result = { authUsersCreated: await syncAuthUsersBack(apply), pending: 0, applied: 0, failed: 0 };
+async function writeBack(apply, authDue) {
   const changes = await readChanges();
-  result.pending = changes.length;
+  // 停止中に初めてログインした部員がいれば（クラウドで名簿が追加されていれば）、先にPCへアカウントを作る
+  const newMembers = changes.some((c) => c.table_name === "profiles" && c.op === "INSERT");
+  const result = { authUsersCreated: authDue || newMembers ? await syncAuthUsersBack(apply) : 0, pending: changes.length, applied: 0, failed: 0 };
   if (!apply) return result;
   for (const change of changes) {
     let outcome;
@@ -290,31 +309,51 @@ async function writeBack(apply) {
 
 async function main() {
   const apply = process.argv.includes("--apply");
-  const writeback = await writeBack(apply);
+  const state = loadState();
+  const now = Date.now();
+  const full = process.argv.includes("--full") || !state || now - (state.fullCheckedAt ?? 0) > FULL_CHECK_MS;
+  const authDue = full || now - (state?.authCheckedAt ?? 0) > AUTH_CHECK_MS;
+  const writeback = await writeBack(apply, authDue);
   // 書き戻しの途中や後にクラウドへ入った書き込みは、次の回に書き戻す。それまで写しで上書き・削除しない。
   const pending = new Map();
   for (const change of await readChanges()) {
     if (!pending.has(change.table_name)) pending.set(change.table_name, new Set());
     pending.get(change.table_name).add(JSON.stringify(change.pk));
   }
-  const summary = { apply, windowStartDate, writeback, authUsersCreated: await syncAuthUsers(apply), tables: {} };
+  const summary = { apply, full, windowStartDate, writeback, authUsersCreated: authDue ? await syncAuthUsers(apply) : 0, tables: {} };
+  const nextTables = {};
   const ctx = { ids: {}, recentScheduleIds: [] };
   const plans = [];
 
   for (const spec of TABLES) {
     const filter = typeof spec.filter === "function" ? spec.filter(ctx) : undefined;
     const pcRows = await readFiltered(pc, spec, filter);
-    const cloudRows = await readAll(cloud, spec.table, spec.pk);
     const key = keyOf(spec.pk);
+    // クラウドの今の中身: 1日1回は実際に読み、それ以外は前回書いた内容の要約（{key: [pk, digest]}）を使う
+    let known = !full ? state?.tables?.[spec.table] : undefined;
+    let cloudCount;
+    if (!known) {
+      const cloudRows = await readAll(cloud, spec.table, spec.pk);
+      known = Object.fromEntries(cloudRows.map((r) => [key(r), [pkOf(spec.pk, r), digest(r)]]));
+      cloudCount = cloudRows.length;
+    }
     const pcByKey = new Map(pcRows.map((r) => [key(r), r]));
-    const cloudByKey = new Map(cloudRows.map((r) => [key(r), r]));
     const held = pending.get(spec.table);
-    const isHeld = (r) => held?.has(JSON.stringify(Object.fromEntries(spec.pk.map((c) => [c, r[c]])))) ?? false;
-    const upserts = pcRows.filter((r) => {
-      const current = cloudByKey.get(key(r));
-      return !isHeld(r) && (!current || comparable(current) !== comparable(r));
-    });
-    const deletes = cloudRows.filter((r) => !pcByKey.has(key(r)) && !isHeld(r));
+    const isHeld = (pkValues) => held?.has(JSON.stringify(pkValues)) ?? false;
+    const upserts = pcRows.filter((r) => !isHeld(pkOf(spec.pk, r)) && known[key(r)]?.[1] !== digest(r));
+    const deletes = Object.entries(known)
+      .filter(([k, [pkValues]]) => !pcByKey.has(k) && !isHeld(pkValues))
+      .map(([, [pkValues]]) => pkValues);
+    // 反映後のクラウドの要約: PCの行（書き戻し待ちの行は前の値のまま）
+    const next = {};
+    for (const r of pcRows) {
+      const k = key(r);
+      const pkValues = pkOf(spec.pk, r);
+      if (!isHeld(pkValues)) next[k] = [pkValues, digest(r)];
+      else if (known[k]) next[k] = known[k];
+    }
+    for (const [k, entry] of Object.entries(known)) if (!pcByKey.has(k) && isHeld(entry[0])) next[k] = entry;
+    nextTables[spec.table] = next;
     plans.push({ spec, upserts, deletes });
     ctx.ids[spec.table] = pcRows.map((r) => r.id).filter(Boolean);
     if (spec.table === "practice_schedules") {
@@ -322,7 +361,7 @@ async function main() {
         .filter((r) => (r.end_date ?? r.schedule_date) >= windowStartDate)
         .map((r) => r.id);
     }
-    summary.tables[spec.table] = { pc: pcRows.length, cloud: cloudRows.length, upsert: upserts.length, delete: deletes.length };
+    summary.tables[spec.table] = { pc: pcRows.length, cloud: cloudCount ?? "要約", upsert: upserts.length, delete: deletes.length };
   }
 
   if (apply) {
@@ -349,6 +388,13 @@ async function main() {
         });
       }
     }
+  }
+  if (apply) {
+    saveState({
+      fullCheckedAt: full ? now : state.fullCheckedAt,
+      authCheckedAt: authDue ? now : state.authCheckedAt,
+      tables: nextTables,
+    });
   }
   console.log(JSON.stringify(summary, null, 1));
 }
