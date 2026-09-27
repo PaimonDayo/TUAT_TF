@@ -18,6 +18,7 @@
 import { readFileSync, writeFileSync, renameSync } from "node:fs";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
+import { OB_TABLES, changesPath } from './cloud-mirror-ob.mjs';
 
 const WINDOW_DAYS = 3;
 const FULL_CHECK_MS = 24 * 3600_000;
@@ -109,6 +110,7 @@ const TABLES = [
   { table: "venues", pk: ["id"] },
   { table: "competitions", pk: ["id"] },
   { table: "competition_events", pk: ["name"] },
+  ...OB_TABLES,
   { table: "schedule_sheets", pk: ["id"] },
   { table: "practice_schedules", pk: ["id"] },
   { table: "practice_menus", pk: ["id"] },
@@ -274,10 +276,10 @@ async function syncAuthUsersBack(apply) {
   return missing.length;
 }
 
-async function readChanges() {
+async function readChanges(includeBlocked = false) {
   const rows = [];
   for (let offset = 0; ; offset += PAGE) {
-    const page = await (await request(cloud, `/rest/v1/failover_changes?select=*&attempts=lt.${MAX_ATTEMPTS}&order=id.asc&limit=${PAGE}&offset=${offset}`)).json();
+    const page = await (await request(cloud, changesPath(offset, PAGE, MAX_ATTEMPTS, includeBlocked))).json();
     rows.push(...page);
     if (page.length < PAGE) return rows;
   }
@@ -316,7 +318,7 @@ async function main() {
   const writeback = await writeBack(apply, authDue);
   // 書き戻しの途中や後にクラウドへ入った書き込みは、次の回に書き戻す。それまで写しで上書き・削除しない。
   const pending = new Map();
-  for (const change of await readChanges()) {
+  for (const change of await readChanges(true)) {
     if (!pending.has(change.table_name)) pending.set(change.table_name, new Set());
     pending.get(change.table_name).add(JSON.stringify(change.pk));
   }

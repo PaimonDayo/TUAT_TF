@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "enabled": false,
+  "releaseDirectory": "D:\\TUAT_TF\\.contingency\\pc-jobs-release",
+  "stateDirectory": "D:\\TUAT_TF\\.contingency\\pc-jobs-state",
+  "backendDirectory": "D:\\TUAT_TF\\.contingency\\backend",
+  "environmentFile": "D:\\TUAT_TF\\.contingency\\pc-jobs.env",
+  "releaseCommit": "REPLACE_WITH_VERIFIED_40_CHARACTER_COMMIT",
+  "activateAt": "REPLACE_WITH_APPROVED_FUTURE_UTC_BOUNDARY",
+  "port": 3112
+}

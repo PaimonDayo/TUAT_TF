@@ -30,6 +30,8 @@ export async function POST(request: Request) {
   if (!secret || !timingSafeEqualString(authHeader, `Bearer ${secret}`)) {
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
+  const body = await request.json().catch(() => ({}));
+  const dryRun = body?.dryRun === true;
 
   const admin = createAdminClient();
   const { data: sheets, error: sheetsError } = await admin
@@ -47,7 +49,7 @@ export async function POST(request: Request) {
   const results: Record<string, unknown>[] = [];
   for (const sheet of (sheets ?? []) as ScheduleSheet[]) {
     try {
-      const summary = await syncOneSheet(admin, sheet, venues);
+      const summary = await syncOneSheet(admin, sheet, venues, dryRun);
       results.push({ sheetId: sheet.id, kind: sheet.kind, ...summary });
     } catch (err) {
       results.push({
@@ -58,13 +60,14 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, results });
+  return NextResponse.json({ ok: results.every(result => !result.error), dryRun, results });
 }
 
 async function syncOneSheet(
   admin: ReturnType<typeof createAdminClient>,
   sheet: ScheduleSheet,
   venues: VenueRow[],
+  dryRun = false,
 ) {
   const csvUrl = googleSheetCsvUrl(sheet.csv_url!);
   const response = await fetch(csvUrl, { cache: "no-store" });
@@ -92,6 +95,7 @@ async function syncOneSheet(
     venues,
     includeDeletions: false,
   });
+  if (dryRun) return { additions: preview.additions.length, updates: preview.updates.length };
 
   let inserted = 0;
   let updated = 0;
