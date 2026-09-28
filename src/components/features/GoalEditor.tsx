@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
+import { FormModal, FormModalFooter, FormDraftGuard } from "@/components/ui/form-modal";
 
 /**
  * 目標（自由入力）の編集ボタン。目標ページ（/goals）の自由入力カードに置く。
@@ -36,24 +36,28 @@ export function GoalEditor({
   }
 
   async function save() {
-    setSaving(true);
-    setError(null);
-    const supabase = createClient();
-    const result = await safeUpdate(
-      supabase,
-      "profiles",
-      { goal: draft.trim() || null },
-      { id: userId },
-    );
-    if (!result.ok) {
-      setError(safeUpdateMessage(result.reason));
+    try {
+      setSaving(true);
+      setError(null);
+      const supabase = createClient();
+      const result = await safeUpdate(
+        supabase,
+        "profiles",
+        { goal: draft.trim() || null },
+        { id: userId },
+      );
+      if (!result.ok) {
+        setError(safeUpdateMessage(result.reason));
+        setSaving(false);
+        return;
+      }
+      setGoal(draft.trim());
       setSaving(false);
-      return;
-    }
-    setGoal(draft.trim());
-    setSaving(false);
-    setOpen(false);
-    router.refresh();
+      setOpen(false);
+      router.refresh();
+    } catch {
+      setError("保存できませんでした。もう一度お試しください");
+    } finally { setSaving(false); }
   }
 
   return (
@@ -68,17 +72,18 @@ export function GoalEditor({
       </button>
 
       <FormModal open={open} onOpenChange={setOpen} title="目標を設定" autoFocus={false}>
-        <div className="space-y-4 pb-4">
+        <FormDraftGuard dirty={draft !== goal} busy={saving} onSave={save} />
+        <fieldset disabled={saving} className="min-w-0 space-y-4 pb-4">
           <div>
-            <p className="section-label mb-1.5">目標（自由入力）</p>
-            <Textarea
+            <label htmlFor="free-goal" className="section-label mb-1.5 block">目標（自由入力）</label>
+            <Textarea id="free-goal" aria-describedby="free-goal-help"
               rows={3}
               placeholder="例: 関カレ出場 / 5000m 14分台 / 自己ベスト更新"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               maxLength={100}
             />
-            <p className="text-micro mt-1">プロフィールに表示され、何に向けて頑張っているか共有できます。</p>
+            <p id="free-goal-help" className="text-micro mt-1">プロフィールに表示され、何に向けて頑張っているか共有できます。</p>
           </div>
           {error && <p className="text-caption text-danger text-center">{error}</p>}
           <FormModalFooter>
@@ -86,7 +91,7 @@ export function GoalEditor({
               {saving ? "保存中…" : "保存する"}
             </Button>
           </FormModalFooter>
-        </div>
+        </fieldset>
       </FormModal>
     </>
   );

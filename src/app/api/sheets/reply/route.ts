@@ -17,25 +17,35 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({}));
   const recordId = typeof body?.recordId === "string" ? body.recordId : "";
-  const text = (body?.text ?? "").toString().trim();
   const commentId =
     typeof body?.commentId === "string" &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.commentId)
       ? body.commentId
       : undefined;
-  if (!recordId || !text) {
+  if (!recordId || !commentId) {
     return NextResponse.json({ ok: false, error: "bad request" }, { status: 400 });
   }
 
-  const admin = createAdminClient();
+  // Resolve content through the caller's RLS before using privileged sheet access.
+  const { data: comment, error: commentError } = await supabase.from("comments")
+    .select("content,sheet_reply_index")
+    .eq("id", commentId).eq("user_id", user.id)
+    .eq("target_type", "record").eq("target_id", recordId).maybeSingle();
+  if (commentError) return NextResponse.json({ ok: false, error: "コメントを確認できませんでした" }, { status: 503 });
+  if (!comment) return NextResponse.json({ ok: false, error: "コメントが見つかりません" }, { status: 404 });
+  if (comment.sheet_reply_index !== null) return NextResponse.json({ ok: true, replyIndex: comment.sheet_reply_index });
+  const text = comment.content.trim();
+  if (!text) return NextResponse.json({ ok: false, error: "コメントが空です" }, { status: 400 });
 
   // 記録 → 作者・日付
-  const { data: rec } = await admin
+  const { data: rec, error: recordError } = await supabase
     .from("practice_records")
     .select("user_id, recorded_date")
     .eq("id", recordId)
     .maybeSingle();
-  if (!rec) return NextResponse.json({ ok: true, skipped: "no record" });
+  if (recordError) return NextResponse.json({ ok: false, error: "記録を確認できませんでした" }, { status: 503 });
+  if (!rec) return NextResponse.json({ ok: false, error: "記録が見つかりません" }, { status: 404 });
+  const admin = createAdminClient();
 
   // 作者がシート連携していなければ何もしない
   const { data: author } = await admin
@@ -63,13 +73,18 @@ export async function POST(request: Request) {
       replyText,
       commentId,
     );
-    if (commentId && replyIndex != null) {
-      await admin
+    if (replyIndex == null) throw new Error("返信を書き込む行が見つかりませんでした");
+    if (replyIndex != null) {
+      const { data: updated, error } = await admin
         .from("comments")
         .update({ sheet_reply_index: replyIndex })
         .eq("id", commentId)
+        .eq("user_id", user.id)
+        .eq("content", comment.content)
         .eq("target_type", "record")
-        .eq("target_id", recordId);
+        .eq("target_id", recordId).select("id").maybeSingle();
+      if (error) throw new Error("返信の同期状態を保存できませんでした。もう一度お試しください");
+      if (!updated) return NextResponse.json({ ok: false, error: "送信中にコメントが変更されました。内容を確認してください" }, { status: 409 });
     }
     return NextResponse.json({ ok: true, replyIndex });
   } catch (err) {

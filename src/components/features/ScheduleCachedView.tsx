@@ -1,5 +1,6 @@
 "use client";
 
+import { RefreshStatus } from "@/components/ui/refresh-status";
 import { useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ScheduleView } from "@/components/features/ScheduleView";
@@ -23,7 +24,7 @@ async function loadSchedulePageData(signal: AbortSignal): Promise<SchedulePageDa
 export function ScheduleCachedView({ initialData, openId }: { initialData: SchedulePageData; openId?: string }) {
   const queryClient = useQueryClient();
   const queryKey = ["schedule", initialData.userId];
-  const { data } = useQuery({
+  const { data, isError, isFetching, refetch } = useQuery({
     queryKey,
     queryFn: ({ signal }) => loadSchedulePageData(signal),
     initialData,
@@ -54,5 +55,5 @@ export function ScheduleCachedView({ initialData, openId }: { initialData: Sched
     };
   }, [data, menuQuery.data]);
 
-  return <ScheduleView {...viewData} openId={openId} />;
+  return <><RefreshStatus failed={isError} busy={isFetching} retry={() => { void refetch(); }} /><RefreshStatus label="中長距離メニュー" hasData={!!menuQuery.data || !!data.middleLongMenuSnapshot} failed={menuQuery.isError} busy={menuQuery.isFetching} retry={() => { void menuQuery.refetch(); }} /><ScheduleView {...viewData} openId={openId} /></>;
 }

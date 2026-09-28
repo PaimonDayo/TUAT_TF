@@ -6,7 +6,7 @@ import { MapPin, Plus, SlidersHorizontal } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Card } from "@/components/ui/card";
-import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
+import { FormModal, FormModalFooter, useFormDraft } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -182,56 +182,64 @@ function VenueForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useFormDraft({
+    dirty: JSON.stringify([name, short, access, fee, url, pinned]) !== JSON.stringify([venue?.name ?? "", venue?.short ?? "", venue?.access ?? "", venue?.fee ?? "", venue?.url ?? "", venue?.pinned ?? true]),
+    busy: saving, onSave: submit,
+  });
   async function submit() {
-    if (!name.trim()) {
-      setError("会場名を入力してください");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    const supabase = createClient();
-    const payload = {
-      name: name.trim(),
-      short: short.trim() || null,
-      access: access.trim() || null,
-      fee: fee.trim() || null,
-      url: url.trim() || null,
-      pinned,
-      sort,
-    };
-    const { data, error } = venue
-      ? await supabase.from("venues").update(payload).eq("id", venue.id).select().single()
-      : await supabase.from("venues").insert(payload).select().single();
+    try {
+      if (!name.trim()) {
+        setError("会場名を入力してください");
+        return;
+      }
+      setSaving(true);
+      setError(null);
+      const supabase = createClient();
+      const payload = {
+        name: name.trim(),
+        short: short.trim() || null,
+        access: access.trim() || null,
+        fee: fee.trim() || null,
+        url: url.trim() || null,
+        pinned,
+        sort,
+      };
+      const { data, error } = venue
+        ? await supabase.from("venues").update(payload).eq("id", venue.id).select().single()
+        : await supabase.from("venues").insert(payload).select().single();
 
-    if (error || !data) {
+      if (error || !data) {
+        setError("保存できませんでした。もう一度お試しください");
+        setSaving(false);
+        return;
+      }
+      onSaved(data as VenueRow);
+    } catch {
       setError("保存できませんでした。もう一度お試しください");
-      setSaving(false);
-      return;
-    }
-    onSaved(data as VenueRow);
+    } finally { setSaving(false); }
   }
 
   return (
-    <div className="space-y-4 pb-4">
+    <fieldset disabled={saving} className="min-w-0 space-y-4 pb-4">
       <div>
-        <p className="section-label mb-1.5">会場名</p>
-        <Input placeholder="例: 府中市民陸上競技場" value={name} onChange={(e) => setName(e.target.value)} />
+        <label htmlFor="venue-name" className="section-label mb-1.5 block">会場名</label>
+        <Input placeholder="例: 府中市民陸上競技場" id="venue-name" value={name} onChange={(e) => setName(e.target.value)} />
       </div>
       <div>
-        <p className="section-label mb-1.5">略称（任意・カードに表示）</p>
-        <Input placeholder="例: 府中" value={short} onChange={(e) => setShort(e.target.value)} maxLength={6} />
+        <label htmlFor="venue-short" className="section-label mb-1.5 block">略称（任意・カードに表示）</label>
+        <Input placeholder="例: 府中" id="venue-short" value={short} onChange={(e) => setShort(e.target.value)} maxLength={6} />
       </div>
       <div>
-        <p className="section-label mb-1.5">アクセス（任意・改行で複数）</p>
-        <Textarea rows={3} placeholder={"例: 北府中駅から徒歩7分\n府中駅から徒歩15分"} value={access} onChange={(e) => setAccess(e.target.value)} />
+        <label htmlFor="venue-access" className="section-label mb-1.5 block">アクセス（任意・改行で複数）</label>
+        <Textarea rows={3} placeholder={"例: 北府中駅から徒歩7分\n府中駅から徒歩15分"} id="venue-access" value={access} onChange={(e) => setAccess(e.target.value)} />
       </div>
       <div>
-        <p className="section-label mb-1.5">参加費（任意）</p>
-        <Input placeholder="例: 100円" value={fee} onChange={(e) => setFee(e.target.value)} />
+        <label htmlFor="venue-fee" className="section-label mb-1.5 block">参加費（任意）</label>
+        <Input placeholder="例: 100円" id="venue-fee" value={fee} onChange={(e) => setFee(e.target.value)} />
       </div>
       <div>
-        <p className="section-label mb-1.5">地図URL（任意）</p>
-        <Input placeholder="https://maps…" value={url} onChange={(e) => setUrl(e.target.value)} inputMode="url" />
+        <label htmlFor="venue-url" className="section-label mb-1.5 block">地図URL（任意）</label>
+        <Input placeholder="https://maps…" id="venue-url" value={url} onChange={(e) => setUrl(e.target.value)} inputMode="url" />
       </div>
       <Toggle label="予定作成に表示" checked={pinned} onChange={() => setPinned((v) => !v)} />
       {error && <p className="text-caption text-danger text-center">{error}</p>}
@@ -240,6 +248,6 @@ function VenueForm({
           <MapPin size={16} /> {saving ? "保存中…" : venue ? "更新する" : "追加する"}
         </Button>
       </FormModalFooter>
-    </div>
+    </fieldset>
   );
 }

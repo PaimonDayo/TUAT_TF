@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { List, UserCheck } from "lucide-react";
 import { RecordCard } from "@/components/cards/RecordCard";
 import { TweetCard } from "@/components/cards/TweetCard";
@@ -11,6 +11,7 @@ import { CompactFeedRow } from "@/components/features/CompactFeedRow";
 import { SeenDivider, UnreadHeading } from "@/components/features/NewPostMarkers";
 import { FAVORITE_CHANGE_EVENT } from "@/components/features/FavoriteButton";
 import { createClient } from "@/lib/supabase/client";
+import { nextFeedCursor, type FeedCursor } from "@/lib/feed-pagination";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SIMPLE_BLOCK_ITEMS, matchSimpleBlock } from "@/lib/constants";
 import { jstToday } from "@/lib/date";
@@ -28,10 +29,6 @@ import type { BlockViewDefault, CommentAuthor, FeedItem } from "@/types";
 
 const PAGE = 30;
 const FILTER_AUTOLOAD_PAGES = 5;
-type FeedCursor = {
-  record?: { createdAt: string; id: string };
-  tweet?: { createdAt: string; id: string };
-} | null;
 
 const INTERACTIVE_FEED_SELECTOR = [
   "a",
@@ -88,16 +85,7 @@ export function TimelineView({
     staleTime: 60_000,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
-    getNextPageParam: (lastPage): FeedCursor | undefined => {
-      if (lastPage.length < PAGE) return undefined;
-      const lastRecord = lastPage.findLast((item) => item.kind === "record");
-      const lastTweet = lastPage.findLast((item) => item.kind === "tweet");
-      if (!lastRecord && !lastTweet) return undefined;
-      return {
-        record: lastRecord ? { createdAt: lastRecord.created_at, id: lastRecord.id } : undefined,
-        tweet: lastTweet ? { createdAt: lastTweet.created_at, id: lastTweet.id } : undefined,
-      };
-    },
+    getNextPageParam: (lastPage) => nextFeedCursor(lastPage, PAGE),
   });
   // A server refresh must replace the old first page too. Otherwise initialData
   // is ignored on revisits, leaving the timeline stale despite another DB read.
@@ -117,7 +105,16 @@ export function TimelineView({
   );
   const [block, setBlock] = useState<string>(initialBlock);
   const [favOnly, setFavOnly] = useState(false);
-  const [currentFavoriteIds, setCurrentFavoriteIds] = useState(favoriteIds);
+  const { data: currentFavoriteIds } = useQuery({
+    queryKey: ["favorites", currentUser.id],
+    queryFn: async () => {
+      const { data, error } = await createClient().from("favorites").select("favorite_user_id").eq("user_id", currentUser.id);
+      if (error) throw error;
+      return (data ?? []).map((row) => row.favorite_user_id as string);
+    },
+    initialData: favoriteIds, initialDataUpdatedAt: initialFetchedAt,
+    staleTime: 60_000,
+  });
   const filterAutoLoadCount = useRef(0);
   const { compact, toggleCompact, toggleExpanded, isCompact } = useFeedDisplay({
     initialCompact,
@@ -125,28 +122,19 @@ export function TimelineView({
   });
 
   useEffect(() => {
-    let active = true;
-    const supabase = createClient();
-    void supabase
-      .from("favorites")
-      .select("favorite_user_id")
-      .eq("user_id", currentUser.id)
-      .then(({ data }) => {
-        if (active) setCurrentFavoriteIds((data ?? []).map((row) => row.favorite_user_id as string));
-      });
-
     function handleFavoriteChange(event: Event) {
       const { targetId, favorited } = (event as CustomEvent<{ targetId: string; favorited: boolean }>).detail;
-      setCurrentFavoriteIds((ids) => favorited
-        ? Array.from(new Set([...ids, targetId]))
-        : ids.filter((id) => id !== targetId));
+      queryClient.setQueryData<string[]>(["favorites", currentUser.id], (ids = []) => favorited
+        ? Array.from(new Set([...ids, targetId])) : ids.filter((id) => id !== targetId));
     }
     window.addEventListener(FAVORITE_CHANGE_EVENT, handleFavoriteChange);
-    return () => {
-      active = false;
-      window.removeEventListener(FAVORITE_CHANGE_EVENT, handleFavoriteChange);
-    };
-  }, [currentUser.id]);
+    return () => window.removeEventListener(FAVORITE_CHANGE_EVENT, handleFavoriteChange);
+  }, [currentUser.id, queryClient]);
+  useEffect(() => {
+    const key = ["favorites", currentUser.id];
+    if ((queryClient.getQueryState(key)?.dataUpdatedAt ?? 0) >= initialFetchedAt) return;
+    queryClient.setQueryData(key, favoriteIds, { updatedAt: initialFetchedAt });
+  }, [favoriteIds, initialFetchedAt, currentUser.id, queryClient]);
 
   const favSet = useMemo(() => new Set(currentFavoriteIds), [currentFavoriteIds]);
 

@@ -9,7 +9,7 @@ import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { FormModalFooter } from "@/components/ui/form-modal";
+import { FormModalFooter, useFormDraft } from "@/components/ui/form-modal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar } from "@/components/common/Avatar";
 import { AvatarCropEditor } from "@/components/features/AvatarCropEditor";
@@ -62,6 +62,11 @@ export function ProfileEditForm({
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useFormDraft({
+    dirty: JSON.stringify([name, blocks, events, grade, sheetName]) !== JSON.stringify([profile.display_name ?? "", normalizeProfileBlocks(profile.blocks), profile.events ?? [], profile.grade, profile.sheet_name ?? ""]),
+    busy: saving || processingAvatar || loadingHeader || signingOut,
+    onSave: save,
+  });
   const valid = name.trim() && blocks.length > 0 && grade;
 
   // スプシ連携用：部員シート名の候補を取得（失敗しても編集は続行できる）
@@ -215,94 +220,102 @@ export function ProfileEditForm({
   }
 
   async function save() {
-    if (!valid) {
-      setError("すべての項目を入力してください");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-
-    if (enableSheetHeaderSetup && sheetName.trim()) {
-      const currentHeader = await fetchHeader();
-      if (!currentHeader) {
-        setSaving(false);
+    try {
+      if (!valid) {
+        setError("すべての項目を入力してください");
         return;
       }
-      if (
-        profile.sheet_name !== sheetName.trim() ||
-        profile.sheet_header_signature !== currentHeader.signature
-      ) {
-        setHeaderData(currentHeader);
-        setSaving(false);
-        return;
-      }
-    }
+      setSaving(true);
+      setError(null);
 
-    await persistProfile(profile.record_fields, sheetName.trim() ? profile.sheet_header_signature : null);
+      if (enableSheetHeaderSetup && sheetName.trim()) {
+        const currentHeader = await fetchHeader();
+        if (!currentHeader) {
+          setSaving(false);
+          return;
+        }
+        if (
+          profile.sheet_name !== sheetName.trim() ||
+          profile.sheet_header_signature !== currentHeader.signature
+        ) {
+          setHeaderData(currentHeader);
+          setSaving(false);
+          return;
+        }
+      }
+
+      await persistProfile(profile.record_fields, sheetName.trim() ? profile.sheet_header_signature : null);
+    } catch {
+      setError("保存できませんでした。もう一度お試しください");
+    } finally { setSaving(false); }
   }
 
   async function persistProfile(recordFields: Profile["record_fields"], headerSignature: string | null) {
-    setSaving(true);
-    setError(null);
-    const nextRecordSource = sheetName.trim() ? "sheet" : "app";
-    const switchingSource = Boolean(sheetName.trim()) && nextRecordSource !== (profile.record_source ?? "app");
+    try {
+      setSaving(true);
+      setError(null);
+      const nextRecordSource = sheetName.trim() ? "sheet" : "app";
+      const switchingSource = Boolean(sheetName.trim()) && nextRecordSource !== (profile.record_source ?? "app");
 
-    if (switchingSource && profile.sheet_name) {
-      const response = await fetch("/api/sheets/reconcile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ direction: "to_sheet" }),
-      });
-      const reconcileResult = await response.json();
-      if (!response.ok || !reconcileResult.ok) {
-        setError(reconcileResult.error ?? "設定を変更できませんでした。もう一度お試しください");
+      if (switchingSource && profile.sheet_name) {
+        const response = await fetch("/api/sheets/reconcile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ direction: "to_sheet" }),
+        });
+        const reconcileResult = await response.json();
+        if (!response.ok || !reconcileResult.ok) {
+          setError(reconcileResult.error ?? "設定を変更できませんでした。もう一度お試しください");
+          setSaving(false);
+          return;
+        }
+      }
+
+      // 出欠一覧の初期表示は設定画面で本人が選ぶ項目なので、ここでは触らない。
+      // ブロックを変えたときだけ、新しいブロックに合わせた初期値を入れ直す。
+      const previousPrimaryBlock = profile.blocks[0];
+      const blockChanged = selectedBlock !== previousPrimaryBlock;
+      const attendanceDefaults = blockChanged
+        ? {
+            attendance_default_block: selectedBlock === "manager" ? "all" : selectedBlock,
+            attendance_view_all_blocks: selectedBlock === "manager",
+          }
+        : {};
+
+      const result = await safeUpdate(
+        createClient(),
+        "profiles",
+        {
+          display_name: name.trim(),
+          blocks: normalizeProfileBlocks(blocks),
+          ...attendanceDefaults,
+          events: events.filter((ev) => eventOptions.includes(ev)),
+          grade,
+          avatar_url: avatarUrl.trim() || null,
+          sheet_name: sheetName.trim() || null,
+          sheet_header_signature: headerSignature,
+          record_source: nextRecordSource,
+          record_fields: recordFieldsToJson(recordFields),
+        },
+        { id: profile.id },
+      );
+
+      if (!result.ok) {
+        setError(safeUpdateMessage(result.reason));
         setSaving(false);
         return;
       }
-    }
-
-    // 出欠一覧の初期表示は設定画面で本人が選ぶ項目なので、ここでは触らない。
-    // ブロックを変えたときだけ、新しいブロックに合わせた初期値を入れ直す。
-    const previousPrimaryBlock = profile.blocks[0];
-    const blockChanged = selectedBlock !== previousPrimaryBlock;
-    const attendanceDefaults = blockChanged
-      ? {
-          attendance_default_block: selectedBlock === "manager" ? "all" : selectedBlock,
-          attendance_view_all_blocks: selectedBlock === "manager",
-        }
-      : {};
-
-    const result = await safeUpdate(
-      createClient(),
-      "profiles",
-      {
-        display_name: name.trim(),
-        blocks: normalizeProfileBlocks(blocks),
-        ...attendanceDefaults,
-        events: events.filter((ev) => eventOptions.includes(ev)),
-        grade,
-        avatar_url: avatarUrl.trim() || null,
-        sheet_name: sheetName.trim() || null,
-        sheet_header_signature: headerSignature,
-        record_source: nextRecordSource,
-        record_fields: recordFieldsToJson(recordFields),
-      },
-      { id: profile.id },
-    );
-
-    if (!result.ok) {
-      setError(safeUpdateMessage(result.reason));
+      setHeaderData(null);
       setSaving(false);
-      return;
-    }
-    setHeaderData(null);
-    setSaving(false);
-    router.refresh();
-    onDone();
+      router.refresh();
+      onDone();
+    } catch {
+      setError("保存できませんでした。もう一度お試しください");
+    } finally { setSaving(false); }
   }
 
   return (
-    <div className="space-y-4 pb-4">
+    <fieldset disabled={saving} className="min-w-0 space-y-4 pb-4">
       {isSetup && (
         <p className="text-body text-muted">はじめまして！プロフィールを設定しましょう。</p>
       )}
@@ -581,6 +594,6 @@ export function ProfileEditForm({
         busy={signingOut}
         onConfirm={signOut}
       />
-    </div>
+    </fieldset>
   );
 }

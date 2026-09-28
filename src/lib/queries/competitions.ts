@@ -1,7 +1,8 @@
 // 大会・種目・目標・結果の取得。
 
 import { createClient } from "@/lib/supabase/server";
-import { isTypedResultOf } from "@/lib/competition-days";
+import { fetchAllPages } from "@/lib/fetch-all-pages";
+import { competitionDays, isTypedResultOf } from "@/lib/competition-days";
 import { jstToday } from "@/lib/date";
 import { selectHomeCompetition } from "@/lib/competition-lifecycle";
 import { readCompetitionProgramEntries } from "@/lib/competition-program-query";
@@ -84,9 +85,9 @@ export async function getCompetitionResults(competition: Pick<CompetitionRow, "i
   const supabase = await createClient();
   const select = "*,author:profiles!user_id(display_name)";
   // 自由入力の大会名は表記ゆれ（全角・空白）があるので、名前が入っている未選択の結果を読んで比べる。
-  const [{ data: linked }, { data: typed }] = await Promise.all([
-    supabase.from("pb_records").select(select).eq("competition_id", competition.id),
-    supabase.from("pb_records").select(select).is("competition_id", null).not("meet_name", "is", null),
+  const [linked, typed] = await Promise.all([
+    fetchAllPages((from, to) => supabase.from("pb_records").select(select).eq("competition_id", competition.id).order("id").range(from, to)),
+    fetchAllPages((from, to) => supabase.from("pb_records").select(select).is("competition_id", null).not("meet_name", "is", null).in("recorded_on", competitionDays(competition.starts_on, competition.ends_on)).order("id").range(from, to)),
   ]);
   const rows = [
     ...(linked ?? []),

@@ -61,9 +61,16 @@ export async function getFeed(
   const recRows = recordsResult.data;
   const twRows = tweetsResult.data;
 
-  const baseRecords = (recRows ?? []).map((row) => normalizeRecordWithAuthor({ ...row, record_fields_snapshot: null }));
-  const rawTweets = (twRows ?? []).map(normalizeTweetWithAuthor);
+  const candidateRecords = (recRows ?? []).map((row) => normalizeRecordWithAuthor({ ...row, record_fields_snapshot: null }));
+  const candidateTweets = (twRows ?? []).map(normalizeTweetWithAuthor);
 
+  const candidates = [
+    ...candidateRecords.map((row) => ({ kind: "record", id: row.id, created_at: row.created_at })),
+    ...candidateTweets.map((row) => ({ kind: "tweet", id: row.id, created_at: row.created_at })),
+  ].sort((a, b) => a.created_at === b.created_at ? b.id.localeCompare(a.id) : a.created_at < b.created_at ? 1 : -1).slice(0, limit);
+  const selected = new Set(candidates.map((row) => `${row.kind}:${row.id}`));
+  const baseRecords = candidateRecords.filter((row) => selected.has(`record:${row.id}`));
+  const rawTweets = candidateTweets.filter((row) => selected.has(`tweet:${row.id}`));
   const recIds = baseRecords.map((r) => r.id);
   // 投票・メンションの取得（attachTweetSocialData）と、いいね・コメント件数の取得は
   // どちらも上の1回目の結果だけに依存していて、互いには依存しない。直列に待つと

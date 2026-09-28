@@ -1,3 +1,29 @@
+## 2026-09-28 UI/UX・効率性・セキュリティ修正（本番反映承認待ち）
+
+Codex: 本日の3監査のコード上の指摘をローカルworktreeで修正。未保存確認/投票失敗/更新失敗表示・カーソル/30件選定/大会日付絞込み・Next16.3.6/sharp0.35.4/Push宛先制限/本人コメント照合。489テスト・運用16テスト・TypeScript・build・合成UI成功、npm audit全依存0。Push制約はPC/クラウドでrollback検証済み。自動承認レビューが本番適用と別途R2バックアップ送信を拒否したため、永続的本番変更・master取り込み・pushなし。本番反映の明示承認が必要。詳細docs/AUDIT-FIXES-2026-09-28.md。
+
+## 2026-09-28 セキュリティチェック（修正未実施）
+
+Codex: 現行コード・関連SQL/Push/中継/GAS・依存関係を監査。依存関係更新、Push送信先の制限、シート返信と本人コメントの照合を要対応として記録。既存479テスト成功。本番DB実効権限・実セッションでの侵入試験は未実施。修正・本番変更・pushなし、文書はローカル保持。攻撃手順は公開文書に記載しない。詳細docs/SECURITY-CHECK-2026-09-28.md。
+
+## 2026-09-27 オーナー確定：ビルド代を減らす運用（旧push手順より優先）
+
+- 作業ブランチはGitHubへpushしない。ローカルの作業ブランチ・worktreeで検証を終え、masterへ入れるときに1回だけpushする。
+- 関連する修正と完了記録をまとめて本番反映する。小さな修正ごとにpushしない。AGENTS.mdやdocsなど文書だけの変更は手元に保持し、次のコード変更と一緒にpushする。文書更新だけを理由にビルド・デプロイしない。
+- コード変更時の検証は従来どおり行い、本番反映後は対象コミットのProduction READYと公開先を確認する。文書だけの作業はローカル反映をもって終了し、pushを保留したことを報告する。
+- Vercel設定（ブランチのビルド停止、Ignored Build Step等）を変更する場合は、具体的な変更についてオーナーの承認を得る。この運用方針への同意を設定変更の承認とは扱わない。
+- 9/27調査時の利用額15.90 USD・残り4.10 USD・ビルド7.22 USDは、その時点の記録。現在値として再利用しない。
+
+### 認証・予備構成を変更するときの注意
+
+- ログインはクラウドSupabase（cookie `sb-tuat-auth`）、通常のデータはPC。`src/lib/supabase/cloud-auth.ts`・`server-client-options.ts`の分離と、ページの認証確認に使う`getClaims`を維持する。
+- PC停止判定は`pcAvailable()`。`/api/pc-supabase`のクラウド中継と、Cloudflare Worker（`ops/pc-rest-relay/worker.mjs`）の接続先不在時503は、`x-tuat-backend: cloud`でクライアントへ切替を知らせる。停止判定には接続先の有効期間（約3分）がある。無停止で瞬時に切り替わるとは扱わない。
+- 新しい表を作るときは、`20260926050000_failover_change_log.sql`の`zz_log_failover_change`を付けるか、対象外にする理由を明記する。クラウドの書込み記録は`failover_changes`へ保存され、`failover_config.log_changes=true`はクラウドだけ。表を作るmigrationはバックアップ・検証後にPCとクラウドの両方へ適用する。
+- `ops/laptop/cloud-mirror.mjs`は5分ごとにクラウドの変更をPCへ書き戻してから、PCの予備データをクラウドへ写す。対象表を増やす場合は`TABLES`（OBは`OB_TABLES`）と主キー・依存順・書戻し・トリガー副作用を確認する。
+- `.contingency/backend/cloud-mirror-state.json`は消さない。差分比較の要約を保持し、クラウド全件再読込は通常1日1回。削除すると次回の全件再読込が発生する。書戻し失敗行の上書き保護も維持する。
+- クラウドの旧cron `sheet-sync-hourly`・`schedule-import-hourly`は停止を維持する。再開するとスプレッドシートへの重複書込みにつながる。
+- 9/27に260秒の中継停止・クラウド表示・PC復帰を検証済み。クラウドの追加・更新・削除のPC書戻しも別途検証済み。PC電源断・OS再起動、停止中のブラウザ保存から復帰までの一連の試験、iOS実機、翌日定時/24時間比較は未実測。最新結果は`docs/OPERATIONS-2026-09-27.md`を参照する。
+
 ## 2026-09-27 定期処理のPC移設完了（過去の未着手記載より優先）
 
 Vercel cronは0件。アプリffbbd96をmasterへpushしProduction READY確認後、15:32 JSTから専用S4UタスクTUAT PC Jobsで記録（毎日0時）・大会（5分ごと）・期限切れ整理（毎日12:17）を実行。予定自動同期はオーナー指示で取りやめ。既存予定・画面は維持。大会は15:35/15:40の定刻success、他2本の初回実行成功。GASのタブ名前後空白を一意照合するv18へ更新し、未送信5件を再送、DBのpending_sheet_push=0確認。OB予備6表全行一致・クラウド保存のPC書戻しINSERT/UPDATE/DELETE成功。全479テスト・runner/予備/GAS12テスト・TypeScript付き固定build成功。iOS・OS再起動・翌日定時/24時間比較は未実測。詳細docs/OPERATIONS-2026-09-27.md。
@@ -292,11 +318,11 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 
 2026-09-06 / Codex / R2移行の実施記録: オーナー承認後、非公開画像バケット限定キーを発行しローカルとVercel ProductionのSecretへ保存。事前スナップショット後37画像17,711,786 bytesをコピー、全件SHA-256一致・元画像削除0・DB変更0。image-storage実装で両バケットの署名GETと公開拒否、一時画像の保存/取得/削除を実接続検証。READ=trueはProduction HgymvYiChDSXtgKxdAyy3G2QxRLE（36bd97f）でREADY確認。WRITE=trueも環境設定し、この記録のデプロイで反映する。実環境変数入りbuild成功。コードは前回全163テスト済みから変更なし。大学認証後の画面・iOS実機は未確認、ユーザーへ大学ログインを依頼済み。詳細はdocs/R2-MIGRATION.md。Vercel使用量キーは未発行、Supabase月間転送量は公式へのリンクのみ。
 
-**作業ブランチへの push は完了ではない。** それだけでは Vercel の Preview が1つ増えるだけで、部員が使う本番（https://tuat-tf.vercel.app ）は何も変わっていない。オーナーから別の指示が無いかぎり、次の5つを終えて初めて「完了」と報告する。
+**作業ブランチはpushしない（2026-09-27オーナー確定）。** コードの本番反映は次の5つを終えて「完了」と報告する。文書だけの変更は次のコード変更までpushを保留する。
 
 1. `npx tsc --noEmit`・対象eslint・`npx vitest run`・`npm run build` を通す。
-2. 作業ブランチを `git push -u origin <branch>` する。
-3. `git fetch origin master` のうえ **master へ fast-forward して push** する。
+2. ローカルの作業ブランチ・worktreeで関連する変更と記録をまとめる。作業ブランチはpushしない。
+3. `git fetch origin master` のうえ **master へ fast-forward して1回だけpush** する。
    `git checkout master && git merge --ff-only <branch> && git push -u origin master`
    ff-only にならないときは origin/master が進んでいるので、**自分の差分を origin/master の上に載せ直してから**もう一度 ff（force-push 厳禁は従来どおり）。
 4. **Vercel Production が自分の commit で成功したことを確認する。** Vercel MCP の `list_deployments`（project `tuat-tf` = `prj_fLc2aGQHb2Ny4IMt21ESzN0ij25p` / team `team_kxzFfl8gjcBDe6W8AayTW156`）で、最新の deployment が `target: "production"`・`state: "READY"`・`meta.githubCommitSha` が自分の commit、の3つを満たすことを見る。`target: null` はブランチのPreviewなので**本番ではない**。ビルド中（`BUILDING`）なら READY になるまで待つ。失敗していれば直してから再度この手順を回す。Vercel MCP が使えないセッションでは、その旨を伝えてオーナーに確認を依頼する。
@@ -493,6 +519,8 @@ TUAT T&F（陸上部アプリ）。Next.js 16 (App Router) + React 19 + Tailwind
 - 他AIが直前に触った範囲は、ログを見て**現状コードを確認してから**触る（古い前提で上書きしない）。
 
 ## 作業ログ（着手前に追記・新しいものを上へ）
+
+- 2026-09-27 / Codex / オーナー指定のビルド節約運用をAGENTS.mdへ反映。旧作業ブランチpush手順を置換し、認証・予備同期・新規表・停止試験の最新注意事項を集約。文書のみのためローカル保持、push/build/deploy・Vercel設定変更なし。差分確認済み。
 
 - 2026-09-27 / Codex / 残作業完了。ffbbd96をmasterへ反映・Production READY、Vercel cron0・PC3処理へ切替。GAS前後空白修正v18で書戻し5件成功・未送信0、OB予備とクラウド書戻し検証成功。詳細は冒頭とdocs/OPERATIONS-2026-09-27.md。
 

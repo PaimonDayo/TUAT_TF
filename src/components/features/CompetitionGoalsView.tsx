@@ -1,4 +1,5 @@
 "use client";
+import { FloatingActionPosition, floatingActionButtonClass } from "@/components/ui/floating-action";
 
 import { useMemo, useState } from "react";
 import { Plus } from "lucide-react";
@@ -156,7 +157,7 @@ export function CompetitionGoalsView({
         busy={busy}
       />
 
-      <button
+<FloatingActionPosition>      <button
         type="button"
         aria-label="目標を追加"
         title={
@@ -166,10 +167,10 @@ export function CompetitionGoalsView({
         }
         disabled={busy || ownGoals.length >= events.length}
         onClick={() => openEditor()}
-        className="fixed bottom-24 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-xl disabled:opacity-40"
+        className={`${floatingActionButtonClass} disabled:opacity-40`}
       >
         <Plus size={26} />
-      </button>
+      </button></FloatingActionPosition>
 
       <FormModal
         open={editorOpen}

@@ -6,10 +6,30 @@ import {
   useEffect,
   useMemo,
   useState,
+  useRef,
+  type RefObject,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import { FullScreen, FullScreenContent } from "@/components/ui/fullscreen";
+import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
+
+type DraftState = { dirty: boolean; busy: boolean; onSave: () => void | Promise<void> };
+const FormDraftContext = createContext<RefObject<DraftState | null> | null>(null);
+
+/** 子フォームの変更・保存状態を親の閉じる操作へ伝える。 */
+export function useFormDraft(state: DraftState) {
+  const guardRef = useContext(FormDraftContext);
+  useEffect(() => {
+    if (!guardRef) return;
+    guardRef.current = state;
+    return () => { guardRef.current = null; };
+  }, [guardRef, state]);
+}
+export function FormDraftGuard(props: DraftState) {
+  useFormDraft(props);
+  return null;
+}
 
 type FooterContextValue = {
   target: HTMLDivElement | null;
@@ -35,6 +55,13 @@ export function FormModal({
   autoFocus?: boolean;
   floatingAction?: ReactNode;
 }) {
+  const draft = useRef<DraftState | null>(null);
+  const [confirmClose, setConfirmClose] = useState(false);
+  function requestOpenChange(next: boolean) {
+    if (!next && draft.current?.busy) return;
+    if (!next && draft.current?.dirty) { setConfirmClose(true); return; }
+    onOpenChange(next);
+  }
   const [footerCount, setFooterCount] = useState(0);
   const [footerTarget, setFooterTarget] = useState<HTMLDivElement | null>(null);
   const context = useMemo<FooterContextValue>(
@@ -52,7 +79,8 @@ export function FormModal({
     (footerCount > 0 ? <div ref={setFooterTarget} className="w-full" /> : undefined);
 
   return (
-    <FullScreen open={open} onOpenChange={onOpenChange}>
+    <>
+    <FullScreen open={open} onOpenChange={requestOpenChange}>
       <FullScreenContent
         title={title}
         footer={footerHost}
@@ -60,10 +88,17 @@ export function FormModal({
         floatingAction={floatingAction}
       >
         <FormModalFooterContext.Provider value={context}>
-          {children}
+          <FormDraftContext.Provider value={draft}>
+            {children}
+          </FormDraftContext.Provider>
         </FormModalFooterContext.Provider>
       </FullScreenContent>
     </FullScreen>
+    <UnsavedChangesDialog open={open && confirmClose} busy={false}
+      onContinue={() => setConfirmClose(false)}
+      onDiscard={() => { if (draft.current?.busy) return; setConfirmClose(false); onOpenChange(false); }}
+      onSave={() => { if (draft.current?.busy) return; setConfirmClose(false); void draft.current?.onSave(); }} />
+    </>
   );
 }
 

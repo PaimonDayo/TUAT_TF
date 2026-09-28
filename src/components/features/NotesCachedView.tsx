@@ -1,5 +1,6 @@
 "use client";
 
+import { RefreshStatus } from "@/components/ui/refresh-status";
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { NotesView } from "@/components/features/NotesView";
@@ -9,7 +10,7 @@ import type { NotesTab } from "@/components/features/NotesView";
 export function NotesCachedView({ initialData, mine, initialScope }: { initialData: NotesPageData; mine: boolean; initialScope?: NotesTab }) {
   const queryClient = useQueryClient();
   const queryKey = ["notes", initialData.currentUser.id];
-  const { data } = useQuery({ queryKey, queryFn: loadNotesPageData, initialData, staleTime: 60_000, refetchOnMount: false });
+  const { data, isError, isFetching, refetch } = useQuery({ queryKey, queryFn: loadNotesPageData, initialData, staleTime: 60_000, refetchOnMount: false });
   // initialDataは初回マウントでしか使われないため、編集後のrouter.refresh()や再訪で
   // サーバーが新しいデータを返しても、これが無いと古いキャッシュが表示され続ける
   // （2026-07-13 オーナー報告「ノートの編集が反映されない」の原因）。
@@ -17,5 +18,5 @@ export function NotesCachedView({ initialData, mine, initialScope }: { initialDa
     queryClient.setQueryData(queryKey, initialData);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData, queryClient]);
-  return <NotesView {...data} mine={mine} initialScope={initialScope} />;
+  return <><RefreshStatus failed={isError} busy={isFetching} retry={() => { void refetch(); }} /><NotesView {...data} mine={mine} initialScope={initialScope} /></>;
 }

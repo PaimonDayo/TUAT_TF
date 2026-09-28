@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0";
 import webPush from "https://esm.sh/web-push@3.6.6";
+import { isAllowedPushEndpoint } from "./endpoint.ts";
 
 const vapidPublicKey = Deno.env.get('NEXT_PUBLIC_VAPID_PUBLIC_KEY') || Deno.env.get('VAPID_PUBLIC_KEY');
 const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY');
@@ -125,6 +126,7 @@ serve(async (req) => {
       data: { url, notificationId: notification.id }
     });
     const results = await Promise.all(subscriptions.map(async (sub) => {
+      if (!isAllowedPushEndpoint(sub.endpoint)) return { sent: false, dropped: false };
       const pushSubscription = {
         endpoint: sub.endpoint,
         keys: {

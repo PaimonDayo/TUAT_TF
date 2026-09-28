@@ -299,13 +299,23 @@ function findNextReplyColumn(sheet, row, header) {
   }
   if (nextCol >= sheet.getMaxColumns()) {
     sheet.insertColumnAfter(sheet.getMaxColumns());
-    return sheet.getMaxColumns();
+    return sheet.getMaxColumns() - 1;
   }
   return nextCol;
 }
 
 // payload: { action:'writeReply', memberName, date, text, sourceId? }
 function writeReplyRecord(data) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    return writeReplyRecordLocked(data);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function writeReplyRecordLocked(data) {
   const memberName = data.memberName;
   const date = data.date;
   const text = (data.text || '').toString().trim();
@@ -322,9 +332,21 @@ function writeReplyRecord(data) {
   const rowIdx = findRecordRow(values, hIdx, date);
   if (rowIdx === -1) return { success: false, action: 'no_row' };
 
-  const col = findNextReplyColumn(sheet, values[rowIdx], values[hIdx]);
+  const marker = sourceId ? 'TUAT_APP_COMMENT:' + sourceId : '';
+  const notes = sheet.getRange(rowIdx + 1, 1, 1, sheet.getMaxColumns()).getNotes()[0];
+  const previous = marker ? notes.indexOf(marker) : -1;
+  if (previous >= 0 && values[rowIdx][previous] !== '' && values[rowIdx][previous] != null) {
+    return { success: true, action: 'already_replied', row: rowIdx + 1, col: previous + 1 };
+  }
+  const occupiedRow = notes.map(function (note, col) {
+    return note.indexOf('TUAT_APP_COMMENT:') === 0 ? 'reserved' : values[rowIdx][col];
+  });
+  const col = previous >= 0 ? previous : findNextReplyColumn(sheet, occupiedRow, values[hIdx]);
   const cell = sheet.getRange(rowIdx + 1, col + 1);
-  cell.setValue(text);
-  if (sourceId) cell.setNote('TUAT_APP_COMMENT:' + sourceId);
+  // Reserve the source before writing; a retry can recover an interrupted empty cell.
+  if (marker) { cell.setNote(marker); SpreadsheetApp.flush(); }
+  cell.setNumberFormat('@');
+  cell.setValue("'" + text);
+  SpreadsheetApp.flush();
   return { success: true, action: 'replied', row: rowIdx + 1, col: col + 1 };
 }

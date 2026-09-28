@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast";
 import { Plus } from "lucide-react";
 import { Avatar } from "@/components/common/Avatar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -94,6 +96,8 @@ export function PollView({
   anonymous: boolean;
   allowOptions: boolean;
 }) {
+  const { showToast } = useToast();
+  const pending = useRef(false);
   const [options, setOptions] = useState(initialOptions);
   const [saving, setSaving] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -107,6 +111,7 @@ export function PollView({
     const root = pollRef.current;
     if (!root) return;
     const preventNativeSelection = (event: Event) => {
+      if (event.target instanceof Element && event.target.closest("input, textarea")) return;
       event.preventDefault();
       window.getSelection()?.removeAllRanges();
     };
@@ -144,48 +149,49 @@ export function PollView({
   }
   const totalVotes = options.reduce((sum, option) => sum + option.vote_count, 0);
 
+  function removeLocalVotes(ids: string[]) {
+    setOptions((items) => items.map((item) => ids.includes(item.id) ? {
+      ...item, voted_by_me: false, vote_count: Math.max(0, item.vote_count - 1),
+      voters: item.voters.filter((voter) => voter.profile_id !== userId),
+    } : item));
+  }
+
   async function vote(optionId: string) {
-    if (saving) return;
-    setSaving(true);
+    if (pending.current) return;
     const target = options.find((option) => option.id === optionId);
-    if (!target) {
-      setSaving(false);
-      return;
-    }
-    if (target.voted_by_me) {
-      await api.removeVotes([optionId]);
-      setOptions((items) => items.map((item) => item.id === optionId ? { ...item, voted_by_me: false, vote_count: Math.max(0, item.vote_count - 1), voters: item.voters.filter((voter) => voter.profile_id !== userId) } : item));
-    } else {
-      if (!multiple) {
-        const selected = options.filter((option) => option.voted_by_me);
-        if (selected.length) {
-          await api.removeVotes(selected.map((option) => option.id));
-        }
+    if (!target) return;
+    pending.current = true;
+    setSaving(true);
+    try {
+      const removedIds = target.voted_by_me ? [optionId] : !multiple ? options.filter((option) => option.voted_by_me).map((option) => option.id) : [];
+      if (removedIds.length) {
+        if (!await api.removeVotes(removedIds)) throw new Error("remove failed");
+        removeLocalVotes(removedIds);
       }
-      const added = await api.addVote(optionId);
-      if (added) {
-        setOptions((items) => items.map((item) => ({
-          ...item,
-          voted_by_me: item.id === optionId ? true : multiple ? item.voted_by_me : false,
-          vote_count: item.id === optionId ? item.vote_count + 1 : !multiple && item.voted_by_me ? Math.max(0, item.vote_count - 1) : item.vote_count,
-          voters: anonymous ? item.voters : item.id === optionId ? [...item.voters.filter((voter) => voter.profile_id !== userId), { profile_id: userId, display_name: userName, avatar_url: userAvatarUrl, blocks: userBlocks, grade: userGrade }] : !multiple && item.voted_by_me ? item.voters.filter((voter) => voter.profile_id !== userId) : item.voters,
-        })));
+      if (!target.voted_by_me) {
+        if (!await api.addVote(optionId)) throw new Error("add failed");
+        setOptions((items) => items.map((item) => item.id === optionId ? {
+          ...item, voted_by_me: true, vote_count: item.vote_count + 1,
+          voters: anonymous ? item.voters : [...item.voters.filter((voter) => voter.profile_id !== userId), { profile_id: userId, display_name: userName, avatar_url: userAvatarUrl, blocks: userBlocks, grade: userGrade }],
+        } : item));
       }
-    }
-    setSaving(false);
+    } catch {
+      showToast("投票を更新できませんでした。選択状態を確認して、もう一度お試しください");
+    } finally { pending.current = false; setSaving(false); }
   }
 
   async function addOption() {
     const text = newOption.trim();
-    if (!text || saving) return;
+    if (!text || pending.current) return;
+    pending.current = true;
     setSaving(true);
-    const created = await api.addOption(text, options.length);
-    if (created) {
+    try {
+      const created = await api.addOption(text, options.length);
+      if (!created) throw new Error("add option failed");
       setOptions((items) => [...items, created]);
-      setNewOption("");
-      setAdding(false);
-    }
-    setSaving(false);
+      setNewOption(""); setAdding(false);
+    } catch { showToast("選択肢を追加できませんでした。もう一度お試しください"); }
+    finally { pending.current = false; setSaving(false); }
   }
 
   return (
@@ -213,7 +219,7 @@ export function PollView({
             )}
           >
             <span className="absolute inset-y-0 left-0 bg-accent/10" style={{ width: `${percent}%` }} />
-            <span className="relative min-w-0 flex-1 truncate text-[14px] font-medium">{option.text}</span>
+            <span className="relative min-w-0 flex-1 whitespace-pre-wrap break-words py-2 text-[14px] font-medium">{option.text}</span>
             <span className="relative ml-3 text-[12px] tabular-nums">{percent}%</span>
           </button>
           </div>
@@ -222,15 +228,15 @@ export function PollView({
       {allowOptions && (
         adding ? (
           <div className="flex gap-2">
-            <input value={newOption} maxLength={80} autoFocus placeholder="選択肢を追加" onChange={(event) => setNewOption(event.target.value)} className="h-10 min-w-0 flex-1 rounded-xl border border-separator bg-card px-3 text-[14px]" />
-            <button type="button" onClick={addOption} className="rounded-xl bg-accent px-3 text-[13px] font-semibold text-white">追加</button>
+            <Input aria-label="追加する選択肢" disabled={saving} value={newOption} maxLength={80} autoFocus placeholder="選択肢を追加" onChange={(event) => setNewOption(event.target.value)} className="min-w-0 flex-1" />
+            <button type="button" onClick={addOption} disabled={saving || !newOption.trim()} className="rounded-xl bg-accent px-3 text-[13px] font-semibold text-white">追加</button>
           </div>
         ) : (
           <button type="button" onClick={() => setAdding(true)} className="flex items-center gap-1 text-[13px] font-semibold text-accent"><Plus size={15} />選択肢を追加</button>
         )
       )}
       <p className="text-micro">{totalVotes}票 ・ {multiple ? "複数選択可" : "1つ選択"} ・ {anonymous ? "匿名" : "記名"}</p>
-      {!anonymous && <p className="text-micro">{"\u9078\u629e\u80a2\u3092\u9577\u62bc\u3057\u3059\u308b\u3068\u6295\u7968\u8005\u3092\u78ba\u8a8d\u3067\u304d\u307e\u3059"}</p>}
+      {!anonymous && <button type="button" onClick={() => setDetailOptionId(options[0]?.id ?? null)} className="text-micro text-accent">投票者を確認</button>}
       {!anonymous && detailOptionId && detailOption && (
         <Sheet open onOpenChange={(open) => !open && setDetailOptionId(null)}>
           <SheetContent
