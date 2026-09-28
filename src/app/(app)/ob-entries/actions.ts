@@ -5,12 +5,12 @@ import { createClient } from "@/lib/supabase/server";
 import { fetchRolesByProfileIds, isMemberPreviewActive } from "@/lib/supabase/auth";
 import { entryClient } from "@/lib/ob-entries-db";
 import { validDutyEdit, type DutyEdit } from "@/lib/ob-duty";
-import { OB_PROGRAM_PATH, canManageObMeet, validPartyEdit, type PartyEdit } from "@/lib/ob-meet";
+import { OB_PROGRAM_PATH, canManageObMeet, canViewObHistory, validPartyEdit, type PartyEdit } from "@/lib/ob-meet";
 import { validEntryEdit, type EntryEdit } from "@/lib/ob-entry-edit";
 /** 旧URL（転送のみ）と、大会ページ配下のプログラムの両方を更新する。 */
-function refreshObPages() { revalidatePath("/ob-entries"); revalidatePath(OB_PROGRAM_PATH); }
+function refreshObPages() { revalidatePath("/ob-entries"); revalidatePath(OB_PROGRAM_PATH); revalidatePath("/home"); }
 
-/** 係（システム・OB戦2026ロール）だけに返す。allowSelf なら一般部員にも返す（本人の分かどうかはDBが確認する）。 */
+/** 係（OB戦2026ロール）だけに返す。allowSelf なら一般部員にも返す（本人の分かどうかはDBが確認する）。 */
 async function editClient(allowSelf = false) {
   const client = entryClient(await createClient());
   const { data: { user } } = await client.auth.getUser();
@@ -119,4 +119,30 @@ export async function claimMyEntry(): Promise<{ ok: boolean; message?: string }>
   }
   refreshObPages();
   return { ok: true };
+}
+
+
+export async function getObEntryHistory(cursor?: { at: string; id: string }): Promise<
+  { ok: true; items: import("@/lib/ob-entry-history").ObHistoryItem[]; nextCursor: { at: string; id: string } | null } | { ok: false; message: string }
+> {
+  const denied = { ok: false as const, message: "履歴を取得できませんでした" };
+  if (cursor && (!/^[0-9a-f-]{36}$/i.test(cursor.id) || !/^\d{4}-\d{2}-\d{2}T[0-9:.+-]+Z?$/.test(cursor.at) || !Number.isFinite(Date.parse(cursor.at)))) return denied;
+  const base = await createClient();
+  const { data: { user } } = await base.auth.getUser();
+  if (!user || await isMemberPreviewActive()) return denied;
+  const roles = await fetchRolesByProfileIds(base, [user.id]);
+  if (!canViewObHistory(roles.get(user.id))) return { ok: false, message: "管理者だけが変更履歴を閲覧できます" };
+  let query = entryClient(base).from("ob_entry_changes").select("id,actor_id,changed_at,before_data,after_data")
+    .eq("after_data->>meet_key", "ob-2026").order("changed_at", { ascending: false }).order("id", { ascending: false }).limit(31);
+  if (cursor) query = query.or(`changed_at.lt.${cursor.at},and(changed_at.eq.${cursor.at},id.lt.${cursor.id})`);
+  const result = await query;
+  if (result.error) return denied;
+  const rows = result.data.slice(0, 30);
+  const { describeObChange, historyProfileIds } = await import("@/lib/ob-entry-history");
+  const ids = historyProfileIds(rows);
+  const people = ids.length ? await base.from("profiles").select("id,display_name").in("id", ids) : { data: [], error: null };
+  if (people.error) return denied;
+  const names = new Map((people.data ?? []).map(p => [p.id, p.display_name]));
+  const last = rows.at(-1);
+  return { ok: true, items: rows.map(row => describeObChange(row, names)), nextCursor: result.data.length > 30 && last ? { at: last.changed_at, id: last.id } : null };
 }

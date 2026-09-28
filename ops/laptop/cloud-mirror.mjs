@@ -18,7 +18,7 @@
 import { readFileSync, writeFileSync, renameSync } from "node:fs";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
-import { OB_TABLES, changesPath } from './cloud-mirror-ob.mjs';
+import { OB_TABLES, changesPath, orderObReplay, obReplayHeaders } from './cloud-mirror-ob.mjs';
 
 const WINDOW_DAYS = 3;
 const FULL_CHECK_MS = 24 * 3600_000;
@@ -209,10 +209,10 @@ async function pcWrite(path, init) {
 }
 
 /** 1件の変更をPCへ書く。成功なら true、失敗なら理由の文字列。 */
-async function applyChange(change) {
+async function applyChange(change, replayHeaders = {}) {
   const table = change.table_name;
   const natural = NATURAL_KEYS[table];
-  const json = { "Content-Type": "application/json" };
+  const json = { "Content-Type": "application/json", ...replayHeaders };
   const pkCols = Object.keys(change.pk);
   const insertRow = async (row) => {
     const r = await pcWrite(`/rest/v1/${table}?on_conflict=${pkCols.join(",")}`, {
@@ -292,9 +292,9 @@ async function writeBack(apply, authDue) {
   const newMembers = changes.some((c) => c.table_name === "profiles" && c.op === "INSERT");
   const result = { authUsersCreated: authDue || newMembers ? await syncAuthUsersBack(apply) : 0, pending: changes.length, applied: 0, failed: 0 };
   if (!apply) return result;
-  for (const change of changes) {
+  for (const change of orderObReplay(changes)) {
     let outcome;
-    try { outcome = await applyChange(change); } catch (error) { outcome = error instanceof Error ? error.message : String(error); }
+    try { outcome = await applyChange(change, obReplayHeaders(change, changes)); } catch (error) { outcome = error instanceof Error ? error.message : String(error); }
     if (outcome === true) {
       await request(cloud, `/rest/v1/failover_changes?id=eq.${change.id}`, { method: "DELETE" });
       result.applied++;

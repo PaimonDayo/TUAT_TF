@@ -1,3 +1,4 @@
+import { ObEntryHistory } from "@/components/features/ObEntryHistory";
 import { notFound } from "next/navigation";
 import { SubHeader } from "@/components/layout/SubHeader";
 import { CompetitionProgramView } from "@/components/features/CompetitionProgramView";
@@ -6,7 +7,7 @@ import { ObMyEntry } from "@/components/features/ObMyEntry";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getCompetitionById, getCompetitionProgramEntries } from "@/lib/queries";
 import { getMyObEntryFull, getObEntries } from "@/lib/queries/ob-entries";
-import { canManageObMeet, isObCompetition } from "@/lib/ob-meet";
+import { canManageObMeet, canViewObHistory, isObCompetition } from "@/lib/ob-meet";
 import { permissionsOf } from "@/lib/permissions";
 
 export default async function CompetitionProgramPage({
@@ -29,15 +30,16 @@ export default async function CompetitionProgramPage({
     ? <SubHeader title={`${competition.name}プログラム`} backHref="/home" forceBackHref />
     : <SubHeader title={`${competition.name}プログラム`} backHref={`/competitions/${competition.id}`} />;
 
-  // OB戦のプログラムは出場登録そのもの。今回はシステムロール限定で公開している。
+  // OB戦のプログラムは出場登録そのもの。本人とOB戦担当者が編集する。
   if (isObCompetition(competition.id)) {
-    // 係（システム・OB戦2026ロール）は全員分、それ以外の部員は自分のエントリーだけを扱う。
+    // 係（OB戦2026ロール）は全員分、それ以外の部員は自分のエントリーだけを扱う。
     if (!canManageObMeet(profile.roles)) {
       const mine = await getMyObEntryFull(profile.id);
       return (
         <>
           {header}
           <ObMyEntry entry={mine.entry} party={mine.party ?? undefined} me={{ id: profile.id, display_name: profile.display_name, grade: profile.grade }} openEditor={edit === "mine"} />
+          {canViewObHistory(profile.roles) && <ObEntryHistory />}
         </>
       );
     }
@@ -50,6 +52,7 @@ export default async function CompetitionProgramPage({
           initial={entries.data ?? []}
           members={members.data ?? []}
           viewerId={profile.id}
+          me={{ id: profile.id, display_name: profile.display_name, grade: profile.grade }}
           openMine={edit === "mine"}
           openIdentity={edit === "identity"}
           party={party.data ?? []}
@@ -57,6 +60,7 @@ export default async function CompetitionProgramPage({
           dutyRoles={dutyRoles.data ?? []}
           history={(history.data ?? []).flatMap((h) => h.profile_id ? [{ submitted_name: h.submitted_name, profile_id: h.profile_id }] : [])}
         />
+        {canViewObHistory(profile.roles) && <ObEntryHistory />}
       </>
     );
   }

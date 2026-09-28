@@ -3,10 +3,10 @@ const mocks = vi.hoisted(() => ({ user: vi.fn(), roles: vi.fn(), preview: vi.fn(
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: mocks.user }, from: mocks.from, rpc: mocks.rpc }) }));
 vi.mock("@/lib/supabase/auth", () => ({ fetchRolesByProfileIds: mocks.roles, isMemberPreviewActive: mocks.preview }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.refresh }));
-import { confirmEntryMember, saveEntry, saveParty, saveDuty, saveDutyRole, saveDutyRoles } from "./actions";
+import { confirmEntryMember, saveEntry, saveParty, saveDuty, saveDutyRole, saveDutyRoles, getObEntryHistory } from "./actions";
 const id = "10000000-0000-4000-8000-000000000001";
 
-it("limits duty writes to system users outside preview and rejects invalid slots",async()=>{
+it("limits duty writes to OB staff outside preview and rejects invalid slots",async()=>{
   const input={profileId:id,slotTime:"10:00",eventName:"1500m",assignment:"周回表示",revision:null};
   mocks.user.mockResolvedValueOnce({data:{user:null}});
   expect((await saveDuty(input)).ok).toBe(false);
@@ -44,7 +44,7 @@ it("saves the entry and party response through one transaction",async()=>{
 
 beforeEach(() => {
   mocks.user.mockResolvedValue({ data: { user: { id: "system" } } });
-  mocks.roles.mockResolvedValue(new Map([["system", [{ can_manage_system: true }]]]));
+  mocks.roles.mockResolvedValue(new Map([["system", [{ name: "OB戦2026", can_manage_system: false, can_manage_members: false }]]]));
   mocks.preview.mockResolvedValue(false);
   const chain = { update: mocks.update, eq: mocks.eq, select: () => chain, maybeSingle: mocks.result };
   mocks.from.mockReturnValue(chain);
@@ -56,7 +56,7 @@ beforeEach(() => {
 
 it("rejects entry edits from preview sessions (ordinary members are limited to their own entry by the DB)", async () => {
   const input = { entryId: id, profileId: null, revision: 0, events: ["男子100m"], marks: {} };
-  mocks.roles.mockResolvedValue(new Map([["system", [{ can_manage_system: true }]]]));
+  mocks.roles.mockResolvedValue(new Map([["system", [{ name: "OB戦2026", can_manage_system: false, can_manage_members: false }]]]));
   mocks.preview.mockResolvedValue(true);
   expect((await saveEntry(input)).ok).toBe(false);
   expect(mocks.rpc).not.toHaveBeenCalled();
@@ -120,4 +120,43 @@ it("reports capacity errors and sends multiple roles atomically",async()=>{
  mocks.rpc.mockResolvedValueOnce({error:{message:"role_full"}});expect((await saveDutyRoles(input)).message).toContain("必要人数");expect(mocks.refresh).not.toHaveBeenCalled();
  mocks.rpc.mockResolvedValueOnce({data:0,error:null});expect((await saveDutyRoles(input)).ok).toBe(true);
  expect(mocks.rpc).toHaveBeenLastCalledWith("save_ob_duty_roles",{p_profile_id:id,p_slot_time:"10:00",p_event_name:"1500m",p_role_ids:[id],p_revision:null});
+});
+
+
+it("refuses history reads by staff, anonymous and preview sessions before querying", async () => {
+  expect((await getObEntryHistory()).ok).toBe(false);
+  mocks.user.mockResolvedValueOnce({data:{user:null}});
+  expect((await getObEntryHistory()).ok).toBe(false);
+  mocks.preview.mockResolvedValueOnce(true);
+  expect((await getObEntryHistory()).ok).toBe(false);
+  expect(mocks.from).not.toHaveBeenCalled();
+});
+it("does not grant administrators other-person editing without the OB role", async () => {
+  mocks.roles.mockResolvedValue(new Map([["system", [{name:"システム",can_manage_system:true,can_manage_members:true}]]]));
+  expect((await confirmEntryMember(id,null,0)).ok).toBe(false);
+  expect((await saveParty({id,revision:0,status:"参加"})).ok).toBe(false);
+  expect(mocks.from).not.toHaveBeenCalled(); expect(mocks.rpc).not.toHaveBeenCalled();
+});
+
+
+it("pages administrator history and resolves the actor without returning raw snapshots", async () => {
+  mocks.roles.mockResolvedValue(new Map([["system", [{name:"管理者",can_manage_system:false,can_manage_members:true}]]]));
+  const rows = Array.from({length:31},(_,i)=>({id:`change-${i}`,actor_id:id,changed_at:"2026-09-28T00:00:00+00:00",before_data:{events:["男子100m"]},after_data:{submitted_name:"対象",events:[]}}));
+  const filter=vi.fn(); const limit=vi.fn();
+  const historyChain = { select:()=>historyChain, eq:()=>historyChain, order:()=>historyChain, limit:(n:number)=>{limit(n);return historyChain;}, or:(value:string)=>{filter(value);return historyChain;}, then:(resolve:(value:unknown)=>void)=>resolve({data:rows,error:null}) };
+  const peopleChain = {select:()=>peopleChain,in:()=>Promise.resolve({data:[{id,display_name:"担当者"}],error:null})};
+  mocks.from.mockImplementation(table=>table==="ob_entry_changes"?historyChain:peopleChain);
+  const result=await getObEntryHistory({id,at:"2026-09-28T01:00:00Z"});
+  expect(result.ok).toBe(true);
+  if(result.ok) {
+    expect(result.items).toHaveLength(30); expect(result.nextCursor?.id).toBe("change-29");
+    expect(result.items[0]).toMatchObject({actor:"担当者",subject:"対象",details:expect.arrayContaining(["種目取消：男子100m"])});
+    expect(result.items[0]).not.toHaveProperty("after_data");
+  }
+  expect(limit).toHaveBeenCalledWith(31);
+  expect(filter).toHaveBeenCalledWith(`changed_at.lt.2026-09-28T01:00:00Z,and(changed_at.eq.2026-09-28T01:00:00Z,id.lt.${id})`);
+});
+it("rejects malformed history cursors before database access", async()=>{
+  expect((await getObEntryHistory({id:"bad",at:"invalid"})).ok).toBe(false);
+  expect(mocks.from).not.toHaveBeenCalled();
 });

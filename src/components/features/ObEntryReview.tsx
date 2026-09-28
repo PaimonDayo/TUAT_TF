@@ -12,6 +12,8 @@ import { useToast } from "@/components/ui/toast";
 import { confirmEntryMember } from "@/app/(app)/ob-entries/actions";
 import { entryEventRows, isAlumniEntry, type ObEntry } from "@/lib/ob-entries";
 import { entryGrade, matchEntryMember, normalizeEntryName, type EntryMember, type ConfirmedEntryIdentity } from "@/lib/entry-identity";
+import { ObMyEntry } from "./ObMyEntry";
+import { ObEntryManager } from "./ObEntryManager";
 import { ObEntryEditor } from "./ObEntryEditor";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { ActionMenu } from "@/components/ui/action-menu";
@@ -29,19 +31,20 @@ function TimeCell({ time }: { time: string }) {
   return <span className="w-12 shrink-0 pt-0.5 text-caption tabular-nums text-muted2">{time}</span>;
 }
 
-export function ObEntryReview({ competition, initial, members, viewerId, history = [], party = [], duties = [], dutyRoles = [], openMine = false, openIdentity = false }: { openMine?: boolean; openIdentity?: boolean; competition: Pick<CompetitionRow, "name" | "starts_on">; initial: ObEntry[]; members: EntryMember[]; viewerId: string; party?: ObPartyResponse[]; duties?: ObDuty[]; dutyRoles?: ObDutyRole[]; history?: ConfirmedEntryIdentity[] }) {
+export function ObEntryReview({ competition, initial, members, viewerId, me, history = [], party = [], duties = [], dutyRoles = [], openMine = false, openIdentity = false }: { openMine?: boolean; openIdentity?: boolean; competition: Pick<CompetitionRow, "name" | "starts_on">; initial: ObEntry[]; members: EntryMember[]; viewerId: string; me: EntryMember; party?: ObPartyResponse[]; duties?: ObDuty[]; dutyRoles?: ObDutyRole[]; history?: ConfirmedEntryIdentity[] }) {
   const dateLabel = format(new Date(`${competition.starts_on}T00:00:00`), "M月d日(E)", { locale: ja });
   const [search, setSearch] = useState("");
-  const mineId = openMine ? initial.find((e) => e.profile_id === viewerId)?.id ?? null : null;
-  // ホームの「編集する」から来たときは自分の回答を開き、エントリーがあればそのまま編集画面、無ければ新規登録を出す。
-  const [view, setView] = useState<"events" | "mine" | "identity" | "party" | "duty">(openMine ? "mine" : openIdentity ? "identity" : "events");
+  const [view, setView] = useState<"events" | "identity" | "party" | "duty">(openIdentity ? "identity" : "events");
   const [unlinked, setUnlinked] = useState(openIdentity);
-  const [adding, setAdding] = useState(openMine && !mineId);
-  const [editingId, setEditingId] = useState<string | null>(mineId);
+  const [managerOpen, setManagerOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [division, setDivision] = useState("all");
+  const mine = initial.find((entry) => entry.profile_id === viewerId) ?? null;
+  const newMembers = members.filter((member) => !initial.some((entry) => entry.profile_id === member.id || normalizeEntryName(entry.submitted_name) === normalizeEntryName(member.display_name)));
   const editing = initial.find((entry) => entry.id === editingId);
   const query = normalizeEntryName(search).toLowerCase();
-  const visible = initial.filter((e) => (view !== "mine" || e.profile_id === viewerId) && (view !== "identity" || !isAlumniEntry(e) && (!unlinked || !e.profile_id)) &&
+  const visible = initial.filter((e) => (view !== "identity" || !isAlumniEntry(e) && (!unlinked || !e.profile_id)) &&
     normalizeEntryName([e.submitted_name, e.grade, ...e.events].join(" ")).toLowerCase().includes(query));
   const eventNames = [...new Set(initial.flatMap((entry) => entry.events))].sort(compareObEvents);
   const groups = eventNames.filter((event) => division === "all" || event.startsWith(division)).map((event) => ({ event, entries: visible.filter((entry) => entry.events.includes(event) && normalizeEntryName([entry.submitted_name, entry.grade, event].join(" ")).toLowerCase().includes(query)).sort((a, b) => compareByGrade({ grade: a.grade, name: a.submitted_name }, { grade: b.grade, name: b.submitted_name })) })).filter((group) => group.entries.length);
@@ -52,18 +55,17 @@ export function ObEntryReview({ competition, initial, members, viewerId, history
           <p className="text-headline">{competition.name}</p>
           <p className="mt-1 text-caption">{dateLabel}・{initial.filter((e) => e.events.length).length}人・{initial.reduce((sum, e) => sum + e.events.length, 0)}エントリー</p>
         </div>
-        <Button size="sm" variant="outline" onClick={() => setAdding(true)}>新規登録</Button>
+        <Button size="sm" variant="outline" onClick={() => setManagerOpen(true)}>エントリー管理</Button>
       </div>
-      <p className="mt-2 text-micro text-muted2">現役・OB・OGの出場登録／システムロール限定</p>
+      <p className="mt-2 text-micro text-muted2">現役・OB・OGの出場登録</p>
     </Card>
-    <SegmentedControl items={[{key:"events",label:"予定"},{key:"mine",label:"回答"},{key:"party",label:"懇親会"},{key:"duty",label:"補助員"}]} value={view === "identity" ? "mine" : view} onChange={(value) => {setView(value);setSearch("");}} />
-    {(view === "mine" || view === "identity") && <SegmentedControl items={[{key:"mine",label:"自分の回答"},{key:"identity",label:"本人照合"}]} value={view} onChange={(value)=>{setView(value);setSearch("");}} />}
+    <ObMyEntry embedded entry={mine} party={party.find((p) => p.entry_id === mine?.id)} me={me} openEditor={openMine} />
+    <SegmentedControl items={[{key:"events",label:"予定"},{key:"identity",label:"本人照合"},{key:"party",label:"懇親会"},{key:"duty",label:"補助員"}]} value={view} onChange={(value) => {setView(value);setSearch("");}} />
     {(view === "events" || view === "identity") && <Input aria-label="氏名・種目・学年で検索" placeholder="氏名・種目・学年で検索" value={search} onChange={(event) => setSearch(event.target.value)} />}
     {view === "events" && <SegmentedControl items={[{key:"all",label:"すべて"},{key:"男子",label:"男子"},{key:"女子",label:"女子"}]} value={division} onChange={setDivision} />}
     {view === "identity" && <Button size="sm" variant={unlinked ? "primary" : "outline"} aria-pressed={unlinked} onClick={() => setUnlinked(!unlinked)}>未確認のみ</Button>}
-    {adding && <ObEntryEditor parties={party} members={members}
-      registered={new Map(initial.flatMap((e) => (e.profile_id ? [[e.profile_id, e.id] as [string, string]] : [])))}
-      onEditExisting={(entryId) => { setAdding(false); setEditingId(entryId); }} initialProfileId={view === "mine" && !initial.some((e) => e.profile_id === viewerId) ? viewerId : ""} onClose={() => setAdding(false)} />}
+    {managerOpen && <ObEntryManager entries={initial} canAdd={newMembers.length > 0} onClose={() => setManagerOpen(false)} onEdit={(id) => { setManagerOpen(false); setEditingId(id); }} onNew={() => { setManagerOpen(false); setAdding(true); }} />}
+    {adding && <ObEntryEditor parties={party} members={newMembers} onClose={() => setAdding(false)} />}
     {editing && <ObEntryEditor key={`${editing.id}:${editing.revision}`} entry={editing} party={party.find((p)=>p.entry_id===editing.id)} members={members} onClose={() => setEditingId(null)} />}
     {view === "party" ? <ObPartyView responses={party} /> : view === "duty" ? <ObDutyTable entries={initial} members={members} duties={duties} roles={dutyRoles} /> : view === "events" ? <div className="space-y-3">
       <p className="text-micro text-muted2">種目を開くと出場者と資格記録が見られます。</p>
@@ -86,8 +88,7 @@ export function ObEntryReview({ competition, initial, members, viewerId, history
         </Card>
       </section>
       {query && !groups.length && <EmptyState title="条件に合うエントリーはありません" />}
-    </div> : visible.length === 0 ? <Card><EmptyState title={view === "mine" ? "自分に紐付いたエントリーはありません" : "条件に合うエントリーはありません"} />
-      {view === "mine" && <p className="px-4 pb-4 text-caption">「本人照合」から自分の回答を確認できます。</p>}</Card> : [...visible].sort((a, b) => compareByGrade({ grade: a.grade, name: a.submitted_name }, { grade: b.grade, name: b.submitted_name })).map((entry) =>
+    </div> : visible.length === 0 ? <Card><EmptyState title="条件に合うエントリーはありません" /></Card> : [...visible].sort((a, b) => compareByGrade({ grade: a.grade, name: a.submitted_name }, { grade: b.grade, name: b.submitted_name })).map((entry) =>
       <EntryCard key={`${entry.id}:${entry.revision}:${view}`} entry={entry} members={members} history={history} party={party.find((p)=>p.entry_id===entry.id)} identity={view === "identity"} />)}
     <p className="text-micro text-muted">変更はアプリ内のみ。Googleフォームには反映されません。</p>
   </div>;

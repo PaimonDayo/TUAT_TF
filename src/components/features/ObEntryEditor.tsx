@@ -16,9 +16,8 @@ import { entryGrade, normalizeEntryName, type EntryMember } from "@/lib/entry-id
 import { OB_PARTY, OB_PROGRAM, PARTY_STATUSES, compareByGrade, obEventTime, type ObPartyResponse, type PartyStatus } from "@/lib/ob-meet";
 import { type ObEntry } from "@/lib/ob-entries";
 
-export function ObEntryEditor({ entry, members, initialProfileId = "", party, parties = [], registered, onEditExisting, onClose, self = false }: { self?: boolean; entry?: ObEntry; party?: ObPartyResponse; parties?: ObPartyResponse[]; members: EntryMember[]; initialProfileId?: string;
-  /** 新規登録で、すでにエントリーがある部員（部員ID→エントリーID）。選ぶとその人の編集に切り替える */
-  registered?: Map<string, string>; onEditExisting?: (entryId: string) => void; onClose: () => void }) {
+export function ObEntryEditor({ entry, members, initialProfileId = "", party, parties = [], onClose, self = false }: { self?: boolean; entry?: ObEntry; party?: ObPartyResponse; parties?: ObPartyResponse[]; members: EntryMember[]; initialProfileId?: string;
+  onClose: () => void }) {
   function findParty(id: string) {return party ?? parties.find((p)=>!p.entry_id&&!p.needs_review&&normalizeEntryName(p.submitted_name)===normalizeEntryName(members.find((m)=>m.id===id)?.display_name??""));}
   const [selectedParty,setSelectedParty]=useState(()=>findParty(initialProfileId));
   const [partyStatus, setPartyStatus] = useState<PartyStatus>(selectedParty?.status ?? "未回答");
@@ -52,15 +51,12 @@ export function ObEntryEditor({ entry, members, initialProfileId = "", party, pa
     <ObProgramDisclosure />
     {!entry && self && <p className="text-headline">{members[0] ? `${entryGrade(members[0].grade)} ${members[0].display_name}` : ""}</p>}
     {!entry && !self && <Select value={profileId} onValueChange={(value)=>{
-      const existing = registered?.get(value);
-      if (existing && onEditExisting) { onEditExisting(existing); return; }
       setProfileId(value);
       const answer=findParty(value);
       setSelectedParty(answer);
       setPartyStatus(answer?.status??"未回答");
     }} disabled={saving} ariaLabel="追加する部員"
-      options={[{ value: "", label: "部員を選択" }, ...[...members].sort((a, b) => compareByGrade({ grade: a.grade, name: a.display_name }, { grade: b.grade, name: b.display_name })).map((m) => ({ value: m.id, label: `${entryGrade(m.grade)} ${m.display_name}${registered?.has(m.id) ? "（登録済み・編集）" : ""}` }))]} />}
-    {!entry && registered && registered.size > 0 && <p className="text-caption">すでにエントリーしている部員を選ぶと、その人のエントリーの編集に切り替わります。</p>}
+      options={[{ value: "", label: "部員を選択" }, ...[...members].sort((a, b) => compareByGrade({ grade: a.grade, name: a.display_name }, { grade: b.grade, name: b.display_name })).map((m) => ({ value: m.id, label: `${entryGrade(m.grade)} ${m.display_name}` }))]} />}
     <Card className="space-y-2 p-3.5"><h3 className="text-headline">懇親会の出欠</h3>
       <p className="text-caption">{OB_PARTY.time} {OB_PARTY.venue}<br />参加費 {OB_PARTY.fee.toLocaleString()}円</p>
       {selectedParty && !entry && <p className="text-caption">懇親会の既存回答：{selectedParty.group_label} {selectedParty.submitted_name}。同じ本人であることを確認して保存してください。</p>}
@@ -97,7 +93,7 @@ export function ObEntryEditor({ entry, members, initialProfileId = "", party, pa
     </>}
     <FormModalFooter><div className="flex items-center gap-3">
       <span className="shrink-0 text-body">{events.length}種目</span>
-      <Button className="flex-1" disabled={saving || !dirty || (!entry && (!profileId || (!events.length && partyStatus === "未回答")))} onClick={() => removed.length ? setConfirm("save") : void save()}>{saving ? "保存中…" : "変更を保存する"}</Button>
+      <Button className="flex-1" disabled={saving || !dirty || (!entry && (!profileId || (!events.length && partyStatus === "未回答")))} onClick={() => removed.length ? setConfirm("save") : void save()}>{saving ? "保存中…" : entry ? "変更を保存する" : "登録する"}</Button>
     </div></FormModalFooter>
     <ConfirmDialog open={confirm !== null} onOpenChange={(open) => { if (!open && !saving) setConfirm(null); }}
       title={confirm === "division" ? "出場区分を変更しますか？" : confirm === "close" ? "変更を破棄しますか？" : "エントリーを取り消しますか？"}

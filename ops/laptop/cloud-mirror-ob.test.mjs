@@ -16,3 +16,17 @@ test('exhausted retries are excluded from replay but never from overwrite protec
   assert.equal(held.searchParams.has('attempts'), false);
   assert.equal(held.searchParams.get('offset'), '1000');
 });
+
+import { orderObReplay, obReplayHeaders } from './cloud-mirror-ob.mjs';
+test('replays original audit rows after parents and suppresses only matching regenerated logs', () => {
+  const entry={id:2,table_name:'ob_meet_entries',op:'UPDATE',pk:{id:'e'},row_data:{revision:3}};
+  const audit={id:1,table_name:'ob_entry_changes',op:'INSERT',row_data:{after_data:{id:'e',revision:3}}};
+  const other={id:3,table_name:'profiles'};
+  assert.deepEqual(orderObReplay([audit,entry,other]),[entry,other,audit]);
+  assert.deepEqual(obReplayHeaders(entry,[audit,entry]),{'x-tuat-mirror':'1'});
+  assert.deepEqual(obReplayHeaders(entry,[]),{});
+  assert.deepEqual(obReplayHeaders({...entry,row_data:{revision:4}},[audit]),{});
+  assert.deepEqual(obReplayHeaders({...entry,table_name:'ob_party_responses'},[audit]),{});
+  const party={...audit,row_data:{after_data:{id:'e',revision:3,change_type:'party'}}};
+  assert.deepEqual(obReplayHeaders({...entry,table_name:'ob_party_responses'},[party]),{'x-tuat-mirror':'1'});
+});

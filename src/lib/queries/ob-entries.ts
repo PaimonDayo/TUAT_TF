@@ -17,12 +17,12 @@ export async function getObEntries() {
   return { entries, members, history, party, duties, dutyRoles };
 }
 
-/** ホーム用: 自分に紐付いたOB戦のエントリーだけを取る（システムロール限定。RLSでも同じ範囲）。 */
+/** ホーム用: 自分に紐付いたOB戦のエントリーだけを取る（RLSでも本人の分だけ）。 */
 export async function getMyObEntry(profileId: string) {
   const client = entryClient(await createClient());
   const { data, error } = await client.from("ob_meet_entries")
     .select("id,events,qualification_marks").eq("meet_key", "ob-2026").eq("profile_id", profileId).limit(1).maybeSingle();
-  if (error) return null;
+  if (error) throw new Error("自分のエントリーを取得できませんでした");
   return data as { id: string; events: string[]; qualification_marks: Record<string, string | null> } | null;
 }
 
@@ -43,9 +43,11 @@ export async function getMyObEntryCandidates(profileId: string) {
 /** 一般部員の画面用: 自分のエントリーと懇親会の回答（RLSで本人の分だけ読める）。 */
 export async function getMyObEntryFull(profileId: string) {
   const client = entryClient(await createClient());
-  const { data: entry } = await client.from("ob_meet_entries").select("*").eq("meet_key", "ob-2026").eq("profile_id", profileId).limit(1).maybeSingle();
-  const party = entry
-    ? (await client.from("ob_party_responses").select("id,meet_key,submitted_name,group_label,status,entry_id,revision,needs_review").eq("entry_id", entry.id).maybeSingle()).data
-    : null;
-  return { entry: (entry ?? null) as ObEntry | null, party: party as ObPartyResponse | null };
+  const { data: entry, error } = await client.from("ob_meet_entries").select("*").eq("meet_key", "ob-2026").eq("profile_id", profileId).limit(1).maybeSingle();
+  if (error) throw new Error("自分のエントリーを取得できませんでした");
+  const partyResult = entry
+    ? await client.from("ob_party_responses").select("id,meet_key,submitted_name,group_label,status,entry_id,revision,needs_review").eq("entry_id", entry.id).maybeSingle()
+    : { data: null, error: null };
+  if (partyResult.error) throw new Error("懇親会の回答を取得できませんでした");
+  return { entry: (entry ?? null) as ObEntry | null, party: partyResult.data as ObPartyResponse | null };
 }
