@@ -1,3 +1,4 @@
+import { canModerateComments } from "@/lib/permissions";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
@@ -80,6 +81,7 @@ async function MemberContent({
     display_name: viewer.display_name,
     avatar_url: viewer.avatar_url,
     systemRecordForm: Boolean(viewer.sheet_name),
+          canModerateComments: canModerateComments(viewer.roles),
   };
 
   // 記録とつぶやきを一つの「これまでの投稿」にまとめる。

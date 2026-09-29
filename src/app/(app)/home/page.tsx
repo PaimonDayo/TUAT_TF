@@ -1,3 +1,4 @@
+import { canModerateComments } from "@/lib/permissions";
 import Link from "next/link";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
@@ -300,6 +301,7 @@ async function FeedSection() {
           display_name: profile.display_name,
           avatar_url: profile.avatar_url,
           systemRecordForm: Boolean(profile.sheet_name),
+          canModerateComments: canModerateComments(profile.roles),
         }}
       />
     </section>

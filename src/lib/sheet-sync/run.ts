@@ -1,3 +1,4 @@
+import { flushReplyDeletions } from "./reply-deletions";
 // 毎時同期の本体。上のモジュールを順に呼ぶ進行役。
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -36,6 +37,7 @@ export async function runSheetSync(
     sheetReplies: 0,
     dryRun,
   };
+  if (!dryRun) result.failedMembers.push(...await flushReplyDeletions(admin));
   const today = todayJST();
   const inRange = (d: string) => d >= SHEET_HISTORY_START && d <= today;
 

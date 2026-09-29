@@ -9,7 +9,7 @@ function setup() {
   let locks = 0, writes = 0;
   const ctx = vm.createContext({ LockService: {getScriptLock: () => ({waitLock(){locks++;}, releaseLock(){locks--;}})}, SpreadsheetApp: {flush(){}} });
   vm.runInContext(readFileSync(new URL('../../gas/sync-clasp/Code.js', import.meta.url),'utf8'),ctx);
-  ctx.findMemberSheet = () => ({getDataRange: () => ({getValues: () => values}), getMaxColumns: () => 4, getRange(row, col) {return {getNotes: () => [notes], setNote(note){notes[col-1]=note;},setNumberFormat(format){assert.equal(format,'@');},setValue(text){assert.equal(locks,1);values[row-1][col-1]=text;writes++;}};}});
+  ctx.findMemberSheet = () => ({getDataRange: () => ({getValues: () => values}), getMaxColumns: () => 4, getRange(row, col) {return {getNotes: () => [notes], setNote(note){notes[col-1]=note;},clearContent(){assert.equal(locks,1);values[row-1][col-1]='';},setNumberFormat(format){assert.equal(format,'@');},setValue(text){assert.equal(locks,1);values[row-1][col-1]=text;writes++;}};}});
   ctx.findGenericHeaderIndex = () => 0;
   ctx.findRecordRow = () => 1;
   ctx.findNextReplyColumn = () => 2;
@@ -38,4 +38,37 @@ test('appending a reply column returns a zero-based index', () => {
   let size=3;const sheet={getMaxColumns:()=>size,insertColumnAfter(col){assert.equal(col,size);size++;}};
   assert.equal(ctx.findNextReplyColumn(sheet,['date','memo','old reply'],['日付','感想','']),3);
   assert.equal(size,4);
+});
+
+test('deletion clears only the identified reply and prevents delayed resends',()=>{
+ const t=setup(),input={memberName:'test',date:'2026-09-28',text:'reply',sourceId:'comment-1'};
+ t.ctx.writeReplyRecord(input);t.values[1][3]='other reply';
+ const deletion={memberName:'test',date:input.date,sourceId:'comment-1',deletionId:'comment-1',replyIndex:2,expectedText:"'reply"};
+ assert.equal(t.ctx.deleteReplyRecord(deletion).success,true);
+ assert.equal(t.values[1][2],'');assert.equal(t.values[1][1],'record');assert.equal(t.values[1][3],'other reply');
+ assert.equal(t.ctx.writeReplyRecord(input).action,'deleted');
+ assert.equal(t.ctx.deleteReplyRecord(deletion).action,'already_deleted');
+});
+test('delete-before-send reserves a tombstone and refuses later delivery',()=>{
+ const t=setup();
+ t.ctx.deleteReplyRecord({memberName:'test',date:'2026-09-28',sourceId:'not-sent',deletionId:'not-sent',expectedText:'reply'});
+ assert.equal(t.ctx.writeReplyRecord({memberName:'test',date:'2026-09-28',sourceId:'not-sent',text:'reply'}).action,'deleted');
+ assert.equal(t.getWrites(),0);
+});
+test('sheet-origin deletion checks the column and content before clearing',()=>{
+ const t=setup();t.values[1][2]='original';
+ const input={memberName:'test',date:'2026-09-28',deletionId:'sheet-1',replyIndex:2,expectedText:'stale'};
+ assert.throws(()=>t.ctx.deleteReplyRecord(input),/変更/);assert.equal(t.values[1][2],'original');
+ assert.throws(()=>t.ctx.deleteReplyRecord({...input,replyIndex:1,expectedText:'record'}),/返信列/);
+ assert.equal(t.ctx.deleteReplyRecord({...input,expectedText:'original'}).success,true);
+ t.values[1][2]='new manual reply';
+ assert.throws(()=>t.ctx.deleteReplyRecord({...input,expectedText:'original'}),/別の返信/);
+ assert.equal(t.values[1][2],'new manual reply');assert.equal(t.getLocks(),0);
+});
+test('interrupted deletion resumes safely without clearing an intervening edit',()=>{
+ const t=setup();t.values[1][2]='original';t.notes[2]='TUAT_DELETING_COMMENT:c1:"original"';
+ const input={memberName:'test',date:'2026-09-28',deletionId:'c1',sourceId:'c1',expectedText:'original'};
+ assert.equal(t.ctx.writeReplyRecord({...input,text:'new'}).action,'deleted');
+ t.values[1][2]='edited';assert.throws(()=>t.ctx.deleteReplyRecord(input),/変更/);
+ t.values[1][2]='original';assert.equal(t.ctx.deleteReplyRecord(input).success,true);assert.equal(t.values[1][2],'');
 });

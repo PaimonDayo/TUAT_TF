@@ -1,3 +1,4 @@
+import { canModerateComments } from "@/lib/permissions";
 import Link from "next/link";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
@@ -164,6 +165,7 @@ export default async function MyPage({
                 display_name: profile.display_name,
                 avatar_url: profile.avatar_url,
                 systemRecordForm: Boolean(profile.sheet_name),
+          canModerateComments: canModerateComments(profile.roles),
               }}
             />
           </Suspense>

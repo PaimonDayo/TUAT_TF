@@ -14,6 +14,13 @@ export type Database = {
   }
   public: {
     Tables: {
+      sheet_reply_deletions: {
+        Row: { id: string; kind: string; actor_id: string | null; record_id: string; sheet_name: string; recorded_date: string; reply_index: number | null; expected_content: string; created_at: string; processed_at: string | null }
+        Insert: never
+        Update: { processed_at?: string | null }
+        Relationships: []
+      }
+
       competition_events: {
         Row: { name: string; sort_order: number; measure_type: string; time_format: string }
         Insert: { name: string; sort_order?: number; measure_type?: string; time_format?: string }
@@ -2158,6 +2165,8 @@ export type Database = {
       }
     }
     Functions: {
+      delete_comment_with_sheet: { Args: { p_id: string; p_kind: string }; Returns: string | null }
+
       replace_competition_program: { Args: { target_competition_id: string; program_rows: Json }; Returns: number }
       get_record_field_groups: {
         Args: { requested_record_ids: string[] }

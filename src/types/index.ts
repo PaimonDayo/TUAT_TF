@@ -269,7 +269,7 @@ export interface Comment {
   updated_at: string;
 }
 
-export type CommentAuthor = Pick<Profile, "id" | "display_name" | "avatar_url"> & { systemRecordForm?: boolean };
+export type CommentAuthor = Pick<Profile, "id" | "display_name" | "avatar_url"> & { systemRecordForm?: boolean; canModerateComments?: boolean };
 
 export interface CommentWithAuthor extends Comment {
   author: CommentAuthor;

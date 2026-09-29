@@ -12,10 +12,11 @@ export function gasConfig() {
 }
 
 
-export async function gasPost<T>(body: Record<string, unknown>): Promise<T> {
+export async function gasPost<T>(body: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
   const { url, secret } = gasConfig();
   const res = await fetch(url, {
     method: "POST",
+    signal,
     redirect: "follow",
     headers: { "Content-Type": "application/json;charset=utf-8" },
     body: JSON.stringify({ ...body, secret }),

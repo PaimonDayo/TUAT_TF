@@ -1,3 +1,4 @@
+import { canModerateComments } from "@/lib/permissions";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
 import Link from "next/link";
@@ -64,6 +65,7 @@ async function PostContent({ params }: { params: Promise<{ kind: string; id: str
     display_name: profile.display_name,
     avatar_url: profile.avatar_url,
     systemRecordForm: Boolean(profile.sheet_name),
+          canModerateComments: canModerateComments(profile.roles),
   };
 
   return (

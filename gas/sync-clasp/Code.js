@@ -55,6 +55,7 @@ function doPost(e) {
     if (body.action === 'fetchMember') return handleFetchMember(body.memberName);
     if (body.action === 'writeCells') return createJsonResponse(writeCellsRecord(body));
     if (body.action === 'writeMiddleLongMenu') return createJsonResponse(writeMiddleLongMenuRecord(body));
+    if (body.action === 'deleteReply') return createJsonResponse(deleteReplyRecord(body));
     if (body.action === 'writeReply') return createJsonResponse(writeReplyRecord(body));
     return createJsonResponse({ error: 'unknown action' });
   } catch (err) {
@@ -334,12 +335,13 @@ function writeReplyRecordLocked(data) {
 
   const marker = sourceId ? 'TUAT_APP_COMMENT:' + sourceId : '';
   const notes = sheet.getRange(rowIdx + 1, 1, 1, sheet.getMaxColumns()).getNotes()[0];
+  if (sourceId && (notes.indexOf('TUAT_DELETED_COMMENT:' + sourceId) >= 0 || notes.some(function(note){return note.indexOf('TUAT_DELETING_COMMENT:' + sourceId + ':') === 0;}))) return { success: false, action: 'deleted' };
   const previous = marker ? notes.indexOf(marker) : -1;
   if (previous >= 0 && values[rowIdx][previous] !== '' && values[rowIdx][previous] != null) {
     return { success: true, action: 'already_replied', row: rowIdx + 1, col: previous + 1 };
   }
   const occupiedRow = notes.map(function (note, col) {
-    return note.indexOf('TUAT_APP_COMMENT:') === 0 ? 'reserved' : values[rowIdx][col];
+    return (note.indexOf('TUAT_APP_COMMENT:') === 0 || note.indexOf('TUAT_DELETED_COMMENT:') === 0 || note.indexOf('TUAT_DELETED_REPLY:') === 0 || note.indexOf('TUAT_DELETING_') === 0) ? 'reserved' : values[rowIdx][col];
   });
   const col = previous >= 0 ? previous : findNextReplyColumn(sheet, occupiedRow, values[hIdx]);
   const cell = sheet.getRange(rowIdx + 1, col + 1);
@@ -349,4 +351,72 @@ function writeReplyRecordLocked(data) {
   cell.setValue("'" + text);
   SpreadsheetApp.flush();
   return { success: true, action: 'replied', row: rowIdx + 1, col: col + 1 };
+}
+
+// Clear exactly one reply cell; never shift columns or touch record fields.
+function deleteReplyRecord(data) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    if (!data.memberName || !data.date || !data.deletionId || !data.expectedText) throw new Error('削除対象が不足しています');
+    const sheet = findMemberSheet(data.memberName);
+    if (!sheet) throw new Error('対象シートが見つかりません');
+    const values = sheet.getDataRange().getValues();
+    const hIdx = findGenericHeaderIndex(values);
+    if (hIdx === -1) throw new Error('見出しが見つかりません');
+    const row = findRecordRow(values, hIdx, data.date);
+    if (row === -1) return {success:true, action:'no_row'};
+    const notes = sheet.getRange(row+1,1,1,sheet.getMaxColumns()).getNotes()[0];
+    const sourceId = (data.sourceId || '').toString().replace(/[^A-Za-z0-9_-]/g,'');
+    const deleted = (sourceId ? 'TUAT_DELETED_COMMENT:' + sourceId : 'TUAT_DELETED_REPLY:' + data.deletionId);
+    const pendingPrefix = (sourceId ? 'TUAT_DELETING_COMMENT:' + sourceId : 'TUAT_DELETING_REPLY:' + data.deletionId) + ':';
+    const interrupted = notes.findIndex(function(note){return note.indexOf(pendingPrefix) === 0;});
+    if (interrupted >= 0) {
+      const original = JSON.parse(notes[interrupted].slice(pendingPrefix.length));
+      const current = String(values[row][interrupted] || '');
+      if (current && current !== original) throw new Error('削除中に返信が変更されました');
+      const cell = sheet.getRange(row+1,interrupted+1);
+      cell.clearContent(); cell.setNote(deleted); SpreadsheetApp.flush();
+      return {success:true,action:'deleted'};
+    }
+    const done = notes.indexOf(deleted);
+    if (done >= 0) {
+      // Retrying a completed deletion must not erase newly typed content.
+      if (String(values[row][done] || '').trim()) throw new Error('削除済みの欄に別の返信があります');
+      return {success:true,action:'already_deleted'};
+    }
+    const marker = sourceId ? notes.indexOf('TUAT_APP_COMMENT:' + sourceId) : -1;
+    let col = marker;
+    const expected = String(data.expectedText).trim();
+    if (marker >= 0 && String(values[row][marker] || '').trim() && String(values[row][marker]).trim() !== expected) throw new Error('返信が変更されています');
+    if (col < 0 && Number.isInteger(data.replyIndex) && data.replyIndex >= 0 && data.replyIndex < notes.length) {
+      const candidate = data.replyIndex;
+      if (String(values[hIdx][candidate] || '').trim()) throw new Error('返信列ではありません');
+      const value = String(values[row][candidate] || '').trim();
+      if (value && value !== expected) throw new Error('返信が変更されています');
+      if (notes[candidate] && notes[candidate] !== 'TUAT_APP_COMMENT:' + sourceId) throw new Error('返信の識別情報が一致しません');
+      col = candidate;
+    }
+    if (col < 0 && sourceId) {
+      const matches = [];
+      values[row].forEach(function(value,index) {
+        if (!String(values[hIdx][index] || '').trim() && String(value || '').trim() === expected && !notes[index]) matches.push(index);
+      });
+      if (matches.length > 1) throw new Error('同じ返信が複数あります');
+      if (matches.length === 1) col = matches[0];
+      else {
+        const occupied = notes.map(function(note,index){return note ? 'reserved' : values[row][index];});
+        col = findNextReplyColumn(sheet,occupied,values[hIdx]);
+      }
+    }
+    if (col < 0 || String(values[hIdx][col] || '').trim()) throw new Error('削除対象を特定できません');
+    const cell = sheet.getRange(row+1,col+1);
+    // Persist the deletion first: a concurrent/retried sender cannot recreate it.
+    cell.setNote(pendingPrefix + JSON.stringify(String(values[row][col] || '')));
+    SpreadsheetApp.flush();
+    cell.clearContent();
+    cell.setNote(deleted);
+    SpreadsheetApp.flush();
+    return {success:true,action:'deleted',col:col+1};
+  } finally { lock.releaseLock(); }
 }

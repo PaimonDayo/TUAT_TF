@@ -1,3 +1,4 @@
+import { canModerateComments } from "@/lib/permissions";
 import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { Header } from "@/components/layout/Header";
@@ -47,6 +48,7 @@ async function TimelineContent() {
         display_name: profile.display_name,
         avatar_url: profile.avatar_url,
         systemRecordForm: Boolean(profile.sheet_name),
+          canModerateComments: canModerateComments(profile.roles),
       }}
       favoriteIds={favoriteIds}
       initialCompact={initialCompact}

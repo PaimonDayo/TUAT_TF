@@ -241,27 +241,21 @@ export function CommentSection({
     setSaving(false);
   }
 
-  async function remove(comment: CommentWithAuthor) {
+  async function remove(comment: DisplayReply) {
+    if (!currentUser.canModerateComments && (comment.kind !== "app" || comment.user_id !== currentUser.id)) return false;
     setError("");
-    const supabase = createClient();
-    const { data, error: deleteError } = await supabase
-      .from("comments")
-      .delete()
-      .eq("id", comment.id)
-      .eq("user_id", currentUser.id)
-      .select("id");
-
-    if (deleteError || !data || data.length !== 1) {
-      setError("コメントを削除できませんでした");
-      return false;
-    }
-
-    setComments((items) => {
-      const next = items.filter((item) => item.id !== comment.id);
-      onCountChange(next.length);
-      return next;
-    });
-    return true;
+    try {
+      const response = await fetch("/api/comments/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: comment.id, kind: comment.kind }) });
+      const result = await response.json();
+      if (!response.ok || !result.ok) { setError("コメントを削除できませんでした"); return false; }
+      setComments((items) => {
+        const next = items.filter((item) => item.id !== comment.id);
+        onCountChange(next.length);
+        return next;
+      });
+      if (result.pending) setError("アプリから削除しました。スプシ側は反映待ちです。次回同期で自動再試行します");
+      return true;
+    } catch { setError("削除結果を確認できませんでした。再試行してください"); return false; }
   }
 
   return (
@@ -294,8 +288,9 @@ export function CommentSection({
                     <FileSpreadsheet size={16} aria-hidden="true" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex min-h-7 items-center">
+                    <div className="flex min-h-7 items-center justify-between gap-2">
                       <p className="text-[13px] font-semibold">スプレッドシートからの返信</p>
+                      {currentUser.canModerateComments && <ActionMenu onDelete={() => remove(comment)} deleteTitle="返信を削除しますか？" deleteDescription="スプシの返信も削除します。元に戻せません。" triggerLabel="返信のメニュー" />}
                     </div>
                     <p className="text-[14px] whitespace-pre-wrap break-words">
                       <Linkify text={comment.content} />
@@ -320,12 +315,12 @@ export function CommentSection({
                     <p className="min-w-0 flex-1 truncate text-[13px] font-semibold">
                       {comment.author.display_name || "名無し"}
                     </p>
-                    {comment.user_id === currentUser.id && !editing && (
+                    {(comment.user_id === currentUser.id || currentUser.canModerateComments) && !editing && (
                       <ActionMenu
-                        onEdit={() => beginEdit(comment)}
+                        onEdit={comment.user_id === currentUser.id ? () => beginEdit(comment) : undefined}
                         onDelete={() => remove(comment)}
                         deleteTitle="コメントを削除しますか？"
-                        deleteDescription="削除したコメントは元に戻せません。"
+                        deleteDescription="スプシに送信済みの返信も削除します。元に戻せません。"
                         triggerLabel="コメントのメニュー"
                         className="-mr-1"
                       />

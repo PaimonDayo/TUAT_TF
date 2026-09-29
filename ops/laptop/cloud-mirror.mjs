@@ -15,7 +15,7 @@
 // 使い方: node ops/laptop/cloud-mirror.mjs          … 差分を数えるだけ（書き込まない）
 //         node ops/laptop/cloud-mirror.mjs --apply  … クラウドへ反映する
 
-import { readFileSync, writeFileSync, renameSync } from "node:fs";
+import { readFileSync, writeFileSync, renameSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { OB_TABLES, changesPath, orderObReplay, obReplayHeaders } from './cloud-mirror-ob.mjs';
@@ -26,6 +26,11 @@ const AUTH_CHECK_MS = 3600_000;
 const PAGE = 1000;
 const BATCH = 500;
 const root = resolve(import.meta.dirname, "../../.contingency");
+// Deployment drain: keep the live backend online while schema and replay code are updated.
+if (existsSync(resolve(root, "backend/cloud-mirror-paused"))) {
+  console.log("Cloud mirror paused for deployment");
+  process.exit(0);
+}
 
 function readEnvFile(file) {
   return Object.fromEntries(
@@ -111,6 +116,7 @@ const TABLES = [
   { table: "competitions", pk: ["id"] },
   { table: "competition_events", pk: ["name"] },
   ...OB_TABLES,
+  { table: "sheet_reply_deletions", pk: ["id"] },
   { table: "schedule_sheets", pk: ["id"] },
   { table: "practice_schedules", pk: ["id"] },
   { table: "practice_menus", pk: ["id"] },
