@@ -1,3 +1,4 @@
+import { parseSheetTransition } from "@/lib/sheet-period";
 import type { AppRole, AttendanceDefaultBlock, AuthorMini, Block, BlockViewDefault, Profile, PracticeRecord, RecordFieldDef, RecordWithAuthor, Role, TweetWithAuthor } from "@/types";
 import type { Database, Json } from "@/types/database";
 
@@ -130,6 +131,7 @@ export function normalizeTweetWithAuthor(
 export function normalizeProfileRow(row: ProfileRow, roles: AppRole[] = []): Profile {
   return {
     ...row,
+    sheet_transition: parseSheetTransition(row.sheet_transition),
     blocks: row.blocks.filter((block): block is Block => BLOCK_VALUES.has(block as Block)),
     role: ROLE_VALUES.has(row.role as Role) ? (row.role as Role) : "member",
     status: row.status === "graduated" ? "graduated" : "active",

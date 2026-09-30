@@ -1,3 +1,5 @@
+import { OCTOBER_START, legacySyncOpen } from "@/lib/sheet-period";
+import { sheetForRecord, systemSheetProfileIds } from "./period-routing";
 // アプリで消した練習記録について、スプシの同じ日の欄を空にする（2026-09-26 オーナー確定: 「アプリで消したらスプシも消す」）。
 // 日付の行そのものは消さない（シートには全日付の行が並んでおり、行を消すと表が崩れる）。
 
@@ -55,12 +57,14 @@ export async function processPendingClears(
   admin: SupabaseClient,
   profile: { id: string; sheet_name: string; record_fields: RecordFieldDef[] },
 ): Promise<{ cleared: number; failed: number }> {
-  const { data: queued, error } = await admin
+  let query = admin
     .from("sheet_pending_clears")
     .select("user_id, recorded_date")
     .eq("user_id", profile.id)
     .order("recorded_date", { ascending: true })
     .limit(20);
+  if (!legacySyncOpen() && (await systemSheetProfileIds(admin)).has(profile.id)) query = query.gte("recorded_date", OCTOBER_START);
+  const { data: queued, error } = await query;
   if (error) throw error;
   const rows = (queued ?? []) as PendingClear[];
   if (rows.length === 0) return { cleared: 0, failed: 0 };
@@ -73,14 +77,16 @@ export async function processPendingClears(
   if (existingError) throw existingError;
   const recreated = new Set((existing ?? []).map((row) => row.recorded_date as string));
 
-  const member = await fetchMemberRaw(profile.sheet_name);
-  const map = resolveFieldMap(member, profile.record_fields);
   let cleared = 0;
   let failed = 0;
   for (const row of rows) {
     try {
+      const target = await sheetForRecord(admin, profile.id, row.recorded_date);
+      if (!target) continue; // Closed periods stay untouched.
+      const member = await fetchMemberRaw(target.sheetName, { spreadsheetId: target.spreadsheetId });
+      const map = resolveFieldMap(member, target.fields);
       if (!recreated.has(row.recorded_date) && sheetRowHasContent(map, member, row.recorded_date)) {
-        await gasPost({ action: "writeCells", memberName: profile.sheet_name, date: row.recorded_date, cells: clearCellsFor(map, row.recorded_date) });
+        await gasPost({ action: "writeCells", memberName: target.sheetName, spreadsheetId: target.spreadsheetId, date: row.recorded_date, cells: clearCellsFor(map, row.recorded_date) });
         cleared++;
       }
       const { error: deleteError } = await admin

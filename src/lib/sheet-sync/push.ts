@@ -21,8 +21,9 @@ export async function pushRecordToSheet(
   sheetName: string,
   recordFields: RecordFieldDef[],
   rec: DbRecord,
+  spreadsheetId?: string,
 ): Promise<PushRecordResult> {
-  const member = await fetchMemberRaw(sheetName);
+  const member = await fetchMemberRaw(sheetName, { spreadsheetId });
   const map = resolveFieldMap(member, recordFields);
   const cells = appToCellsFull(map, rec);
 
@@ -51,6 +52,7 @@ export async function pushRecordToSheet(
     unmapped?: string[];
   }>({
     action: "writeCells",
+    spreadsheetId,
     memberName: sheetName,
     date: rec.recorded_date,
     cells,

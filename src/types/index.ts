@@ -92,6 +92,7 @@ export interface Profile {
   /** シート開始日からの初回履歴取込が完了した時刻。未完了ならnull */
   sheet_history_imported_at: string | null;
   sheet_header_signature: string | null;
+  sheet_transition?: import("@/lib/sheet-period").SheetTransition | null;
   /** 記録のメインDB。'sheet'ならスプシが正でアプリからの保存は即write-through、'app'ならアプリが正でスプシへ書き戻す */
   record_source: "app" | "sheet";
   /** 記録フォームのカスタム項目定義（短距離など独自列の人向け） */
@@ -693,7 +694,7 @@ export type FeedItem =
   | ({ kind: "record" } & RecordWithAuthor)
   | ({ kind: "tweet" } & TweetWithAuthor);
 
-export type NotificationType = "comment" | "notice" | "schedule_update" | "sync_failure" | "thread_reply" | "mention";
+export type NotificationType = "comment" | "notice" | "schedule_update" | "sync_failure" | "thread_reply" | "mention" | "sheet_setup";
 export type NotificationReferenceType = "record" | "tweet" | "schedule" | "notice" | "thread";
 
 export interface AppNotification {

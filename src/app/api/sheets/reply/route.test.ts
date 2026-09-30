@@ -15,6 +15,7 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({
 }) }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: state.admin }));
 vi.mock("@/lib/sheet-sync", () => ({ writeSheetReply: state.write }));
+vi.mock("@/lib/sheet-sync/period-routing", () => ({ sheetForRecord: async () => ({ sheetName: "test-sheet", fields: [] }) }));
 import { POST } from "./route";
 
 const commentId = "11111111-1111-4111-8111-111111111111";
@@ -44,7 +45,7 @@ describe("sheet replies", () => {
   });
   it("uses DB content and limits the sync update to the same author and content", async () => {
     expect((await POST(request({ recordId: "r", commentId, text: "未保存の別本文" }))).status).toBe(200);
-    expect(state.write).toHaveBeenCalledWith("test-sheet", "2026-09-28", "保存済み本文　本人", commentId);
+    expect(state.write).toHaveBeenCalledWith("test-sheet", "2026-09-28", "保存済み本文　本人", commentId, undefined);
     expect(state.filters).toContainEqual(["comments", "content", "保存済み本文"]);
   });
   it("does not resend a synchronized comment, including column zero", async () => {

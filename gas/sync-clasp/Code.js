@@ -1,3 +1,6 @@
+const OCTOBER_SPREADSHEET_ID = '18HKZrVL-JtXbZ9zcYUFPRPGIGCpd7ltLOsmvBKdJfR8';
+let requestSpreadsheetId = '';
+
 /**
  * TUAT T&F app sync API (shared secret required).
  * All application calls use POST; spreadsheet sharing and permissions stay unchanged.
@@ -10,7 +13,7 @@ function getSpreadsheetId() {
 }
 
 function getSpreadsheet() {
-  return SpreadsheetApp.openById(getSpreadsheetId());
+  return SpreadsheetApp.openById(requestSpreadsheetId || getSpreadsheetId());
 }
 
 // Owner-only helper for setting Script Properties manually. Never called by the web app.
@@ -50,6 +53,10 @@ function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
     verifySyncSecret(body.secret);
+    const target = body.spreadsheetId || getSpreadsheetId();
+    if (target !== getSpreadsheetId() && target !== OCTOBER_SPREADSHEET_ID) throw new Error('Spreadsheet not allowed');
+    if (target === OCTOBER_SPREADSHEET_ID && body.date && body.date < '2026-10-01') throw new Error('Date outside spreadsheet period');
+    requestSpreadsheetId = target;
     if (body.action === 'listMembers') return handleListMembers();
     if (body.action === 'fetchAllRaw') return handleFetchAllRaw();
     if (body.action === 'fetchMember') return handleFetchMember(body.memberName);
@@ -60,6 +67,8 @@ function doPost(e) {
     return createJsonResponse({ error: 'unknown action' });
   } catch (err) {
     return createJsonResponse({ error: err.toString() });
+  } finally {
+    requestSpreadsheetId = '';
   }
 }
 function normalizeHeaderCell(cell) {
@@ -91,7 +100,7 @@ function parseSheetDate(raw) {
   if (!s) return '';
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
   const parts = s.split('/').map(p => p.trim());
-  const year = new Date().getFullYear();
+  const year = requestSpreadsheetId === OCTOBER_SPREADSHEET_ID ? (Number(parts[0]) < 10 ? 2027 : 2026) : new Date().getFullYear();
   if (parts.length === 2) return year + '-' + parts[0].padStart(2, '0') + '-' + parts[1].padStart(2, '0');
   if (parts.length === 3) return parts[0] + '-' + parts[1].padStart(2, '0') + '-' + parts[2].padStart(2, '0');
   return s;

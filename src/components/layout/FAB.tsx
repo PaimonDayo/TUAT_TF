@@ -58,6 +58,7 @@ type FabProps = {
   isMiddleLong: boolean;
   recordSource: "app" | "sheet";
   recordFields: RecordFieldDef[];
+  sheetTransition?: import("@/lib/sheet-period").SheetTransition | null;
   systemRecordForm: boolean;
   can: FabPermissions;
 };
@@ -83,6 +84,7 @@ function ContextualFAB({
   isMiddleLong,
   recordSource,
   recordFields,
+  sheetTransition,
   systemRecordForm,
   can,
   pathname,
@@ -379,6 +381,7 @@ function ContextualFAB({
           isMiddleLong={isMiddleLong}
           recordSource={recordSource}
           recordFields={recordFields}
+          sheetTransition={sheetTransition}
           systemRecordForm={systemRecordForm}
           onDirtyChange={setRecordDirty}
           onDone={() => closeTimelineForm("record")}

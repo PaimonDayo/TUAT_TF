@@ -142,6 +142,7 @@ export function resolveFieldMap(
 }
 // ── 値の取り出し（アプリ側 / シート側）と比較 ────────────────────────────────
 export type DbRecord = {
+  record_fields_snapshot?: RecordFieldDef[] | null;
   id: string;
   user_id: string;
   recorded_date: string;

@@ -45,9 +45,11 @@ export async function writeSheetReply(
   date: string,
   text: string,
   sourceId?: string,
+  spreadsheetId?: string,
 ): Promise<number | null> {
   const result = await gasPost<{ success?: boolean; col?: number }>({
     action: "writeReply",
+    spreadsheetId,
     memberName,
     date,
     text,
@@ -80,8 +82,8 @@ export async function writeMiddleLongMenuToSheet(
 }
 /** プロフィール選択用：部員シート名一覧 */
 
-export async function fetchSheetMembers(): Promise<SheetMember[]> {
-  return fetchPublicSheetMembers();
+export async function fetchSheetMembers(spreadsheetId?: string): Promise<SheetMember[]> {
+  return fetchPublicSheetMembers(spreadsheetId);
 }
 
 export type ProtectedFetchResult = {
@@ -101,8 +103,8 @@ export type MemberFetchInput = {
  * 公開CSVを少数並列で取得する。失敗したタブを空データとして扱わず、
  * 他の部員だけ同期を継続しつつ failedMembers に残す。
  */
-export async function fetchAllRaw(inputs: MemberFetchInput[]): Promise<ProtectedFetchResult> {
-  const allMembers = await fetchSheetMembers();
+export async function fetchAllRaw(inputs: MemberFetchInput[], spreadsheetId?: string): Promise<ProtectedFetchResult> {
+  const allMembers = await fetchSheetMembers(spreadsheetId);
   const byName = new Map(allMembers.map((member) => [member.name.normalize("NFC").trim(), member]));
   const inputByName = new Map(inputs.map((input) => [input.name.normalize("NFC").trim(), input]));
   const requested = [...inputByName.keys()];
@@ -130,6 +132,7 @@ export async function fetchAllRaw(inputs: MemberFetchInput[]): Promise<Protected
         return fetchPublicMemberSnapshot(member.name, {
           timeoutMs: 15_000,
           members: allMembers,
+          spreadsheetId,
           expectedSignature: input?.previousSignature,
           forceParse: input?.forceParse,
         });
@@ -163,7 +166,7 @@ export async function fetchAllRaw(inputs: MemberFetchInput[]): Promise<Protected
 /** 部員1人だけを軽量取得（write-through保存直後の確認・個人の記録画面用） */
 export async function fetchMemberRaw(
   memberName: string,
-  opts: { timeoutMs?: number } = {},
+  opts: { timeoutMs?: number; spreadsheetId?: string } = {},
 ): Promise<RawMember> {
   return fetchPublicMember(memberName, opts);
 }

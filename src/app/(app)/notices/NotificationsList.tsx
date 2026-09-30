@@ -27,6 +27,8 @@ export function NotificationsList({
   const getMessage = (n: AppNotificationWithActor) => {
     const actorName = n.actor?.display_name ?? "誰か";
     switch (n.type) {
+      case "sheet_setup":
+        return "10月以降のシート・入力方法・表示項目を確認してください";
       case "comment":
         return `${actorName}さんがあなたの投稿にコメントしました`;
       case "notice":
@@ -45,6 +47,7 @@ export function NotificationsList({
   };
 
   const getHref = (n: AppNotificationWithActor) => {
+    if (n.type === "sheet_setup") return "/settings/sheet-setup";
     if (!n.reference_id) return null;
     switch (n.reference_type) {
       case "record":

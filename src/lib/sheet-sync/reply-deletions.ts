@@ -1,3 +1,4 @@
+import { legacySyncOpen } from "@/lib/sheet-period";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { gasPost } from "./gas-client";
 
@@ -10,7 +11,8 @@ export async function flushReplyDeletions(admin: SupabaseClient, id?: string) {
   const failures: { member: string; reason: string }[] = [];
   for (const job of data ?? []) {
     try {
-      const result = await gasPost<{ success?: boolean }>({ action: "deleteReply", memberName: job.sheet_name,
+      if (job.legacy_period && !legacySyncOpen()) continue;
+      const result = await gasPost<{ success?: boolean }>({ action: "deleteReply", memberName: job.sheet_name, spreadsheetId: job.spreadsheet_id ?? undefined,
         date: job.recorded_date, deletionId: job.id, sourceId: job.kind === "app" ? job.id : undefined,
         replyIndex: job.reply_index, expectedText: job.expected_content }, AbortSignal.timeout(20000));
       if (!result.success) throw new Error("スプレッドシートの返信を削除できませんでした");

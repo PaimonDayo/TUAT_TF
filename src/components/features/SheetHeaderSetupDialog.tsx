@@ -30,6 +30,7 @@ export function SheetHeaderSetupDialog({
   initialFields = [],
   isMiddleLong,
   busy,
+  error,
   onCancel,
   onConfirm,
 }: {
@@ -38,6 +39,7 @@ export function SheetHeaderSetupDialog({
   initialFields?: RecordFieldDef[];
   isMiddleLong: boolean;
   busy: boolean;
+  error?: string | null;
   onCancel: () => void;
   onConfirm: (fields: RecordFieldDef[], signature: string) => void;
 }) {
@@ -110,6 +112,7 @@ export function SheetHeaderSetupDialog({
 
   return (
     <FormModal open={open} onOpenChange={(next) => !next && onCancel()} title="練習記録フォーム・タイムライン表示" autoFocus={false}>
+      {error && <p role="alert" className="m-4 rounded-lg bg-danger/10 p-3 text-caption text-danger">{error}</p>}
       <div className="space-y-4 pb-5">
         <div className="rounded-xl bg-accent/8 px-3 py-2.5 text-caption leading-relaxed">
           「{data.sheetName}」の見出しから作成します。日付・曜日は自動で判別し、スプレッドシートにない項目は表示しません。

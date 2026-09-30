@@ -1,3 +1,4 @@
+import { systemSheetProfileIds } from "@/lib/sheet-sync/period-routing";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -27,6 +28,7 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
   try {
+    if ((await systemSheetProfileIds(admin)).has(user.id)) return NextResponse.json({ error: "10月以降の入力設定はお知らせの「シート・入力設定」から変更してください" }, { status: 409 });
     const result = await reconcileOnSwitch(admin, user.id, body.direction, {
       dryRun: body.dryRun === true,
     });

@@ -1,3 +1,4 @@
+import { sheetForRecord } from "@/lib/sheet-sync/period-routing";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -67,11 +68,14 @@ export async function POST(request: Request) {
   const replyText = name ? `${text}　${name}` : text;
 
   try {
+    const target = await sheetForRecord(admin, rec.user_id, rec.recorded_date);
+    if (!target) return NextResponse.json({ ok: true, skipped: "sync ended" });
     const replyIndex = await writeSheetReply(
-      author.sheet_name,
+      target.sheetName,
       rec.recorded_date,
       replyText,
       commentId,
+      target.spreadsheetId,
     );
     if (replyIndex == null) throw new Error("返信を書き込む行が見つかりませんでした");
     if (replyIndex != null) {

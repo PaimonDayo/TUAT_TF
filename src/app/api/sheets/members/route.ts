@@ -1,3 +1,4 @@
+import { OCTOBER_SHEET_ID, parseSheetTransition } from "@/lib/sheet-period";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { fetchSheetMembers } from "@/lib/sheet-sync";
@@ -13,7 +14,8 @@ export async function GET() {
   }
 
   try {
-    const members = await fetchSheetMembers();
+    const { data: profile } = await supabase.from("profiles").select("sheet_transition").eq("id", user.id).single();
+    const members = await fetchSheetMembers(parseSheetTransition(profile?.sheet_transition) ? OCTOBER_SHEET_ID : undefined);
     return NextResponse.json({ members });
   } catch (err) {
     return NextResponse.json(

@@ -1,3 +1,6 @@
+import { OCTOBER_SHEET_ID, OCTOBER_START, legacySyncOpen, parseSheetTransition, periodContains } from "@/lib/sheet-period";
+import { systemSheetProfileIds } from "./period-routing";
+
 import { flushReplyDeletions } from "./reply-deletions";
 // 毎時同期の本体。上のモジュールを順に呼ぶ進行役。
 
@@ -21,9 +24,11 @@ import { clearCellsFor, sheetRowHasContent, type PendingClear } from "./clear";
 //  - シート連携者: 確認済みの列は空欄も反映。未マップ列とシートに存在しない日は触らない
 //  - 同日に複数記録がある日付は曖昧なのでスキップ（conflictとして報告）
 //  - dryRun で「何が起きるか」だけ確認できる
-export async function runSheetSync(
+async function runSheetSyncBatch(
   admin: SupabaseClient,
-  options: SyncOptions = {},
+  options: SyncOptions,
+  batch: LinkedProfile[],
+  period: "unchanged" | "legacy" | "october",
 ): Promise<SyncResult> {
   const dryRun = !!options.dryRun;
   const result: SyncResult = {
@@ -37,25 +42,11 @@ export async function runSheetSync(
     sheetReplies: 0,
     dryRun,
   };
-  if (!dryRun) result.failedMembers.push(...await flushReplyDeletions(admin));
+  const spreadsheetId = period === "october" ? OCTOBER_SHEET_ID : undefined;
   const today = todayJST();
-  const inRange = (d: string) => d >= SHEET_HISTORY_START && d <= today;
+  const inRange = (d: string) => d >= SHEET_HISTORY_START && d <= today && periodContains(d, period);
 
-  const { data: profiles, error: pErr } = await admin
-    .from("profiles")
-    .select("id, sheet_name, record_fields, record_source, sheet_linked_at, sheet_header_signature, sheet_history_imported_at")
-    .not("sheet_name", "is", null);
-  if (pErr) throw pErr;
-
-  let linked = (profiles ?? []).filter((p) => p.sheet_name) as {
-    id: string;
-    sheet_name: string;
-    record_fields: RecordFieldDef[] | null;
-    record_source: "app" | "sheet";
-    sheet_linked_at: string | null;
-    sheet_header_signature: string | null;
-    sheet_history_imported_at: string | null;
-  }[];
+  let linked = batch;
   if (options.onlySheet) {
     linked = linked.filter((p) => p.sheet_name.trim() === options.onlySheet!.trim());
   }
@@ -78,7 +69,7 @@ export async function runSheetSync(
       .in("profile_id", allUserIds),
     admin
       .from("practice_records")
-      .select("user_id")
+      .select("user_id, recorded_date")
       .in("user_id", allUserIds)
       .eq("pending_sheet_push", true),
     admin
@@ -92,29 +83,32 @@ export async function runSheetSync(
   // アプリで消した（日付を変えた）記録の、スプシ側を空にする予定。user_id -> 日付
   const clearsByUser = new Map<string, Set<string>>();
   for (const row of (clearRows ?? []) as PendingClear[]) {
+    if (!inRange(row.recorded_date)) continue;
     const dates = clearsByUser.get(row.user_id) ?? new Set<string>();
     dates.add(row.recorded_date);
     clearsByUser.set(row.user_id, dates);
   }
   const signatureByProfile = new Map((syncStates ?? []).map((state) => [state.profile_id, state.content_signature]));
   const configSignatureByProfile = new Map((syncStates ?? []).map((state) => [state.profile_id, state.config_signature]));
-  const profilesWithPendingPush = new Set((pendingRows ?? []).map((row) => row.user_id));
+  const profilesWithPendingPush = new Set((pendingRows ?? []).filter(row => inRange(row.recorded_date)).map((row) => row.user_id));
   const currentConfigSignatures = new Map(linked.map((profile) => [
     profile.id,
     sheetContentSignature(JSON.stringify({
       fields: profile.record_fields,
       header: profile.sheet_header_signature,
       source: profile.record_source,
+      period,
+      appOnly: profile.appOnly,
     })),
   ]));
 
   const fetched = await fetchAllRaw(linked.map((profile) => ({
     name: profile.sheet_name,
-    previousSignature: signatureByProfile.get(profile.id) ?? null,
-    forceParse: profilesWithPendingPush.has(profile.id)
+    previousSignature: period === "legacy" ? null : signatureByProfile.get(profile.id) ?? null,
+    forceParse: period === "legacy" || profilesWithPendingPush.has(profile.id)
       || clearsByUser.has(profile.id)
       || configSignatureByProfile.get(profile.id) !== currentConfigSignatures.get(profile.id),
-  })));
+  })), spreadsheetId);
   result.failedMembers.push(...fetched.failedMembers);
   result.unchangedMembers.push(...fetched.unchangedMembers);
   const members = fetched.members;
@@ -131,7 +125,7 @@ export async function runSheetSync(
     admin
       .from("practice_records")
       .select(
-        "id, user_id, recorded_date, dist_low, dist_mid, dist_high, dist_speed, dist_actual, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at, pending_sheet_push",
+        "id, user_id, recorded_date, dist_low, dist_mid, dist_high, dist_speed, dist_actual, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at, pending_sheet_push, record_fields_snapshot",
       )
       .in("user_id", userIds)
       .gte("recorded_date", SHEET_HISTORY_START)
@@ -203,7 +197,8 @@ export async function runSheetSync(
       const app = list[0];
       if (!app.pending_sheet_push) continue;
       excludedDates.add(date);
-      const cells = appToCellsFull(map, app);
+      const pushMap = app.record_fields_snapshot ? resolveFieldMap(member, app.record_fields_snapshot) : map;
+      const cells = appToCellsFull(pushMap, app);
       if (Object.keys(cells).length > 0) {
         pushes.push({ id: app.id, memberName: sheetName, date, cells, clearsPending: true, updatedAt: app.updated_at });
       }
@@ -211,6 +206,7 @@ export async function runSheetSync(
 
     // アプリで消した記録の欄を空にする（オーナー確定 2026-09-26「アプリで消したらスプシも消す」）。
     for (const date of clearsByUser.get(profile.id) ?? []) {
+      if (!inRange(date)) continue;
       const queued = { user_id: profile.id, recorded_date: date };
       if (appByDate.has(date)) {
         // その日を作り直している。記録側の送信がその日を上書きするので、予定だけ消す。
@@ -228,14 +224,15 @@ export async function runSheetSync(
     // スプシ→アプリの取り込み。初回はシート開始日から全履歴を補完し、完了後は直近1か月だけを再取得する。
     // スプシが正の部員で見出し確認済みなら、空欄も意図した削除として反映する。
     // アプリが正の部員も、スプシで直接直した（空でない）値は取り込む（2026-07-27 の方針）。
+    if (profile.appOnly) continue;
     const cutoff = sheetPullCutoff(today, profile.sheet_history_imported_at);
-    if (!profile.sheet_history_imported_at) historyImportCandidates.add(profile.id);
+    if (period !== "legacy" && !profile.sheet_history_imported_at) historyImportCandidates.add(profile.id);
     const pulled = computeMemberPull(
       profile.id,
       map,
       sheetRecordsWithoutPendingPushes(member.records, excludedDates),
       appByDate,
-      (date) => date >= cutoff && date <= today,
+      (date) => date >= cutoff && inRange(date),
       nowIso,
       profile.record_source === "sheet" && stagedSheetFlow ? "replace_mapped" : "merge_nonempty",
     );
@@ -260,10 +257,10 @@ export async function runSheetSync(
     try {
       const replySync = await reconcileSheetReplies(
         admin,
-        processedProfiles.map((profile) => ({ id: profile.id, sheet_name: profile.sheet_name })),
+        processedProfiles.filter(profile => !profile.appOnly).map((profile) => ({ id: profile.id, sheet_name: profile.sheet_name })),
         members,
-        sheetReplyCutoff(today),
-        today,
+        period === "october" ? [sheetReplyCutoff(today), OCTOBER_START].sort().at(-1)! : sheetReplyCutoff(today),
+        period === "legacy" ? (today < OCTOBER_START ? today : "2026-09-30") : today,
         true,
       );
       result.sheetReplies = replySync.synced;
@@ -332,10 +329,10 @@ export async function runSheetSync(
   try {
     const replySync = await reconcileSheetReplies(
       admin,
-      processedProfiles.map((profile) => ({ id: profile.id, sheet_name: profile.sheet_name })),
+      processedProfiles.filter(profile => !profile.appOnly).map((profile) => ({ id: profile.id, sheet_name: profile.sheet_name })),
       members,
-      sheetReplyCutoff(today),
-      today,
+      period === "october" ? [sheetReplyCutoff(today), OCTOBER_START].sort().at(-1)! : sheetReplyCutoff(today),
+      period === "legacy" ? (today < OCTOBER_START ? today : "2026-09-30") : today,
     );
     result.sheetReplies = replySync.synced;
     result.failedMembers.push(...replySync.failedMembers);
@@ -359,7 +356,7 @@ export async function runSheetSync(
 
   for (const p of scheduledPushes) {
     try {
-      await gasPost({ action: "writeCells", memberName: p.memberName, date: p.date, cells: p.cells });
+      await gasPost({ action: "writeCells", spreadsheetId, memberName: p.memberName, date: p.date, cells: p.cells });
       if (p.clearQueue) {
         const { error } = await admin
           .from("sheet_pending_clears")
@@ -394,7 +391,7 @@ export async function runSheetSync(
   const failedNames = new Set(result.failedMembers.map((failure) => failure.member));
   const hasGlobalFailure = [...failedNames].some((name) => name.startsWith("("));
   const pushedNames = new Set(scheduledPushes.map((push) => push.memberName));
-  const signatureRows = hasGlobalFailure ? [] : processedProfiles.flatMap((profile) => {
+  const signatureRows = hasGlobalFailure || period === "legacy" ? [] : processedProfiles.flatMap((profile) => {
     const name = profile.sheet_name.trim();
     const signature = fetched.signatures.get(name);
     const conflicted = result.conflicts.some((conflict) => conflict.startsWith(`${name} `));
@@ -419,4 +416,51 @@ export async function runSheetSync(
   }
 
   return result;
+}
+
+
+type LinkedProfile = {
+  id: string; sheet_name: string; record_fields: RecordFieldDef[] | null;
+  record_source: "app" | "sheet"; sheet_linked_at: string | null;
+  sheet_header_signature: string | null; sheet_history_imported_at: string | null;
+  sheet_transition?: unknown; appOnly?: boolean;
+};
+
+export async function runSheetSync(admin: SupabaseClient, options: SyncOptions = {}): Promise<SyncResult> {
+  const [{ data, error }, systems] = await Promise.all([
+    admin.from("profiles").select("id,sheet_name,record_fields,record_source,sheet_linked_at,sheet_header_signature,sheet_history_imported_at,sheet_transition"),
+    systemSheetProfileIds(admin),
+  ]);
+  if (error) throw error;
+  const groups: Record<"unchanged" | "legacy" | "october", LinkedProfile[]> = { unchanged: [], legacy: [], october: [] };
+  for (const profile of (data ?? []) as LinkedProfile[]) {
+    const transition = parseSheetTransition(profile.sheet_transition);
+    // Chunk names refer to the current profile, even when the old sheet had a different name.
+    if (options.onlySheet && profile.sheet_name?.trim() !== options.onlySheet.trim()) continue;
+    if (options.onlySheets && !options.onlySheets.some(name => name.trim() === profile.sheet_name?.trim())) continue;
+    if (!systems.has(profile.id) && !transition) {
+      if (profile.sheet_name) groups.unchanged.push(profile);
+      continue;
+    }
+    const legacy = transition ? { ...profile, ...transition.legacy } : profile;
+    if (legacySyncOpen() && legacy.sheet_name) groups.legacy.push({ ...legacy, sheet_name: legacy.sheet_name,
+      // A confirmed app-only choice blocks imports from both workbooks.
+      appOnly: transition?.mode === "app_only" });
+    if (systems.has(profile.id) && transition && profile.sheet_name) groups.october.push({ ...profile, appOnly: transition.mode === "app_only" });
+  }
+  const total: SyncResult = { inserted: 0, updated: 0, pushed: 0, sheetReplies: 0, conflicts: [], skippedMembers: [],
+    unchangedMembers: [], failedMembers: [], dryRun: !!options.dryRun };
+  if (!options.dryRun) total.failedMembers.push(...await flushReplyDeletions(admin));
+  for (const period of ["unchanged", "legacy", "october"] as const) {
+    if (!groups[period].length) continue;
+    try {
+      const result = await runSheetSyncBatch(admin, { dryRun: options.dryRun }, groups[period], period);
+      for (const key of ["inserted", "updated", "pushed", "sheetReplies"] as const) total[key] += result[key];
+      for (const key of ["conflicts", "skippedMembers", "unchangedMembers", "failedMembers"] as const) total[key].push(...result[key] as never[]);
+    } catch (error) {
+      total.failedMembers.push(...groups[period].map(profile => ({ member: profile.sheet_name,
+        reason: error instanceof Error ? error.message : "シートを取得できませんでした" })));
+    }
+  }
+  return total;
 }

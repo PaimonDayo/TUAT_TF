@@ -1533,6 +1533,7 @@ export type Database = {
           record_fields_version: number
           record_source: string
           role: string
+          sheet_transition: Json | null
           sheet_header_signature: string | null
           sheet_linked_at: string | null
           sheet_history_imported_at: string | null
@@ -1563,6 +1564,7 @@ export type Database = {
           record_fields_version?: number
           record_source?: string
           role?: string
+          sheet_transition?: Json | null
           sheet_header_signature?: string | null
           sheet_linked_at?: string | null
           sheet_history_imported_at?: string | null
@@ -1593,6 +1595,7 @@ export type Database = {
           record_fields_version?: number
           record_source?: string
           role?: string
+          sheet_transition?: Json | null
           sheet_header_signature?: string | null
           sheet_linked_at?: string | null
           sheet_history_imported_at?: string | null
@@ -2165,6 +2168,11 @@ export type Database = {
       }
     }
     Functions: {
+      save_october_sheet_setup: {
+        Args: { p_sheet_name: string; p_fields: Json; p_signature: string; p_mode: string }
+        Returns: undefined
+      }
+
       delete_comment_with_sheet: { Args: { p_id: string; p_kind: string }; Returns: string | null }
 
       replace_competition_program: { Args: { target_competition_id: string; program_rows: Json }; Returns: number }

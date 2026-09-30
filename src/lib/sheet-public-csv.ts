@@ -1,3 +1,4 @@
+import { OCTOBER_SHEET_ID } from "@/lib/sheet-period";
 import Papa from "papaparse";
 import { createHash } from "node:crypto";
 import type { RawSheetReply } from "@/lib/sheet-replies";
@@ -99,7 +100,7 @@ export function commentColumn(header: string[]): number {
 }
 
 /** 1タブ分の公開CSVを、従来のGAS readMemberSheetと同じ形へ変換する。 */
-export function parseMemberCsv(member: SheetMember, csv: string, defaultYear = currentYearJst()): RawMember {
+export function parseMemberCsv(member: SheetMember, csv: string, defaultYear = currentYearJst(), startMonth?: number): RawMember {
   const parsed = Papa.parse<string[]>(csv, { skipEmptyLines: false });
   const fatal = parsed.errors.find((error) => error.type === "Quotes");
   if (fatal) throw new Error(`CSVを読み取れませんでした: ${fatal.message}`);
@@ -115,7 +116,10 @@ export function parseMemberCsv(member: SheetMember, csv: string, defaultYear = c
   const records: RawMember["records"] = [];
 
   for (const row of rows.slice(headerIndex + 1)) {
-    const date = parsePublicSheetDate(row[dateColumn] ?? "", defaultYear);
+    const rawDate = row[dateColumn] ?? "";
+    const shortDate = /^(\d{1,2})\/(\d{1,2})(?:\s|$)/.exec(rawDate.trim());
+    const year = startMonth && shortDate && Number(shortDate[1]) < startMonth ? defaultYear + 1 : defaultYear;
+    const date = parsePublicSheetDate(rawDate, year);
     if (!date) continue;
     const cells: Record<string, string> = {};
     for (let column = 0; column < fullHeader.length; column++) {
@@ -152,8 +156,8 @@ async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Respons
   }
 }
 
-export async function fetchPublicSheetMembers(): Promise<SheetMember[]> {
-  const id = spreadsheetId();
+export async function fetchPublicSheetMembers(targetSpreadsheetId?: string): Promise<SheetMember[]> {
+  const id = targetSpreadsheetId ?? spreadsheetId();
   if (metadataCache?.spreadsheetId === id && metadataCache.expiresAt > Date.now()) {
     return metadataCache.members;
   }
@@ -170,7 +174,7 @@ export async function fetchPublicSheetMembers(): Promise<SheetMember[]> {
 
 export async function fetchPublicMember(
   memberName: string,
-  opts: { timeoutMs?: number; members?: SheetMember[] } = {},
+  opts: { timeoutMs?: number; members?: SheetMember[]; spreadsheetId?: string } = {},
 ): Promise<RawMember> {
   const snapshot = await fetchPublicMemberSnapshot(memberName, { ...opts, forceParse: true });
   if (!snapshot.member) throw new Error("CSVを解析できませんでした");
@@ -189,16 +193,17 @@ export async function fetchPublicMemberSnapshot(
   memberName: string,
   opts: {
     timeoutMs?: number;
+    spreadsheetId?: string;
     members?: SheetMember[];
     expectedSignature?: string | null;
     forceParse?: boolean;
   } = {},
 ): Promise<PublicMemberSnapshot> {
-  const members = opts.members ?? (await fetchPublicSheetMembers());
+  const members = opts.members ?? (await fetchPublicSheetMembers(opts.spreadsheetId));
   const wanted = canonicalName(memberName);
   const member = members.find((candidate) => canonicalName(candidate.name) === wanted);
   if (!member) throw new Error(`部員シート「${memberName}」が見つかりません`);
-  const id = spreadsheetId();
+  const id = opts.spreadsheetId ?? spreadsheetId();
   const url = `${BASE_URL}/${encodeURIComponent(id)}/export?format=csv&gid=${encodeURIComponent(member.gid)}&t=${Date.now()}`;
   const response = await fetchWithTimeout(url, opts.timeoutMs ?? 10_000);
   if (!response.ok) throw new Error(`CSVを取得できませんでした (${response.status})`);
@@ -213,6 +218,6 @@ export async function fetchPublicMemberSnapshot(
     signature,
     member: !opts.forceParse && opts.expectedSignature === signature
       ? null
-      : parseMemberCsv(member, csv),
+      : parseMemberCsv(member, csv, id === OCTOBER_SHEET_ID ? 2026 : currentYearJst(), id === OCTOBER_SHEET_ID ? 10 : undefined),
   };
 }

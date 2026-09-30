@@ -1,3 +1,4 @@
+import { sheetForRecord } from "@/lib/sheet-sync/period-routing";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
   const { data: rec, error: rErr } = await admin
     .from("practice_records")
     .select(
-      "id, user_id, recorded_date, dist_low, dist_mid, dist_high, dist_speed, dist_actual, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at",
+      "id, user_id, recorded_date, dist_low, dist_mid, dist_high, dist_speed, dist_actual, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at, record_fields_snapshot",
     )
     .eq("id", recordId)
     .maybeSingle();
@@ -53,10 +54,13 @@ export async function POST(request: Request) {
   }
 
   try {
+    const target = await sheetForRecord(admin, user.id, rec.recorded_date);
+    if (!target) return NextResponse.json({ ok: true, skipped: true });
     const result = await pushRecordToSheet(
-      profile.sheet_name,
-      recordFieldsFromJson(profile.record_fields),
+      target.sheetName,
+      rec.record_fields_snapshot ? recordFieldsFromJson(rec.record_fields_snapshot) : target.fields,
       rec as DbRecord,
+      target.spreadsheetId,
     );
     // 成功: pending_sheet_pushをfalseに戻す（毎日0時の再送対象から外す）。
     // 送信中に同じ記録が別の保存で変わっていたら（updated_at が違う）送信済みにしない。新しい内容は次回送る。

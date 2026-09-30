@@ -36,6 +36,7 @@ export function ProfileEditForm({
     | "avatar_url"
     | "sheet_name"
     | "record_source"
+    | "sheet_transition"
     | "record_fields"
     | "sheet_header_signature"
   >;
@@ -254,7 +255,7 @@ export function ProfileEditForm({
     try {
       setSaving(true);
       setError(null);
-      const nextRecordSource = sheetName.trim() ? "sheet" : "app";
+      const nextRecordSource = sheetName.trim() && profile.sheet_transition?.mode !== "app_only" ? "sheet" : "app";
       const switchingSource = Boolean(sheetName.trim()) && nextRecordSource !== (profile.record_source ?? "app");
 
       if (switchingSource && profile.sheet_name) {

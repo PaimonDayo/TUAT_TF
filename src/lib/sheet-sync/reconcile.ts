@@ -1,3 +1,4 @@
+import { parseSheetTransition } from "@/lib/sheet-period";
 // 記録の入力元を切り替えるときの、一度だけの突き合わせ。
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -35,10 +36,11 @@ export async function reconcileOnSwitch(
 
   const { data: profile, error: pErr } = await admin
     .from("profiles")
-    .select("id, sheet_name, record_fields")
+    .select("id, sheet_name, record_fields, sheet_transition")
     .eq("id", profileId)
     .maybeSingle();
   if (pErr) throw pErr;
+  if (parseSheetTransition(profile?.sheet_transition)) throw new Error("10月以降の入力設定から変更してください");
   if (!profile?.sheet_name) return result; // 連携していなければ何もしない
 
   let member: RawMember;

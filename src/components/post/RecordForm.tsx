@@ -1,4 +1,5 @@
 "use client";
+import { OCTOBER_START, type SheetTransition } from "@/lib/sheet-period";
 
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -103,7 +104,7 @@ function serializeRecordDraft(draft: RecordDraftValues): string {
  * record を渡すと編集モード（その記録を更新）になる。
  */
 export type RecordFormHandle = { save: () => void };
-export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddleLong: boolean; record?: PracticeRecord; recordSource?: "app" | "sheet"; recordFields?: RecordFieldDef[]; systemRecordForm?: boolean; onDone: () => void; onDirtyChange?: (dirty: boolean) => void }>(function RecordForm({ userId, isMiddleLong, record, recordFields, systemRecordForm = false, onDone, onDirtyChange }, ref) {
+export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddleLong: boolean; record?: PracticeRecord; recordSource?: "app" | "sheet"; recordFields?: RecordFieldDef[]; sheetTransition?: SheetTransition | null; systemRecordForm?: boolean; onDone: () => void; onDirtyChange?: (dirty: boolean) => void }>(function RecordForm({ userId, isMiddleLong, record, recordFields, sheetTransition, systemRecordForm = false, onDone, onDirtyChange }, ref) {
   const router = useRouter();
   const { showToast } = useToast();
   const editing = !!record;
@@ -136,7 +137,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
   // カスタム項目（プロフィールで設定したもの）。フォームに動的に追加する。
   // 呼び出し側が取得済みプロフィールから渡していれば、それを使い再フェッチしない。
   const historicalFields = systemRecordForm && record?.record_fields_version != null ? (record.record_fields_snapshot ?? []) : null;
-  const [configuredFields, setConfiguredFields] = useState<RecordFieldDef[]>(historicalFields ?? recordFields ?? []);
+  const [configuredFields, setConfiguredFields] = useState<RecordFieldDef[]>(historicalFields ?? (sheetTransition && date < OCTOBER_START ? sheetTransition.legacy.record_fields : recordFields) ?? []);
   const fieldEnabled = (key: Parameters<typeof recordFieldHidden>[1]) => {
     if (isMiddleLong && key === "dist_actual") return false;
     return systemRecordForm
@@ -230,12 +231,13 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
         setCondition(nextDraft.condition);
         setCustomValues(nextDraft.customValues);
         if (systemRecordForm && found?.record_fields_version != null) setConfiguredFields(found.record_fields_snapshot ?? []);
+        else if (recordFields) setConfiguredFields(sheetTransition && date < OCTOBER_START ? sheetTransition.legacy.record_fields : recordFields);
         setBaselineSnapshot(serializeRecordDraft(nextDraft));
       });
     return () => {
       active = false;
     };
-  }, [date, editing, systemRecordForm, userId]);
+  }, [date, editing, systemRecordForm, userId, recordFields, sheetTransition]);
 
   function buildCustom(): Record<string, string | number | null> {
     const out: Record<string, string | number | null> = { ...(record?.custom ?? {}) };

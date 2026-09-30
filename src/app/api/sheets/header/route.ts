@@ -1,3 +1,4 @@
+import { OCTOBER_SHEET_ID, parseSheetTransition } from "@/lib/sheet-period";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { fetchPublicMember } from "@/lib/sheet-public-csv";
@@ -14,7 +15,7 @@ export async function GET(request: Request) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("blocks, record_fields")
+    .select("blocks, record_fields, sheet_transition")
     .eq("id", user.id)
     .single();
   const isMiddleLong = (profile?.blocks ?? []).includes("middle_long");
@@ -24,7 +25,7 @@ export async function GET(request: Request) {
   if (!sheetName) return NextResponse.json({ error: "シートを選択してください" }, { status: 400 });
 
   try {
-    const member = await fetchPublicMember(sheetName, { timeoutMs: 8_000 });
+    const member = await fetchPublicMember(sheetName, { timeoutMs: 8_000, spreadsheetId: parseSheetTransition(profile?.sheet_transition) ? OCTOBER_SHEET_ID : undefined });
     const columns = member.columns ?? member.header.map((label, index) => ({ index, label }));
     const dateColumn = columns.find((column) => column.label.replace(/\s+/g, "").trim() === "日付");
     if (!dateColumn) return NextResponse.json({ error: "日付列が見つかりません" }, { status: 422 });
