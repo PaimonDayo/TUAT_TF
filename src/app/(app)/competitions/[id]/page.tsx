@@ -71,6 +71,7 @@ export default async function CompetitionPage({
         <Card className="divide-y divide-separator">
           {(competition.program_source_url || isObCompetition(competition.id)) && (
             <Link
+              data-ui-row
               href={`/competitions/${competition.id}/program`}
               className="flex items-center gap-3 p-4 pressable"
             >
@@ -80,6 +81,7 @@ export default async function CompetitionPage({
             </Link>
           )}
           <Link
+            data-ui-row
             href={`/competitions/${competition.id}/goals`}
             className="flex items-center gap-3 p-4 pressable"
           >

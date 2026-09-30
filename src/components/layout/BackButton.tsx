@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
+import { useSystemGlass } from "@/components/layout/glass/system-glass-state";
 
 /** 直前のページに戻る（履歴がなければ fallback へ） */
 export function BackButton({
@@ -14,6 +15,7 @@ export function BackButton({
   forceFallback?: boolean;
 }) {
   const router = useRouter();
+  const systemGlass = useSystemGlass();
 
   function back() {
     if (forceFallback) {
@@ -35,12 +37,17 @@ export function BackButton({
 
   return (
     <button
+      type="button"
       data-glass-control
+      data-system-glass={systemGlass || undefined}
+      aria-label={label}
       onClick={back}
-      className="justify-self-start h-9 pl-1 pr-2 flex items-center gap-0.5 text-accent pressable text-[15px]"
+      className={systemGlass
+        ? "justify-self-start flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink pressable"
+        : "justify-self-start h-9 pl-1 pr-2 flex items-center gap-0.5 text-accent pressable text-[15px]"}
     >
-      <ChevronLeft size={24} />
-      {label}
+      <ChevronLeft size={24} aria-hidden="true" />
+      {!systemGlass && label}
     </button>
   );
 }

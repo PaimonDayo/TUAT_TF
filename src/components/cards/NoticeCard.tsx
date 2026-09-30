@@ -42,6 +42,7 @@ export function NoticeCard({
     <Card id={`notice-${notice.id}`} className="scroll-mt-16 p-4">
       {/* ヘッダー＋タイトル＝タップで開閉 */}
       <div
+        data-ui-row
         onClick={onToggle}
         onKeyDown={(event) => {
           if (event.target !== event.currentTarget || !["Enter", " "].includes(event.key)) return;

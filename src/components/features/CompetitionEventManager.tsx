@@ -136,7 +136,7 @@ export function CompetitionEventManager({
                 {e.name}
                 <span className="ml-1.5 text-caption">{e.count}件</span>
               </p>
-              <div className="flex gap-2">
+              <div data-ui-group className="flex gap-2">
                 <Button
                   size="sm"
                   variant="secondary"
@@ -264,6 +264,7 @@ export function CompetitionEventManager({
               件の結果を、選んだ種目に付け替えます。
             </p>
             <select
+              data-ui-field
               aria-label="まとめ先の種目"
               className={selectClass}
               value={mergeTo}
@@ -354,6 +355,7 @@ function EventForm({
       <div>
         <p className="section-label mb-1.5">記録の書き方</p>
         <select
+          data-ui-field
           aria-label="記録の書き方"
           className={selectClass}
           value={format}

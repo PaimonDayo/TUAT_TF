@@ -77,6 +77,8 @@ function MeetTile({
 }) {
   return (
     <Link
+      data-ui-row
+      data-ui-panel
       href={href}
       aria-label={ariaLabel}
       className="block overflow-hidden rounded-2xl border border-separator/70 bg-card p-4 transition-colors active:bg-bg"

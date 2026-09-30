@@ -69,21 +69,21 @@ export function RoleManager({ roles: initialRoles, members, categories: initialC
   }
 
   return <div className="space-y-3">
-    <div className="flex justify-end gap-2">
+    <div data-ui-group className="flex justify-end gap-2">
       <Button type="button" size="sm" variant="outline" onClick={() => setCreatingCategory(true)}><FolderPlus size={16} />カテゴリを作成</Button>
       <Button type="button" size="sm" variant={reorderMode ? "primary" : "outline"} onClick={() => setReorderMode((value) => !value)}><SlidersHorizontal size={16} />{reorderMode ? "完了" : "並べ替え"}</Button>
     </div>
 
     {reorderMode ? <ReorderList items={roles} enabled onReorder={(next) => void reorder(next)} renderItem={renderRole} /> : <div className="space-y-3">
       {everyone.map(renderRole)}
-      {folders.map((folder) => <details key={folder.category.id} className="group overflow-hidden rounded-xl border border-separator bg-card">
-        <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 px-3 active:bg-bg"><span className="flex-1 text-sm font-semibold">{folder.category.name}</span><span className="text-xs tabular-nums text-muted">{folder.roles.length}件</span><ChevronDown size={18} className="text-muted transition-transform group-open:rotate-180" /></summary>
+      {folders.map((folder) => <details data-ui-section key={folder.category.id} className="group overflow-hidden rounded-xl border border-separator bg-card">
+        <summary data-ui-disclosure className="flex min-h-12 cursor-pointer list-none items-center gap-2 px-3 active:bg-bg"><span className="flex-1 text-sm font-semibold">{folder.category.name}</span><span className="text-xs tabular-nums text-muted">{folder.roles.length}件</span><ChevronDown size={18} className="text-muted transition-transform group-open:rotate-180" /></summary>
         <div className="space-y-2 border-t border-separator bg-bg/40 p-2">{folder.roles.length ? folder.roles.map(renderRole) : <p className="px-2 py-3 text-xs text-muted">このカテゴリのロールはまだありません</p>}</div>
       </details>)}
       {uncategorized.length > 0 && <section className="space-y-2"><p className="section-label">カテゴリなし</p>{uncategorized.map(renderRole)}</section>}
     </div>}
 
-    <button type="button" onClick={() => setCreating(true)} className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-separator py-3 text-[14px] font-semibold text-accent active:bg-bg"><Plus size={18} />新しいロールを作成</button>
+    <button data-ui-action data-ui-tone="primary" type="button" onClick={() => setCreating(true)} className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-separator py-3 text-[14px] font-semibold text-accent active:bg-bg"><Plus size={18} />新しいロールを作成</button>
     {creating && <RoleEditor open onClose={() => setCreating(false)} sortOrder={roles.length + 1} categories={categories} canManageSystem={canManageSystem} onSaved={(role) => { setRoles((items) => [...items, role]); setCreating(false); }} />}
     {creatingCategory && <CategoryEditor open sortOrder={categories.length + 1} onClose={() => setCreatingCategory(false)} onSaved={(category) => { setCategories((items) => [...items, category]); setCreatingCategory(false); }} />}
   </div>;
@@ -147,7 +147,7 @@ function RoleEditor({ open, onClose, onSaved, sortOrder, role, categories, canMa
     <div><p className="section-label mb-1.5">ロール名</p><Input value={name} onChange={(event) => setName(event.target.value)} placeholder="例: 会計担当 / 主将" maxLength={20} /></div>
     {!role?.is_everyone && <div><p className="section-label mb-1.5">カテゴリ</p><Select value={category || "__none__"} onValueChange={(value) => setCategory(value === "__none__" ? "" : value)} ariaLabel="ロールカテゴリ" options={[{ value: "__none__", label: "カテゴリなし" }, ...categories.map((item) => ({ value: item.name, label: item.name }))]} /></div>}
     <div><p className="section-label mb-1.5">権限</p><div className="space-y-2">{PERMISSION_LIST.map((permission) => { const administrativeForEveryone = role?.is_everyone && (permission.key === "manage_system" || permission.key === "manage_members"); const disabled = administrativeForEveryone || (permission.key === "manage_system" && !canManageSystem); return <Toggle key={permission.key} checked={flags[permission.key]} onChange={() => setFlags((current) => ({ ...current, [permission.key]: !current[permission.key] }))} label={permission.label} description={administrativeForEveryone ? "全員ロールには安全上付与できません" : permission.key === "manage_system" && !canManageSystem ? `${permission.desc}（システム管理者のみ変更可）` : permission.desc} disabled={disabled} />; })}</div></div>
-    <div><p className="section-label mb-1.5">ロールの色</p><div className="grid grid-cols-8 gap-2">{ROLE_COLORS.map((option) => <button key={option} type="button" onClick={() => setColor(option)} aria-label={`色 ${option}`} className="flex aspect-square items-center justify-center rounded-lg border" style={{ borderColor: color === option ? option : "#e5e5ea", backgroundColor: `${option}18` }}><span className="h-5 w-5 rounded-full" style={{ backgroundColor: option }} /></button>)}</div></div>
+    <div><p className="section-label mb-1.5">ロールの色</p><div data-ui-swatches className="grid grid-cols-8 gap-2">{ROLE_COLORS.map((option) => <button data-ui-choice key={option} type="button" onClick={() => setColor(option)} aria-pressed={color === option} aria-label={`色 ${option}`} className="flex aspect-square items-center justify-center rounded-lg border" style={{ borderColor: color === option ? option : "#e5e5ea", backgroundColor: `${option}18` }}><span className="h-5 w-5 rounded-full" style={{ backgroundColor: option }} /></button>)}</div></div>
     {error && <p className="text-center text-caption text-danger">{error}</p>}<FormModalFooter><Button size="lg" onClick={save} disabled={saving}>{saving ? "保存中…" : role ? "保存する" : "作成する"}</Button></FormModalFooter>
   </div></FormModal>;
 }

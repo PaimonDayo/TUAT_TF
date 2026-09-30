@@ -53,7 +53,7 @@ function ProgramRow({ row }: { row: ParsedProgramRow }) {
 
   return (
     <div className="p-3.5">
-      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-start gap-2 text-left pressable">
+      <button data-ui-row type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-start gap-2 text-left pressable">
         <span className="min-w-0 flex-1">
           <ProgramEventSummary row={row} />
           {finished.length > 0 && !open && (
@@ -155,7 +155,7 @@ export function CompetitionProgramView({
           ? <p className="text-caption">アーカイブ：大会の出場者と記録を保存しています。</p>
           : <CompetitionInProgress entries={entries} />}
       </Card>
-      <div className="flex items-center justify-between gap-2 rounded-xl border border-separator bg-card p-3">
+      <div data-ui-group className="flex items-center justify-between gap-2 rounded-xl border border-separator bg-card p-3">
         <p className="text-micro text-muted2">
           {lastSyncedAt
             ? `最終取得: ${format(new Date(lastSyncedAt), "M月d日 HH:mm", { locale: ja })}`
@@ -168,7 +168,7 @@ export function CompetitionProgramView({
       </div>
 
       <p className="text-micro text-muted2">{isCompetitionArchived(competition) ? "自動取得は終了しています。記録は最終取得時点の情報です。" : "開催期間は約5分ごとに公式情報を取得します。記録は速報値です。"}</p>
-      {competition.program_source_url && <a href={competition.program_source_url} target="_blank" rel="noopener noreferrer" className="text-caption text-accent underline">大会公式のプログラムを見る</a>}
+      {competition.program_source_url && <a data-ui-action="text" data-ui-tone="primary" href={competition.program_source_url} target="_blank" rel="noopener noreferrer" className="text-caption text-accent underline">大会公式のプログラムを見る</a>}
       {groups.length === 0 ? (
         <Card>
           <EmptyState title="まだ出場種目の情報がありません" />

@@ -37,7 +37,7 @@ function PostMissing() {
       title="投稿が見つかりません"
       description="削除されたか、閲覧できない投稿です。"
       action={
-        <Link href="/timeline" prefetch={false} className="text-[15px] text-accent">
+        <Link data-ui-link href="/timeline" prefetch={false} className="text-[15px] text-accent">
           タイムラインを開く
         </Link>
       }

@@ -30,7 +30,7 @@ function Anchor({ href, children }: { href: string; children: ReactNode }) {
   }
 
   return (
-    <a
+    <a data-ui-link
       href={href}
       target="_blank"
       rel="noopener noreferrer"

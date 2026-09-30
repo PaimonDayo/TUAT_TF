@@ -18,6 +18,7 @@ export function SegmentedControl<T extends string>({
 }) {
   const systemGlass = useSystemGlass();
   const track = useRef<HTMLDivElement>(null);
+  const itemSignature = JSON.stringify(items);
   useLayoutEffect(() => {
     const node = track.current;
     if (!systemGlass || !node) return;
@@ -32,11 +33,12 @@ export function SegmentedControl<T extends string>({
     const observer = new ResizeObserver(update);
     observer.observe(node);
     return () => observer.disconnect();
-  }, [systemGlass, value, items]);
+  }, [systemGlass, value, itemSignature]);
   return (
     <div
       ref={track}
       data-glass-segments
+      data-system-glass={systemGlass || undefined}
       className={cn(
         // min-h を固定し、項目数や文字数で縦寸法が変わらないようにする
         "flex min-h-[34px] items-center gap-0.5 rounded-[10px] bg-[#e9e9eb] p-0.5 lg:min-h-8 lg:rounded-lg",

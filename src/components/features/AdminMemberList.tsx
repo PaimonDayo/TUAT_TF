@@ -72,6 +72,8 @@ export function AdminMemberList({
           <div className="space-y-2">
             {group.list.map((member) => (
               <button
+                data-ui-row
+                data-ui-row-container
                 key={member.id}
                 type="button"
                 onClick={() => setSelected(member)}
@@ -220,6 +222,8 @@ function MemberRoleEditor({
             const active = selectedIds.includes(role.id);
             return (
               <button
+                data-ui-choice
+                aria-pressed={active}
                 key={role.id}
                 type="button"
                 onClick={() => toggle(role.id)}

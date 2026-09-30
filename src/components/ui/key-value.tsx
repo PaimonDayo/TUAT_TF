@@ -25,7 +25,7 @@ export function KeyValue({
         <div className={cn("whitespace-pre-wrap", collapsible && !expanded && "line-clamp-3")}>
           {typeof value === "string" ? <Linkify text={value} /> : value}
         </div>
-        {collapsible && typeof value === "string" && value.length > 90 && <button type="button" onClick={() => setExpanded((current) => !current)} className="mt-1 text-caption font-semibold text-accent">{expanded ? "閉じる" : "続きを読む"}</button>}
+        {collapsible && typeof value === "string" && value.length > 90 && <button data-ui-disclosure type="button" onClick={() => setExpanded((current) => !current)} className="mt-1 text-caption font-semibold text-accent">{expanded ? "閉じる" : "続きを読む"}</button>}
       </dd>
     </div>
   );

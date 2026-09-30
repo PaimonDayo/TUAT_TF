@@ -42,14 +42,14 @@ export function TweetCard({
 
   return (
     <>
-    <Card className={cn("space-y-3 p-4", embedded && "rounded-none border-0")}>
+    <Card data-ui-embedded={embedded || undefined} className={cn("space-y-3 p-4", embedded && "rounded-none border-0")}>
       <div className="flex items-center gap-2.5">
-        <Link href={`/members/${author.id}`} prefetch={false} onClick={(event) => event.stopPropagation()}>
+        <Link data-ui-link href={`/members/${author.id}`} prefetch={false} onClick={(event) => event.stopPropagation()}>
           <Avatar name={author.display_name} blocks={author.blocks} avatarUrl={author.avatar_url} />
         </Link>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <Link
+            <Link data-ui-link
               href={`/members/${author.id}`}
               prefetch={false}
               onClick={(event) => event.stopPropagation()}
@@ -107,6 +107,7 @@ export function TweetCard({
 
       {tweet.image_path && (
         <button
+          data-ui-row
           type="button"
           aria-label="画像を拡大"
           className="block w-full overflow-hidden rounded-card border border-separator bg-bg"

@@ -363,7 +363,7 @@ export function ProfileEditForm({
                 {processingAvatar ? "画像を保存中…" : "写真を選ぶ"}
               </Button>
               {avatarUrl.trim() && (
-                <Button
+                <Button data-ui-tone="danger"
                   type="button"
                   variant="ghost"
                   size="sm"
@@ -391,6 +391,8 @@ export function ProfileEditForm({
             const active = blocks.includes(b);
             return (
               <button
+                data-ui-choice
+                aria-pressed={active}
                 key={b}
                 type="button"
                 onClick={() => selectBlock(b)}
@@ -416,6 +418,8 @@ export function ProfileEditForm({
               const active = events.includes(ev);
               return (
                 <button
+                  data-ui-choice
+                  aria-pressed={active}
                   key={ev}
                   type="button"
                   onClick={() => toggleEvent(ev)}
@@ -432,8 +436,8 @@ export function ProfileEditForm({
             })}
           </div>
           {otherEventOptions.length > 0 && (
-            <details className="group mt-3 rounded-xl border border-separator bg-card">
-              <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-[14px] font-semibold text-muted2">
+            <details data-ui-section className="group mt-3 rounded-xl border border-separator bg-card">
+              <summary data-ui-disclosure className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-[14px] font-semibold text-muted2">
                 <span className="flex-1">
                   {otherEventLabel}
                   {events.some((event) => otherEventOptions.includes(event)) && (
@@ -449,6 +453,8 @@ export function ProfileEditForm({
                   const active = events.includes(event);
                   return (
                     <button
+                      data-ui-choice
+                      aria-pressed={active}
                       key={event}
                       type="button"
                       onClick={() => toggleEvent(event)}
@@ -476,6 +482,8 @@ export function ProfileEditForm({
             const active = grade === g.value;
             return (
               <button
+                data-ui-choice
+                aria-pressed={active}
                 key={g.value}
                 type="button"
                 onClick={() => setGrade(g.value)}
@@ -502,6 +510,8 @@ export function ProfileEditForm({
             <Skeleton className="h-11 w-full" />
           ) : (
             <select
+              data-ui-field
+              aria-label="スプレッドシートの自分のシート"
               value={sheetName}
               onChange={(e) => setSheetName(e.target.value)}
               className="h-11 w-full rounded-xl border border-separator bg-card px-3 text-[16px] text-ink"
@@ -521,6 +531,7 @@ export function ProfileEditForm({
           </p>
           {enableSheetHeaderSetup && sheetName.trim() && (
             <button
+              data-ui-row
               type="button"
               onClick={() => void openHeaderEditor()}
               disabled={loadingHeader || saving}
@@ -557,6 +568,9 @@ export function ProfileEditForm({
 
       {!isSetup && (
         <button
+          data-ui-action
+          data-ui-tone="danger"
+          type="button"
           onClick={() => setConfirmSignOut(true)}
           disabled={signingOut}
           className="mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-separator text-[15px] font-semibold text-danger active:bg-bg"

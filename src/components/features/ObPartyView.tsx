@@ -32,7 +32,7 @@ export function ObPartyView({ responses }: { responses: ObPartyResponse[] }) {
     <Select value={status} onValueChange={setStatus} ariaLabel="懇親会の出欠で絞り込み" options={[{value:"all",label:"すべて"},...PARTY_STATUSES.map((s) => ({value:s,label:s})),{value:"held",label:"確認待ち"}]} />
     <Card className="divide-y divide-separator">{rows.length ? rows.map((p) => <div key={p.id} className="flex items-center gap-2 p-3.5">
       <div className="min-w-0 flex-1"><p className="text-caption">{p.group_label}</p><p className="break-words text-body">{p.submitted_name}</p></div>
-      <span className="shrink-0 text-body">{p.needs_review ? `確認待ち（${p.status}）` : p.status}</span>
+      <span data-ui-status={p.needs_review || p.status === "未回答" ? "neutral" : p.status === "参加" ? "positive" : "negative"} className="shrink-0 text-body">{p.needs_review ? `確認待ち（${p.status}）` : p.status}</span>
       {!p.needs_review && <ActionMenu triggerLabel={`${p.submitted_name}の懇親会の操作`} onEdit={() => setEditing(p)} editLabel="懇親会の出欠を編集" />}
     </div>) : <EmptyState title="該当する回答はありません" />}</Card>
     {editing && <PartyEditor key={`${editing.id}:${editing.revision}`} response={editing} onClose={() => setEditing(null)} />}

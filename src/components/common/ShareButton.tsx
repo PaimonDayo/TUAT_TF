@@ -5,6 +5,8 @@ import { Copy, Share2 } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import { GlassMenu } from "@/components/ui/glass-menu";
+import { useSystemGlass } from "@/components/layout/glass/system-glass-state";
 
 export async function copyText(text: string) {
   if (navigator.clipboard?.writeText) {
@@ -38,6 +40,7 @@ export function ShareButton({
 }) {
   const { showToast } = useToast();
   const [open, setOpen] = useState(false);
+  const newUi = useSystemGlass();
 
   async function copyLink() {
     const url = new URL(path, window.location.origin).toString();
@@ -69,11 +72,11 @@ export function ShareButton({
     await copyLink();
   }
 
-  return (
-    <>
+  const trigger = (
       <button
+        data-ui-action
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={newUi ? undefined : () => setOpen(true)}
         aria-label={label}
         title={label}
         className={cn(
@@ -83,11 +86,20 @@ export function ShareButton({
       >
         <Share2 size={19} />
       </button>
+  );
 
-      <Sheet open={open} onOpenChange={setOpen}>
+  return (
+    <>
+      {newUi ? <GlassMenu open={open} onOpenChange={setOpen} label="共有" trigger={trigger} items={[
+        { key: "copy", label: "リンクをコピー", icon: <Copy size={20} />, immediate: true, onSelect: () => void copyLink() },
+        { key: "share", label: "ほかのアプリで共有", icon: <Share2 size={20} />, immediate: true, onSelect: () => void shareExternally() },
+      ]} /> : trigger}
+
+      {!newUi && <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent title={"\u5171\u6709"}>
           <div className="space-y-2 pb-4">
             <button
+              data-ui-row
               type="button"
               onClick={() => void copyLink()}
               className="flex w-full items-center gap-3 rounded-xl border border-separator bg-card p-3.5 text-left active:bg-bg"
@@ -101,6 +113,7 @@ export function ShareButton({
               </span>
             </button>
             <button
+              data-ui-row
               type="button"
               onClick={() => void shareExternally()}
               className="flex w-full items-center gap-3 rounded-xl border border-separator bg-card p-3.5 text-left active:bg-bg"
@@ -110,7 +123,7 @@ export function ShareButton({
             </button>
           </div>
         </SheetContent>
-      </Sheet>
+      </Sheet>}
     </>
   );
 }

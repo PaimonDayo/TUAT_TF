@@ -6,6 +6,7 @@ export function NoteImages({ images = [] }: { images?: NoteImage[] }) {
     <div className="mt-3 grid grid-cols-2 gap-2">
       {images.map((image, index) => (
         <a
+          data-ui-row
           key={image.id}
           href={`/api/note-image?id=${image.id}`}
           target="_blank"

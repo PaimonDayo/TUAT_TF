@@ -32,6 +32,7 @@ export function Disclosure({
     <div className={cn("border-t border-separator/70", className)}>
       <button
         type="button"
+        data-ui-disclosure
         onClick={toggle}
         aria-expanded={expanded}
         className="flex min-h-11 w-full items-center justify-between gap-3 py-2 text-left pressable"

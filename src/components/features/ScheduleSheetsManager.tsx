@@ -439,11 +439,11 @@ export function ScheduleSheetsManager() {
   return (
     <div className="space-y-5 pb-4">
       {lastApplied.length > 0 && (
-        <Card className="space-y-2 border-danger/30 bg-danger/5 p-3">
+        <Card data-ui-tone="danger" className="space-y-2 border-danger/30 bg-danger/5 p-3">
           <p className="text-caption">
             直前の取込で{lastApplied.length}件の予定を追加しました。間違えた場合はここから取り消せます。
           </p>
-          <Button
+          <Button data-ui-tone="danger"
             type="button"
             variant="outline"
             size="lg"
@@ -528,6 +528,7 @@ export function ScheduleSheetsManager() {
               {selectedIds.length} / {existing.length} 件を編集対象
             </span>
             <button
+              data-ui-action
               type="button"
               onClick={() =>
                 setSelectedIds(
@@ -551,6 +552,8 @@ export function ScheduleSheetsManager() {
                 const active = selectedIds.includes(schedule.id);
                 return (
                   <button
+                    data-ui-row
+                    aria-pressed={active}
                     key={schedule.id}
                     type="button"
                     onClick={() =>
@@ -746,7 +749,7 @@ export function ScheduleSheetsManager() {
             </p>
           </div>
         ) : (
-          <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-separator bg-card px-4 active:bg-bg">
+          <label data-ui-choice-row className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-separator bg-card px-4 active:bg-bg">
             <Upload size={19} className="text-accent" />
             <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">
               {fileName || "CSVファイルを選択"}
@@ -894,7 +897,7 @@ function EditablePreviewTable({
                 {visibleColumns.map((column) => (
                   <td key={column} className="px-1.5 py-1.5 align-top">
                     <input
-                      type={inputTypeForColumn(column)}
+                      data-ui-field type={inputTypeForColumn(column)}
                       value={row.values[column] ?? ""}
                       readOnly={column === "予定ID"}
                       aria-label={`${row.rowNumber}行目 ${column}`}
@@ -996,7 +999,7 @@ function DeletionCandidates({
           const checked = selectedIds.includes(row.id);
           return (
             <label
-              key={row.id}
+              data-ui-choice-row key={row.id}
               className="flex min-h-11 items-center gap-2 rounded-lg px-2 active:bg-bg"
             >
               <input
@@ -1018,7 +1021,7 @@ function DeletionCandidates({
           );
         })}
       </Card>
-      <Button
+      <Button data-ui-tone="danger"
         type="button"
         variant="outline"
         size="lg"

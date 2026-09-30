@@ -1,0 +1,254 @@
+/* New UI is an account-scoped opt-in. In-flow surfaces use tint/edges rather
+   than a live backdrop filter per row. Only floating overlays sample a backdrop. */
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) {
+  --ui-edge: rgb(255 255 255 / .85);
+  --ui-line: rgb(32 46 70 / .09);
+  --ui-neutral: linear-gradient(155deg, #ffffffda, #ffffff70);
+  --ui-shadow: inset 0 1px 0 #ffffffc7, 0 2px 8px #25324a0a;
+  --ui-selected: #e8f2ff;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-panel], [data-ui-section]) {
+  border-radius: 22px;
+  border-color: var(--ui-line);
+  background: linear-gradient(155deg, #fffffff2, #ffffffd9);
+  box-shadow: inset 0 1px 0 #fff, 0 3px 12px #27364c07;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-panel] [data-ui-panel] {
+  border-radius: 16px;
+  box-shadow: none;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-panel][data-ui-embedded] {
+  background: transparent; border: 0; border-radius: 0; box-shadow: none;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-panel][data-ui-tone="danger"] {
+  background: #fff3f1; border-color: #d332294d;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-action], [data-ui-choice]) {
+  min-height: 44px;
+  min-width: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--ui-edge);
+  background: var(--ui-neutral);
+  box-shadow: var(--ui-shadow);
+  color: var(--color-ink);
+  opacity: 1;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: background-color 120ms ease-out, scale 160ms cubic-bezier(.2,.8,.2,1), box-shadow 120ms ease-out;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-action][data-ui-variant="primary"] {
+  background: linear-gradient(160deg, #398cf9, #0766d7);
+  border-color: #ffffff55;
+  color: #fff;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-action="text"] {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding-inline: 12px; vertical-align: middle;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-action]:is([data-ui-variant="danger"], [data-ui-tone="danger"]) {
+  background: linear-gradient(150deg, #fff6f5, #ffe5e1);
+  border-color: #d3322926;
+  color: #b4231c;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-action][data-ui-tone="primary"] {
+  color: #075db5;
+  background: linear-gradient(155deg, #fff, #e5f0ff);
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-action][data-ui-variant="ghost"] {
+  background: transparent;
+  box-shadow: none;
+  border-color: transparent;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-action], [data-ui-choice]):is([aria-pressed="true"], [aria-current="page"], [aria-selected="true"], [data-ui-active="true"]),
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-choice], [data-ui-choice-row]):has(input:checked) {
+  color: #075db5;
+  background: linear-gradient(155deg, #fafdff, var(--ui-selected));
+  border-color: #0875ed59;
+  box-shadow: inset 0 1px 0 #fff, 0 1px 6px #176bb51a;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-action][data-ui-tone="danger"][aria-pressed="true"] { color: #b4231c; background: #fff0ee; border-color: #d3322966; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-action], [data-ui-choice]):is(:active, [data-glass-pressed]) {
+  scale: .975;
+  opacity: 1;
+  box-shadow: inset 0 0 0 1px #619ce94d;
+  transition-duration: 70ms;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-action], [data-ui-choice], [data-ui-toggle]):disabled {
+  opacity: .45;
+  scale: none;
+  cursor: not-allowed;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-action], [data-ui-choice], [data-ui-row], [data-ui-disclosure], [data-ui-toggle], [data-ui-cell]):focus-visible {
+  outline: 2px solid #0875ed;
+  outline-offset: 2px;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-row], [data-ui-disclosure], [data-ui-toggle], [data-ui-choice-row]) {
+  min-height: 44px;
+  border-radius: 14px;
+  transition: background-color 120ms ease-out;
+  -webkit-tap-highlight-color: transparent;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-row], [data-ui-disclosure], [data-ui-toggle]):is(:active, [data-glass-pressed]) {
+  background-color: #0875ed0d;
+  opacity: 1;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-row][aria-pressed="true"] { background-color: var(--ui-selected); color: #075db5; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) a[data-ui-row]:has(> [data-ui-panel]) { display: block; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-field], :where(input[type="search"])) {
+  border-radius: 16px;
+  background: #ffffffc9;
+  border: 1px solid #263b591c;
+  box-shadow: inset 0 1px 3px #253d5605;
+  transition: border-color 120ms ease-out, box-shadow 120ms ease-out;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-field]:focus-visible {
+  border-color: #0875ed99;
+  outline: 2px solid #0875ed38;
+  outline-offset: 1px;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) button[data-ui-field] { min-height: 44px; height: auto; padding-block: 9px; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-field="metric"] {
+  min-width: 0; min-height: 44px; background: transparent; border-color: transparent; box-shadow: none; border-radius: 8px;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-field="metric"] + span { white-space: nowrap; flex-shrink: 0; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-range] { min-height: 44px; accent-color: #0875ed; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-drag-handle] { min-width: 44px; border-radius: 14px; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-link], [data-ui-chart-bar], [data-ui-drag-handle], [data-ui-range]):focus-visible { outline: 2px solid #0875ed; outline-offset: 2px; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-link]:hover { text-decoration: underline; text-underline-offset: 3px; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-group] {
+  border-radius: 20px;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-group="segmented"] {
+  height: auto;
+  min-height: 50px;
+  padding: 3px;
+  gap: 3px;
+  background: #dfe5ee80;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-group="segmented"] > [data-ui-action] {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-group="segmented"] > [data-ui-action]:is([aria-pressed="true"], [aria-selected="true"]) {
+  background: var(--ui-neutral);
+  color: #075db5;
+  border-color: var(--ui-edge);
+  box-shadow: var(--ui-shadow);
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-toolbar="search"] input[type="search"] { padding-right: 56px; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-action="clear"] { right: 2px; justify-content: center; box-shadow: none; background: transparent; border-color: transparent; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-switch-track] {
+  height: 28px;
+  width: 48px;
+  padding: 3px;
+  box-shadow: inset 0 1px 2px #102c291c;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-switch-thumb] {
+  height: 22px;
+  width: 22px;
+  background: linear-gradient(145deg, #fff, #f4f7fa);
+  border: 1px solid #fff;
+  box-shadow: 0 1px 4px #12332633;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-swatches] {
+  grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-swatches] :is([data-ui-action], [data-ui-choice]) { background-image: none; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-row-container] { padding: 0; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-status] {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #ffffffcf;
+  border-radius: 999px;
+  padding: 3px 10px;
+  background: #ffffff99;
+  color: #536172;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-status="positive"] { color: #087438; background: #e4f6e9; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-status="negative"] { color: #bd2923; background: #fff0ee; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-table] {
+  border-color: var(--ui-line);
+  background: #ffffffd9;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-cell]:is(:active, [data-glass-pressed]) { background: #0875ed14; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-poll-option] {
+  border-radius: 16px;
+  border-color: #263b591c;
+  background-color: #ffffffb3;
+}
+[data-new-ui-surface][data-ui-select-menu] {
+  border-radius: 20px;
+  border: 1px solid #ffffffc9;
+  background: linear-gradient(145deg, #ffffffb3, #f4f6f9d9);
+  backdrop-filter: blur(22px) saturate(135%);
+  -webkit-backdrop-filter: blur(22px) saturate(135%);
+  box-shadow: inset 0 1px 0 #fff, 0 12px 30px #17233426;
+  max-height: min(24rem, var(--radix-select-content-available-height));
+  max-width: calc(100vw - 24px);
+}
+[data-new-ui-surface] [data-ui-select-option] {
+  min-height: 44px;
+  border-radius: 14px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+[data-new-ui-surface] [data-ui-select-option][data-highlighted] { color: #075db5; background: #0875ed14; }
+[data-new-ui-surface] [data-ui-select-option][data-state="checked"] { color: #075db5; font-weight: 600; }
+[data-new-ui-surface].sheet-content { border-radius: 28px 28px 0 0; border: 1px solid #ffffffbd; box-shadow: 0 -8px 32px #17233414; }
+[data-new-ui-surface][data-ui-dialog], [data-new-ui-surface] [data-ui-toast] {
+  border-radius: 26px;
+  border: 1px solid #ffffffd9;
+  background: linear-gradient(145deg, #fffffff2, #f5f7fbe8);
+  box-shadow: inset 0 1px 0 #fff, 0 12px 40px #1723342b;
+}
+[data-new-ui-surface][data-ui-sidebar] {
+  margin-block: 16px;
+  border: 1px solid #ffffffa6;
+  border-radius: 28px;
+  background: linear-gradient(150deg, #ffffff70, #ffffff29);
+  height: calc(100dvh - 32px);
+  box-shadow: var(--ui-shadow);
+}
+[data-new-ui-surface][data-ui-sidebar] [aria-current="page"] { background: var(--ui-neutral); color: #075db5; border: 1px solid #fff; box-shadow: var(--ui-shadow); }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-composer] {
+  bottom: max(12px, calc(var(--ui-composer-inset, 0px) + 12px));
+  border: 1px solid #ffffffc9;
+  border-radius: 24px;
+  background: #f6f8fbe8;
+  box-shadow: 0 4px 20px #1723341c;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-thread] { padding-bottom: calc(var(--ui-composer-height, 64px) + 12px); }
+@media (max-width: 767px) {
+  :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-banner] { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+  :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-composer] {
+    bottom: max(calc(88px + env(safe-area-inset-bottom, 0px)), calc(var(--ui-composer-inset, 0px) + 12px));
+    inset-inline: 12px;
+    width: calc(100% - 24px);
+    max-width: 424px;
+  }
+  :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is(input, textarea, select)[data-ui-field]:not([data-ui-field="metric"]) { min-height: 44px; font-size: 16px; }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  [data-new-ui-surface][data-ui-select-menu],
+  :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-composer] { background: #f6f8fb; }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
+  :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-action], [data-ui-choice], [data-ui-panel], [data-ui-section], [data-ui-field], [data-ui-composer]),
+  [data-new-ui-surface]:is([data-ui-dialog], [data-ui-select-menu], [data-ui-sidebar]), [data-new-ui-surface] [data-ui-toast] {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: Canvas !important;
+    border-color: GrayText !important;
+    color: CanvasText !important;
+    box-shadow: none !important;
+  }
+  :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-action], [data-ui-choice])[aria-pressed="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-action], [data-ui-choice], [data-ui-row], [data-ui-disclosure], [data-ui-toggle], [data-ui-field]),
+  [data-new-ui-surface].sheet-content, [data-new-ui-surface].sheet-overlay { animation: none; transition: none; }
+  :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-action], [data-ui-choice]):is(:active, [data-glass-pressed]) { scale: none; }
+}

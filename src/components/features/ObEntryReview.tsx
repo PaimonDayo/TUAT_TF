@@ -98,7 +98,7 @@ function EntryProgramRow({ time, event, entries, viewerId, searching, onEdit }: 
   const [open, setOpen] = useState(searching);
   const expanded = open;
   return <div className="p-3.5">
-    <button type="button" aria-expanded={expanded} onClick={() => setOpen(!open)} className="flex w-full items-start gap-2 text-left pressable">
+    <button data-ui-row type="button" aria-expanded={expanded} onClick={() => setOpen(!open)} className="flex w-full items-start gap-2 text-left pressable">
       <span className="flex min-w-0 flex-1 items-start gap-3">
         <TimeCell time={time} />
         <span className="min-w-0 flex-1">
@@ -146,7 +146,7 @@ function EntryCard({ entry, members, history, identity, party }: { party?: ObPar
     {!identity && <p className="mt-1 text-caption">出場区分：{entryDivision(entry) ?? "未登録"}</p>}
     {!identity && !entry.events.length && <p className="mt-2 text-body">競技の出場登録なし</p>}
     {!identity && <p className="mt-2 text-body">懇親会：{party?.status ?? "未回答"}</p>}
-    {!identity && <table className="mt-2 w-full table-fixed text-left text-body">
+    {!identity && <table data-ui-table className="mt-2 w-full table-fixed text-left text-body">
       <caption className="sr-only">{entry.submitted_name}の出場種目と資格記録</caption>
       <thead><tr className="border-b border-separator"><th scope="col" className="w-1/2 py-2 pr-2 font-medium">出場種目</th><th scope="col" className="py-2 font-medium">資格記録</th></tr></thead>
       <tbody>{entryEventRows(entry).map(({ event, mark }) => <tr key={event} className="border-b border-separator last:border-0">
@@ -154,7 +154,7 @@ function EntryCard({ entry, members, history, identity, party }: { party?: ObPar
       </tr>)}</tbody>
     </table>}
     {editing && <ObEntryEditor entry={entry} party={party} members={members} onClose={() => setEditing(false)} />}
-    {identity && <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="mt-1 flex min-h-8 w-full items-center justify-between gap-2 text-left text-caption text-accent">
+    {identity && <button data-ui-row type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="mt-1 flex min-h-8 w-full items-center justify-between gap-2 text-left text-caption text-accent">
       <span>{status}{linked ? `：${linked.display_name}` : ""}</span><ChevronDown size={16} className={open ? "rotate-180 shrink-0" : "shrink-0"} />
     </button>}
     {open && <div className="mt-3 space-y-3 border-t border-separator pt-3">

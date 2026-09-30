@@ -21,6 +21,8 @@ export function CompetitionProgramCard({
 
   return (
     <Link
+      data-ui-row
+      data-ui-panel
       href={`/competitions/${competition.id}/program`}
       aria-label={`${competition.name}のプログラムを開く`}
       className="block overflow-hidden rounded-card border border-separator bg-card p-4 transition-colors active:bg-bg"

@@ -302,7 +302,7 @@ export function MenuSheetImportManager() {
             </p>
           </div>
         ) : (
-          <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-separator bg-card px-4 active:bg-bg">
+          <label data-ui-choice-row className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-separator bg-card px-4 active:bg-bg">
             <Upload size={19} className="text-accent" />
             <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">
               {fileName || "CSVファイルを選択"}
@@ -412,7 +412,7 @@ function EditablePreviewTable({
                 {MENU_IMPORT_COLUMNS.map((column) => (
                   <td key={column} className="px-1.5 py-1.5 align-top">
                     {column === "メニュー" || column === "ペース" || column === "補足" || column === "補強" ? (
-                      <textarea
+                      <textarea data-ui-field
                         value={row.values[column] ?? ""}
                         aria-label={`${row.rowNumber}行目 ${column}`}
                         rows={2}
@@ -421,7 +421,7 @@ function EditablePreviewTable({
                       />
                     ) : (
                       <input
-                        type={column === "日付" ? "date" : "text"}
+                        data-ui-field type={column === "日付" ? "date" : "text"}
                         value={row.values[column] ?? ""}
                         aria-label={`${row.rowNumber}行目 ${column}`}
                         onChange={(event) => onChange(row.rowNumber, column, event.target.value)}

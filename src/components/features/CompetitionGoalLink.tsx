@@ -21,6 +21,7 @@ export function CompetitionGoalLink({
 
   return (
     <Link
+      data-ui-row
       href={`/competitions/${competition.id}/goals`}
       className="flex items-center gap-3 p-4 active:bg-bg"
     >

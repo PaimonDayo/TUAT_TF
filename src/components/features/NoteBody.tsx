@@ -50,6 +50,7 @@ export function NoteBody({
         if (!image) return null;
         return (
           <a
+            data-ui-row
             key={index}
             href={`/api/note-image?id=${image.id}`}
             target="_blank"

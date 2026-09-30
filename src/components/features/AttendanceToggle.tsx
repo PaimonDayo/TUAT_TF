@@ -11,6 +11,7 @@ import { useToast } from "@/components/ui/toast";
 import { Toggle } from "@/components/ui/toggle";
 import { Input } from "@/components/ui/input";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useSystemGlass } from "@/components/layout/glass/system-glass-state";
 import type { AttendanceStatusOrNone } from "@/types";
 
 const NEXT: Record<AttendanceStatusOrNone, AttendanceStatusOrNone> = {
@@ -56,6 +57,7 @@ export function AttendanceToggle({
   refreshOnChange?: boolean;
   onChanged?: (change: AttendanceChange) => void;
 }) {
+  const systemGlass = useSystemGlass();
   const { showToast } = useToast();
   const router = useRouter();
   const [status, setStatus] = useState(initial);
@@ -90,6 +92,11 @@ export function AttendanceToggle({
   const style = STYLE[status];
   return (
     <button
+      type="button"
+      data-system-glass={systemGlass || undefined}
+      data-glass-control={systemGlass || undefined}
+      data-glass-attendance={systemGlass ? status : undefined}
+      aria-busy={busy}
       onClick={toggle}
       disabled={busy}
       className={cn(
@@ -293,7 +300,7 @@ export function CancelledBanner({
       <p className="flex items-center gap-1.5 text-[13px] font-bold text-danger"><Ban size={15} />この予定は中止です</p>
       {reason && <p className="mt-1 text-[13px] whitespace-pre-wrap">{reason}</p>}
       {canDecide && (
-        <button type="button" onClick={() => setConfirming(true)} className="mt-1.5 text-[12px] text-muted2 pressable">
+        <button data-ui-action="text" type="button" onClick={() => setConfirming(true)} className="mt-1.5 text-[12px] text-muted2 pressable">
           中止を取り消す
         </button>
       )}
@@ -388,7 +395,7 @@ export function WeatherStatusControl({
     return (
       <button
         type="button"
-        onClick={(event) => { event.stopPropagation(); setOpen(true); }}
+        data-ui-action="text" onClick={(event) => { event.stopPropagation(); setOpen(true); }}
         className="flex items-center gap-1 text-[12px] text-muted2 pressable"
       >
         <CloudRain size={13} />
@@ -401,7 +408,7 @@ export function WeatherStatusControl({
     <div className="space-y-1.5 rounded-xl border border-warning/40 bg-warning/10 p-3" onClick={(event) => event.stopPropagation()}>
       <div className="flex items-center justify-between gap-2">
         <p className="flex items-center gap-1 text-[12px] font-semibold text-warning"><CloudRain size={14} />対応状況（雨天時など）</p>
-        <button type="button" onClick={note ? clearNote : () => setOpen(false)} className="text-[12px] text-muted2 pressable">
+        <button data-ui-action="text" data-ui-variant="ghost" type="button" onClick={note ? clearNote : () => setOpen(false)} className="text-[12px] text-muted2 pressable">
           {note ? "消す" : "閉じる"}
         </button>
       </div>
@@ -425,7 +432,7 @@ export function WeatherStatusControl({
         ) : (
           <span />
         )}
-        <button type="button" onClick={() => setConfirming(true)} className="flex items-center gap-1 text-[12px] font-semibold text-danger pressable">
+        <button data-ui-action="text" type="button" onClick={() => setConfirming(true)} data-ui-tone="danger" className="flex items-center gap-1 text-[12px] font-semibold text-danger pressable">
           <Ban size={13} />
           中止にする
         </button>

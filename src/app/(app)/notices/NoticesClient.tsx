@@ -8,6 +8,7 @@ import { SegmentedControl } from "@/components/ui/segmented";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useSystemGlass } from "@/components/layout/glass/system-glass-state";
 import { NOTICE_CATEGORIES } from "@/lib/constants";
 import { jstToday } from "@/lib/date";
 import {
@@ -34,6 +35,7 @@ export function NoticesClient({
   notifications: AppNotificationWithActor[];
   canCreateNotice: boolean;
 }) {
+  const newUi = useSystemGlass();
   const [tab, setTab] = useState<"notice" | "for_you">("notice");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
@@ -100,9 +102,9 @@ export function NoticesClient({
     requestAnimationFrame(() => {
       document
         .getElementById(`notice-${id}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        ?.scrollIntoView({ behavior: newUi && window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
     });
-  }, [tab, expanded]);
+  }, [tab, expanded, newUi]);
 
   return (
     <div className="space-y-4">
@@ -119,7 +121,7 @@ export function NoticesClient({
 
       {tab === "notice" && (
         <div className="space-y-2 px-4">
-          <div className="flex gap-2">
+          <div data-ui-toolbar="search" className="flex gap-2">
             <div className="relative min-w-0 flex-1">
               <Search size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
               <Input
@@ -132,6 +134,7 @@ export function NoticesClient({
               />
               {query && (
                 <button
+                  data-ui-action="clear"
                   type="button"
                   onClick={() => setQuery("")}
                   aria-label="検索語を消去"
@@ -157,7 +160,7 @@ export function NoticesClient({
               {hasConditions ? `${filteredNotices.length}件 / 全${notices.length}件` : `全${notices.length}件`}
             </p>
             {hasConditions && (
-              <button type="button" onClick={resetConditions} className="text-xs font-semibold text-accent pressable">
+              <button data-ui-action type="button" onClick={resetConditions} className="text-xs font-semibold text-accent pressable">
                 すべて解除
               </button>
             )}
@@ -242,6 +245,7 @@ function ActiveFilterChips({
 function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
     <button
+      data-ui-action
       type="button"
       onClick={onRemove}
       aria-label={`${label}の絞り込みを外す`}

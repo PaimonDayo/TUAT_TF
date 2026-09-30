@@ -9,6 +9,8 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { Button } from "@/components/ui/button";
+import { useSystemGlass } from "@/components/layout/glass/system-glass-state";
+import { glassDialogOpener } from "@/components/layout/glass/glass-press";
 import {
   AVATAR_MAX_PIXELS,
   prepareAvatarImage,
@@ -98,6 +100,9 @@ function AvatarCropEditorDialog({
   onOpenChange,
   onApply,
 }: AvatarCropEditorProps) {
+  const newUi = useSystemGlass();
+  const contentRef = useRef<HTMLDivElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const pointersRef = useRef(new Map<number, Point>());
   const lastDragPointRef = useRef<Point | null>(null);
@@ -282,8 +287,20 @@ function AvatarCropEditorDialog({
       <Dialog.Portal>
         <Dialog.Overlay className="sheet-overlay fixed inset-0 z-[70] bg-black/45" />
         <Dialog.Content
-          onOpenAutoFocus={(event) => event.preventDefault()}
-          onCloseAutoFocus={(event) => event.preventDefault()}
+          ref={contentRef}
+          data-new-ui-surface={newUi || undefined}
+          data-ui-dialog
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            if (newUi) {
+              openerRef.current = glassDialogOpener();
+              contentRef.current?.focus({ preventScroll: true });
+            }
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            if (newUi && openerRef.current?.isConnected) openerRef.current.focus({ preventScroll: true });
+          }}
           className="fixed left-1/2 top-1/2 z-[70] w-[calc(100%-24px)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-[22px] bg-card px-4 pb-[max(env(safe-area-inset-bottom),16px)] pt-4 shadow-xl outline-none"
         >
           <div className="flex items-center justify-between gap-3">
@@ -295,6 +312,8 @@ function AvatarCropEditorDialog({
             </div>
             <Dialog.Close asChild>
               <button
+                data-ui-action
+                data-ui-size="icon"
                 type="button"
                 aria-label="閉じる"
                 disabled={busy}
@@ -347,6 +366,7 @@ function AvatarCropEditorDialog({
             <div className="flex items-center gap-3">
               <Minus size={17} className="shrink-0 text-muted" aria-hidden />
               <input
+                data-ui-range
                 type="range"
                 min={MIN_ZOOM}
                 max={MAX_ZOOM}
@@ -360,6 +380,7 @@ function AvatarCropEditorDialog({
               <Plus size={17} className="shrink-0 text-muted" aria-hidden />
             </div>
             <button
+              data-ui-action
               type="button"
               disabled={!image || busy || (zoom === MIN_ZOOM && position.x === 0 && position.y === 0)}
               onClick={() => {

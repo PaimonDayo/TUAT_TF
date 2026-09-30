@@ -21,11 +21,11 @@ export function RecipientPicker({ people, roles, roleAssignments, all, roleIds, 
   const uniqueRecipientCount = noticeRecipientIds(conditionSelectedIds, personIds, effectiveExcludedPersonIds).length;
   const availableGrades = useMemo(() => { const present = new Set(people.map((person) => person.grade).filter((grade): grade is string => Boolean(grade))); return GRADE_OPTIONS.filter((grade) => present.has(grade.value)); }, [people]);
 
-  return <div className="rounded-xl border border-separator bg-bg/40 px-3">
+  return <div data-ui-panel className="rounded-xl border border-separator bg-bg/40 px-3">
     <div className="py-3"><p className="section-label">通知先</p><p className="mt-0.5 text-micro text-muted">複数の条件を組み合わせられます</p></div>
-    <button type="button" onClick={() => onAllChange(!all)} className={cn("flex min-h-11 w-full items-center rounded-xl border px-3 text-left text-sm font-semibold", all ? "border-accent bg-accent/10 text-ink" : "border-separator bg-card text-muted2")}><span className="flex-1">全員</span>{all && <Check size={18} className="text-accent" />}</button>
+    <button data-ui-row aria-pressed={all} type="button" onClick={() => onAllChange(!all)} className={cn("flex min-h-11 w-full items-center rounded-xl border px-3 text-left text-sm font-semibold", all ? "border-accent bg-accent/10 text-ink" : "border-separator bg-card text-muted2")}><span className="flex-1">全員</span>{all && <Check size={18} className="text-accent" />}</button>
     <Disclosure title={<span>ロール{roleIds.length > 0 && <span className="ml-2 text-xs text-accent">{roleIds.length}件</span>}</span>}>
-      <div className="space-y-1">{roles.filter((role) => !role.is_everyone).map((role) => { const active = roleIds.includes(role.id); return <button key={role.id} type="button" onClick={() => toggleRole(role.id)} className={cn("flex min-h-11 w-full items-center gap-3 rounded-xl px-2 text-left", active ? "bg-accent/10" : "active:bg-bg")}><span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/10 text-accent"><Users size={15} /></span><span className="flex-1 text-sm font-semibold">{role.name}</span>{active && <Check size={18} className="text-accent" />}</button>; })}</div>
+      <div className="space-y-1">{roles.filter((role) => !role.is_everyone).map((role) => { const active = roleIds.includes(role.id); return <button data-ui-row aria-pressed={active} key={role.id} type="button" onClick={() => toggleRole(role.id)} className={cn("flex min-h-11 w-full items-center gap-3 rounded-xl px-2 text-left", active ? "bg-accent/10" : "active:bg-bg")}><span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/10 text-accent"><Users size={15} /></span><span className="flex-1 text-sm font-semibold">{role.name}</span>{active && <Check size={18} className="text-accent" />}</button>; })}</div>
     </Disclosure>
     <Disclosure title={<span>ブロック{blocks.length > 0 && <span className="ml-2 text-xs text-accent">{blocks.length}件</span>}</span>}>
       <div className="space-y-1">{EDITABLE_BLOCK_ORDER.map((block) => <FilterRow key={block} label={BLOCKS[block].label} checked={blocks.includes(block)} onClick={() => onBlocksChange(blocks.includes(block) ? blocks.filter((item) => item !== block) : [...blocks, block])} />)}</div>
@@ -41,5 +41,5 @@ export function RecipientPicker({ people, roles, roleAssignments, all, roleIds, 
 }
 
 function FilterRow({ label, checked, onClick }: { label: string; checked: boolean; onClick: () => void }) {
-  return <button type="button" onClick={onClick} className={cn("flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm", checked ? "bg-accent/10 font-semibold text-ink" : "active:bg-bg text-muted2")}><span className="flex-1">{label}</span>{checked && <Check size={18} className="text-accent" />}</button>;
+  return <button data-ui-row aria-pressed={checked} type="button" onClick={onClick} className={cn("flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm", checked ? "bg-accent/10 font-semibold text-ink" : "active:bg-bg text-muted2")}><span className="flex-1">{label}</span>{checked && <Check size={18} className="text-accent" />}</button>;
 }

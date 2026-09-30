@@ -265,6 +265,7 @@ export function ScheduleCard({
     <Card ref={cardRef} className="overflow-hidden scroll-mt-20">
       <button
         type="button"
+        data-ui-disclosure
         disabled={!hasDetail}
         onClick={() => {
           if (!hasDetail) return;
@@ -481,7 +482,7 @@ export function ScheduleCard({
             </Disclosure>
           )}
           {schedule.venue_url && (
-            <a href={schedule.venue_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[13px] font-medium text-accent pressable">
+            <a data-ui-action="text" data-ui-tone="primary" href={schedule.venue_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[13px] font-medium text-accent pressable">
               <MapPin size={14} /> 地図を開く <ExternalLink size={12} className="opacity-50" />
             </a>
           )}
@@ -624,7 +625,7 @@ function MenuCard({
       {canManage && menu.status === "draft" && (
         <button
           type="button"
-          onClick={publish}
+          data-ui-action="text" data-ui-tone="primary" onClick={publish}
           disabled={publishing}
           className="mt-2 inline-flex items-center gap-1 rounded-lg bg-accent px-3 py-1.5 text-[12px] font-semibold text-white pressable disabled:opacity-50"
         >

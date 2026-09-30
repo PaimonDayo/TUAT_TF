@@ -91,7 +91,7 @@ function SortableRow({
         zIndex: isDragging ? 20 : undefined,
       }}
     >
-      <button
+      <button data-ui-drag-handle
         type="button"
         aria-label="ドラッグして並べ替え"
         className="flex w-10 shrink-0 touch-none items-center justify-center rounded-lg text-muted active:bg-separator/50"

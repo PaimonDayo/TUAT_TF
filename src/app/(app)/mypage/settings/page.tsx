@@ -14,6 +14,8 @@ import { RecordFieldsSetting } from "@/components/features/RecordFieldsSetting";
 import { RecordSourceSetting } from "@/components/features/RecordSourceSetting";
 import { SystemSyncStatus } from "@/components/features/SystemSyncStatus";
 import { MemberPreviewSetting } from "@/components/features/MemberPreviewSetting";
+import { NewUiSetting } from "@/components/features/NewUiSetting";
+import { canUseNewUi } from "@/lib/new-ui";
 import { EditProfileButton } from "@/components/features/MyPageActions";
 import { SHEET_SETUP_PATH } from "@/lib/sheet-period";
 import { getCurrentProfile, isMemberPreviewActive } from "@/lib/supabase/auth";
@@ -63,7 +65,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </Section>
 
         <Section title="練習記録" id="practice-record-settings" collapsible>
-          <Link href={SHEET_SETUP_PATH} prefetch={false} className="flex items-center gap-3 px-4 py-3 active:bg-bg">
+          <Link data-ui-row href={SHEET_SETUP_PATH} prefetch={false} className="flex items-center gap-3 px-4 py-3 active:bg-bg">
               <SlidersHorizontal size={19} className="shrink-0 text-accent" />
               <span className="min-w-0 flex-1">
                 <span className="block text-[14px] font-medium">シート・入力方法・表示項目</span>
@@ -74,12 +76,18 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           {profile.sheet_transition?.mode === "off" && <RecordFieldsSetting profileId={profile.id} initial={profile.record_fields} isMiddleLong={profile.blocks.includes("middle_long")} />}
         </Section>
 
+        {canUseNewUi(profile.roles) && (
+          <Section title="管理者設定" id="admin-ui-settings" collapsible>
+            <NewUiSetting userId={profile.id} />
+          </Section>
+        )}
+
         {perms.manageSystem && (
           <SettingsGroup title="システム管理">
             <div className="space-y-2 p-3">
             <SystemSyncStatus />
             <Card className="divide-y divide-separator/70 overflow-hidden">
-              <Link href="/admin/services" prefetch={false} className="flex items-center gap-3 px-4 py-3 active:bg-bg">
+              <Link data-ui-row href="/admin/services" prefetch={false} className="flex items-center gap-3 px-4 py-3 active:bg-bg">
                 <Activity size={19} className="shrink-0 text-muted2" />
                 <span className="min-w-0 flex-1">
                   <span className="block text-[14px] font-medium">サービスの状態</span>
@@ -90,6 +98,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <RecordSourceSetting initial={showRecordSource} />
               <MemberPreviewSetting previewing={false} />
               <a
+                data-ui-row
                 href="/api/legacy-access"
                 target="_blank"
                 rel="noopener noreferrer"

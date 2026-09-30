@@ -546,14 +546,16 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
       {/* コンディション */}
       {!systemRecordForm && fieldEnabled("condition") && <div>
         <p className="section-label mb-1.5">{recordFieldLabel(configuredFields, "condition", "コンディション")}</p>
-        <div className="grid grid-cols-3 gap-2">
+        <div data-ui-group className="grid grid-cols-3 gap-2">
           {CONDITION_ORDER.map((c) => {
             const meta = CONDITIONS[c];
             const active = condition === c;
             return (
               <button
+                data-ui-action
                 key={c}
                 type="button"
+                aria-pressed={active}
                 onClick={() => setCondition(active ? null : c)}
                 className="h-14 rounded-xl border flex flex-col items-center justify-center gap-0.5 pressable"
                 style={{

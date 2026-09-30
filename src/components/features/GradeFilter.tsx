@@ -37,6 +37,8 @@ export function GradeFilter({
     <>
       <button
         type="button"
+        data-ui-action
+        aria-pressed={active}
         onClick={() => setOpen(true)}
         aria-label="学年で絞り込み"
         className={cn(
@@ -81,6 +83,8 @@ function Row({
   return (
     <button
       type="button"
+      data-ui-row
+      aria-pressed={checked}
       onClick={onClick}
       className="flex min-h-12 w-full items-center justify-between border-t border-separator/70 px-1 text-left text-[15px] first:border-t-0 active:bg-bg"
     >

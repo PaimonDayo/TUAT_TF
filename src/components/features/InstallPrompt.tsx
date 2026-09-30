@@ -106,7 +106,7 @@ export function InstallPrompt() {
           {canPrompt && !isIos && (
             <button
               type="button"
-              onClick={install}
+              data-ui-action data-ui-variant="primary" onClick={install}
               className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[13px] font-semibold text-white pressable"
             >
               <Download size={14} /> 追加する
@@ -115,7 +115,7 @@ export function InstallPrompt() {
         </div>
         <button
           type="button"
-          onClick={dismiss}
+          data-ui-action data-ui-variant="ghost" onClick={dismiss}
           aria-label="閉じる"
           className="-mr-1 -mt-1 shrink-0 rounded-full p-1.5 text-muted active:bg-bg"
         >

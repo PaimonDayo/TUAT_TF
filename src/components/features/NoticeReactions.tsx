@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { NoticeAcknowledgersSheet } from "@/components/features/NoticeAcknowledgersSheet";
@@ -21,6 +21,9 @@ export function NoticeReactions({ noticeId, userId, initialCounts, initialMine }
   const { showToast } = useToast();
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressed = useRef(false);
+  useEffect(() => () => {
+    if (pressTimer.current) clearTimeout(pressTimer.current);
+  }, []);
 
   function startPress() {
     longPressed.current = false;
@@ -71,6 +74,7 @@ export function NoticeReactions({ noticeId, userId, initialCounts, initialMine }
   return (
     <>
       <button
+        data-ui-action
         type="button"
         onClick={handleClick}
         onPointerDown={(event) => { event.preventDefault(); startPress(); }}

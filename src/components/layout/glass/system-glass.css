@@ -1,49 +1,75 @@
-/* The server's effective system role owns this preview. BottomNav is independent. */
-.app-main:has(> [data-system-glass-preview]) :is([data-glass-control], .app-create-button) {
+/* Effective administrator + this account's device opt-in. BottomNav is independent. */
+[data-new-ui-subheader-layout]:has(> [data-system-glass]) {
+  grid-template-columns: minmax(44px, 1fr) minmax(0, 2fr) minmax(44px, 1fr);
+}
+[data-new-ui-subheader-layout]:has(> [data-system-glass]) > h1 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-wrap: nowrap;
+}
+.app-main:has(> [data-new-ui]) [data-glass-header] h1,
+[data-new-ui-title] { white-space: nowrap; text-wrap: nowrap; }
+.app-main:has(> [data-new-ui]) :is([data-glass-control], .app-create-button),
+[data-system-glass][data-glass-control] {
   border-radius: 999px;
   color: var(--color-ink);
   background: linear-gradient(145deg, #ffffff65, #ffffff08 65%), #ffffff38;
   border: 1px solid #ffffff70;
-  -webkit-backdrop-filter: blur(20px) saturate(140%);
-  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   box-shadow: inset 0 1px 0 #ffffff85, inset 0 -1px 0 #26334409, 0 2px 8px #18253312;
   opacity: 1;
   transition: scale 240ms cubic-bezier(.2,.8,.2,1), background-color 160ms ease-out, box-shadow 160ms ease-out;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
-.app-main:has(> [data-system-glass-preview]) :is([data-glass-control], .app-create-button):is(:active, [data-glass-pressed]) {
+/* Only floating navigation samples the backdrop. Repeated attendance/menu
+   controls retain the same tint and edge without a compositing layer per row. */
+.app-main:has(> [data-new-ui]) .app-create-button {
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+.app-main:has(> [data-new-ui]) :is([data-glass-control], .app-create-button):is(:active, [data-glass-pressed]),
+[data-system-glass][data-glass-control]:is(:active, [data-glass-pressed]) {
   scale: .95;
   opacity: 1;
   background-color: #ffffff8f;
   box-shadow: inset 0 0 0 1px #ffffffb0, 0 1px 4px #18253318;
   transition-duration: 80ms;
 }
-.app-main:has(> [data-system-glass-preview]) :is([data-glass-control], .app-create-button):focus-visible {
+.app-main:has(> [data-new-ui]) :is([data-glass-control], .app-create-button):focus-visible,
+[data-system-glass][data-glass-control]:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 3px;
 }
-.app-main:has(> [data-system-glass-preview]) [data-glass-segments] {
+[data-system-glass][data-glass-segments] {
   position: relative;
   isolation: isolate;
+  align-items: stretch;
   border-radius: 999px;
   background: #dfe2e680;
 }
-.app-main:has(> [data-system-glass-preview]) [data-glass-segments] > button {
+[data-system-glass][data-glass-segments] > button {
   position: relative;
   z-index: 1;
   border-radius: 999px;
   background: transparent;
   box-shadow: none;
   opacity: 1;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.4;
   transition: color 160ms ease-out, background-color 100ms ease-out;
   -webkit-tap-highlight-color: transparent;
 }
-.app-main:has(> [data-system-glass-preview]) [data-glass-segments] > button:is(:active, [data-glass-pressed]) { background: #ffffff40; }
-.app-main:has(> [data-system-glass-preview]) [data-glass-segments] > button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+[data-system-glass][data-glass-segments] > button:is(:active, [data-glass-pressed]) { background: #ffffff40; }
+[data-system-glass][data-glass-segments] > button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 /* Keep the server-rendered selection visible until its moving lens hydrates. */
-.app-main:has(> [data-system-glass-preview]) [data-glass-segments]:not(:has(> [data-glass-selection])) > button[aria-pressed="true"] { background: var(--color-card); }
-.app-main:has(> [data-system-glass-preview]) [data-glass-selection] {
+[data-system-glass][data-glass-segments]:not(:has(> [data-glass-selection])) > button[aria-pressed="true"] { background: var(--color-card); }
+[data-system-glass][data-glass-segments] > [data-glass-selection] {
   position: absolute;
   top: 2px;
   bottom: 2px;
@@ -52,15 +78,32 @@
   border-radius: 999px;
   background: linear-gradient(150deg, #ffffffa3, #ffffff3d);
   border: 1px solid #ffffffa8;
-  -webkit-backdrop-filter: blur(12px) saturate(125%);
-  backdrop-filter: blur(12px) saturate(125%);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   box-shadow: inset 0 .5px 0 #ffffffd0, 0 1px 4px #1b29351c;
   transition: transform 260ms cubic-bezier(.2,.8,.2,1), width 260ms cubic-bezier(.2,.8,.2,1);
 }
 @media (max-width: 767px) {
-  .app-main:has(> [data-system-glass-preview]) [data-glass-control] { min-width: 44px; min-height: 44px; }
-  .app-main:has(> [data-system-glass-preview]) [data-glass-segments] > button { min-height: 44px; }
+  :is(.app-main:has(> [data-new-ui]) [data-glass-control], [data-system-glass][data-glass-control]) { min-width: 44px; min-height: 44px; }
+  [data-system-glass][data-glass-segments] > button { min-height: 44px; }
 }
+
+/* Role flags travel with portal controls. Status also retains words and icons. */
+[data-system-glass][data-glass-control][data-glass-attendance] {
+  min-height: 44px;
+  --attendance-ink: #075db5;
+  --attendance-tint: #007aff0a;
+  color: var(--attendance-ink);
+  background: linear-gradient(145deg, #ffffff99, #ffffff24 65%), var(--attendance-tint);
+  border: 1px solid #ffffffa8;
+}
+[data-system-glass][data-glass-control][data-glass-attendance="none"] { border-style: dashed; border-color: #075db559; }
+[data-system-glass][data-glass-control][data-glass-attendance="present"] { --attendance-ink: #087438; --attendance-tint: #16a34a16; }
+[data-system-glass][data-glass-control][data-glass-attendance="absent"] { --attendance-ink: #bd2923; --attendance-tint: #e43b3012; }
+[data-system-glass][data-glass-control][data-glass-attendance="summary"] { --attendance-ink: var(--color-muted2); --attendance-tint: #ffffff38; }
+[data-system-glass][data-glass-attendance="summary"] .text-success { color: #087438; }
+[data-system-glass][data-glass-attendance="summary"] .text-danger { color: #bd2923; }
+[data-system-glass][data-glass-control][data-glass-attendance]:disabled { opacity: .6; cursor: wait; }
 
 /* A single continuous surface, with quiet icons and a highlight per pressed row. */
 .system-glass-menu-scrim { position: fixed; inset: 0; z-index: 60; background: #111b290d; }
@@ -119,11 +162,17 @@
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .system-glass-menu,
-  .app-main:has(> [data-system-glass-preview]) :is([data-glass-control], .app-create-button, [data-glass-selection]) { background: var(--color-card); }
+  [data-system-glass][data-glass-control][data-glass-attendance],
+  .app-main:has(> [data-new-ui]) :is([data-glass-control], .app-create-button),
+  [data-system-glass][data-glass-control],
+  [data-system-glass][data-glass-segments] > [data-glass-selection] { background: var(--color-card); }
 }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
   .system-glass-menu,
-  .app-main:has(> [data-system-glass-preview]) :is([data-glass-control], .app-create-button, [data-glass-selection]) {
+  [data-system-glass][data-glass-control][data-glass-attendance],
+  .app-main:has(> [data-new-ui]) :is([data-glass-control], .app-create-button),
+  [data-system-glass][data-glass-control],
+  [data-system-glass][data-glass-segments] > [data-glass-selection] {
     background: var(--color-card);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
@@ -135,7 +184,14 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .system-glass-menu[data-state], .system-glass-menu-scrim[data-state], .system-glass-menu-item,
-  .app-main:has(> [data-system-glass-preview]) :is([data-glass-control], .app-create-button, [data-glass-segments] > button, [data-glass-selection]) { animation: none; transition: none; }
+  .app-main:has(> [data-new-ui]) :is([data-glass-control], .app-create-button),
+  [data-system-glass][data-glass-control],
+  [data-system-glass][data-glass-segments] > :is(button, [data-glass-selection]) { animation: none; transition: none; }
   .system-glass-menu-item:is(:active, [data-glass-pressed]),
-  .app-main:has(> [data-system-glass-preview]) :is([data-glass-control], .app-create-button):is(:active, [data-glass-pressed]) { scale: none; }
+  :is(.app-main:has(> [data-new-ui]) :is([data-glass-control], .app-create-button), [data-system-glass][data-glass-control]):is(:active, [data-glass-pressed]) { scale: none; }
+}
+
+@media (forced-colors: active) {
+  [data-system-glass][data-glass-control][data-glass-attendance],
+  [data-system-glass][data-glass-attendance="summary"] :is(.text-success, .text-danger) { color: ButtonText; border-color: ButtonText; }
 }

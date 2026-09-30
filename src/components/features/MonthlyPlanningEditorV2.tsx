@@ -8,6 +8,7 @@ import { FormModalFooter } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { Select } from "@/components/ui/select";
+import { useSystemGlass } from "@/components/layout/glass/system-glass-state";
 import { Textarea } from "@/components/ui/textarea";
 import { getCurrentUserId } from "@/lib/supabase/client-auth";
 import { createClient } from "@/lib/supabase/client";
@@ -47,6 +48,7 @@ function hasMenuValue(draft?: MenuDraft) { return !!draft && [draft.content, dra
 export type MonthlyPlanningEditorHandle = { save: () => Promise<boolean> };
 
 export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, { initialTab?: "schedule" | "menu"; canSchedule?: boolean; canMenu?: boolean; onDirtyChange?: (dirty: boolean) => void; onSaved?: () => void }>(function MonthlyPlanningEditorV2({ initialTab = "schedule", canSchedule = true, canMenu = true, onDirtyChange, onSaved }, ref) {
+  const newUi = useSystemGlass();
   const now = new Date();
   const [tab, setTab] = useState<"schedule" | "menu">(initialTab === "menu" && !canMenu ? "schedule" : initialTab === "schedule" && !canSchedule ? "menu" : initialTab);
   const [year, setYear] = useState(now.getFullYear());
@@ -319,7 +321,7 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
   return <div className="space-y-4">
     {tab === "schedule" && <SegmentedControl items={[{ key: "all", label: "全体" }, { key: "middle_long", label: "中長距離" }, { key: "short", label: "短距離" }]} value={scheduleScope} onChange={(value) => { if (hasDirtyChanges) localStorage.setItem(localDraftKey, JSON.stringify({ schedules: scheduleDrafts, menus: menuDrafts })); setScheduleScope(value as ScheduleScope); setSchedules({}); setScheduleDrafts({}); setRowStates({}); }} />}
     <SegmentedControl items={[...(canSchedule ? [{ key: "schedule", label: "予定" }] : []), ...(canMenu ? [{ key: "menu", label: "メニュー" }] : [])]} value={tab} onChange={(value) => setTab(value as "schedule" | "menu")} />
-    <div className="flex items-center justify-between rounded-xl bg-bg px-2 py-1"><button type="button" onClick={() => moveMonth(-1)} className="p-2"><ChevronLeft /></button><strong>{year}年{month}月</strong><button type="button" onClick={() => moveMonth(1)} className="p-2"><ChevronRight /></button></div>
+    <div className="flex items-center justify-between rounded-xl bg-bg px-2 py-1"><button data-ui-action type="button" aria-label="前の月" onClick={() => moveMonth(-1)} className={newUi ? "flex h-11 w-11 items-center justify-center rounded-full pressable focus-visible:outline-2 focus-visible:outline-accent" : "p-2"}><ChevronLeft aria-hidden="true" /></button><strong>{year}年{month}月</strong><button data-ui-action type="button" aria-label="次の月" onClick={() => moveMonth(1)} className={newUi ? "flex h-11 w-11 items-center justify-center rounded-full pressable focus-visible:outline-2 focus-visible:outline-accent" : "p-2"}><ChevronRight aria-hidden="true" /></button></div>
     <div className="flex items-center justify-between gap-3">{tab === "schedule" ? <SegmentedControl className="w-52" items={[{ key: "all", label: "すべての日" }, { key: "active", label: "予定あり" }]} value={showActiveOnly ? "active" : "all"} onChange={(value) => setShowActiveOnly(value === "active")} /> : <span className="text-xs text-muted">予定がある日のみ表示</span>}<span className="shrink-0 text-xs text-muted">変更 {dirtyCount}件</span></div>
     {tab === "menu" && <div className="space-y-3 rounded-xl border border-separator bg-card p-3">
       <Select value={block} onValueChange={(value) => setBlock(value as Block)} ariaLabel="ブロック" options={EDITABLE_BLOCK_ORDER.map((item) => ({ value: item, label: BLOCKS[item].label }))} />
@@ -373,7 +375,7 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
             <p className="section-label mb-1.5">メニュー</p>
             <Textarea autoGrow rows={3} className="min-h-20" placeholder="例: 400m×10（つなぎ200m）" value={menuDrafts[date]?.content ?? ""} onChange={(event) => updateMenu(date, { content: event.target.value })} />
           </div>
-          {(block === "middle_long" || block === "short") && <button type="button" onClick={() => toggleExpanded(date)} className="inline-flex items-center gap-1 text-xs font-semibold text-accent">{isExpanded(date) ? <ChevronUp size={14} /> : <ChevronDown size={14} />}{isExpanded(date) ? "詳細を閉じる" : block === "middle_long" ? "ペース・補足・補強を入力" : "説明を入力"}</button>}
+          {(block === "middle_long" || block === "short") && <button data-ui-disclosure aria-expanded={isExpanded(date)} type="button" onClick={() => toggleExpanded(date)} className="inline-flex items-center gap-1 text-xs font-semibold text-accent">{isExpanded(date) ? <ChevronUp size={14} /> : <ChevronDown size={14} />}{isExpanded(date) ? "詳細を閉じる" : block === "middle_long" ? "ペース・補足・補強を入力" : "説明を入力"}</button>}
           {block === "middle_long" && isExpanded(date) && <>
             <div>
               <p className="section-label mb-1.5">ペース</p>

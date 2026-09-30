@@ -56,7 +56,7 @@ export function ExpandableSection({
         )}
       </div>
       {!forceExpanded && overflowing && (
-        <button
+        <button data-ui-disclosure
           type="button"
           onClick={() => setExpanded((current) => !current)}
           aria-expanded={expanded}

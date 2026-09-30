@@ -359,9 +359,9 @@ export const ResultForm = forwardRef<
     <div className="space-y-4 pb-4">
       <div>
         <p className="section-label mb-1.5">いつの記録か</p>
-        <div className="flex rounded-xl bg-separator/50 p-0.5">
+        <div data-ui-group="segmented" className="flex rounded-xl bg-separator/50 p-0.5">
           {(Object.keys(STAGE_LABEL) as RecordStage[]).map((key) => (
-            <button
+            <button data-ui-action
               key={key}
               type="button"
               aria-pressed={stage === key}
@@ -384,7 +384,7 @@ export const ResultForm = forwardRef<
 
       <div>
         <p className="section-label mb-1.5">種目</p>
-        <select
+        <select data-ui-field
           aria-label="種目"
           className={selectClass}
           value={eventChoice}
@@ -409,7 +409,7 @@ export const ResultForm = forwardRef<
 
       <div>
         <p className="section-label mb-1.5">記録</p>
-        <select
+        <select data-ui-field
           aria-label="記録の状態"
           className={selectClass}
           value={status}
@@ -465,14 +465,14 @@ export const ResultForm = forwardRef<
 
       <div>
         <p className="section-label mb-1.5">大会</p>
-        <div className="flex rounded-xl bg-separator/50 p-0.5">
+        <div data-ui-group="segmented" className="flex rounded-xl bg-separator/50 p-0.5">
           {(
             [
               { value: "catalog", label: "大会から選ぶ" },
               { value: "other", label: "自由入力" },
             ] as const
           ).map((item) => (
-            <button
+            <button data-ui-action
               key={item.value}
               type="button"
               aria-pressed={meetMode === item.value}
@@ -490,7 +490,7 @@ export const ResultForm = forwardRef<
         </div>
         {meetMode === "catalog" ? (
           <>
-            <select
+            <select data-ui-field
               aria-label="大会"
               className={cn(selectClass, "mt-2")}
               value={competitionId}
@@ -513,11 +513,11 @@ export const ResultForm = forwardRef<
               return (
                 <div className="mt-2">
                   <p className="text-caption">何日目の記録ですか</p>
-                  <div className="mt-1.5 flex flex-wrap gap-2">
+                  <div data-ui-group className="mt-1.5 flex flex-wrap gap-2">
                     {days.map((day, i) => {
                       const active = precision === "day" && recordedOn === day;
                       return (
-                        <button
+                        <button data-ui-action
                           key={day}
                           type="button"
                           aria-pressed={active}
@@ -549,7 +549,7 @@ export const ResultForm = forwardRef<
       {stage === "university" ? (
         <div>
           <p className="section-label mb-1.5">記録日（任意）</p>
-          <select
+          <select data-ui-field
             aria-label="記録日の細かさ"
             className={selectClass}
             value={precision}

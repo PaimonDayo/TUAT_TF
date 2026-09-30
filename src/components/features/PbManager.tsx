@@ -9,6 +9,8 @@ import { useToast } from "@/components/ui/toast";
 import { ResultsList } from "@/components/features/ResultsList";
 import { ResultForm, type ResultFormHandle } from "@/components/post/ResultForm";
 import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
+import { FloatingActionPosition, floatingActionButtonClass } from "@/components/ui/floating-action";
+import { useSystemGlass } from "@/components/layout/glass/system-glass-state";
 import type { CompetitionEvent } from "@/lib/competition-goals";
 import type { CompetitionRow, PbRecord } from "@/types";
 
@@ -26,6 +28,7 @@ export function PbManager({
   competitions: CompetitionRow[];
   addLabel?: string;
 }) {
+  const newUi = useSystemGlass();
   const router = useRouter();
   const { showToast } = useToast();
   const [items, setItems] = useState<PbRecord[]>(initial);
@@ -58,6 +61,18 @@ export function PbManager({
     return true;
   }
 
+  const addButton = (
+    <button
+      data-ui-action
+      type="button"
+      onClick={openAdd}
+      aria-label={addLabel}
+      className={newUi ? floatingActionButtonClass : "fixed bottom-24 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-xl pressable"}
+    >
+      <Plus size={26} />
+    </button>
+  );
+
   return (
     <>
       <div className="space-y-3">
@@ -65,14 +80,7 @@ export function PbManager({
       </div>
 
       {/* 追加は他の画面と同じくFABから。一覧の下にボタンを置かない（規約: 書く=FAB） */}
-      <button
-        type="button"
-        onClick={openAdd}
-        aria-label={addLabel}
-        className="fixed bottom-24 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-xl pressable"
-      >
-        <Plus size={26} />
-      </button>
+      {newUi ? <FloatingActionPosition>{addButton}</FloatingActionPosition> : addButton}
 
       {open && (
         <FormModal

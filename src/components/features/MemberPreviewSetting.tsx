@@ -41,6 +41,8 @@ export function MemberPreviewSetting({ previewing }: { previewing: boolean }) {
           管理者向けの項目が隠れています。スクリーンショットを撮り終えたら元に戻してください。翌日には自動で戻ります。
         </p>
         <button
+          data-ui-action
+          data-ui-tone="primary"
           type="button"
           onClick={() => apply(false)}
           className="mt-3 inline-flex min-h-9 items-center rounded-lg bg-accent px-3 text-[13px] font-semibold text-white pressable"

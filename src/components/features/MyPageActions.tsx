@@ -37,6 +37,9 @@ export function EditProfileButton({
   return (
     <>
       <button
+        type="button"
+        data-ui-row={settingsRow || undefined}
+        data-ui-action={!settingsRow || undefined}
         onClick={() => setOpen(true)}
         aria-label="プロフィールを編集"
         className={settingsRow ? "flex w-full items-center gap-3 px-4 py-3 text-left active:bg-bg" : "h-9 px-1 flex items-center gap-1 text-accent text-[15px] pressable"}

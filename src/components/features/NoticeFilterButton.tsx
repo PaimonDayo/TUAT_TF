@@ -51,6 +51,8 @@ export function NoticeFilterButton({
     <Sheet>
       <SheetTrigger asChild>
         <button
+          data-ui-action
+          data-ui-active={count > 0 || undefined}
           type="button"
           className={cn(
             "inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl border px-3 text-[13px] font-semibold",
@@ -100,6 +102,7 @@ export function NoticeFilterButton({
           </FilterSection>
 
           <button
+            data-ui-action
             type="button"
             onClick={onReset}
             disabled={count === 0}
@@ -138,6 +141,7 @@ function FilterRow({
 }) {
   return (
     <button
+      data-ui-row
       type="button"
       onClick={onClick}
       aria-pressed={checked}

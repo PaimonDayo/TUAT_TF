@@ -23,7 +23,7 @@ export function ServiceStatusPanel() {
   return <div className="space-y-4 px-4 pb-8 pt-1">
     <div className="flex items-start justify-between gap-3">
       <p className="text-sm text-muted">システム管理者だけが確認できます。障害情報は各サービス全体の状況です。</p>
-      <button type="button" disabled={query.isFetching} onClick={() => void query.refetch()} className="flex shrink-0 items-center gap-1 rounded-lg border border-separator px-3 py-2 text-sm disabled:opacity-50">
+      <button data-ui-action type="button" disabled={query.isFetching} onClick={() => void query.refetch()} className="flex shrink-0 items-center gap-1 rounded-lg border border-separator px-3 py-2 text-sm disabled:opacity-50">
         <RefreshCw size={14} className={query.isFetching ? "animate-spin" : ""} />再確認
       </button>
     </div>
@@ -68,9 +68,9 @@ function ServiceCard({ name, health, statusUrl, usageUrl, children }: { name: st
     <p className={`text-sm font-semibold ${health.indicator === "none" ? "text-success" : health.indicator === "unknown" ? "text-muted" : "text-warning"}`}>{healthLabels[health.indicator]}</p>
     {health.incidents.length > 0 && <ul className="list-disc space-y-1 pl-4 text-micro text-muted">{health.incidents.map((incident, index) => <li key={index}>{incident}</li>)}</ul>}
     {children}
-    <div className="flex flex-wrap gap-4 border-t border-separator pt-3 text-sm">
-      <a href={usageUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1">使用量を開く<ExternalLink size={13} /></a>
-      <a href={statusUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-muted">障害情報<ExternalLink size={13} /></a>
+    <div data-ui-group className="flex flex-wrap gap-4 border-t border-separator pt-3 text-sm">
+      <a data-ui-action href={usageUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1">使用量を開く<ExternalLink size={13} /></a>
+      <a data-ui-action href={statusUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-muted">障害情報<ExternalLink size={13} /></a>
     </div>
   </Card>;
 }

@@ -197,6 +197,10 @@ export function TrainingChart({
               return (
                 <button
                   key={i}
+                  type="button"
+                  data-ui-chart-bar
+                  aria-label={`${bucketLabel(b, true)} ${formatDistance(b.total)}km`}
+                  aria-pressed={isSel}
                   onClick={() => {
                     setSelected(i);
                     setShowDetail(false);

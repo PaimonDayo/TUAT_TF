@@ -3,6 +3,7 @@
 import * as SelectPrimitive from "@radix-ui/react-select";
 import { Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSystemGlass } from "@/components/layout/glass/system-glass-state";
 
 const EMPTY_VALUE = "__select_empty__";
 
@@ -29,6 +30,7 @@ export function Select({
   disabled?: boolean;
   className?: string;
 }) {
+  const newUi = useSystemGlass();
   const normalizedOptions = options.map((option) => ({
     ...option,
     value: option.value === "" ? EMPTY_VALUE : option.value,
@@ -42,6 +44,7 @@ export function Select({
       disabled={disabled}
     >
       <SelectPrimitive.Trigger
+        data-ui-field
         aria-label={ariaLabel}
         className={cn(
           "flex h-11 w-full min-w-0 items-center justify-between gap-2 rounded-xl border border-separator bg-card px-3 text-left text-[15px] outline-none data-[placeholder]:text-muted disabled:opacity-40 lg:h-9 lg:rounded-lg lg:text-[14px]",
@@ -55,6 +58,8 @@ export function Select({
       </SelectPrimitive.Trigger>
       <SelectPrimitive.Portal>
         <SelectPrimitive.Content
+          data-new-ui-surface={newUi || undefined}
+          data-ui-select-menu
           position="popper"
           sideOffset={6}
           className="z-[110] max-h-72 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-xl border border-separator bg-card shadow-xl"
@@ -62,6 +67,7 @@ export function Select({
           <SelectPrimitive.Viewport className="p-1">
             {normalizedOptions.map((option) => (
               <SelectPrimitive.Item
+                data-ui-select-option
                 key={option.value}
                 value={option.value}
                 disabled={option.disabled}

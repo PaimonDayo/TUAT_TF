@@ -49,7 +49,7 @@ export function CompactFeedRow({ item }: { item: FeedItem }) {
 
   return (
     <div className="flex min-h-[70px] gap-2.5 bg-card px-3 py-2.5">
-      <Link
+      <Link data-ui-link
         href={"/members/" + author.id}
         prefetch={false}
         onClick={(event) => event.stopPropagation()}
@@ -66,7 +66,7 @@ export function CompactFeedRow({ item }: { item: FeedItem }) {
 
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5">
-          <Link
+          <Link data-ui-link
             href={"/members/" + author.id}
             prefetch={false}
             onClick={(event) => event.stopPropagation()}

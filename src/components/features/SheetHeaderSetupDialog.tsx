@@ -121,7 +121,7 @@ export function SheetHeaderSetupDialog({
           「{data.sheetName}」の見出しから作成します。日付・曜日は自動で判別し、スプレッドシートにない項目は表示しません。
         </div>
 
-        {isMiddleLong && fixed.length > 0 && <section className="rounded-card border border-separator bg-card p-3">
+        {isMiddleLong && fixed.length > 0 && <section data-ui-panel className="rounded-card border border-separator bg-card p-3">
           <div className="mb-2 flex items-center gap-2"><Check size={17} className="text-accent" /><h3 className="text-[14px] font-semibold">標準項目</h3></div>
           <p className="mb-2 text-micro text-muted2">入力フォームとタイムラインに設定済みです</p>
           <div className="flex flex-wrap gap-2">{fixed.map((column) => <span key={column.index} className="rounded-full bg-accent/10 px-2.5 py-1 text-micro font-semibold text-accent">{column.label}</span>)}</div>
@@ -132,13 +132,13 @@ export function SheetHeaderSetupDialog({
           <div className="space-y-2">
             {selectable.map((column) => {
               const checked = selected.includes(column.index);
-              return <div key={column.index} className={`rounded-card border p-3 ${checked ? "border-accent/40 bg-accent/5" : "border-separator bg-card"}`}>
-                <button type="button" onClick={() => toggleInput(column.index)} className="flex min-h-8 w-full items-center gap-2 text-left">
+              return <div data-ui-panel key={column.index} className={`rounded-card border p-3 ${checked ? "border-accent/40 bg-accent/5" : "border-separator bg-card"}`}>
+                <button data-ui-row aria-pressed={checked} type="button" onClick={() => toggleInput(column.index)} className="flex min-h-8 w-full items-center gap-2 text-left">
                   <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${checked ? "border-accent bg-accent text-white" : "border-separator bg-card"}`}>{checked && <Check size={14} strokeWidth={3} />}</span>
                   <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{column.label}</span>
                 </button>
                 {checked && <div className="mt-3 border-t border-separator/70 pt-3">
-                  <div className="grid grid-cols-2 gap-2">{(["text", "number"] as const).map((type) => <button key={type} type="button" onClick={() => setTypes((current) => ({ ...current, [column.index]: type }))} className={`h-9 rounded-lg border text-caption font-semibold ${types[column.index] === type ? "border-accent bg-accent/10 text-accent" : "border-separator bg-card text-muted2"}`}>{type === "text" ? "文字列" : "数値"}</button>)}</div>
+                  <div className="grid grid-cols-2 gap-2">{(["text", "number"] as const).map((type) => <button data-ui-choice aria-pressed={types[column.index] === type} key={type} type="button" onClick={() => setTypes((current) => ({ ...current, [column.index]: type }))} className={`h-9 rounded-lg border text-caption font-semibold ${types[column.index] === type ? "border-accent bg-accent/10 text-accent" : "border-separator bg-card text-muted2"}`}>{type === "text" ? "文字列" : "数値"}</button>)}</div>
                 </div>}
               </div>;
             })}
@@ -155,7 +155,7 @@ export function SheetHeaderSetupDialog({
           <div className="space-y-2">
             {selectable.filter((column) => selected.includes(column.index)).map((column) => {
               const checked = timelineSelected.includes(column.index);
-              return <button key={column.index} type="button" onClick={() => toggleTimeline(column.index)} className={`flex min-h-12 w-full items-center gap-2 rounded-xl border px-3 text-left ${checked ? "border-accent/40 bg-accent/5" : "border-separator bg-card"}`}>
+              return <button data-ui-choice aria-pressed={checked} key={column.index} type="button" onClick={() => toggleTimeline(column.index)} className={`flex min-h-12 w-full items-center gap-2 rounded-xl border px-3 text-left ${checked ? "border-accent/40 bg-accent/5" : "border-separator bg-card"}`}>
                 <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${checked ? "border-accent bg-accent text-white" : "border-separator bg-card"}`}>{checked && <Check size={14} strokeWidth={3} />}</span>
                 <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{column.label}</span>
               </button>;

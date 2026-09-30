@@ -22,8 +22,9 @@ export function RankingMonthNav({
   const canGoNext = next <= currentMonth;
 
   return (
-    <div className="flex items-center justify-between rounded-card border border-separator bg-card p-1">
+    <div data-ui-group className="flex items-center justify-between rounded-card border border-separator bg-card p-1">
       <Link
+        data-ui-action
         href={`/ranking?month=${previous}`}
         prefetch={false}
         replace
@@ -38,6 +39,7 @@ export function RankingMonthNav({
       </div>
       {canGoNext ? (
         <Link
+          data-ui-action
           href={`/ranking?month=${next}`}
           prefetch={false}
           replace

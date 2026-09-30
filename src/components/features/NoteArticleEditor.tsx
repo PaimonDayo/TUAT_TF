@@ -305,6 +305,7 @@ export function NoteArticleEditor({
       <div>
         <p className="section-label mb-1.5">タイトル</p>
         <Input
+          aria-label="タイトル"
           value={title}
           onChange={(event) => setTitle(event.target.value)}
           placeholder="タイトルを入力"
@@ -339,7 +340,7 @@ export function NoteArticleEditor({
                     alt="本文に置いていない写真"
                     className="aspect-square w-full rounded-xl object-cover"
                   />
-                  <button
+                  <button data-ui-action
                     type="button"
                     aria-label={photo.removeLabel}
                     disabled={saving}
@@ -349,7 +350,7 @@ export function NoteArticleEditor({
                     <X size={14} />
                   </button>
                 </div>
-                <button
+                <button data-ui-action
                   type="button"
                   disabled={saving}
                   onClick={() => placePhoto(photo.key)}
@@ -365,7 +366,7 @@ export function NoteArticleEditor({
 
       {/* 追加できるものを1か所にまとめて、写真の入口を分かるようにする。 */}
       <div className="flex flex-wrap gap-2">
-        <label
+        <label data-ui-action
           className={`inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-separator bg-card px-3.5 text-[14px] font-semibold active:bg-bg ${
             imageCount >= MAX_IMAGES ? "pointer-events-none opacity-40" : ""
           }`}
@@ -386,7 +387,7 @@ export function NoteArticleEditor({
           />
         </label>
         {!pollEnabled && (
-          <button
+          <button data-ui-action
             type="button"
             disabled={saving}
             onClick={() => {
@@ -409,7 +410,7 @@ export function NoteArticleEditor({
         <section className="space-y-3 rounded-card border border-separator bg-bg p-3">
           <div className="flex items-center justify-between">
             <p className="section-label">投票</p>
-            <button
+            <button data-ui-action data-ui-tone="danger"
               type="button"
               disabled={saving}
               onClick={() =>
@@ -429,7 +430,7 @@ export function NoteArticleEditor({
               <span className="shrink-0 text-caption tabular-nums">
                 {option.vote_count}票
               </span>
-              <button
+              <button data-ui-action
                 type="button"
                 aria-label={`${option.text}を外す`}
                 disabled={saving || option.vote_count > 0}
@@ -457,7 +458,7 @@ export function NoteArticleEditor({
                   )
                 }
               />
-              <button
+              <button data-ui-action
                 type="button"
                 aria-label="選択肢を削除"
                 disabled={saving}
@@ -471,7 +472,7 @@ export function NoteArticleEditor({
             </div>
           ))}
 
-          <button
+          <button data-ui-action
             type="button"
             disabled={saving}
             onClick={() => setNewOptions((old) => [...old, ""])}

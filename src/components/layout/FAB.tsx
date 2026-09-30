@@ -419,7 +419,7 @@ function ContextualFAB({
 
       <UnsavedChangesDialog open={pendingTimelineClose !== null} busy={false} intent="post" onContinue={() => setPendingTimelineClose(null)} onDiscard={() => { if (pendingTimelineClose) closeTimelineForm(pendingTimelineClose); }} onSave={savePendingTimelineForm} />
 
-      <FormModal open={directForm === "planning"} onOpenChange={(open) => { if (!open) { if (scheduleType === "practice" && planningDirty) setConfirmPlanningClose(true); else closeDirectForm(); } }} title="予定">
+      <FormModal open={directForm === "planning"} autoFocus={!systemGlass} onOpenChange={(open) => { if (!open) { if (scheduleType === "practice" && planningDirty) setConfirmPlanningClose(true); else closeDirectForm(); } }} title="予定">
         <div className="space-y-5">
           <SegmentedControl
             items={[
@@ -446,6 +446,7 @@ function ContextualFAB({
 
       <FormModal
         open={directForm === "schedule"}
+        autoFocus={!systemGlass}
         onOpenChange={(open) => !open && closeDirectForm()}
         title="予定"
       >

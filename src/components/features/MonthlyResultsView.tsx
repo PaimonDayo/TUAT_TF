@@ -157,16 +157,16 @@ export function MonthlyResultsView({
         onChange={(kind) => router.push(kind === "month" ? PATH : `${PATH}?view=${kind}`)}
       />
       {nav && (
-        <Card className="flex items-center gap-2 p-2">
-          <Link href={nav.prev} aria-label="前へ" className="rounded-lg p-2 pressable">
+        <Card data-ui-group className="flex items-center gap-2 p-2">
+          <Link data-ui-action href={nav.prev} aria-label="前へ" className="rounded-lg p-2 pressable">
             <ChevronLeft size={20} />
           </Link>
           <div className="min-w-0 flex-1 text-center">
             <p className="text-headline">{nav.label}</p>
-            {nav.reset && <Link href={nav.reset.href} className="text-caption text-accent">{nav.reset.label}</Link>}
+            {nav.reset && <Link data-ui-action="text" data-ui-tone="primary" href={nav.reset.href} className="text-caption text-accent">{nav.reset.label}</Link>}
           </div>
           {nav.next ? (
-            <Link href={nav.next} aria-label="次へ" className="rounded-lg p-2 pressable">
+            <Link data-ui-action href={nav.next} aria-label="次へ" className="rounded-lg p-2 pressable">
               <ChevronRight size={20} />
             </Link>
           ) : (

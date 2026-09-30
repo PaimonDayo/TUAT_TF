@@ -54,7 +54,7 @@ export function MenuForm({ scheduleId }: { scheduleId: string }) {
 
   return (
     <>
-      <button
+      <button data-ui-action
         type="button"
         onClick={(event) => {
           event.stopPropagation();
@@ -331,10 +331,10 @@ function MenuEditor({
               const meta = BLOCKS[block];
               const active = targetBlock === block;
               return (
-                <button
+                <button data-ui-action
                   key={block}
                   type="button"
-                  onClick={() => setTargetBlock(block)}
+                  aria-pressed={active} onClick={() => setTargetBlock(block)}
                   className="h-11 rounded-xl border text-[14px] font-semibold"
                   style={{
                     borderColor: active ? meta.color : "#e5e5ea",
@@ -358,10 +358,10 @@ function MenuEditor({
                 const meta = BLOCKS[block];
                 const active = targetBlock === block;
                 return (
-                  <button
+                  <button data-ui-action
                     key={block}
                     type="button"
-                    onClick={() => setTargetBlock(block)}
+                    aria-pressed={active} onClick={() => setTargetBlock(block)}
                     className="h-11 rounded-xl border text-[14px] font-semibold"
                     style={{
                       borderColor: active ? meta.color : "#e5e5ea",

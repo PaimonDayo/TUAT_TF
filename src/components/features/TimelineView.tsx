@@ -207,9 +207,10 @@ export function TimelineView({
   return (
     <>
       <div className="px-4 pt-1 pb-3 md:px-6 lg:pb-2">
-        <div className="flex min-h-9 items-center gap-2 lg:min-h-8">
+        <div data-ui-toolbar="timeline" className="flex min-h-9 items-center gap-2 lg:min-h-8">
           <div className="min-w-0 flex-1 md:max-w-[420px]"><SegmentedControl items={SIMPLE_BLOCK_ITEMS} value={block} onChange={setBlock} /></div>
           <button
+            data-ui-action
             type="button"
             onClick={toggleCompact}
             aria-pressed={compact}
@@ -224,6 +225,9 @@ export function TimelineView({
             <span>一覧</span>
           </button>
           <button
+            data-ui-action
+            type="button"
+            aria-pressed={favOnly}
             onClick={() => setFavOnly((v) => !v)}
             aria-label={favOnly ? "フォロー中のみを解除" : "フォロー中のみ表示"}
             title="フォロー中"
@@ -262,7 +266,7 @@ export function TimelineView({
                       <span className="text-[10px] text-muted">・{group.items.length}件</span>
                     </div>
                     {compact ? (
-                      <div className="divide-y divide-separator/70 overflow-hidden rounded-card border border-separator/70 bg-card">
+                      <div data-ui-panel className="divide-y divide-separator/70 overflow-hidden rounded-card border border-separator/70 bg-card">
                         {group.items.map((item, index) => {
                           const key = `${item.kind}-${item.id}`;
                           const collapsed = isCompact(key);
@@ -274,6 +278,7 @@ export function TimelineView({
                               )}
                               <div
                                 role="button"
+                                data-ui-row
                                 tabIndex={0}
                                 aria-label={collapsed ? "投稿の詳細を開く" : "投稿の詳細を閉じる"}
                                 aria-expanded={!collapsed}

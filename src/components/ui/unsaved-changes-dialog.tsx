@@ -2,6 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
+import { useSystemGlass } from "@/components/layout/glass/system-glass-state";
 
 /**
  * 何をする画面から閉じようとしたのかで言葉を変える。
@@ -53,15 +54,16 @@ export function UnsavedChangesDialog({
   onSave: () => void;
 }) {
   const copy = COPY[intent];
+  const newUi = useSystemGlass();
   return <Dialog.Root open={open} onOpenChange={(next) => !next && !busy && onContinue()}>
     <Dialog.Portal>
-      <Dialog.Overlay className="sheet-overlay fixed inset-0 z-[60] bg-black/30" />
-      <Dialog.Content className="fixed left-1/2 top-1/2 z-[60] w-[calc(100%-32px)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-[18px] bg-card p-5 shadow-xl outline-none">
+        <Dialog.Overlay data-new-ui-surface={newUi || undefined} className="sheet-overlay fixed inset-0 z-[60] bg-black/30" />
+      <Dialog.Content data-new-ui-surface={newUi || undefined} data-ui-dialog className="fixed left-1/2 top-1/2 z-[60] w-[calc(100%-32px)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-[18px] bg-card p-5 shadow-xl outline-none">
         <Dialog.Title className="text-title">{copy.title}</Dialog.Title>
         <Dialog.Description className="mt-2 text-[14px] text-muted2">{copy.description}</Dialog.Description>
         <div className="mt-5 space-y-2">
           <Button type="button" className="w-full" disabled={busy} onClick={onSave}>{busy ? copy.busy : copy.confirm}</Button>
-          <Button type="button" variant="outline" className="w-full text-danger" disabled={busy} onClick={onDiscard}>{copy.discard}</Button>
+          <Button data-ui-tone="danger" type="button" variant="outline" className="w-full text-danger" disabled={busy} onClick={onDiscard}>{copy.discard}</Button>
           <Button type="button" variant="ghost" className="w-full" disabled={busy} onClick={onContinue}>編集を続ける</Button>
         </div>
       </Dialog.Content>

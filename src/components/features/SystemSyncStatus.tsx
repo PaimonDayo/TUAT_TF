@@ -41,11 +41,11 @@ export function SystemSyncStatus() {
     <div className="space-y-2">
       <div className="flex items-center justify-between px-1">
         <p className="text-micro text-muted2">スプレッドシート連携の状態</p>
-        <button type="button" onClick={() => { setError(false); setHealth(null); setRefreshKey((key) => key + 1); }} className="p-1 text-muted pressable" aria-label="連携状態を再確認">
+        <button data-ui-action data-ui-size="icon" type="button" onClick={() => { setError(false); setHealth(null); setRefreshKey((key) => key + 1); }} className="p-1 text-muted pressable" aria-label="連携状態を再確認">
           <RefreshCw size={15} />
         </button>
       </div>
-      <div className="rounded-xl border border-separator bg-card p-3">
+      <div data-ui-panel className="rounded-xl border border-separator bg-card p-3">
         <div className="flex items-center gap-2">
           {error ? <AlertTriangle size={18} className="text-danger" /> : issue ? <AlertTriangle size={18} className="text-warning" /> : <CheckCircle2 size={18} className="text-success" />}
           <span className="text-[14px] font-semibold">{error ? "状態を取得できません" : !health ? "確認中…" : issue ? "確認が必要です" : "連携は正常です"}</span>

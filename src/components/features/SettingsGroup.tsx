@@ -25,8 +25,8 @@ export function SettingsGroup({ title, id, defaultOpen = false, children }: {
   }, [id]);
 
   return (
-    <details ref={ref} id={id} open={defaultOpen} className="group scroll-mt-20 rounded-card border border-separator/70 bg-card">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-card px-4 py-4 text-[15px] font-semibold focus-visible:outline-2 focus-visible:outline-accent [&::-webkit-details-marker]:hidden">
+    <details data-ui-section ref={ref} id={id} open={defaultOpen} className="group scroll-mt-20 rounded-card border border-separator/70 bg-card">
+      <summary data-ui-disclosure className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-card px-4 py-4 text-[15px] font-semibold focus-visible:outline-2 focus-visible:outline-accent [&::-webkit-details-marker]:hidden">
         {title}
         <ChevronDown size={18} className="shrink-0 text-muted transition-transform group-open:rotate-180" />
       </summary>

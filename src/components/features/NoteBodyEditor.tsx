@@ -55,6 +55,7 @@ export function NoteBodyEditor({
           const first = index === 0;
           return (
             <Textarea
+              aria-label={first ? "本文" : `写真の説明 ${index + 1}`}
               key={`text-${index}`}
               autoGrow
               rows={first ? 6 : 2}
@@ -92,7 +93,7 @@ export function NoteBodyEditor({
                 保存時に追加
               </span>
             )}
-            <button
+            <button data-ui-action
               type="button"
               aria-label="この写真を本文から外す"
               disabled={disabled}

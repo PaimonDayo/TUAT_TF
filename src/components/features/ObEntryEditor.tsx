@@ -75,7 +75,7 @@ export function ObEntryEditor({ entry, members, initialProfileId = "", party, pa
         {OB_ENTRY_EVENTS.filter((event) => event.startsWith(gender)).map((event) => {
           const selected = events.includes(event);
           return <div key={event} className="px-3.5">
-            <label className="flex min-h-12 cursor-pointer items-center gap-3 py-3 text-body">
+            <label data-ui-choice className="flex min-h-12 cursor-pointer items-center gap-3 py-3 text-body">
               <input type="checkbox" className="h-5 w-5 shrink-0 accent-accent" checked={selected} disabled={saving} aria-label={event}
                 onChange={() => { setEvents(selected ? events.filter((e) => e !== event) : [...events, event]); if (!selected && !Object.hasOwn(marks, event)) setMarks({ ...marks, [event]: null }); }} />
               <span className="flex-1">{event.slice(2)}</span>

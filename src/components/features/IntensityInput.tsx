@@ -24,14 +24,14 @@ export function IntensityInput({
       <div className="grid grid-cols-2 gap-2">
         {keys.map((key) => {
           const meta = INTENSITY_LABELS[key];
-          return <div key={key} className="rounded-xl border border-separator bg-card p-2.5">
+          return <div key={key} data-ui-panel className="rounded-xl border border-separator bg-card p-2.5">
             <div className="mb-1.5 flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: meta.color }} />
               <span className="text-[12px] font-semibold">{meta.label}</span>
               <span className="text-micro">{meta.sub}</span>
             </div>
             <div className="flex items-baseline gap-1">
-              <input type="number" inputMode="decimal" min={0} step="0.01" placeholder="0" value={values[key]} onChange={(event) => onChange({ ...values, [key]: event.target.value })} className="w-full bg-transparent text-right text-[20px] font-bold tabular-nums outline-none" />
+              <input data-ui-field="metric" aria-label={`${meta.label}の距離（km）`} type="number" inputMode="decimal" min={0} step="0.01" placeholder="0" value={values[key]} onChange={(event) => onChange({ ...values, [key]: event.target.value })} className="w-full bg-transparent text-right text-[20px] font-bold tabular-nums outline-none" />
               <span className="text-caption">km</span>
             </div>
           </div>;

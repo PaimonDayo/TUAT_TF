@@ -5,6 +5,8 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { syncVisualViewport } from "@/lib/viewport-sync";
+import { useSystemGlass } from "@/components/layout/glass/system-glass-state";
+import { glassDialogOpener } from "@/components/layout/glass/glass-press";
 
 /**
  * 全画面モーダル。高さが固定なので、中身の量が変わっても
@@ -34,6 +36,8 @@ export function FullScreenContent({
   className?: string;
   floatingAction?: React.ReactNode;
 }) {
+  const systemGlass = useSystemGlass();
+  const openerRef = React.useRef<HTMLElement | null>(null);
   const contentRef = React.useRef<HTMLDivElement | null>(null);
   // Dialog.Portal mounts after its parent effect, and may open much later.
   // Attach on the actual DOM mount, including every reopen (React 19 ref cleanup).
@@ -45,11 +49,12 @@ export function FullScreenContent({
   }, []);
   return (
     <Dialog.Portal>
-      <Dialog.Overlay className="sheet-overlay fixed inset-0 z-50 bg-black/30">
+      <Dialog.Overlay data-new-ui-surface={systemGlass || undefined} className="sheet-overlay fixed inset-0 z-50 bg-black/30">
         {/* visualViewport でフォーム本体が移動しても、ステータスバー領域を透かさない。 */}
         <div aria-hidden="true" className="mx-auto h-full w-full max-w-md bg-bg md:max-w-2xl" />
       </Dialog.Overlay>
       <Dialog.Content
+        data-new-ui-surface={systemGlass || undefined}
         ref={attachContent}
         onKeyDownCapture={(event) => {
           // このモーダルは Portal で描画されるが、React の合成イベントは
@@ -70,8 +75,12 @@ export function FullScreenContent({
           }
         }}
         onOpenAutoFocus={(event) => {
+          openerRef.current = glassDialogOpener();
           event.preventDefault();
-          if (!autoFocus) return;
+          if (!autoFocus) {
+            if (systemGlass) contentRef.current?.focus({ preventScroll: true });
+            return;
+          }
 
           // Avoid racing the initial focus with the mobile keyboard viewport resize.
           requestAnimationFrame(() => {
@@ -81,7 +90,10 @@ export function FullScreenContent({
             target?.focus({ preventScroll: true });
           });
         }}
-        onCloseAutoFocus={(e) => e.preventDefault()}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          if (systemGlass && openerRef.current?.isConnected) openerRef.current.focus({ preventScroll: true });
+        }}
         // Select 等の Radix ポップアップや、入れ子の Sheet（Dialog.Root）は
         // Portal で Dialog 外（document.body直下）に描画されるため、その操作を
         // 「外側クリック」と誤判定してこのモーダルごと閉じてしまうのを防ぐ。
@@ -104,16 +116,22 @@ export function FullScreenContent({
           className,
         )}
       >
-        {/* 固定ヘッダー。左上はページと同じ「‹戻る」に揃える（閉じる操作は従来どおり） */}
-        <div className="h-12 shrink-0 box-content grid grid-cols-[1fr_auto_1fr] items-center border-b border-separator bg-bg px-2 pt-[env(safe-area-inset-top)]">
+        {/* 新 UI の戻るはページと同じアイコンだけに揃え、閉じる処理は Dialog に任せる。 */}
+        <div className={cn("h-12 shrink-0 box-content grid items-center border-b border-separator bg-bg px-2 pt-[env(safe-area-inset-top)]", systemGlass
+          ? "grid-cols-[minmax(44px,1fr)_minmax(0,2fr)_minmax(44px,1fr)]"
+          : "grid-cols-[1fr_auto_1fr]")}>
           <Dialog.Close
             aria-label="戻る"
-            className="justify-self-start h-9 pl-1 pr-2 flex items-center gap-0.5 text-accent pressable text-[15px]"
+            data-glass-control={systemGlass || undefined}
+            data-system-glass={systemGlass || undefined}
+            className={systemGlass
+              ? "justify-self-start flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink pressable"
+              : "justify-self-start h-9 pl-1 pr-2 flex items-center gap-0.5 text-accent pressable text-[15px]"}
           >
-            <ChevronLeft size={24} />
-            戻る
+            <ChevronLeft size={24} aria-hidden="true" />
+            {!systemGlass && "戻る"}
           </Dialog.Close>
-          <Dialog.Title className="text-title text-center whitespace-nowrap">{title}</Dialog.Title>
+          <Dialog.Title data-new-ui-title={systemGlass || undefined} className={cn("text-title text-center whitespace-nowrap", systemGlass && "min-w-0 truncate")} title={title}>{title}</Dialog.Title>
           <div />
         </div>
 

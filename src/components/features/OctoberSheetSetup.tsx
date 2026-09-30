@@ -65,9 +65,9 @@ export function OctoberSheetSetup({ profile, prompt = false }: { profile: Profil
       <p className="text-body">入力方法を選んでください。スプシと連携する場合は、自分のシートと入力・表示項目も確認します。</p>
       <SheetInputModeSetting mode={mode} onChange={nextMode => { setMode(nextMode); setError(null); }} disabled={busy} />
       {mode !== "off" && <>
-      <a className="text-accent underline text-caption" href={`https://docs.google.com/spreadsheets/d/${OCTOBER_SHEET_ID}/edit`} target="_blank" rel="noreferrer">練習記録2026.10/1～を開く</a>
+      <a data-ui-action="text" data-ui-tone="primary" className="text-accent underline text-caption" href={`https://docs.google.com/spreadsheets/d/${OCTOBER_SHEET_ID}/edit`} target="_blank" rel="noreferrer">練習記録2026.10/1～を開く</a>
       <label className="block space-y-2"><span className="text-body font-semibold">自分のシート</span>
-        <select className="w-full rounded-xl border border-separator bg-surface p-3" value={members.includes(sheetName) ? sheetName : ""} onChange={e => setSheetName(e.target.value)} disabled={busy || !loaded}>
+        <select data-ui-field className="w-full rounded-xl border border-separator bg-surface p-3" value={members.includes(sheetName) ? sheetName : ""} onChange={e => setSheetName(e.target.value)} disabled={busy || !loaded}>
           <option value="">{loaded ? "シートを選択" : "読み込み中…"}</option>
           {members.map(name => <option key={name} value={name}>{name}</option>)}
         </select>

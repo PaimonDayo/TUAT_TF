@@ -116,6 +116,7 @@ export function NotificationsList({
       {hasUnread && (
         <div className="flex justify-end mb-2">
           <button
+            data-ui-action
             type="button"
             onClick={handleMarkAllRead}
             className="flex items-center gap-1.5 text-sm text-accent pressable transition-opacity"
@@ -128,6 +129,7 @@ export function NotificationsList({
 
       {notifications.map((n) => (
         <Card
+          data-ui-row
           key={n.id}
           className="relative flex items-center p-3 gap-3 overflow-hidden cursor-pointer active:bg-bg/50 transition-colors"
           onClick={() => handleTap(n)}

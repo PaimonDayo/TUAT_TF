@@ -279,14 +279,16 @@ export function NoteEditor({
       {note && canManagePermissions && moveTargets && (
         <div>
           <p className="section-label mb-1.5">場所</p>
-          <div className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-separator bg-card p-1">
+          <div data-ui-panel className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-separator bg-card p-1">
             {[{ id: null as string | null, title: "ルート（ノート一覧の直下）", depth: 0 }, ...moveTargets].map(
               (target) => {
                 const active = parentIdValue === target.id;
                 return (
                   <button
+                    data-ui-row
                     key={target.id ?? "root"}
                     type="button"
+                    aria-pressed={active}
                     onClick={() => setParentIdValue(target.id)}
                     className={cn(
                       "flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left",

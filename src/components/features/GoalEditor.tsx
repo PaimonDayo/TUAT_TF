@@ -63,6 +63,8 @@ export function GoalEditor({
   return (
     <>
       <button
+        type="button"
+        data-ui-row
         onClick={openSheet}
         className="flex w-full items-center gap-3 p-4 text-left active:bg-bg"
       >

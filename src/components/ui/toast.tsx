@@ -11,6 +11,7 @@ import {
 } from "react";
 import { AlertCircle, CheckCircle2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSystemGlass } from "@/components/layout/glass/system-glass-state";
 
 type ToastKind = "success" | "error";
 
@@ -27,6 +28,7 @@ type ToastContextValue = {
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const newUi = useSystemGlass();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const nextId = useRef(0);
 
@@ -49,12 +51,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={value}>
       {children}
       <div
+        data-new-ui-surface={newUi || undefined}
         aria-live="polite"
         aria-atomic="true"
         className="pointer-events-none fixed inset-x-0 top-[calc(env(safe-area-inset-top)+12px)] z-[100] mx-auto flex w-full max-w-md flex-col gap-2 px-4 md:max-w-xl"
       >
         {toasts.map((toast) => (
           <div
+            data-ui-toast
             key={toast.id}
             role={toast.kind === "error" ? "alert" : "status"}
             className={cn(
@@ -69,6 +73,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             )}
             <p className="min-w-0 flex-1 text-[13px] font-medium">{toast.message}</p>
             <button
+              data-ui-action
+              data-ui-variant="ghost"
               type="button"
               onClick={() => dismiss(toast.id)}
               aria-label="通知を閉じる"

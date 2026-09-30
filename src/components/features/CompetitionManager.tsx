@@ -175,6 +175,7 @@ export function CompetitionManager({
           <Card key={c.id} className="p-3">
             <div className="flex items-start gap-2">
               <Link
+                data-ui-row
                 href={`/competitions/${c.id}`}
                 className="flex-1 min-w-0 pressable"
               >

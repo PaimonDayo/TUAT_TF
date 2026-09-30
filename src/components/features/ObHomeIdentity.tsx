@@ -27,7 +27,7 @@ export function ObHomeIdentity({ candidates, profileId }: { candidates: ObHomeCa
     <div className="space-y-2">
       <p className="text-caption">この回答はあなたですか？</p>
       {candidates.map((c) => (
-        <div key={c.id} className="flex items-center justify-between gap-3 rounded-xl bg-bg p-3">
+        <div data-ui-panel key={c.id} className="flex items-center justify-between gap-3 rounded-xl bg-bg p-3">
           <div className="min-w-0">
             <p className="text-[15px] font-medium"><span className="mr-1 text-caption">{c.grade}</span>{c.submitted_name}</p>
             <p className="truncate text-caption">{c.events.length ? c.events.join("・") : "競技の出場登録なし"}{c.sure ? "" : "（学年などを確認）"}</p>

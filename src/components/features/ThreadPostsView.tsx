@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
@@ -15,6 +15,7 @@ import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { createClient } from "@/lib/supabase/client";
+import { useSystemGlass } from "@/components/layout/glass/system-glass-state";
 import type { AuthorMini, ThreadPostWithAuthor } from "@/types";
 
 /** スレッドのメッセージ一覧＋送信欄（掲示板スタイル・時系列） */
@@ -39,6 +40,49 @@ export function ThreadPostsView({
   const [editingBody, setEditingBody] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const threadRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLFormElement>(null);
+  const newUi = useSystemGlass();
+
+  useEffect(() => {
+    const thread = threadRef.current;
+    const composer = composerRef.current;
+    if (!newUi || !thread || !composer) return;
+    const viewport = window.visualViewport;
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      thread.style.setProperty("--ui-composer-height", `${composer.offsetHeight}px`);
+      // The floating composer stays above the software keyboard without
+      // rerendering the message list on every visual viewport event.
+      const inset = viewport && composer.contains(document.activeElement)
+        ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+        : 0;
+      thread.style.setProperty("--ui-composer-inset", `${inset}px`);
+    };
+    const scheduleMeasure = () => {
+      if (!frame) frame = requestAnimationFrame(measure);
+    };
+    measure();
+    const observer = new ResizeObserver(scheduleMeasure);
+    observer.observe(composer);
+    viewport?.addEventListener("resize", scheduleMeasure);
+    viewport?.addEventListener("scroll", scheduleMeasure);
+    window.addEventListener("resize", scheduleMeasure);
+    composer.addEventListener("focusin", scheduleMeasure);
+    composer.addEventListener("focusout", scheduleMeasure);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      viewport?.removeEventListener("resize", scheduleMeasure);
+      viewport?.removeEventListener("scroll", scheduleMeasure);
+      window.removeEventListener("resize", scheduleMeasure);
+      composer.removeEventListener("focusin", scheduleMeasure);
+      composer.removeEventListener("focusout", scheduleMeasure);
+      thread.style.removeProperty("--ui-composer-height");
+      thread.style.removeProperty("--ui-composer-inset");
+    };
+  }, [newUi]);
 
   const [visiblePosts, setVisiblePosts] = useState(posts);
   async function send() {
@@ -117,7 +161,7 @@ export function ThreadPostsView({
   }
 
   return (
-    <div className="space-y-4 pb-20">
+    <div ref={threadRef} data-ui-thread className="space-y-4 pb-20">
       {visiblePosts.length === 0 ? (
         <EmptyState title="まだメッセージはありません" description="最初のメッセージを送ってみましょう。" />
       ) : (
@@ -159,6 +203,8 @@ export function ThreadPostsView({
       )}
 
       <form
+        ref={composerRef}
+        data-ui-composer
         className="fixed inset-x-0 bottom-[calc(52px+env(safe-area-inset-bottom))] z-30 mx-auto w-full max-w-md border-t border-separator bg-bg/90 px-3 py-2 backdrop-blur-xl md:bottom-0 md:left-[104px] md:right-3 md:w-auto md:max-w-none lg:left-auto lg:right-[max(24px,calc((100vw-1160px)/2+24px))] lg:w-[min(848px,calc(100vw-312px))]"
         data-no-pull-refresh
         onSubmit={(event) => {

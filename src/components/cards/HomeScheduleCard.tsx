@@ -25,7 +25,7 @@ export function HomeScheduleCard({ loadSheetMenus, ...props }: ComponentProps<ty
       <Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" />
     </div>
   ) : menus.isError ? (
-    <p className="text-caption">最新の練習メニューを読み込めませんでした。<button type="button" className="ml-1 text-accent" disabled={menus.isFetching} onClick={() => void menus.refetch()}>再読み込み</button></p>
+    <p className="text-caption">最新の練習メニューを読み込めませんでした。<button data-ui-disclosure type="button" className="ml-1 text-accent" disabled={menus.isFetching} onClick={() => void menus.refetch()}>再読み込み</button></p>
   ) : !schedule.menus?.length ? <p className="text-caption">まだ練習メニューはありません</p> : null;
 
   return <ScheduleCard {...props} schedule={schedule} onOpenChange={setOpen} menuStatus={status} />;

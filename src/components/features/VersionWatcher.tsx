@@ -38,11 +38,11 @@ export function VersionWatcher() {
   if (!stale) return null;
 
   return (
-    <div className="fixed left-1/2 -translate-x-1/2 z-50 bottom-[calc(66px+env(safe-area-inset-bottom))] w-[calc(100%-32px)] max-w-sm">
+    <div data-ui-banner className="fixed left-1/2 -translate-x-1/2 z-50 bottom-[calc(66px+env(safe-area-inset-bottom))] w-[calc(100%-32px)] max-w-sm">
       <div className="flex items-center gap-3 rounded-card bg-ink/90 text-white px-4 py-3 shadow-lg backdrop-blur">
         <RefreshCw size={18} className="shrink-0" />
         <span className="text-[13px] flex-1">新しいバージョンがあります</span>
-        <button
+        <button type="button" data-ui-action data-ui-tone="primary"
           onClick={() => window.location.reload()}
           className="text-[13px] font-bold text-accent bg-white rounded-full px-3.5 py-1.5 pressable"
         >

@@ -145,14 +145,16 @@ export function NoticeForm({
     <div className="space-y-4 pb-4">
       <div>
         <p className="section-label mb-1.5">カテゴリ</p>
-        <div className="grid grid-cols-4 gap-2">
+        <div data-ui-group className="grid grid-cols-4 gap-2">
           {(Object.keys(NOTICE_CATEGORIES) as NoticeCategory[]).map((c) => {
             const meta = NOTICE_CATEGORIES[c];
             const active = category === c;
             return (
               <button
+                data-ui-action
                 key={c}
                 type="button"
+                aria-pressed={active}
                 onClick={() => setCategory(c)}
                 className="h-10 rounded-xl border text-[13px] font-semibold pressable"
                 style={{

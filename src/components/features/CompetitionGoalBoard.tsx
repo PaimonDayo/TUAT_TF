@@ -170,7 +170,7 @@ function GoalRow({
           {goal.target}
         </p>
         {long && (
-          <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="mt-1 py-1 text-caption text-accent">
+          <button data-ui-action="text" data-ui-tone="primary" type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="mt-1 py-1 text-caption text-accent">
             {open ? "閉じる" : "全文を表示"}
           </button>
         )}

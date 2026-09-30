@@ -87,21 +87,21 @@ export function PersonPicker({ people, value, onChange, label = "対象者", exc
   }
 
   return <>
-    <button type="button" onClick={launch} className="flex min-h-11 w-full items-center justify-between rounded-xl border border-separator bg-card px-3 text-left">
+    <button data-ui-field aria-haspopup="dialog" aria-expanded={open} type="button" onClick={launch} className="flex min-h-11 w-full items-center justify-between rounded-xl border border-separator bg-card px-3 text-left">
       <span><span className="block text-sm font-semibold">{label}</span><span className="text-micro text-muted">{excludedIncludedIds.length ? `${excludedIncludedIds.length}人を個別に除外` : value.length ? `個別に${value.length}人を選択中` : includedIds.length ? `${includedIds.length}人が条件で対象` : "選択なし"}</span></span><ChevronRight size={17} className="text-muted" />
     </button>
     <FormModal open={open} onOpenChange={setOpen} title={`${label}を選択`} autoFocus={false}>
       <div className="space-y-3 pb-4">
         <div className="space-y-2 rounded-xl border border-separator bg-bg p-3">
-          <div className="flex items-center justify-between gap-2"><p className="inline-flex items-center gap-1.5 text-sm font-semibold"><Users size={16} className="text-accent" />メンバーリスト</p>{draft.length > 0 && !creatingList && <button type="button" onClick={() => setCreatingList(true)} className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-accent"><Plus size={14} />現在の選択を保存</button>}</div>
+          <div className="flex items-center justify-between gap-2"><p className="inline-flex items-center gap-1.5 text-sm font-semibold"><Users size={16} className="text-accent" />メンバーリスト</p>{draft.length > 0 && !creatingList && <button data-ui-action="text" data-ui-tone="primary" type="button" onClick={() => setCreatingList(true)} className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-accent"><Plus size={14} />現在の選択を保存</button>}</div>
           {memberLists.length === 0 && !creatingList && <p className="py-1 text-xs text-muted">部員を選ぶと、この組み合わせをリストとして保存できます</p>}
           {memberLists.map((list) => <div key={list.key} className="flex min-h-11 items-center gap-2 rounded-lg bg-card px-3">
-            <button type="button" onClick={() => applyMemberList(list)} className="min-w-0 flex-1 text-left"><span className="block truncate text-sm font-semibold">{list.name}</span><span className="text-micro text-muted">{list.ids.filter((id) => !excluded.has(id) && people.some((person) => person.id === id)).length}人を選択</span></button>
-            <button type="button" onClick={() => saveMemberLists(memberLists.filter((item) => item.key !== list.key))} aria-label={`${list.name}を削除`} className="rounded-lg p-2 text-muted active:bg-bg"><Trash2 size={16} /></button>
+            <button data-ui-row type="button" onClick={() => applyMemberList(list)} className="min-w-0 flex-1 text-left"><span className="block truncate text-sm font-semibold">{list.name}</span><span className="text-micro text-muted">{list.ids.filter((id) => !excluded.has(id) && people.some((person) => person.id === id)).length}人を選択</span></button>
+            <button data-ui-action data-ui-tone="danger" type="button" onClick={() => saveMemberLists(memberLists.filter((item) => item.key !== list.key))} aria-label={`${list.name}を削除`} className="rounded-lg p-2 text-muted active:bg-bg"><Trash2 size={16} /></button>
           </div>)}
           {creatingList && <div className="space-y-2 rounded-lg bg-card p-2">
             <Input autoFocus value={listName} onChange={(event) => setListName(event.target.value)} placeholder="例: 駅伝メンバー" />
-            <div className="flex justify-end gap-2"><button type="button" onClick={() => { setCreatingList(false); setListName(""); }} className="px-3 py-2 text-xs font-semibold text-muted">キャンセル</button><Button type="button" size="sm" disabled={!listName.trim()} onClick={createMemberList}>保存する</Button></div>
+            <div className="flex justify-end gap-2"><button data-ui-action data-ui-variant="ghost" type="button" onClick={() => { setCreatingList(false); setListName(""); }} className="px-3 py-2 text-xs font-semibold text-muted">キャンセル</button><Button type="button" size="sm" disabled={!listName.trim()} onClick={createMemberList}>保存する</Button></div>
           </div>}
         </div>
         <div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="検索" aria-label="部員を検索" className="pl-9" /></div>
@@ -113,7 +113,7 @@ export function PersonPicker({ people, value, onChange, label = "対象者", exc
           const byCondition = included.has(person.id);
           const excludedByCondition = byCondition && draftExcludedIncludedIds.includes(person.id);
           const active = explicit || (byCondition && !excludedByCondition);
-          return <button key={person.id} type="button" onClick={() => togglePerson(person.id)} className={cn("flex min-h-12 w-full items-center gap-3 rounded-xl px-2 text-left", active ? "bg-accent/10" : excludedByCondition ? "bg-danger/5" : "active:bg-bg")}><Avatar name={person.display_name} avatarUrl={person.avatar_url} blocks={person.blocks} size="sm" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{person.display_name}</span><span className={cn("text-micro text-muted", excludedByCondition && "text-danger")}>{explicit ? "個別指定" : excludedByCondition ? "個別に除外" : byCondition ? "条件で対象" : person.grade ?? "学年未設定"}</span></span>{active && <Check size={18} className="text-accent" />}</button>;
+          return <button data-ui-row aria-pressed={active} key={person.id} type="button" onClick={() => togglePerson(person.id)} className={cn("flex min-h-12 w-full items-center gap-3 rounded-xl px-2 text-left", active ? "bg-accent/10" : excludedByCondition ? "bg-danger/5" : "active:bg-bg")}><Avatar name={person.display_name} avatarUrl={person.avatar_url} blocks={person.blocks} size="sm" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{person.display_name}</span><span className={cn("text-micro text-muted", excludedByCondition && "text-danger")}>{explicit ? "個別指定" : excludedByCondition ? "個別に除外" : byCondition ? "条件で対象" : person.grade ?? "学年未設定"}</span></span>{active && <Check size={18} className="text-accent" />}</button>;
         })}</div>
       </div>
       <FormModalFooter><Button size="lg" onClick={() => { onChange(draft); onExcludedIncludedIdsChange?.(draftExcludedIncludedIds.filter((id) => included.has(id))); setOpen(false); }}>完了（追加 {draft.length}人・除外 {draftExcludedIncludedIds.filter((id) => included.has(id)).length}人）</Button></FormModalFooter>

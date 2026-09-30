@@ -60,7 +60,7 @@ async function AuthenticatedFab() {
   const perms = permissionsOf(profile.roles);
   return (
     <>
-    <SystemGlassPreview roles={profile.roles} />
+    <SystemGlassPreview roles={profile.roles} userId={profile.id} />
     <FAB
       userId={profile.id}
       currentUser={{

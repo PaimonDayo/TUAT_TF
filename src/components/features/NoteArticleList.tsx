@@ -45,6 +45,7 @@ export function NoteArticleList({
           <Card key={article.id} className="p-4">
             <div className="flex items-start gap-2">
               <button
+                data-ui-row
                 type="button"
                 onClick={() => setOpenId(open ? null : article.id)}
                 aria-expanded={open}
@@ -72,6 +73,7 @@ export function NoteArticleList({
                 </div>
               )}
               <button
+                data-ui-action
                 type="button"
                 onClick={() => setOpenId(open ? null : article.id)}
                 aria-label={open ? "閉じる" : "開く"}
@@ -113,6 +115,7 @@ export function NoteArticleList({
                 )}
                 {isLong && (
                   <Link
+                    data-ui-action
                     href={`/notes/${noteId}/articles/${article.id}`}
                     prefetch={false}
                     className="mt-2 inline-block text-[13px] font-medium text-accent pressable"

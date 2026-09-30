@@ -22,6 +22,9 @@ export function Toggle({
   return (
     <button
       type="button"
+      data-ui-toggle
+      role="switch"
+      aria-checked={checked}
       onClick={onChange}
       disabled={disabled}
       className={cn(
@@ -37,13 +40,14 @@ export function Toggle({
         {description && <span className="block text-micro">{description}</span>}
       </span>
       <span
+        data-ui-switch-track
         className="h-6 w-10 rounded-full p-0.5 transition-colors flex shrink-0 ml-3"
         style={{
           backgroundColor: checked ? "#34c759" : "#e5e5ea",
           justifyContent: checked ? "flex-end" : "flex-start",
         }}
       >
-        <span className="h-5 w-5 rounded-full bg-white shadow" />
+        <span data-ui-switch-thumb className="h-5 w-5 rounded-full bg-white shadow" />
       </span>
     </button>
   );

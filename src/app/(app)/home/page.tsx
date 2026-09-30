@@ -90,7 +90,7 @@ async function ObEntrySection() {
   const candidates = entry || !staff ? [] : await getMyObEntryCandidates(profile.id);
   const rows = entry ? entryEventRows(entry) : [];
   const footer = (label: string, hint: string, href: string) => (
-    <Link href={href} prefetch={false} className="mt-3 flex items-center justify-between gap-3 border-t border-separator pt-3">
+    <Link data-ui-row href={href} prefetch={false} className="mt-3 flex items-center justify-between gap-3 border-t border-separator pt-3">
       <span className="text-caption">{hint}</span>
       <span className="flex shrink-0 items-center gap-1 text-[14px] font-semibold text-accent"><Pencil size={14} />{label}</span>
     </Link>
@@ -101,7 +101,7 @@ async function ObEntrySection() {
       <Card className="p-4">
         {entry ? (
           <>
-            <Link href={`${OB_PROGRAM_PATH}?edit=mine`} prefetch={false} className="block">
+            <Link data-ui-row href={`${OB_PROGRAM_PATH}?edit=mine`} prefetch={false} className="block">
               {rows.length ? (
                 <ul className="space-y-1">
                   {rows.map((row) => (
@@ -121,7 +121,7 @@ async function ObEntrySection() {
               ? <ObHomeIdentity candidates={candidates} profileId={profile.id} />
               : <p className="text-[15px] text-muted">まだエントリーしていません</p>}
             {footer("エントリーする", "種目・資格記録と懇親会の出欠を登録できます", `${OB_PROGRAM_PATH}?edit=mine`)}
-            {staff && <Link href={`${OB_PROGRAM_PATH}?edit=identity`} prefetch={false} className="mt-2 block text-right text-caption text-accent">回答済みなら本人照合で探す →</Link>}
+            {staff && <Link data-ui-row href={`${OB_PROGRAM_PATH}?edit=identity`} prefetch={false} className="mt-2 block text-right text-caption text-accent">回答済みなら本人照合で探す →</Link>}
           </>
         )}
       </Card>
@@ -131,7 +131,7 @@ async function ObEntrySection() {
 
 async function CompetitionSection() {
   const result = await getHomeCompetition();
-  if (!result) return <Link href="/competitions" className="block text-right text-caption text-accent">大会一覧・アーカイブ →</Link>;
+  if (!result) return <Link data-ui-row href="/competitions" className="block text-right text-caption text-accent">大会一覧・アーカイブ →</Link>;
   const programEntries = result.competition.program_source_url
     ? await getCompetitionProgramEntries(result.competition.id)
     : [];
@@ -260,7 +260,7 @@ async function NotesSection() {
       <SectionHeading title="ノート" href="/notes" />
       <div className="space-y-2">
         {notes.map((note) => (
-          <Link key={note.id} href={`/notes/${note.id}`} prefetch={false} className="block">
+          <Link data-ui-row key={note.id} href={`/notes/${note.id}`} prefetch={false} className="block">
             <Card className="p-4 active:bg-bg">
               <div className="flex items-start gap-3">
                 <Folder size={19} className="mt-0.5 shrink-0 text-accent" />
@@ -312,7 +312,7 @@ function SectionHeading({ title, href }: { title: string; href: string }) {
   return (
     <div className="flex items-center justify-between">
       <p className="section-label">{title}</p>
-      <Link href={href} prefetch={false} className="flex items-center text-[13px] text-accent">
+      <Link data-ui-row href={href} prefetch={false} className="flex items-center text-[13px] text-accent">
         すべて見る <ChevronRight size={15} />
       </Link>
     </div>

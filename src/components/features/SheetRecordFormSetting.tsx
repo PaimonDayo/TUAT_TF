@@ -54,7 +54,7 @@ export function SheetRecordFormSetting({
   }
 
   return <>
-    <button type="button" onClick={() => void openEditor()} disabled={loading} className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-bg disabled:opacity-60">
+    <button data-ui-row type="button" onClick={() => void openEditor()} disabled={loading} className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-bg disabled:opacity-60">
       <SlidersHorizontal size={19} className="shrink-0 text-accent" />
       <span className="min-w-0 flex-1"><span className="block text-[14px] font-medium">記録フォームを編集</span><span className="block text-micro text-muted">スプレッドシートの列から、入力項目とタイムラインの表示項目を選びます。</span></span>
       <ChevronRight size={18} className="shrink-0 text-muted" />

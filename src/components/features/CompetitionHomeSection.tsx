@@ -31,6 +31,6 @@ export function CompetitionHomeSection({ competition, entries, goalCount, initia
       <CompetitionProgramCard competition={competition} entries={entries} />
       <CompetitionHome competition={competition} goalCount={goalCount} initialToday={initialToday} />
     </>}
-    <Link href="/competitions" className="block text-right text-caption text-accent">大会一覧・アーカイブ →</Link>
+    <Link data-ui-action="text" data-ui-tone="primary" href="/competitions" className="block text-right text-caption text-accent">大会一覧・アーカイブ →</Link>
   </div>;
 }

@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useSystemGlass } from "@/components/layout/glass/system-glass-state";
 import type { CommentAuthor, CommentWithAuthor, TargetType } from "@/types";
 
 type AppReply = CommentWithAuthor & { kind: "app" };
@@ -48,6 +49,7 @@ export function CommentSection({
   currentUser: CommentAuthor;
   onCountChange: (count: number) => void;
 }) {
+  const newUi = useSystemGlass();
   const [comments, setComments] = useState<DisplayReply[]>([]);
   // コメントごとのいいね。件数と自分の状態を1回のRPCでまとめて読む。
   const [likeState, setLikeState] = useState<Record<string, CommentLike>>({});
@@ -201,7 +203,7 @@ export function CommentSection({
     }
     setText("");
     setSaving(false);
-    requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
+    requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: newUi && window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "nearest" }));
   }
 
   function beginEdit(comment: CommentWithAuthor) {
@@ -330,6 +332,7 @@ export function CommentSection({
                   {editing ? (
                     <div className="space-y-2">
                       <Textarea
+                        aria-label="コメントを編集"
                         rows={2}
                         maxLength={500}
                         value={editText}
@@ -388,6 +391,7 @@ export function CommentSection({
 
       <div className="mt-3 flex min-w-0 items-end gap-2">
         <Textarea
+          aria-label="コメントを入力"
           rows={1}
           maxLength={500}
           placeholder="コメントを入力"

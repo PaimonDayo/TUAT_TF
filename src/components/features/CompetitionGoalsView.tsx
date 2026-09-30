@@ -158,6 +158,7 @@ export function CompetitionGoalsView({
       />
 
 <FloatingActionPosition>      <button
+        data-ui-action
         type="button"
         aria-label="目標を追加"
         title={
@@ -192,6 +193,7 @@ export function CompetitionGoalsView({
               <label className="block text-body">
                 種目{index + 1}
                 <select
+                  data-ui-field
                   className={selectClass}
                   value={row.event}
                   disabled={busy}

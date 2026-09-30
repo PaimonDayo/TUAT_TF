@@ -12,6 +12,7 @@ export function Card({
   return (
     <div
       ref={ref}
+      data-ui-panel
       className={cn(
         "rounded-card bg-card border border-separator/70",
         className,

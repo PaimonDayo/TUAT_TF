@@ -40,8 +40,10 @@ export function GlassMenu({ open, onOpenChange, trigger, label, items }: {
           const action = pending.current;
           pending.current = null;
           if (!alive.current) return;
-          if (action) action();
-          else anchor.current?.focus({ preventScroll: true });
+          // Re-establish the opener before a deferred form mounts. It then owns
+          // focus and can restore this same anchor when the form closes.
+          anchor.current?.focus({ preventScroll: true });
+          action?.();
         }}>
           {items.map((item) => (
             <button key={item.key} type="button" data-menu-item data-destructive={item.destructive || undefined}

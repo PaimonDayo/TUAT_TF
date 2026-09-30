@@ -68,6 +68,7 @@ export default async function GoalsPage() {
           <p className="section-label">これまで</p>
           <Card className="overflow-hidden">
             <Link
+              data-ui-row
               href="/goals/past"
               className="flex items-center gap-3 p-4 active:bg-bg"
             >

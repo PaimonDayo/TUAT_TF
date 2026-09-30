@@ -66,6 +66,8 @@ export function FavoriteButton({ targetId, initial }: { targetId: string; initia
   }
   return (
     <button
+      data-ui-action
+      type="button"
       onClick={toggle}
       disabled={busy}
       aria-pressed={fav}

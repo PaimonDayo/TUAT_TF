@@ -72,6 +72,8 @@ export function ResultsList({
 
       {results.length > PREVIEW && (
         <button
+          type="button"
+          data-ui-action
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
           aria-label={expanded ? "結果を閉じる" : `残りの結果を表示（全${results.length}件）`}
