@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Check, Eye, ListChecks } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
@@ -31,6 +31,7 @@ export function SheetHeaderSetupDialog({
   isMiddleLong,
   busy,
   error,
+  inputMethod,
   onCancel,
   onConfirm,
 }: {
@@ -40,6 +41,7 @@ export function SheetHeaderSetupDialog({
   isMiddleLong: boolean;
   busy: boolean;
   error?: string | null;
+  inputMethod?: ReactNode;
   onCancel: () => void;
   onConfirm: (fields: RecordFieldDef[], signature: string) => void;
 }) {
@@ -114,6 +116,7 @@ export function SheetHeaderSetupDialog({
     <FormModal open={open} onOpenChange={(next) => !next && onCancel()} title="練習記録フォーム・タイムライン表示" autoFocus={false}>
       {error && <p role="alert" className="m-4 rounded-lg bg-danger/10 p-3 text-caption text-danger">{error}</p>}
       <div className="space-y-4 pb-5">
+        {inputMethod}
         <div className="rounded-xl bg-accent/8 px-3 py-2.5 text-caption leading-relaxed">
           「{data.sheetName}」の見出しから作成します。日付・曜日は自動で判別し、スプレッドシートにない項目は表示しません。
         </div>

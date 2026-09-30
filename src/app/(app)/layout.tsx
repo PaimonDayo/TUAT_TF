@@ -93,6 +93,7 @@ async function AuthenticatedSheetHeaderGuard() {
       signature={profile.sheet_header_signature}
       isMiddleLong={profile.blocks.includes("middle_long")}
       recordFields={profile.record_fields}
+      octoberProfile={permissionsOf(profile.roles).manageSystem ? profile : undefined}
     />
   );
 }
