@@ -1,5 +1,6 @@
 import { canModerateComments } from "@/lib/permissions";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { Trophy, Medal, ChevronRight, Settings, Shield, ShieldCheck, Users, Target, MapPin, ListOrdered, Rss, Flag, CalendarDays } from "lucide-react";
@@ -35,6 +36,7 @@ export default async function MyPage({
   const showRecordSource = recordSourceEnabled(cookieStore.get(RECORD_SOURCE_COOKIE)?.value);
 
   const perms = permissionsOf(profile.roles);
+  if (perms.manageSystem && setup === "1") redirect("/mypage/settings?profile=1&setup=1");
   const showAdminMenu = perms.manageMembers || perms.createSchedule || perms.manageSystem;
 
   return (
@@ -42,7 +44,7 @@ export default async function MyPage({
       <Header
         title="マイページ"
         large
-        right={
+        right={perms.manageSystem ? undefined :
           <EditProfileButton
             profile={{
               id: profile.id,
@@ -53,6 +55,7 @@ export default async function MyPage({
               avatar_url: profile.avatar_url,
               sheet_name: profile.sheet_name,
               record_source: profile.record_source,
+              sheet_transition: profile.sheet_transition,
               record_fields: profile.record_fields,
               sheet_header_signature: profile.sheet_header_signature,
             }}

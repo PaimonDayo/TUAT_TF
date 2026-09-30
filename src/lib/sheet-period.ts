@@ -2,6 +2,7 @@ import type { RecordFieldDef } from "@/types";
 
 export const OCTOBER_SHEET_ID = "18HKZrVL-JtXbZ9zcYUFPRPGIGCpd7ltLOsmvBKdJfR8";
 export const OCTOBER_START = "2026-10-01";
+export const SHEET_SETUP_PATH = "/mypage/settings/records";
 export const LEGACY_SYNC_END = "2026-10-07T15:00:00.000Z"; // 10/8 00:00 JST
 // Updated guidance must be confirmed once, without clearing existing settings.
 export const SHEET_SETUP_RECONFIRM_AFTER = "2026-09-30T00:45:32.000Z";

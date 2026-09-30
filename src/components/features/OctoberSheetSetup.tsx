@@ -6,7 +6,7 @@ import { FormModal } from "@/components/ui/form-modal";
 import { Button } from "@/components/ui/button";
 import { SheetHeaderSetupDialog, type SheetHeaderData } from "./SheetHeaderSetupDialog";
 import { SheetInputModeSetting } from "./SheetInputModeSetting";
-import { OCTOBER_SHEET_ID } from "@/lib/sheet-period";
+import { OCTOBER_SHEET_ID, SHEET_SETUP_PATH } from "@/lib/sheet-period";
 import { recordFieldsToJson } from "@/lib/profile-normalize";
 import type { Profile, RecordFieldDef } from "@/types";
 
@@ -50,16 +50,16 @@ export function OctoberSheetSetup({ profile, prompt = false }: { profile: Profil
       const body = await response.json();
       if (!response.ok) throw new Error(body.error);
       setOpen(false); setHeader(null); router.refresh();
-      if (!prompt) router.replace("/home");
+      if (!prompt) router.replace("/mypage/settings");
     } catch (e) { setError(e instanceof Error ? e.message : "保存できませんでした"); }
     finally { setBusy(false); }
   }
-  if (!open || (prompt && pathname === "/settings/sheet-setup")) return null;
+  if (!open || (prompt && [SHEET_SETUP_PATH, "/settings/sheet-setup"].includes(pathname))) return null;
   if (header) return <SheetHeaderSetupDialog open data={header} initialFields={profile.sheet_transition ? profile.record_fields : []}
     isMiddleLong={profile.blocks.includes("middle_long")} busy={busy} error={error}
     inputMethod={<SheetInputModeSetting mode={mode} onChange={setMode} disabled={busy} />}
     onCancel={() => { if (!busy) setHeader(null); }} onConfirm={(fields, signature) => void save(fields, signature)} />;
-  return <FormModal open title="10月からの入力設定" autoFocus={false} onOpenChange={nextOpen => { if (!busy) { setOpen(nextOpen); if (!nextOpen && !prompt) router.replace("/home"); } }}>
+  return <FormModal open title="記録の入力設定" autoFocus={false} onOpenChange={nextOpen => { if (!busy) { setOpen(nextOpen); if (!nextOpen && !prompt) router.replace("/mypage/settings"); } }}>
     <div className="space-y-5 p-4 pb-8">
       <p className="text-body">新しいスプレッドシートで、自分のシートと入力方法を確認してください。次に入力フォームとタイムラインの表示項目を選びます。</p>
       <a className="text-accent underline text-caption" href={`https://docs.google.com/spreadsheets/d/${OCTOBER_SHEET_ID}/edit`} target="_blank" rel="noreferrer">練習記録2026.10/1～を開く</a>
@@ -71,7 +71,7 @@ export function OctoberSheetSetup({ profile, prompt = false }: { profile: Profil
       </label>
       <SheetInputModeSetting mode={mode} onChange={setMode} disabled={busy} />
       <div className="space-y-2 text-caption text-muted">
-        <p>設定を変更したいときは、ホームの「記録の入力設定」からいつでも開けます。変更して保存すると、その入力方法で同期します。設定変更だけでアプリの過去の記録が削除されることはありません。</p>
+        <p>設定を変更したいときは、マイページ → 設定 → 練習記録からいつでも開けます。変更して保存すると、その入力方法で同期します。設定変更だけでアプリの過去の記録が削除されることはありません。</p>
         <p>「両方から入力」に戻すと、同期対象期間のスプシの内容が再びアプリへ取り込まれます。スプシの列・見出しが変わった場合は、起動時に入力・表示項目を再確認します。</p>
         <p>9月以前の記録は旧スプシと10月7日いっぱいまで同期します。</p>
       </div>

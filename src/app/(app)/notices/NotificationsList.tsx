@@ -47,7 +47,7 @@ export function NotificationsList({
   };
 
   const getHref = (n: AppNotificationWithActor) => {
-    if (n.type === "sheet_setup") return "/settings/sheet-setup";
+    if (n.type === "sheet_setup") return "/mypage/settings#practice-record-settings";
     if (!n.reference_id) return null;
     switch (n.reference_type) {
       case "record":

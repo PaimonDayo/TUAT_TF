@@ -58,8 +58,7 @@ export default function HomePage() {
 }
 
 async function HomeContent({ nowJst }: { nowJst: Date }) {
-  const [sheetSetup, notices, competition, obEntry, summary, schedules, notes, feed] = await Promise.all([
-    SheetSetupSection(),
+  const [notices, competition, obEntry, summary, schedules, notes, feed] = await Promise.all([
     NoticesSection(),
     CompetitionSection(),
     ObEntrySection(),
@@ -70,7 +69,6 @@ async function HomeContent({ nowJst }: { nowJst: Date }) {
   ]);
   return (
     <div className="space-y-5 px-4 pt-1">
-      {sheetSetup}
       {notices}
       {competition}
       {obEntry}
@@ -80,22 +78,6 @@ async function HomeContent({ nowJst }: { nowJst: Date }) {
       {feed}
       <InstallPrompt />
     </div>
-  );
-}
-
-async function SheetSetupSection() {
-  const profile = await getCurrentProfile();
-  if (!permissionsOf(profile.roles).manageSystem) return null;
-  const mode = profile.sheet_transition?.mode;
-  return (
-    <section className="space-y-2">
-      <p className="section-label">記録の入力設定</p>
-      <Link href="/settings/sheet-setup" prefetch={false} className="block rounded-xl border border-separator bg-surface p-4">
-        <span className="flex items-center justify-between gap-3 text-body font-semibold">シート・入力方法を確認／変更<ChevronRight size={18} className="shrink-0 text-muted" /></span>
-        <span className="mt-1 block text-caption text-muted">{mode === "app_only" ? "現在：アプリからのみ入力" : mode === "sheet" ? "現在：スプシとアプリの両方から入力" : "10月以降の設定を確認してください"}</span>
-        <span className="mt-2 block text-caption text-muted">自分のシート、入力方法、フォーム・表示項目は、ここからいつでも変更できます。</span>
-      </Link>
-    </section>
   );
 }
 

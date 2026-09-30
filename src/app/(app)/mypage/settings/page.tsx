@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { ChevronRight, ExternalLink, Activity } from "lucide-react";
+import { ChevronRight, ExternalLink, Activity, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { SubHeader } from "@/components/layout/SubHeader";
 import { Card } from "@/components/ui/card";
@@ -14,6 +14,8 @@ import { SheetRecordFormSetting } from "@/components/features/SheetRecordFormSet
 import { RecordSourceSetting } from "@/components/features/RecordSourceSetting";
 import { SystemSyncStatus } from "@/components/features/SystemSyncStatus";
 import { MemberPreviewSetting } from "@/components/features/MemberPreviewSetting";
+import { EditProfileButton } from "@/components/features/MyPageActions";
+import { SHEET_SETUP_PATH } from "@/lib/sheet-period";
 import { getCurrentProfile, isMemberPreviewActive } from "@/lib/supabase/auth";
 import { permissionsOf } from "@/lib/permissions";
 import { RECORD_SOURCE_COOKIE, recordSourceEnabled } from "@/lib/record-source-display";
@@ -23,7 +25,8 @@ import { RECORD_SOURCE_COOKIE, recordSourceEnabled } from "@/lib/record-source-d
  * 独立したページに分けて「表示 / 通知 / 練習記録 / システム管理」へグループ分けした。
  * 行の見た目は1種類に統一し、上ほどよく触る項目を置いている。
  */
-export default async function SettingsPage() {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ profile?: string; setup?: string }> }) {
+  const params = await searchParams;
   const profile = await getCurrentProfile();
   const previewingAsMember = await isMemberPreviewActive();
   const cookieStore = await cookies();
@@ -37,6 +40,10 @@ export default async function SettingsPage() {
       <div className="space-y-5 px-4 pb-6 pt-1">
         {/* プレビュー中は管理者向けが全部隠れるので、戻す導線を最初に出す */}
         {previewingAsMember && <MemberPreviewSetting previewing />}
+
+        {perms.manageSystem && <Section title="プロフィール">
+          <EditProfileButton profile={profile} settingsRow autoOpen={params.profile === "1" || params.setup === "1"} />
+        </Section>}
 
         <Section title="表示">
           <AttendanceViewSetting userId={profile.id} initial={profile.attendance_default_block} />
@@ -55,8 +62,17 @@ export default async function SettingsPage() {
           />
         </Section>
 
-        <Section title="練習記録">
-          {profile.sheet_name ? (
+        <Section title="練習記録" id="practice-record-settings">
+          {perms.manageSystem ? (
+            <Link href={SHEET_SETUP_PATH} prefetch={false} className="flex items-center gap-3 px-4 py-3 active:bg-bg">
+              <SlidersHorizontal size={19} className="shrink-0 text-accent" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[14px] font-medium">シート・入力方法・表示項目</span>
+                <span className="block text-micro text-muted">{profile.sheet_transition?.mode === "app_only" ? "現在：アプリからのみ入力" : profile.sheet_transition ? "現在：スプシとアプリの両方から入力" : "10月以降の設定を確認してください"}</span>
+              </span>
+              <ChevronRight size={18} className="shrink-0 text-muted" />
+            </Link>
+          ) : profile.sheet_name ? (
             <div>
               <SheetRecordFormSetting
                 sheetName={profile.sheet_name}
@@ -112,9 +128,9 @@ export default async function SettingsPage() {
 }
 
 /** 見出し＋区切り線つきカード。設定はすべてこの形で並べる。 */
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, id }: { title: string; children: React.ReactNode; id?: string }) {
   return (
-    <section className="space-y-2">
+    <section id={id} className="scroll-mt-20 space-y-2">
       <p className="section-label">{title}</p>
       <Card className="divide-y divide-separator/70 overflow-hidden">{children}</Card>
     </section>

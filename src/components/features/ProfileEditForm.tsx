@@ -25,6 +25,7 @@ export function ProfileEditForm({
   onDone,
   isSetup = false,
   enableSheetHeaderSetup = false,
+  separateRecordSettings = false,
 }: {
   profile: Pick<
     Profile,
@@ -43,6 +44,7 @@ export function ProfileEditForm({
   onDone: () => void;
   isSetup?: boolean;
   enableSheetHeaderSetup?: boolean;
+  separateRecordSettings?: boolean;
 }) {
   const router = useRouter();
   const [name, setName] = useState(profile.display_name ?? "");
@@ -72,6 +74,7 @@ export function ProfileEditForm({
 
   // スプシ連携用：部員シート名の候補を取得（失敗しても編集は続行できる）
   useEffect(() => {
+    if (separateRecordSettings) return;
     let active = true;
     fetch("/api/sheets/members")
       .then((r) => (r.ok ? r.json() : Promise.reject()))
@@ -89,7 +92,7 @@ export function ProfileEditForm({
     return () => {
       active = false;
     };
-  }, [profile.sheet_name]);
+  }, [profile.sheet_name, separateRecordSettings]);
 
   async function signOut() {
     setSigningOut(true);
@@ -229,7 +232,7 @@ export function ProfileEditForm({
       setSaving(true);
       setError(null);
 
-      if (enableSheetHeaderSetup && sheetName.trim()) {
+      if (!separateRecordSettings && enableSheetHeaderSetup && sheetName.trim()) {
         const currentHeader = await fetchHeader();
         if (!currentHeader) {
           setSaving(false);
@@ -256,7 +259,7 @@ export function ProfileEditForm({
       setSaving(true);
       setError(null);
       const nextRecordSource = sheetName.trim() && profile.sheet_transition?.mode !== "app_only" ? "sheet" : "app";
-      const switchingSource = Boolean(sheetName.trim()) && nextRecordSource !== (profile.record_source ?? "app");
+      const switchingSource = !separateRecordSettings && Boolean(sheetName.trim()) && nextRecordSource !== (profile.record_source ?? "app");
 
       if (switchingSource && profile.sheet_name) {
         const response = await fetch("/api/sheets/reconcile", {
@@ -293,10 +296,10 @@ export function ProfileEditForm({
           events: events.filter((ev) => eventOptions.includes(ev)),
           grade,
           avatar_url: avatarUrl.trim() || null,
-          sheet_name: sheetName.trim() || null,
+          ...(!separateRecordSettings ? { sheet_name: sheetName.trim() || null,
           sheet_header_signature: headerSignature,
           record_source: nextRecordSource,
-          record_fields: recordFieldsToJson(recordFields),
+          record_fields: recordFieldsToJson(recordFields) } : {}),
         },
         { id: profile.id },
       );
@@ -492,7 +495,7 @@ export function ProfileEditForm({
 
       {/* スプレッドシート連携：自分のシートを選ぶ（練習記録の同期に使う）。
           候補取得中も欄自体は出しておき、後から急に現れる遅延を無くす。 */}
-      {(sheetOptions === null || sheetOptions.length > 0) && (
+      {!separateRecordSettings && (sheetOptions === null || sheetOptions.length > 0) && (
         <div>
           <p className="section-label mb-1.5">スプレッドシートの自分のシート（任意）</p>
           {sheetOptions === null ? (
@@ -535,11 +538,11 @@ export function ProfileEditForm({
         </div>
       )}
 
-      {sheetNameMissing && (
+      {!separateRecordSettings && sheetNameMissing && (
         <p className="-mt-3 text-micro text-danger">現在選ばれているシートが見つかりません。正しいシートを選び直してください。</p>
       )}
 
-      {enableSheetHeaderSetup && sheetName.trim() && (
+      {!separateRecordSettings && enableSheetHeaderSetup && sheetName.trim() && (
         <p className="text-micro -mt-3">
           列名が変わったときは、同期前にアプリで入力項目を再確認します。
         </p>

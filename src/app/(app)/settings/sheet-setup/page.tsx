@@ -1,9 +1,5 @@
-import { notFound } from "next/navigation";
-import { getCurrentProfile } from "@/lib/supabase/auth";
-import { permissionsOf } from "@/lib/permissions";
-import { OctoberSheetSetup } from "@/components/features/OctoberSheetSetup";
-export default async function SheetSetupPage() {
-  const profile = await getCurrentProfile();
-  if (!permissionsOf(profile.roles).manageSystem) notFound();
-  return <OctoberSheetSetup profile={profile} />;
+import { redirect } from "next/navigation";
+import { SHEET_SETUP_PATH } from "@/lib/sheet-period";
+export default function SheetSetupPage() {
+  redirect(SHEET_SETUP_PATH);
 }

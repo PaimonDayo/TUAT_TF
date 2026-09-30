@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { OctoberSheetSetup } from "@/components/features/OctoberSheetSetup";
+import { SHEET_SETUP_PATH } from "@/lib/sheet-period";
 import { SheetHeaderSetupDialog, type SheetHeaderData } from "@/components/features/SheetHeaderSetupDialog";
 import { recordFieldsToJson } from "@/lib/profile-normalize";
 import type { Profile, RecordFieldDef } from "@/types";
@@ -23,7 +24,7 @@ export function SheetHeaderGuard({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const dedicatedSetup = !!octoberProfile && pathname === "/settings/sheet-setup";
+  const dedicatedSetup = !!octoberProfile && [SHEET_SETUP_PATH, "/settings/sheet-setup"].includes(pathname);
   const [data, setData] = useState<SheetHeaderData | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -37,7 +38,7 @@ export function SheetHeaderGuard({
       })
       .catch(() => undefined);
     return () => { active = false; };
-  }, [sheetName, signature, dedicatedSetup]);
+  }, [sheetName, signature, dedicatedSetup, isMiddleLong]);
 
   async function confirm(fields: RecordFieldDef[], nextSignature: string) {
     setBusy(true);
