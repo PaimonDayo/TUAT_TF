@@ -3,6 +3,7 @@ import { ChevronRight, ExternalLink, Activity, SlidersHorizontal } from "lucide-
 import Link from "next/link";
 import { SubHeader } from "@/components/layout/SubHeader";
 import { Card } from "@/components/ui/card";
+import { SettingsGroup } from "@/components/features/SettingsGroup";
 import { AttendanceViewSetting } from "@/components/features/AttendanceViewSetting";
 import { TimelineViewSetting } from "@/components/features/TimelineViewSetting";
 import { MenuViewSetting } from "@/components/features/MenuViewSetting";
@@ -41,11 +42,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         {/* プレビュー中は管理者向けが全部隠れるので、戻す導線を最初に出す */}
         {previewingAsMember && <MemberPreviewSetting previewing />}
 
-        {perms.manageSystem && <Section title="プロフィール">
+        {perms.manageSystem && <Section title="プロフィール" collapsible defaultOpen={params.profile === "1" || params.setup === "1"}>
           <EditProfileButton profile={profile} settingsRow autoOpen={params.profile === "1" || params.setup === "1"} />
         </Section>}
 
-        <Section title="表示">
+        <Section title="表示" collapsible={perms.manageSystem}>
           <AttendanceViewSetting userId={profile.id} initial={profile.attendance_default_block} />
           <TimelineViewSetting userId={profile.id} initial={profile.timeline_default_block} />
           <ScheduleViewSetting userId={profile.id} initial={profile.schedule_view_all_blocks ?? false} />
@@ -53,7 +54,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <SplashIntroSetting />
         </Section>
 
-        <Section title="通知">
+        <Section title="通知" collapsible={perms.manageSystem}>
           <NotificationSettings
             profileId={profile.id}
             initialComment={profile.notify_comment ?? true}
@@ -62,7 +63,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           />
         </Section>
 
-        <Section title="練習記録" id="practice-record-settings">
+        <Section title="練習記録" id="practice-record-settings" collapsible={perms.manageSystem}>
           {perms.manageSystem ? (
             <Link href={SHEET_SETUP_PATH} prefetch={false} className="flex items-center gap-3 px-4 py-3 active:bg-bg">
               <SlidersHorizontal size={19} className="shrink-0 text-accent" />
@@ -92,8 +93,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </Section>
 
         {perms.manageSystem && (
-          <section className="space-y-2">
-            <p className="section-label">システム管理</p>
+          <SettingsGroup title="システム管理">
+            <div className="space-y-2 p-3">
             <SystemSyncStatus />
             <Card className="divide-y divide-separator/70 overflow-hidden">
               <Link href="/admin/services" prefetch={false} className="flex items-center gap-3 px-4 py-3 active:bg-bg">
@@ -120,7 +121,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <ChevronRight size={18} className="shrink-0 text-muted" />
               </a>
             </Card>
-          </section>
+            </div>
+          </SettingsGroup>
         )}
       </div>
     </>
@@ -128,7 +130,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 }
 
 /** 見出し＋区切り線つきカード。設定はすべてこの形で並べる。 */
-function Section({ title, children, id }: { title: string; children: React.ReactNode; id?: string }) {
+function Section({ title, children, id, collapsible = false, defaultOpen = false }: {
+  title: string; children: React.ReactNode; id?: string; collapsible?: boolean; defaultOpen?: boolean;
+}) {
+  if (collapsible) {
+    return <SettingsGroup title={title} id={id} defaultOpen={defaultOpen}>
+      <div className="divide-y divide-separator/70">{children}</div>
+    </SettingsGroup>;
+  }
   return (
     <section id={id} className="scroll-mt-20 space-y-2">
       <p className="section-label">{title}</p>
