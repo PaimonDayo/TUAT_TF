@@ -72,3 +72,30 @@ test('interrupted deletion resumes safely without clearing an intervening edit',
  t.values[1][2]='edited';assert.throws(()=>t.ctx.deleteReplyRecord(input),/変更/);
  t.values[1][2]='original';assert.equal(t.ctx.deleteReplyRecord(input).success,true);assert.equal(t.values[1][2],'');
 });
+
+test('a CSV-imported app copy can be deleted and its original ID blocks delayed sends',()=>{
+ const t=setup();t.values[1][2]='original';t.values[1][3]='other';t.notes[2]='TUAT_APP_COMMENT:original-app';
+ const input={memberName:'test',date:'2026-09-28',deletionId:'imported-reply',replyIndex:2,expectedText:'original'};
+ assert.equal(t.ctx.deleteReplyRecord(input).success,true);
+ assert.equal(t.values[1][2],'');assert.equal(t.values[1][3],'other');assert.equal(t.values[1][1],'record');
+ assert.equal(t.notes[2],'TUAT_DELETED_COMMENT:original-app');
+ assert.equal(t.ctx.writeReplyRecord({...input,text:'original',sourceId:'original-app'}).action,'deleted');
+ assert.equal(t.ctx.deleteReplyRecord(input).action,'already_deleted');
+ t.values[1][2]='new reply';assert.throws(()=>t.ctx.deleteReplyRecord(input),/別の返信/);assert.equal(t.values[1][2],'new reply');
+});
+
+test('a CSV-imported app deletion still rejects changed text and labelled columns',()=>{
+ const t=setup();t.values[1][2]='changed';t.notes[2]='TUAT_APP_COMMENT:original-app';
+ const input={memberName:'test',date:'2026-09-28',deletionId:'imported-reply',replyIndex:2,expectedText:'original'};
+ assert.throws(()=>t.ctx.deleteReplyRecord(input),/変更/);assert.equal(t.values[1][2],'changed');
+ t.notes[1]='TUAT_APP_COMMENT:original-app';assert.throws(()=>t.ctx.deleteReplyRecord({...input,replyIndex:1,expectedText:'record'}),/返信列/);
+ assert.equal(t.getLocks(),0);
+});
+
+test('an interrupted imported-app deletion resumes using its original app identity',()=>{
+ const t=setup();t.values[1][2]='original';t.notes[2]='TUAT_DELETING_COMMENT:original-app:"original"';
+ const input={memberName:'test',date:'2026-09-28',deletionId:'imported-reply',replyIndex:2,expectedText:'original'};
+ assert.throws(()=>t.ctx.deleteReplyRecord({...input,expectedText:'different'}),/変更/);
+ assert.equal(t.ctx.deleteReplyRecord(input).success,true);assert.equal(t.values[1][2],'');
+ assert.equal(t.notes[2],'TUAT_DELETED_COMMENT:original-app');
+});

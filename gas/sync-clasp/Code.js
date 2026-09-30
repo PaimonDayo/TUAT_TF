@@ -376,7 +376,28 @@ function deleteReplyRecord(data) {
     const row = findRecordRow(values, hIdx, data.date);
     if (row === -1) return {success:true, action:'no_row'};
     const notes = sheet.getRange(row+1,1,1,sheet.getMaxColumns()).getNotes()[0];
-    const sourceId = (data.sourceId || '').toString().replace(/[^A-Za-z0-9_-]/g,'');
+    let sourceId = (data.sourceId || '').toString().replace(/[^A-Za-z0-9_-]/g,'');
+    const expected = String(data.expectedText).trim();
+    // Older CSV imports lost the app-origin note. An authorized sheet-reply
+    // deletion can recover that identity from its exact column and text. Keep
+    // the original app ID in the tombstone so delayed app sends stay blocked.
+    if (!sourceId && Number.isInteger(data.replyIndex) && data.replyIndex >= 0 && data.replyIndex < notes.length) {
+      const candidate = data.replyIndex;
+      if (String(values[hIdx][candidate] || '').trim()) throw new Error('返信列ではありません');
+      const note = notes[candidate] || '';
+      const original = note.match(/^TUAT_APP_COMMENT:([A-Za-z0-9_-]+)$/);
+      const completed = note.match(/^TUAT_DELETED_COMMENT:([A-Za-z0-9_-]+)$/);
+      const interruptedApp = note.match(/^TUAT_DELETING_COMMENT:([A-Za-z0-9_-]+):(.*)$/);
+      if (original) {
+        if (String(values[row][candidate] || '').trim() !== expected) throw new Error('返信が変更されています');
+        sourceId = original[1];
+      } else if (completed) {
+        sourceId = completed[1];
+      } else if (interruptedApp) {
+        if (String(JSON.parse(interruptedApp[2])).trim() !== expected) throw new Error('返信が変更されています');
+        sourceId = interruptedApp[1];
+      }
+    }
     const deleted = (sourceId ? 'TUAT_DELETED_COMMENT:' + sourceId : 'TUAT_DELETED_REPLY:' + data.deletionId);
     const pendingPrefix = (sourceId ? 'TUAT_DELETING_COMMENT:' + sourceId : 'TUAT_DELETING_REPLY:' + data.deletionId) + ':';
     const interrupted = notes.findIndex(function(note){return note.indexOf(pendingPrefix) === 0;});
@@ -396,7 +417,6 @@ function deleteReplyRecord(data) {
     }
     const marker = sourceId ? notes.indexOf('TUAT_APP_COMMENT:' + sourceId) : -1;
     let col = marker;
-    const expected = String(data.expectedText).trim();
     if (marker >= 0 && String(values[row][marker] || '').trim() && String(values[row][marker]).trim() !== expected) throw new Error('返信が変更されています');
     if (col < 0 && Number.isInteger(data.replyIndex) && data.replyIndex >= 0 && data.replyIndex < notes.length) {
       const candidate = data.replyIndex;

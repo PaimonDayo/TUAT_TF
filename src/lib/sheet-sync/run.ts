@@ -98,6 +98,7 @@ async function runSheetSyncBatch(
       source: profile.record_source,
       period,
       appOnly: profile.appOnly,
+      replySourceVersion: 2,
     })),
   ]));
 
@@ -261,6 +262,7 @@ async function runSheetSyncBatch(
         period === "october" ? [sheetReplyCutoff(today), OCTOBER_START].sort().at(-1)! : sheetReplyCutoff(today),
         period === "legacy" ? (today < OCTOBER_START ? today : "2026-09-30") : today,
         true,
+        spreadsheetId,
       );
       result.sheetReplies = replySync.synced;
       result.failedMembers.push(...replySync.failedMembers);
@@ -332,6 +334,8 @@ async function runSheetSyncBatch(
       members,
       period === "october" ? [sheetReplyCutoff(today), OCTOBER_START].sort().at(-1)! : sheetReplyCutoff(today),
       period === "legacy" ? (today < OCTOBER_START ? today : "2026-09-30") : today,
+      false,
+      spreadsheetId,
     );
     result.sheetReplies = replySync.synced;
     result.failedMembers.push(...replySync.failedMembers);

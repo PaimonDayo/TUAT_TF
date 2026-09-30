@@ -52,6 +52,7 @@ describe("period-aware scheduled synchronization", () => {
     const inserts = state.writes.filter(w => w.table === "practice_records" && w.op === "insert").flatMap(w => w.value as { recorded_date: string; memo: string }[]);
     expect(inserts.map(row => [row.recorded_date, row.memo])).toEqual([["2026-09-30", "旧"], ["2026-10-01", "新"]]);
     expect(state.fetch.mock.calls.map(call => [call[0][0].name, call[1]])).toEqual([["B1 old", undefined], ["B1 test", OCTOBER_SHEET_ID]]);
+    expect(state.replies.mock.calls.map(call => call[6])).toEqual([undefined, OCTOBER_SHEET_ID]);
   });
   it("blocks imports and replies for app-only input but still sends pending records", async () => {
     state.profiles = [profile("app_only")];

@@ -3,6 +3,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { importedSheetReplies, matchAppReplyIndexes, normalizeSheetReplyText, type AppReplyIndexCandidate, type RawSheetReply } from "@/lib/sheet-replies";
 import { type RawMember } from "@/lib/sheet-public-csv";
+import { gasPost } from "./gas-client";
 
 export type ReplySyncProfile = {
   id: string;
@@ -16,6 +17,7 @@ export async function reconcileSheetReplies(
   fromDate: string,
   throughDate: string,
   dryRun = false,
+  spreadsheetId?: string,
 ): Promise<{
   synced: number;
   failedMembers: { member: string; reason: string }[];
@@ -44,10 +46,50 @@ export async function reconcileSheetReplies(
     recordsByOwnerDate.set(key, rows);
   }
 
+  const { data: existingReplies, error: existingError } = await supabase
+    .from("sheet_record_replies")
+    .select("record_id, owner_id")
+    .in("owner_id", profileIds)
+    .gte("recorded_date", fromDate)
+    .lte("recorded_date", throughDate);
+  if (existingError) throw existingError;
+
+  // Public CSV does not include cell notes. An app-origin reply must stay excluded
+  // even after its app comment (and thus the text-based duplicate match) is gone.
+  // Verify only members with current/recent replies, including removals. A failed
+  // or malformed read must never become an empty replacement that deletes data.
+  const failedMembers: { member: string; reason: string }[] = [];
+  const candidates = supportedProfiles.filter(profile =>
+    existingReplies?.some(reply => reply.owner_id === profile.id) ||
+    memberByName.get(profile.sheet_name.trim())?.records.some(record =>
+      record.date >= fromDate && record.date <= throughDate && record.replies?.length),
+  );
+  const verifiedMembers = new Map<string, RawMember>();
+  for (let offset = 0; offset < candidates.length; offset += 4) {
+    await Promise.all(candidates.slice(offset, offset + 4).map(async profile => {
+      try {
+        const response = await gasPost<{ data?: RawMember }>({
+          action: "fetchMember", memberName: profile.sheet_name, spreadsheetId,
+        }, AbortSignal.timeout(20_000));
+        const member = response.data;
+        if (!member || member.name?.trim() !== profile.sheet_name.trim() || !Array.isArray(member.records) ||
+          member.records.some(record => typeof record.date !== "string" ||
+            !Array.isArray(record.replies) || record.replies.some(reply =>
+              !Number.isInteger(reply.replyIndex) || reply.replyIndex < 0 ||
+              typeof reply.content !== "string" || !["app", "sheet"].includes(reply.source)))) {
+          throw new Error("Invalid reply source response");
+        }
+        verifiedMembers.set(profile.id, member);
+      } catch {
+        failedMembers.push({ member: profile.sheet_name.trim(), reason: "返信の送信元を確認できませんでした。既存の返信を保持し、次回同期で再確認します" });
+      }
+    }));
+  }
+
   const rawRepliesByRecord = new Map<string, RawSheetReply[]>();
   const sheetNameByRecord = new Map<string, string>();
   for (const profile of supportedProfiles) {
-    const member = memberByName.get(profile.sheet_name.trim());
+    const member = verifiedMembers.get(profile.id);
     if (!member) continue;
     for (const sheetRecord of member.records) {
       if (sheetRecord.date < fromDate || sheetRecord.date > throughDate) continue;
@@ -58,17 +100,11 @@ export async function reconcileSheetReplies(
     }
   }
 
-  const { data: existingReplies, error: existingError } = await supabase
-    .from("sheet_record_replies")
-    .select("record_id")
-    .in("owner_id", profileIds)
-    .gte("recorded_date", fromDate)
-    .lte("recorded_date", throughDate);
-  if (existingError) throw existingError;
-
   const targetIds = new Set(rawRepliesByRecord.keys());
-  for (const reply of existingReplies ?? []) targetIds.add(reply.record_id);
-  if (targetIds.size === 0) return { synced: 0, failedMembers: [] };
+  for (const reply of existingReplies ?? []) {
+    if (verifiedMembers.has(reply.owner_id)) targetIds.add(reply.record_id);
+  }
+  if (targetIds.size === 0) return { synced: 0, failedMembers };
 
   const { data: appComments, error: commentError } = await supabase
     .from("comments")
@@ -104,7 +140,6 @@ export async function reconcileSheetReplies(
     appRepliesByRecord.set(comment.target_id, candidates);
   }
   let synced = 0;
-  const failedMembers: { member: string; reason: string }[] = [];
   for (const recordId of targetIds) {
     const rawReplies = rawRepliesByRecord.get(recordId) ?? [];
     const indexMatches = matchAppReplyIndexes(
