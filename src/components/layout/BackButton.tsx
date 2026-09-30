@@ -35,6 +35,7 @@ export function BackButton({
 
   return (
     <button
+      data-glass-control
       onClick={back}
       className="justify-self-start h-9 pl-1 pr-2 flex items-center gap-0.5 text-accent pressable text-[15px]"
     >

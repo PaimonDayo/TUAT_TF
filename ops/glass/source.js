@@ -66,6 +66,8 @@ class Source {
     const offsetTop = Math.max(0, Math.min(fullHeight - height, bottom - 230 - bounds.top));
     const top = bounds.top + offsetTop, end = top + height;
     const revision = this.revision;
+    // Trial the layout fix only for the authenticated system preview.
+    const preserveLayout = !!this.element.querySelector(":scope > [data-system-glass-preview]");
     const visible = /* @__PURE__ */ new WeakMap();
     const filter = (node) => {
       if (node instanceof Element && node.matches("script,style,.app-floating-action,[data-liquid-glass-ignore]")) return false;
@@ -73,7 +75,16 @@ class Source {
       if (!parent || parent === this.element) return true;
       if (!visible.has(parent)) {
         const box = parent.getBoundingClientRect();
-        visible.set(parent, box.height === 0 || box.bottom >= top - 16 && box.top <= end + 16);
+        let keep = box.height === 0 || box.bottom >= top - 16 && box.top <= end + 16;
+        if (!keep && preserveLayout) {
+          // Inline links can contain block cards. Removing their children
+          // collapses the copied rows even though the link's measured box is
+          // nonzero. Only prune inside boxes whose copied CSS keeps both axes.
+          const style = getComputedStyle(parent);
+          keep = style.display === "inline" || style.display === "contents"
+            || !style.width.endsWith("px") || !style.height.endsWith("px");
+        }
+        visible.set(parent, keep);
       }
       return visible.get(parent);
     };

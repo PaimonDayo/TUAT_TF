@@ -1,11 +1,45 @@
 /* Small, live CSS surfaces. Enabled only by the authenticated system marker. */
-.app-main:has(> [data-system-glass-preview]) [data-glass-header] {
-  background: transparent;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+/* Titles stay on the existing flat header. Glass belongs to the controls. */
+.app-main:has(> [data-system-glass-preview]) [data-glass-control] {
+  border-radius: 999px;
 }
 
-.app-main:has(> [data-system-glass-preview]) [data-glass-header] > div,
+/* A neutral track and one selected lens, not glass stacked on glass. */
+.app-main:has(> [data-system-glass-preview]) [data-glass-segments] {
+  border-radius: 999px;
+  background: #e9e9eb;
+}
+.app-main:has(> [data-system-glass-preview]) [data-glass-segments] > button {
+  border-radius: 999px;
+}
+.app-main:has(> [data-system-glass-preview]) [data-glass-segments] > button[aria-pressed="true"] {
+  background: rgba(255, 255, 255, .72);
+  -webkit-backdrop-filter: blur(12px) saturate(125%);
+  backdrop-filter: blur(12px) saturate(125%);
+  box-shadow: inset 0 0 0 1px #ffffffb8, 0 1px 3px #26334426;
+}
+.app-main:has(> [data-system-glass-preview]) :is([data-glass-control], [data-glass-segments] > button):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.app-main:has(> [data-system-glass-preview]) [data-glass-control]:active {
+  background: #e5eaf0;
+}
+@media (max-width: 767px) {
+  .app-main:has(> [data-system-glass-preview]) [data-glass-control] {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .app-main:has(> [data-system-glass-preview]) [data-glass-segments] > button {
+    min-height: 44px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-main:has(> [data-system-glass-preview]) [data-glass-segments] > button {
+    transition: none;
+  }
+}
+.app-main:has(> [data-system-glass-preview]) [data-glass-control],
 .app-main:has(> [data-system-glass-preview]) .app-create-button,
 .app-main:has(> [data-system-glass-preview]) [data-glass-create-menu] {
   background: rgba(255, 255, 255, .82);
@@ -13,12 +47,6 @@
   backdrop-filter: blur(18px) saturate(125%);
   border: 1px solid rgba(255, 255, 255, .92);
   box-shadow: 0 6px 22px -10px #26334430, 0 1px 3px #2633440d, inset 0 1px 0 #fff;
-}
-
-.app-main:has(> [data-system-glass-preview]) [data-glass-header] > div {
-  /* Keep the header height stable when the authenticated marker streams in. */
-  margin: 0 8px;
-  border-radius: 24px;
 }
 
 .app-main:has(> [data-system-glass-preview]) .app-create-button {
@@ -41,7 +69,8 @@
 }
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .app-main:has(> [data-system-glass-preview]) [data-glass-header] > div,
+  .app-main:has(> [data-system-glass-preview]) [data-glass-segments] > button[aria-pressed="true"],
+  .app-main:has(> [data-system-glass-preview]) [data-glass-control],
   .app-main:has(> [data-system-glass-preview]) .app-create-button,
   .app-main:has(> [data-system-glass-preview]) [data-glass-create-menu] {
     background: var(--color-card);
@@ -49,7 +78,8 @@
 }
 
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
-  .app-main:has(> [data-system-glass-preview]) [data-glass-header] > div,
+  .app-main:has(> [data-system-glass-preview]) [data-glass-segments] > button[aria-pressed="true"],
+  .app-main:has(> [data-system-glass-preview]) [data-glass-control],
   .app-main:has(> [data-system-glass-preview]) .app-create-button,
   .app-main:has(> [data-system-glass-preview]) [data-glass-create-menu] {
     background: var(--color-card);

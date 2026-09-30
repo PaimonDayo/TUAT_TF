@@ -16,6 +16,7 @@ export function SegmentedControl<T extends string>({
 }) {
   return (
     <div
+      data-glass-segments
       className={cn(
         // min-h を固定し、項目数や文字数で縦寸法が変わらないようにする
         "flex min-h-[34px] items-center gap-0.5 rounded-[10px] bg-[#e9e9eb] p-0.5 lg:min-h-8 lg:rounded-lg",

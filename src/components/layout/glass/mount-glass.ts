@@ -5,7 +5,7 @@ function loadVendor() {
   if (customElements.get("liquid-glass")) return Promise.resolve();
   if (!vendor) vendor = new Promise<void>((resolve, reject) => {
     const script = document.createElement("script");
-    script.src = "/vendor/liquid-glass/simple-liquid-glass.js?v=4";
+    script.src = "/vendor/liquid-glass/simple-liquid-glass.js?v=5";
     script.async = true;
     script.onload = () => resolve();
     script.onerror = () => { script.remove(); vendor = undefined; reject(new Error("Glass unavailable")); };
