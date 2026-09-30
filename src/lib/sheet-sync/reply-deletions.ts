@@ -1,4 +1,4 @@
-import { legacySyncOpen, parseSheetTransition } from "@/lib/sheet-period";
+import { OCTOBER_START, legacySyncOpen, parseSheetTransition } from "@/lib/sheet-period";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { gasPost } from "./gas-client";
 
@@ -11,7 +11,9 @@ export async function flushReplyDeletions(admin: SupabaseClient, id?: string) {
   const failures: { member: string; reason: string }[] = [];
   for (const job of data ?? []) {
     try {
-      if (job.legacy_period && !legacySyncOpen()) continue;
+      if ((job.legacy_period || job.recorded_date < OCTOBER_START) && !legacySyncOpen()) continue;
+      // Unconfirmed October receipts have no verified workbook; never send to the old one.
+      if (job.recorded_date >= OCTOBER_START && !job.spreadsheet_id) continue;
       const { data: record, error: recordError } = await admin.from("practice_records").select("user_id").eq("id", job.record_id).maybeSingle();
       if (recordError) throw recordError;
       if (!record) continue;

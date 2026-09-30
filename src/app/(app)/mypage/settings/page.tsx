@@ -11,7 +11,6 @@ import { ScheduleViewSetting } from "@/components/features/ScheduleViewSetting";
 import { SplashIntroSetting } from "@/components/features/SplashIntroSetting";
 import { NotificationSettings } from "@/components/features/NotificationSettings";
 import { RecordFieldsSetting } from "@/components/features/RecordFieldsSetting";
-import { SheetRecordFormSetting } from "@/components/features/SheetRecordFormSetting";
 import { RecordSourceSetting } from "@/components/features/RecordSourceSetting";
 import { SystemSyncStatus } from "@/components/features/SystemSyncStatus";
 import { MemberPreviewSetting } from "@/components/features/MemberPreviewSetting";
@@ -42,11 +41,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         {/* プレビュー中は管理者向けが全部隠れるので、戻す導線を最初に出す */}
         {previewingAsMember && <MemberPreviewSetting previewing />}
 
-        {perms.manageSystem && <Section title="プロフィール" collapsible defaultOpen={params.profile === "1" || params.setup === "1"}>
+        <Section title="プロフィール" collapsible defaultOpen={params.profile === "1" || params.setup === "1"}>
           <EditProfileButton profile={profile} settingsRow autoOpen={params.profile === "1" || params.setup === "1"} />
-        </Section>}
+        </Section>
 
-        <Section title="表示" collapsible={perms.manageSystem}>
+        <Section title="表示" collapsible>
           <AttendanceViewSetting userId={profile.id} initial={profile.attendance_default_block} />
           <TimelineViewSetting userId={profile.id} initial={profile.timeline_default_block} />
           <ScheduleViewSetting userId={profile.id} initial={profile.schedule_view_all_blocks ?? false} />
@@ -54,7 +53,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <SplashIntroSetting />
         </Section>
 
-        <Section title="通知" collapsible={perms.manageSystem}>
+        <Section title="通知" collapsible>
           <NotificationSettings
             profileId={profile.id}
             initialComment={profile.notify_comment ?? true}
@@ -63,34 +62,16 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           />
         </Section>
 
-        <Section title="練習記録" id="practice-record-settings" collapsible={perms.manageSystem}>
-          {perms.manageSystem ? (
-            <Link href={SHEET_SETUP_PATH} prefetch={false} className="flex items-center gap-3 px-4 py-3 active:bg-bg">
+        <Section title="練習記録" id="practice-record-settings" collapsible>
+          <Link href={SHEET_SETUP_PATH} prefetch={false} className="flex items-center gap-3 px-4 py-3 active:bg-bg">
               <SlidersHorizontal size={19} className="shrink-0 text-accent" />
               <span className="min-w-0 flex-1">
                 <span className="block text-[14px] font-medium">シート・入力方法・表示項目</span>
                 <span className="block text-micro text-muted">{profile.sheet_transition?.mode === "off" ? "現在：スプシ連携しない" : profile.sheet_transition?.mode === "app_only" ? "現在：アプリからのみ入力" : profile.sheet_transition ? "現在：スプシとアプリの両方から入力" : "10月以降の設定を確認してください"}</span>
               </span>
               <ChevronRight size={18} className="shrink-0 text-muted" />
-            </Link>
-          ) : profile.sheet_name ? (
-            <div>
-              <SheetRecordFormSetting
-                sheetName={profile.sheet_name}
-                initial={profile.record_fields ?? []}
-                isMiddleLong={profile.blocks.includes("middle_long")}
-              />
-            </div>
-          ) : (
-            <div>
-              <RecordFieldsSetting
-                profileId={profile.id}
-                initial={profile.record_fields ?? []}
-                isMiddleLong={profile.blocks.includes("middle_long")}
-              />
-            </div>
-          )}
-          {perms.manageSystem && profile.sheet_transition?.mode === "off" && <RecordFieldsSetting profileId={profile.id} initial={profile.record_fields} isMiddleLong={profile.blocks.includes("middle_long")} />}
+          </Link>
+          {profile.sheet_transition?.mode === "off" && <RecordFieldsSetting profileId={profile.id} initial={profile.record_fields} isMiddleLong={profile.blocks.includes("middle_long")} />}
         </Section>
 
         {perms.manageSystem && (

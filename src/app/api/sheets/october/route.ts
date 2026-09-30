@@ -10,10 +10,8 @@ async function access() {
   const client = await createClient();
   const { data: { user } } = await client.auth.getUser();
   if (!user) return { error: NextResponse.json({ error: "認証が必要です" }, { status: 401 }) };
-  const { data: allowed, error } = await client.rpc("can_manage_system");
-  if (error || !allowed) return { error: NextResponse.json({ error: "システムロール限定です" }, { status: 403 }) };
   const { data: profile, error: profileError } = await client.from("profiles").select("blocks,record_fields").eq("id", user.id).single();
-  if (profileError) return { error: NextResponse.json({ error: "設定を取得できませんでした" }, { status: 503 }) };
+  if (profileError || !profile) return { error: NextResponse.json({ error: "設定を取得できませんでした" }, { status: 503 }) };
   return { client, profile };
 }
 

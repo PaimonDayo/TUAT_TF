@@ -1,40 +1,10 @@
-import { systemSheetProfileIds } from "@/lib/sheet-sync/period-routing";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { reconcileOnSwitch } from "@/lib/sheet-sync";
 
-/**
- * 記録の入力元(record_source)を切り替える直前に、その部員自身だけを対象に
- * 一度だけ両側を揃える（2026-07-03インシデントの再発防止。オーナー確定 2026-07-04）。
- * 本人のみ実行可能（他人の入力元は切り替えられないため、対象は常に自分の profile.id）。
- */
-export async function POST(request: Request) {
-  const body = (await request.json().catch(() => ({}))) as {
-    direction?: "to_sheet" | "to_app";
-    dryRun?: boolean;
-  };
-  if (body.direction !== "to_sheet" && body.direction !== "to_app") {
-    return NextResponse.json({ error: "directionを指定してください" }, { status: 400 });
-  }
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
-  }
-
-  const admin = createAdminClient();
-  try {
-    if ((await systemSheetProfileIds(admin)).has(user.id)) return NextResponse.json({ error: "10月以降の入力設定はお知らせの「シート・入力設定」から変更してください" }, { status: 409 });
-    const result = await reconcileOnSwitch(admin, user.id, body.direction, {
-      dryRun: body.dryRun === true,
-    });
-    return NextResponse.json({ ok: true, ...result });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "連携できませんでした";
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
-  }
+/** Old clients must use period-aware setup instead of reconciling the old workbook. */
+export async function POST() {
+  const client = await createClient();
+  const { data: { user } } = await client.auth.getUser();
+  if (!user) return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
+  return NextResponse.json({ error: "入力方法はマイページ → 設定 → 練習記録から変更してください" }, { status: 409 });
 }

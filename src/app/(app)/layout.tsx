@@ -29,7 +29,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <PullToRefresh />
             {children}
             <Suspense fallback={<FabPlaceholder />}><AuthenticatedFab /></Suspense>
-            <Suspense fallback={<BottomNav />}><AuthenticatedBottomNav /></Suspense>
+            <BottomNav />
             <Suspense fallback={null}><AuthenticatedObEntryPrompt /></Suspense>
             <VersionWatcher />
             {process.env.NEXT_PUBLIC_PC_TRIAL !== "true" && <PushSubscriptionSync />}
@@ -40,11 +40,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     </ToastProvider>
     </AppQueryProvider>
   );
-}
-
-async function AuthenticatedBottomNav() {
-  const profile = await getCurrentProfile();
-  return <BottomNav canUseGlass={permissionsOf(profile.roles).manageSystem} />;
 }
 
 /** 作成ボタンが出るまでの場所取り。位置と大きさはFAB本体と揃えてある。 */
@@ -89,7 +84,7 @@ async function AuthenticatedFab() {
 
 async function AuthenticatedSheetHeaderGuard() {
   const profile = await getCurrentProfile();
-  if (permissionsOf(profile.roles).manageSystem && needsSheetSetupConfirmation(profile.sheet_transition)) return <OctoberSheetSetup profile={profile} prompt />;
+  if (needsSheetSetupConfirmation(profile.sheet_transition)) return <OctoberSheetSetup profile={profile} prompt />;
   if (!profile.sheet_name) return null;
   return (
     <SheetHeaderGuard
@@ -98,7 +93,7 @@ async function AuthenticatedSheetHeaderGuard() {
       signature={profile.sheet_header_signature}
       isMiddleLong={profile.blocks.includes("middle_long")}
       recordFields={profile.record_fields}
-      octoberProfile={permissionsOf(profile.roles).manageSystem ? profile : undefined}
+      octoberProfile={profile}
     />
   );
 }

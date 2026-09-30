@@ -1,5 +1,5 @@
 import { OCTOBER_START, legacySyncOpen } from "@/lib/sheet-period";
-import { sheetForRecord, systemSheetProfileIds } from "./period-routing";
+import { sheetForRecord } from "./period-routing";
 // アプリで消した練習記録について、スプシの同じ日の欄を空にする（2026-09-26 オーナー確定: 「アプリで消したらスプシも消す」）。
 // 日付の行そのものは消さない（シートには全日付の行が並んでおり、行を消すと表が崩れる）。
 
@@ -63,7 +63,7 @@ export async function processPendingClears(
     .eq("user_id", profile.id)
     .order("recorded_date", { ascending: true })
     .limit(20);
-  if (!legacySyncOpen() && (await systemSheetProfileIds(admin)).has(profile.id)) query = query.gte("recorded_date", OCTOBER_START);
+  if (!legacySyncOpen()) query = query.gte("recorded_date", OCTOBER_START);
   const { data: queued, error } = await query;
   if (error) throw error;
   const rows = (queued ?? []) as PendingClear[];

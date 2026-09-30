@@ -1,5 +1,4 @@
 import { OCTOBER_SHEET_ID, OCTOBER_START, legacySyncOpen, parseSheetTransition, periodContains } from "@/lib/sheet-period";
-import { systemSheetProfileIds } from "./period-routing";
 
 import { flushReplyDeletions } from "./reply-deletions";
 // 毎時同期の本体。上のモジュールを順に呼ぶ進行役。
@@ -427,32 +426,26 @@ type LinkedProfile = {
 };
 
 export async function runSheetSync(admin: SupabaseClient, options: SyncOptions = {}): Promise<SyncResult> {
-  const [{ data, error }, systems] = await Promise.all([
-    admin.from("profiles").select("id,sheet_name,record_fields,record_source,sheet_linked_at,sheet_header_signature,sheet_history_imported_at,sheet_transition"),
-    systemSheetProfileIds(admin),
-  ]);
+  const { data, error } = await admin.from("profiles")
+    .select("id,sheet_name,record_fields,record_source,sheet_linked_at,sheet_header_signature,sheet_history_imported_at,sheet_transition");
   if (error) throw error;
-  const groups: Record<"unchanged" | "legacy" | "october", LinkedProfile[]> = { unchanged: [], legacy: [], october: [] };
+  const groups: Record<"legacy" | "october", LinkedProfile[]> = { legacy: [], october: [] };
   for (const profile of (data ?? []) as LinkedProfile[]) {
     const transition = parseSheetTransition(profile.sheet_transition);
     if (transition?.mode === "off") continue;
     // Chunk names refer to the current profile, even when the old sheet had a different name.
     if (options.onlySheet && profile.sheet_name?.trim() !== options.onlySheet.trim()) continue;
     if (options.onlySheets && !options.onlySheets.some(name => name.trim() === profile.sheet_name?.trim())) continue;
-    if (!systems.has(profile.id) && !transition) {
-      if (profile.sheet_name) groups.unchanged.push(profile);
-      continue;
-    }
     const legacy = transition ? { ...profile, ...transition.legacy } : profile;
     if (legacySyncOpen() && legacy.sheet_name) groups.legacy.push({ ...legacy, sheet_name: legacy.sheet_name,
       // A confirmed app-only choice blocks imports from both workbooks.
       appOnly: transition?.mode === "app_only" });
-    if (systems.has(profile.id) && transition && profile.sheet_name) groups.october.push({ ...profile, appOnly: transition.mode === "app_only" });
+    if (transition && profile.sheet_name) groups.october.push({ ...profile, appOnly: transition.mode === "app_only" });
   }
   const total: SyncResult = { inserted: 0, updated: 0, pushed: 0, sheetReplies: 0, conflicts: [], skippedMembers: [],
     unchangedMembers: [], failedMembers: [], dryRun: !!options.dryRun };
   if (!options.dryRun) total.failedMembers.push(...await flushReplyDeletions(admin));
-  for (const period of ["unchanged", "legacy", "october"] as const) {
+  for (const period of ["legacy", "october"] as const) {
     if (!groups[period].length) continue;
     try {
       const result = await runSheetSyncBatch(admin, { dryRun: options.dryRun }, groups[period], period);

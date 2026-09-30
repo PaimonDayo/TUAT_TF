@@ -12,7 +12,6 @@ import { BlockPills } from "@/components/common/BlockPill";
 import { Linkify } from "@/components/common/Linkify";
 import { ActivityFeed } from "@/components/features/ActivityFeed";
 import { MyTrainingChartCached } from "@/components/features/MyTrainingChartCached";
-import { EditProfileButton } from "@/components/features/MyPageActions";
 import { getCurrentProfile, getCurrentUserId } from "@/lib/supabase/auth";
 import { getUserRecords, getUserActivity } from "@/lib/queries";
 import { gradeShort } from "@/lib/constants";
@@ -36,7 +35,7 @@ export default async function MyPage({
   const showRecordSource = recordSourceEnabled(cookieStore.get(RECORD_SOURCE_COOKIE)?.value);
 
   const perms = permissionsOf(profile.roles);
-  if (perms.manageSystem && setup === "1") redirect("/mypage/settings?profile=1&setup=1");
+  if (setup === "1") redirect("/mypage/settings?profile=1&setup=1");
   const showAdminMenu = perms.manageMembers || perms.createSchedule || perms.manageSystem;
 
   return (
@@ -44,25 +43,7 @@ export default async function MyPage({
       <Header
         title="マイページ"
         large
-        right={perms.manageSystem ? undefined :
-          <EditProfileButton
-            profile={{
-              id: profile.id,
-              display_name: profile.display_name,
-              blocks: profile.blocks,
-              events: profile.events,
-              grade: profile.grade,
-              avatar_url: profile.avatar_url,
-              sheet_name: profile.sheet_name,
-              record_source: profile.record_source,
-              sheet_transition: profile.sheet_transition,
-              record_fields: profile.record_fields,
-              sheet_header_signature: profile.sheet_header_signature,
-            }}
-            autoOpen={setup === "1"}
-            enableSheetHeaderSetup
-          />
-        }
+
       />
 
       <div className="px-4 space-y-5 pt-1">

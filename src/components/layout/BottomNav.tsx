@@ -61,11 +61,11 @@ function TabContent({
   );
 }
 
-export function BottomNav({ canUseGlass = false }: { canUseGlass?: boolean }) {
+export function BottomNav() {
   const pathname = usePathname();
   const mounted = useSyncExternalStore(subscribeToClient, () => true, () => false);
   const eligibleDevice = useSyncExternalStore(subscribeToMobile, glassDeviceSnapshot, () => false);
-  const glass = canUseGlass && eligibleDevice;
+  const glass = eligibleDevice;
   const navRef = useRef<HTMLElement | null>(null);
   const controller = useRef<{ update: (index: number) => void; destroy: () => void } | null>(null);
   const activeIndex = ITEMS.findIndex(({ href }) => pathname === href || pathname.startsWith(href + "/"));

@@ -1,4 +1,4 @@
-/* Scoped to the system-role iOS enhancement. Ordinary navigation is unchanged. */
+/* Scoped to the iOS enhancement. Other devices keep ordinary navigation. */
 .ios-glass-nav{padding:0 12px calc(10px + env(safe-area-inset-bottom,0px));pointer-events:none}
 .ios-glass-nav .glass-bar{position:relative;pointer-events:auto;color:#424a55}
 .ios-glass-nav .nav-items{position:relative;display:grid;grid-template-columns:repeat(5,minmax(0,1fr))}
