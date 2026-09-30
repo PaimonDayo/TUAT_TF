@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { SubHeader } from "@/components/layout/SubHeader";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getNotices, getPersonalNotifications } from "@/lib/queries";
@@ -19,7 +18,6 @@ export default async function NoticesPage() {
   return (
     <>
       <SubHeader title="お知らせ" backHref="/home" />
-      {permissions.manageSystem && <Link href="/settings/sheet-setup" className="mx-4 my-3 block rounded-xl border border-separator bg-surface p-4 text-body font-semibold">10月以降のシート・入力設定<span className="mt-1 block text-caption font-normal text-muted">自分のシート、入力方法、フォーム・表示項目を確認・変更</span></Link>}
       <NoticesClient
         profile={{ id: profile.id, roles: profile.roles }}
         notices={notices as NoticeWithReactions[]}

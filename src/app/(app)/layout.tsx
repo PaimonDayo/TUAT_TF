@@ -1,4 +1,5 @@
 import { OctoberSheetSetup } from "@/components/features/OctoberSheetSetup";
+import { needsSheetSetupConfirmation } from "@/lib/sheet-period";
 import { Suspense } from "react";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { DesktopNav } from "@/components/layout/DesktopNav";
@@ -83,7 +84,7 @@ async function AuthenticatedFab() {
 
 async function AuthenticatedSheetHeaderGuard() {
   const profile = await getCurrentProfile();
-  if (permissionsOf(profile.roles).manageSystem && !profile.sheet_transition) return <OctoberSheetSetup profile={profile} prompt />;
+  if (permissionsOf(profile.roles).manageSystem && needsSheetSetupConfirmation(profile.sheet_transition)) return <OctoberSheetSetup profile={profile} prompt />;
   if (!profile.sheet_name) return null;
   return (
     <SheetHeaderGuard
@@ -100,7 +101,7 @@ async function AuthenticatedSheetHeaderGuard() {
 async function AuthenticatedObEntryPrompt() {
   const profile = await getCurrentProfile();
   if (!permissionsOf(profile.roles).manageSystem) return null;
-  if (!profile.sheet_transition) return null;
+  if (needsSheetSetupConfirmation(profile.sheet_transition)) return null;
   const entry = await getMyObEntry(profile.id);
   return <ObEntryPrompt hasEntry={!!entry} today={jstToday()} />;
 }

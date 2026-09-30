@@ -1,9 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { legacySyncOpen, periodContains } from "./sheet-period";
+import { legacySyncOpen, periodContains, needsSheetSetupConfirmation, SHEET_SETUP_RECONFIRM_AFTER, type SheetTransition } from "./sheet-period";
 import { parseMemberCsv } from "./sheet-public-csv";
 
 afterEach(() => vi.useRealTimers());
 describe("October sheet boundaries", () => {
+  it("reopens updated guidance until saved again without resetting the chosen mode", () => {
+    const transition: SheetTransition = { version: "2026-10", mode: "app_only", confirmed_at: "2026-09-30T00:41:02Z", legacy: { sheet_name: "old", record_fields: [], sheet_header_signature: null, record_source: "sheet" } };
+    expect(needsSheetSetupConfirmation(transition)).toBe(true);
+    expect(transition.mode).toBe("app_only");
+    expect(needsSheetSetupConfirmation({ ...transition, confirmed_at: SHEET_SETUP_RECONFIRM_AFTER })).toBe(false);
+    expect(needsSheetSetupConfirmation(null)).toBe(true);
+    expect(needsSheetSetupConfirmation({ ...transition, confirmed_at: "invalid" })).toBe(true);
+  });
   it("ends old synchronization exactly at October 8 midnight JST", () => {
     expect(legacySyncOpen(new Date("2026-10-07T14:59:59.999Z"))).toBe(true);
     expect(legacySyncOpen(new Date("2026-10-07T15:00:00Z"))).toBe(false);

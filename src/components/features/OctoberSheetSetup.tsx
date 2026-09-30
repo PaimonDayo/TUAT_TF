@@ -49,7 +49,7 @@ export function OctoberSheetSetup({ profile, prompt = false }: { profile: Profil
       const body = await response.json();
       if (!response.ok) throw new Error(body.error);
       setOpen(false); setHeader(null); router.refresh();
-      if (!prompt) router.replace("/notices");
+      if (!prompt) router.replace("/home");
     } catch (e) { setError(e instanceof Error ? e.message : "保存できませんでした"); }
     finally { setBusy(false); }
   }
@@ -67,12 +67,17 @@ export function OctoberSheetSetup({ profile, prompt = false }: { profile: Profil
           {members.map(name => <option key={name} value={name}>{name}</option>)}
         </select>
       </label>
+      <p className="rounded-xl bg-accent/10 p-3 text-caption">アプリだけで記録を入力する方は、同期処理の負荷を減らすため、できる限り「アプリからのみ入力」を選んでください。アプリの記録は引き続きスプシへ反映されます。</p>
       <fieldset disabled={busy} className="space-y-3"><legend className="mb-2 text-body font-semibold">入力方法</legend>
         <label className="flex gap-3 rounded-xl border border-separator p-3"><input type="radio" name="sheet-mode" checked={mode === "sheet"} onChange={() => setMode("sheet")} /><span>スプシとアプリの両方から入力<span className="block text-caption text-muted">スプシの変更をアプリへ取り込み、アプリで入力した記録もスプシへ反映します。</span></span></label>
         <label className="flex gap-3 rounded-xl border border-separator p-3"><input type="radio" name="sheet-mode" checked={mode === "app_only"} onChange={() => setMode("app_only")} /><span>アプリからのみ入力<span className="block text-caption text-muted">アプリの記録をスプシへ反映します。</span></span></label>
       </fieldset>
       {mode === "app_only" && <p role="note" className="rounded-xl bg-accent/10 p-3 text-caption">スプシに入力・変更した内容はアプリに反映されません。スプシ上の返信も取り込みません。記録はアプリから入力してください。</p>}
-      <p className="text-caption text-muted">9月以前の記録は旧スプシと10月7日いっぱいまで同期します。設定後も、お知らせからこの画面を開けます。</p>
+      <div className="space-y-2 text-caption text-muted">
+        <p>設定を変更したいときは、ホームの「記録の入力設定」からいつでも開けます。変更して保存すると、その入力方法で同期します。設定変更だけでアプリの過去の記録が削除されることはありません。</p>
+        <p>「両方から入力」に戻すと、同期対象期間のスプシの内容が再びアプリへ取り込まれます。スプシの列・見出しが変わった場合は、起動時に入力・表示項目を再確認します。</p>
+        <p>9月以前の記録は旧スプシと10月7日いっぱいまで同期します。</p>
+      </div>
       {error && <p role="alert" className="text-caption text-danger">{error}</p>}
       {!loaded && error && <Button onClick={() => setAttempt(value => value + 1)}>再試行</Button>}
       <Button className="w-full" disabled={busy || !loaded || !members.includes(sheetName)} onClick={() => void next()}>{busy ? "取得中…" : "入力・表示項目を確認"}</Button>

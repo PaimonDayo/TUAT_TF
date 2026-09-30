@@ -39,3 +39,17 @@
 ## 2026-09-30 ログイン後の再開
 
 Supabase管理画面からSQL実行を確認。対象テーブル7種をアクセス制限付きローカルファイルに退避し、変更前の関数2つと通知制約を保全。PCと同じmigration二重適用・権限・入力元・日付別フォームの試験をクラウドでもROLLBACK付きで完了。貼付SQLはコメント/空白正規化後の長さ7331・ハッシュ一致を確認。最終隔離build（Next16.3.6、TypeScript込み）も成功。以下の本番反映を準備中。
+
+## 2026-09-30 本番反映完了
+
+- `e454bd524ef8b52ff7b308888340058844e201c5` をmasterへ1回push。GitHubのVercel本番チェックは `success / Deployment has completed`、公開 `/api/version` とPC固定releaseの同一SHAを確認。Vercel管理APIの保存済みアクセストークンは期限切れだったため、完了確認はGitHubの公式デプロイ結果と公開レスポンスで実施。
+- PCのpublicスキーマ全体を `/opt/tuat-tf-supabase/backups/october-20260930/pc-public-before.dump` に退避。クラウドは対象7表を `.contingency/backend/october-cloud-data-before-20260930.json` にアクセス制限付きで保存、変更前の関数と通知制約も保全。migration 20260929020000を両DBへ適用、APIスキーマ再読込済み。
+- GASはv19を退避してv20へ更新、公開URLは維持。新スプシ49シートの読取、旧日付と未許可workbookの拒否を本番GASで確認（書込0）。
+- PC jobsは事前dry-run成功（記録 insert14/update66/push1 の予測、failedMembers0、大会成功）後、固定release `.contingency/pc-jobs-e454bd5` に切替。既存journal/activateAt保持、タスク再起動済み。09:40 JSTの大会定期処理successと継続heartbeatを確認。記録の次回定時実行は未到来で、既存journalの過去failed表示は書き換えていない。
+- 公開後09:41 JSTに実際のシステムユーザーが `app_only` 設定を保存したことを確認。PC/クラウド両方で設定済み1人、一般部員の切替0、設定通知1件。両DBへの設定反映と予備同期成功、公開GET/POSTの未認証401を確認。
+- 未反映のコメント削除監査表を参照するローカルcloud-mirror差分が、既存予備同期を404で止めていた。元ファイルと差分を `.contingency/backend/cloud-mirror-with-pending-comment-audit-20260930.mjs` と `pending-comment-audit-mirror-20260930.patch` に保全し、稼働中mirrorだけ公開済み版へ戻して復旧。監査migration/types差分の本番反映はしていない。監査を反映する際は退避patchも適用する。
+- 最終反映記録はローカル保持。文書更新だけの追加pushはしない。実ユーザーの新スプシへの試験書込やiOS実機試験は行っていない。
+
+## 2026-09-30 ホーム導線・推奨文・再確認
+
+オーナー追加指示で設定への固定入口をお知らせからホーム上部へ移動。現在の入力方法を表示し、保存後もホームへ戻る。アプリだけで入力する方には負荷軽減のためアプリ専用入力を勧め、ホームからいつでも変更できること・両方入力へ戻すと同期対象のスプシ取込が再開すること・列変更時の起動再確認を明記。既存confirmed_atが2026-09-30 09:45:32 JSTより前ならシステムロールのみ再表示し、保存後は終了。設定JSONや旧設定を消さず、再確認中はOB確認を重ねない。対象7テスト・ESLint・Next16.3.6 TypeScript付きbuild成功、実コンポーネントの推奨文/警告と320px横はみ出しなしを確認。DB/GAS/PC定期処理の変更は不要。
