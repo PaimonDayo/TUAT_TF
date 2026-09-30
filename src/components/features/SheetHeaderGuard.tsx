@@ -24,12 +24,13 @@ export function SheetHeaderGuard({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const disconnected = octoberProfile?.sheet_transition?.mode === "off";
   const dedicatedSetup = !!octoberProfile && [SHEET_SETUP_PATH, "/settings/sheet-setup"].includes(pathname);
   const [data, setData] = useState<SheetHeaderData | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!sheetName || dedicatedSetup) return;
+    if (!sheetName || dedicatedSetup || disconnected) return;
     let active = true;
     void fetch(`/api/sheets/header?sheetName=${encodeURIComponent(sheetName)}`, { cache: "no-store" })
       .then(async (response) => response.ok ? response.json() as Promise<SheetHeaderData> : null)
@@ -38,7 +39,7 @@ export function SheetHeaderGuard({
       })
       .catch(() => undefined);
     return () => { active = false; };
-  }, [sheetName, signature, dedicatedSetup, isMiddleLong]);
+  }, [sheetName, signature, dedicatedSetup, isMiddleLong, disconnected]);
 
   async function confirm(fields: RecordFieldDef[], nextSignature: string) {
     setBusy(true);
@@ -53,7 +54,7 @@ export function SheetHeaderGuard({
     router.refresh();
   }
 
-  if (dedicatedSetup) return null;
+  if (dedicatedSetup || disconnected) return null;
   if (data && octoberProfile) return <OctoberSheetSetup key={data.signature} profile={octoberProfile} prompt />;
   return data ? (
     <SheetHeaderSetupDialog

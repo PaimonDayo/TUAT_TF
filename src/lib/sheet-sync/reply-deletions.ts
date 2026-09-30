@@ -1,4 +1,4 @@
-import { legacySyncOpen } from "@/lib/sheet-period";
+import { legacySyncOpen, parseSheetTransition } from "@/lib/sheet-period";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { gasPost } from "./gas-client";
 
@@ -12,6 +12,12 @@ export async function flushReplyDeletions(admin: SupabaseClient, id?: string) {
   for (const job of data ?? []) {
     try {
       if (job.legacy_period && !legacySyncOpen()) continue;
+      const { data: record, error: recordError } = await admin.from("practice_records").select("user_id").eq("id", job.record_id).maybeSingle();
+      if (recordError) throw recordError;
+      if (!record) continue;
+      const { data: owner, error: ownerError } = await admin.from("profiles").select("sheet_transition").eq("id", record.user_id).single();
+      if (ownerError) throw ownerError;
+      if (parseSheetTransition(owner?.sheet_transition)?.mode === "off") continue;
       const result = await gasPost<{ success?: boolean }>({ action: "deleteReply", memberName: job.sheet_name, spreadsheetId: job.spreadsheet_id ?? undefined,
         date: job.recorded_date, deletionId: job.id, sourceId: job.kind === "app" ? job.id : undefined,
         replyIndex: job.reply_index, expectedText: job.expected_content }, AbortSignal.timeout(20000));

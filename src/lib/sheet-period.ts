@@ -8,7 +8,7 @@ export const LEGACY_SYNC_END = "2026-10-07T15:00:00.000Z"; // 10/8 00:00 JST
 export const SHEET_SETUP_RECONFIRM_AFTER = "2026-09-30T00:45:32.000Z";
 export type SheetTransition = {
   version: "2026-10";
-  mode: "sheet" | "app_only";
+  mode: "sheet" | "app_only" | "off";
   confirmed_at: string;
   legacy: {
     sheet_name: string | null;
@@ -20,7 +20,7 @@ export type SheetTransition = {
 export function parseSheetTransition(value: unknown): SheetTransition | null {
   if (!value || typeof value !== "object") return null;
   const config = value as SheetTransition;
-  return config.version === "2026-10" && (config.mode === "sheet" || config.mode === "app_only")
+  return config.version === "2026-10" && (config.mode === "sheet" || config.mode === "app_only" || config.mode === "off")
     && !!config.legacy && Array.isArray(config.legacy.record_fields) ? config : null;
 }
 export function needsSheetSetupConfirmation(transition: SheetTransition | null | undefined): boolean {

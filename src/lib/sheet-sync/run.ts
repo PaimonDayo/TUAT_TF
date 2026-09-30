@@ -435,6 +435,7 @@ export async function runSheetSync(admin: SupabaseClient, options: SyncOptions =
   const groups: Record<"unchanged" | "legacy" | "october", LinkedProfile[]> = { unchanged: [], legacy: [], october: [] };
   for (const profile of (data ?? []) as LinkedProfile[]) {
     const transition = parseSheetTransition(profile.sheet_transition);
+    if (transition?.mode === "off") continue;
     // Chunk names refer to the current profile, even when the old sheet had a different name.
     if (options.onlySheet && profile.sheet_name?.trim() !== options.onlySheet.trim()) continue;
     if (options.onlySheets && !options.onlySheets.some(name => name.trim() === profile.sheet_name?.trim())) continue;

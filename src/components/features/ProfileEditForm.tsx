@@ -258,7 +258,7 @@ export function ProfileEditForm({
     try {
       setSaving(true);
       setError(null);
-      const nextRecordSource = sheetName.trim() && profile.sheet_transition?.mode !== "app_only" ? "sheet" : "app";
+      const nextRecordSource = sheetName.trim() && (!profile.sheet_transition || profile.sheet_transition.mode === "sheet") ? "sheet" : "app";
       const switchingSource = !separateRecordSettings && Boolean(sheetName.trim()) && nextRecordSource !== (profile.record_source ?? "app");
 
       if (switchingSource && profile.sheet_name) {

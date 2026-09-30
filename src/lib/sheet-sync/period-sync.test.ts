@@ -28,7 +28,7 @@ const admin = { from(table: string) {
   return q;
 } } as unknown as SupabaseClient;
 
-function profile(mode?: "sheet" | "app_only", id = "pilot") {
+function profile(mode?: "sheet" | "app_only" | "off", id = "pilot") {
   return { id, sheet_name: "B1 test", record_fields: [], record_source: "sheet", sheet_header_signature: null, sheet_history_imported_at: null,
     ...(mode ? { sheet_transition: { version: "2026-10", mode, confirmed_at: "2026-09-29", legacy: { sheet_name: "B1 old", record_fields: [], sheet_header_signature: null, record_source: "sheet" } } } : {}) };
 }
@@ -61,6 +61,14 @@ describe("period-aware scheduled synchronization", () => {
     expect(result.inserted).toBe(0); expect(result.updated).toBe(0); expect(result.pushed).toBe(1);
     expect(state.gas).toHaveBeenCalledWith(expect.objectContaining({ spreadsheetId: OCTOBER_SHEET_ID, date: "2026-10-01", cells: { 感想: "アプリ" } }));
     expect(state.replies.mock.calls.every(call => call[1].length === 0)).toBe(true);
+  });
+  it("off skips both workbooks including pending sends", async () => {
+    state.profiles = [profile("off")];
+    state.records = [{ id: "r", user_id: "pilot", recorded_date: "2026-10-01", pending_sheet_push: true }];
+    const result = await runSheetSync(admin);
+    expect(result.inserted).toBe(0); expect(result.pushed).toBe(0);
+    expect(state.fetch).not.toHaveBeenCalled(); expect(state.gas).not.toHaveBeenCalled();
+    expect(state.replies).not.toHaveBeenCalled();
   });
   it("does not route an unconfirmed pilot's October records to the old workbook", async () => {
     state.profiles = [profile()];

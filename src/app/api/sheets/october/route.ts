@@ -38,6 +38,10 @@ export async function POST(request: Request) {
   const auth = await access();
   if (auth.error) return auth.error;
   const body = await request.json().catch(() => null);
+  if (body?.mode === "off") {
+    const { error } = await auth.client.rpc("save_october_sheet_setup", { p_sheet_name: "", p_fields: [], p_signature: "", p_mode: "off" });
+    return error ? NextResponse.json({ error: "設定を保存できませんでした。もう一度お試しください" }, { status: 502 }) : NextResponse.json({ ok: true });
+  }
   if (!body || typeof body.sheetName !== "string" || !["sheet", "app_only"].includes(body.mode) || !Array.isArray(body.fields)) {
     return NextResponse.json({ error: "シートと入力方法を選択してください" }, { status: 400 });
   }

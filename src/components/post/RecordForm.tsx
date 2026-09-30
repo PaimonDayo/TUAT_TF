@@ -137,7 +137,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
   // カスタム項目（プロフィールで設定したもの）。フォームに動的に追加する。
   // 呼び出し側が取得済みプロフィールから渡していれば、それを使い再フェッチしない。
   const historicalFields = systemRecordForm && record?.record_fields_version != null ? (record.record_fields_snapshot ?? []) : null;
-  const [configuredFields, setConfiguredFields] = useState<RecordFieldDef[]>(historicalFields ?? (sheetTransition && date < OCTOBER_START ? sheetTransition.legacy.record_fields : recordFields) ?? []);
+  const [configuredFields, setConfiguredFields] = useState<RecordFieldDef[]>(historicalFields ?? (sheetTransition && sheetTransition.mode !== "off" && date < OCTOBER_START ? sheetTransition.legacy.record_fields : recordFields) ?? []);
   const fieldEnabled = (key: Parameters<typeof recordFieldHidden>[1]) => {
     if (isMiddleLong && key === "dist_actual") return false;
     return systemRecordForm
@@ -231,7 +231,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
         setCondition(nextDraft.condition);
         setCustomValues(nextDraft.customValues);
         if (systemRecordForm && found?.record_fields_version != null) setConfiguredFields(found.record_fields_snapshot ?? []);
-        else if (recordFields) setConfiguredFields(sheetTransition && date < OCTOBER_START ? sheetTransition.legacy.record_fields : recordFields);
+        else if (recordFields) setConfiguredFields(sheetTransition && sheetTransition.mode !== "off" && date < OCTOBER_START ? sheetTransition.legacy.record_fields : recordFields);
         setBaselineSnapshot(serializeRecordDraft(nextDraft));
       });
     return () => {

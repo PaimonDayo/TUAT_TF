@@ -19,6 +19,7 @@ export async function sheetForRecord(admin: SupabaseClient, profileId: string, d
   ]);
   if (error) throw new Error("シート設定を取得できませんでした");
   const transition = parseSheetTransition(profile.sheet_transition);
+  if (transition?.mode === "off") return null;
   if (!systems.has(profileId) && !transition) {
     return profile.sheet_name ? { sheetName: profile.sheet_name, fields: recordFieldsFromJson(profile.record_fields) } : null;
   }

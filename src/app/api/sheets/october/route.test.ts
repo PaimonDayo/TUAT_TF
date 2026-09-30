@@ -35,6 +35,11 @@ describe("system-only October setup API", () => {
     expect((await POST(request({ sheetName: "B1 synthetic", fields, mode: "app_only", signature }))).status).toBe(200);
     expect(state.save).toHaveBeenCalledWith(expect.objectContaining({ p_mode: "app_only", p_sheet_name: "B1 synthetic", p_signature: signature }));
   });
+  it("disables linkage without a sheet or external request", async () => {
+    expect((await POST(request({ mode: "off" }))).status).toBe(200);
+    expect(state.save).toHaveBeenCalledWith(expect.objectContaining({ p_mode: "off" }));
+    expect(state.member).not.toHaveBeenCalled(); expect(state.list).not.toHaveBeenCalled();
+  });
   it("keeps settings unchanged if columns moved while the form was open", async () => {
     expect((await POST(request({ sheetName: "B1 synthetic", fields, mode: "sheet", signature: "stale" }))).status).toBe(409);
     expect(state.save).not.toHaveBeenCalled();
