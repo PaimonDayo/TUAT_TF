@@ -1,0 +1,49 @@
+/* Scoped to the system-role iOS enhancement. Ordinary navigation is unchanged. */
+.ios-glass-nav{padding:0 12px calc(10px + env(safe-area-inset-bottom,0px));pointer-events:none}
+.ios-glass-nav .glass-bar{position:relative;pointer-events:auto;color:#424a55}
+.ios-glass-nav .nav-items{position:relative;display:grid;grid-template-columns:repeat(5,minmax(0,1fr))}
+.ios-glass-nav .nav-button{position:relative;z-index:1;min-width:0;min-height:44px;border-radius:30px;white-space:nowrap;text-decoration:none}
+.ios-glass-nav .nav-button>span{color:inherit;gap:4px}
+.ios-glass-nav .nav-button>span>span:not(.sr-only){line-height:15px}
+.ios-glass-nav .nav-button svg{width:23px;height:23px}
+.ios-glass-nav .selection{position:absolute;inset:0 auto 0 0;width:20%;pointer-events:none}
+@media(max-width:767px){body:has(>.ios-glass-nav) .app-main{padding-bottom:calc(88px + env(safe-area-inset-bottom,0px))}}
+@media(max-width:767px){body:has(>.ios-glass-nav) .app-floating-action{transform:translateY(-26px)}}
+/* Continuous soft glass, without the metallic double rim. */
+.ios-glass-nav .glass-bar{--light-x:30%;border:0;padding:5px;border-radius:40px;background:linear-gradient(180deg,#ffffff30,#ffffff09 52%,#ffffff20),rgba(240,244,250,.26);-webkit-backdrop-filter:blur(15px) saturate(190%);backdrop-filter:blur(15px) saturate(190%);box-shadow:0 8px 24px -7px #20304b33,0 1px 3px #263b5512,inset 0 .5px 0 #ffffffdb,inset 0 -.5px 0 #ffffff70}
+.ios-glass-nav .glass-bar::before{content:"";position:absolute;inset:0;padding:.75px;border-radius:inherit;pointer-events:none;background:linear-gradient(155deg,#ffffffe0,#ffffff30 28%,#ffffff14 55%,#ffffff80);-webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);mask-composite:exclude}
+.ios-glass-nav .glass-bar::after{content:"";position:absolute;inset:0;border:0;border-radius:inherit;pointer-events:none;box-shadow:inset 3px 0 7px -5px #ffffffb0,inset -3px 0 7px -5px #ffffff90;background:radial-gradient(ellipse 48% 40% at var(--light-x) 0%,#ffffff26,transparent)}
+.ios-glass-nav .glass-bar .nav-items{height:58px;z-index:1;touch-action:pan-y}
+.ios-glass-nav .glass-bar .selection{border:0;border-radius:31px;background:linear-gradient(165deg,#ffffff52,#ffffff0a 55%,#ffffff2e),rgba(105,129,157,.095);box-shadow:inset 0 .5px 1px #ffffffb0,inset 0 -.5px 1px #ffffff50,0 1px 4px #3c537710;transition:none;will-change:transform}
+.ios-glass-nav .glass-bar .selection::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:radial-gradient(ellipse at 30% 0%,#ffffff38,transparent 70%)}
+.ios-glass-nav .glass-bar .nav-button{color:#424a55;text-shadow:none;transition:color .16s;user-select:none;-webkit-user-select:none}
+.ios-glass-nav .glass-bar .nav-button svg{filter:none;transition:transform .26s cubic-bezier(.2,.8,.2,1)}
+.ios-glass-nav .glass-bar .nav-button[aria-current=page]{color:#007aff}
+.ios-glass-nav .glass-bar .nav-button:has([aria-busy=true]){color:#007aff}
+.ios-glass-nav .glass-bar .nav-button:active{background:transparent}
+.ios-glass-nav .glass-bar[data-pressing=true] .nav-button[data-preview=true] svg{transform:translateY(-1px) scale(1.07)}
+.ios-glass-nav .glass-bar[data-dragging=true] .nav-button[aria-current=page]{color:#424a55}
+.ios-glass-nav .glass-bar[data-dragging=true] .nav-button[data-preview=true]{color:#007aff}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.ios-glass-nav .glass-bar{background:var(--color-card)}}
+@media(prefers-reduced-motion:reduce){.ios-glass-nav .glass-bar .nav-button,.ios-glass-nav .glass-bar .nav-button svg{transition:none}.ios-glass-nav .glass-bar[data-pressing=true] .nav-button[data-preview=true] svg{transform:none}}
+@media(prefers-reduced-transparency:reduce),(prefers-contrast:more){.ios-glass-nav .glass-bar{background:var(--color-card);-webkit-backdrop-filter:none;backdrop-filter:none}.ios-glass-nav .glass-bar::before,.ios-glass-nav .glass-bar::after{display:none}}
+
+/* Integration shell only. Optical rendering comes from the unchanged upstream bundle. */
+.ios-glass-nav .glass-bar:has(>liquid-glass[data-glass-strategy=webgl]){background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:0 5px 20px -7px #192b4930}
+.ios-glass-nav .glass-bar:has(>liquid-glass[data-glass-strategy=webgl])::before,
+.ios-glass-nav .glass-bar:has(>liquid-glass[data-glass-strategy=webgl])::after{display:none}
+
+/* A lifted lens also refracts the tab symbols passing beneath it. */
+.ios-glass-nav .tab-optics{display:none;position:absolute;inset:0;width:100%;height:58px;overflow:visible;pointer-events:none;z-index:3}
+.ios-glass-nav .tab-optics text{font:500 10px -apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;fill:currentColor;stroke:none}
+.ios-glass-nav .optics-base{color:#424a55}.ios-glass-nav .optics-refracted{color:#007aff}
+.ios-glass-nav .glass-bar[data-lensing=true] .tab-optics{display:block}
+.ios-glass-nav .glass-bar[data-lensing=true] .nav-button>svg,.ios-glass-nav .glass-bar[data-lensing=true] .nav-button>span{opacity:0}
+.ios-glass-nav .glass-bar .selection{--lens-light:rgba(255,255,255,.65);--lens-shade:rgba(55,79,108,.17)}
+.ios-glass-nav .glass-bar .nav-items{touch-action:none}
+.ios-glass-nav .glass-bar,.ios-glass-nav .glass-bar *{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
+.ios-glass-nav .glass-bar .selection{background:linear-gradient(165deg,rgba(255,255,255,calc(.22 - var(--lens-pressure,0)*.13)),#ffffff02 55%,#ffffff19),rgba(105,129,157,.035)}
+.ios-glass-nav .glass-bar .selection::after{background:radial-gradient(ellipse at var(--lens-light-x,30%) 0%,#ffffff35,transparent 62%);opacity:calc(.45 + var(--lens-pressure,0)*.55)}
+.ios-glass-nav .glass-bar[data-lensing=true] .selection{box-shadow:inset 0 .75px .5px var(--lens-light),inset .75px 0 1px #a7deff6b,inset -.75px 0 1px #e3c4ff45,inset 0 -.75px 1px #ffffff30,0 3px 9px -3px var(--lens-shade)}
+@media(prefers-reduced-motion:reduce){.ios-glass-nav .tab-optics{display:none!important}}
+.ios-glass-nav .glass-bar>liquid-glass{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}

@@ -2,13 +2,20 @@
 
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
-import { useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { Home, Newspaper, CalendarDays, NotebookTabs, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { syncVisualViewport } from "@/lib/viewport-sync";
+import { isIOSGlassDevice } from "@/lib/ios-glass";
+import "./glass/glass-nav.css";
 
-const attachNav = (element: HTMLElement | null) => element ? syncVisualViewport(element, "bottom") : undefined;
+const subscribeToMobile = (changed: () => void) => {
+  const query = matchMedia("(max-width: 767px)");
+  query.addEventListener("change", changed);
+  return () => query.removeEventListener("change", changed);
+};
+const glassDeviceSnapshot = () => isIOSGlassDevice(navigator) && matchMedia("(max-width: 767px)").matches;
 
 const ITEMS = [
   { href: "/home", label: "ホーム", icon: Home },
@@ -54,20 +61,52 @@ function TabContent({
   );
 }
 
-export function BottomNav() {
+export function BottomNav({ canUseGlass = false }: { canUseGlass?: boolean }) {
   const pathname = usePathname();
   const mounted = useSyncExternalStore(subscribeToClient, () => true, () => false);
+  const eligibleDevice = useSyncExternalStore(subscribeToMobile, glassDeviceSnapshot, () => false);
+  const glass = canUseGlass && eligibleDevice;
+  const navRef = useRef<HTMLElement | null>(null);
+  const controller = useRef<{ update: (index: number) => void; destroy: () => void } | null>(null);
+  const activeIndex = ITEMS.findIndex(({ href }) => pathname === href || pathname.startsWith(href + "/"));
+  const selected = useRef(activeIndex);
+  useEffect(() => {
+    if (mounted && navRef.current) return syncVisualViewport(navRef.current, "bottom");
+  }, [glass, mounted]);
+
+  useEffect(() => {
+    selected.current = activeIndex;
+    controller.current?.update(activeIndex);
+  }, [activeIndex]);
+
+  useEffect(() => {
+    if (!glass || !mounted || !navRef.current) return;
+    const element = navRef.current;
+    let disposed = false;
+    // Neither the optical engine nor its vendor script loads for other members/devices.
+    void import("./glass/mount-glass").then(({ mountGlass }) => {
+      if (!disposed) controller.current = mountGlass(element, selected.current);
+    }).catch(() => { /* CSS glass and normal Links remain usable if loading fails. */ });
+    return () => {
+      disposed = true;
+      controller.current?.destroy();
+      controller.current = null;
+    };
+  }, [glass, mounted]);
 
   if (!mounted) return null;
 
   return createPortal(
     <nav
-      ref={attachNav}
+      ref={navRef}
       data-no-pull-refresh
       aria-label="メインナビゲーション"
-      className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md border-t border-separator bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
+      className={cn("fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md md:hidden",
+        glass ? "ios-glass-nav" : "border-t border-separator bg-card pb-[env(safe-area-inset-bottom)]")}
     >
-      <div className="h-[52px] flex items-stretch">
+      <div className={glass ? "glass-bar" : undefined} data-glass={glass ? "true" : undefined}>
+      <div className={glass ? "nav-items" : "h-[52px] flex items-stretch"}>
+        {glass && <span aria-hidden="true" className="selection" style={{ transform: `translateX(${Math.max(0, activeIndex) * 100}%)`, visibility: activeIndex < 0 ? "hidden" : undefined }} />}
         {ITEMS.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
           return (
@@ -92,12 +131,13 @@ export function BottomNav() {
                 }
               }}
               aria-current={active ? "page" : undefined}
-              className="flex-1"
+              className={glass ? "nav-button" : "flex-1"}
             >
               <TabContent label={label} Icon={Icon} active={active} />
             </Link>
           );
         })}
+      </div>
       </div>
     </nav>,
     document.body,

@@ -29,7 +29,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <PullToRefresh />
             {children}
             <Suspense fallback={<FabPlaceholder />}><AuthenticatedFab /></Suspense>
-            <Suspense fallback={null}><BottomNav /></Suspense>
+            <Suspense fallback={<BottomNav />}><AuthenticatedBottomNav /></Suspense>
             <Suspense fallback={null}><AuthenticatedObEntryPrompt /></Suspense>
             <VersionWatcher />
             {process.env.NEXT_PUBLIC_PC_TRIAL !== "true" && <PushSubscriptionSync />}
@@ -42,12 +42,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
+async function AuthenticatedBottomNav() {
+  const profile = await getCurrentProfile();
+  return <BottomNav canUseGlass={permissionsOf(profile.roles).manageSystem} />;
+}
+
 /** 作成ボタンが出るまでの場所取り。位置と大きさはFAB本体と揃えてある。 */
 function FabPlaceholder() {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-40 mx-auto h-0 w-full max-w-md md:inset-x-auto md:right-3 md:w-0 md:max-w-none lg:right-[max(0px,calc((100vw-1160px)/2))]"
+      className="app-floating-action pointer-events-none fixed inset-x-0 bottom-0 z-40 mx-auto h-0 w-full max-w-md md:inset-x-auto md:right-3 md:w-0 md:max-w-none lg:right-[max(0px,calc((100vw-1160px)/2))]"
     >
       <div className="absolute right-5 bottom-[calc(74px+env(safe-area-inset-bottom))] h-14 w-14 rounded-full bg-separator/60 lg:bottom-8 lg:right-8 lg:h-12 lg:w-12" />
     </div>
