@@ -2,6 +2,7 @@ import { OctoberSheetSetup } from "@/components/features/OctoberSheetSetup";
 import { needsSheetSetupConfirmation } from "@/lib/sheet-period";
 import { Suspense } from "react";
 import { BottomNav } from "@/components/layout/BottomNav";
+import { SystemGlassPreview } from "@/components/layout/glass/SystemGlassPreview";
 import { DesktopNav } from "@/components/layout/DesktopNav";
 import { FAB } from "@/components/layout/FAB";
 import { SessionKeepAlive } from "@/components/layout/SessionKeepAlive";
@@ -58,6 +59,8 @@ async function AuthenticatedFab() {
   const profile = await getCurrentProfile();
   const perms = permissionsOf(profile.roles);
   return (
+    <>
+    <SystemGlassPreview roles={profile.roles} />
     <FAB
       userId={profile.id}
       currentUser={{
@@ -79,6 +82,7 @@ async function AuthenticatedFab() {
         manageMembers: perms.manageMembers,
       }}
     />
+    </>
   );
 }
 

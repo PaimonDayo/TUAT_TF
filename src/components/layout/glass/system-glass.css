@@ -1,0 +1,62 @@
+/* Small, live CSS surfaces. Enabled only by the authenticated system marker. */
+.app-main:has(> [data-system-glass-preview]) [data-glass-header] {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.app-main:has(> [data-system-glass-preview]) [data-glass-header] > div,
+.app-main:has(> [data-system-glass-preview]) .app-create-button,
+.app-main:has(> [data-system-glass-preview]) [data-glass-create-menu] {
+  background: rgba(255, 255, 255, .82);
+  -webkit-backdrop-filter: blur(18px) saturate(125%);
+  backdrop-filter: blur(18px) saturate(125%);
+  border: 1px solid rgba(255, 255, 255, .92);
+  box-shadow: 0 6px 22px -10px #26334430, 0 1px 3px #2633440d, inset 0 1px 0 #fff;
+}
+
+.app-main:has(> [data-system-glass-preview]) [data-glass-header] > div {
+  /* Keep the header height stable when the authenticated marker streams in. */
+  margin: 0 8px;
+  border-radius: 24px;
+}
+
+.app-main:has(> [data-system-glass-preview]) .app-create-button {
+  color: #263344;
+}
+
+.app-main:has(> [data-system-glass-preview]) [data-glass-create-menu] {
+  border-radius: 24px;
+  background: rgba(255, 255, 255, .9);
+  box-shadow: 0 12px 36px -12px #26334438, inset 0 1px 0 #fff;
+}
+
+/* Preserve visible feedback and a clear keyboard focus on the pale surface. */
+.app-main:has(> [data-system-glass-preview]) .app-create-button:active {
+  background: #e5eaf0;
+}
+.app-main:has(> [data-system-glass-preview]) .app-create-button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .app-main:has(> [data-system-glass-preview]) [data-glass-header] > div,
+  .app-main:has(> [data-system-glass-preview]) .app-create-button,
+  .app-main:has(> [data-system-glass-preview]) [data-glass-create-menu] {
+    background: var(--color-card);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
+  .app-main:has(> [data-system-glass-preview]) [data-glass-header] > div,
+  .app-main:has(> [data-system-glass-preview]) .app-create-button,
+  .app-main:has(> [data-system-glass-preview]) [data-glass-create-menu] {
+    background: var(--color-card);
+    color: var(--color-ink);
+    border-color: var(--color-muted2);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+}

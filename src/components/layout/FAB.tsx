@@ -264,7 +264,7 @@ function ContextualFAB({
 
       <FloatingActionPosition>
         {isFeed && speedDialOpen && (
-          <div className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-card border border-separator bg-card shadow-xl lg:bottom-24 lg:right-8">
+          <div data-glass-create-menu className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-card border border-separator bg-card shadow-xl lg:bottom-24 lg:right-8">
             <SpeedDialAction
               icon={<Activity size={19} />}
               label="練習記録"
@@ -295,7 +295,7 @@ function ContextualFAB({
         )}
 
         {isNotesRoot && speedDialOpen && (
-          <div className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-card border border-separator bg-card shadow-xl lg:bottom-24 lg:right-8">
+          <div data-glass-create-menu className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-card border border-separator bg-card shadow-xl lg:bottom-24 lg:right-8">
             <SpeedDialAction
               icon={<FolderPlus size={19} />}
               label="フォルダ"
@@ -318,7 +318,7 @@ function ContextualFAB({
         )}
 
         {isNoteFolder && speedDialOpen && (
-          <div className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-card border border-separator bg-card shadow-xl lg:bottom-24 lg:right-8">
+          <div data-glass-create-menu className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-card border border-separator bg-card shadow-xl lg:bottom-24 lg:right-8">
             <SpeedDialAction
               icon={<NotebookPen size={19} />}
               label="記事"

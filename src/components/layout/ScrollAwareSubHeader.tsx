@@ -23,7 +23,7 @@ export function ScrollAwareSubHeader({ title, backHref }: { title: string; backH
   }, []);
 
   return (
-    <header className={cn("sticky top-0 z-30 bg-bg/90 backdrop-blur-xl pt-[env(safe-area-inset-top)] transition-transform duration-200 lg:pt-0", !visible && "-translate-y-full")}>
+    <header data-glass-header className={cn("sticky top-0 z-30 bg-bg/90 backdrop-blur-xl pt-[env(safe-area-inset-top)] transition-transform duration-200 lg:pt-0", !visible && "-translate-y-full")}>
       <div className="grid h-12 grid-cols-[minmax(72px,1fr)_minmax(0,2fr)_minmax(72px,1fr)] items-center px-2 md:px-4 lg:h-16">
         <BackButton fallback={backHref} />
         <h1 className="truncate text-center text-title" title={title}>{title}</h1>

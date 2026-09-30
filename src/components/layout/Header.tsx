@@ -23,7 +23,7 @@ export function Header({
   besideTitle?: React.ReactNode;
 }) {
   return (
-    <header className="sticky top-0 z-30 bg-bg/80 backdrop-blur-xl pt-[env(safe-area-inset-top)] lg:pt-0">
+    <header data-glass-header className="sticky top-0 z-30 bg-bg/80 backdrop-blur-xl pt-[env(safe-area-inset-top)] lg:pt-0">
       <div className="h-12 px-4 flex items-center justify-between md:px-6 lg:h-16">
         <div className="flex min-w-0 items-baseline gap-3">
           <h1 className={large ? "shrink-0 text-large-title" : "shrink-0 text-title"}>{title}</h1>
