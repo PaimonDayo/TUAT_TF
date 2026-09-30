@@ -1,5 +1,5 @@
 # Vendored Liquid Glass
 
-Source: https://github.com/lucaperullo/simple-liquid-glass/tree/9f1ca87d360d9a1f0e318ab804156c8f9c1
+Source: https://github.com/lucaperullo/simple-liquid-glass/tree/9f1ca87d360d9a1c79a1f0e318ab804156c8f9c1
 
-Optical engine and shaders unchanged. Integration fix in src/web-component/index.ts: defer ResizeObserver render via one cancellable requestAnimationFrame, and cancel it on disconnect, to avoid a WebKit ResizeObserver delivery-loop error. No other upstream source changes. Bundled with esbuild 0.25.12, html-to-image 1.11.11; IIFE, target safari15. Source package.json says 5.3.1, but that version was unavailable on npm at retrieval, so this build is pinned to the Git revision above. No upstream install/build scripts were executed. Retained MIT notices beside this file.
+MIT. Optical shaders unchanged. TUAT patches: cancellable ResizeObserver render; bounded 384px bottom-viewport capture with offscreen subtree pruning; defer capture until input/navigation settles; crop-aware sampling with live CSS fallback outside the cached strip. System fonts only. html-to-image copies only resolved paint/layout properties instead of every computed CSS variable. Patch source and reproducible build are in ops/glass/. Build dependencies: esbuild 0.25.12, html-to-image 1.11.11; target safari15. Retained MIT notices beside this file.

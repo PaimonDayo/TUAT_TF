@@ -13,7 +13,20 @@ export function attachGlassInteraction(root, initial) {
     removers.push(()=>element.removeEventListener(type,handler,options));
   };
   // Dispatch the existing Link so prefetch, navigation and any guards stay intact.
-  const selectTab=index=>{buttons[index].click();animate(selected < 0 ? 0 : selected)};
+  let releaseFrame=0;
+  const selectTab=index=>{
+    // Keep the released lens on the tapped tab while Next starts its transition.
+    // Returning to the old page immediately made every tap visibly bounce back.
+    animate(index);buttons[index].click();
+    cancelAnimationFrame(releaseFrame);
+    releaseFrame=requestAnimationFrame(()=>{
+      releaseFrame=requestAnimationFrame(()=>{
+        releaseFrame=0;
+        const pending=buttons.findIndex(button=>button.querySelector('[aria-busy=true]'));
+        if(!contact)animate(pending<0?Math.max(0,selected):pending);
+      });
+    });
+  };
 
   const reduced=matchMedia('(prefers-reduced-motion: reduce)');
   const lens=nav.querySelector('.selection'),buttons=[...nav.querySelectorAll('a')];
@@ -237,7 +250,7 @@ export function attachGlassInteraction(root, initial) {
       const id=contact?.kind==='pointer'?contact.id:undefined;
       contact=null;
       if(id!==undefined&&nav.hasPointerCapture(id))nav.releasePointerCapture(id);
-      removers.forEach(remove=>remove());resize.disconnect();pending.disconnect();cancelAnimationFrame(frame);svg.remove();
+      removers.forEach(remove=>remove());resize.disconnect();pending.disconnect();cancelAnimationFrame(frame);cancelAnimationFrame(releaseFrame);svg.remove();
       delete root.dataset.pressing;delete root.dataset.dragging;delete root.dataset.lensing;
       lens.removeAttribute('style');buttons.forEach(button=>delete button.dataset.preview);
     },
