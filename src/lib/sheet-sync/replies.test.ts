@@ -36,6 +36,11 @@ describe("verified sheet reply imports", () => {
     expect((await sync(member([]))).failedMembers).toEqual([{ member: "B1 test", reason: expect.stringContaining("保持") }]);
     expect(state.rpc).not.toHaveBeenCalled(); expect(state.updates).not.toHaveBeenCalled();
   });
+  it("retries a transient read failure once before replacing replies", async () => {
+    state.gas.mockRejectedValueOnce(new Error("temporary upstream error"));
+    expect((await sync()).failedMembers).toEqual([]);
+    expect(state.gas).toHaveBeenCalledTimes(2); expect(state.rpc).toHaveBeenCalledOnce();
+  });
   it.each([
     { data: { ...member(), name: "another member" } },
     { data: { ...member(), records: [{ date: "2026-10-01", cells: {} }] } },

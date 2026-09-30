@@ -65,13 +65,25 @@ export async function reconcileSheetReplies(
       record.date >= fromDate && record.date <= throughDate && record.replies?.length),
   );
   const verifiedMembers = new Map<string, RawMember>();
+  const verificationDeadline = Date.now() + 60_000;
   for (let offset = 0; offset < candidates.length; offset += 4) {
     await Promise.all(candidates.slice(offset, offset + 4).map(async profile => {
       try {
-        const response = await gasPost<{ data?: RawMember }>({
-          action: "fetchMember", memberName: profile.sheet_name, spreadsheetId,
-        }, AbortSignal.timeout(20_000));
-        const member = response.data;
+        let response: { data?: RawMember } | undefined;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const remaining = verificationDeadline - Date.now();
+          if (remaining <= 0) throw new Error("Reply verification budget exceeded");
+          try {
+            response = await gasPost<{ data?: RawMember }>({
+              action: "fetchMember", memberName: profile.sheet_name, spreadsheetId,
+            }, AbortSignal.timeout(Math.min(20_000, remaining)));
+            break;
+          } catch (error) {
+            // Only this read is retried. Never replay a reply write or deletion.
+            if (attempt === 1) throw error;
+          }
+        }
+        const member = response?.data;
         if (!member || member.name?.trim() !== profile.sheet_name.trim() || !Array.isArray(member.records) ||
           member.records.some(record => typeof record.date !== "string" ||
             !Array.isArray(record.replies) || record.replies.some(reply =>
