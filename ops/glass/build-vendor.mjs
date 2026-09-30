@@ -41,6 +41,11 @@ const clonePath=resolve(dependencies,'html-to-image/es/clone-node.js');
 let clone=readFileSync(clonePath,'utf8');
 if(!clone.includes('toArray(sourceStyle).forEach((name) => {'))throw Error('CSS clone source changed');
 clone=clone.replace('toArray(sourceStyle).forEach((name) => {',`${JSON.stringify(paintProperties.split(' '))}.forEach((name) => {`);
+// A screenshot must keep the original glyph positions and line breaks. The
+// upstream export workaround floors every font size and subtracts another .1px.
+const fontReduction = /\s*if \(name === 'font-size' && value\.endsWith\('px'\)\) \{\s*const reducedFont = [^;]+;\s*value = `\$\{reducedFont\}px`;\s*\}/;
+if (!fontReduction.test(clone)) throw Error('Font clone source changed');
+clone = clone.replace(fontReduction, '');
 // Load every upstream file from the pinned Git object, never working-tree edits.
 await esbuild.build({stdin:{contents:entry,resolveDir:upstream+'/src/web-component',sourcefile:'web-component/index.ts',loader:'ts'},
  bundle:true,format:'iife',target:'safari15',minify:true,legalComments:'eof',nodePaths:[dependencies],
@@ -51,4 +56,4 @@ await esbuild.build({stdin:{contents:entry,resolveDir:upstream+'/src/web-compone
    if(!relative||!args.path.replaceAll('\\','/').startsWith(upstream.replaceAll('\\','/')))return;
    return {contents:overrides.get(relative)??original(relative),loader:relative.endsWith('.tsx')?'tsx':'ts',resolveDir:dirname(args.path)};
  });}}],outfile:resolve('public/vendor/liquid-glass/simple-liquid-glass.js')});
-writeFileSync('public/vendor/liquid-glass/SOURCE.md',`# Vendored Liquid Glass\n\nSource: https://github.com/lucaperullo/simple-liquid-glass/tree/${revision}\n\nMIT. Optical shaders unchanged. TUAT patches: exposed glass/border shadow parts for the app-owned continuous material; cancellable ResizeObserver render; bounded 384px bottom-viewport capture with offscreen subtree pruning; defer capture until input/navigation settles; crop-aware sampling with live CSS fallback outside the cached strip. System fonts only. html-to-image copies only resolved paint/layout properties instead of every computed CSS variable. Patch source and reproducible build are in ops/glass/. Build dependencies: esbuild 0.25.12, html-to-image 1.11.11; target safari15. Retained MIT notices beside this file.\n`);
+writeFileSync('public/vendor/liquid-glass/SOURCE.md',`# Vendored Liquid Glass\n\nSource: https://github.com/lucaperullo/simple-liquid-glass/tree/${revision}\n\nMIT. Optical shaders unchanged. TUAT patches: exposed glass/border shadow parts for the app-owned continuous material; cancellable ResizeObserver render; bounded 384px bottom-viewport capture with offscreen subtree pruning; defer capture until input/navigation settles; crop-aware sampling with live CSS fallback outside the cached strip. Capture keeps fractional CSS dimensions and exact computed font sizes to align the background with the page. System fonts only. html-to-image copies only resolved paint/layout properties instead of every computed CSS variable. Patch source and reproducible build are in ops/glass/. Build dependencies: esbuild 0.25.12, html-to-image 1.11.11; target safari15. Retained MIT notices beside this file.\n`);

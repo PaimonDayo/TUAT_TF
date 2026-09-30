@@ -58,7 +58,9 @@ class Source {
     const bottom = viewport ? viewport.offsetTop + viewport.height : innerHeight;
     const prior = this.capture.cache.get(this.element);
     if (!this.dirty && prior && bottom - 110 >= bounds.top + prior.offsetTop && bottom + 20 <= bounds.top + prior.offsetTop + prior.cssHeight) return;
-    const width = this.element.offsetWidth, fullHeight = this.element.offsetHeight;
+    // Keep the same fractional CSS dimensions used by the sampling rect.
+    // offsetWidth/offsetHeight round them, reflowing the copied background.
+    const width = bounds.width, fullHeight = bounds.height;
     if (!width || !fullHeight) return;
     const height = Math.min(384, fullHeight);
     const offsetTop = Math.max(0, Math.min(fullHeight - height, bottom - 230 - bounds.top));
