@@ -7,7 +7,6 @@ import { createPortal } from "react-dom";
 import { Home, Newspaper, CalendarDays, NotebookTabs, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { syncVisualViewport } from "@/lib/viewport-sync";
-import { isIOSGlassDevice } from "@/lib/ios-glass";
 import "./glass/glass-nav.css";
 
 const subscribeToMobile = (changed: () => void) => {
@@ -15,7 +14,7 @@ const subscribeToMobile = (changed: () => void) => {
   query.addEventListener("change", changed);
   return () => query.removeEventListener("change", changed);
 };
-const glassDeviceSnapshot = () => isIOSGlassDevice(navigator) && matchMedia("(max-width: 767px)").matches;
+const mobileSnapshot = () => matchMedia("(max-width: 767px)").matches;
 
 const ITEMS = [
   { href: "/home", label: "ホーム", icon: Home },
@@ -64,8 +63,7 @@ function TabContent({
 export function BottomNav() {
   const pathname = usePathname();
   const mounted = useSyncExternalStore(subscribeToClient, () => true, () => false);
-  const eligibleDevice = useSyncExternalStore(subscribeToMobile, glassDeviceSnapshot, () => false);
-  const glass = eligibleDevice;
+  const glass = useSyncExternalStore(subscribeToMobile, mobileSnapshot, () => false);
   const navRef = useRef<HTMLElement | null>(null);
   const controller = useRef<{ update: (index: number) => void; destroy: () => void } | null>(null);
   const activeIndex = ITEMS.findIndex(({ href }) => pathname === href || pathname.startsWith(href + "/"));
@@ -83,7 +81,7 @@ export function BottomNav() {
     if (!glass || !mounted || !navRef.current) return;
     const element = navRef.current;
     let disposed = false;
-    // Neither the optical engine nor its vendor script loads for other members/devices.
+    // Load the optical engine only while the mobile bottom navigation is visible.
     void import("./glass/mount-glass").then(({ mountGlass }) => {
       if (!disposed) controller.current = mountGlass(element, selected.current);
     }).catch(() => { /* CSS glass and normal Links remain usable if loading fails. */ });
