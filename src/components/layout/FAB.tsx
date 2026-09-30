@@ -1,5 +1,7 @@
 "use client";
 import { FloatingActionPosition, floatingActionButtonClass } from "@/components/ui/floating-action";
+import { useSystemGlass } from "./glass/system-glass-state";
+import { GlassMenu, type GlassMenuItem } from "@/components/ui/glass-menu";
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
@@ -96,6 +98,7 @@ function ContextualFAB({
   const router = useRouter();
   const queryClient = useQueryClient();
   const [speedDialOpen, setSpeedDialOpen] = useState(false);
+  const systemGlass = useSystemGlass();
   const [recordOpen, setRecordOpen] = useState(false);
   const [tweetOpen, setTweetOpen] = useState(false);
   const [tweetInitialStory, setTweetInitialStory] = useState(false);
@@ -251,9 +254,48 @@ function ContextualFAB({
           ? "作成メニューを開く"
           : "このフォルダに作成";
 
+  const hasMenu = isFeed || isNotesRoot || isNoteFolder;
+  const glassItems: GlassMenuItem[] = isFeed ? [
+    { key: "record", label: "練習記録", icon: <Activity size={21} />, onSelect: () => setRecordOpen(true) },
+    { key: "tweet", label: "つぶやき", icon: <MessageCircle size={21} />, onSelect: () => { setTweetInitialStory(false); setTweetOpen(true); } },
+    { key: "story", label: "ストーリー", icon: <ImagePlus size={21} />, onSelect: () => { setTweetInitialStory(true); setTweetOpen(true); } },
+    { key: "result", label: "大会・記録会の結果", icon: <Trophy size={21} />, onSelect: () => setResultOpen(true) },
+  ] : isNotesRoot ? [
+    { key: "folder", label: "フォルダ", icon: <FolderPlus size={21} />, onSelect: () => setDirectForm("folder") },
+  ] : [
+    { key: "article", label: "記事", icon: <NotebookPen size={21} />, onSelect: () => setDirectForm("article") },
+    { key: "subfolder", label: "サブフォルダ", icon: <FolderPlus size={21} />, onSelect: () => setDirectForm("subfolder") },
+    { key: "thread", label: "スレッド", icon: <MessagesSquare size={21} />, onSelect: () => setDirectForm("thread") },
+  ];
+  const trigger = <button
+          type="button"
+          onClick={systemGlass && hasMenu ? undefined : handleMainAction}
+          aria-label={label}
+          aria-expanded={isFeed || isNotesRoot || isNoteFolder ? speedDialOpen : undefined}
+          className={floatingActionButtonClass}
+        >
+          {isFeed || isNotesRoot || isNoteFolder ? (
+            <Plus
+              size={28}
+              strokeWidth={2.5}
+              className={cn(
+                "transition-transform duration-200 motion-reduce:transition-none",
+                speedDialOpen && "rotate-45",
+              )}
+            />
+          ) : (
+            <span key={pathname} className="flex">
+              {isSchedule && <CalendarPlus size={25} />}
+              {isNotice && <BellPlus size={25} />}
+              {isNotesRoot && <FolderPlus size={25} />}
+              {isNoteFolder && <NotebookPen size={25} />}
+              {/* サブフォルダを作れる場合は上のPlus分岐が使われる */}
+            </span>
+          )}
+        </button>;
   return (
     <>
-      {(isFeed || isNotesRoot || isNoteFolder) && speedDialOpen && (
+      {!systemGlass && (isFeed || isNotesRoot || isNoteFolder) && speedDialOpen && (
         <button
           type="button"
           aria-label="作成メニューを閉じる"
@@ -263,7 +305,7 @@ function ContextualFAB({
       )}
 
       <FloatingActionPosition>
-        {isFeed && speedDialOpen && (
+        {!systemGlass && isFeed && speedDialOpen && (
           <div data-glass-create-menu className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-card border border-separator bg-card shadow-xl lg:bottom-24 lg:right-8">
             <SpeedDialAction
               icon={<Activity size={19} />}
@@ -294,7 +336,7 @@ function ContextualFAB({
           </div>
         )}
 
-        {isNotesRoot && speedDialOpen && (
+        {!systemGlass && isNotesRoot && speedDialOpen && (
           <div data-glass-create-menu className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-card border border-separator bg-card shadow-xl lg:bottom-24 lg:right-8">
             <SpeedDialAction
               icon={<FolderPlus size={19} />}
@@ -317,7 +359,7 @@ function ContextualFAB({
           </div>
         )}
 
-        {isNoteFolder && speedDialOpen && (
+        {!systemGlass && isNoteFolder && speedDialOpen && (
           <div data-glass-create-menu className="pointer-events-auto absolute right-5 bottom-[calc(142px+env(safe-area-inset-bottom))] w-[min(15rem,calc(100vw-2.5rem))] origin-bottom-right divide-y divide-separator/70 overflow-hidden rounded-card border border-separator bg-card shadow-xl lg:bottom-24 lg:right-8">
             <SpeedDialAction
               icon={<NotebookPen size={19} />}
@@ -346,32 +388,7 @@ function ContextualFAB({
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={handleMainAction}
-          aria-label={label}
-          aria-expanded={isFeed || isNotesRoot || isNoteFolder ? speedDialOpen : undefined}
-          className={floatingActionButtonClass}
-        >
-          {isFeed || isNotesRoot || isNoteFolder ? (
-            <Plus
-              size={28}
-              strokeWidth={2.5}
-              className={cn(
-                "transition-transform duration-200 motion-reduce:transition-none",
-                speedDialOpen && "rotate-45",
-              )}
-            />
-          ) : (
-            <span key={pathname} className="flex">
-              {isSchedule && <CalendarPlus size={25} />}
-              {isNotice && <BellPlus size={25} />}
-              {isNotesRoot && <FolderPlus size={25} />}
-              {isNoteFolder && <NotebookPen size={25} />}
-              {/* サブフォルダを作れる場合は上のPlus分岐が使われる */}
-            </span>
-          )}
-        </button>
+        {systemGlass && hasMenu ? <GlassMenu open={speedDialOpen} onOpenChange={setSpeedDialOpen} label="作成メニュー" trigger={trigger} items={glassItems} /> : trigger}
       </FloatingActionPosition>
 
       <FormModal open={recordOpen} onOpenChange={(open) => { if (!open) { if (recordDirty) setPendingTimelineClose("record"); else closeTimelineForm("record"); } }} title="練習記録">

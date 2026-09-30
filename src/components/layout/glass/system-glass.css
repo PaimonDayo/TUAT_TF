@@ -1,92 +1,141 @@
-/* Small, live CSS surfaces. Enabled only by the authenticated system marker. */
-/* Titles stay on the existing flat header. Glass belongs to the controls. */
-.app-main:has(> [data-system-glass-preview]) [data-glass-control] {
+/* The server's effective system role owns this preview. BottomNav is independent. */
+.app-main:has(> [data-system-glass-preview]) :is([data-glass-control], .app-create-button) {
   border-radius: 999px;
+  color: var(--color-ink);
+  background: linear-gradient(145deg, #ffffff65, #ffffff08 65%), #ffffff38;
+  border: 1px solid #ffffff70;
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+  box-shadow: inset 0 1px 0 #ffffff85, inset 0 -1px 0 #26334409, 0 2px 8px #18253312;
+  opacity: 1;
+  transition: scale 240ms cubic-bezier(.2,.8,.2,1), background-color 160ms ease-out, box-shadow 160ms ease-out;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
-
-/* A neutral track and one selected lens, not glass stacked on glass. */
-.app-main:has(> [data-system-glass-preview]) [data-glass-segments] {
-  border-radius: 999px;
-  background: #e9e9eb;
+.app-main:has(> [data-system-glass-preview]) :is([data-glass-control], .app-create-button):is(:active, [data-glass-pressed]) {
+  scale: .95;
+  opacity: 1;
+  background-color: #ffffff8f;
+  box-shadow: inset 0 0 0 1px #ffffffb0, 0 1px 4px #18253318;
+  transition-duration: 80ms;
 }
-.app-main:has(> [data-system-glass-preview]) [data-glass-segments] > button {
-  border-radius: 999px;
-}
-.app-main:has(> [data-system-glass-preview]) [data-glass-segments] > button[aria-pressed="true"] {
-  background: rgba(255, 255, 255, .72);
-  -webkit-backdrop-filter: blur(12px) saturate(125%);
-  backdrop-filter: blur(12px) saturate(125%);
-  box-shadow: inset 0 0 0 1px #ffffffb8, 0 1px 3px #26334426;
-}
-.app-main:has(> [data-system-glass-preview]) :is([data-glass-control], [data-glass-segments] > button):focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-}
-.app-main:has(> [data-system-glass-preview]) [data-glass-control]:active {
-  background: #e5eaf0;
-}
-@media (max-width: 767px) {
-  .app-main:has(> [data-system-glass-preview]) [data-glass-control] {
-    min-width: 44px;
-    min-height: 44px;
-  }
-  .app-main:has(> [data-system-glass-preview]) [data-glass-segments] > button {
-    min-height: 44px;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .app-main:has(> [data-system-glass-preview]) [data-glass-segments] > button {
-    transition: none;
-  }
-}
-.app-main:has(> [data-system-glass-preview]) [data-glass-control],
-.app-main:has(> [data-system-glass-preview]) .app-create-button,
-.app-main:has(> [data-system-glass-preview]) [data-glass-create-menu] {
-  background: rgba(255, 255, 255, .82);
-  -webkit-backdrop-filter: blur(18px) saturate(125%);
-  backdrop-filter: blur(18px) saturate(125%);
-  border: 1px solid rgba(255, 255, 255, .92);
-  box-shadow: 0 6px 22px -10px #26334430, 0 1px 3px #2633440d, inset 0 1px 0 #fff;
-}
-
-.app-main:has(> [data-system-glass-preview]) .app-create-button {
-  color: #263344;
-}
-
-.app-main:has(> [data-system-glass-preview]) [data-glass-create-menu] {
-  border-radius: 24px;
-  background: rgba(255, 255, 255, .9);
-  box-shadow: 0 12px 36px -12px #26334438, inset 0 1px 0 #fff;
-}
-
-/* Preserve visible feedback and a clear keyboard focus on the pale surface. */
-.app-main:has(> [data-system-glass-preview]) .app-create-button:active {
-  background: #e5eaf0;
-}
-.app-main:has(> [data-system-glass-preview]) .app-create-button:focus-visible {
+.app-main:has(> [data-system-glass-preview]) :is([data-glass-control], .app-create-button):focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 3px;
 }
-
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .app-main:has(> [data-system-glass-preview]) [data-glass-segments] > button[aria-pressed="true"],
-  .app-main:has(> [data-system-glass-preview]) [data-glass-control],
-  .app-main:has(> [data-system-glass-preview]) .app-create-button,
-  .app-main:has(> [data-system-glass-preview]) [data-glass-create-menu] {
-    background: var(--color-card);
-  }
+.app-main:has(> [data-system-glass-preview]) [data-glass-segments] {
+  position: relative;
+  isolation: isolate;
+  border-radius: 999px;
+  background: #dfe2e680;
+}
+.app-main:has(> [data-system-glass-preview]) [data-glass-segments] > button {
+  position: relative;
+  z-index: 1;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  opacity: 1;
+  transition: color 160ms ease-out, background-color 100ms ease-out;
+  -webkit-tap-highlight-color: transparent;
+}
+.app-main:has(> [data-system-glass-preview]) [data-glass-segments] > button:is(:active, [data-glass-pressed]) { background: #ffffff40; }
+.app-main:has(> [data-system-glass-preview]) [data-glass-segments] > button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+/* Keep the server-rendered selection visible until its moving lens hydrates. */
+.app-main:has(> [data-system-glass-preview]) [data-glass-segments]:not(:has(> [data-glass-selection])) > button[aria-pressed="true"] { background: var(--color-card); }
+.app-main:has(> [data-system-glass-preview]) [data-glass-selection] {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  pointer-events: none;
+  border-radius: 999px;
+  background: linear-gradient(150deg, #ffffffa3, #ffffff3d);
+  border: 1px solid #ffffffa8;
+  -webkit-backdrop-filter: blur(12px) saturate(125%);
+  backdrop-filter: blur(12px) saturate(125%);
+  box-shadow: inset 0 .5px 0 #ffffffd0, 0 1px 4px #1b29351c;
+  transition: transform 260ms cubic-bezier(.2,.8,.2,1), width 260ms cubic-bezier(.2,.8,.2,1);
+}
+@media (max-width: 767px) {
+  .app-main:has(> [data-system-glass-preview]) [data-glass-control] { min-width: 44px; min-height: 44px; }
+  .app-main:has(> [data-system-glass-preview]) [data-glass-segments] > button { min-height: 44px; }
 }
 
+/* A single continuous surface, with quiet icons and a highlight per pressed row. */
+.system-glass-menu-scrim { position: fixed; inset: 0; z-index: 60; background: #111b290d; }
+.system-glass-menu {
+  position: fixed;
+  z-index: 61;
+  width: min(280px, calc(100vw - 24px));
+  padding: 7px;
+  border-radius: 28px;
+  border: 1px solid #ffffff80;
+  background: linear-gradient(145deg, #ffffff70, #ffffff0a 58%), rgb(244 246 249 / .64);
+  -webkit-backdrop-filter: blur(26px) saturate(145%);
+  backdrop-filter: blur(26px) saturate(145%);
+  box-shadow: inset 0 1px 0 #ffffffa0, inset 0 -1px 0 #18253312, 0 16px 44px -10px #17233440, 0 2px 8px #1723340d;
+  color: var(--color-ink);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.system-glass-menu[data-state="open"] { animation: glass-menu-in 200ms cubic-bezier(.16,1,.3,1); }
+.system-glass-menu[data-state="closed"] { animation: glass-menu-out 130ms ease-in; pointer-events: none; }
+.system-glass-menu-scrim[data-state="open"] { animation: glass-scrim-in 160ms ease-out; }
+.system-glass-menu-scrim[data-state="closed"] { animation: glass-scrim-in 130ms ease-in reverse; }
+.system-glass-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 11px 13px;
+  text-align: left;
+  border-radius: 20px;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 500;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition: background-color 110ms ease-out, scale 180ms cubic-bezier(.2,.8,.2,1);
+}
+.system-glass-menu-icon { display: flex; flex: 0 0 23px; align-items: center; justify-content: center; }
+.system-glass-menu-description { display: block; font-size: 12px; line-height: 17px; color: var(--color-muted); }
+.system-glass-menu-item[data-destructive] { color: var(--color-danger); }
+.system-glass-menu-item[data-separator] { border-top: 1px solid #26334415; margin-top: 5px; border-top-left-radius: 0; border-top-right-radius: 0; }
+@media (hover: hover) { .system-glass-menu-item:hover { background: #687a9014; } }
+.system-glass-menu-item:is(:active, [data-glass-pressed]) { background: #687a9026; scale: .985; transition-duration: 60ms; }
+.system-glass-menu-item:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; background: #687a9014; }
+@keyframes glass-menu-in { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: scale(1); } }
+@keyframes glass-menu-out { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(.97); } }
+@keyframes glass-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .system-glass-menu,
+  .app-main:has(> [data-system-glass-preview]) :is([data-glass-control], .app-create-button, [data-glass-selection]) { background: var(--color-card); }
+}
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
-  .app-main:has(> [data-system-glass-preview]) [data-glass-segments] > button[aria-pressed="true"],
-  .app-main:has(> [data-system-glass-preview]) [data-glass-control],
-  .app-main:has(> [data-system-glass-preview]) .app-create-button,
-  .app-main:has(> [data-system-glass-preview]) [data-glass-create-menu] {
+  .system-glass-menu,
+  .app-main:has(> [data-system-glass-preview]) :is([data-glass-control], .app-create-button, [data-glass-selection]) {
     background: var(--color-card);
-    color: var(--color-ink);
-    border-color: var(--color-muted2);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
+    border-color: var(--color-muted2);
     box-shadow: none;
   }
+  .system-glass-menu-item:focus-visible { outline-color: Highlight; }
+  .system-glass-menu-item[data-separator] { border-color: var(--color-muted2); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .system-glass-menu[data-state], .system-glass-menu-scrim[data-state], .system-glass-menu-item,
+  .app-main:has(> [data-system-glass-preview]) :is([data-glass-control], .app-create-button, [data-glass-segments] > button, [data-glass-selection]) { animation: none; transition: none; }
+  .system-glass-menu-item:is(:active, [data-glass-pressed]),
+  .app-main:has(> [data-system-glass-preview]) :is([data-glass-control], .app-create-button):is(:active, [data-glass-pressed]) { scale: none; }
 }

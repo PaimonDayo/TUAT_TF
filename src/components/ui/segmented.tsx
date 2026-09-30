@@ -1,6 +1,8 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { useLayoutEffect, useRef } from "react";
+import { useSystemGlass } from "@/components/layout/glass/system-glass-state";
 
 /** iOS 風セグメントコントロール（フィルタタブ用） */
 export function SegmentedControl<T extends string>({
@@ -14,8 +16,26 @@ export function SegmentedControl<T extends string>({
   onChange: (key: T) => void;
   className?: string;
 }) {
+  const systemGlass = useSystemGlass();
+  const track = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const node = track.current;
+    if (!systemGlass || !node) return;
+    const update = () => {
+      const selected = node.querySelector<HTMLElement>('button[aria-pressed="true"]');
+      const lens = node.querySelector<HTMLElement>("[data-glass-selection]");
+      if (!selected || !lens) return;
+      lens.style.width = `${selected.offsetWidth}px`;
+      lens.style.transform = `translateX(${selected.offsetLeft}px)`;
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [systemGlass, value, items]);
   return (
     <div
+      ref={track}
       data-glass-segments
       className={cn(
         // min-h を固定し、項目数や文字数で縦寸法が変わらないようにする
@@ -23,6 +43,7 @@ export function SegmentedControl<T extends string>({
         className,
       )}
     >
+      {systemGlass && <span data-glass-selection aria-hidden="true" />}
       {items.map((it) => {
         const active = it.key === value;
         return (

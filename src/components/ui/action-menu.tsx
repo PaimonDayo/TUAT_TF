@@ -5,6 +5,8 @@ import { Archive, ArchiveRestore, MoreHorizontal, Pencil, Pin, PinOff, Quote, Sh
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { useSystemGlass } from "@/components/layout/glass/system-glass-state";
+import { GlassMenu, type GlassMenuItem } from "./glass-menu";
 
 export function ActionMenu({
   onEdit,
@@ -44,6 +46,14 @@ export function ActionMenu({
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const systemGlass = useSystemGlass();
+  const glassItems: GlassMenuItem[] = [];
+  if (onEdit) glassItems.push({ key: "edit", label: editLabel, icon: <Pencil size={21} />, onSelect: onEdit });
+  if (onQuote) glassItems.push({ key: "quote", label: quoteLabel, icon: <Quote size={21} />, onSelect: onQuote });
+  if (onShare) glassItems.push({ key: "share", label: shareLabel, icon: <Share2 size={21} />, immediate: true, onSelect: () => { void onShare(); } });
+  if (onPin) glassItems.push({ key: "pin", label: pinned ? "ピン留めを外す" : "ピン留めする", icon: pinned ? <PinOff size={21} /> : <Pin size={21} />, onSelect: () => { void onPin(); } });
+  if (onArchive) glassItems.push({ key: "archive", label: archived ? "アーカイブを解除" : "アーカイブする", description: archived ? "ホームの表示対象に戻します" : "全員のホームから非表示にします", icon: archived ? <ArchiveRestore size={21} /> : <Archive size={21} />, onSelect: () => { void onArchive(); } });
+  if (onDelete) glassItems.push({ key: "delete", label: deleteLabel, icon: <Trash2 size={21} />, destructive: true, separator: glassItems.length > 0, onSelect: () => setConfirmOpen(true) });
 
   function openForm(open?: () => void) {
     setMenuOpen(false);
@@ -66,11 +76,10 @@ export function ActionMenu({
     }
   }
 
-  return (
-    <>
-      <button
+  const trigger = <button
         type="button"
-        onClick={() => setMenuOpen(true)}
+        onClick={systemGlass ? undefined : () => setMenuOpen(true)}
+        data-glass-control={systemGlass || undefined}
         aria-label={triggerLabel}
         className={cn(
           "flex h-8 w-8 shrink-0 items-center justify-center text-muted pressable",
@@ -78,9 +87,11 @@ export function ActionMenu({
         )}
       >
         <MoreHorizontal size={20} />
-      </button>
-
-      <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+      </button>;
+  return (
+    <>
+      {systemGlass ? <GlassMenu open={menuOpen} onOpenChange={setMenuOpen} label={triggerLabel} trigger={trigger} items={glassItems} /> : trigger}
+      {!systemGlass && <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
         <SheetContent>
           <div className="space-y-2 pb-4">
             {onEdit && (
@@ -151,7 +162,7 @@ export function ActionMenu({
             )}
           </div>
         </SheetContent>
-      </Sheet>
+      </Sheet>}
 
       <ConfirmDialog
         open={confirmOpen}
