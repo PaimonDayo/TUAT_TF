@@ -55,6 +55,7 @@
   border-radius: 999px;
   background: #dfe2e680;
   touch-action: pan-y pinch-zoom;
+  -webkit-touch-callout: none;
   user-select: none;
   -webkit-user-select: none;
 }

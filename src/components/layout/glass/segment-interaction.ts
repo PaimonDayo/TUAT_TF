@@ -10,7 +10,7 @@ export function attachSegmentInteraction(root: HTMLElement, initial: number) {
   const state = { x: Math.max(0, initial), v: 0 }, pressure = { x: 0, v: 0 }, shape = { x: 0, v: 0 };
   let selected = initial, target = state.x, frame = 0, last = 0, inputTime = 0, shapeTarget = 0;
   let suppressClick = false;
-  let contact: { id: number; index: number; x: number; y: number; lastX: number; time: number; drag: boolean } | null = null;
+  let contact: { kind: "touch" | "pointer"; id: number; index: number; x: number; y: number; lastX: number; started: number; time: number; drag: boolean } | null = null;
   const removers: (() => void)[] = [];
   const listen = <K extends keyof WindowEventMap>(element: Window | HTMLElement, type: K, handler: (event: WindowEventMap[K]) => void, options?: AddEventListenerOptions) => {
     element.addEventListener(type, handler as EventListener, options);
@@ -50,66 +50,115 @@ export function attachSegmentInteraction(root: HTMLElement, initial: number) {
     if (!frame) { last = performance.now(); frame = requestAnimationFrame(tick); }
   }
   function release() {
-    const id = contact?.id;
+    const id = contact?.kind === "pointer" ? contact.id : undefined;
     contact = null; shapeTarget = 0;
     root.removeAttribute("data-glass-sliding"); preview(-1);
     if (id !== undefined && root.hasPointerCapture(id)) root.releasePointerCapture(id);
   }
   function cancel() {
+    if (contact) suppressClick = true;
     release(); animate(Math.max(0, selected));
   }
   function coordinate(x: number) {
     const step = (root.getBoundingClientRect().width - 2) / buttons.length;
     return clamp(contact!.index + (x - contact!.x) / step);
   }
-  listen(root, "pointerdown", (event) => {
-    if (contact || !event.isPrimary || event.button !== 0 || !(event.target instanceof Element)) return;
-    const button = event.target.closest("button");
+  function begin(kind: "touch" | "pointer", id: number, x: number, y: number, time: number, element: EventTarget | null) {
+    if (contact || !(element instanceof Element)) return;
+    const button = element.closest("button");
     const index = button ? buttons.indexOf(button) : -1;
     if (index < 0 || button!.disabled) return;
     suppressClick = false;
-    contact = { id: event.pointerId, index, x: event.clientX, y: event.clientY, lastX: event.clientX, time: event.timeStamp, drag: false };
+    contact = { kind, id, index, x, y, lastX: x, started: time, time, drag: false };
     root.setAttribute("data-glass-sliding", ""); preview(index); animate(index);
-  });
-  listen(window, "pointermove", (event) => {
-    if (!contact || contact.id !== event.pointerId) return;
-    const dx = event.clientX - contact.x, dy = event.clientY - contact.y;
+  }
+  function move(x: number, y: number, time: number) {
+    if (!contact) return;
+    const dx = x - contact.x, dy = y - contact.y;
     if (!contact.drag) {
-      if (Math.abs(dy) > 6 && Math.abs(dy) >= Math.abs(dx)) { cancel(); return; }
-      if (Math.abs(dx) <= 6) return;
+      // A deliberate hold owns the slide, including ordinary finger tremor.
+      // A vertical swipe started promptly still scrolls the page natively.
+      const held = time - contact.started >= 300;
+      if (!held && Math.abs(dy) > 6 && Math.abs(dy) >= Math.abs(dx)) { cancel(); return; }
+      if ((held ? Math.hypot(dx, dy) : Math.abs(dx)) <= 6) return;
       contact.drag = true;
-      root.setPointerCapture(event.pointerId);
+      if (contact.kind === "pointer") root.setPointerCapture(contact.id);
     }
-    const next = coordinate(event.clientX), step = (root.getBoundingClientRect().width - 2) / buttons.length;
-    const speed = (event.clientX - contact.lastX) / step * 1000 / Math.max(8, event.timeStamp - contact.time);
+    const next = coordinate(x), step = (root.getBoundingClientRect().width - 2) / buttons.length;
+    const speed = (x - contact.lastX) / step * 1000 / Math.max(8, time - contact.time);
     shapeTarget = reduced.matches ? 0 : Math.tanh(speed / 7) * .10;
-    contact.lastX = event.clientX; contact.time = event.timeStamp; inputTime = performance.now();
+    contact.lastX = x; contact.time = time; inputTime = performance.now();
     state.x = target = next; state.v = 0; preview(Math.round(next)); paint(); animate();
-  }, { passive: true });
-  listen(window, "pointerup", (event) => {
-    if (!contact || contact.id !== event.pointerId) return;
-    const { drag } = contact, next = drag ? Math.round(coordinate(event.clientX)) : contact.index;
+  }
+  function finish(x: number, y: number) {
+    if (!contact) return;
+    const { kind, drag } = contact, next = drag ? Math.round(coordinate(x)) : contact.index;
     const box = root.getBoundingClientRect();
-    const inside = event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top - 24 && event.clientY <= box.bottom + 24;
+    // Match the bottom tabs' release tolerance after a slide; leaving the
+    // control slightly while lifting a finger must not undo the selection.
+    const marginX = drag ? 45 : 0, marginY = drag ? 70 : 24;
+    const inside = x >= box.left - marginX && x <= box.right + marginX && y >= box.top - marginY && y <= box.bottom + marginY;
     release();
     if (!inside || buttons[next].disabled) { suppressClick = true; animate(Math.max(0, selected)); return; }
     animate(next);
-    if (drag) {
+    if (drag || kind === "touch") {
       suppressClick = true;
       // Use the same React onClick as tapping or the keyboard; commit once.
       buttons[next].click();
       buttons[next].focus({ preventScroll: true });
     }
+  }
+  // Safari can cancel the Pointer stream while the physical touch continues.
+  // As with BottomNav, follow Touch.identifier until that finger ends instead.
+  const touchEvents = "ontouchstart" in window;
+  listen(root, "touchstart", (event) => {
+    if (event.touches.length !== 1) { cancel(); return; }
+    const touch = event.changedTouches[0];
+    if (touch) begin("touch", touch.identifier, touch.clientX, touch.clientY, event.timeStamp, touch.target);
+  }, { passive: true });
+  listen(window, "touchstart", (event) => {
+    if (contact?.kind === "touch" && event.touches.length > 1) cancel();
+  }, { passive: true });
+  // Touch events keep their original target even outside the control. Keep
+  // non-passive listeners local so the rest of the page scrolls without them.
+  listen(root, "touchmove", (event) => {
+    if (contact?.kind !== "touch") return;
+    if (event.touches.length !== 1) { cancel(); return; }
+    const touch = Array.from(event.changedTouches).find((touch) => touch.identifier === contact?.id);
+    if (!touch) return;
+    move(touch.clientX, touch.clientY, event.timeStamp);
+    if (contact?.drag && event.cancelable) event.preventDefault();
+  }, { passive: false });
+  listen(root, "touchend", (event) => {
+    if (contact?.kind !== "touch") return;
+    const touch = Array.from(event.changedTouches).find((touch) => touch.identifier === contact?.id);
+    if (!touch) return;
+    if (event.cancelable) event.preventDefault();
+    finish(touch.clientX, touch.clientY);
+  }, { passive: false });
+  listen(root, "touchcancel", (event) => {
+    if (contact?.kind === "touch" && Array.from(event.changedTouches).some((touch) => touch.identifier === contact?.id)) cancel();
+  });
+  listen(root, "pointerdown", (event) => {
+    if ((event.pointerType === "touch" && touchEvents) || !event.isPrimary || event.button !== 0) return;
+    begin("pointer", event.pointerId, event.clientX, event.clientY, event.timeStamp, event.target);
+  });
+  listen(window, "pointermove", (event) => {
+    if (contact?.kind === "pointer" && contact.id === event.pointerId) move(event.clientX, event.clientY, event.timeStamp);
+  }, { passive: true });
+  listen(window, "pointerup", (event) => {
+    if (contact?.kind === "pointer" && contact.id === event.pointerId) finish(event.clientX, event.clientY);
   });
   listen(root, "click", (event) => {
-    if (suppressClick && event.detail !== 0) {
+    if (suppressClick && (event.detail !== 0 || (event instanceof PointerEvent && event.pointerType === "touch"))) {
       event.preventDefault(); event.stopImmediatePropagation(); suppressClick = false;
     }
   }, { capture: true });
-  listen(window, "pointercancel", (event) => { if (contact?.id === event.pointerId) cancel(); });
+  listen(window, "pointercancel", (event) => { if (contact?.kind === "pointer" && contact.id === event.pointerId) cancel(); });
   // Capture transfers from the touched button to this group during a slide.
   // Its lostpointercapture bubbles; keep following the gesture on window.
   listen(root, "dragstart", (event) => event.preventDefault());
+  listen(root, "contextmenu", (event) => event.preventDefault());
   listen(window, "blur", cancel);
   const visibility = () => { if (document.hidden) cancel(); };
   document.addEventListener("visibilitychange", visibility);
