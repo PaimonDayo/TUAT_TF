@@ -39,13 +39,19 @@ export function FullScreenContent({
   const systemGlass = useSystemGlass();
   const openerRef = React.useRef<HTMLElement | null>(null);
   const contentRef = React.useRef<HTMLDivElement | null>(null);
+  const autoFocusFrame = React.useRef<number | undefined>(undefined);
   // Dialog.Portal mounts after its parent effect, and may open much later.
   // Attach on the actual DOM mount, including every reopen (React 19 ref cleanup).
   const attachContent = React.useCallback((element: HTMLDivElement | null) => {
     contentRef.current = element;
     if (!element) return;
     const detach = syncVisualViewport(element, "full");
-    return () => { detach(); contentRef.current = null; };
+    return () => {
+      detach();
+      if (autoFocusFrame.current !== undefined) cancelAnimationFrame(autoFocusFrame.current);
+      autoFocusFrame.current = undefined;
+      contentRef.current = null;
+    };
   }, []);
   return (
     <Dialog.Portal>
@@ -83,8 +89,15 @@ export function FullScreenContent({
           }
 
           // Avoid racing the initial focus with the mobile keyboard viewport resize.
-          requestAnimationFrame(() => {
-            const target = contentRef.current?.querySelector<HTMLElement>(
+          const content = contentRef.current;
+          if (autoFocusFrame.current !== undefined) cancelAnimationFrame(autoFocusFrame.current);
+          autoFocusFrame.current = requestAnimationFrame(() => {
+            autoFocusFrame.current = undefined;
+            if (!content || contentRef.current !== content) return;
+            // A warmed form can be used immediately. Never pull focus away
+            // from an input or button the user has already chosen this frame.
+            if (document.activeElement !== content && content.contains(document.activeElement)) return;
+            const target = content.querySelector<HTMLElement>(
               "textarea,input,select,[contenteditable='true']",
             );
             target?.focus({ preventScroll: true });

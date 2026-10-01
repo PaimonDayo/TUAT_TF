@@ -5,6 +5,7 @@ import { GlassMenu, type GlassMenuItem } from "@/components/ui/glass-menu";
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import { withIntentPreload } from "@/components/ui/intent-form";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -32,18 +33,61 @@ import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { AuthorMini, RecordFieldDef, ScheduleType } from "@/types";
 
-// Download form code when a dialog opens, keeping the persistent navigation light.
+// Keep forms out of navigation's initial bundle. Warm only on a user's intent,
+// so choosing a menu item does not start a second, serial loading delay.
 
-const MonthlyPlanningEditorV2 = dynamic(() => import("@/components/features/MonthlyPlanningEditorV2").then(m => m.MonthlyPlanningEditorV2), { loading: FormSkeleton });
-const NoteArticleEditor = dynamic(() => import("@/components/features/NoteArticleEditor").then(m => m.NoteArticleEditor), { loading: FormSkeleton });
-const ThreadComposer = dynamic(() => import("@/components/features/ThreadList").then(m => m.ThreadComposer), { loading: FormSkeleton });
-const NoteComposer = dynamic(() => import("@/components/features/NoteComposer").then(m => m.NoteComposer), { loading: FormSkeleton });
-const NoticeForm = dynamic(() => import("@/components/post/NoticeForm").then(m => m.NoticeForm), { loading: FormSkeleton });
-const RecordForm = dynamic(() => import("@/components/post/RecordForm").then(m => m.RecordForm), { loading: FormSkeleton });
-const ResultForm = dynamic(() => import("@/components/post/ResultForm").then(m => m.ResultForm), { loading: FormSkeleton });
-const TweetForm = dynamic(() => import("@/components/post/TweetForm").then(m => m.TweetForm), { loading: FormSkeleton });
-const ScheduleForm = dynamic(() => import("@/components/post/ScheduleForm").then(m => m.ScheduleForm), { loading: FormSkeleton });
-const ScheduleCreatePanel = dynamic(() => import("@/components/post/ScheduleForm").then(m => m.ScheduleCreatePanel), { loading: FormSkeleton });
+const MonthlyPlanningEditorV2 = withIntentPreload(
+  dynamic(() => import("@/components/features/MonthlyPlanningEditorV2").then(m => m.MonthlyPlanningEditorV2), { loading: FormSkeleton }),
+  () => import("@/components/features/MonthlyPlanningEditorV2").then(m => m.MonthlyPlanningEditorV2),
+);
+const NoteArticleEditor = withIntentPreload(
+  dynamic(() => import("@/components/features/NoteArticleEditor").then(m => m.NoteArticleEditor), { loading: FormSkeleton }),
+  () => import("@/components/features/NoteArticleEditor").then(m => m.NoteArticleEditor),
+);
+const ThreadComposer = withIntentPreload(
+  dynamic(() => import("@/components/features/ThreadList").then(m => m.ThreadComposer), { loading: FormSkeleton }),
+  () => import("@/components/features/ThreadList").then(m => m.ThreadComposer),
+);
+const NoteComposer = withIntentPreload(
+  dynamic(() => import("@/components/features/NoteComposer").then(m => m.NoteComposer), { loading: FormSkeleton }),
+  () => import("@/components/features/NoteComposer").then(m => m.NoteComposer),
+);
+const NoticeForm = withIntentPreload(
+  dynamic(() => import("@/components/post/NoticeForm").then(m => m.NoticeForm), { loading: FormSkeleton }),
+  () => import("@/components/post/NoticeForm").then(m => m.NoticeForm),
+);
+const RecordForm = withIntentPreload(
+  dynamic(() => import("@/components/post/RecordForm").then(m => m.RecordForm), { loading: FormSkeleton }),
+  () => import("@/components/post/RecordForm").then(m => m.RecordForm),
+);
+const ResultForm = withIntentPreload(
+  dynamic(() => import("@/components/post/ResultForm").then(m => m.ResultForm), { loading: FormSkeleton }),
+  () => import("@/components/post/ResultForm").then(m => m.ResultForm),
+);
+const TweetForm = withIntentPreload(
+  dynamic(() => import("@/components/post/TweetForm").then(m => m.TweetForm), { loading: FormSkeleton }),
+  () => import("@/components/post/TweetForm").then(m => m.TweetForm),
+);
+const ScheduleForm = withIntentPreload(
+  dynamic(() => import("@/components/post/ScheduleForm").then(m => m.ScheduleForm), { loading: FormSkeleton }),
+  () => import("@/components/post/ScheduleForm").then(m => m.ScheduleForm),
+);
+const ScheduleCreatePanel = withIntentPreload(
+  dynamic(() => import("@/components/post/ScheduleForm").then(m => m.ScheduleCreatePanel), { loading: FormSkeleton }),
+  () => import("@/components/post/ScheduleForm").then(m => m.ScheduleCreatePanel),
+);
+
+const formPreloads = {
+  record: RecordForm.preload,
+  tweet: TweetForm.preload,
+  result: ResultForm.preload,
+  planning: MonthlyPlanningEditorV2.preload,
+  notice: NoticeForm.preload,
+  article: NoteArticleEditor.preload,
+  folder: NoteComposer.preload,
+  thread: ThreadComposer.preload,
+};
+function warmForm(kind: keyof typeof formPreloads) { formPreloads[kind](); }
 
 export type FabPermissions = {
   createSchedule: boolean;
@@ -255,20 +299,23 @@ function ContextualFAB({
           : "このフォルダに作成";
 
   const hasMenu = isFeed || isNotesRoot || isNoteFolder;
+  const warmMainAction = () => warmForm(isFeed ? "record" : isSchedule ? "planning"
+    : isNotice ? "notice" : isNotesRoot ? "folder" : "article");
   const glassItems: GlassMenuItem[] = isFeed ? [
-    { key: "record", label: "練習記録", icon: <Activity size={21} />, onSelect: () => setRecordOpen(true) },
-    { key: "tweet", label: "つぶやき", icon: <MessageCircle size={21} />, onSelect: () => { setTweetInitialStory(false); setTweetOpen(true); } },
-    { key: "story", label: "ストーリー", icon: <ImagePlus size={21} />, onSelect: () => { setTweetInitialStory(true); setTweetOpen(true); } },
-    { key: "result", label: "大会・記録会の結果", icon: <Trophy size={21} />, onSelect: () => setResultOpen(true) },
+    { key: "record", label: "練習記録", icon: <Activity size={21} />, onIntent: () => warmForm("record"), onSelect: () => setRecordOpen(true) },
+    { key: "tweet", label: "つぶやき", icon: <MessageCircle size={21} />, onIntent: () => warmForm("tweet"), onSelect: () => { setTweetInitialStory(false); setTweetOpen(true); } },
+    { key: "story", label: "ストーリー", icon: <ImagePlus size={21} />, onIntent: () => warmForm("tweet"), onSelect: () => { setTweetInitialStory(true); setTweetOpen(true); } },
+    { key: "result", label: "大会・記録会の結果", icon: <Trophy size={21} />, onIntent: () => warmForm("result"), onSelect: () => setResultOpen(true) },
   ] : isNotesRoot ? [
-    { key: "folder", label: "フォルダ", icon: <FolderPlus size={21} />, onSelect: () => setDirectForm("folder") },
+    { key: "folder", label: "フォルダ", icon: <FolderPlus size={21} />, onIntent: () => warmForm("folder"), onSelect: () => setDirectForm("folder") },
   ] : [
-    { key: "article", label: "記事", icon: <NotebookPen size={21} />, onSelect: () => setDirectForm("article") },
-    { key: "subfolder", label: "サブフォルダ", icon: <FolderPlus size={21} />, onSelect: () => setDirectForm("subfolder") },
-    { key: "thread", label: "スレッド", icon: <MessagesSquare size={21} />, onSelect: () => setDirectForm("thread") },
+    { key: "article", label: "記事", icon: <NotebookPen size={21} />, onIntent: () => warmForm("article"), onSelect: () => setDirectForm("article") },
+    { key: "subfolder", label: "サブフォルダ", icon: <FolderPlus size={21} />, onIntent: () => warmForm("folder"), onSelect: () => setDirectForm("subfolder") },
+    { key: "thread", label: "スレッド", icon: <MessagesSquare size={21} />, onIntent: () => warmForm("thread"), onSelect: () => setDirectForm("thread") },
   ];
   const trigger = <button
           type="button"
+          onPointerEnter={warmMainAction} onPointerDown={warmMainAction} onFocus={warmMainAction}
           onClick={systemGlass && hasMenu ? undefined : handleMainAction}
           aria-label={label}
           aria-expanded={isFeed || isNotesRoot || isNoteFolder ? speedDialOpen : undefined}

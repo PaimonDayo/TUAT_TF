@@ -1,7 +1,7 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { useEffect, useLayoutEffect, useRef, type ReactElement, type ReactNode, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode, type RefObject } from "react";
 import { glassMenuPosition } from "@/lib/glass-menu-position";
 
 export type GlassMenuItem = {
@@ -13,6 +13,8 @@ export type GlassMenuItem = {
   separator?: boolean;
   /** Clipboard operations must retain the browser's direct user activation. */
   immediate?: boolean;
+  /** Warm just the selected form's code; no data requests or mutations. */
+  onIntent?: () => void;
   onSelect: () => void;
 };
 
@@ -27,19 +29,21 @@ export function GlassMenu({ open, onOpenChange, trigger, label, items }: {
   const anchor = useRef<HTMLButtonElement>(null);
   const pending = useRef<(() => void) | null>(null);
   const alive = useRef(true);
+  const [handoff, setHandoff] = useState(false);
   useEffect(() => {
     alive.current = true;
     return () => { alive.current = false; pending.current = null; };
   }, []);
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={(next) => { if (next) setHandoff(false); onOpenChange(next); }}>
       <Dialog.Trigger ref={anchor} asChild>{trigger}</Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="system-glass-menu-scrim" />
-        <MenuSurface anchor={anchor} label={label} onClosed={() => {
+        <Dialog.Overlay className="system-glass-menu-scrim" data-handoff={handoff || undefined} />
+        <MenuSurface anchor={anchor} label={label} handoff={handoff} onClosed={() => {
           const action = pending.current;
           pending.current = null;
           if (!alive.current) return;
+          setHandoff(false);
           // Re-establish the opener before a deferred form mounts. It then owns
           // focus and can restore this same anchor when the form closes.
           anchor.current?.focus({ preventScroll: true });
@@ -48,10 +52,14 @@ export function GlassMenu({ open, onOpenChange, trigger, label, items }: {
           {items.map((item) => (
             <button key={item.key} type="button" data-menu-item data-destructive={item.destructive || undefined}
               data-separator={item.separator || undefined} className="system-glass-menu-item"
+              onPointerEnter={item.onIntent} onPointerDown={item.onIntent} onFocus={item.onIntent}
               onClick={() => {
                 if (pending.current) return;
                 pending.current = item.immediate ? () => anchor.current?.focus({ preventScroll: true }) : item.onSelect;
                 if (item.immediate) item.onSelect();
+                // Keep Radix's scroll/focus cleanup before opening the next dialog,
+                // without making the user wait for an exit animation first.
+                setHandoff(true);
                 onOpenChange(false);
               }}>
               <span className="system-glass-menu-icon" aria-hidden="true">{item.icon}</span>
@@ -64,9 +72,10 @@ export function GlassMenu({ open, onOpenChange, trigger, label, items }: {
   );
 }
 
-function MenuSurface({ anchor, label, onClosed, children }: {
+function MenuSurface({ anchor, label, handoff, onClosed, children }: {
   anchor: RefObject<HTMLButtonElement | null>;
   label: string;
+  handoff: boolean;
   onClosed: () => void;
   children: ReactNode;
 }) {
@@ -94,7 +103,7 @@ function MenuSurface({ anchor, label, onClosed, children }: {
     };
   }, [anchor]);
   return (
-    <Dialog.Content ref={content} className="system-glass-menu" aria-describedby={undefined}
+    <Dialog.Content ref={content} className="system-glass-menu" data-handoff={handoff || undefined} aria-describedby={undefined}
       style={{ visibility: "hidden" }}
       onCloseAutoFocus={(event) => { event.preventDefault(); onClosed(); }}
       onKeyDown={(event) => {
