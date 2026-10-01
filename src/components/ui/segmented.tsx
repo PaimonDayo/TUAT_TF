@@ -1,7 +1,9 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { useEffect, useRef, type CSSProperties } from "react";
 import { useSystemGlass } from "@/components/layout/glass/system-glass-state";
+import { attachSegmentInteraction } from "@/components/layout/glass/segment-interaction";
 
 /** iOS 風セグメントコントロール（フィルタタブ用） */
 export function SegmentedControl<T extends string>({
@@ -17,8 +19,22 @@ export function SegmentedControl<T extends string>({
 }) {
   const systemGlass = useSystemGlass();
   const selectedIndex = items.findIndex((item) => item.key === value);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const motion = useRef<ReturnType<typeof attachSegmentInteraction> | null>(null);
+  const selection = useRef(selectedIndex);
+  const keys = JSON.stringify(items.map((item) => item.key));
+  useEffect(() => {
+    selection.current = selectedIndex;
+    motion.current?.update(selectedIndex);
+  }, [selectedIndex]);
+  useEffect(() => {
+    if (!systemGlass || !rootRef.current || items.length === 0) return;
+    motion.current = attachSegmentInteraction(rootRef.current, selection.current);
+    return () => { motion.current?.destroy(); motion.current = null; };
+  }, [systemGlass, keys, items.length]);
   return (
     <div
+      ref={rootRef}
       data-glass-segments
       data-system-glass={systemGlass || undefined}
       className={cn(
@@ -27,12 +43,13 @@ export function SegmentedControl<T extends string>({
         className,
       )}
     >
-      {systemGlass && selectedIndex >= 0 && <span data-glass-selection aria-hidden="true" style={{
+      {systemGlass && items.length > 0 && <span data-glass-selection aria-hidden="true" style={{
         // Equal columns, 2px gaps and 2px insets. CSS keeps fractional positions
         // in sync during resizing and dialog animation without DOM measurement.
         width: `calc((100% - 2px) / ${items.length} - 2px)`,
-        left: `calc(2px + (100% - 2px) / ${items.length} * ${selectedIndex})`,
-      }} />}
+        "--glass-selection-left": `calc(2px + (100% - 2px) / ${items.length} * ${Math.max(0, selectedIndex)})`,
+        visibility: selectedIndex < 0 ? "hidden" : undefined,
+      } as CSSProperties} />}
       {items.map((it) => {
         const active = it.key === value;
         return (

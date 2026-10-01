@@ -22,12 +22,29 @@ export const Textarea = React.forwardRef<
     const element = localRef.current;
     if (!autoGrow || !element) return;
     element.style.height = "auto";
-    element.style.height = `${element.scrollHeight}px`;
+    element.style.height = `${element.scrollHeight + element.offsetHeight - element.clientHeight}px`;
   }, [autoGrow]);
 
   React.useLayoutEffect(() => {
+    if (!autoGrow) {
+      // Switching UI versions must also release the height from auto-growing.
+      if (!style?.height) localRef.current?.style.removeProperty("height");
+      return;
+    }
     resizeToContent();
-  }, [resizeToContent, value]);
+  }, [autoGrow, resizeToContent, style?.height, value]);
+  React.useLayoutEffect(() => {
+    const element = localRef.current;
+    if (!autoGrow || !element) return;
+    let width = 0;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry.contentRect.width === width) return;
+      width = entry.contentRect.width;
+      resizeToContent();
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [autoGrow, resizeToContent]);
   return (
     <textarea
       ref={setRef}

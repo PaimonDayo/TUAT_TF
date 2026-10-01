@@ -12,6 +12,7 @@
 | PC移設 / 旧クラウドへの復帰条件 | [PC移設](../ops/laptop/SERVER-HANDOFF.md) / [復帰](../ops/laptop/RETURN-TO-SUPABASE.md) |
 | UI・データ取得・更新の規約 | [UI統一](UI-UNIFICATION.md) / [文言](WORDING-GUIDELINES.md) |
 | 直近の現行アプリ改善 | [UI・通信改善](UI-PERFORMANCE-2026-09-23.md) / [ホーム・文書整理](HOME-2026-09-23.md) |
+| ガラスタブと記録入力の修正 | [揺れ・スライド操作・入力画面](GLASS-MOTION-FORMS-2026-10-01.md) |
 | 監査の修正状況と確認方法 | [実測監査](AUDIT-2026-09-21.md) |
 | 利用量の確認経路 | [サービス状態](SERVICE-STATUS.md) / [9月22日の改善記録](USAGE-2026-09-22.md) |
 

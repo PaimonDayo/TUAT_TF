@@ -180,6 +180,32 @@
   outline-offset: 1px;
 }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) button[data-ui-field] { min-height: 44px; height: auto; padding-block: 9px; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) input[data-ui-field] { min-height: 44px; }
+/* Writing uses quiet white sections and clear labels. Glass stays on actions. */
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-record-form] > [data-ui-record-field] {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--ui-line);
+  border-radius: 18px;
+  background: #fff;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-record-field] > .section-label {
+  color: var(--color-ink);
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 10px;
+  overflow-wrap: anywhere;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-record-field] [data-ui-field]:not([data-ui-field="metric"]) {
+  min-height: 48px;
+  border-radius: 12px;
+  background: #f5f7fa;
+  border-color: transparent;
+  box-shadow: none;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-record-field] textarea[data-ui-field] { min-height: 96px; line-height: 1.6; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-intensity-grid] { grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr)); }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-intensity] [data-ui-panel] { border-radius: 12px; background: #f5f7fa; box-shadow: none; }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-field="metric"] {
   min-width: 0; min-height: 44px; background: transparent; border-color: transparent; box-shadow: none; border-radius: 8px;
 }
