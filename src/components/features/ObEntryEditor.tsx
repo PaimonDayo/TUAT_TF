@@ -71,15 +71,15 @@ export function ObEntryEditor({ entry, members, initialProfileId = "", party, pa
     </div>}
     {gender && <>
       <div><h3 className="text-headline">出場種目・資格記録</h3><p className="mt-1 text-caption">出場する種目にチェックし、その下に資格記録を入力してください。</p></div>
-      <Card className="divide-y divide-separator">
+      <Card data-ui-checklist className="divide-y divide-separator">
         {OB_ENTRY_EVENTS.filter((event) => event.startsWith(gender)).map((event) => {
           const selected = events.includes(event);
           return <div key={event} className="px-3.5">
-            <label data-ui-choice-row className="flex min-h-12 cursor-pointer items-center gap-3 py-3 text-body">
+            <label data-ui-checklist-row className="flex min-h-12 cursor-pointer items-center gap-3 py-3 text-body">
               <input type="checkbox" className="h-5 w-5 shrink-0 accent-accent" checked={selected} disabled={saving} aria-label={event}
                 onChange={() => { setEvents(selected ? events.filter((e) => e !== event) : [...events, event]); if (!selected && !Object.hasOwn(marks, event)) setMarks({ ...marks, [event]: null }); }} />
-              <span className="flex-1">{event.slice(2)}</span>
-              {obEventTime(event) && <span className="text-caption tabular-nums">{obEventTime(event)}〜</span>}
+              <span className="min-w-0 flex-1">{event.slice(2)}</span>
+              {obEventTime(event) && <span className="shrink-0 text-caption tabular-nums">{obEventTime(event)}〜</span>}
             </label>
             {selected && <div className="pb-3 pl-8">
               <label htmlFor={`mark-${event}`} className="mb-1 block text-caption">資格記録（任意）</label>

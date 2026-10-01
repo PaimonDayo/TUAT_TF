@@ -56,12 +56,12 @@ export function ObDutyRoleManager({entries,time,event,roles,duties,members,onClo
   <p className="text-body">{people.selected.length} / {people.role.required_count}人</p>
   <p className="text-caption">この時間帯に出場しない部員を学年順に表示しています。下の行は次の競技・補助員とその時刻です。アップ・移動の時間を確認して選んでください。</p>
   {!candidates.length&&<p className="text-body">候補になる部員がいません。</p>}
-  <div className="divide-y divide-separator rounded-xl border border-separator">{candidates.map(row=>{
+  <div data-ui-checklist className="divide-y divide-separator rounded-xl border border-separator">{candidates.map(row=>{
    const checked=people.selected.includes(row.id);
    const full=!checked&&people.selected.length>=people.role.required_count;
    const next=nextCommitment(row.entry,row.id,time,duties,roles);
    const here=(slotDuty(row.id)?.role_ids??[]).filter(id=>id!==people.role.id).map(id=>roles.find(r=>r.id===id)?.abbreviation).filter(Boolean);
-   return <label data-ui-choice-row key={row.id} className={`flex items-start gap-3 p-3 ${full?"opacity-50":""}`}>
+   return <label data-ui-checklist-row key={row.id} className={`flex items-start gap-3 p-3 ${full?"opacity-50":""}`}>
     <input type="checkbox" className="mt-1 h-5 w-5 shrink-0" checked={checked} disabled={saving||full} onChange={()=>setPeople({...people,selected:checked?people.selected.filter(id=>id!==row.id):[...people.selected,row.id]})}/>
     <span className="min-w-0 flex-1"><span className="block text-body"><span className="mr-2 text-caption">{row.grade}</span>{row.name}{here.length>0&&<span className="ml-2 text-caption">この種目：{here.join("・")}</span>}</span>
     <span className="mt-0.5 block text-caption">{next?<>次：<span className="tabular-nums">{next.time}</span> {next.label}（{next.kind==="競技"?"出場":`補助員・${next.detail}`}）</>:"このあとの予定なし"}</span></span>
@@ -69,7 +69,7 @@ export function ObDutyRoleManager({entries,time,event,roles,duties,members,onClo
   })}</div>
  </div>:<>
  <p className="text-caption">割当済み / 必要人数。「人を編集」で担当者を選べます。</p>
- <div className="divide-y divide-separator">{roles.map(role=>{const assigned=rolePeople(role.id);return <section key={role.id} className="py-3"><div className="flex items-start justify-between gap-3"><div><h3 className="text-headline">{role.name} <span className="text-caption">{role.abbreviation}</span></h3><p className={assigned.length<role.required_count?"text-accent text-body":"text-body"}>{assigned.length} / {role.required_count}人</p></div>
+ <div className="divide-y divide-separator">{roles.map(role=>{const assigned=rolePeople(role.id);return <section key={role.id} className="py-3"><div data-ui-duty-role-heading className="flex items-start justify-between gap-3"><div><h3 className="text-headline">{role.name} <span className="text-caption">{role.abbreviation}</span></h3><p className={assigned.length<role.required_count?"text-accent text-body":"text-body"}>{assigned.length} / {role.required_count}人</p></div>
   <div data-ui-group className="flex shrink-0 gap-2"><Button size="sm" variant="ghost" aria-label={`${role.name}の役職の設定`} onClick={()=>setDraft({id:role.id,slotTime:time,eventName:event,name:role.name,abbreviation:role.abbreviation,requiredCount:role.required_count,revision:role.revision})}>設定</Button>
   <Button size="sm" variant="outline" aria-label={`${role.name}の担当者を編集`} onClick={()=>setPeople({role,selected:assigned.map(d=>d.profile_id)})}>人を編集</Button></div></div>
   <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1">{[...assigned].sort(byGrade).map(d=>{const m=member(d.profile_id);return <li key={d.profile_id} className="text-body"><span className="mr-2 text-caption">{entryGrade(m?.grade??null)}</span>{m?.display_name??"名簿確認待ち"}</li>;})}</ul>{!assigned.length&&<p className="text-caption">未割当</p>}</section>;})}</div>

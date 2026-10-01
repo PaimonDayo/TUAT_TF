@@ -131,7 +131,7 @@ async function ObEntrySection() {
 
 async function CompetitionSection() {
   const result = await getHomeCompetition();
-  if (!result) return <Link data-ui-row href="/competitions" className="block text-right text-caption text-accent">大会一覧・アーカイブ →</Link>;
+  if (!result) return null;
   const programEntries = result.competition.program_source_url
     ? await getCompetitionProgramEntries(result.competition.id)
     : [];

@@ -133,6 +133,39 @@
   box-shadow: var(--ui-shadow);
 }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-choice-row] > input { flex-shrink: 0; accent-color: #0875ed; }
+/* Repeated form choices share one quiet container. The native checkbox is the
+   selected state; drawing a glass surface around every row obscures the form. */
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-checklist] {
+  border: 1px solid var(--ui-line);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: none;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-checklist-row] {
+  min-height: 48px;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-checklist] > [data-ui-checklist-row] { margin-block: 0; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-checklist]:empty { display: none; }
+/* Legacy divide-y supplies bottom borders; keep a single divider per row. */
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-checklist] > * { border-bottom-width: 0; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-checklist] > * + * { border-top: 1px solid var(--ui-line); }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-checklist-row] > input { flex-shrink: 0; accent-color: #0875ed; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-checklist-row]:has(input:disabled) { cursor: default; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-checklist-row]:has(input:focus-visible) { outline: 2px solid #0875ed; outline-offset: -2px; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-checklist] [data-ui-field] { border-radius: 10px; background: #fff; box-shadow: none; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-checklist-heading] { flex-wrap: wrap; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-checklist-heading] > :first-child { min-width: 0; flex: 1 1 8rem; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-duty-role-heading] { flex-wrap: wrap; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-duty-role-heading] > :first-child { min-width: 0; flex: 1 1 12rem; overflow-wrap: anywhere; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-duty-role-heading] > [data-ui-group] { max-width: 100%; flex-wrap: wrap; }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) a[data-ui-row]:has(> [data-ui-panel]) { display: block; }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-field], :where(input[type="search"])) {
   border-radius: 16px;

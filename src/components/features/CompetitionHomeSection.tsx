@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { isCompetitionArchived } from "@/lib/competition-lifecycle";
 import { CompetitionHome } from "./CompetitionHome";
@@ -31,6 +30,5 @@ export function CompetitionHomeSection({ competition, entries, goalCount, initia
       <CompetitionProgramCard competition={competition} entries={entries} />
       <CompetitionHome competition={competition} goalCount={goalCount} initialToday={initialToday} />
     </>}
-    <Link data-ui-action="text" data-ui-tone="primary" href="/competitions" className="block text-right text-caption text-accent">大会一覧・アーカイブ →</Link>
   </div>;
 }

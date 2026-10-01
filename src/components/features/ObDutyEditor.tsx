@@ -33,14 +33,14 @@ export function ObDutyEditor({target,onClose,roles,duties,members}:{target:DutyT
       <p className="text-caption">競技の終了時刻・アップ・移動を確認して割り当ててください。</p>
       <p className="text-caption">複数選択できます。人数はこの部員の選択を含む保存後の人数です。</p>
       {roles.length===0 && <p className="text-body">先に表の種目名から役職と必要人数を追加してください。</p>}
-      <div className="space-y-2">{roles.map(role=>{
+      <div data-ui-checklist className="space-y-2">{roles.map(role=>{
         const assigned=duties.filter(d=>d.role_ids?.includes(role.id));
         const others=assigned.filter(d=>d.profile_id!==target.profileId);
         const checked=selected.includes(role.id);
         const full=others.length>=role.required_count;
-        return <label data-ui-choice-row key={role.id} className="flex items-start gap-3 rounded-xl border border-separator p-3">
+        return <label data-ui-checklist-row key={role.id} className="flex items-start gap-3 rounded-xl border border-separator p-3">
           <input type="checkbox" className="mt-1 h-5 w-5" checked={checked} disabled={saving||target.competing||(!checked&&full)} onChange={()=>setSelected(v=>checked?v.filter(id=>id!==role.id):[...v,role.id])}/>
-          <span className="min-w-0 flex-1"><span className="flex justify-between gap-2"><span className="text-headline">{role.name} <span className="text-caption">{role.abbreviation}</span></span><span className="text-body whitespace-nowrap">{others.length+(checked?1:0)} / {role.required_count}人</span></span>
+          <span className="min-w-0 flex-1"><span data-ui-checklist-heading className="flex justify-between gap-2"><span className="text-headline">{role.name} <span className="text-caption">{role.abbreviation}</span></span><span className="text-body whitespace-nowrap">{others.length+(checked?1:0)} / {role.required_count}人</span></span>
           <span className="mt-1 block text-caption">現在：{assigned.length?assigned.map(d=>members.find(m=>m.id===d.profile_id)?.display_name??"名簿確認待ち").join("、"):"未割当"}</span></span>
         </label>;
       })}</div>
