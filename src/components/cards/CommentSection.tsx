@@ -262,6 +262,7 @@ export function CommentSection({
 
   return (
     <div
+      data-ui-comments
       className="mt-3 min-w-0 max-w-full overflow-hidden border-t border-separator/70 pt-3"
       onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}

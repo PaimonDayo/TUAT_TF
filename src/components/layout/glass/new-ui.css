@@ -180,6 +180,20 @@
   outline-offset: 1px;
 }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) button[data-ui-field] { min-height: 44px; height: auto; padding-block: 9px; }
+/* Comments keep a single quiet edge while typing, including touch focus.
+   Keep a visible keyboard cue on actions without the blue outer frame. */
+[data-ui-comments] textarea[data-ui-field]:focus {
+  border-color: #687a90;
+  outline: none;
+}
+[data-ui-comments] [data-ui-action]:focus-visible {
+  outline: 2px solid #687a90;
+  outline-offset: -2px;
+}
+@media (forced-colors: active) {
+  [data-ui-comments] textarea[data-ui-field]:focus { border-color: Highlight; }
+  [data-ui-comments] [data-ui-action]:focus-visible { outline-color: Highlight; }
+}
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) input[data-ui-field] { min-height: 44px; }
 /* Writing uses quiet white sections and clear labels. Glass stays on actions. */
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-record-form] > [data-ui-record-field] {
