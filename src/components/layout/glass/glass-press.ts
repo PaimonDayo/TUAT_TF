@@ -22,7 +22,7 @@ export function attachGlassPress() {
   const down = (event: PointerEvent) => {
     if (!event.isPrimary || event.button !== 0 || !(event.target instanceof Element)) return;
     remember(event);
-    const node = event.target.closest<HTMLElement>("[data-glass-control],.app-create-button,.system-glass-menu-item,[data-glass-segments]>button,[data-ui-action],[data-ui-choice],[data-ui-row],[data-ui-disclosure]");
+    const node = event.target.closest<HTMLElement>("[data-glass-control],.app-create-button,.system-glass-menu-item,[data-glass-segments]>button,[data-ui-action],[data-ui-reaction],[data-ui-choice],[data-ui-row],[data-ui-disclosure]");
     if (!node || node.matches(":disabled")) return;
     // Forms and sheets render in body portals, outside .app-main. Their controls
     // carry the same effective-role flag as their selection surface.

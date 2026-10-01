@@ -74,7 +74,7 @@ export function NoticeReactions({ noticeId, userId, initialCounts, initialMine }
   return (
     <>
       <button
-        data-ui-action
+        data-ui-reaction
         type="button"
         onClick={handleClick}
         onPointerDown={(event) => { event.preventDefault(); startPress(); }}

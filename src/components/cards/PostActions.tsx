@@ -279,8 +279,7 @@ export function PostActions({
         className="flex select-none items-center gap-5 pt-1 [-webkit-touch-callout:none] [-webkit-user-select:none]"
       >
         <button
-          data-ui-action
-          data-ui-tone={liked ? "danger" : undefined}
+          data-ui-reaction
           ref={likeButtonRef}
           type="button"
           aria-pressed={liked}
@@ -320,7 +319,7 @@ export function PostActions({
           </span>
         </button>
         <button
-          data-ui-action
+          data-ui-reaction
           type="button"
           onClick={toggleComments}
           aria-label={`コメント${commentsVisible ? "を閉じる" : "を表示"}、${commentCount}件`}

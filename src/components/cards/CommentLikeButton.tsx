@@ -94,8 +94,7 @@ export function CommentLikeButton({
 
   return (
     <>
-      <button data-ui-action
-        data-ui-tone={liked ? "danger" : undefined}
+      <button data-ui-reaction
         ref={buttonRef}
         type="button"
         disabled={busy}
