@@ -8,11 +8,18 @@ import {
   fromCentiseconds,
   measureTypeOf,
   parseRecordText,
+  parseDecimalSeconds,
   recordGroupKey,
   toCentiseconds,
 } from "./competition-record";
 
 describe("time values", () => {
+  it("accepts total seconds converted from hours within the stored integer range", () => {
+    expect(parseDecimalSeconds("100800")).toBe(10_080_000);
+    expect(parseDecimalSeconds("21474836.47")).toBe(2_147_483_647);
+    expect(parseDecimalSeconds("21474836.48")).toBeNull();
+    expect(parseDecimalSeconds("999999999")).toBeNull();
+  });
   it("keeps hundredths through the round trip", () => {
     const cs = toCentiseconds({ minutes: 15, seconds: 32, centis: 40 });
     expect(cs).toBe(93_240);

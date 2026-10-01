@@ -4,7 +4,6 @@ import {
   forwardRef,
   useEffect,
   useImperativeHandle,
-  useMemo,
   useState,
 } from "react";
 import { LoaderCircle } from "lucide-react";
@@ -18,20 +17,22 @@ import {
   RESULT_STATUS_LABEL,
   STAGE_LABEL,
   formatRecord,
-  fromCentiseconds,
-  measureTypeOf,
-  recordFormatOf,
   parseDecimalSeconds,
   parseDecimalMetres,
-  decimalSecondsInput,
   decimalMetresInput,
-  parseRecordText,
-  toCentiseconds,
   type DatePrecision,
   type RecordStage,
   type ResultStatus,
   type TimeFormat,
 } from "@/lib/competition-record";
+import {
+  initialResultInput,
+  initialResultValues,
+  measureForResultInput,
+  resultInputPreset,
+  resultTimeFields,
+  type ResultInputFormat,
+} from "@/lib/competition-result-input";
 import { cn } from "@/lib/utils";
 import { competitionDays } from "@/lib/competition-days";
 import type { CompetitionEvent } from "@/lib/competition-goals";
@@ -137,40 +138,29 @@ export const ResultForm = forwardRef<
     initial && !known(initial.event_name) ? initial.event_name : "",
   );
   const eventName = eventChoice === OTHER ? eventOther.trim() : eventChoice;
-  const measure = measureTypeOf(events, eventName);
-  // 種目ごとに決めた書き方で入力欄を出し分ける（分と秒 / 秒 / メートル / 得点）。
-  const recordFormat = recordFormatOf(events, eventName);
+  // Initialize from saved values once. A catalog refresh must not reinterpret a draft.
+  const [initialInput] = useState(() => initialResultInput(initial, events));
+  const [recordFormat, setRecordFormat] = useState<ResultInputFormat>(initialInput.format);
+  const [otherFormat, setOtherFormat] = useState<ResultInputFormat>(initialInput.format);
+  const [windEnabled, setWindEnabled] = useState(initialInput.wind);
+  const [otherWindEnabled, setOtherWindEnabled] = useState(initialInput.wind);
+  const measure = measureForResultInput(recordFormat);
   const timeFormat: TimeFormat = recordFormat === "seconds" ? "seconds" : "minutes";
-
-  const legacy = useMemo(
-    () =>
-      initial &&
-      initial.value_cs === null &&
-      initial.value_cm === null &&
-      initial.value_points === null
-        ? parseRecordText(initial.record, measure)
-        : null,
-    [initial, measure],
+  const showWind = measure !== "points" && windEnabled;
+  const distanceLabel = resultInputPreset(eventName, events).distanceLabel;
+  const [initialValues] = useState(() => initialResultValues(initial, initialInput.format));
+  const [initialTime] = useState(() => resultTimeFields(initialValues.value_cs, initialInput.format));
+  const [timeDraftFormat, setTimeDraftFormat] = useState<ResultInputFormat>(
+    measureForResultInput(initialInput.format) === "time" ? initialInput.format : "minutes",
   );
-  const initialCs = initial?.value_cs ?? legacy?.value_cs ?? null;
-  const initialCm = initial?.value_cm ?? legacy?.value_cm ?? null;
-  const initialPoints = initial?.value_points ?? legacy?.value_points ?? null;
-  const parts = initialCs !== null ? fromCentiseconds(initialCs) : null;
-
-  const [hours, setHours] = useState(parts?.hours ? String(parts.hours) : "");
-  const [minutes, setMinutes] = useState(
-    parts && (parts.minutes || parts.hours) ? String(parts.minutes) : "",
-  );
-  // 秒は小数で1欄にまとめる（「1/100」という言い方をやめる）。
-  // 秒で書く種目は分へ繰り上げず、61.85 のようにそのまま秒で入れる。
-  const [seconds, setSeconds] = useState(
-    initialCs !== null ? decimalSecondsInput(initialCs, timeFormat) : "",
-  );
+  const [hours, setHours] = useState(initialTime.hours);
+  const [minutes, setMinutes] = useState(initialTime.minutes);
+  const [seconds, setSeconds] = useState(initialTime.seconds);
   const [metres, setMetres] = useState(
-    initialCm !== null ? decimalMetresInput(initialCm) : "",
+    initialValues.value_cm !== null ? decimalMetresInput(initialValues.value_cm) : "",
   );
   const [points, setPoints] = useState(
-    initialPoints !== null ? String(initialPoints) : "",
+    initialValues.value_points !== null ? String(initialValues.value_points) : "",
   );
   const [status, setStatus] = useState<ResultStatus>(
     (initial?.result_status as ResultStatus) ?? "ok",
@@ -208,6 +198,10 @@ export const ResultForm = forwardRef<
   const snapshot = JSON.stringify([
     stage,
     eventName,
+    recordFormat,
+    otherFormat,
+    windEnabled,
+    otherWindEnabled,
     hours,
     minutes,
     seconds,
@@ -233,6 +227,42 @@ export const ResultForm = forwardRef<
   }, [snapshot, baseline, onDirtyChange]);
   useImperativeHandle(ref, () => ({ save: () => void submit() }));
 
+  function timeValue(format: ResultInputFormat): number | null {
+    const secondsValue = seconds.trim() === "" ? 0 : parseDecimalSeconds(seconds);
+    if (secondsValue === null) return null;
+    const total = secondsValue + (format === "seconds" ? 0 : Number(minutes || 0) * 6_000)
+      + (format === "hours" ? Number(hours || 0) * 360_000 : 0);
+    return Number.isSafeInteger(total) && total <= 2_147_483_647 ? total : null;
+  }
+
+  function changeFormat(format: ResultInputFormat) {
+    if (measureForResultInput(format) === "time" && format !== timeDraftFormat) {
+      const value = timeValue(timeDraftFormat);
+      if (value === null) {
+        setError("入力中のタイムを確認してください");
+        return false;
+      }
+      const hasTime = hours !== "" || minutes !== "" || seconds !== "";
+      const next = resultTimeFields(hasTime ? value : null, format);
+      setHours(next.hours);
+      setMinutes(next.minutes);
+      setSeconds(next.seconds);
+      setTimeDraftFormat(format);
+    }
+    setRecordFormat(format);
+    setError(null);
+    return true;
+  }
+
+  function chooseEvent(value: string) {
+    const preset = value === OTHER
+      ? { format: otherFormat, wind: otherWindEnabled }
+      : resultInputPreset(value, events);
+    if (!changeFormat(preset.format)) return;
+    setEventChoice(value);
+    setWindEnabled(preset.wind);
+  }
+
   /** 大会を選んだら初日を記録日に入れる（複数日開催でも初日で統一する） */
   function chooseCompetition(id: string) {
     setCompetitionId(id);
@@ -249,7 +279,7 @@ export const ResultForm = forwardRef<
     if (measure === "distance")
       return {
         value_cs: null,
-        value_cm: parseDecimalMetres(metres) ?? 0,
+        value_cm: parseDecimalMetres(metres),
         value_points: null,
       };
     if (measure === "points")
@@ -259,15 +289,8 @@ export const ResultForm = forwardRef<
         value_points: Number(points || 0),
       };
     // 秒で書く種目は秒だけ、分と秒で書く種目は時・分も足して 1/100秒 へ直す。
-    const secondsCs = parseDecimalSeconds(seconds) ?? 0;
     return {
-      value_cs:
-        timeFormat === "seconds"
-          ? secondsCs
-          : toCentiseconds({
-              hours: Number(hours || 0),
-              minutes: Number(minutes || 0),
-            }) + secondsCs,
+      value_cs: timeValue(recordFormat),
       value_cm: null,
       value_points: null,
     };
@@ -309,11 +332,15 @@ export const ResultForm = forwardRef<
       setError("記録を入力してください");
       return;
     }
-    const windValue = wind.trim() === ""
+    const windValue = status !== "ok" || !showWind || wind.trim() === ""
       ? null
       : Number(wind) * (windDirection === "headwind" ? -1 : 1);
     if (windValue !== null && !Number.isFinite(windValue)) {
       setError("風速は数値で入力してください");
+      return;
+    }
+    if (windValue !== null && (Math.abs(windValue) > 20 || !/^\d*(?:\.\d)?$/.test(wind))) {
+      setError("風速は20.0m/s以内、小数第1位までで入力してください");
       return;
     }
     setSaving(true);
@@ -324,7 +351,7 @@ export const ResultForm = forwardRef<
       event_name: eventName,
       ...values,
       result_status: status,
-      wind: measure === "points" ? null : windValue,
+      wind: windValue,
       record: formatRecord({ ...values, result_status: status }, measure, timeFormat),
       competition_id: meetMode === "catalog" ? competitionId || null : null,
       meet_name:
@@ -394,26 +421,63 @@ export const ResultForm = forwardRef<
           aria-label="種目"
           className={selectClass}
           value={eventChoice}
-          onChange={(e) => setEventChoice(e.target.value)}
+          onChange={(e) => chooseEvent(e.target.value)}
         >
           <option value="">種目を選択</option>
           {events.map((e) => (
             <option key={e.name}>{e.name}</option>
           ))}
+          {eventChoice && eventChoice !== OTHER && !known(eventChoice) && (
+            <option value={eventChoice}>{eventChoice}</option>
+          )}
           <option value={OTHER}>その他（自由入力）</option>
         </select>
         {eventChoice === OTHER && (
-          <Input
-            className="mt-2"
-            maxLength={50}
-            placeholder="例: 2000mSC"
-            value={eventOther}
-            onChange={(e) => setEventOther(e.target.value)}
-          />
+          <div className="mt-2 space-y-3">
+            <Input
+              aria-label="種目名"
+              maxLength={50}
+              placeholder="例: 2000mSC"
+              value={eventOther}
+              onChange={(e) => setEventOther(e.target.value)}
+            />
+            <label className="block space-y-1.5">
+              <span className="section-label">記録の入力形式</span>
+              <select data-ui-field
+                aria-label="記録の入力形式"
+                className={selectClass}
+                value={recordFormat}
+                onChange={(e) => {
+                  const format = e.target.value as ResultInputFormat;
+                  if (changeFormat(format)) setOtherFormat(format);
+                }}
+              >
+                <option value="seconds">秒（例: 12.34）</option>
+                <option value="minutes">分・秒（例: 15分32.40秒）</option>
+                <option value="hours">時・分・秒（例: 1時間10分30秒）</option>
+                <option value="meters">メートル（例: 6.85m）</option>
+                <option value="points">得点（例: 5432点）</option>
+              </select>
+            </label>
+            {measure !== "points" && (
+              <label className="flex min-h-11 cursor-pointer items-center gap-2 text-[14px]">
+                <input
+                  type="checkbox"
+                  className="size-5 shrink-0 accent-accent"
+                  checked={windEnabled}
+                  onChange={(e) => {
+                    setWindEnabled(e.target.checked);
+                    setOtherWindEnabled(e.target.checked);
+                  }}
+                />
+                風速を入力する
+              </label>
+            )}
+          </div>
         )}
       </div>
 
-      <div>
+      {eventChoice && <div>
         <p className="section-label mb-1.5">記録</p>
         <select data-ui-field
           aria-label="記録の状態"
@@ -430,11 +494,11 @@ export const ResultForm = forwardRef<
 
         {status === "ok" && measure === "time" && (
           <div className="mt-2 flex items-end gap-2">
-            {timeFormat === "minutes" && (
-              <>
-                <NumberField label="時（任意）" value={hours} onChange={setHours} max={23} />
-                <NumberField label="分" value={minutes} onChange={setMinutes} max={999} />
-              </>
+            {recordFormat === "hours" && (
+              <NumberField label="時" value={hours} onChange={setHours} max={5965} />
+            )}
+            {recordFormat !== "seconds" && (
+              <NumberField label="分" value={minutes} onChange={setMinutes} max={recordFormat === "hours" ? 59 : 357913} />
             )}
             <DecimalField
               label="秒"
@@ -446,7 +510,7 @@ export const ResultForm = forwardRef<
         )}
         {status === "ok" && measure === "distance" && (
           <div className="mt-2 flex items-end gap-2">
-            <DecimalField label="m" placeholder="6.85" value={metres} onChange={setMetres} />
+            <DecimalField label={distanceLabel} placeholder={distanceLabel === "高さ（m）" ? "1.80" : "6.85"} value={metres} onChange={setMetres} />
           </div>
         )}
         {status === "ok" && measure === "points" && (
@@ -454,7 +518,7 @@ export const ResultForm = forwardRef<
             <NumberField label="点" value={points} onChange={setPoints} max={99999} />
           </div>
         )}
-        {status === "ok" && measure !== "points" && (
+        {status === "ok" && showWind && (
           <fieldset className="mt-2 min-w-0 space-y-2">
             <legend className="text-caption">風速（任意）</legend>
             <div data-ui-group className="grid grid-cols-2 gap-2">
@@ -500,7 +564,7 @@ export const ResultForm = forwardRef<
             </label>
           </fieldset>
         )}
-      </div>
+      </div>}
 
       <div>
         <p className="section-label mb-1.5">大会</p>
@@ -662,7 +726,7 @@ export const ResultForm = forwardRef<
         PB・UB は種目ごとに1件だけ付きます。新しく付けると、同じ種目の前の記録からは外れます。UBは大学の記録だけに付きます。
       </p>
 
-      {error && <p className="text-caption text-danger text-center">{error}</p>}
+      {error && <p role="alert" className="text-caption text-danger text-center">{error}</p>}
       <FormModalFooter>
         <Button size="lg" onClick={submit} disabled={saving}>
           {saving ? (

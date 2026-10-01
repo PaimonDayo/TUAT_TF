@@ -129,9 +129,10 @@ export function formatCentiseconds(value: number, format: TimeFormat = "minutes"
 export function parseDecimalSeconds(text: string): number | null {
   const value = text.normalize("NFKC").trim().replace(/[秒"”]/g, "");
   if (!value) return null;
-  const m = /^(\d{1,5})(?:[.．](\d{1,2}))?$/.exec(value);
+  const m = /^(\d{1,8})(?:[.．](\d{1,2}))?$/.exec(value);
   if (!m) return null;
-  return Number(m[1]) * 100 + (m[2] ? Number(m[2].padEnd(2, "0")) : 0);
+  const centiseconds = Number(m[1]) * 100 + (m[2] ? Number(m[2].padEnd(2, "0")) : 0);
+  return centiseconds <= 2_147_483_647 ? centiseconds : null;
 }
 
 /** 「6.85」のようなメートルの入力 → cm。小数は2桁までで丸める。 */
