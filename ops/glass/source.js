@@ -35,6 +35,7 @@ class Source {
     document.addEventListener("pointerdown", this.interacting, true);
     document.addEventListener("touchstart", this.interacting, { passive: true, capture: true });
     document.addEventListener("click", this.interacting, true);
+    document.addEventListener("tuat:glass-route-change", this.routeChanged);
     window.addEventListener("scroll", this.interacting, { passive: true });
     window.addEventListener("resize", this.changed);
     window.visualViewport?.addEventListener("resize", this.changed);
@@ -81,6 +82,14 @@ class Source {
     this.dirty = true;
     this.revision++;
     this.schedule();
+  };
+  routeChanged = () => {
+    // A snapshot belongs to one page. Until the new page is captured, the
+    // renderer uses the existing live CSS backdrop instead of old-page pixels.
+    this.capture.cache.forEach((snapshot) => { snapshot.canvas.width = 0; });
+    this.capture.cache.clear();
+    this.changed();
+    this.listeners.forEach((listener) => listener());
   };
   interacting = () => {
     this.quietUntil = performance.now() + 240;
@@ -174,6 +183,7 @@ class Source {
     document.removeEventListener("pointerdown", this.interacting, true);
     document.removeEventListener("touchstart", this.interacting, true);
     document.removeEventListener("click", this.interacting, true);
+    document.removeEventListener("tuat:glass-route-change", this.routeChanged);
     window.removeEventListener("scroll", this.interacting);
     window.removeEventListener("resize", this.changed);
     window.visualViewport?.removeEventListener("resize", this.changed);

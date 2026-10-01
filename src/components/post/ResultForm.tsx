@@ -177,8 +177,11 @@ export const ResultForm = forwardRef<
   );
   const [wind, setWind] = useState(
     initial?.wind !== null && initial?.wind !== undefined
-      ? String(initial.wind)
+      ? String(Math.abs(initial.wind))
       : "",
+  );
+  const [windDirection, setWindDirection] = useState<"tailwind" | "headwind">(
+    (initial?.wind ?? 0) < 0 ? "headwind" : "tailwind",
   );
 
   const [competitionId, setCompetitionId] = useState(
@@ -188,7 +191,7 @@ export const ResultForm = forwardRef<
     initial && !initial.competition_id ? (initial.meet_name ?? "") : "",
   );
   const [meetMode, setMeetMode] = useState<"catalog" | "other">(
-    initial?.competition_id ? "catalog" : "other",
+    !initial || initial.competition_id ? "catalog" : "other",
   );
 
   const [precision, setPrecision] = useState<DatePrecision>(
@@ -214,6 +217,7 @@ export const ResultForm = forwardRef<
     points,
     status,
     wind,
+    windDirection,
     competitionId,
     meetOther,
     meetMode,
@@ -305,7 +309,9 @@ export const ResultForm = forwardRef<
       setError("記録を入力してください");
       return;
     }
-    const windValue = wind.trim() === "" ? null : Number(wind);
+    const windValue = wind.trim() === ""
+      ? null
+      : Number(wind) * (windDirection === "headwind" ? -1 : 1);
     if (windValue !== null && !Number.isFinite(windValue)) {
       setError("風速は数値で入力してください");
       return;
@@ -449,17 +455,50 @@ export const ResultForm = forwardRef<
           </div>
         )}
         {status === "ok" && measure !== "points" && (
-          <label className="mt-2 block text-caption">
-            風速（任意・例: 1.2 / -0.3）
-            <Input
-              inputMode="decimal"
-              placeholder="+1.2"
-              value={wind}
-              onChange={(e) =>
-                setWind(e.target.value.replace(/[^0-9.+-]/g, ""))
-              }
-            />
-          </label>
+          <fieldset className="mt-2 min-w-0 space-y-2">
+            <legend className="text-caption">風速（任意）</legend>
+            <div data-ui-group className="grid grid-cols-2 gap-2">
+              {([
+                { value: "tailwind", label: "＋ 追い風" },
+                { value: "headwind", label: "− 向かい風" },
+              ] as const).map((item) => (
+                <button data-ui-action
+                  key={item.value}
+                  type="button"
+                  aria-pressed={windDirection === item.value}
+                  onClick={() => setWindDirection(item.value)}
+                  className={cn(
+                    "min-h-11 rounded-xl border px-3 py-2 text-[13px] font-semibold pressable",
+                    windDirection === item.value
+                      ? "border-accent bg-accent/10 text-accent"
+                      : "border-separator bg-card text-muted",
+                  )}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <label className="flex items-center gap-2">
+              <span aria-hidden="true" className="w-4 shrink-0 text-center tabular-nums">
+                {windDirection === "headwind" ? "−" : "＋"}
+              </span>
+              <Input
+                aria-label="風速（m/s）"
+                inputMode="decimal"
+                placeholder="1.2"
+                value={wind}
+                onChange={(e) => {
+                  // 符号はボタンで選べる。PC入力・貼り付けの符号も受け取る。
+                  const next = e.target.value.normalize("NFKC").replace(/−/g, "-").trim();
+                  if (!/^[+-]?\d*(?:\.\d*)?$/.test(next)) return;
+                  if (next.startsWith("-")) setWindDirection("headwind");
+                  if (next.startsWith("+")) setWindDirection("tailwind");
+                  setWind(next.replace(/^[+-]/, ""));
+                }}
+              />
+              <span aria-hidden="true" className="shrink-0 text-caption">m/s</span>
+            </label>
+          </fieldset>
         )}
       </div>
 
@@ -523,11 +562,11 @@ export const ResultForm = forwardRef<
                           aria-pressed={active}
                           onClick={() => { setRecordedOn(day); setPrecision("day"); }}
                           className={cn(
-                            "rounded-xl border px-3 py-2 text-body pressable",
-                            active ? "border-accent bg-accent/10 font-semibold text-accent" : "border-separator bg-card",
+                            "inline-flex min-h-11 items-center justify-center gap-1 whitespace-nowrap rounded-xl border px-3 py-2 text-[14px] font-semibold pressable",
+                            active ? "border-accent bg-accent/10 text-accent" : "border-separator bg-card",
                           )}
                         >
-                          {i + 1}日目 <span className="text-caption tabular-nums">{Number(day.slice(5, 7))}/{Number(day.slice(8, 10))}</span>
+                          <span>{i + 1}日目</span><span className="text-caption tabular-nums">{Number(day.slice(5, 7))}/{Number(day.slice(8, 10))}</span>
                         </button>
                       );
                     })}

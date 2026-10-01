@@ -96,6 +96,21 @@ test('end-of-page cache coverage does not request an impossible strip beyond the
 test('scrolling beyond the cached strip still refreshes', async () => {
   const f = fixture(); await warm(f); f.bounds(-1300); f.document.emit('click'); await f.flush(); assert.equal(f.captures.length, 2); f.shared.release();
 });
+test('navigation immediately removes old-page pixels and only publishes the final page', async () => {
+  const f = fixture(); await warm(f);
+  const first = f.captures[0].canvas;
+  f.document.emit('tuat:glass-route-change');
+  assert.equal(first.width, 0); assert.equal(f.shared.capture.cache.size, 0);
+  const unblock = f.block(); await f.flush();
+  f.document.emit('tuat:glass-route-change');
+  unblock(); await f.flush();
+  assert.equal(f.captures[1].canvas.width, 0);
+  assert.equal(f.shared.capture.cache.size, 0);
+  await f.flush();
+  assert.equal(f.captures.length, 3); assert.ok(f.captures[2].canvas.width > 0);
+  assert.equal(f.shared.capture.cache.get(f.element).canvas, f.captures[2].canvas);
+  f.shared.release();
+});
 test('a real change during capture discards stale pixels and preserves the pending refresh', async () => {
   const f = fixture(); await warm(f); const unblock = f.block(); await f.shared.refresh(); await f.flush();
   f.modal(true); f.mutations([f.attribute('class')]); unblock(); await f.flush();

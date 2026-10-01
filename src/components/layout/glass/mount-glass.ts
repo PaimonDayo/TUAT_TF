@@ -5,7 +5,7 @@ function loadVendor() {
   if (customElements.get("liquid-glass")) return Promise.resolve();
   if (!vendor) vendor = new Promise<void>((resolve, reject) => {
     const script = document.createElement("script");
-    script.src = "/vendor/liquid-glass/simple-liquid-glass.js?v=7";
+    script.src = "/vendor/liquid-glass/simple-liquid-glass.js?v=8";
     script.async = true;
     script.onload = () => resolve();
     script.onerror = () => { script.remove(); vendor = undefined; reject(new Error("Glass unavailable")); };
@@ -15,13 +15,14 @@ function loadVendor() {
 }
 
 /** Owned by one mounted BottomNav. All listeners, captures and GPU resources are released. */
-export function mountGlass(nav: HTMLElement, selected: number) {
+export function mountGlass(nav: HTMLElement, selected: number, pathname: string) {
   const bar = nav.querySelector<HTMLElement>(".glass-bar")!;
   const interaction = attachGlassInteraction(bar, selected);
   const transparency = matchMedia("(prefers-reduced-transparency: reduce)");
   const contrast = matchMedia("(prefers-contrast: more)");
   let disposed = false;
   let material: HTMLElement | null = null;
+  let route = pathname;
   const enabled = () => !disposed && !document.hidden && !transparency.matches && !contrast.matches;
   const sync = () => {
     if (!enabled()) { material?.remove(); material = null; return; }
@@ -41,7 +42,14 @@ export function mountGlass(nav: HTMLElement, selected: number) {
   document.addEventListener("visibilitychange", sync);
   sync();
   return {
-    update: interaction.update,
+    update(index: number, pathname: string) {
+      interaction.update(index);
+      if (pathname === route) return;
+      route = pathname;
+      // The old route must not remain inside the lens while its new snapshot
+      // waits for navigation to settle. Keep the GPU and live CSS surface.
+      document.dispatchEvent(new Event("tuat:glass-route-change"));
+    },
     destroy() {
       disposed = true;
       transparency.removeEventListener("change", sync);

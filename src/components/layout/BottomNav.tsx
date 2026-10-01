@@ -2,7 +2,7 @@
 
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { Home, Newspaper, CalendarDays, NotebookTabs, User } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -65,17 +65,19 @@ export function BottomNav() {
   const mounted = useSyncExternalStore(subscribeToClient, () => true, () => false);
   const glass = useSyncExternalStore(subscribeToMobile, mobileSnapshot, () => false);
   const navRef = useRef<HTMLElement | null>(null);
-  const controller = useRef<{ update: (index: number) => void; destroy: () => void } | null>(null);
+  const controller = useRef<{ update: (index: number, pathname: string) => void; destroy: () => void } | null>(null);
   const activeIndex = ITEMS.findIndex(({ href }) => pathname === href || pathname.startsWith(href + "/"));
   const selected = useRef(activeIndex);
+  const route = useRef(pathname);
   useEffect(() => {
     if (mounted && navRef.current) return syncVisualViewport(navRef.current, "bottom");
   }, [glass, mounted]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     selected.current = activeIndex;
-    controller.current?.update(activeIndex);
-  }, [activeIndex]);
+    route.current = pathname;
+    controller.current?.update(activeIndex, pathname);
+  }, [activeIndex, pathname]);
 
   useEffect(() => {
     if (!glass || !mounted || !navRef.current) return;
@@ -83,7 +85,7 @@ export function BottomNav() {
     let disposed = false;
     // Load the optical engine only while the mobile bottom navigation is visible.
     void import("./glass/mount-glass").then(({ mountGlass }) => {
-      if (!disposed) controller.current = mountGlass(element, selected.current);
+      if (!disposed) controller.current = mountGlass(element, selected.current, route.current);
     }).catch(() => { /* CSS glass and normal Links remain usable if loading fails. */ });
     return () => {
       disposed = true;
