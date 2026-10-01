@@ -148,6 +148,11 @@ class Source {
         pixelRatio: Math.min(devicePixelRatio || 1, 1.5),
         // The app uses system fonts; avoid scanning/downloading every stylesheet.
         fontEmbedCSS: "",
+        // Avatar/media endpoints distinguish images by query string. A single
+        // unreadable image (e.g. a cross-origin redirect) must not discard the
+        // whole backdrop: keep its layout and capture the surrounding content.
+        includeQueryParams: true,
+        imagePlaceholder: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxIiBoZWlnaHQ9IjEiLz4=",
         filter,
         style: {
           height: `${fullHeight}px`,
