@@ -93,7 +93,7 @@ export function NoteBodyEditor({
                 保存時に追加
               </span>
             )}
-            <button data-ui-action
+            <button data-ui-action="icon"
               type="button"
               aria-label="この写真を本文から外す"
               disabled={disabled}

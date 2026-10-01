@@ -36,6 +36,22 @@
   touch-action: manipulation;
   transition: background-color 120ms ease-out, scale 160ms cubic-bezier(.2,.8,.2,1), box-shadow 120ms ease-out;
 }
+/* Keep contents centred when a legacy 28/32px target becomes a 44px control. */
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-action] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 12px;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-action]:is([data-ui-action="icon"], [data-ui-size="icon"]) {
+  padding: 0;
+  flex-shrink: 0;
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-action] > svg { flex-shrink: 0; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-action="icon"] > svg { margin: 0; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-action="row"] { justify-content: flex-start; border-radius: 18px; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-action="tile"] { padding-inline: 4px; border-radius: 16px; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-nav-placeholder] { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; padding: 0; }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-action][data-ui-variant="primary"] {
   background: linear-gradient(160deg, #398cf9, #0766d7);
   border-color: #ffffff55;
@@ -60,6 +76,7 @@
   border-color: transparent;
 }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-action], [data-ui-choice]):is([aria-pressed="true"], [aria-current="page"], [aria-selected="true"], [data-ui-active="true"]),
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-choice-row][aria-pressed="true"],
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-choice], [data-ui-choice-row]):has(input:checked) {
   color: #075db5;
   background: linear-gradient(155deg, #fafdff, var(--ui-selected));
@@ -78,7 +95,7 @@
   scale: none;
   cursor: not-allowed;
 }
-:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-action], [data-ui-choice], [data-ui-row], [data-ui-disclosure], [data-ui-toggle], [data-ui-cell]):focus-visible {
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-action], [data-ui-choice], [data-ui-choice-row], [data-ui-row], [data-ui-disclosure], [data-ui-toggle], [data-ui-cell]):focus-visible {
   outline: 2px solid #0875ed;
   outline-offset: 2px;
 }
@@ -93,6 +110,13 @@
   opacity: 1;
 }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-row][aria-pressed="true"] { background-color: var(--ui-selected); color: #075db5; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-choice-row] {
+  border: 1px solid var(--ui-line);
+  border-radius: 18px;
+  background: var(--ui-neutral);
+  box-shadow: var(--ui-shadow);
+}
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-choice-row] > input { flex-shrink: 0; accent-color: #0875ed; }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) a[data-ui-row]:has(> [data-ui-panel]) { display: block; }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-field], :where(input[type="search"])) {
   border-radius: 16px;
@@ -120,10 +144,11 @@
 }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-group="segmented"] {
   height: auto;
-  min-height: 50px;
-  padding: 3px;
-  gap: 3px;
-  background: #dfe5ee80;
+  min-height: 48px;
+  border-radius: 999px;
+  padding: 2px;
+  gap: 2px;
+  background: #dfe2e680;
 }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-group="segmented"] > [data-ui-action] {
   background: transparent;
@@ -236,7 +261,7 @@
   :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-composer] { background: #f6f8fb; }
 }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
-  :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-action], [data-ui-choice], [data-ui-panel], [data-ui-section], [data-ui-field], [data-ui-composer]),
+  :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-action], [data-ui-choice], [data-ui-choice-row], [data-ui-panel], [data-ui-section], [data-ui-field], [data-ui-composer]),
   [data-new-ui-surface]:is([data-ui-dialog], [data-ui-select-menu], [data-ui-sidebar]), [data-new-ui-surface] [data-ui-toast] {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;

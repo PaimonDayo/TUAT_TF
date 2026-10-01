@@ -73,7 +73,7 @@ export function NoteArticleList({
                 </div>
               )}
               <button
-                data-ui-action
+                data-ui-action="icon"
                 type="button"
                 onClick={() => setOpenId(open ? null : article.id)}
                 aria-label={open ? "閉じる" : "開く"}

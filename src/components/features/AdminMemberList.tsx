@@ -222,7 +222,7 @@ function MemberRoleEditor({
             const active = selectedIds.includes(role.id);
             return (
               <button
-                data-ui-choice
+                data-ui-choice-row
                 aria-pressed={active}
                 key={role.id}
                 type="button"

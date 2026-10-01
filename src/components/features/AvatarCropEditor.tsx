@@ -312,7 +312,7 @@ function AvatarCropEditorDialog({
             </div>
             <Dialog.Close asChild>
               <button
-                data-ui-action
+                data-ui-action="icon"
                 data-ui-size="icon"
                 type="button"
                 aria-label="閉じる"

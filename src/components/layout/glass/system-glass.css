@@ -11,15 +11,17 @@
 }
 .app-main:has(> [data-new-ui]) [data-glass-header] h1,
 [data-new-ui-title] { white-space: nowrap; text-wrap: nowrap; }
-.app-main:has(> [data-new-ui]) :is([data-glass-control], .app-create-button),
+:is(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-glass-control], .app-create-button),
 [data-system-glass][data-glass-control] {
+  min-width: 44px;
+  min-height: 44px;
   border-radius: 999px;
   color: var(--color-ink);
-  background: linear-gradient(145deg, #ffffff65, #ffffff08 65%), #ffffff38;
-  border: 1px solid #ffffff70;
+  background: var(--ui-neutral, linear-gradient(155deg, #ffffffda, #ffffff70));
+  border: 1px solid var(--ui-edge, #ffffffd9);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  box-shadow: inset 0 1px 0 #ffffff85, inset 0 -1px 0 #26334409, 0 2px 8px #18253312;
+  box-shadow: var(--ui-shadow, inset 0 1px 0 #ffffffc7, 0 2px 8px #25324a0a);
   opacity: 1;
   transition: scale 240ms cubic-bezier(.2,.8,.2,1), background-color 160ms ease-out, box-shadow 160ms ease-out;
   -webkit-tap-highlight-color: transparent;
@@ -31,7 +33,7 @@
   -webkit-backdrop-filter: blur(20px) saturate(140%);
   backdrop-filter: blur(20px) saturate(140%);
 }
-.app-main:has(> [data-new-ui]) :is([data-glass-control], .app-create-button):is(:active, [data-glass-pressed]),
+:is(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-glass-control], .app-create-button):is(:active, [data-glass-pressed]),
 [data-system-glass][data-glass-control]:is(:active, [data-glass-pressed]) {
   scale: .95;
   opacity: 1;
@@ -39,7 +41,7 @@
   box-shadow: inset 0 0 0 1px #ffffffb0, 0 1px 4px #18253318;
   transition-duration: 80ms;
 }
-.app-main:has(> [data-new-ui]) :is([data-glass-control], .app-create-button):focus-visible,
+:is(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-glass-control], .app-create-button):focus-visible,
 [data-system-glass][data-glass-control]:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 3px;
@@ -47,11 +49,14 @@
 [data-system-glass][data-glass-segments] {
   position: relative;
   isolation: isolate;
+  padding: 2px;
+  gap: 2px;
   align-items: stretch;
   border-radius: 999px;
   background: #dfe2e680;
 }
 [data-system-glass][data-glass-segments] > button {
+  min-height: 44px;
   position: relative;
   z-index: 1;
   border-radius: 999px;
@@ -67,6 +72,7 @@
 }
 [data-system-glass][data-glass-segments] > button:is(:active, [data-glass-pressed]) { background: #ffffff40; }
 [data-system-glass][data-glass-segments] > button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+[data-system-glass][data-glass-segments] > button[aria-pressed="true"] { color: #075db5; }
 /* Keep the server-rendered selection visible until its moving lens hydrates. */
 [data-system-glass][data-glass-segments]:not(:has(> [data-glass-selection])) > button[aria-pressed="true"] { background: var(--color-card); }
 [data-system-glass][data-glass-segments] > [data-glass-selection] {
@@ -76,16 +82,12 @@
   left: 0;
   pointer-events: none;
   border-radius: 999px;
-  background: linear-gradient(150deg, #ffffffa3, #ffffff3d);
-  border: 1px solid #ffffffa8;
+  background: var(--ui-neutral, linear-gradient(155deg, #ffffffda, #ffffff70));
+  border: 1px solid var(--ui-edge, #ffffffd9);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  box-shadow: inset 0 .5px 0 #ffffffd0, 0 1px 4px #1b29351c;
-  transition: transform 260ms cubic-bezier(.2,.8,.2,1), width 260ms cubic-bezier(.2,.8,.2,1);
-}
-@media (max-width: 767px) {
-  :is(.app-main:has(> [data-new-ui]) [data-glass-control], [data-system-glass][data-glass-control]) { min-width: 44px; min-height: 44px; }
-  [data-system-glass][data-glass-segments] > button { min-height: 44px; }
+  box-shadow: var(--ui-shadow, inset 0 1px 0 #ffffffc7, 0 2px 8px #25324a0a);
+  transition: left 260ms cubic-bezier(.2,.8,.2,1), width 260ms cubic-bezier(.2,.8,.2,1);
 }
 
 /* Role flags travel with portal controls. Status also retains words and icons. */
@@ -163,14 +165,14 @@
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .system-glass-menu,
   [data-system-glass][data-glass-control][data-glass-attendance],
-  .app-main:has(> [data-new-ui]) :is([data-glass-control], .app-create-button),
+  :is(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-glass-control], .app-create-button),
   [data-system-glass][data-glass-control],
   [data-system-glass][data-glass-segments] > [data-glass-selection] { background: var(--color-card); }
 }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
   .system-glass-menu,
   [data-system-glass][data-glass-control][data-glass-attendance],
-  .app-main:has(> [data-new-ui]) :is([data-glass-control], .app-create-button),
+  :is(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-glass-control], .app-create-button),
   [data-system-glass][data-glass-control],
   [data-system-glass][data-glass-segments] > [data-glass-selection] {
     background: var(--color-card);
@@ -184,11 +186,11 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .system-glass-menu[data-state], .system-glass-menu-scrim[data-state], .system-glass-menu-item,
-  .app-main:has(> [data-new-ui]) :is([data-glass-control], .app-create-button),
+  :is(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-glass-control], .app-create-button),
   [data-system-glass][data-glass-control],
   [data-system-glass][data-glass-segments] > :is(button, [data-glass-selection]) { animation: none; transition: none; }
   .system-glass-menu-item:is(:active, [data-glass-pressed]),
-  :is(.app-main:has(> [data-new-ui]) :is([data-glass-control], .app-create-button), [data-system-glass][data-glass-control]):is(:active, [data-glass-pressed]) { scale: none; }
+  :is(:is(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-glass-control], .app-create-button), [data-system-glass][data-glass-control]):is(:active, [data-glass-pressed]) { scale: none; }
 }
 
 @media (forced-colors: active) {

@@ -115,7 +115,7 @@ export function InstallPrompt() {
         </div>
         <button
           type="button"
-          data-ui-action data-ui-variant="ghost" onClick={dismiss}
+          data-ui-action="icon" data-ui-variant="ghost" onClick={dismiss}
           aria-label="閉じる"
           className="-mr-1 -mt-1 shrink-0 rounded-full p-1.5 text-muted active:bg-bg"
         >

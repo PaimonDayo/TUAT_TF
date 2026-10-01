@@ -155,7 +155,7 @@ export function SheetHeaderSetupDialog({
           <div className="space-y-2">
             {selectable.filter((column) => selected.includes(column.index)).map((column) => {
               const checked = timelineSelected.includes(column.index);
-              return <button data-ui-choice aria-pressed={checked} key={column.index} type="button" onClick={() => toggleTimeline(column.index)} className={`flex min-h-12 w-full items-center gap-2 rounded-xl border px-3 text-left ${checked ? "border-accent/40 bg-accent/5" : "border-separator bg-card"}`}>
+              return <button data-ui-choice-row aria-pressed={checked} key={column.index} type="button" onClick={() => toggleTimeline(column.index)} className={`flex min-h-12 w-full items-center gap-2 rounded-xl border px-3 text-left ${checked ? "border-accent/40 bg-accent/5" : "border-separator bg-card"}`}>
                 <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${checked ? "border-accent bg-accent text-white" : "border-separator bg-card"}`}>{checked && <Check size={14} strokeWidth={3} />}</span>
                 <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{column.label}</span>
               </button>;

@@ -307,7 +307,7 @@ export const TweetForm = forwardRef<
 
       {!editing && (
         <div className="space-y-2">
-          <button data-ui-action
+          <button data-ui-action="icon"
             type="button"
             aria-label="投稿に追加"
             aria-expanded={addMenuOpen}
@@ -322,13 +322,13 @@ export const TweetForm = forwardRef<
           <Sheet open={addMenuOpen} onOpenChange={setAddMenuOpen}>
             <SheetContent title="投稿に追加" autoFocus={false}>
               <div className="space-y-2 pb-4">
-                <button data-ui-action type="button" className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-separator bg-card p-3.5 text-left active:bg-bg" onClick={() => { setPollEnabled((value) => !value); setAddMenuOpen(false); }}>
+                <button data-ui-action="row" type="button" className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-separator bg-card p-3.5 text-left active:bg-bg" onClick={() => { setPollEnabled((value) => !value); setAddMenuOpen(false); }}>
                   <BarChart3 size={20} className="text-accent" />
                   <span className="min-w-0 flex-1 text-headline">投票</span>
                   {pollEnabled && <Check size={18} className="text-accent" />}
                 </button>
                 {!initialStory && (
-                <button data-ui-action type="button" className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-separator bg-card p-3.5 text-left active:bg-bg" onClick={() => {
+                <button data-ui-action="row" type="button" className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-separator bg-card p-3.5 text-left active:bg-bg" onClick={() => {
                   setExpiresIn24Hours((value) => {
                     if (value) setImageFile(null);
                     return !value;
@@ -356,7 +356,7 @@ export const TweetForm = forwardRef<
                       onChange={(event) => setPollOptions((options) => options.map((value, optionIndex) => optionIndex === index ? event.target.value : value))}
                     />
                     {pollOptions.length > 2 && (
-                      <button data-ui-action type="button" aria-label="選択肢を削除" className="grid h-10 w-10 place-items-center text-muted" onClick={() => setPollOptions((options) => options.filter((_, optionIndex) => optionIndex !== index))}>
+                      <button data-ui-action="icon" type="button" aria-label="選択肢を削除" className="grid h-10 w-10 place-items-center text-muted" onClick={() => setPollOptions((options) => options.filter((_, optionIndex) => optionIndex !== index))}>
                         <X size={17} />
                       </button>
                     )}
@@ -387,7 +387,7 @@ export const TweetForm = forwardRef<
               {imagePreview && (
                 <div className="relative overflow-hidden rounded-card border border-separator">
                   <img src={imagePreview} alt="投稿画像のプレビュー" className="max-h-80 w-full object-contain" />
-                  <button data-ui-action type="button" aria-label="画像を外す" onClick={() => setImageFile(null)} className="absolute right-2 top-2 rounded-full bg-black/65 p-2 text-white">
+                  <button data-ui-action="icon" type="button" aria-label="画像を外す" onClick={() => setImageFile(null)} className="absolute right-2 top-2 rounded-full bg-black/65 p-2 text-white">
                     <X size={17} />
                   </button>
                 </div>

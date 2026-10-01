@@ -74,7 +74,7 @@ export function ShareButton({
 
   const trigger = (
       <button
-        data-ui-action
+        data-ui-action="icon"
         type="button"
         onClick={newUi ? undefined : () => setOpen(true)}
         aria-label={label}

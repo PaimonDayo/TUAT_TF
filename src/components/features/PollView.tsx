@@ -82,10 +82,11 @@ function PollOptionTabs({
             }}
             className={cn(
               "h-8 min-w-24 max-w-44 shrink-0 snap-center truncate rounded-[8px] px-3 text-[13px] font-semibold transition-colors pressable",
+              newUi && "gap-1.5",
               active ? "bg-white text-ink shadow-sm" : "text-muted2",
             )}
           >
-            {option.text} <span className="tabular-nums">{option.vote_count}</span>
+            <span className="min-w-0 truncate">{option.text}</span>{" "}<span className="shrink-0 tabular-nums">{option.vote_count}</span>
           </button>
         );
       })}

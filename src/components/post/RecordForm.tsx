@@ -552,7 +552,7 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
             const active = condition === c;
             return (
               <button
-                data-ui-action
+                data-ui-action="tile"
                 key={c}
                 type="button"
                 aria-pressed={active}

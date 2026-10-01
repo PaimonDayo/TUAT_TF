@@ -340,7 +340,7 @@ export function NoteArticleEditor({
                     alt="本文に置いていない写真"
                     className="aspect-square w-full rounded-xl object-cover"
                   />
-                  <button data-ui-action
+                  <button data-ui-action="icon"
                     type="button"
                     aria-label={photo.removeLabel}
                     disabled={saving}
@@ -430,7 +430,7 @@ export function NoteArticleEditor({
               <span className="shrink-0 text-caption tabular-nums">
                 {option.vote_count}票
               </span>
-              <button data-ui-action
+              <button data-ui-action="icon"
                 type="button"
                 aria-label={`${option.text}を外す`}
                 disabled={saving || option.vote_count > 0}
@@ -458,7 +458,7 @@ export function NoteArticleEditor({
                   )
                 }
               />
-              <button data-ui-action
+              <button data-ui-action="icon"
                 type="button"
                 aria-label="選択肢を削除"
                 disabled={saving}

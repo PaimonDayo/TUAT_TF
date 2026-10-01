@@ -158,7 +158,7 @@ export function CompetitionGoalsView({
       />
 
 <FloatingActionPosition>      <button
-        data-ui-action
+        data-ui-action="icon"
         type="button"
         aria-label="目標を追加"
         title={

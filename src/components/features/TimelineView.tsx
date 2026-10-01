@@ -225,7 +225,7 @@ export function TimelineView({
             <span>一覧</span>
           </button>
           <button
-            data-ui-action
+            data-ui-action="icon"
             type="button"
             aria-pressed={favOnly}
             onClick={() => setFavOnly((v) => !v)}

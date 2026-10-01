@@ -267,7 +267,7 @@ export function ScheduleForm({
                   setMeetingTime(event.target.value);
                 }}
               />
-              <button data-ui-action data-ui-variant="ghost"
+              <button data-ui-action="icon" data-ui-variant="ghost"
                 type="button"
                 onClick={() => {
                   meetingTimeTouched.current = true;

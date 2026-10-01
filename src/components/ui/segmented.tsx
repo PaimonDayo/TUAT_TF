@@ -1,7 +1,6 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { useLayoutEffect, useRef } from "react";
 import { useSystemGlass } from "@/components/layout/glass/system-glass-state";
 
 /** iOS 風セグメントコントロール（フィルタタブ用） */
@@ -17,26 +16,9 @@ export function SegmentedControl<T extends string>({
   className?: string;
 }) {
   const systemGlass = useSystemGlass();
-  const track = useRef<HTMLDivElement>(null);
-  const itemSignature = JSON.stringify(items);
-  useLayoutEffect(() => {
-    const node = track.current;
-    if (!systemGlass || !node) return;
-    const update = () => {
-      const selected = node.querySelector<HTMLElement>('button[aria-pressed="true"]');
-      const lens = node.querySelector<HTMLElement>("[data-glass-selection]");
-      if (!selected || !lens) return;
-      lens.style.width = `${selected.offsetWidth}px`;
-      lens.style.transform = `translateX(${selected.offsetLeft}px)`;
-    };
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [systemGlass, value, itemSignature]);
+  const selectedIndex = items.findIndex((item) => item.key === value);
   return (
     <div
-      ref={track}
       data-glass-segments
       data-system-glass={systemGlass || undefined}
       className={cn(
@@ -45,7 +27,12 @@ export function SegmentedControl<T extends string>({
         className,
       )}
     >
-      {systemGlass && <span data-glass-selection aria-hidden="true" />}
+      {systemGlass && selectedIndex >= 0 && <span data-glass-selection aria-hidden="true" style={{
+        // Equal columns, 2px gaps and 2px insets. CSS keeps fractional positions
+        // in sync during resizing and dialog animation without DOM measurement.
+        width: `calc((100% - 2px) / ${items.length} - 2px)`,
+        left: `calc(2px + (100% - 2px) / ${items.length} * ${selectedIndex})`,
+      }} />}
       {items.map((it) => {
         const active = it.key === value;
         return (

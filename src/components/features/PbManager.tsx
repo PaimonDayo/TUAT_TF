@@ -63,7 +63,7 @@ export function PbManager({
 
   const addButton = (
     <button
-      data-ui-action
+      data-ui-action="icon"
       type="button"
       onClick={openAdd}
       aria-label={addLabel}

@@ -61,7 +61,7 @@ export function ObDutyRoleManager({entries,time,event,roles,duties,members,onClo
    const full=!checked&&people.selected.length>=people.role.required_count;
    const next=nextCommitment(row.entry,row.id,time,duties,roles);
    const here=(slotDuty(row.id)?.role_ids??[]).filter(id=>id!==people.role.id).map(id=>roles.find(r=>r.id===id)?.abbreviation).filter(Boolean);
-   return <label data-ui-choice key={row.id} className={`flex items-start gap-3 p-3 ${full?"opacity-50":""}`}>
+   return <label data-ui-choice-row key={row.id} className={`flex items-start gap-3 p-3 ${full?"opacity-50":""}`}>
     <input type="checkbox" className="mt-1 h-5 w-5 shrink-0" checked={checked} disabled={saving||full} onChange={()=>setPeople({...people,selected:checked?people.selected.filter(id=>id!==row.id):[...people.selected,row.id]})}/>
     <span className="min-w-0 flex-1"><span className="block text-body"><span className="mr-2 text-caption">{row.grade}</span>{row.name}{here.length>0&&<span className="ml-2 text-caption">この種目：{here.join("・")}</span>}</span>
     <span className="mt-0.5 block text-caption">{next?<>次：<span className="tabular-nums">{next.time}</span> {next.label}（{next.kind==="競技"?"出場":`補助員・${next.detail}`}）</>:"このあとの予定なし"}</span></span>
