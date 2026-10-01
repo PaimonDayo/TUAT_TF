@@ -25,6 +25,7 @@ import { useToast } from "@/components/ui/toast";
 import { SCHEDULE_TYPES, ATTENDANCE_TYPES } from "@/lib/constants";
 import { BLOCKS, BLOCK_ORDER, viewerCompetitionBlocks } from "@/lib/constants";
 import { venueShort } from "@/lib/venues";
+import { menuAccess } from "@/lib/menu-permissions";
 import { cn } from "@/lib/utils";
 import { jstToday } from "@/lib/date";
 import { scheduleAttendanceDates } from "@/lib/schedule-days";
@@ -87,6 +88,7 @@ export function ScheduleCard({
   viewerBlocks = [],
   canEditMenu = false,
   canManageAllMenus = false,
+  editableMenuBlocks = [],
   canManage = false,
   canDecidePractice = false,
   userId,
@@ -105,6 +107,7 @@ export function ScheduleCard({
   viewerBlocks?: Block[];
   canEditMenu?: boolean;
   canManageAllMenus?: boolean;
+  editableMenuBlocks?: Block[];
   canManage?: boolean;
   /** 雨天時など、出欠欄近くに開催の対応状況を表示・編集できる（練習の開催判断権限） */
   canDecidePractice?: boolean;
@@ -452,8 +455,11 @@ export function ScheduleCard({
                           canManage={
                             m.source === "sheet"
                               ? canEditMenu
-                              : canManageAllMenus || (!!userId && m.author?.id === userId)
+                              : menuAccess({ userId, authorId: m.author_id, targetBlock: m.target_block, canCreate: canEditMenu, canManageAll: canManageAllMenus, editableBlocks: editableMenuBlocks }).canEdit
                           }
+                          canDelete={menuAccess({ userId, authorId: m.author_id, targetBlock: m.target_block, canCreate: canEditMenu, canManageAll: canManageAllMenus }).canDelete}
+                          editableBlocks={editableMenuBlocks}
+                          restrictBlock={!canManageAllMenus && m.author_id !== userId}
                           isTargeted={
                             !!userId && (m.targets?.some((t) => t.user_id === userId) ?? false)
                           }
@@ -499,6 +505,9 @@ export function ScheduleCard({
 }
 
 function MenuCard({
+  canDelete,
+  editableBlocks,
+  restrictBlock,
   menu,
   scheduleId,
   canManage,
@@ -509,6 +518,9 @@ function MenuCard({
   menu: PracticeMenu;
   scheduleId: string;
   canManage: boolean;
+  canDelete: boolean;
+  editableBlocks: Block[];
+  restrictBlock: boolean;
   isTargeted?: boolean;
   isMyBlock?: boolean;
   onChanged: (menu: PracticeMenu | null) => void;
@@ -526,8 +538,8 @@ function MenuCard({
 
   async function remove() {
     const supabase = createClient();
-    const { error } = await supabase.from("practice_menus").delete().eq("id", menu.id);
-    if (error) {
+    const { data, error } = await supabase.from("practice_menus").delete().eq("id", menu.id).select("id");
+    if (error || !data?.length) {
       showToast("練習メニューを削除できませんでした");
       return false;
     }
@@ -570,7 +582,7 @@ function MenuCard({
         <div className="absolute right-1.5 top-1.5">
           <ActionMenu
             onEdit={() => setEditing(true)}
-            onDelete={remove}
+            onDelete={canDelete ? remove : undefined}
             deleteTitle="練習メニューを削除しますか？"
             deleteDescription="削除したメニューは元に戻せません。"
             triggerLabel="練習メニューの操作"
@@ -633,6 +645,7 @@ function MenuCard({
         </button>
       )}
       <MenuEditModal
+        allowedBlocks={restrictBlock ? editableBlocks : undefined}
         menu={menu}
         scheduleId={scheduleId}
         open={editing}

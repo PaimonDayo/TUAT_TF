@@ -13,10 +13,10 @@ const PERMISSION_COLUMN: Record<Permission, keyof AppRole> = {
 /** ロール作成・編集フォームで使う権限の一覧（表示順） */
 export const PERMISSION_LIST: { key: Permission; label: string; desc: string }[] = [
   { key: "manage_system", label: "システム管理", desc: "最上位の設定を変更でき、自分が投稿したお知らせも通知を受け取る" },
-  { key: "manage_members", label: "部員・ロール管理", desc: "ロールの作成や部員へのロール付与ができる（管理者）" },
-  { key: "create_schedule", label: "練習予定の作成", desc: "練習・大会などの予定を作成できる" },
-  { key: "create_menu", label: "練習メニューの作成", desc: "予定に練習メニューを追加できる" },
-  { key: "create_notice", label: "お知らせの作成", desc: "お知らせを投稿できる" },
+  { key: "manage_members", label: "部員・ロール管理", desc: "部員・ロール、他人のメニュー・ノート・スレッドの管理、OB変更履歴の閲覧ができる" },
+  { key: "create_schedule", label: "練習予定の作成・管理", desc: "他人の予定も編集・削除でき、練習場所も管理できる。大会マスタ管理はシステム権限が必要" },
+  { key: "create_menu", label: "練習メニューの作成", desc: "新規作成と自分のメニューの編集・削除、中長距離スプシの編集ができる。ブロック長は担当ブロックの他人のメニューも編集できる" },
+  { key: "create_notice", label: "お知らせの作成・管理", desc: "他人のお知らせも編集・削除できる。全員ロールに付与すると全員が操作可能" },
   { key: "decide_practice", label: "練習の開催判断", desc: "雨天時など、出欠欄に「話し合い中です」等の対応状況を表示できる" },
 ];
 
@@ -26,7 +26,7 @@ export function hasPermission(
   perm: Permission,
 ): boolean {
   const col = PERMISSION_COLUMN[perm];
-  return (roles ?? []).some((r) => Boolean(r[col]));
+  return (roles ?? []).some((r) => !r.permissions_suppressed && Boolean(r[col]));
 }
 
 /** よく使う権限セットをまとめて算出 */
@@ -43,5 +43,5 @@ export function permissionsOf(roles: AppRole[] | undefined | null) {
 
 /** 管理者によるコメント削除。本文の編集権限は投稿者だけに保持する。 */
 export function canModerateComments(roles: AppRole[] | undefined | null): boolean {
-  return !!roles?.some(role => role.name === "管理者");
+  return !!roles?.some(role => !role.permissions_suppressed && role.name === "管理者");
 }

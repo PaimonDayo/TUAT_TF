@@ -42,7 +42,7 @@ describe("role catalog isolation", () => {
   });
   it("failed assignments or definitions fail closed", async () => {
     mocks.catalog.mockResolvedValue([role("everyone",true)]);
-    expect((await fetchRolesByProfileIds(client([],[],true).supabase,["a"],{useCachedCatalog:true})).size).toBe(0);
+    await expect(fetchRolesByProfileIds(client([],[],true).supabase,["a"],{useCachedCatalog:true})).rejects.toThrow("権限情報を取得できませんでした");
   });
   it("reads definitions as the member when the shared catalog is unavailable (PC down)", async () => {
     mocks.catalog.mockRejectedValue(new Error("unavailable"));
@@ -56,5 +56,15 @@ describe("role catalog isolation", () => {
     expect((await fetchRolesByProfileIds(c.supabase,[])).size).toBe(0);
     expect(c.from).not.toHaveBeenCalled();
     expect(mocks.catalog).not.toHaveBeenCalled();
+  });
+  it("recovers a transient assignment failure with a fresh retry", async () => {
+    let attempts = 0;
+    const from = vi.fn((table: string) => ({ select: () => table === "roles"
+      ? Promise.resolve({ data: [role("everyone", true)], error: null })
+      : { in: async () => ++attempts === 1 ? { data: null, error: new Error("network") } : { data: [], error: null } }
+    }));
+    const result = await fetchRolesByProfileIds({ from } as unknown as Parameters<typeof fetchRolesByProfileIds>[0], ["a"]);
+    expect(attempts).toBe(2);
+    expect(result.get("a")?.map(r => r.id)).toEqual(["everyone"]);
   });
 });

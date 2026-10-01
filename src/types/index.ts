@@ -18,6 +18,8 @@ export type Permission =
 
 /** カスタムロール（roles テーブル） */
 export interface AppRole {
+  /** 一般部員プレビュー用。DBには保存しない。 */
+  permissions_suppressed?: boolean;
   id: string;
   name: string;
   can_manage_system: boolean;

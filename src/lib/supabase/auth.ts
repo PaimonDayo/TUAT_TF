@@ -54,7 +54,7 @@ const getStoredProfile = cache(async (): Promise<Profile> => {
   // 全ページの描画がDBへの往復1回ぶん遅れる（PC中継では1往復が数百ミリ秒かかる）。
   const [{ data: profile, error: profileError }, rolesMap] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
-    fetchRolesByProfileIds(supabase, [user.id], { useCachedCatalog: true }),
+    fetchRolesByProfileIds(supabase, [user.id]),
   ]);
 
   if (profileError) {
@@ -124,6 +124,7 @@ export const getCurrentProfile = cache(async (): Promise<Profile> => {
     ...profile,
     roles: profile.roles.map((role) => ({
       ...role,
+      permissions_suppressed: true,
       can_manage_system: false,
       can_manage_members: false,
       can_create_schedule: false,
@@ -136,7 +137,7 @@ export const getCurrentProfile = cache(async (): Promise<Profile> => {
 
 /**
  * 指定プロフィール群のロールをまとめて取得する。
- * roles / profile_roles 未適用やエラー時は空マップを返す（プロフィール表示は壊さない）。
+ * 取得失敗は一度再試行し、なお失敗なら例外。権限なしとは区別する。
  */
 function loadRoles(supabase: SupabaseServer): Promise<AppRole[]> {
   return Promise.resolve(supabase.from("roles").select("*")).then(({ data, error }) => {
@@ -148,7 +149,7 @@ function loadRoles(supabase: SupabaseServer): Promise<AppRole[]> {
 export async function fetchRolesByProfileIds(
   supabase: SupabaseServer,
   ids: string[],
-  options: { useCachedCatalog?: boolean } = {},
+  options: { useCachedCatalog?: boolean; retry?: boolean } = {},
 ): Promise<Map<string, AppRole[]>> {
   const map = new Map<string, AppRole[]>();
   if (ids.length === 0) return map;
@@ -162,7 +163,7 @@ export async function fetchRolesByProfileIds(
         ? getSharedRoleCatalog().catch(() => loadRoles(supabase))
         : loadRoles(supabase),
     ]);
-    if (assignments.error || !assignments.data) return map;
+    if (assignments.error || !assignments.data) throw new Error("Failed to load role assignments");
     const byId = new Map(catalog.map((role) => [role.id, role]));
     const globalRoles = catalog.filter((role) => role.is_everyone);
     for (const id of ids) map.set(id, [...globalRoles]);
@@ -174,7 +175,8 @@ export async function fetchRolesByProfileIds(
     for (const roles of map.values()) roles.sort((a, b) => a.sort_order - b.sort_order);
     return map;
   } catch {
-    // Failed reads never grant permissions or poison the shared cache with [].
-    return map;
+    if (options.retry !== false) return fetchRolesByProfileIds(supabase, ids, { useCachedCatalog: false, retry: false });
+    // Fail closed without turning a transport failure into a false permission denial.
+    throw new Error("権限情報を取得できませんでした。接続を確認して再読み込みしてください。");
   }
 }

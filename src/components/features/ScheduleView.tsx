@@ -20,6 +20,7 @@ export function ScheduleView({
   viewerBlocks,
   canEditMenu,
   canManageAllMenus = false,
+  editableMenuBlocks = [],
   canManage = false,
   canDecidePractice = false,
   attendeesBySchedule,
@@ -36,6 +37,7 @@ export function ScheduleView({
   viewerBlocks: Block[];
   canEditMenu: boolean;
   canManageAllMenus?: boolean;
+  editableMenuBlocks?: Block[];
   canManage?: boolean;
   canDecidePractice?: boolean;
   attendeesBySchedule: Record<string, Attendee[]>;
@@ -105,6 +107,7 @@ export function ScheduleView({
                     viewerBlocks={viewerBlocks}
                     canEditMenu={canEditMenu}
                     canManageAllMenus={canManageAllMenus}
+                    editableMenuBlocks={editableMenuBlocks}
                     canManage={canManage}
                     canDecidePractice={canDecidePractice}
                     userId={userId}

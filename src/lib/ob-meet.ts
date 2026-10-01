@@ -13,8 +13,8 @@ export function isObCompetition(competitionId: string): boolean {
 
 /** 他人のOB戦回答を変更できるのは、この大会の担当ロールだけ。 */
 export const OB_STAFF_ROLE = "OB戦2026";
-export function canManageObMeet(roles: { name: string; can_manage_system: boolean }[] | null | undefined): boolean {
-  return !!roles?.some((r) => r.name === OB_STAFF_ROLE);
+export function canManageObMeet(roles: { name: string; can_manage_system: boolean; permissions_suppressed?: boolean }[] | null | undefined): boolean {
+  return !!roles?.some((r) => !r.permissions_suppressed && r.name === OB_STAFF_ROLE);
 }
 export function canViewObHistory(roles: { can_manage_system: boolean; can_manage_members: boolean }[] | null | undefined): boolean {
   return !!roles?.some((r) => r.can_manage_system || r.can_manage_members);

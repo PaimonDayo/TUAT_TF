@@ -9,7 +9,7 @@ import { permissionsOf } from "@/lib/permissions";
 export default async function AdminPage() {
   const profile = await getCurrentProfile();
   const permissions = permissionsOf(profile.roles);
-  if (!permissions.manageMembers && !permissions.manageSystem) redirect("/home");
+  if (!permissions.manageMembers) redirect("/home");
 
   const [members, roles, categories] = await Promise.all([
     getAllProfiles(),

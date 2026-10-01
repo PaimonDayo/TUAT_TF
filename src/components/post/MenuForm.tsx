@@ -108,6 +108,7 @@ function MenuCreatePanel({
 }
 
 export function MenuEditModal({
+  allowedBlocks,
   menu,
   scheduleId,
   open,
@@ -115,6 +116,7 @@ export function MenuEditModal({
   onSaved,
 }: {
   menu: PracticeMenu;
+  allowedBlocks?: Block[];
   scheduleId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -124,6 +126,7 @@ export function MenuEditModal({
   return (
     <FormModal open onOpenChange={onOpenChange} title="練習メニューを編集">
       <MenuEditor
+        allowedBlocks={allowedBlocks}
         menu={menu}
         scheduleId={scheduleId}
         onDone={(saved) => { if (saved) onSaved?.({ ...menu, ...saved }); onOpenChange(false); }}
@@ -133,12 +136,14 @@ export function MenuEditModal({
 }
 
 function MenuEditor({
+  allowedBlocks,
   scheduleId: fixedScheduleId,
   menu,
   onDone,
 }: {
   scheduleId?: string;
   menu?: PracticeMenu;
+  allowedBlocks?: Block[];
   onDone: (saved?: MenuSaveResult) => void;
 }) {
 
@@ -327,7 +332,7 @@ function MenuEditor({
         <div>
           <p className="section-label mb-1.5">ブロック</p>
           <div className="grid grid-cols-2 gap-2">
-            {EDITABLE_BLOCK_ORDER.map((block) => {
+            {EDITABLE_BLOCK_ORDER.filter(block => !allowedBlocks || allowedBlocks.includes(block)).map((block) => {
               const meta = BLOCKS[block];
               const active = targetBlock === block;
               return (
@@ -354,7 +359,7 @@ function MenuEditor({
             <p className="section-label mb-1.5">ブロック</p>
             <p className="text-micro mb-1.5">同じブロックの部員もこの個別メニューを閲覧できます。</p>
             <div className="grid grid-cols-2 gap-2">
-              {EDITABLE_BLOCK_ORDER.map((block) => {
+              {EDITABLE_BLOCK_ORDER.filter(block => !allowedBlocks || allowedBlocks.includes(block)).map((block) => {
                 const meta = BLOCKS[block];
                 const active = targetBlock === block;
                 return (

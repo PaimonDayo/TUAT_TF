@@ -1,5 +1,6 @@
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getUpcomingSchedulesWithAttendances } from "@/lib/queries";
+import { editableMenuBlocks } from "@/lib/menu-permissions";
 import { permissionsOf } from "@/lib/permissions";
 import type { MiddleLongMenuSnapshot } from "@/lib/middle-long-menu-data";
 import type { Attendee, AttendanceDefaultBlock, AttendanceStatusOrNone, AuthorMini, ScheduleWithMenus } from "@/types";
@@ -24,6 +25,7 @@ export type SchedulePageData = {
   viewerBlocks: import("@/types").Block[];
   canEditMenu: boolean;
   canManageAllMenus: boolean;
+  editableMenuBlocks: import("@/types").Block[];
   canManage: boolean;
   canDecidePractice: boolean;
   attendeesBySchedule: Record<string, Attendee[]>;
@@ -73,6 +75,7 @@ export async function getSchedulePageData(): Promise<SchedulePageData> {
     viewerBlocks: profile.blocks,
     canEditMenu: perms.createMenu,
     canManageAllMenus: perms.manageMembers,
+    editableMenuBlocks: editableMenuBlocks(profile.roles),
     canManage: perms.createSchedule,
     canDecidePractice: perms.decidePractice,
     attendeesBySchedule,

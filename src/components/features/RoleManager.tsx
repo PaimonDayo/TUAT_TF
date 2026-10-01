@@ -14,6 +14,7 @@ import { ReorderList } from "@/components/ui/reorder-list";
 import { Select } from "@/components/ui/select";
 import { Toggle } from "@/components/ui/toggle";
 import { useToast } from "@/components/ui/toast";
+import { namedRoleCapabilities } from "@/lib/role-capabilities";
 import { PERMISSION_LIST } from "@/lib/permissions";
 import type { AppRole, Permission, Profile, RoleCategory } from "@/types";
 
@@ -93,6 +94,7 @@ function RoleRow({ role, members, categories, onUpdated, onDeleted, onMembersUpd
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const perms = PERMISSION_LIST.filter((permission) => role[PERM_COLUMN[permission.key]]);
+  const namedCapabilities = namedRoleCapabilities(role.name);
   const assignedIds = role.is_everyone ? members.map((member) => member.id) : members.filter((member) => member.roles.some((item) => item.id === role.id)).map((member) => member.id);
 
   async function updateRoleMembers(nextMemberIds: string[]) {
@@ -116,10 +118,11 @@ function RoleRow({ role, members, categories, onUpdated, onDeleted, onMembersUpd
   return <Card className="p-3">
     <div className="flex items-start gap-2"><div className="min-w-0 flex-1 pt-1">
       <span className="flex items-center gap-1 text-[15px] font-semibold"><span className="inline-flex rounded-full px-2 py-0.5 text-[13px]" style={{ color: role.color, backgroundColor: `${role.color}18` }}>{role.name}</span>{role.is_system && <span className="inline-flex shrink-0 items-center gap-0.5 text-micro text-muted"><Lock size={10} />組み込み</span>}{role.is_everyone && <span className="inline-flex shrink-0 items-center gap-0.5 text-micro text-muted"><Users size={10} />全員に自動適用</span>}</span>
-      <div className="mt-1.5 flex flex-wrap gap-1">{perms.length === 0 ? <span className="text-micro">権限なし（肩書きのみ）</span> : perms.map((permission) => <span key={permission.key} className="rounded-full bg-accent/10 px-2 py-0.5 text-micro text-accent">{permission.label}</span>)}</div>
-    </div>{!role.is_system && <ActionMenu onEdit={() => setEditing(true)} onDelete={role.is_everyone ? undefined : remove} deleteTitle={`ロール「${role.name}」を削除しますか？`} deleteDescription="このロールの部員への割り当ても解除されます。" triggerLabel={`${role.name}のメニュー`} />}</div>
+      <div className="mt-1.5 flex flex-wrap gap-1">{perms.length === 0 && namedCapabilities.length === 0 ? <span className="text-micro">権限なし（肩書きのみ）</span> : perms.map((permission) => <span key={permission.key} className="rounded-full bg-accent/10 px-2 py-0.5 text-micro text-accent">{permission.label}</span>)}</div>
+      {namedCapabilities.map(text => <p key={text} className="mt-2 text-caption">{text}</p>)}
+    </div>{!role.is_system && <ActionMenu onEdit={() => setEditing(true)} onDelete={role.is_everyone || (role.can_manage_system && !canManageSystem) ? undefined : remove} deleteTitle={`ロール「${role.name}」を削除しますか？`} deleteDescription="このロールの部員への割り当ても解除されます。" triggerLabel={`${role.name}のメニュー`} />}</div>
     {editing && <RoleEditor open onClose={() => setEditing(false)} role={role} sortOrder={role.sort_order} categories={categories} canManageSystem={canManageSystem} onSaved={(updated) => { onUpdated(updated); setEditing(false); }} />}
-    <div className="mt-3">{role.is_everyone ? <div className="flex min-h-11 items-center gap-2 rounded-xl border border-separator bg-bg px-3 text-sm font-semibold"><Users size={17} className="text-accent" /><span className="flex-1">すべての部員</span><span className="text-muted">{members.length}人</span></div> : <PersonPicker people={members} value={assignedIds} onChange={(ids) => void updateRoleMembers(ids)} label={`所属メンバー（${assignedIds.length}人）`} />}</div>
+    <div className="mt-3">{role.is_everyone ? <div className="flex min-h-11 items-center gap-2 rounded-xl border border-separator bg-bg px-3 text-sm font-semibold"><Users size={17} className="text-accent" /><span className="flex-1">すべての部員</span><span className="text-muted">{members.length}人</span></div> : role.can_manage_system && !canManageSystem ? <p className="text-caption">このロールの所属変更はシステム管理者のみ操作できます。</p> : <PersonPicker people={members} value={assignedIds} onChange={(ids) => void updateRoleMembers(ids)} label={`所属メンバー（${assignedIds.length}人）`} />}</div>
   </Card>;
 }
 
@@ -145,6 +148,8 @@ function RoleEditor({ open, onClose, onSaved, sortOrder, role, categories, canMa
 
   return <FormModal open={open} onOpenChange={(next) => !next && onClose()} title={role ? "ロールを編集" : "ロールを作成"}><div className="space-y-4 pb-4">
     <div><p className="section-label mb-1.5">ロール名</p><Input value={name} onChange={(event) => setName(event.target.value)} placeholder="例: 会計担当 / 主将" maxLength={20} /></div>
+    {namedRoleCapabilities(name.trim()).map(text => <p key={text} className="text-caption">ロール名で適用: {text}</p>)}
+    {role && namedRoleCapabilities(role.name).length > 0 && <p className="text-caption">名前を変更すると、名前に対応する権限も変わります。</p>}
     {!role?.is_everyone && <div><p className="section-label mb-1.5">カテゴリ</p><Select value={category || "__none__"} onValueChange={(value) => setCategory(value === "__none__" ? "" : value)} ariaLabel="ロールカテゴリ" options={[{ value: "__none__", label: "カテゴリなし" }, ...categories.map((item) => ({ value: item.name, label: item.name }))]} /></div>}
     <div><p className="section-label mb-1.5">権限</p><div className="space-y-2">{PERMISSION_LIST.map((permission) => { const administrativeForEveryone = role?.is_everyone && (permission.key === "manage_system" || permission.key === "manage_members"); const disabled = administrativeForEveryone || (permission.key === "manage_system" && !canManageSystem); return <Toggle key={permission.key} checked={flags[permission.key]} onChange={() => setFlags((current) => ({ ...current, [permission.key]: !current[permission.key] }))} label={permission.label} description={administrativeForEveryone ? "全員ロールには安全上付与できません" : permission.key === "manage_system" && !canManageSystem ? `${permission.desc}（システム管理者のみ変更可）` : permission.desc} disabled={disabled} />; })}</div></div>
     <div><p className="section-label mb-1.5">ロールの色</p><div data-ui-swatches className="grid grid-cols-8 gap-2">{ROLE_COLORS.map((option) => <button data-ui-choice key={option} type="button" onClick={() => setColor(option)} aria-pressed={color === option} aria-label={`色 ${option}`} className="flex aspect-square items-center justify-center rounded-lg border" style={{ borderColor: color === option ? option : "#e5e5ea", backgroundColor: `${option}18` }}><span className="h-5 w-5 rounded-full" style={{ backgroundColor: option }} /></button>)}</div></div>
