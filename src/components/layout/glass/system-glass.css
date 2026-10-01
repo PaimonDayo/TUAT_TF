@@ -76,6 +76,9 @@
 }
 [data-system-glass][data-glass-segments] > button:is(:active, [data-glass-pressed]) { background: #ffffff40; }
 [data-system-glass][data-glass-segments] > button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+/* touchend commits through click() + focus(); browsers can treat that as
+   keyboard focus. Restore the ring on keydown or when focus leaves the group. */
+[data-system-glass][data-glass-segments][data-glass-pointer-focus] > button:focus-visible { outline: none; }
 [data-system-glass][data-glass-segments] > button[aria-pressed="true"] { color: #075db5; }
 /* Keep the server-rendered selection visible until its moving lens hydrates. */
 [data-system-glass][data-glass-segments]:not(:has(> [data-glass-selection])) > button[aria-pressed="true"] { background: var(--color-card); }

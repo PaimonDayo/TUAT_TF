@@ -69,6 +69,7 @@ export function attachSegmentInteraction(root: HTMLElement, initial: number) {
     const index = button ? buttons.indexOf(button) : -1;
     if (index < 0 || button!.disabled) return;
     suppressClick = false;
+    root.setAttribute("data-glass-pointer-focus", "");
     contact = { kind, id, index, x, y, lastX: x, started: time, time, drag: false };
     root.setAttribute("data-glass-sliding", ""); preview(index); animate(index);
   }
@@ -105,9 +106,19 @@ export function attachSegmentInteraction(root: HTMLElement, initial: number) {
       suppressClick = true;
       // Use the same React onClick as tapping or the keyboard; commit once.
       buttons[next].click();
+      // Keep the keyboard's next Tab relative to the selected button, but don't
+      // let synthetic touch activation inherit a keyboard-only focus ring.
+      root.setAttribute("data-glass-pointer-focus", "");
       buttons[next].focus({ preventScroll: true });
     }
   }
+  const clearPointerFocus = () => root.removeAttribute("data-glass-pointer-focus");
+  // Safari may leave a clicked button unfocused, so the first Tab can arrive
+  // from outside this group. Clear before that key's default focus movement.
+  listen(window, "keydown", clearPointerFocus, { capture: true });
+  listen(root, "focusout", (event) => {
+    if (!(event.relatedTarget instanceof Node) || !root.contains(event.relatedTarget)) clearPointerFocus();
+  });
   // Safari can cancel the Pointer stream while the physical touch continues.
   // As with BottomNav, follow Touch.identifier until that finger ends instead.
   const touchEvents = "ontouchstart" in window;
@@ -168,6 +179,7 @@ export function attachSegmentInteraction(root: HTMLElement, initial: number) {
     update(index: number) { selected = index; if (!contact) animate(Math.max(0, index)); },
     destroy() {
       release(); cancelAnimationFrame(frame); removers.forEach((remove) => remove());
+      clearPointerFocus();
       document.removeEventListener("visibilitychange", visibility); reduced.removeEventListener("change", cancel);
       root.removeAttribute("data-glass-motion"); lens.style.removeProperty("transform"); lens.style.removeProperty("left");
     },
