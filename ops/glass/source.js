@@ -1,11 +1,33 @@
 // TUAT bounded viewport capture for simple-liquid-glass (MIT).
 import { toCanvas } from "html-to-image";
 const sources = /* @__PURE__ */ new WeakMap();
+const excluded = "script,style,.app-floating-action,[data-liquid-glass-ignore]";
+const stylingMarker = "[data-new-ui],[data-system-glass-preview]";
+const overlays = '[role="dialog"],[role="alertdialog"],[data-glass-create-menu]';
+// These changes alone do not need a new backdrop: press feedback is transient,
+// and Radix's accessibility hiding does not alter the background's appearance.
+const nonVisual = new Set(["aria-hidden", "data-aria-hidden", "data-glass-pressed", "data-glass-pointer-focus"]);
+const menuState = new Set(["data-state", "aria-expanded", "aria-controls"]);
+function affectsCapture(record) {
+  const element = record.target instanceof Element ? record.target : record.target.parentElement;
+  // This hidden marker changes the CSS/layout of the entire source tree.
+  if (record.type === "attributes" && ["data-new-ui", "data-system-glass-preview"].includes(record.attributeName)) return true;
+  if (element?.closest(excluded)) return false;
+  if (record.type === "attributes" && (nonVisual.has(record.attributeName)
+    || element?.matches("[data-glass-menu-trigger]") && menuState.has(record.attributeName))) return false;
+  if (record.type === "childList") {
+    return [...record.addedNodes, ...record.removedNodes].some((node) => !(node instanceof Element)
+      || node.matches(stylingMarker) || !node.matches(excluded));
+  }
+  return true;
+}
 class Source {
   constructor(element) {
     this.element = element;
-    this.observer = new MutationObserver(this.changed);
+    this.observer = new MutationObserver(this.mutated);
     this.observer.observe(element, { subtree: true, childList: true, characterData: true, attributes: true });
+    this.portals = new MutationObserver(this.syncSuspended);
+    this.portals.observe(document.body, { childList: true });
     this.resize = new ResizeObserver(this.changed);
     this.resize.observe(element);
     element.addEventListener("load", this.changed, true);
@@ -16,10 +38,12 @@ class Source {
     window.addEventListener("scroll", this.interacting, { passive: true });
     window.addEventListener("resize", this.changed);
     window.visualViewport?.addEventListener("resize", this.changed);
+    this.syncSuspended();
   }
-  capture = { cache: /* @__PURE__ */ new Map() };
+  capture = { cache: /* @__PURE__ */ new Map(), suspended: false };
   listeners = /* @__PURE__ */ new Set();
   observer;
+  portals;
   resize;
   timer;
   busy = false;
@@ -28,12 +52,30 @@ class Source {
   revision = 0;
   quietUntil = 0;
   schedule = () => {
-    if (this.disposed) return;
+    if (this.disposed || this.capture.suspended) return;
     clearTimeout(this.timer);
     this.timer = setTimeout(() => {
       this.timer = void 0;
       void this.run();
     }, 220);
+  };
+  syncSuspended = () => {
+    const suspended = !!document.querySelector(overlays);
+    if (suspended === this.capture.suspended) return;
+    this.capture.suspended = suspended;
+    if (suspended) {
+      clearTimeout(this.timer);
+      this.timer = void 0;
+    } else {
+      // Closing a portal does not change the backdrop. Reuse its snapshot, or
+      // resume a real content change once focus/scroll restoration has settled.
+      this.quietUntil = Math.max(this.quietUntil, performance.now() + 240);
+      this.schedule();
+    }
+  };
+  mutated = (records) => {
+    this.syncSuspended();
+    if (records.some(affectsCapture)) this.changed();
   };
   changed = () => {
     this.dirty = true;
@@ -48,7 +90,7 @@ class Source {
     this.changed();
   };
   async run() {
-    if (this.disposed || document.hidden) return;
+    if (this.disposed || document.hidden || this.capture.suspended) return;
     if (this.busy || performance.now() < this.quietUntil || document.querySelector('.glass-bar[data-pressing="true"],.ios-glass-nav [aria-busy="true"]')) {
       this.schedule();
       return;
@@ -57,7 +99,8 @@ class Source {
     const viewport = window.visualViewport;
     const bottom = viewport ? viewport.offsetTop + viewport.height : innerHeight;
     const prior = this.capture.cache.get(this.element);
-    if (!this.dirty && prior && bottom - 110 >= bounds.top + prior.offsetTop && bottom + 20 <= bounds.top + prior.offsetTop + prior.cssHeight) return;
+    if (!this.dirty && prior && Math.max(bottom - 110, bounds.top) >= bounds.top + prior.offsetTop
+      && Math.min(bottom + 20, bounds.bottom) <= bounds.top + prior.offsetTop + prior.cssHeight) return;
     // Keep the same fractional CSS dimensions used by the sampling rect.
     // offsetWidth/offsetHeight round them, reflowing the copied background.
     const width = bounds.width, fullHeight = bounds.height;
@@ -70,7 +113,7 @@ class Source {
     const preserveLayout = !!this.element.querySelector(":scope > [data-system-glass-preview]");
     const visible = /* @__PURE__ */ new WeakMap();
     const filter = (node) => {
-      if (node instanceof Element && node.matches("script,style,.app-floating-action,[data-liquid-glass-ignore]")) return false;
+      if (node instanceof Element && node.matches(excluded)) return false;
       const parent = node.parentElement;
       if (!parent || parent === this.element) return true;
       if (!visible.has(parent)) {
@@ -124,6 +167,7 @@ class Source {
     this.disposed = true;
     clearTimeout(this.timer);
     this.observer.disconnect();
+    this.portals.disconnect();
     this.resize.disconnect();
     this.element.removeEventListener("load", this.changed, true);
     this.element.removeEventListener("input", this.changed, true);

@@ -20,6 +20,11 @@ for (const layer of ['glass', 'border']) {
  entry=entry.replace(marker,`${marker} part="${layer}"`);
 }
 let runtime=original('core/webgl/runtime.ts');
+// Preserve the v6 pause while a portal covers the page, including per-frame
+// geometry reads. Keep this in the reproducible source, not only the bundle.
+const pauseMarker='if (document.hidden || renderer.contextLost || (faulted && !dirty)) return;';
+if(!runtime.includes(pauseMarker))throw Error('Runtime pause source changed');
+runtime=runtime.replace(pauseMarker,'if (document.hidden || shared?.capture.suspended || renderer.contextLost || (faulted && !dirty)) return;');
 const marker='sourceRect = new DOMRect(measured.left, elastic && !fixedSource ? documentTop - y : measured.top, measured.width, measured.height);';
 if(!runtime.includes(marker))throw Error('Runtime source changed');
 runtime=runtime.replace(marker,`${marker}
@@ -56,4 +61,4 @@ await esbuild.build({stdin:{contents:entry,resolveDir:upstream+'/src/web-compone
    if(!relative||!args.path.replaceAll('\\','/').startsWith(upstream.replaceAll('\\','/')))return;
    return {contents:overrides.get(relative)??original(relative),loader:relative.endsWith('.tsx')?'tsx':'ts',resolveDir:dirname(args.path)};
  });}}],outfile:resolve('public/vendor/liquid-glass/simple-liquid-glass.js')});
-writeFileSync('public/vendor/liquid-glass/SOURCE.md',`# Vendored Liquid Glass\n\nSource: https://github.com/lucaperullo/simple-liquid-glass/tree/${revision}\n\nMIT. Optical shaders unchanged. TUAT patches: exposed glass/border shadow parts for the app-owned continuous material; cancellable ResizeObserver render; bounded 384px bottom-viewport capture with offscreen subtree pruning (system preview preserves inline/contents/auto-sized parents to prevent collapsed rows); defer capture until input/navigation settles; crop-aware sampling with live CSS fallback outside the cached strip. Capture keeps fractional CSS dimensions and exact computed font sizes to align the background with the page. System fonts only. html-to-image copies only resolved paint/layout properties instead of every computed CSS variable. Patch source and reproducible build are in ops/glass/. Build dependencies: esbuild 0.25.12, html-to-image 1.11.11; target safari15. Retained MIT notices beside this file.\n`);
+writeFileSync('public/vendor/liquid-glass/SOURCE.md',`# Vendored Liquid Glass\n\nSource: https://github.com/lucaperullo/simple-liquid-glass/tree/${revision}\n\nMIT. Optical shaders unchanged. TUAT patches: exposed glass/border shadow parts for the app-owned continuous material; cancellable ResizeObserver render; bounded 384px bottom-viewport capture with offscreen subtree pruning (system preview preserves inline/contents/auto-sized parents to prevent collapsed rows); defer capture until input/navigation settles; suspend capture and geometry reads behind dialogs; reuse unchanged snapshots across portal dismissal while retaining real backdrop mutations; ignore excluded floating controls and nonvisual accessibility/press attributes; clamp cache coverage at page edges; crop-aware sampling with live CSS fallback outside the cached strip. Capture keeps fractional CSS dimensions and exact computed font sizes to align the background with the page. System fonts only. html-to-image copies only resolved paint/layout properties instead of every computed CSS variable. Patch source and reproducible build are in ops/glass/. Build dependencies: esbuild 0.25.12, html-to-image 1.11.11; target safari15. Retained MIT notices beside this file.\n`);

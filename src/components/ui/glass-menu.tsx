@@ -36,7 +36,7 @@ export function GlassMenu({ open, onOpenChange, trigger, label, items }: {
   }, []);
   return (
     <Dialog.Root open={open} onOpenChange={(next) => { if (next) setHandoff(false); onOpenChange(next); }}>
-      <Dialog.Trigger ref={anchor} asChild>{trigger}</Dialog.Trigger>
+      <Dialog.Trigger ref={anchor} data-glass-menu-trigger="" asChild>{trigger}</Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay className="system-glass-menu-scrim" data-handoff={handoff || undefined} />
         <MenuSurface anchor={anchor} label={label} handoff={handoff} onClosed={() => {
