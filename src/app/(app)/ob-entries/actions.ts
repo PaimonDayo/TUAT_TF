@@ -100,6 +100,7 @@ export async function saveDutyRole(input: import("@/lib/ob-duty").DutyRoleEdit):
   refreshObPages();return {ok:true};
 }
 function dutyRoleError(message:string) {
+  if(message.includes("role_assigned"))return "担当者がいる役職は削除できません。「人を編集」で担当を解除してから削除してください";
   if(message.includes("entry_duty_busy"))return "同時刻に別種目の補助担当があります。画面を更新して確認してください";
   if(message.includes("entry_helper_ineligible"))return "現役の参加回答を選んでください。OB・OGは補助員の対象外です";
   if(message.includes("role_full"))return "必要人数に達した役職があります。画面を更新して確認してください";
@@ -109,6 +110,16 @@ function dutyRoleError(message:string) {
   if(message.includes("entry_conflict"))return "他の操作で更新されています。画面を更新してください";
   if(message.includes("role_names_too_long"))return "選択した役職名が長すぎます。役職名を短くしてください";
   return "保存できませんでした。入力内容を確認してください";
+}
+
+export async function deleteDutyRole(input: import("@/lib/ob-duty").DutyRoleDelete): Promise<{ok:boolean;message?:string}> {
+  const {validDutyRoleDelete}=await import("@/lib/ob-duty");
+  if(!validDutyRoleDelete(input))return {ok:false,message:"役職を確認してください"};
+  const client=await editClient();if(!client)return {ok:false,message:"権限がありません"};
+  const result=await client.rpc("delete_ob_duty_role",{p_id:input.id,p_slot_time:input.slotTime,p_event_name:input.eventName,p_revision:input.revision});
+  if(result.error)return {ok:false,message:result.error.message.includes("role_assigned")||result.error.message.includes("entry_conflict")?dutyRoleError(result.error.message):"削除できませんでした。画面を更新してからやり直してください"};
+  if(result.data!==input.id)return {ok:false,message:"削除を確認できませんでした。画面を更新してください"};
+  refreshObPages();return {ok:true};
 }
 
 /** 紐付け前の自分の回答を、アプリの名前と学年で呼び出す（照合の条件はDBの claim_ob_entry）。 */

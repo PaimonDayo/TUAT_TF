@@ -3,8 +3,32 @@ const mocks = vi.hoisted(() => ({ user: vi.fn(), roles: vi.fn(), preview: vi.fn(
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: mocks.user }, from: mocks.from, rpc: mocks.rpc }) }));
 vi.mock("@/lib/supabase/auth", () => ({ fetchRolesByProfileIds: mocks.roles, isMemberPreviewActive: mocks.preview }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.refresh }));
-import { confirmEntryMember, saveEntry, saveParty, saveDuty, saveDutyRole, saveDutyRoles, getObEntryHistory } from "./actions";
+import { confirmEntryMember, saveEntry, saveParty, saveDuty, saveDutyRole, saveDutyRoles, deleteDutyRole, getObEntryHistory } from "./actions";
 const id = "10000000-0000-4000-8000-000000000001";
+
+it("deletes only the expected role and refreshes only after its ID is returned",async()=>{
+ const input={id,slotTime:"11:00",eventName:"100m",revision:2};
+ for(const data of [null,0,"other"]){mocks.rpc.mockResolvedValueOnce({data,error:null});expect((await deleteDutyRole(input)).ok).toBe(false);}
+ expect(mocks.refresh).not.toHaveBeenCalled();
+ mocks.rpc.mockResolvedValueOnce({data:id,error:null});expect(await deleteDutyRole(input)).toEqual({ok:true});
+ expect(mocks.rpc).toHaveBeenLastCalledWith("delete_ob_duty_role",{p_id:id,p_slot_time:"11:00",p_event_name:"100m",p_revision:2});
+ expect(mocks.refresh).toHaveBeenCalled();
+});
+it("refuses role deletion by anonymous, ordinary, system-only and preview users",async()=>{
+ const input={id,slotTime:"11:00",eventName:"100m",revision:0};
+ mocks.user.mockResolvedValueOnce({data:{user:null}});expect((await deleteDutyRole(input)).ok).toBe(false);
+ mocks.roles.mockResolvedValueOnce(new Map());expect((await deleteDutyRole(input)).ok).toBe(false);
+ mocks.roles.mockResolvedValueOnce(new Map([["system",[{name:"システム",can_manage_system:true}]]]));expect((await deleteDutyRole(input)).ok).toBe(false);
+ mocks.preview.mockResolvedValueOnce(true);expect((await deleteDutyRole(input)).ok).toBe(false);
+ for(const change of [{id:"bad"},{revision:-1},{revision:1.2},{revision:null},{slotTime:"12:34"},{eventName:"1500m"}])expect((await deleteDutyRole({...input,...change} as typeof input)).ok).toBe(false);
+ expect(mocks.rpc).not.toHaveBeenCalled();
+});
+it("explains assigned and changed roles without reporting deletion success",async()=>{
+ const input={id,slotTime:"11:00",eventName:"100m",revision:0};
+ mocks.rpc.mockResolvedValueOnce({error:{message:"role_assigned"}});expect((await deleteDutyRole(input)).message).toContain("担当を解除");
+ mocks.rpc.mockResolvedValueOnce({error:{message:"entry_conflict"}});expect((await deleteDutyRole(input)).message).toContain("更新されています");
+ expect(mocks.refresh).not.toHaveBeenCalled();
+});
 
 it("saves unregistered helpers by entry ID and never reports absent revisions as success",async()=>{
  const input={profileId:id,entryId:id,slotTime:"11:00",eventName:"100m",roleIds:[],revision:null};
