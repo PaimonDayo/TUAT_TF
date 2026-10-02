@@ -1,4 +1,12 @@
-# 通知機能 実装仕様（実装・本番投入済み）
+# 通知機能の設計・実装履歴
+
+## 現在の読み方（2026-10-02確認）
+
+現在の仕様の確認元はコードと適用済みmigration。以下は導入時の設計・実装履歴であり、古いSQLや各フェーズをそのまま再実行しない。作業規則は [AGENTS.md](../AGENTS.md)、文書の入口は [文書案内](README.md) を参照する。
+
+- 現在の受信設定は「コメント」「お知らせ」「メンション」の3種類（`notify_comment` / `notify_notice` / `notify_mention`、`NotificationSettings.tsx`）。予定の追加・変更通知は廃止済みで、下の `notify_schedule` は旧設計の記録。
+- ロール指定はお知らせの通知先を制御する。閲覧範囲には別途 `notices.system_only` があり、`system_only=true` のお知らせはシステム管理権限者だけが閲覧できる（`20260930010000_system_notice_visibility.sql`）。
+- お知らせベルはPC構成では表示中に120秒間隔で取得し、画面へ戻ったときにも確認する。PC構成以外ではRealtimeを使用する（`NotificationBell.tsx`）。
 
 ## 2026-06-29 追加: ロール別通知とリアルタイム未読表示
 
@@ -12,7 +20,7 @@
 
 最終更新: 2026-06-22 / 起案: Claude Code / 実装: Antigravity（初版）→ Claude Code が列名バグ修正・予定通知廃止・Web Push基盤の本番投入を完了。
 
-> このドキュメントは通知機能の「正」。現状の実装内容と一致させること。
+> 以下の設計履歴と現状が異なる場合は、冒頭の現行概要・コード・適用済みmigrationを確認する。
 > 不明点は**現状コードを読んで確認**する。当時の課題台帳（UX-ISSUES / UI-AUDIT）は2026-09-13に削除した。
 
 ## 0. 守ること（このプロジェクト固有・重要）
@@ -20,9 +28,9 @@
 - **通知の生成はクライアント直 INSERT 禁止**。他人宛の行を作るため、必ず **DBトリガー（SECURITY DEFINER）** で作る（偽通知防止）。クライアントには `notifications` の INSERT 権限を与えない。
 - **update の無言失敗**に注意（`src/lib/safe-update.ts` を流用）。
 - マイグレは**新しいタイムスタンプ＋冪等**（`IF NOT EXISTS` / `DROP POLICY IF EXISTS` / `CREATE OR REPLACE`）。
-- 初期データ取得は `src/lib/queries.ts` に集約。操作系は Client Component。
+- 初期データ取得は `src/lib/queries/` の機能別モジュールに集約（入口は `@/lib/queries`）。操作系は Client Component。
 - ガクつき禁止（未読バッジ・件数は `tabular-nums`＋固定幅）。
-- コミット署名は **Antigravity 名**。着手前に `git pull`、push 前に `npx tsc --noEmit`＋`npm run build`。
+- コミット署名は実際に作業したエージェント名を使う。検証・Git・本番反映は [AGENTS.md](../AGENTS.md) の現行規則に従う。
 
 ## 1. 確定した仕様（ユーザー決定済み）
 - **通知センターはベルに同居**：`/notices` を拡張し、上部 `SegmentedControl` で「お知らせ」/「あなたへ」を切替（X/GitHub型）。
@@ -96,7 +104,7 @@ ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
   - **タップで遷移＋既読化**：`reference_type/id` から該当画面へ（record/tweet→該当カード、schedule→予定、notice→`/notices#notice-<id>`）。同時に `is_read=true`（`safe-update` 流用）。
   - 未読は左に小さなドット等で表現（背景色は変えてよいが幅は固定）。
   - **「すべて既読」ボタン**を上部に。個別削除は **⋯ ActionMenu**（スワイプ禁止）。
-- 取得は `src/lib/queries.ts` に `getNotifications(userId)` 等を追加。actor の表示名/アバターを join。
+- 取得は `src/lib/queries/notices.ts` の `getPersonalNotifications(userId)` 等に集約。actor の表示名/アバターを join。
 
 ### 3-3. 通知設定（マイページ）
 - 3種トグル（`notify_comment`/`notify_schedule`/`notify_notice`）。**既存の共通 `Toggle` 部品があれば再利用**（無ければ既存トグルに合わせる）。保存は `safe-update`。
@@ -132,7 +140,7 @@ ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
 - 上記はコミットに含めない（秘密鍵）。Antigravity は**手順書を出して登録依頼**する。
 
 ## 6. フェーズ（順に push 可能な単位で）
-1. `notifications`＋RLS＋生成トリガー（comment→schedule→notice）、`queries.ts`、通知センター（タブ同居）、赤バッジ、タップ既読＋すべて既読＋⋯削除。
+1. `notifications`＋RLS＋生成トリガー（comment→schedule→notice）、取得処理（現行は `src/lib/queries/`）、通知センター（タブ同居）、赤バッジ、タップ既読＋すべて既読＋⋯削除。
 2. 受信設定3トグル（`profiles`列＋マイページUI）。トリガーは設定を見て生成。
 3. PWA Service Worker＋`push_subscriptions`＋VAPID＋有効化フロー＋Edge Function配信＋iOS案内。
 

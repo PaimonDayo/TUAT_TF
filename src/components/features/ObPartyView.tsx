@@ -28,13 +28,13 @@ export function ObPartyView({ responses }: { responses: ObPartyResponse[] }) {
       <p className="text-body">参加 {count.attending}人・不参加 {count.absent}人・未回答 {count.unknown}人</p>
       {count.held > 0 && <p className="text-caption">氏名未確認 {count.held}件は人数に含めていません。</p>}
     </Card>
-    <Input aria-label="懇親会の氏名・区分で検索" placeholder="氏名・区分で検索" value={search} onChange={(e) => setSearch(e.target.value)} />
+    <Input aria-label="懇親会の氏名・区分で検索" placeholder="検索" value={search} onChange={(e) => setSearch(e.target.value)} />
     <Select value={status} onValueChange={setStatus} ariaLabel="懇親会の出欠で絞り込み" options={[{value:"all",label:"すべて"},...PARTY_STATUSES.map((s) => ({value:s,label:s})),{value:"held",label:"確認待ち"}]} />
     <Card className="divide-y divide-separator">{rows.length ? rows.map((p) => <div key={p.id} className="flex items-center gap-2 p-3.5">
       <div className="min-w-0 flex-1"><p className="text-caption">{p.group_label}</p><p className="break-words text-body">{p.submitted_name}</p></div>
       <span data-ui-status={p.needs_review || p.status === "未回答" ? "neutral" : p.status === "参加" ? "positive" : "negative"} className="shrink-0 text-body">{p.needs_review ? `確認待ち（${p.status}）` : p.status}</span>
       {!p.needs_review && <ActionMenu triggerLabel={`${p.submitted_name}の懇親会の操作`} onEdit={() => setEditing(p)} editLabel="懇親会の出欠を編集" />}
-    </div>) : <EmptyState title="該当する回答はありません" />}</Card>
+    </div>) : <EmptyState title={normalizeEntryName(search) || status !== "all" ? "条件に合う回答はありません" : "まだ回答はありません"} />}</Card>
     {editing && <PartyEditor key={`${editing.id}:${editing.revision}`} response={editing} onClose={() => setEditing(null)} />}
   </div>;
 }

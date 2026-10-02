@@ -18,14 +18,9 @@ import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
 import { useToast } from "@/components/ui/toast";
 import { createClient } from "@/lib/supabase/client";
 import { ResultForm, type ResultFormHandle } from "@/components/post/ResultForm";
+import { shiftMonth } from "@/lib/date";
 
 const PATH = "/mypage/monthly-results";
-
-function shiftMonth(month: string, delta: number): string {
-  const [y, m] = month.split("-").map(Number);
-  const d = new Date(Date.UTC(y, m - 1 + delta, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-}
 
 export type ResultsPeriod =
   | { kind: "month"; value: string; current: string }
@@ -80,6 +75,10 @@ export function MonthlyResultsView({
     return true;
   }
   const visible = results.filter((r) => matchSimpleBlock(r.author?.blocks, block));
+  const emptyTitle = block !== "all" ? "条件に合う結果はありません"
+    : period.kind === "latest" ? "まだ結果はありません"
+    : period.kind === "year" ? "この年の大会・記録会の結果はありません"
+    : "この月の大会・記録会の結果はありません";
   const groups = new Map<string, { date: string; meet: string; rows: MonthlyResult[] }>();
   for (const r of visible) {
     const meet = r.competition?.name ?? r.meet_name ?? "大会名なし";
@@ -183,10 +182,10 @@ export function MonthlyResultsView({
 
       {period.kind === "latest" ? (
         visible.length === 0
-          ? <Card><EmptyState title="結果はまだ登録されていません" /></Card>
+          ? <Card><EmptyState title={emptyTitle} /></Card>
           : <Card className="divide-y divide-separator">{visible.map((r) => row(r, true))}</Card>
       ) : groups.size === 0 ? (
-        <Card><EmptyState title={period.kind === "year" ? "この年の大会・記録会の結果はありません" : "この月の大会・記録会の結果はありません"} /></Card>
+        <Card><EmptyState title={emptyTitle} /></Card>
       ) : (
         [...groups.values()].map((group) => (
           <section key={`${group.date} ${group.meet}`} className="space-y-1.5">

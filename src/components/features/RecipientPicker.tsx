@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { Check, Users } from "lucide-react";
 import { PersonPicker } from "@/components/features/PersonPicker";
+import { FilterRow } from "@/components/features/FilterRow";
 import { Disclosure } from "@/components/ui/disclosure";
 import { BLOCKS, EDITABLE_BLOCK_ORDER, GRADE_OPTIONS } from "@/lib/constants";
 import { noticeConditionRecipientIds, noticeRecipientIds } from "@/lib/notice-recipients";
@@ -38,8 +39,4 @@ export function RecipientPicker({ people, roles, roleAssignments, all, roleIds, 
     </Disclosure>
     <p className="border-t border-separator/70 py-3 text-xs font-semibold text-muted">通知対象 {uniqueRecipientCount}人</p>
   </div>;
-}
-
-function FilterRow({ label, checked, onClick }: { label: string; checked: boolean; onClick: () => void }) {
-  return <button data-ui-row aria-pressed={checked} type="button" onClick={onClick} className={cn("flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm", checked ? "bg-accent/10 font-semibold text-ink" : "active:bg-bg text-muted2")}><span className="flex-1">{label}</span>{checked && <Check size={18} className="text-accent" />}</button>;
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { MENU_DRAFT_VISIBILITY_DESCRIPTION } from "@/lib/menu-copy";
+
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, LoaderCircle, Save } from "lucide-react";
 import { PersonPicker } from "@/components/features/PersonPicker";
@@ -331,7 +333,7 @@ export const MonthlyPlanningEditorV2 = forwardRef<MonthlyPlanningEditorHandle, {
           中長距離のブロック全体メニューは、GASを通して月別スプレッドシートへ保存します。
         </p>
       ) : (
-        <div className={`rounded-xl border p-3 ${status === "published" ? "border-accent/30 bg-accent/5" : "border-warning/30 bg-warning/5"}`}><p className="section-label mb-2">保存後の状態</p><SegmentedControl items={[{ key: "published", label: "公開" }, { key: "draft", label: "下書き" }]} value={status} onChange={(value) => setStatus(value as "draft" | "published")} /><p className="mt-2 text-xs text-muted">{status === "published" ? "保存するとすぐに部員へ公開されます" : "作成者だけが確認できる下書きで保存します"}</p></div>
+        <div className={`rounded-xl border p-3 ${status === "published" ? "border-accent/30 bg-accent/5" : "border-warning/30 bg-warning/5"}`}><p className="section-label mb-2">保存後の状態</p><SegmentedControl items={[{ key: "published", label: "公開" }, { key: "draft", label: "下書き" }]} value={status} onChange={(value) => setStatus(value as "draft" | "published")} /><p className="mt-2 text-xs text-muted">{status === "published" ? "保存するとすぐに部員へ公開されます" : MENU_DRAFT_VISIBILITY_DESCRIPTION}</p></div>
       )}
     </div>}
     <div className="space-y-2">{visibleDays.map(({ date, day, weekday }) => <section key={date} className={`rounded-xl border bg-card p-3 ${rowStates[stateKey(tab, date)] === "error" ? "border-danger" : "border-separator"}`}><div className="mb-2 flex items-center"><strong className="text-sm">{month}/{day}（{weekday}）</strong><RowStatus state={rowStates[stateKey(tab, date)]} /></div>

@@ -73,7 +73,7 @@ export function RecordFieldsSetting({ profileId, initial, isMiddleLong }: { prof
     setHiddenKeys([]);
     setFields([]);
     setReorderMode(false);
-    setMessage("デフォルトに戻しました。保存すると反映されます");
+    setMessage("初期設定に戻しました。保存するとこの設定が使われます");
   }
 
   function addField() {

@@ -17,3 +17,10 @@ export function jstToday(offsetDays = 0): string {
 export function jstNow(): Date {
   return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
 }
+
+/** YYYY-MM形式の月を移動する。月末の日付や実行環境のタイムゾーンに左右されない。 */
+export function shiftMonth(month: string, amount: number): string {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const date = new Date(Date.UTC(year, monthNumber - 1 + amount, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}

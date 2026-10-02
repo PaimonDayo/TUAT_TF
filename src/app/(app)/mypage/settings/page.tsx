@@ -17,6 +17,7 @@ import { MemberPreviewSetting } from "@/components/features/MemberPreviewSetting
 import { NewUiSetting } from "@/components/features/NewUiSetting";
 import { canUseNewUi } from "@/lib/new-ui";
 import { EditProfileButton } from "@/components/features/MyPageActions";
+import { SHEET_INPUT_MODE_LABELS } from "@/lib/sheet-input-mode";
 import { SHEET_SETUP_PATH } from "@/lib/sheet-period";
 import { getCurrentProfile, isMemberPreviewActive } from "@/lib/supabase/auth";
 import { permissionsOf } from "@/lib/permissions";
@@ -69,7 +70,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <SlidersHorizontal size={19} className="shrink-0 text-accent" />
               <span className="min-w-0 flex-1">
                 <span className="block text-[14px] font-medium">シート・入力方法・表示項目</span>
-                <span className="block text-micro text-muted">{profile.sheet_transition?.mode === "off" ? "現在：スプシ連携しない" : profile.sheet_transition?.mode === "app_only" ? "現在：アプリからのみ入力" : profile.sheet_transition ? "現在：スプシとアプリの両方から入力" : "10月以降の設定を確認してください"}</span>
+                <span className="block text-micro text-muted">{profile.sheet_transition ? `現在: ${SHEET_INPUT_MODE_LABELS[profile.sheet_transition.mode]}` : "10月以降の設定を確認してください"}</span>
               </span>
               <ChevronRight size={18} className="shrink-0 text-muted" />
           </Link>

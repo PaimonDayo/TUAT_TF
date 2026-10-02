@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Papa from "papaparse";
-import { AlertCircle, Download, Link2, RefreshCw, Upload } from "lucide-react";
+import { Download, Link2, RefreshCw, Upload } from "lucide-react";
+import { RowStatus, Step, SummaryCount } from "@/components/features/sheet-import/ImportFeedback";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -331,7 +332,7 @@ export function MenuSheetImportManager() {
             <p className="text-headline">確認してメニューに登録</p>
           </div>
           <Card className="grid grid-cols-3 divide-x divide-separator overflow-hidden">
-            <SummaryCount label="取込可能" value={applicable} />
+            <SummaryCount label="取り込み可能" value={applicable} />
             <SummaryCount label="エラー" value={errorCount} danger={errorCount > 0} />
             <SummaryCount label="未確認" value={dirtyCount} />
           </Card>
@@ -370,14 +371,6 @@ export function MenuSheetImportManager() {
   );
 }
 
-function Step({ number }: { number: number }) {
-  return (
-    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-[13px] font-bold text-white">
-      {number}
-    </span>
-  );
-}
-
 function EditablePreviewTable({
   rows,
   onChange,
@@ -387,7 +380,7 @@ function EditablePreviewTable({
 }) {
   return (
     <section className="space-y-2">
-      <p className="section-label">取込内容を編集</p>
+      <p className="section-label">取り込み内容を編集</p>
       <div className="overflow-x-auto rounded-xl border border-separator bg-card">
         <table className="w-max min-w-full border-collapse text-left">
           <thead>
@@ -436,47 +429,5 @@ function EditablePreviewTable({
         </table>
       </div>
     </section>
-  );
-}
-
-function RowStatus({ row }: { row: MenuImportEditableRow }) {
-  if (row.status === "error") {
-    return (
-      <div className="mt-1 max-w-40 text-[10px] leading-4 text-danger">
-        <span className="inline-flex items-center gap-1 font-semibold">
-          <AlertCircle size={12} />
-          エラー
-        </span>
-        <p>{row.message}</p>
-      </div>
-    );
-  }
-  const labels = {
-    addition: "追加",
-    update: "更新",
-    skip: "スキップ",
-    editing: "未確認",
-  } as const;
-  return (
-    <span className="mt-1 inline-block whitespace-nowrap text-[10px] font-semibold text-muted2">
-      {labels[row.status]}
-    </span>
-  );
-}
-
-function SummaryCount({
-  label,
-  value,
-  danger = false,
-}: {
-  label: string;
-  value: number;
-  danger?: boolean;
-}) {
-  return (
-    <div className="p-3 text-center">
-      <p className="text-micro">{label}</p>
-      <p className={`mt-0.5 text-title tabular-nums ${danger ? "text-danger" : ""}`}>{value}</p>
-    </div>
   );
 }

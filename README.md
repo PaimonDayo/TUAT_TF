@@ -2,13 +2,13 @@
 
 陸上競技部向けの練習記録・予定・出欠・大会結果・ノート共有アプリ。Next.js 16 / React 19 / Supabase / Tailwind CSS v4 を使用する。
 
-本番は [tuat-tf.vercel.app](https://tuat-tf.vercel.app)。アプリはVercel、DB/Authは所有者PCのWSL内Supabase、画像は非公開R2。旧クラウドSupabaseへ接続先だけを戻してはいけない。
+本番は [tuat-tf.vercel.app](https://tuat-tf.vercel.app)。アプリはVercel、認証はクラウドSupabase、通常のデータは所有者PCのWSL内Supabase、画像は非公開R2。PC停止時はクラウドの予備データへ切り替え、復帰時に変更を書き戻す。全面移行を接続先の差し替えだけで行ってはいけない。
 
 開発ルールと完了条件は [AGENTS.md](AGENTS.md)、運用は [PC本番運用](ops/laptop/PC-PRODUCTION-HANDOFF.md)、文書全体は [文書案内](docs/README.md) を参照する。
 
 ## 開発環境
 
-ルートディレクトリが現行アプリ。新アプリの `tuat-tf-next/` は別packageで、現行アプリのビルド・lint・テスト対象から除外している。
+ルートディレクトリが現行アプリ。新アプリは `D:\TUAT_TF_NEXT_PAUSED` へ移して休止中。オーナーの明示指示なしに再開せず、現行アプリのビルド・lint・テストへ混ぜない。
 
 1. Node.js 22.12以降（この変更は24系で検証）を用意する。
 2. `npm ci` でロックファイルに合わせて依存を導入する。
@@ -24,12 +24,18 @@ GoogleログインにはAuthプロバイダーとコールバック設定が必�
 | コマンド | 用途 |
 | --- | --- |
 | `npm run dev` | ローカル開発 |
+| `npm run check:environment` | Node.js・直接依存の実バージョンをロックファイルと照合（読取のみ） |
 | `npm test` | 現行アプリのVitest |
+| `npm run test:tooling` | 開発環境診断の合成テスト |
+| `npm run test:ops` | バックアップ・予備同期・GAS・ガラス描画の合成テスト |
+| `npm run test:ops:integration` | ループバックHTTPを使う中継・定期処理の合成テスト |
 | `npx tsc --noEmit` | 型検査 |
 | `npx eslint <変更ファイル>` | 変更箇所のlint |
 | `npm run lint` | リポジトリのlint（既存の指摘も含む） |
 | `npm run build` | 現在の環境設定でビルド |
 | `npm start` | ビルドしたアプリを起動 |
+
+検証前に `npm run check:environment` を実行する。package.jsonが新しくても、実行中のNode.jsや既存node_modulesが古い場合がある。診断は自動インストールや本番への通信を行わない。運用の実行スクリプトをテスト代わりに起動しない。
 
 所有者PCでの本番設定ビルドは `node ops/laptop/build-production-local.mjs`。非公開設定が必要なので、他のPCで同名フォルダを作って代用しない。
 

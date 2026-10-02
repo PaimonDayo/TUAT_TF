@@ -360,7 +360,7 @@ function CompetitionForm({
           onChange={(e) => setProgramSourceUrl(e.target.value)}
         />
         <p className="mt-1 text-micro text-muted">
-          設定すると、農工大の出場種目・出場選手を定期的に自動取込し、ホームにプログラムのカードが出ます。
+          設定すると、農工大の出場種目・出場選手を定期的に自動で取り込み、ホームにプログラムのカードが出ます。
         </p>
       </div>
       {error && <p className="text-caption text-danger text-center">{error}</p>}

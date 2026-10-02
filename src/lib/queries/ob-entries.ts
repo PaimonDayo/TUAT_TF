@@ -1,17 +1,17 @@
 import { createClient } from "@/lib/supabase/server";
 import { entryClient } from "@/lib/ob-entries-db";
 import { isAlumniEntry, matchEntryMember, type ObEntry } from "@/lib/ob-entries";
-import type { ObPartyResponse } from "@/lib/ob-meet";
+import { OB_MEET, type ObPartyResponse } from "@/lib/ob-meet";
 
 export async function getObEntries() {
   const client = entryClient(await createClient());
   const [entries, members, history, party, duties, dutyRoles] = await Promise.all([
-    client.from("ob_meet_entries").select("*").eq("meet_key", "ob-2026").order("grade").order("submitted_name"),
+    client.from("ob_meet_entries").select("*").eq("meet_key", OB_MEET.meetKey).order("grade").order("submitted_name"),
     client.from("profiles").select("id,display_name,grade").eq("status", "active").eq("approved", true).order("display_name"),
-    client.from("ob_meet_entries").select("submitted_name,profile_id").neq("meet_key", "ob-2026").not("profile_id", "is", null),
-    client.from("ob_party_responses").select("id,meet_key,submitted_name,group_label,status,entry_id,revision,needs_review").eq("meet_key", "ob-2026").order("group_label").order("submitted_name"),
-    client.from("ob_meet_duties").select("meet_key,profile_id,slot_time,event_name,assignment,revision,role_ids").eq("meet_key", "ob-2026"),
-    client.from("ob_duty_roles").select("*").eq("meet_key","ob-2026").order("name"),
+    client.from("ob_meet_entries").select("submitted_name,profile_id").neq("meet_key", OB_MEET.meetKey).not("profile_id", "is", null),
+    client.from("ob_party_responses").select("id,meet_key,submitted_name,group_label,status,entry_id,revision,needs_review").eq("meet_key", OB_MEET.meetKey).order("group_label").order("submitted_name"),
+    client.from("ob_meet_duties").select("meet_key,profile_id,slot_time,event_name,assignment,revision,role_ids").eq("meet_key", OB_MEET.meetKey),
+    client.from("ob_duty_roles").select("*").eq("meet_key",OB_MEET.meetKey).order("name"),
   ]);
   if (entries.error || members.error || history.error || party.error || duties.error || dutyRoles.error) throw new Error("エントリー情報を取得できませんでした");
   return { entries, members, history, party, duties, dutyRoles };
@@ -21,7 +21,7 @@ export async function getObEntries() {
 export async function getMyObEntry(profileId: string) {
   const client = entryClient(await createClient());
   const { data, error } = await client.from("ob_meet_entries")
-    .select("id,events,qualification_marks").eq("meet_key", "ob-2026").eq("profile_id", profileId).limit(1).maybeSingle();
+    .select("id,events,qualification_marks").eq("meet_key", OB_MEET.meetKey).eq("profile_id", profileId).limit(1).maybeSingle();
   if (error) throw new Error("自分のエントリーを取得できませんでした");
   return data as { id: string; events: string[]; qualification_marks: Record<string, string | null> } | null;
 }
@@ -43,7 +43,7 @@ export async function getMyObEntryCandidates(profileId: string) {
 /** 一般部員の画面用: 自分のエントリーと懇親会の回答（RLSで本人の分だけ読める）。 */
 export async function getMyObEntryFull(profileId: string) {
   const client = entryClient(await createClient());
-  const { data: entry, error } = await client.from("ob_meet_entries").select("*").eq("meet_key", "ob-2026").eq("profile_id", profileId).limit(1).maybeSingle();
+  const { data: entry, error } = await client.from("ob_meet_entries").select("*").eq("meet_key", OB_MEET.meetKey).eq("profile_id", profileId).limit(1).maybeSingle();
   if (error) throw new Error("自分のエントリーを取得できませんでした");
   const partyResult = entry
     ? await client.from("ob_party_responses").select("id,meet_key,submitted_name,group_label,status,entry_id,revision,needs_review").eq("entry_id", entry.id).maybeSingle()

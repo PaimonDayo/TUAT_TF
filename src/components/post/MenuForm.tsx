@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { getCurrentUserId } from "@/lib/supabase/client-auth";
 import { createClient } from "@/lib/supabase/client";
+import { MENU_DRAFT_VISIBILITY_DESCRIPTION } from "@/lib/menu-copy";
 import { jstToday } from "@/lib/date";
 import { MenuSheetImportManager } from "@/components/features/MenuSheetImportManager";
 import { PersonPicker } from "@/components/features/PersonPicker";
@@ -449,7 +450,7 @@ function MenuEditor({
           onChange={(key) => setStatus(key as MenuStatus)}
         />
         <p className="text-micro mt-1.5">
-          下書きは作成権限者だけに表示されます。
+          {MENU_DRAFT_VISIBILITY_DESCRIPTION}
         </p>
       </div>
 
@@ -518,7 +519,7 @@ export function SheetMenuEditModal({
     <FormModal open onOpenChange={onOpenChange} title="中長距離メニューを編集">
       <div className="space-y-4 pb-4">
         <p className="rounded-xl bg-accent/5 px-3 py-2 text-xs text-muted">
-          保存するとGASを通して月別スプレッドシートへ反映されます。
+          保存すると月別スプレッドシートへ書き込まれます。
         </p>
         <div>
           <p className="section-label mb-1.5">メニュー</p>

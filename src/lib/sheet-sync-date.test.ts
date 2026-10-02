@@ -1,8 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sheetRecordCreatedAt } from "./sheet-sync";
 
 describe("sheetRecordCreatedAt", () => {
   const importedAt = new Date("2026-09-13T15:00:00.000Z"); // JST 9/14 0:00 の同期
+
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(importedAt); });
+  afterEach(() => { vi.useRealTimers(); });
 
   it("取り込んだ時刻を投稿時刻にする（タイムラインの一番上に出る）", () => {
     // 練習日そのものではなく、取り込んだ時刻の近傍になる。

@@ -255,7 +255,7 @@ export function CommentSection({
         onCountChange(next.length);
         return next;
       });
-      if (result.pending) setError("アプリから削除しました。スプシ側は反映待ちです。次回同期で自動再試行します");
+      if (result.pending) setError("アプリから削除しました。スプレッドシート側の削除は、次回の連携時に自動でもう一度試します");
       return true;
     } catch { setError("削除結果を確認できませんでした。再試行してください"); return false; }
   }
@@ -293,7 +293,7 @@ export function CommentSection({
                   <div className="min-w-0 flex-1">
                     <div className="flex min-h-7 items-center justify-between gap-2">
                       <p className="text-[13px] font-semibold">スプレッドシートからの返信</p>
-                      {currentUser.canModerateComments && <ActionMenu onDelete={() => remove(comment)} deleteTitle="返信を削除しますか？" deleteDescription="スプシの返信も削除します。元に戻せません。" triggerLabel="返信のメニュー" />}
+                      {currentUser.canModerateComments && <ActionMenu onDelete={() => remove(comment)} deleteTitle="返信を削除しますか？" deleteDescription="スプレッドシートの返信も削除します。元に戻せません。" triggerLabel="返信のメニュー" />}
                     </div>
                     <p className="text-[14px] whitespace-pre-wrap break-words">
                       <Linkify text={comment.content} />
@@ -323,7 +323,7 @@ export function CommentSection({
                         onEdit={comment.user_id === currentUser.id ? () => beginEdit(comment) : undefined}
                         onDelete={() => remove(comment)}
                         deleteTitle="コメントを削除しますか？"
-                        deleteDescription="スプシに送信済みの返信も削除します。元に戻せません。"
+                        deleteDescription="スプレッドシートに書き込み済みの返信も削除します。元に戻せません。"
                         triggerLabel="コメントのメニュー"
                         className="-mr-1"
                       />

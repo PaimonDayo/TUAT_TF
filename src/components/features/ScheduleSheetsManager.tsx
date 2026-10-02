@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Papa from "papaparse";
 import {
-  AlertCircle,
   Check,
   Download,
   ExternalLink,
@@ -12,6 +11,7 @@ import {
   RefreshCw,
   Upload,
 } from "lucide-react";
+import { RowStatus, Step, SummaryCount } from "@/components/features/sheet-import/ImportFeedback";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -441,7 +441,7 @@ export function ScheduleSheetsManager() {
       {lastApplied.length > 0 && (
         <Card data-ui-tone="danger" className="space-y-2 border-danger/30 bg-danger/5 p-3">
           <p className="text-caption">
-            直前の取込で{lastApplied.length}件の予定を追加しました。間違えた場合はここから取り消せます。
+            直前の取り込みで{lastApplied.length}件の予定を追加しました。間違えた場合はここから取り消せます。
           </p>
           <Button data-ui-tone="danger"
             type="button"
@@ -451,7 +451,7 @@ export function ScheduleSheetsManager() {
             onClick={undoLastApply}
             className="border-danger text-danger"
           >
-            {undoing ? "取り消し中…" : `この取込を取り消す（${lastApplied.length}件削除）`}
+            {undoing ? "取り消し中…" : `この取り込みを取り消す（${lastApplied.length}件削除）`}
           </Button>
         </Card>
       )}
@@ -781,7 +781,7 @@ export function ScheduleSheetsManager() {
             <p className="text-headline">確認して予定に登録</p>
           </div>
           <Card className="grid grid-cols-3 divide-x divide-separator overflow-hidden">
-            <SummaryCount label="取込可能" value={applicable} />
+            <SummaryCount label="取り込み可能" value={applicable} />
             <SummaryCount label="エラー" value={errorCount} danger={errorCount > 0} />
             <SummaryCount label="未確認" value={dirtyCount} />
           </Card>
@@ -849,14 +849,6 @@ export function ScheduleSheetsManager() {
   }
 }
 
-function Step({ number }: { number: number }) {
-  return (
-    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-[13px] font-bold text-white">
-      {number}
-    </span>
-  );
-}
-
 function EditablePreviewTable({
   columns,
   rows,
@@ -869,7 +861,7 @@ function EditablePreviewTable({
   const visibleColumns = columns.filter((column) => column !== "曜日");
   return (
     <section className="space-y-2">
-      <p className="section-label">取込内容を編集</p>
+      <p className="section-label">取り込み内容を編集</p>
       <div className="overflow-x-auto rounded-xl border border-separator bg-card">
         <table className="w-max min-w-full border-collapse text-left">
           <thead>
@@ -914,50 +906,6 @@ function EditablePreviewTable({
         </table>
       </div>
     </section>
-  );
-}
-
-function RowStatus({ row }: { row: ScheduleImportEditableRow }) {
-  if (row.status === "error") {
-    return (
-      <div className="mt-1 max-w-40 text-[10px] leading-4 text-danger">
-        <span className="inline-flex items-center gap-1 font-semibold">
-          <AlertCircle size={12} />
-          エラー
-        </span>
-        <p>{row.message}</p>
-      </div>
-    );
-  }
-  const labels = {
-    addition: "追加",
-    update: "更新",
-    skip: "スキップ",
-    editing: "未確認",
-  } as const;
-  return (
-    <span className="mt-1 inline-block whitespace-nowrap text-[10px] font-semibold text-muted2">
-      {labels[row.status]}
-    </span>
-  );
-}
-
-function SummaryCount({
-  label,
-  value,
-  danger = false,
-}: {
-  label: string;
-  value: number;
-  danger?: boolean;
-}) {
-  return (
-    <div className="p-3 text-center">
-      <p className="text-micro">{label}</p>
-      <p className={`mt-0.5 text-title tabular-nums ${danger ? "text-danger" : ""}`}>
-        {value}
-      </p>
-    </div>
   );
 }
 

@@ -61,7 +61,7 @@ export function ObEntryReview({ competition, initial, members, viewerId, me, his
     </Card>
     <ObMyEntry embedded entry={mine} party={party.find((p) => p.entry_id === mine?.id)} me={me} openEditor={openMine} />
     <SegmentedControl items={[{key:"events",label:"予定"},{key:"identity",label:"本人照合"},{key:"party",label:"懇親会"},{key:"duty",label:"補助員"}]} value={view} onChange={(value) => {setView(value);setSearch("");}} />
-    {(view === "events" || view === "identity") && <Input aria-label="氏名・種目・学年で検索" placeholder="氏名・種目・学年で検索" value={search} onChange={(event) => setSearch(event.target.value)} />}
+    {(view === "events" || view === "identity") && <Input aria-label="氏名・種目・学年で検索" placeholder="検索" value={search} onChange={(event) => setSearch(event.target.value)} />}
     {view === "events" && <SegmentedControl items={[{key:"all",label:"すべて"},{key:"男子",label:"男子"},{key:"女子",label:"女子"}]} value={division} onChange={setDivision} />}
     {view === "identity" && <Button size="sm" variant={unlinked ? "primary" : "outline"} aria-pressed={unlinked} onClick={() => setUnlinked(!unlinked)}>未確認のみ</Button>}
     {managerOpen && <ObEntryManager entries={initial} canAdd={newMembers.length > 0} onClose={() => setManagerOpen(false)} onEdit={(id) => { setManagerOpen(false); setEditingId(id); }} onNew={() => { setManagerOpen(false); setAdding(true); }} />}
@@ -90,7 +90,7 @@ export function ObEntryReview({ competition, initial, members, viewerId, me, his
       {query && !groups.length && <EmptyState title="条件に合うエントリーはありません" />}
     </div> : visible.length === 0 ? <Card><EmptyState title="条件に合うエントリーはありません" /></Card> : [...visible].sort((a, b) => compareByGrade({ grade: a.grade, name: a.submitted_name }, { grade: b.grade, name: b.submitted_name })).map((entry) =>
       <EntryCard key={`${entry.id}:${entry.revision}:${view}`} entry={entry} members={members} history={history} party={party.find((p)=>p.entry_id===entry.id)} identity={view === "identity"} />)}
-    <p className="text-micro text-muted">変更はアプリ内のみ。Googleフォームには反映されません。</p>
+    <p className="text-micro text-muted">変更はアプリ内だけに保存されます。Googleフォームの回答は変わりません。</p>
   </div>;
 }
 

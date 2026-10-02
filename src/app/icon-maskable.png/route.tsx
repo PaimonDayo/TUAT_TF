@@ -3,8 +3,7 @@ import { APP_MONO } from "@/lib/app";
 
 // Android等のmaskableアイコン用。OS側で円形等にクロップされるため
 // 角丸を付けず全面塗りつぶし＋ロゴをセーフゾーン内に収める。
-export const size = { width: 512, height: 512 };
-export const contentType = "image/png";
+const size = { width: 512, height: 512 };
 
 export function GET() {
   return new ImageResponse(

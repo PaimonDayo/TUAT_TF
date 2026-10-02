@@ -1,8 +1,7 @@
 import { ImageResponse } from "next/og";
 import { APP_MONO } from "@/lib/app";
 
-export const size = { width: 512, height: 512 };
-export const contentType = "image/png";
+const size = { width: 512, height: 512 };
 
 export function GET() {
   return new ImageResponse(

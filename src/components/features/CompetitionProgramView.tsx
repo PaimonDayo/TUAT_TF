@@ -171,7 +171,7 @@ export function CompetitionProgramView({
       {competition.program_source_url && <a data-ui-action="text" data-ui-tone="primary" href={competition.program_source_url} target="_blank" rel="noopener noreferrer" className="text-caption text-accent underline">大会公式のプログラムを見る</a>}
       {groups.length === 0 ? (
         <Card>
-          <EmptyState title="まだ出場種目の情報がありません" />
+          <EmptyState title="まだ出場種目の情報はありません" />
         </Card>
       ) : (
         groups.map((group) => (

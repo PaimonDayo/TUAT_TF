@@ -1,7 +1,8 @@
 "use client";
 
-import { Check, RotateCcw, SlidersHorizontal } from "lucide-react";
+import { RotateCcw, SlidersHorizontal } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { FilterRow } from "@/components/features/FilterRow";
 import { BLOCKS, EDITABLE_BLOCK_ORDER, GRADE_OPTIONS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { Block } from "@/types";
@@ -25,8 +26,4 @@ export function PeopleFilterButton({ blocks, grades, onBlocksChange, onGradesCha
       </SheetContent>
     </Sheet>
   </>;
-}
-
-function FilterRow({ label, checked, onClick }: { label: string; checked: boolean; onClick: () => void }) {
-  return <button data-ui-row aria-pressed={checked} type="button" onClick={onClick} className={cn("flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm", checked ? "bg-accent/10 font-semibold text-ink" : "active:bg-bg text-muted2")}><span className="flex-1">{label}</span>{checked && <Check size={18} className="text-accent" />}</button>;
 }

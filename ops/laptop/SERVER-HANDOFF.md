@@ -1,7 +1,10 @@
 # サーバーを別のPCへ引き継ぐ
 
-現在の本番はVercel（アプリ）＋所有者PCのWSL内Supabase（DB/Auth）＋R2（画像）。
-この文書は**DB/Authを別のWindows PCへ移す**手順。アプリのURL（https://tuat-tf.vercel.app ）は変えない。
+現在の本番はVercel（アプリ）＋クラウドSupabase（認証・予備データ）＋所有者PCのWSL内Supabase（通常のデータ）＋R2（画像）。
+
+**2026-10-02確認:** 以下は、DBとAuthを同じPCで運用していた時点の移設手順を保存したもの。現行のクラウド認証、Cloudflare REST中継、クラウド予備データの書き戻し、PC定期処理を含むPC間移設としては再検証していない。接続先・鍵・ジョブ・停止中の書き込みの扱いを確認する前に、そのまま実行しない。
+
+旧手順は**DB/Authを別のWindows PCへ移す**前提で、アプリのURL（https://tuat-tf.vercel.app ）を維持する設計だった。現在の移設でもクラウド認証とPCデータの役割を分けて確認する。
 
 先に [PC-PRODUCTION-HANDOFF.md](PC-PRODUCTION-HANDOFF.md)（現行構成）と
 [RETURN-TO-SUPABASE.md](RETURN-TO-SUPABASE.md)（クラウドへ戻す道）を読む。
@@ -22,6 +25,8 @@
 | スタックの `.env` | WSL内 `/opt/tuat-tf-supabase/.env` | 下の「鍵をどうするか」を参照 |
 
 ### 鍵をどうするか（先に決める）
+
+> 下のA/Bとログインへの影響は旧PC Auth構成の説明。現在のログインはクラウドSupabaseが担うため、PC側の鍵変更だけから「全員が再ログイン」「ログインを維持できる」とは断定しない。クラウド発行トークンの検証設定、PC側APIキー、中継・定期処理の設定を別々に照合する。以下の移設手順全体は現構成で未検証。
 
 `initialize-wsl.sh` は毎回**新しいJWT鍵**を作る。どちらを選ぶかで部員への影響が変わる。
 

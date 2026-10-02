@@ -1,6 +1,6 @@
 /**
  * TF構造スプレッドシート（部員別シート）と practice_records の同期。
- * GASブリッジ（TF/gas/Code.gs を Web App 公開）を HTTP で叩く。
+ * GASブリッジ（gas/sync-clasp/Code.js を Web App 公開）を HTTP で叩く。
  * 詳細・マッピング: docs/SHEETS-SYNC-PLAN.md
  *
  * 見出し名ベースで突合する（中長距離＝低強度等の数値枠／短距離＝メニュー等の自由記述／

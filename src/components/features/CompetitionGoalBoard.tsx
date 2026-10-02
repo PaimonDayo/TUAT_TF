@@ -96,8 +96,8 @@ export function CompetitionGoalBoard({
           <Search size={16} className="pointer-events-none absolute left-3 top-3.5 text-muted" />
           <Input
             className="pl-9"
-            aria-label="目標を検索"
-            placeholder="名前・種目・目標で検索"
+            aria-label="名前・種目・目標で検索"
+            placeholder="検索"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { FormModal } from "@/components/ui/form-modal";
 import { Button } from "@/components/ui/button";
 import { SheetHeaderSetupDialog, type SheetHeaderData } from "./SheetHeaderSetupDialog";
+import { SHEET_INPUT_MODE_LABELS } from "@/lib/sheet-input-mode";
 import { SheetInputModeSetting } from "./SheetInputModeSetting";
 import { OCTOBER_SHEET_ID, SHEET_SETUP_PATH } from "@/lib/sheet-period";
 import { recordFieldsToJson } from "@/lib/profile-normalize";
@@ -62,7 +63,7 @@ export function OctoberSheetSetup({ profile, prompt = false }: { profile: Profil
     onCancel={() => { if (!busy) setHeader(null); }} onConfirm={(fields, signature) => void save(fields, signature)} />;
   return <FormModal open title="記録の入力設定" autoFocus={false} onOpenChange={nextOpen => { if (!busy) { setOpen(nextOpen); if (!nextOpen && !prompt) router.replace("/mypage/settings"); } }}>
     <div className="space-y-5 p-4 pb-8">
-      <p className="text-body">入力方法を選んでください。スプシと連携する場合は、自分のシートと入力・表示項目も確認します。</p>
+      <p className="text-body">入力方法を選んでください。スプレッドシートと連携する場合は、自分のシートと入力・表示項目も確認します。</p>
       <SheetInputModeSetting mode={mode} onChange={nextMode => { setMode(nextMode); setError(null); }} disabled={busy} />
       {mode !== "off" && <>
       <a data-ui-action="text" data-ui-tone="primary" className="text-accent underline text-caption" href={`https://docs.google.com/spreadsheets/d/${OCTOBER_SHEET_ID}/edit`} target="_blank" rel="noreferrer">練習記録2026.10/1～を開く</a>
@@ -74,9 +75,9 @@ export function OctoberSheetSetup({ profile, prompt = false }: { profile: Profil
       </label>
       </>}
       <div className="space-y-2 text-caption text-muted">
-        <p>設定を変更したいときは、マイページ → 設定 → 練習記録からいつでも開けます。変更して保存すると、その入力方法で同期します。設定変更だけでアプリの過去の記録が削除されることはありません。</p>
-        <p>「両方から入力」に戻すと、同期対象期間のスプシの内容が再びアプリへ取り込まれます。スプシの列・見出しが変わった場合は、起動時に入力・表示項目を再確認します。</p>
-        <p>連携中は9月以前の記録を旧スプシと10月7日いっぱいまで同期します。「スプシ連携しない」では、この同期も停止します。</p>
+        <p>設定を変更したいときは、マイページ → 設定 → 練習記録からいつでも開けます。変更して保存すると、その入力方法で連携します。設定変更だけでアプリの過去の記録が削除されることはありません。</p>
+        <p>「{SHEET_INPUT_MODE_LABELS.sheet}」に戻すと、連携対象期間のスプレッドシートの内容が再びアプリへ取り込まれます。スプレッドシートの列・見出しが変わった場合は、起動時に入力・表示項目を再確認します。</p>
+        <p>連携中は9月以前の記録を旧スプレッドシートと2026年10月7日いっぱいまで連携します。「{SHEET_INPUT_MODE_LABELS.off}」では、この連携も停止します。</p>
       </div>
       {error && <p role="alert" className="text-caption text-danger">{error}</p>}
       {mode !== "off" && !loaded && error && <Button onClick={() => setAttempt(value => value + 1)}>再試行</Button>}

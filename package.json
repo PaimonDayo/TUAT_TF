@@ -8,7 +8,11 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "check:environment": "node scripts/check-environment.mjs",
+    "test:tooling": "node --test scripts/check-environment.test.mjs",
+    "test:ops": "node --test ops/laptop/backup-backend.test.mjs ops/laptop/backup-retention.test.mjs ops/laptop/cloud-mirror-ob.test.mjs ops/pc-jobs/gas-member.test.mjs ops/pc-jobs/gas-period.test.mjs ops/pc-jobs/gas-reply.test.mjs ops/glass/source.test.mjs",
+    "test:ops:integration": "node --test ops/laptop/backend-gateway.test.mjs ops/pc-jobs/scheduler.test.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1127.0",

@@ -50,7 +50,7 @@ export function RoleManager({ roles: initialRoles, members, categories: initialC
     setRoles(next);
     const { error } = await createClient().rpc("reorder_roles", { role_ids: next.map((role) => role.id) });
     if (error) { setRoles(previous); showToast("並び順を更新できませんでした"); }
-    else if (!(await refreshRoleCatalog())) showToast("並び順は保存しました。表示の反映に時間がかかる場合があります");
+    else if (!(await refreshRoleCatalog())) showToast("並び順は保存しました。画面の更新に時間がかかる場合があります");
   }
 
   function renderRole(role: AppRole) {
@@ -111,7 +111,7 @@ function RoleRow({ role, members, categories, onUpdated, onDeleted, onMembersUpd
   async function remove() {
     const { data, error } = await createClient().rpc("delete_custom_role", { target_role_id: role.id });
     if (error || !data) { onError("ロールを削除できませんでした"); return false; }
-    if (!(await refreshRoleCatalog())) onError("削除しました。表示の反映に時間がかかる場合があります");
+    if (!(await refreshRoleCatalog())) onError("削除しました。画面の更新に時間がかかる場合があります");
     onDeleted(); return true;
   }
 
@@ -142,7 +142,7 @@ function RoleEditor({ open, onClose, onSaved, sortOrder, role, categories, canMa
     const query = role ? createClient().from("roles").update(payload).eq("id", role.id) : createClient().from("roles").insert(payload);
     const { data, error: saveError } = await query.select("*").single();
     if (saveError || !data) { setError("保存できませんでした。もう一度お試しください"); setSaving(false); return; }
-    if (!(await refreshRoleCatalog())) showToast("保存しました。表示の反映に時間がかかる場合があります");
+    if (!(await refreshRoleCatalog())) showToast("保存しました。画面の更新に時間がかかる場合があります");
     setSaving(false); onSaved(data as AppRole);
   }
 

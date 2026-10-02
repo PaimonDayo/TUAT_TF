@@ -555,7 +555,7 @@ export function ProfileEditForm({
 
       {!separateRecordSettings && enableSheetHeaderSetup && sheetName.trim() && (
         <p className="text-micro -mt-3">
-          列名が変わったときは、同期前にアプリで入力項目を再確認します。
+          列名が変わったときは、連携前にアプリで入力項目を再確認します。
         </p>
       )}
 

@@ -37,7 +37,7 @@ export function ObDutyTable({entries,members,duties=[],roles=[]}:{entries:ObEntr
     <p className="text-caption">種目ごとに担当を登録します。○は同時刻に出場するため補助員に割り当てられない枠です。アップ・移動・競技終了時刻を確認して担当を決めてください。空欄でもアップ・移動時間を考慮してください。リレーは当日確認です。</p>
     <p className="text-caption">学年を問わず、エントリーがある現役部員を表示しています。灰色の行はアプリの部員とまだ照合していない回答です。担当欄を押すと、本人を選んでから担当を登録できます。</p>
   </Card>
-  <div data-ui-group className="flex items-center gap-2"><Input className="min-w-0 flex-1" aria-label="補助員表の氏名・学年で検索" placeholder="氏名・学年で検索" value={search} onChange={(e)=>setSearch(e.target.value)} /><Button size="sm" variant="outline" onClick={download}>CSV出力</Button></div>
+  <div data-ui-group className="flex items-center gap-2"><Input className="min-w-0 flex-1" aria-label="補助員表の氏名・学年で検索" placeholder="検索" value={search} onChange={(e)=>setSearch(e.target.value)} /><Button size="sm" variant="outline" onClick={download}>CSV出力</Button></div>
   <p className="text-caption">{rows.length}行・種目名をタップすると補助員一覧、担当欄をタップすると登録・編集できます。CSVにも保存済みの担当が出ます。</p>
   <Card className="min-w-0 overflow-hidden"><div className="ob-duty-scroll max-h-[65dvh] overflow-auto" tabIndex={0} role="region" aria-label="部員別の出場予定表">
     <table data-ui-table className="w-full min-w-[1264px] table-fixed lg:min-w-[1072px] border-collapse text-left text-[13px]"><caption className="sr-only">補助員検討用の出場予定</caption>

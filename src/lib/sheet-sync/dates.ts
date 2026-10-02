@@ -1,16 +1,10 @@
 // 同期対象期間とタイムラインの並び順に使う日付の決まり。
-
-
+import { jstToday } from "../date";
 
 // 現行スプレッドシートの開始日。初回だけここから全履歴を取り込み、以後は直近1か月に絞る。
 export const SHEET_HISTORY_START = "2026-03-23";
 export function todayJST(): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Tokyo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
+  return jstToday();
 }
 
 /** 初回は全履歴、完了後は同日の1か月前からを同期対象にする。 */

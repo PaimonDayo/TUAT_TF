@@ -18,7 +18,7 @@ export function ObEntryManager({ entries, canAdd, onEdit, onNew, onClose }: { en
     .sort((a, b) => compareByGrade({ grade: a.grade, name: a.submitted_name }, { grade: b.grade, name: b.submitted_name }));
   return <FormModal open title="エントリー管理" autoFocus={false} onOpenChange={(open) => !open && onClose()}>
     <div className="space-y-4">
-      <Input aria-label="登録済みの氏名・学年で検索" placeholder="氏名・学年で検索" value={search} onChange={(event) => setSearch(event.target.value)} />
+      <Input aria-label="登録済みの氏名・学年で検索" placeholder="検索" value={search} onChange={(event) => setSearch(event.target.value)} />
       <Card className="divide-y divide-separator">
         {visible.map((entry) => <div key={entry.id} className="flex items-center gap-3 p-3">
           <div className="min-w-0 flex-1">
