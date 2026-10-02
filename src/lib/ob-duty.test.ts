@@ -46,3 +46,35 @@ it("orders grades from B1", async()=>{
  const rows=[{grade:"M1",name:"a"},{grade:"B3",name:"b"},{grade:"D1",name:"c"},{grade:"1",name:"d"},{grade:"OB・OG",name:"e"}];
  expect(rows.sort(compareByGrade).map(r=>r.name)).toEqual(["d","b","a","c","e"]);
 });
+
+it("excludes only active helper assignments in another event at the same time",async()=>{
+ const {concurrentDuties}=await import("./ob-duty");
+ const duty={meet_key:"ob-2026",profile_id:input.profileId,slot_time:"11:00",event_name:"砲丸投げ",assignment:"",role_ids:["role"],revision:0};
+ expect(concurrentDuties(input.profileId,"11:00","100m",[duty])).toEqual([duty]);
+ expect(concurrentDuties(input.profileId,"11:00","砲丸投げ",[duty])).toEqual([]);
+ expect(concurrentDuties(input.profileId,"11:40","300mH",[duty])).toEqual([]);
+ expect(concurrentDuties(input.profileId,"11:00","100m",[{...duty,role_ids:[],assignment:"旧担当"}])).toHaveLength(1);
+ for(const change of [{role_ids:[],assignment:"  "},{meet_key:"other"},{profile_id:"other"}])expect(concurrentDuties(input.profileId,"11:00","100m",[{...duty,...change}])).toEqual([]);
+});
+
+it("shows every commitment at the closest previous or next time, never the current time",async()=>{
+ const {adjacentCommitments}=await import("./ob-duty");
+ const duty={meet_key:"ob-2026",profile_id:input.profileId,slot_time:"11:00",event_name:"砲丸投げ",assignment:"器具",role_ids:[],revision:0};
+ const entry={events:["男子1500m","男子100m","男子300m"]};
+ expect(adjacentCommitments(entry,input.profileId,"11:40",[duty],[],"previous")).toEqual([
+  {time:"11:00",label:"100m",kind:"競技",detail:"出場"},
+  {time:"11:00",label:"砲丸投げ",kind:"補助員",detail:"器具"},
+ ]);
+ expect(adjacentCommitments(entry,input.profileId,"10:30",[duty],[],"next")).toHaveLength(2);
+ expect(adjacentCommitments(entry,input.profileId,"11:00",[duty],[],"previous")[0].time).toBe("10:00");
+ expect(adjacentCommitments(entry,input.profileId,"10:00",[duty],[],"previous")).toEqual([]);
+ expect(adjacentCommitments(entry,input.profileId,"15:30",[duty],[],"next")).toEqual([]);
+});
+
+it("includes helpers without a competing entry and resolves their adjacent role names",async()=>{
+ const {adjacentCommitments}=await import("./ob-duty");
+ const role={id:"r",meet_key:"ob-2026",slot_time:"14:30",event_name:"やり投げ",name:"器具の運搬",abbreviation:"器",required_count:2,revision:0};
+ const duty={meet_key:"ob-2026",profile_id:input.profileId,slot_time:"14:30",event_name:"やり投げ",assignment:"古い名称",role_ids:[role.id],revision:0};
+ expect(adjacentCommitments(undefined,input.profileId,"15:00",[duty],[role],"previous")).toEqual([{time:"14:30",label:"やり投げ",kind:"補助員",detail:"器具の運搬"}]);
+ expect(adjacentCommitments(undefined,input.profileId,"15:00",[{...duty,role_ids:[],assignment:""}],[role],"previous")).toEqual([]);
+});

@@ -7,17 +7,17 @@ import {Input} from "@/components/ui/input";
 import {ConfirmDialog} from "@/components/ui/confirm-dialog";
 import {useToast} from "@/components/ui/toast";
 import {saveDutyRole,saveDutyRoles} from "@/app/(app)/ob-entries/actions";
-import {nextCommitment,type ObDuty,type ObDutyRole,type DutyRoleEdit} from "@/lib/ob-duty";
+import {adjacentCommitments,concurrentDuties,type ObDuty,type ObDutyRole,type DutyRoleEdit,type DutyCommitment} from "@/lib/ob-duty";
 import {OB_DUTY_SLOTS,compareByGrade,dutyRows,dutyTimeCell,isCompeting} from "@/lib/ob-meet";
 import type {ObEntry} from "@/lib/ob-entries";
 import {entryGrade,type EntryMember} from "@/lib/entry-identity";
 
 /**
  * 種目の補助員一覧。役職ごとに「人を編集」で担当者を選ぶ（2026-09-26 オーナー指示）。
- * 候補はその時間帯に出場しない部員を学年順（B1から）に並べ、次の競技・補助員と時刻を添える。
+ * 候補は同時刻の出場・別種目担当がない部員。前後の競技・補助員と時刻を添える。
  * 役職名・必要人数の変更は「設定」から。
  */
-export function ObDutyRoleManager({entries,time,event,roles,duties,members,onClose}:{entries:ObEntry[];time:string;event:string;roles:ObDutyRole[];duties:ObDuty[];members:EntryMember[];onClose:()=>void}) {
+export function ObDutyRoleManager({entries,time,event,roles,allRoles=roles,duties,members,onClose}:{entries:ObEntry[];time:string;event:string;roles:ObDutyRole[];allRoles?:ObDutyRole[];duties:ObDuty[];members:EntryMember[];onClose:()=>void}) {
  const [draft,setDraft]=useState<DutyRoleEdit|null>(null),[people,setPeople]=useState<{role:ObDutyRole;selected:string[]}|null>(null);
  const [saving,setSaving]=useState(false),[discard,setDiscard]=useState(false);
  const router=useRouter();const {showToast}=useToast();
@@ -28,11 +28,15 @@ export function ObDutyRoleManager({entries,time,event,roles,duties,members,onClo
  const byGrade=(a:ObDuty,b:ObDuty)=>compareByGrade({grade:member(a.profile_id)?.grade??null,name:member(a.profile_id)?.display_name??""},{grade:member(b.profile_id)?.grade??null,name:member(b.profile_id)?.display_name??""});
  const peopleOriginal=people?rolePeople(people.role.id).map(d=>d.profile_id):[];
  const peopleDirty=!!people&&[...people.selected].sort().join()!==[...peopleOriginal].sort().join();
- // 候補: エントリー済みでアプリの名簿と照合できた現役部員のうち、この時間帯に出場しない人（学年順）。
- const candidates=dutyRows(entries,members).filter(r=>r.linked&&!isCompeting(dutyTimeCell(r.entry,slot)));
+ const unavailable=(profileId:string,entry:ObEntry|undefined)=>isCompeting(dutyTimeCell(entry,slot))||concurrentDuties(profileId,time,event,duties).length>0;
+ const candidates=dutyRows(entries,members).filter(r=>r.linked&&!unavailable(r.id,r.entry));
+ // 現在の担当者は候補から外れても解除できるよう、別枠に残す。
+ const excludedAssigned=peopleOriginal.filter(id=>!candidates.some(r=>r.id===id));
  async function saveRole(){if(!draft)return;setSaving(true);try{const result=await saveDutyRole(draft);if(!result.ok){showToast(result.message??"保存できませんでした");return;}router.refresh();setDraft(null);showToast("役職を保存しました","success");}catch{showToast("保存できませんでした");}finally{setSaving(false);}}
  async function savePeople(){
-  if(!people)return;setSaving(true);
+  if(!people)return;
+  if(people.selected.some(id=>!peopleOriginal.includes(id)&&!candidates.some(r=>r.id===id))){showToast("候補の予定が変わりました。画面を開き直して確認してください");return;}
+  setSaving(true);
   const role=people.role.id;
   const removed=peopleOriginal.filter(id=>!people.selected.includes(id)),added=people.selected.filter(id=>!peopleOriginal.includes(id));
   try{
@@ -54,17 +58,19 @@ export function ObDutyRoleManager({entries,time,event,roles,duties,members,onClo
   <p className="text-caption">割当済みの人数より少なくはできません。使わない役職は、担当を解除して必要人数を0にできます。</p>
  </div>:people?<div className="space-y-3">
   <p className="text-body">{people.selected.length} / {people.role.required_count}人</p>
-  <p className="text-caption">この時間帯に出場しない部員を学年順に表示しています。下の行は次の競技・補助員とその時刻です。アップ・移動の時間を確認して選んでください。</p>
+  <p className="text-caption">同時刻に出場・別種目の補助担当がない部員を表示しています。前後の予定と、競技終了・アップ・移動の時間を確認してください。</p>
+  {excludedAssigned.length>0&&<section className="space-y-2"><h3 className="text-body text-danger">割当済み・予定の確認が必要</h3><p className="text-caption">候補の条件から外れています。チェックを外すと担当を解除できます。</p><div data-ui-checklist className="divide-y divide-separator rounded-xl border border-separator">{excludedAssigned.map(id=><label key={id} className="flex min-h-12 items-center gap-3 p-3"><input type="checkbox" className="h-5 w-5 shrink-0" checked={people.selected.includes(id)} disabled={saving} onChange={()=>setPeople({...people,selected:people.selected.includes(id)?people.selected.filter(x=>x!==id):[...people.selected,id]})}/><span className="min-w-0 truncate text-body" title={member(id)?.display_name}>{entryGrade(member(id)?.grade??null)} {member(id)?.display_name??"名簿確認待ち"}</span></label>)}</div></section>}
   {!candidates.length&&<p className="text-body">候補になる部員がいません。</p>}
   <div data-ui-checklist className="divide-y divide-separator rounded-xl border border-separator">{candidates.map(row=>{
    const checked=people.selected.includes(row.id);
    const full=!checked&&people.selected.length>=people.role.required_count;
-   const next=nextCommitment(row.entry,row.id,time,duties,roles);
+   const previous=adjacentCommitments(row.entry,row.id,time,duties,allRoles,"previous");
+   const next=adjacentCommitments(row.entry,row.id,time,duties,allRoles,"next");
    const here=(slotDuty(row.id)?.role_ids??[]).filter(id=>id!==people.role.id).map(id=>roles.find(r=>r.id===id)?.abbreviation).filter(Boolean);
    return <label data-ui-checklist-row key={row.id} className={`flex items-start gap-3 p-3 ${full?"opacity-50":""}`}>
     <input type="checkbox" className="mt-1 h-5 w-5 shrink-0" checked={checked} disabled={saving||full} onChange={()=>setPeople({...people,selected:checked?people.selected.filter(id=>id!==row.id):[...people.selected,row.id]})}/>
-    <span className="min-w-0 flex-1"><span className="block text-body"><span className="mr-2 text-caption">{row.grade}</span>{row.name}{here.length>0&&<span className="ml-2 text-caption">この種目：{here.join("・")}</span>}</span>
-    <span className="mt-0.5 block text-caption">{next?<>次：<span className="tabular-nums">{next.time}</span> {next.label}（{next.kind==="競技"?"出場":`補助員・${next.detail}`}）</>:"このあとの予定なし"}</span></span>
+    <span className="min-w-0 flex-1"><span title={row.name} className="block truncate text-body"><span className="mr-2 text-caption">{row.grade}</span>{row.name}</span>{here.length>0&&<span className="block text-caption">この種目：{here.join("・")}</span>}
+    <CommitmentLine label="前" items={previous}/><CommitmentLine label="次" items={next}/></span>
    </label>;
   })}</div>
  </div>:<>
@@ -81,4 +87,8 @@ export function ObDutyRoleManager({entries,time,event,roles,duties,members,onClo
  {people&&<FormModalFooter><Button className="w-full" disabled={saving||!peopleDirty} onClick={()=>void savePeople()}>{saving?"保存中…":"担当者を保存する"}</Button></FormModalFooter>}
  <ConfirmDialog open={discard} onOpenChange={setDiscard} title="変更を破棄しますか？" description="保存していない変更は失われます。" confirmLabel="破棄する" onConfirm={()=>{setDraft(null);setPeople(null);setDiscard(false);}}/>
  </FormModal>;
+}
+
+function CommitmentLine({label,items}:{label:"前"|"次";items:DutyCommitment[]}) {
+ return <span className="mt-0.5 block text-caption">{label}：{items.length?items.map((item,i)=><span key={`${item.kind}-${item.label}`}>{i>0?" ／ ":""}<span className="tabular-nums">{item.time}</span> {item.label}（{item.kind==="競技"?"出場":`補助・${item.detail}`}）</span>):"予定なし"}</span>;
 }

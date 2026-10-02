@@ -1,4 +1,4 @@
-import { OB_DUTY_SLOTS, dutyTimeCell, isCompeting } from "./ob-meet";
+import { OB_DUTY_SLOTS, OB_MEET, dutyTimeCell, isCompeting } from "./ob-meet";
 import type { ObEntry } from "./ob-entries";
 
 export type ObDuty = { meet_key: string; profile_id: string; slot_time: string; event_name: string; assignment: string; revision: number; role_ids?: string[] };
@@ -18,18 +18,33 @@ export function validDutyRolesEdit(v:DutyRolesEdit) {return !!v && validDutyEdit
 export function validDutyRoleEdit(v:DutyRoleEdit) {return !!v && OB_DUTY_SLOTS.some(s=>s.time===v.slotTime&&s.label===v.eventName) && (v.id===null?v.revision===null:uuid(v.id)&&Number.isSafeInteger(v.revision)&&v.revision!>=0) && typeof v.name==="string" && v.name.trim().length>0 && v.name.length<=200 && typeof v.abbreviation==="string" && v.abbreviation.trim().length>0 && v.abbreviation.length<=8 && Number.isInteger(v.requiredCount)&&v.requiredCount>=0&&v.requiredCount<=99;}
 export function dutyRoleText(duty:ObDuty|undefined,roles:ObDutyRole[],short=false) {if(!duty)return "";return duty.role_ids?.length?duty.role_ids.map(id=>roles.find(r=>r.id===id)).map(r=>r?(short?r.abbreviation:r.name):"?").join("・"):duty.assignment;}
 
-/**
- * その時刻より後で、次に入っている予定（出場か補助員）。補助員一覧で候補を選ぶときに、
- * 次の予定までの余裕を見られるようにする。同じ時刻に出場と補助員があれば出場を優先して出す。
- */
-export function nextCommitment(entry: Pick<ObEntry, "events"> | undefined, profileId: string, afterTime: string, duties: ObDuty[], roles: ObDutyRole[]):
-  { time: string; label: string; kind: "競技" | "補助員"; detail: string } | null {
-  for (const slot of OB_DUTY_SLOTS.filter((s) => s.time > afterTime)) {
+export function hasDuty(duty: ObDuty): boolean {
+  return !!(duty.role_ids?.length || duty.assignment.trim());
+}
+
+/** 同種目の兼務は許可し、別時刻・別大会・解除済みの行は妨げない。 */
+export function concurrentDuties(profileId: string, time: string, event: string, duties: ObDuty[]): ObDuty[] {
+  return duties.filter(d => d.meet_key === OB_MEET.meetKey && d.profile_id === profileId && d.slot_time === time && d.event_name !== event && hasDuty(d));
+}
+
+export type DutyCommitment = { time: string; label: string; kind: "競技" | "補助員"; detail: string };
+
+/** 直前／直後の開始時刻にある予定をすべて返す。終了時刻や空き時間とはみなさない。 */
+export function adjacentCommitments(entry: Pick<ObEntry, "events"> | undefined, profileId: string, time: string, duties: ObDuty[], roles: ObDutyRole[], direction: "previous" | "next"): DutyCommitment[] {
+  const times = DUTY_TIMES.filter(t => direction === "previous" ? t < time : t > time);
+  if (direction === "previous") times.reverse();
+  for (const at of times) {
+    const slot = OB_DUTY_SLOTS.find(s => s.time === at)!;
     const cell = dutyTimeCell(entry, slot);
-    // 同時刻の別種目への出場も含む（cell はその時刻に出る種目名）
-    if (!slot.note && isCompeting(cell)) return { time: slot.time, label: cell, kind: "競技", detail: "出場" };
-    const duty = duties.find((d) => d.profile_id === profileId && d.slot_time === slot.time && d.event_name === slot.label && (d.role_ids?.length || d.assignment));
-    if (duty) return { time: slot.time, label: slot.label, kind: "補助員", detail: dutyRoleText(duty, roles) };
+    const commitments: DutyCommitment[] = !slot.note && isCompeting(cell) ? [{time: at, label: cell, kind: "競技", detail: "出場"}] : [];
+    for (const duty of duties.filter(d => d.meet_key === OB_MEET.meetKey && d.profile_id === profileId && d.slot_time === at && hasDuty(d))) {
+      commitments.push({time: at, label: duty.event_name, kind: "補助員", detail: dutyRoleText(duty, roles)});
+    }
+    if (commitments.length) return commitments;
   }
-  return null;
+  return [];
+}
+
+export function nextCommitment(entry: Pick<ObEntry, "events"> | undefined, profileId: string, afterTime: string, duties: ObDuty[], roles: ObDutyRole[]): DutyCommitment | null {
+  return adjacentCommitments(entry, profileId, afterTime, duties, roles, "next")[0] ?? null;
 }

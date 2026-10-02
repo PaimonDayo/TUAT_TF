@@ -14,6 +14,7 @@
 | 新UIの適用範囲 | [全画面新UI](NEW-UI-2026-10-01.md) / [位置・Portal](NEW-UI-ALIGNMENT-2026-10-01.md) |
 | 現行ロール・メニュー権限 | [ロール権限監査](ROLE-PERMISSION-AUDIT-2026-10-01.md) |
 | OB戦のシステム限定運営機能 | [運営表・組み分け・試技記録](OB-OPERATIONS-2026-10-02.md) |
+| OB戦の補助員選択 | [候補の重複除外と前後の予定](OB-DUTY-CANDIDATES-2026-10-02.md) |
 | コメントとシートの削除 | [再取り込み防止](COMMENT-REIMPORT-PREVENTION-2026-10-01.md) / [コメント管理](COMMENT-MODERATION-2026-09-29.md) |
 | 9/27の残作業・稼働確認 | [定期処理移設と予備構成の検証](OPERATIONS-2026-09-27.md) |
 | 開発環境・コマンド | [README](../README.md) |
