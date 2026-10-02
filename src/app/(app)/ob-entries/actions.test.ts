@@ -6,6 +6,18 @@ vi.mock("next/cache", () => ({ revalidatePath: mocks.refresh }));
 import { confirmEntryMember, saveEntry, saveParty, saveDuty, saveDutyRole, saveDutyRoles, getObEntryHistory } from "./actions";
 const id = "10000000-0000-4000-8000-000000000001";
 
+it("saves unregistered helpers by entry ID and never reports absent revisions as success",async()=>{
+ const input={profileId:id,entryId:id,slotTime:"11:00",eventName:"100m",roleIds:[],revision:null};
+ mocks.rpc.mockResolvedValueOnce({data:0,error:null});
+ expect((await saveDutyRoles(input)).ok).toBe(true);
+ expect(mocks.rpc).toHaveBeenLastCalledWith("save_ob_entry_duty_roles",{p_entry_id:id,p_slot_time:"11:00",p_event_name:"100m",p_role_ids:[],p_revision:null});
+ mocks.rpc.mockResolvedValueOnce({data:null,error:null});expect((await saveDutyRoles(input)).ok).toBe(false);
+ mocks.rpc.mockResolvedValueOnce({error:{message:"entry_duty_busy"}});expect((await saveDutyRoles(input)).message).toContain("別種目");
+ expect((await saveDutyRoles({...input,entryId:"bad"})).ok).toBe(false);
+ mocks.preview.mockResolvedValueOnce(true);expect((await saveDutyRoles(input)).ok).toBe(false);
+ mocks.roles.mockResolvedValueOnce(new Map());expect((await saveDutyRoles(input)).ok).toBe(false);
+});
+
 it("limits duty writes to OB staff outside preview and rejects invalid slots",async()=>{
   const input={profileId:id,slotTime:"10:00",eventName:"1500m",assignment:"周回表示",revision:null};
   mocks.user.mockResolvedValueOnce({data:{user:null}});

@@ -10,7 +10,7 @@ import { useToast } from "@/components/ui/toast";
 import { saveDutyRoles } from "@/app/(app)/ob-entries/actions";
 import { concurrentDuties, type ObDuty, type ObDutyRole } from "@/lib/ob-duty";
 
-export type DutyTarget = {profileId:string;name:string;grade:string;time:string;label:string;entryText:string;competing:boolean;existing?:ObDuty};
+export type DutyTarget = {profileId:string;entryId?:string;name:string;grade:string;time:string;label:string;entryText:string;competing:boolean;existing?:ObDuty};
 export function ObDutyEditor({target,onClose,roles,duties,members}:{target:DutyTarget;onClose:()=>void;roles:ObDutyRole[];duties:ObDuty[];members:EntryMember[]}) {
   const [selected,setSelected]=useState<string[]>(target.existing?.role_ids ?? []);
   const [saving,setSaving]=useState(false);
@@ -24,7 +24,7 @@ export function ObDutyEditor({target,onClose,roles,duties,members}:{target:DutyT
     if(blocked&&value.some(id=>!original.includes(id))){showToast("同時刻の予定があるため追加できません。担当を確認してください");return;}
     setSaving(true);
     try {
-      const result=await saveDutyRoles({profileId:target.profileId,slotTime:target.time,eventName:target.label,roleIds:value,revision:target.existing?.revision??null});
+      const result=await saveDutyRoles({profileId:target.profileId,entryId:target.entryId,slotTime:target.time,eventName:target.label,roleIds:value,revision:target.existing?.revision??null});
       if(!result.ok){showToast(result.message??"保存できませんでした");setConfirm(null);return;}
       showToast(value.length?"補助員の担当を保存しました":"補助員の担当を解除しました","success");router.refresh();onClose();
     } catch {showToast("保存できませんでした");setConfirm(null);} finally {setSaving(false);}

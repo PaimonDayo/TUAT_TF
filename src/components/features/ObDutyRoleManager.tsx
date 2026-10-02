@@ -24,12 +24,13 @@ export function ObDutyRoleManager({entries,time,event,roles,allRoles=roles,dutie
  const slot=OB_DUTY_SLOTS.find(s=>s.time===time&&s.label===event)!;
  const slotDuty=(profileId:string)=>duties.find(d=>d.profile_id===profileId&&d.slot_time===time&&d.event_name===event);
  const rolePeople=(id:string)=>duties.filter(d=>d.slot_time===time&&d.event_name===event&&d.role_ids?.includes(id));
- const member=(id:string)=>members.find(x=>x.id===id);
+ const roster=dutyRows(entries,members);
+ const member=(id:string)=>members.find(x=>x.id===id)??(()=>{const r=roster.find(x=>x.id===id);return r?{id,display_name:r.name,grade:r.grade}:undefined;})();
  const byGrade=(a:ObDuty,b:ObDuty)=>compareByGrade({grade:member(a.profile_id)?.grade??null,name:member(a.profile_id)?.display_name??""},{grade:member(b.profile_id)?.grade??null,name:member(b.profile_id)?.display_name??""});
  const peopleOriginal=people?rolePeople(people.role.id).map(d=>d.profile_id):[];
  const peopleDirty=!!people&&[...people.selected].sort().join()!==[...peopleOriginal].sort().join();
  const unavailable=(profileId:string,entry:ObEntry|undefined)=>isCompeting(dutyTimeCell(entry,slot))||concurrentDuties(profileId,time,event,duties).length>0;
- const candidates=dutyRows(entries,members).filter(r=>r.linked&&!unavailable(r.id,r.entry));
+ const candidates=roster.filter(r=>(r.linked||!r.entry?.profile_id)&&!unavailable(r.id,r.entry));
  // 現在の担当者は候補から外れても解除できるよう、別枠に残す。
  const excludedAssigned=peopleOriginal.filter(id=>!candidates.some(r=>r.id===id));
  async function saveRole(){if(!draft)return;setSaving(true);try{const result=await saveDutyRole(draft);if(!result.ok){showToast(result.message??"保存できませんでした");return;}router.refresh();setDraft(null);showToast("役職を保存しました","success");}catch{showToast("保存できませんでした");}finally{setSaving(false);}}
@@ -43,7 +44,7 @@ export function ObDutyRoleManager({entries,time,event,roles,allRoles=roles,dutie
    // 外す人を先に保存して、必要人数の上限に引っかからないようにする。
    for(const profileId of [...removed,...added]){
     const current=slotDuty(profileId);const ids=current?.role_ids??[];
-    const result=await saveDutyRoles({profileId,slotTime:time,eventName:event,roleIds:removed.includes(profileId)?ids.filter(x=>x!==role):[...ids,role],revision:current?.revision??null});
+    const result=await saveDutyRoles({profileId,entryId:roster.find(r=>r.id===profileId)?.entry?.id,slotTime:time,eventName:event,roleIds:removed.includes(profileId)?ids.filter(x=>x!==role):[...ids,role],revision:current?.revision??null});
     if(!result.ok){showToast(`${member(profileId)?.display_name??""}：${result.message??"保存できませんでした"}`);router.refresh();return;}
    }
    showToast("補助員を保存しました","success");router.refresh();setPeople(null);
@@ -69,7 +70,7 @@ export function ObDutyRoleManager({entries,time,event,roles,allRoles=roles,dutie
    const here=(slotDuty(row.id)?.role_ids??[]).filter(id=>id!==people.role.id).map(id=>roles.find(r=>r.id===id)?.abbreviation).filter(Boolean);
    return <label data-ui-checklist-row key={row.id} className={`flex items-start gap-3 p-3 ${full?"opacity-50":""}`}>
     <input type="checkbox" className="mt-1 h-5 w-5 shrink-0" checked={checked} disabled={saving||full} onChange={()=>setPeople({...people,selected:checked?people.selected.filter(id=>id!==row.id):[...people.selected,row.id]})}/>
-    <span className="min-w-0 flex-1"><span title={row.name} className="block truncate text-body"><span className="mr-2 text-caption">{row.grade}</span>{row.name}</span>{here.length>0&&<span className="block text-caption">この種目：{here.join("・")}</span>}
+    <span className="min-w-0 flex-1"><span title={row.name} className="block truncate text-body"><span className="mr-2 text-caption">{row.grade}</span>{row.name}{!row.linked&&<span className="ml-2 text-caption">参加回答</span>}</span>{here.length>0&&<span className="block text-caption">この種目：{here.join("・")}</span>}
     <CommitmentLine label="前" items={previous}/><CommitmentLine label="次" items={next}/></span>
    </label>;
   })}</div>

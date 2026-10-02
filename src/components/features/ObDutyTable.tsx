@@ -6,12 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ObDutyRoleManager } from "./ObDutyRoleManager";
 import type { EntryMember } from "@/lib/entry-identity";
-import { entryGrade, matchEntryMember, normalizeEntryName } from "@/lib/entry-identity";
-import { useRouter } from "next/navigation";
-import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
-import { Select } from "@/components/ui/select";
-import { useToast } from "@/components/ui/toast";
-import { confirmEntryMember } from "@/app/(app)/ob-entries/actions";
+import { normalizeEntryName } from "@/lib/entry-identity";
+import { FormModal } from "@/components/ui/form-modal";
 import type { ObEntry } from "@/lib/ob-entries";
 import { OB_DUTY_SLOTS, dutyRows, dutyTimeCell, obCsvCell } from "@/lib/ob-meet";
 import { dutyRoleText, type ObDuty, type ObDutyRole } from "@/lib/ob-duty";
@@ -25,7 +21,7 @@ export function ObDutyTable({entries,members,duties=[],roles=[],integrated=false
   const [period,setPeriod]=useState("all");
   const [detail,setDetail]=useState<{name:string;text:string;events:string[]}|null>(null);
   const [editing,setEditing]=useState<DutyTarget|null>(null);
-  const [linking,setLinking]=useState<{entry:ObEntry;slot:typeof OB_DUTY_SLOTS[number]}|null>(null);
+
   const [selectedEvent,setSelectedEvent]=useState<typeof OB_DUTY_SLOTS[number]|null>(null);
   const findDuty=(profileId:string,time:string,event:string)=>duties.find((d)=>d.profile_id===profileId&&d.slot_time===time&&d.event_name===event);
   const roster=useMemo(()=>integrated?new ObMeetRoster(entries,members).rows:dutyRows(entries,members).map(row=>({...row,alumni:false})),[entries,members,integrated]);
@@ -35,7 +31,7 @@ export function ObDutyTable({entries,members,duties=[],roles=[],integrated=false
     const values=[
       ["補助員検討用：開始時刻別の出場登録。終了時刻・アップ・移動は未反映。出場登録なしは担当可能の確約ではありません。"],
       ["学年","氏名","本人照合",...OB_DUTY_SLOTS.flatMap((s)=>[`${s.time} ${s.label}：出場予定`,`${s.time} ${s.label}：補助員担当`])],
-      ...rows.map((row)=>[row.grade,row.name,row.alumni?"OB・OG":row.linked?"アプリ名簿":"未照合",...OB_DUTY_SLOTS.flatMap((slot)=>{const cell=ObMeetRoster.cell(row.entry,slot);return [integrated?(cell.kind==="competing"?"出場":cell.kind==="concurrent"?`別種目：${cell.events.join("・")}`:cell.kind==="on-day"?"当日確認":""):(slot.note ? "当日確認" : dutyTimeCell(row.entry,slot)==="出場登録なし" || dutyTimeCell(row.entry,slot)==="エントリー未確認" ? "" : "○"),row.linked?dutyRoleText(findDuty(row.id,slot.time,slot.label),roles):""]})]),
+      ...rows.map((row)=>[row.grade,row.name,row.alumni?"OB・OG":row.linked?"アプリ名簿":"未照合",...OB_DUTY_SLOTS.flatMap((slot)=>{const cell=ObMeetRoster.cell(row.entry,slot);return [integrated?(cell.kind==="competing"?"出場":cell.kind==="concurrent"?`別種目：${cell.events.join("・")}`:cell.kind==="on-day"?"当日確認":""):(slot.note ? "当日確認" : dutyTimeCell(row.entry,slot)==="出場登録なし" || dutyTimeCell(row.entry,slot)==="エントリー未確認" ? "" : "○"),dutyRoleText(findDuty(row.id,slot.time,slot.label),roles)]})]),
     ];
     const blob=new Blob(["\uFEFF"+values.map((row)=>row.map(obCsvCell).join(",")).join("\r\n")],{type:"text/csv;charset=utf-8"});
     const url=URL.createObjectURL(blob); const a=document.createElement("a");a.href=url;a.download=integrated?"OB戦_出場・補助員表.csv":"OB戦_補助員検討表.csv";a.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -46,7 +42,7 @@ export function ObDutyTable({entries,members,duties=[],roles=[],integrated=false
     <div className="grid gap-2 sm:grid-cols-2"><SegmentedControl items={[{key:"all",label:"全員"},{key:"active",label:"現役"},{key:"alumni",label:"OB・OG"}]} value={people} onChange={setPeople}/><SegmentedControl items={[{key:"all",label:"終日"},{key:"am",label:"午前"},{key:"pm",label:"午後"}]} value={period} onChange={setPeriod}/></div>
   </div>:<Card className="space-y-2 p-4"><h2 className="text-headline">補助員の割り当て</h2>
     <p className="text-caption">種目ごとに担当を登録します。○は同時刻に出場するため補助員に割り当てられない枠です。アップ・移動・競技終了時刻を確認して担当を決めてください。空欄でもアップ・移動時間を考慮してください。リレーは当日確認です。</p>
-    <p className="text-caption">学年を問わず、エントリーがある現役部員を表示しています。灰色の行はアプリの部員とまだ照合していない回答です。担当欄を押すと、本人を選んでから担当を登録できます。</p>
+    <p className="text-caption">学年を問わず、エントリーがある現役部員を表示しています。灰色の行はアプリの部員とまだ照合していない回答です。アプリ未登録でも、参加回答に担当を登録できます。</p>
   </Card>}
   <div data-ui-group className="flex items-center gap-2"><Input className="min-w-0 flex-1" aria-label="補助員表の氏名・学年で検索" placeholder="検索" value={search} onChange={(e)=>setSearch(e.target.value)} /><Button size="sm" variant="outline" onClick={download}>CSV出力</Button></div>
   <p className="text-caption">{rows.length}行・種目名をタップすると補助員一覧、担当欄をタップすると登録・編集できます。CSVにも保存済みの担当が出ます。</p>
@@ -54,52 +50,21 @@ export function ObDutyTable({entries,members,duties=[],roles=[],integrated=false
     <table data-ui-table style={integrated?{minWidth:112+slots.length*80}:undefined} className={`w-full table-fixed border-collapse text-left text-[13px] ${integrated?"":"min-w-[1264px] lg:min-w-[1072px]"}`}><caption className="sr-only">{integrated?"現役・OB・OGの出場と補助担当":"補助員検討用の出場予定"}</caption>
       <thead className="sticky top-0 z-20 bg-card"><tr><th scope="col" className="sticky left-0 z-30 w-28 bg-card p-3 lg:w-28 lg:px-2 lg:py-1.5">氏名・学年</th>{slots.map((s)=><th key={s.label} scope="col" className="w-20 border-l border-separator"><button data-ui-cell type="button" onClick={()=>setSelectedEvent(s)} aria-label={`${s.time} ${s.label}の補助員一覧`} className="min-h-11 w-full p-3 text-left hover:bg-accent/5 focus-visible:outline-2 focus-visible:outline-accent lg:px-2 lg:py-1.5"><span className="block tabular-nums">{s.time}</span><span className="font-normal text-accent underline decoration-accent/30 underline-offset-2">{s.label}</span></button></th>)}</tr></thead>
       <tbody>{rows.map((row)=><tr key={row.id} className={`border-t border-separator ${row.alumni?"bg-violet-50/40":row.linked?"":"bg-bg"}`}><th scope="row" className={`sticky left-0 z-10 p-2 font-normal ${row.alumni?"bg-violet-50 text-violet-700":row.linked?"bg-card":"bg-bg text-muted"}`}><span className="block truncate text-micro">{row.grade}</span><span title={row.name} className="block truncate">{row.name}</span></th>
-        {slots.map((slot)=>{const value=dutyTimeCell(row.entry,slot);const competing=value!=="出場登録なし"&&value!=="エントリー未確認"&&value!=="当日確認";const duty=row.linked?findDuty(row.id,slot.time,slot.label):undefined;const cell=ObMeetRoster.cell(row.entry,slot);const assignment=dutyRoleText(duty,roles,true);return <td key={slot.label} className={`relative border-l border-separator align-top ${integrated?(cell.kind==="concurrent"?"ob-concurrent":cell.kind==="competing"?"bg-accent/5":""):competing?"bg-accent/10":""}`}>
+        {slots.map((slot)=>{const value=dutyTimeCell(row.entry,slot);const competing=value!=="出場登録なし"&&value!=="エントリー未確認"&&value!=="当日確認";const duty=findDuty(row.id,slot.time,slot.label);const cell=ObMeetRoster.cell(row.entry,slot);const assignment=dutyRoleText(duty,roles,true);return <td key={slot.label} className={`relative border-l border-separator align-top ${integrated?(cell.kind==="concurrent"?"ob-concurrent":cell.kind==="competing"?"bg-accent/5":""):competing?"bg-accent/10":""}`}>
           {integrated?<button data-ui-cell type="button" aria-label={`${row.name} ${slot.time} ${slot.label}：${cell.kind==="competing"?"出場":cell.kind==="concurrent"?`別種目出場 ${cell.events.join("・")}`:cell.kind==="on-day"?"当日確認":"出場登録なし"}${assignment?`、補助担当 ${assignment}`:""}`} className="flex min-h-12 w-full flex-col items-center justify-center px-1 py-1 text-center hover:bg-accent/5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent" onClick={()=>{
             if(!canEditDuties||row.alumni||competing&&!assignment){setDetail({name:row.name,text:`${slot.time} ${slot.label}`,events:cell.events});return;}
-            if(row.linked)setEditing({profileId:row.id,name:row.name,grade:row.grade,time:slot.time,label:slot.label,entryText:value,competing,existing:duty});else if(row.entry)setLinking({entry:row.entry,slot});
+            setEditing({profileId:row.id,entryId:row.entry?.id,name:row.name,grade:row.grade,time:slot.time,label:slot.label,entryText:value,competing,existing:duty});
           }}><span aria-hidden className={row.alumni?"text-violet-700":"text-accent"}>{cell.kind==="competing"?"●":cell.kind==="on-day"?"△":"\u00a0"}{competing&&assignment&&<span className="text-danger"> !</span>}</span>{assignment&&<span title={dutyRoleText(duty,roles)} className="block w-full truncate text-amber-700">■ {assignment}</span>}</button>:
           (row.linked || row.entry ? <div className="min-h-11 px-2 py-1 lg:min-h-8 lg:px-1.5 lg:py-1">
             <p title={value} className={`lg:truncate ${competing?"font-medium text-accent":"text-muted2"}`}>{competing ? "○" : slot.note ? "当日確認" : ""}</p>
-            {row.linked && duty?.assignment && <p title={dutyRoleText(duty,roles)} className="text-ink truncate">{dutyRoleText(duty,roles,true)}</p>}
+            {dutyRoleText(duty,roles) && <p title={dutyRoleText(duty,roles)} className="text-ink truncate">{dutyRoleText(duty,roles,true)}</p>}
             <button data-ui-cell type="button" disabled={competing&&!duty?.assignment} aria-label={`${row.name}の${slot.time} ${slot.label}の補助員担当`} className="absolute inset-0 h-full w-full cursor-pointer disabled:cursor-default hover:bg-accent/5 focus-visible:outline-2 focus-visible:outline-accent focus-visible:-outline-offset-2"
-              onClick={()=>row.linked?setEditing({profileId:row.id,name:row.name,grade:row.grade,time:slot.time,label:slot.label,entryText:value,competing,existing:duty}):setLinking({entry:row.entry!,slot})} />
+              onClick={()=>setEditing({profileId:row.id,entryId:row.entry?.id,name:row.name,grade:row.grade,time:slot.time,label:slot.label,entryText:value,competing,existing:duty})} />
           </div> : null)}
         </td>;})}
       </tr>)}</tbody>
     </table>
-  </div></Card>{!rows.length&&<p className="py-6 text-center text-caption">条件に合う参加者はいません</p>}{detail&&<FormModal open autoFocus={false} title="出場予定" onOpenChange={open=>!open&&setDetail(null)}><p className="text-headline break-words">{detail.name}</p><p className="mt-2 text-caption">{detail.text}</p><div className="mt-4 space-y-2">{detail.events.length?detail.events.map(event=><Button key={event} className="w-full" variant="outline" onClick={()=>{setDetail(null);onEvent?.(event);}}>{event}の組・記録</Button>):<p className="text-body">この時間の出場登録はありません</p>}</div></FormModal>}{editing && <ObDutyEditor target={editing} roles={roles.filter(r=>r.slot_time===editing.time&&r.event_name===editing.label)} duties={duties} members={members} onClose={()=>setEditing(null)} />}
-  {linking && <LinkMember entry={linking.entry} members={members} linkedIds={new Set(entries.flatMap((e)=>e.profile_id?[e.profile_id]:[]))} onClose={()=>setLinking(null)}
-    onLinked={(member)=>{const slot=linking.slot;const value=dutyTimeCell(linking.entry,slot);setLinking(null);
-      setEditing({profileId:member.id,name:member.display_name,grade:entryGrade(member.grade),time:slot.time,label:slot.label,entryText:value,competing:value!=="出場登録なし"&&value!=="エントリー未確認"&&value!=="当日確認",existing:findDuty(member.id,slot.time,slot.label)});}} />}
-  {selectedEvent && (canEditDuties?<ObDutyRoleManager allRoles={roles} entries={entries} time={selectedEvent.time} event={selectedEvent.label} roles={roles.filter(r=>r.slot_time===selectedEvent.time&&r.event_name===selectedEvent.label)} duties={duties} members={members} onClose={()=>setSelectedEvent(null)}/>:<FormModal open title="補助員一覧" onOpenChange={open=>!open&&setSelectedEvent(null)}><p className="text-caption">補助員の編集にはOB戦担当権限が必要です。</p>{duties.filter(d=>d.slot_time===selectedEvent.time&&d.event_name===selectedEvent.label&&dutyRoleText(d,roles)).map(d=><p key={d.profile_id} className="py-2 text-body">{members.find(m=>m.id===d.profile_id)?.display_name} · {dutyRoleText(d,roles)}</p>)}</FormModal>)}
+  </div></Card>{!rows.length&&<p className="py-6 text-center text-caption">条件に合う参加者はいません</p>}{detail&&<FormModal open autoFocus={false} title="出場予定" onOpenChange={open=>!open&&setDetail(null)}><p className="text-headline break-words">{detail.name}</p><p className="mt-2 text-caption">{detail.text}</p><div className="mt-4 space-y-2">{detail.events.length?detail.events.map(event=><Button key={event} className="w-full" variant="outline" onClick={()=>{setDetail(null);onEvent?.(event);}}>{event}の組・記録</Button>):<p className="text-body">この時間の出場登録はありません</p>}</div></FormModal>}{editing && <ObDutyEditor target={editing} roles={roles.filter(r=>r.slot_time===editing.time&&r.event_name===editing.label)} duties={duties} members={[...members,...roster.filter(r=>!r.linked&&!r.alumni).map(r=>({id:r.id,display_name:r.name,grade:r.grade}))]} onClose={()=>setEditing(null)} />}
+  {selectedEvent && (canEditDuties?<ObDutyRoleManager allRoles={roles} entries={entries} time={selectedEvent.time} event={selectedEvent.label} roles={roles.filter(r=>r.slot_time===selectedEvent.time&&r.event_name===selectedEvent.label)} duties={duties} members={members} onClose={()=>setSelectedEvent(null)}/>:<FormModal open title="補助員一覧" onOpenChange={open=>!open&&setSelectedEvent(null)}><p className="text-caption">補助員の編集にはOB戦担当権限が必要です。</p>{duties.filter(d=>d.slot_time===selectedEvent.time&&d.event_name===selectedEvent.label&&dutyRoleText(d,roles)).map(d=><p key={d.profile_id} className="py-2 text-body">{members.find(m=>m.id===d.profile_id)?.display_name??roster.find(r=>r.id===d.profile_id)?.name} · {dutyRoleText(d,roles)}</p>)}</FormModal>)}
   </div>;
-}
-
-/** まだ照合していない回答に担当を入れる前に、本人（アプリの部員）を選んで照合する。 */
-function LinkMember({entry,members,linkedIds,onClose,onLinked}:{entry:ObEntry;members:EntryMember[];linkedIds:Set<string>;onClose:()=>void;onLinked:(member:EntryMember)=>void}) {
-  const match=matchEntryMember(entry,members,[]);
-  const free=members.filter((m)=>!linkedIds.has(m.id));
-  const [selected,setSelected]=useState(match.status==="exact"&&!linkedIds.has(match.candidates[0].id)?match.candidates[0].id:"");
-  const [saving,setSaving]=useState(false);
-  const router=useRouter();const {showToast}=useToast();
-  async function save() {
-    const member=members.find((m)=>m.id===selected); if(!member) return;
-    setSaving(true);
-    try {
-      const result=await confirmEntryMember(entry.id,member.id,entry.revision);
-      if(!result.ok){showToast(result.message??"保存できませんでした");return;}
-      router.refresh();onLinked(member);
-    } catch {showToast("保存できませんでした");} finally {setSaving(false);}
-  }
-  return <FormModal open autoFocus={false} title="本人の確認" onOpenChange={(open)=>{if(!open&&!saving)onClose();}}>
-    <div className="space-y-3">
-      <p className="text-headline">{entry.grade} {entry.submitted_name}</p>
-      <p className="text-caption">この回答はまだアプリの部員と照合していません。本人を選ぶと照合して、担当の登録に進みます。</p>
-      {match.candidates.length>0 && <p className="text-caption">候補：{match.candidates.map((m)=>`${entryGrade(m.grade)} ${m.display_name}`).join("、")}</p>}
-      <Select value={selected} onValueChange={setSelected} ariaLabel={`${entry.submitted_name}のアプリ上の部員`} disabled={saving}
-        options={[{value:"",label:"部員を選ぶ"},...free.map((m)=>({value:m.id,label:`${entryGrade(m.grade)} ${m.display_name}`}))]} />
-    </div>
-    <FormModalFooter><Button className="w-full" disabled={saving||!selected} onClick={()=>void save()}>{saving?"保存中…":"照合して担当を選ぶ"}</Button></FormModalFooter>
-  </FormModal>;
 }

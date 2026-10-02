@@ -78,3 +78,18 @@ it("includes helpers without a competing entry and resolves their adjacent role 
  expect(adjacentCommitments(undefined,input.profileId,"15:00",[duty],[role],"previous")).toEqual([{time:"14:30",label:"やり投げ",kind:"補助員",detail:"器具の運搬"}]);
  expect(adjacentCommitments(undefined,input.profileId,"15:00",[{...duty,role_ids:[],assignment:""}],[role],"previous")).toEqual([]);
 });
+
+it("keeps entry-backed duties visible before and after identity confirmation without counting cleared duplicates",async()=>{
+ const {combineObDuties}=await import("./ob-duty");
+ const entry={id:"entry",profile_id:null,meet_key:"ob-2026",submitted_name:"未登録",grade:"B1",events:[],qualification_marks:{},revision:0,imported_at:""};
+ const duty={entry_id:entry.id,meet_key:"ob-2026",slot_time:"11:00",event_name:"100m",assignment:"計時",role_ids:["r"],revision:2};
+ expect(combineObDuties([],[duty],[entry])[0]).toMatchObject({profile_id:"entry",revision:2});
+ const linked={...entry,profile_id:input.profileId};
+ const {dutyRows}=await import("./ob-meet");
+ expect(dutyRows([linked],[])[0].id).toBe(input.profileId);
+ const empty={...duty,profile_id:input.profileId,role_ids:[],assignment:"",revision:9};
+ expect(combineObDuties([empty],[duty],[linked])).toHaveLength(1);
+ expect(combineObDuties([empty],[duty],[linked])[0]).toMatchObject({profile_id:input.profileId,revision:2});
+ expect(combineObDuties([{...empty,role_ids:["r"],assignment:"計時"}],[{...duty,role_ids:[],assignment:""}],[linked])[0].revision).toBe(9);
+ expect(()=>combineObDuties([{...empty,role_ids:["r"]}],[duty],[linked])).toThrow("重複");
+});

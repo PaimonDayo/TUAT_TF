@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { OB_TABLES, changesPath } from './cloud-mirror-ob.mjs';
-test('OB mirror covers all eight tables with their production primary keys', () => {
-  assert.equal(OB_TABLES.length, 8);
+test('OB mirror covers all nine tables with their production primary keys', () => {
+  assert.equal(OB_TABLES.length, 9);
+  assert.deepEqual(OB_TABLES.find(t => t.table === 'ob_entry_duties').pk, ['meet_key','entry_id','slot_time','event_name']);
   assert.deepEqual(OB_TABLES.find(t => t.table === 'ob_event_operations').pk, ['meet_key','event_name']);
   assert.deepEqual(OB_TABLES.find(t => t.table === 'ob_meet_duties').pk, ['meet_key','profile_id','slot_time','event_name']);
   const position = name => OB_TABLES.findIndex(t => t.table === name);
-  for (const [parent,child] of [['ob_duty_event_slots','ob_duty_roles'],['ob_duty_event_slots','ob_meet_duties'],['ob_meet_entries','ob_party_responses'],['ob_meet_entries','ob_entry_changes']]) {
+  for (const [parent,child] of [['ob_duty_event_slots','ob_duty_roles'],['ob_duty_event_slots','ob_meet_duties'],['ob_meet_entries','ob_entry_duties'],['ob_meet_entries','ob_party_responses'],['ob_meet_entries','ob_entry_changes']]) {
     assert(position(parent) < position(child));
   }
 });

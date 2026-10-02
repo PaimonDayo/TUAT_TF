@@ -55,6 +55,7 @@ export async function confirmEntryMember(entryId: string, profileId: string | nu
   const saved = await client.from("ob_meet_entries").update({ profile_id: profileId, revision: revision + 1 })
     .eq("id", entryId).eq("meet_key", "ob-2026").eq("revision", revision).select("id").maybeSingle();
   if (saved.error?.code === "23505") return { ok: false, message: "この部員は別のエントリーに紐付いています" };
+  if (saved.error?.message.includes("entry_duty_link_conflict")) return {ok:false,message:"同時刻の補助担当が重複しています。先に担当を確認・解除してください"};
   if (saved.error) return { ok: false, message: "保存できませんでした" };
   if (!saved.data) return { ok: false, message: "他の操作で更新されています。画面を更新してください" };
   refreshObPages();
@@ -84,8 +85,10 @@ export async function saveDutyRoles(input: import("@/lib/ob-duty").DutyRolesEdit
   const {validDutyRolesEdit}=await import("@/lib/ob-duty");
   if(!validDutyRolesEdit(input))return {ok:false,message:"役職を確認してください"};
   const client=await editClient();if(!client)return {ok:false,message:"権限がありません"};
-  const result=await client.rpc("save_ob_duty_roles",{p_profile_id:input.profileId,p_slot_time:input.slotTime,p_event_name:input.eventName,p_role_ids:input.roleIds,p_revision:input.revision});
+  const args={p_slot_time:input.slotTime,p_event_name:input.eventName,p_role_ids:input.roleIds,p_revision:input.revision};
+  const result=input.entryId?await client.rpc("save_ob_entry_duty_roles",{...args,p_entry_id:input.entryId}):await client.rpc("save_ob_duty_roles",{...args,p_profile_id:input.profileId});
   if(result.error)return {ok:false,message:dutyRoleError(result.error.message)};
+  if(!Number.isSafeInteger(result.data)||result.data<0)return {ok:false,message:"保存を確認できませんでした。画面を開き直して確認してください"};
   refreshObPages();return {ok:true};
 }
 export async function saveDutyRole(input: import("@/lib/ob-duty").DutyRoleEdit): Promise<{ok:boolean;message?:string}> {
@@ -97,6 +100,8 @@ export async function saveDutyRole(input: import("@/lib/ob-duty").DutyRoleEdit):
   refreshObPages();return {ok:true};
 }
 function dutyRoleError(message:string) {
+  if(message.includes("entry_duty_busy"))return "同時刻に別種目の補助担当があります。画面を更新して確認してください";
+  if(message.includes("entry_helper_ineligible"))return "現役の参加回答を選んでください。OB・OGは補助員の対象外です";
   if(message.includes("role_full"))return "必要人数に達した役職があります。画面を更新して確認してください";
   if(message.includes("role_below_assigned"))return "割当済みの人数より少なくできません。先に担当を解除してください";
   if(message.includes("role_duplicate"))return "同じ名前の役職が登録されています";

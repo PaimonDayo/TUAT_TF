@@ -2,13 +2,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { ObEntry } from "./ob-entries";
 import type { EntryChange } from "./ob-entry-edit";
-import type { ObDuty, ObDutyRole } from "./ob-duty";
+import type { ObDuty, ObDutyRole, ObEntryDuty } from "./ob-duty";
 import type { ObPartyResponse } from "./ob-meet";
 
 type EntryDatabase = Omit<Database, "public"> & {
   public: Omit<Database["public"], "Tables" | "Functions"> & {
     Functions: Database["public"]["Functions"] & {
       claim_ob_entry: { Args: Record<string, never>; Returns: string };
+      save_ob_entry_duty_roles: { Args: {p_entry_id:string;p_slot_time:string;p_event_name:string;p_role_ids:string[];p_revision:number|null}; Returns:number };
       save_ob_duty_roles: { Args: {p_profile_id:string;p_slot_time:string;p_event_name:string;p_role_ids:string[];p_revision:number|null}; Returns:number };
       save_ob_duty_role: { Args: {p_id:string|null;p_slot_time:string;p_event_name:string;p_name:string;p_abbreviation:string;p_required_count:number;p_revision:number|null}; Returns:string };
       save_ob_duty: { Args: { p_profile_id: string; p_slot_time: string; p_event_name: string; p_assignment: string; p_revision: number | null }; Returns: number };
@@ -19,6 +20,7 @@ type EntryDatabase = Omit<Database, "public"> & {
     Tables: Database["public"]["Tables"] & {
       ob_duty_roles: { Row: ObDutyRole; Insert: never; Update: never; Relationships: [] };
       ob_meet_duties: { Row: ObDuty; Insert: never; Update: never; Relationships: [] };
+      ob_entry_duties: { Row: ObEntryDuty; Insert: never; Update: never; Relationships: [] };
       ob_party_responses: { Row: ObPartyResponse; Insert: never; Update: never; Relationships: [] };
       ob_entry_changes: { Row: EntryChange & { entry_id: string | null }; Insert: never; Update: never; Relationships: [] };
       ob_meet_entries: {
