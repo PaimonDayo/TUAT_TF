@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Competition status keeps its meaning in monochrome and without hover. */
+.ob-concurrent {
+  background-image: repeating-linear-gradient(135deg, transparent 0 5px, rgb(100 116 139 / 16%) 5px 7px);
+}
+
 /* ─────────────────────────────────────────────
    陸上部ログ — iOS 風デザインシステム (Tailwind v4)
    ───────────────────────────────────────────── */

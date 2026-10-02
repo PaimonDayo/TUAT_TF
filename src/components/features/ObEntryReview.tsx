@@ -25,13 +25,15 @@ import { compareObEvents, entryDivision } from "@/lib/ob-entry-edit";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 import type { CompetitionRow } from "@/types";
+import { ObOperations } from "./ObOperations";
+import type { ObEventOperation } from "@/lib/ob-operations";
 
 /** 時刻の列。27大戦などのプログラム（ProgramEventSummary）と同じ幅・書式にそろえる。 */
 function TimeCell({ time }: { time: string }) {
   return <span className="w-12 shrink-0 pt-0.5 text-caption tabular-nums text-muted2">{time}</span>;
 }
 
-export function ObEntryReview({ competition, initial, members, viewerId, me, history = [], party = [], duties = [], dutyRoles = [], openMine = false, openIdentity = false }: { openMine?: boolean; openIdentity?: boolean; competition: Pick<CompetitionRow, "name" | "starts_on">; initial: ObEntry[]; members: EntryMember[]; viewerId: string; me: EntryMember; party?: ObPartyResponse[]; duties?: ObDuty[]; dutyRoles?: ObDutyRole[]; history?: ConfirmedEntryIdentity[] }) {
+export function ObEntryReview({ competition, initial, members, viewerId, me, history = [], party = [], duties = [], dutyRoles = [], openMine = false, openIdentity = false, operations }: { operations?: ObEventOperation[]; openMine?: boolean; openIdentity?: boolean; competition: Pick<CompetitionRow, "name" | "starts_on">; initial: ObEntry[]; members: EntryMember[]; viewerId: string; me: EntryMember; party?: ObPartyResponse[]; duties?: ObDuty[]; dutyRoles?: ObDutyRole[]; history?: ConfirmedEntryIdentity[] }) {
   const dateLabel = format(new Date(`${competition.starts_on}T00:00:00`), "M月d日(E)", { locale: ja });
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"events" | "identity" | "party" | "duty">(openIdentity ? "identity" : "events");
@@ -60,14 +62,14 @@ export function ObEntryReview({ competition, initial, members, viewerId, me, his
       <p className="mt-2 text-micro text-muted2">現役・OB・OGの出場登録</p>
     </Card>
     <ObMyEntry embedded entry={mine} party={party.find((p) => p.entry_id === mine?.id)} me={me} openEditor={openMine} />
-    <SegmentedControl items={[{key:"events",label:"予定"},{key:"identity",label:"本人照合"},{key:"party",label:"懇親会"},{key:"duty",label:"補助員"}]} value={view} onChange={(value) => {setView(value);setSearch("");}} />
+    <SegmentedControl items={[{key:"events",label:"予定"},{key:"identity",label:"本人照合"},{key:"party",label:"懇親会"},{key:"duty",label:operations?"運営":"補助員"}]} value={view} onChange={(value) => {setView(value);setSearch("");}} />
     {(view === "events" || view === "identity") && <Input aria-label="氏名・種目・学年で検索" placeholder="検索" value={search} onChange={(event) => setSearch(event.target.value)} />}
     {view === "events" && <SegmentedControl items={[{key:"all",label:"すべて"},{key:"男子",label:"男子"},{key:"女子",label:"女子"}]} value={division} onChange={setDivision} />}
     {view === "identity" && <Button size="sm" variant={unlinked ? "primary" : "outline"} aria-pressed={unlinked} onClick={() => setUnlinked(!unlinked)}>未確認のみ</Button>}
     {managerOpen && <ObEntryManager entries={initial} canAdd={newMembers.length > 0} onClose={() => setManagerOpen(false)} onEdit={(id) => { setManagerOpen(false); setEditingId(id); }} onNew={() => { setManagerOpen(false); setAdding(true); }} />}
     {adding && <ObEntryEditor parties={party} members={newMembers} onClose={() => setAdding(false)} />}
     {editing && <ObEntryEditor key={`${editing.id}:${editing.revision}`} entry={editing} party={party.find((p)=>p.entry_id===editing.id)} members={members} onClose={() => setEditingId(null)} />}
-    {view === "party" ? <ObPartyView responses={party} /> : view === "duty" ? <ObDutyTable entries={initial} members={members} duties={duties} roles={dutyRoles} /> : view === "events" ? <div className="space-y-3">
+    {view === "party" ? <ObPartyView responses={party} /> : view === "duty" ? operations ? <ObOperations entries={initial} members={members} duties={duties} roles={dutyRoles} initial={operations}/> : <ObDutyTable entries={initial} members={members} duties={duties} roles={dutyRoles} /> : view === "events" ? <div className="space-y-3">
       <p className="text-micro text-muted2">種目を開くと出場者と資格記録が見られます。</p>
       <section className="space-y-3">
         <p className="section-label">{dateLabel}</p>
@@ -111,7 +113,7 @@ function EntryProgramRow({ time, event, entries, viewerId, searching, onEdit }: 
       <p className="px-2.5 text-micro text-muted2">出場者・資格記録</p>
       {entries.map((entry) => <div key={entry.id} className="flex items-start gap-1 rounded-lg bg-bg px-2.5 py-2 text-[13px]">
         <div className="min-w-0 flex-1"><div className="grid grid-cols-2 items-baseline gap-2">
-          <p className="break-words"><span className="mr-1 text-muted2">{entry.grade}</span>{entry.submitted_name}{entry.profile_id === viewerId && <span className="ml-1 text-micro text-accent">自分</span>}</p>
+          <p title={entry.submitted_name} className={`truncate ${isAlumniEntry(entry)?"text-violet-700":""}`}><span className="mr-1 text-muted2">{entry.grade}</span>{entry.submitted_name}{entry.profile_id === viewerId && <span className="ml-1 text-micro text-accent">自分</span>}</p>
           <p className="whitespace-pre-wrap break-words text-right font-semibold tabular-nums">{entryEventRows(entry).find((row) => row.event === event)?.mark}</p>
         </div></div>
         <ActionMenu onEdit={() => onEdit(entry.id)} editLabel="種目・資格記録を編集" triggerLabel={`${entry.submitted_name}の${event}の操作`} />

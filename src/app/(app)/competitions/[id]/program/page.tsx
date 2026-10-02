@@ -9,6 +9,8 @@ import { getCompetitionById, getCompetitionProgramEntries } from "@/lib/queries"
 import { getMyObEntryFull, getObEntries } from "@/lib/queries/ob-entries";
 import { canManageObMeet, canViewObHistory, isObCompetition } from "@/lib/ob-meet";
 import { permissionsOf } from "@/lib/permissions";
+import { getObEventOperations } from "@/lib/queries/ob-operations";
+import { ObOperations } from "@/components/features/ObOperations";
 
 export default async function CompetitionProgramPage({
   params,
@@ -32,6 +34,10 @@ export default async function CompetitionProgramPage({
 
   // OB戦のプログラムは出場登録そのもの。本人とOB戦担当者が編集する。
   if (isObCompetition(competition.id)) {
+    if (canManage && !canManageObMeet(profile.roles)) {
+      const [roster, operations] = await Promise.all([getObEntries(), getObEventOperations()]);
+      return <>{header}<div data-ob-workspace className="space-y-4 px-4 pb-8 pt-2"><ObOperations entries={roster.entries.data ?? []} members={roster.members.data ?? []} duties={roster.duties.data ?? []} roles={roster.dutyRoles.data ?? []} initial={operations} canEditDuties={false}/></div></>;
+    }
     // 係（OB戦2026ロール）は全員分、それ以外の部員は自分のエントリーだけを扱う。
     if (!canManageObMeet(profile.roles)) {
       const mine = await getMyObEntryFull(profile.id);
@@ -43,12 +49,13 @@ export default async function CompetitionProgramPage({
         </>
       );
     }
-    const { entries, members, history, party, duties, dutyRoles } = await getObEntries();
+    const [{ entries, members, history, party, duties, dutyRoles }, operations] = await Promise.all([getObEntries(), canManage ? getObEventOperations() : Promise.resolve(undefined)]);
     return (
       <>
         {header}
         <ObEntryReview
           competition={competition}
+          operations={operations}
           initial={entries.data ?? []}
           members={members.data ?? []}
           viewerId={profile.id}

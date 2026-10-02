@@ -6,6 +6,8 @@ export const OB_TABLES = [
   { table: 'ob_party_responses', pk: ['id'] },
   { table: 'ob_meet_duties', pk: ['meet_key', 'profile_id', 'slot_time', 'event_name'] },
   { table: 'ob_entry_changes', pk: ['id'] },
+  { table: 'ob_event_operations', pk: ['meet_key', 'event_name'] },
+  { table: 'ob_operation_changes', pk: ['id'] },
 ];
 
 export function changesPath(offset, page, maxAttempts, includeBlocked = false) {
