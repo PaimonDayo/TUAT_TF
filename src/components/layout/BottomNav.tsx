@@ -65,27 +65,25 @@ export function BottomNav() {
   const mounted = useSyncExternalStore(subscribeToClient, () => true, () => false);
   const glass = useSyncExternalStore(subscribeToMobile, mobileSnapshot, () => false);
   const navRef = useRef<HTMLElement | null>(null);
-  const controller = useRef<{ update: (index: number, pathname: string) => void; destroy: () => void } | null>(null);
+  const controller = useRef<{ update: (index: number) => void; destroy: () => void } | null>(null);
   const activeIndex = ITEMS.findIndex(({ href }) => pathname === href || pathname.startsWith(href + "/"));
   const selected = useRef(activeIndex);
-  const route = useRef(pathname);
   useEffect(() => {
     if (mounted && navRef.current) return syncVisualViewport(navRef.current, "bottom");
   }, [glass, mounted]);
 
   useLayoutEffect(() => {
     selected.current = activeIndex;
-    route.current = pathname;
-    controller.current?.update(activeIndex, pathname);
+    controller.current?.update(activeIndex);
   }, [activeIndex, pathname]);
 
   useEffect(() => {
     if (!glass || !mounted || !navRef.current) return;
     const element = navRef.current;
     let disposed = false;
-    // Load the optical engine only while the mobile bottom navigation is visible.
+    // Background compositing stays in CSS; load only the selection gesture.
     void import("./glass/mount-glass").then(({ mountGlass }) => {
-      if (!disposed) controller.current = mountGlass(element, selected.current, route.current);
+      if (!disposed) controller.current = mountGlass(element, selected.current);
     }).catch(() => { /* CSS glass and normal Links remain usable if loading fails. */ });
     return () => {
       disposed = true;

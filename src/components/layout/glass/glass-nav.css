@@ -9,7 +9,8 @@
 .ios-glass-nav .selection{position:absolute;inset:0 auto 0 0;width:20%;pointer-events:none}
 @media(max-width:767px){body:has(>.ios-glass-nav) .app-main{padding-bottom:calc(88px + env(safe-area-inset-bottom,0px))}}
 @media(max-width:767px){body:has(>.ios-glass-nav) .app-floating-action{transform:translateY(-26px)}}
-/* One live material across loading, scrolling, WebGL and fallback states. */
+/* One browser-composited backdrop during scrolling, updates and idle.
+   Captured page pixels must not overlay it: they update after real content. */
 .ios-glass-nav .glass-bar{--light-x:30%;border:0;padding:5px;border-radius:34px;background:transparent;-webkit-backdrop-filter:blur(.65px) saturate(135%);backdrop-filter:blur(.65px) saturate(135%);box-shadow:0 8px 24px -7px #20304b33,0 1px 3px #263b5512,inset 0 .5px 0 #ffffffdb,inset 0 -.5px 0 #ffffff70}
 .ios-glass-nav .glass-bar::before{content:"";position:absolute;inset:0;z-index:1;padding:.75px;border-radius:inherit;pointer-events:none;background:linear-gradient(155deg,#ffffffe0,#ffffff30 28%,#ffffff14 55%,#ffffff80);-webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);mask-composite:exclude}
 .ios-glass-nav .glass-bar::after{content:"";position:absolute;inset:0;border:0;border-radius:inherit;pointer-events:none;box-shadow:inset 3px 0 7px -5px #ffffffb0,inset -3px 0 7px -5px #ffffff90;z-index:0;background:rgba(255,255,255,.035)}
@@ -27,11 +28,6 @@
 @media(prefers-reduced-motion:reduce){.ios-glass-nav .glass-bar .nav-button,.ios-glass-nav .glass-bar .nav-button svg{transition:none}.ios-glass-nav .glass-bar[data-pressing=true] .nav-button[data-preview=true] svg{transform:none}}
 @media(prefers-reduced-transparency:reduce),(prefers-contrast:more){.ios-glass-nav .glass-bar{background:var(--color-card);-webkit-backdrop-filter:none;backdrop-filter:none}.ios-glass-nav .glass-bar::before,.ios-glass-nav .glass-bar::after{display:none}}
 
-/* The canvas supplies refraction only; the shell keeps its live backdrop,
-   tint and rim. Do not stack the vendor's 9px fallback on the shell. */
-.ios-glass-nav .glass-bar>liquid-glass::part(glass),
-.ios-glass-nav .glass-bar>liquid-glass::part(border){display:none}
-
 /* Keep the original icons and text in place throughout the lens gesture.
    Repainting all labels in SVG used different baselines and caused a jump. */
 .ios-glass-nav .glass-bar .selection{--lens-light:rgba(255,255,255,.65);--lens-shade:rgba(55,79,108,.17)}
@@ -40,4 +36,3 @@
 .ios-glass-nav .glass-bar .selection{background:rgba(255,255,255,.08)}
 .ios-glass-nav .glass-bar .selection::after{background:radial-gradient(ellipse at var(--lens-light-x,30%) 0%,#ffffff35,transparent 62%);opacity:calc(.45 + var(--lens-pressure,0)*.55)}
 .ios-glass-nav .glass-bar[data-lensing=true] .selection{box-shadow:inset 0 .75px .5px var(--lens-light),inset .75px 0 1px #a7deff6b,inset -.75px 0 1px #e3c4ff45,inset 0 -.75px 1px #ffffff30,0 3px 9px -3px var(--lens-shade)}
-.ios-glass-nav .glass-bar>liquid-glass{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
