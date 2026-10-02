@@ -1,23 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AppRole } from "@/types";
 import {
-  canUseNewUi,
   NEW_UI_CHANGE,
   newUiStorageKey,
   readNewUiPreference,
   subscribeNewUiPreference,
   writeNewUiPreference,
 } from "./new-ui";
-
-function role(overrides: Partial<AppRole> = {}): AppRole {
-  return {
-    id: "role", name: "部員", can_manage_system: false, can_manage_members: false,
-    can_create_schedule: false, can_create_menu: false, can_create_notice: false,
-    can_decide_practice: false, is_system: false, is_everyone: false,
-    color: "#000000", category: null, sort_order: 0,
-    created_at: "2026-01-01T00:00:00Z", ...overrides,
-  };
-}
 
 let values: Map<string, string>;
 let storage: { getItem: ReturnType<typeof vi.fn>; setItem: ReturnType<typeof vi.fn> };
@@ -37,29 +25,6 @@ beforeEach(() => {
 afterEach(() => {
   subscriptions.splice(0).forEach((unsubscribe) => unsubscribe());
   vi.unstubAllGlobals();
-});
-
-describe("new UI access", () => {
-  it("allows effective member managers and system managers independently", () => {
-    expect(canUseNewUi([role({ can_manage_members: true })])).toBe(true);
-    expect(canUseNewUi([role({ can_manage_system: true })])).toBe(true);
-  });
-
-  it("denies members and creation-only roles even when a preference is saved", () => {
-    writeNewUiPreference("member", true);
-    expect(readNewUiPreference("member")).toBe(true);
-    expect(canUseNewUi(null)).toBe(false);
-    expect(canUseNewUi(undefined)).toBe(false);
-    expect(canUseNewUi([])).toBe(false);
-    expect(canUseNewUi([role()])).toBe(false);
-    expect(canUseNewUi([role({ can_create_schedule: true, can_create_menu: true,
-      can_create_notice: true, can_decide_practice: true })])).toBe(false);
-  });
-
-  it("does not treat retained administrator names or system labels as preview authority", () => {
-    expect(canUseNewUi([role({ name: "管理者", is_system: true })])).toBe(false);
-    expect(canUseNewUi([role({ name: "システム", is_system: true })])).toBe(false);
-  });
 });
 
 describe("per-account browser preference", () => {

@@ -11,8 +11,8 @@ export function NewUiSetting({ userId }: { userId: string }) {
     <div>
       <Toggle
         variant="row"
-        label="新UI版を使う"
-        description="この端末・このアカウントだけで試せます。オフにすると通常版に戻ります。"
+        label="ガラスUIを使う"
+        description="この端末・このアカウントだけに適用します。オフにすると通常版に戻ります。"
         checked={enabled}
         onChange={() => setError(!writeNewUiPreference(userId, !enabled))}
       />

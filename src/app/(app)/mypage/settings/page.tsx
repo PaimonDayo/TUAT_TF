@@ -15,7 +15,6 @@ import { RecordSourceSetting } from "@/components/features/RecordSourceSetting";
 import { SystemSyncStatus } from "@/components/features/SystemSyncStatus";
 import { MemberPreviewSetting } from "@/components/features/MemberPreviewSetting";
 import { NewUiSetting } from "@/components/features/NewUiSetting";
-import { canUseNewUi } from "@/lib/new-ui";
 import { EditProfileButton } from "@/components/features/MyPageActions";
 import { SHEET_INPUT_MODE_LABELS } from "@/lib/sheet-input-mode";
 import { SHEET_SETUP_PATH } from "@/lib/sheet-period";
@@ -49,6 +48,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </Section>
 
         <Section title="表示" collapsible>
+          <NewUiSetting userId={profile.id} />
           <AttendanceViewSetting userId={profile.id} initial={profile.attendance_default_block} />
           <TimelineViewSetting userId={profile.id} initial={profile.timeline_default_block} />
           <ScheduleViewSetting userId={profile.id} initial={profile.schedule_view_all_blocks ?? false} />
@@ -76,12 +76,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </Link>
           {profile.sheet_transition?.mode === "off" && <RecordFieldsSetting profileId={profile.id} initial={profile.record_fields} isMiddleLong={profile.blocks.includes("middle_long")} />}
         </Section>
-
-        {canUseNewUi(profile.roles) && (
-          <Section title="管理者設定" id="admin-ui-settings" collapsible>
-            <NewUiSetting userId={profile.id} />
-          </Section>
-        )}
 
         {perms.manageSystem && (
           <SettingsGroup title="システム管理">

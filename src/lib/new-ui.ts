@@ -1,12 +1,3 @@
-import type { AppRole } from "@/types";
-import { permissionsOf } from "@/lib/permissions";
-
-/** Effective permission flags deliberately exclude the general-member preview. */
-export function canUseNewUi(roles: AppRole[] | undefined | null) {
-  const permissions = permissionsOf(roles);
-  return permissions.manageSystem || permissions.manageMembers;
-}
-
 export const NEW_UI_CHANGE = "tuat:new-ui-change";
 export const newUiStorageKey = (userId: string) => `track-app:new-ui:v1:${userId}`;
 

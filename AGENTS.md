@@ -42,7 +42,7 @@
 - 学年は`B1/B2/B3/B4・M1/M2・D1/D2/D3`、`gradeShort` / `GRADE_OPTIONS`を使う。
 - UIと部員向け文言は[UI統一](docs/UI-UNIFICATION.md)・[文言規約](docs/WORDING-GUIDELINES.md)を参照する。入力は全画面、選択はシート、編集・削除は共通の「…」メニューを基本に、現在の共通部品を使う。
 - `cacheComponents`・`experimental.staleTimes`はiOS PWAの実障害を受けて再導入禁止。PullToRefreshを方式変更だけで復活させない。東京リージョン`hnd1`・画面のReact Queryキャッシュ・`loading.tsx`を維持する。FreezeProbeの診断記録を保ち、削除済みのTab Labを戻さない。
-- 新UIは実効`manageMembers`または`manageSystem`を持つ管理者の端末別opt-in、初期off・アカウント別保存。一般部員プレビューは通常版。モバイルの下部タブは全員が対象。
+- ガラスUIは一般部員を含む全員の端末別opt-in、初期off・アカウント別保存。「設定 → 表示」で切替。一般部員プレビューも同じ設定に従う（[2026-10-03の承認・記録](docs/GLASS-MEMBER-OPTIN-2026-10-03.md)）。モバイルの下部タブは全員が対象。
 - 下部タブ背景は2026-10-02に直接透過へ統一済み。過去の背景画像化・vendor読込・WebGL制約を現行の要件として戻さない。ガラスを全操作へ広げず、いいね・コメント等は装飾を抑えた現在の方針を維持する。
 
 ## 認証・本番PC・予備構成

@@ -4,7 +4,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { attachGlassPress } from "./glass-press";
 import { readNewUiPreference, subscribeNewUiPreference } from "@/lib/new-ui";
 
-// The server mounts this bridge only for effective administrators. Visuals also
+// The authenticated app mounts this bridge for every member. Visuals still
 // require this account's opt-in. The store reaches existing sibling and portal
 // controls without delaying the streamed page on another profile request.
 let owners = 0;
