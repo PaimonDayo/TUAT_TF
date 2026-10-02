@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Check, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
+import { FormModal, FormModalFooter, useFormDraft } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { SegmentedControl } from "@/components/ui/segmented";
@@ -101,6 +101,8 @@ export function NoteEditor({
     note?.editors?.map((editor) => editor.user_id) ?? [],
   );
   const [saving, setSaving] = useState(false);
+  // フォルダ作成後に編集者の保存だけ失敗しても、再試行で同じフォルダを使う。
+  const [savedId, setSavedId] = useState(note?.id);
   // 場所（親フォルダ）の移動（タスク17-e）。編集時＋管理可の場合のみ使用。
   const [parentIdValue, setParentIdValue] = useState<string | null>(note?.parent_id ?? parentId ?? null);
   const [folderOptions, setFolderOptions] = useState<
@@ -168,9 +170,12 @@ export function NoteEditor({
       .sort((a, b) => a.title.localeCompare(b.title, "ja"));
   })();
   const [error, setError] = useState<string | null>(null);
-
+  const draft = JSON.stringify([scope, title, description, status, editPolicy, [...editorIds].sort(), parentIdValue]);
+  const [initialDraft] = useState(draft);
+  useFormDraft({ dirty: draft !== initialDraft || savedId !== note?.id, busy: saving, onSave: submit });
 
   async function submit() {
+    if (saving) return;
     if (!title.trim()) {
       setError("フォルダ名を入力してください");
       return;
@@ -185,75 +190,78 @@ export function NoteEditor({
 
     setSaving(true);
     setError(null);
-    const supabase = createClient();
-    const payload = {
-      scope,
-      theme_id: null,
-      title: title.trim(),
-      description: description.trim() || null,
-      status,
-      edit_policy: editPolicy,
-      parent_id: parentIdValue,
-    };
+    try {
+      const supabase = createClient();
+      const payload = {
+        scope,
+        theme_id: null,
+        title: title.trim(),
+        description: description.trim() || null,
+        status,
+        edit_policy: editPolicy,
+        parent_id: parentIdValue,
+      };
 
-    let noteId = note?.id;
-    if (note) {
-      const updatePayload = canManagePermissions
-        ? payload
-        : { title: payload.title, status: payload.status };
-      const result = await safeUpdate(supabase, "notes", updatePayload, {
-        id: note.id,
-      });
-      if (!result.ok) {
-        setError(safeUpdateMessage(result.reason));
-        setSaving(false);
-        return;
-      }
-    } else {
-      const { data, error: insertError } = await supabase
-        .from("notes")
-        .insert({ ...payload, body: "", author_id: currentUser.id, parent_id: parentId ?? null })
-        .select("id")
-        .single();
-      if (insertError || !data) {
-        console.error("Failed to create note", insertError);
-        setError("ノートを保存できませんでした");
-        setSaving(false);
-        return;
-      }
-      noteId = data.id as string;
-    }
-
-    if (noteId && canManagePermissions) {
-      const { error: deleteEditorsError } = await supabase
-        .from("note_editors")
-        .delete()
-        .eq("note_id", noteId);
-      if (deleteEditorsError) {
-        console.error("Failed to reset note editors", deleteEditorsError);
-        setError("編集者の設定を更新できませんでした");
-        setSaving(false);
-        return;
-      }
-      if (editPolicy === "specified" && editorIds.length > 0) {
-        const { error: editorError } = await supabase
-          .from("note_editors")
-          .insert(editorIds.map((userId) => ({ note_id: noteId, user_id: userId })));
-        if (editorError) {
-          console.error("Failed to save note editors", editorError);
-          setError("編集者の設定を保存できませんでした");
-          setSaving(false);
+      let noteId = savedId;
+      if (noteId) {
+        const updatePayload = canManagePermissions
+          ? payload
+          : { title: payload.title, status: payload.status };
+        const result = await safeUpdate(supabase, "notes", updatePayload, {
+          id: noteId,
+        });
+        if (!result.ok) {
+          setError(safeUpdateMessage(result.reason));
           return;
         }
+      } else {
+        const { data, error: insertError } = await supabase
+          .from("notes")
+          .insert({ ...payload, body: "", author_id: currentUser.id, parent_id: parentId ?? null })
+          .select("id")
+          .single();
+        if (insertError || !data) {
+          console.error("Failed to create note", insertError);
+          setError("ノートを保存できませんでした");
+          return;
+        }
+        noteId = data.id as string;
+        setSavedId(noteId);
       }
-    }
 
-    router.refresh();
-    onDone();
+      if (noteId && canManagePermissions) {
+        const { error: deleteEditorsError } = await supabase
+          .from("note_editors")
+          .delete()
+          .eq("note_id", noteId);
+        if (deleteEditorsError) {
+          console.error("Failed to reset note editors", deleteEditorsError);
+          setError("編集者の設定を更新できませんでした");
+          return;
+        }
+        if (editPolicy === "specified" && editorIds.length > 0) {
+          const { error: editorError } = await supabase
+            .from("note_editors")
+            .insert(editorIds.map((userId) => ({ note_id: noteId, user_id: userId })));
+          if (editorError) {
+            console.error("Failed to save note editors", editorError);
+            setError("編集者の設定を保存できませんでした");
+            return;
+          }
+        }
+      }
+
+      router.refresh();
+      onDone();
+    } catch {
+      setError("保存できませんでした。もう一度お試しください");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <div className="space-y-5 pb-4">
+    <fieldset disabled={saving} className="min-w-0 space-y-5 pb-4">
       {(!note || canManagePermissions) && (
         <div>
           <p className="section-label mb-1.5">種類</p>
@@ -370,6 +378,6 @@ export function NoteEditor({
           {saving ? "保存中…" : note ? "更新する" : "保存する"}
         </Button>
       </FormModalFooter>
-    </div>
+    </fieldset>
   );
 }

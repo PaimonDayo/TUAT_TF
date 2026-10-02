@@ -3,84 +3,24 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import {
-  Clock,
-  MapPin,
-  ChevronDown,
-  Train,
-  CalendarRange,
-  ExternalLink,
-  Info,
-  ListChecks,
-  Timer,
-  StickyNote,
-  Dumbbell,
-} from "lucide-react";
+import { Clock, MapPin, ChevronDown, Train, CalendarRange, ExternalLink, Info } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ActionMenu } from "@/components/ui/action-menu";
 import { Disclosure } from "@/components/ui/disclosure";
 import { KeyValue } from "@/components/ui/key-value";
-import { useToast } from "@/components/ui/toast";
-import { SCHEDULE_TYPES, ATTENDANCE_TYPES } from "@/lib/constants";
-import { BLOCKS, BLOCK_ORDER, viewerCompetitionBlocks } from "@/lib/constants";
+import { SCHEDULE_TYPES, ATTENDANCE_TYPES, BLOCKS, BLOCK_ORDER, viewerCompetitionBlocks } from "@/lib/constants";
 import { venueShort } from "@/lib/venues";
 import { menuAccess } from "@/lib/menu-permissions";
 import { cn } from "@/lib/utils";
 import { jstToday } from "@/lib/date";
 import { scheduleAttendanceDates } from "@/lib/schedule-days";
-import { MenuEditModal, SheetMenuEditModal } from "@/components/post/MenuForm";
 import { ScheduleManageActions } from "@/components/post/ScheduleForm";
-import { AbsenceAttendanceControl, AttendanceToggle, CancelledBanner, LateAttendanceControl, WeatherStatusBanner, WeatherStatusControl, type AttendanceChange, type LateAttendanceChange } from "@/components/features/AttendanceToggle";
-import { AttendeesButton } from "@/components/features/AttendeesButton";
+import { CancelledBanner, WeatherStatusBanner, WeatherStatusControl, type AttendanceChange, type LateAttendanceChange } from "@/components/features/AttendanceToggle";
 import { Linkify } from "@/components/common/Linkify";
-import { createClient } from "@/lib/supabase/client";
-import type {
-  ScheduleWithMenus,
-  Attendee,
-  AttendanceStatusOrNone,
-  AuthorMini,
-  Block,
-  PracticeMenu,
-} from "@/types";
-
-/**
- * 呼び出し元から渡された「自分の出欠」を一覧へ合流させる。
- * 一覧に自分の行が無いのに出欠だけ渡された場合（呼び出し元が別経路で持っている場合）に、
- * 初日の行として補う。渡された一覧に自分の行があればそちらを正とする。
- */
-function seedAttendees(
-  attendees: Attendee[],
-  mine: {
-    userId?: string;
-    attendDate: string;
-    status: AttendanceStatusOrNone;
-    isLate: boolean;
-    lateNote: string | null;
-    absenceNote: string | null;
-    profile?: AuthorMini;
-  },
-): Attendee[] {
-  if (!mine.userId || mine.status === "none" || !mine.profile) return attendees;
-  if (
-    attendees.some(
-      (a) => a.user_id === mine.userId && a.attend_date === mine.attendDate,
-    )
-  )
-    return attendees;
-  return [
-    ...attendees,
-    {
-      user_id: mine.userId,
-      attend_date: mine.attendDate,
-      status: mine.status,
-      is_late: mine.isLate,
-      late_note: mine.lateNote,
-      absence_note: mine.absenceNote,
-      profile: mine.profile,
-    },
-  ];
-}
+import { MenuCard } from "./schedule/PracticeMenuCard";
+import { ScheduleAttendance } from "./schedule/ScheduleAttendance";
+import { seedAttendees, menuCompare } from "./schedule/schedule-card-data";
+import type { ScheduleWithMenus, Attendee, AttendanceStatusOrNone, AuthorMini, Block, PracticeMenu } from "@/types";
 
 /** 展開式の練習予定カード */
 export function ScheduleCard({
@@ -368,56 +308,17 @@ export function ScheduleCard({
 
       {/* 出欠行（中止のあいだは出さない） */}
       {showAttendance && !cancelledAt && (
-        <div className="-mt-1 space-y-2 px-4 pb-3 lg:px-3 lg:pb-2.5">
-          {attendanceDays.map((day) => {
-            // 複数日開催は日ごとに出欠を出す。単日の予定は従来どおり1行だけ。
-            const dayAttendees = multiDayAttendance
-              ? attendeesState.filter((a) => a.attend_date === day)
-              : attendeesState;
-            const mine = attendeesState.find(
-              (a) => a.user_id === userId && a.attend_date === day,
-            );
-            const status = mine?.status ?? "none";
-            return (
-              <div key={day} className="space-y-2">
-                {multiDayAttendance && (
-                  <p className="text-caption font-medium">
-                    {format(new Date(`${day}T00:00:00`), "M/d (E)", { locale: ja })}
-                  </p>
-                )}
-                <div className="flex flex-wrap items-center gap-2">
-                  <AttendanceToggle
-                    scheduleId={schedule.id}
-                    attendDate={day}
-                    userId={userId!}
-                    initial={status}
-                    onChanged={(change) => handleAttendanceChanged(day, change)}
-                  />
-                  <AttendeesButton attendees={dayAttendees} defaultBlock={attendanceDefaultBlock} />
-                </div>
-                {status === "absent" && (
-                  <AbsenceAttendanceControl
-                    scheduleId={schedule.id}
-                    attendDate={day}
-                    userId={userId!}
-                    initialNote={mine?.absence_note ?? null}
-                    onChanged={(note) => handleAbsenceNoteChanged(day, note)}
-                  />
-                )}
-                {day === jstToday() && status === "present" && (
-                  <LateAttendanceControl
-                    scheduleId={schedule.id}
-                    attendDate={day}
-                    userId={userId!}
-                    initialLate={mine?.is_late ?? false}
-                    initialNote={mine?.late_note ?? null}
-                    onChanged={(change) => handleLateChanged(day, change)}
-                  />
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <ScheduleAttendance
+          scheduleId={schedule.id}
+          userId={userId!}
+          attendanceDays={attendanceDays}
+          multiDayAttendance={multiDayAttendance}
+          attendeesState={attendeesState}
+          attendanceDefaultBlock={attendanceDefaultBlock}
+          handleAttendanceChanged={handleAttendanceChanged}
+          handleAbsenceNoteChanged={handleAbsenceNoteChanged}
+          handleLateChanged={handleLateChanged}
+        />
       )}
 
       {open && hasDetail && (
@@ -502,268 +403,6 @@ export function ScheduleCard({
       )}
     </Card>
   );
-}
-
-function MenuCard({
-  canDelete,
-  editableBlocks,
-  restrictBlock,
-  menu,
-  scheduleId,
-  canManage,
-  isTargeted = false,
-  isMyBlock = false,
-  onChanged,
-}: {
-  menu: PracticeMenu;
-  scheduleId: string;
-  canManage: boolean;
-  canDelete: boolean;
-  editableBlocks: Block[];
-  restrictBlock: boolean;
-  isTargeted?: boolean;
-  isMyBlock?: boolean;
-  onChanged: (menu: PracticeMenu | null) => void;
-}) {
-  const { showToast } = useToast();
-  const [editing, setEditing] = useState(false);
-  const targetNames =
-    menu.targets?.map((target) => target.profile?.display_name).filter(Boolean) ?? [];
-
-  const [publishing, setPublishing] = useState(false);
-
-  if (menu.source === "sheet") {
-    return <SheetMenuCard menu={menu} scheduleId={scheduleId} canManage={canManage} onChanged={onChanged} />;
-  }
-
-  async function remove() {
-    const supabase = createClient();
-    const { data, error } = await supabase.from("practice_menus").delete().eq("id", menu.id).select("id");
-    if (error || !data?.length) {
-      showToast("練習メニューを削除できませんでした");
-      return false;
-    }
-    onChanged(null);
-    return true;
-  }
-
-  async function publish() {
-    setPublishing(true);
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("practice_menus")
-      .update({ status: "published" })
-      .eq("id", menu.id)
-      .select("id");
-    if (error || !data || data.length === 0) {
-      setPublishing(false);
-      showToast("公開できませんでした");
-      return;
-    }
-    showToast("メニューを公開しました");
-    onChanged({ ...menu, status: "published" });
-  }
-
-  const hasBadges = menu.status === "draft" || targetNames.length > 0;
-
-  return (
-    <div
-      className={cn(
-        "relative rounded-xl border p-3",
-        isTargeted
-          ? "border-accent/45 bg-accent/5" // 自分が対象の個別メニュー＝青系
-          : isMyBlock
-            ? "border-[#34c759]/45 bg-[#34c759]/8" // 自分の所属ブロック＝緑系
-            : "border-transparent bg-bg",
-      )}
-    >
-      {/* 操作メニューは右上に絶対配置（空のヘッダー行で余白が出ないように） */}
-      {canManage && (
-        <div className="absolute right-1.5 top-1.5">
-          <ActionMenu
-            onEdit={() => setEditing(true)}
-            onDelete={canDelete ? remove : undefined}
-            deleteTitle="練習メニューを削除しますか？"
-            deleteDescription="削除したメニューは元に戻せません。"
-            triggerLabel="練習メニューの操作"
-          />
-        </div>
-      )}
-      {hasBadges && (
-        <div className={cn("mb-1 flex flex-wrap items-center gap-1.5", canManage && "pr-8")}>
-          {menu.status === "draft" && (
-            <span className="rounded border border-warning px-1.5 py-0.5 text-[10px] font-bold text-warning">
-              下書き
-            </span>
-          )}
-          {targetNames.length > 0 && (
-            <span className="text-[11px] text-muted2">
-              対象: {targetNames.join("、")}
-            </span>
-          )}
-        </div>
-      )}
-      {menu.content && (
-        <p className={cn("text-[14px] whitespace-pre-wrap", canManage && !hasBadges && "pr-8")}>
-          <Linkify text={menu.content} />
-        </p>
-      )}
-      {menu.pace && (
-        <div className="mt-2">
-          <p className="text-[11px] font-semibold text-muted2">ペース</p>
-          <p className="text-[14px] whitespace-pre-wrap">
-            <Linkify text={menu.pace} />
-          </p>
-        </div>
-      )}
-      {menu.remark && (
-        <div className="mt-2">
-          <p className="text-[11px] font-semibold text-muted2">
-            {menu.target_block === "short" ? "説明" : "補足"}
-          </p>
-          <p className="text-[14px] whitespace-pre-wrap">
-            <Linkify text={menu.remark} />
-          </p>
-        </div>
-      )}
-      {menu.supplement && (
-        <div className="mt-2">
-          <p className="text-[11px] font-semibold text-muted2">補強</p>
-          <p className="text-[14px] whitespace-pre-wrap">
-            <Linkify text={menu.supplement} />
-          </p>
-        </div>
-      )}
-      {canManage && menu.status === "draft" && (
-        <button
-          type="button"
-          data-ui-action="text" data-ui-tone="primary" onClick={publish}
-          disabled={publishing}
-          className="mt-2 inline-flex items-center gap-1 rounded-lg bg-accent px-3 py-1.5 text-[12px] font-semibold text-white pressable disabled:opacity-50"
-        >
-          {publishing ? "公開中…" : "公開する"}
-        </button>
-      )}
-      <MenuEditModal
-        allowedBlocks={restrictBlock ? editableBlocks : undefined}
-        menu={menu}
-        scheduleId={scheduleId}
-        open={editing}
-        onOpenChange={setEditing}
-        onSaved={(saved) => onChanged(saved)}
-      />
-    </div>
-  );
-}
-
-function SheetMenuCard({
-  menu,
-  scheduleId,
-  canManage,
-  onChanged,
-}: {
-  menu: PracticeMenu;
-  scheduleId: string;
-  canManage: boolean;
-  onChanged: (menu: PracticeMenu | null) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  return (
-    <div className="relative space-y-2">
-      <p className={cn("text-[10px] font-semibold text-muted2", canManage && "pr-8")}>
-        スプレッドシートから最新表示
-      </p>
-      {canManage && (
-        <div className="absolute -right-1.5 -top-1.5">
-          <ActionMenu
-            onEdit={() => setEditing(true)}
-            triggerLabel="中長距離メニューの操作"
-          />
-        </div>
-      )}
-      {menu.content && (
-        <SheetMenuSection
-          icon={<ListChecks size={14} />}
-          label="練習メニュー"
-          text={menu.content}
-          className="border-blue-200/70 bg-blue-50/70 text-blue-700"
-        />
-      )}
-      {menu.pace && (
-        <SheetMenuSection
-          icon={<Timer size={14} />}
-          label="ペース目安"
-          text={menu.pace}
-          className="border-emerald-200/70 bg-emerald-50/70 text-emerald-700"
-        />
-      )}
-      {menu.remark && (
-        <SheetMenuSection
-          icon={<StickyNote size={14} />}
-          label="補足・メモ"
-          text={menu.remark}
-          className="border-amber-200/70 bg-amber-50/70 text-amber-700"
-        />
-      )}
-      {menu.supplement && (
-        <SheetMenuSection
-          icon={<Dumbbell size={14} />}
-          label="補強"
-          text={menu.supplement}
-          className="border-violet-200/70 bg-violet-50/70 text-violet-700"
-        />
-      )}
-      {editing && (
-        <SheetMenuEditModal
-          menu={menu}
-          scheduleId={scheduleId}
-          onOpenChange={setEditing}
-          onSaved={onChanged}
-        />
-      )}
-    </div>
-  );
-}
-function SheetMenuSection({
-  icon,
-  label,
-  text,
-  className,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  text: string;
-  className: string;
-}) {
-  return (
-    <div className={cn("rounded-xl border p-3", className)}>
-      <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold">
-        {icon}
-        {label}
-      </p>
-      <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-ink">
-        <Linkify text={text} />
-      </p>
-    </div>
-  );
-}
-
-/** メニューの安定した並び順（作成日時非依存）。全体メニュー→個別、個別は対象者名順、最後に本文 */
-function menuTargetNames(m: PracticeMenu): string {
-  return (m.targets?.map((t) => t.profile?.display_name).filter(Boolean) ?? [])
-    .sort((a, b) => (a as string).localeCompare(b as string, "ja"))
-    .join("、");
-}
-
-function menuCompare(a: PracticeMenu, b: PracticeMenu): number {
-  const aNames = menuTargetNames(a);
-  const bNames = menuTargetNames(b);
-  // 対象者なし（ブロック全体）を先頭に
-  const aHasTarget = aNames.length > 0 ? 1 : 0;
-  const bHasTarget = bNames.length > 0 ? 1 : 0;
-  if (aHasTarget !== bHasTarget) return aHasTarget - bHasTarget;
-  if (aNames !== bNames) return aNames.localeCompare(bNames, "ja");
-  return (a.content ?? "").localeCompare(b.content ?? "", "ja");
 }
 
 function fmt(d: string | null): string {

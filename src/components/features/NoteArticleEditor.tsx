@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Toggle } from "@/components/ui/toggle";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { FormModalFooter } from "@/components/ui/form-modal";
+import { FormModalFooter, useFormDraft } from "@/components/ui/form-modal";
 import { safeUpdate, safeUpdateMessage } from "@/lib/safe-update";
 import { prepareTweetImage } from "@/lib/tweet-image";
 import {
@@ -84,6 +84,17 @@ export function NoteArticleEditor({
     article?.poll_allow_options ?? false,
   );
   const [confirmRemovePoll, setConfirmRemovePoll] = useState(false);
+  const draft = JSON.stringify([
+    title, blocks, images.map((image) => image.id), pollEnabled,
+    keptOptions.map((option) => option.id), newOptions,
+    pollMultiple, pollAnonymous, pollAllowOptions,
+  ]);
+  const [initialDraft] = useState(draft);
+  useFormDraft({
+    dirty: draft !== initialDraft || removed.length > 0 || pending.length > 0 || savedId !== article?.id,
+    busy: saving || preparing,
+    onSave: submit,
+  });
 
   const previews = usePreviews(pending);
   const liveImages = images.filter((image) => !removed.includes(image.id));
@@ -210,6 +221,7 @@ export function NoteArticleEditor({
   }
 
   async function submit() {
+    if (saving || preparing) return;
     const body = serializeNoteBlocks(blocks);
     if (!title.trim() || (!body && !pending.length && !liveImages.length && !pollEnabled)) {
       setError("タイトルと、本文・写真・投票のいずれかを入力してください");
@@ -301,7 +313,7 @@ export function NoteArticleEditor({
   }
 
   return (
-    <div className="space-y-5 pb-4">
+    <fieldset disabled={saving} className="min-w-0 space-y-5 pb-4">
       <div>
         <p className="section-label mb-1.5">タイトル</p>
         <Input
@@ -530,6 +542,6 @@ export function NoteArticleEditor({
           {saving ? "保存中…" : article ? "更新する" : "保存する"}
         </Button>
       </FormModalFooter>
-    </div>
+    </fieldset>
   );
 }

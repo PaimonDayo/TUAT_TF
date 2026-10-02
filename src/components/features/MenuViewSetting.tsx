@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 
 /**
  * 「他ブロックのメニューも見る」個人設定。既定オフ。
- * オンにした本人だけ全ブロックのメニューが見える（RLSで担保）。誰でも利用できる。
+ * オンにした本人だけ全ブロックの公開済みメニューが見える（RLSで担保）。誰でも利用できる。
  */
 export function MenuViewSetting({
   userId,
@@ -47,7 +47,7 @@ export function MenuViewSetting({
     <Toggle
       variant="row"
       label="他ブロックのメニューも見る"
-      description="下書きを含め、自分のブロック以外の練習メニューも表示します。"
+      description="自分のブロック以外の公開済みメニューも表示します。下書きの閲覧範囲は変わりません。"
       checked={on}
       onChange={toggle}
     />

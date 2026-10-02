@@ -8,7 +8,7 @@ import { PersonPicker } from "@/components/features/PersonPicker";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
+import { FormDraftGuard, FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { Input } from "@/components/ui/input";
 import { ReorderList } from "@/components/ui/reorder-list";
 import { Select } from "@/components/ui/select";
@@ -134,19 +134,27 @@ function RoleEditor({ open, onClose, onSaved, sortOrder, role, categories, canMa
   const [category, setCategory] = useState(role?.category ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const draft = JSON.stringify([name, flags, color, category]);
+  const [initialDraft] = useState(draft);
 
   async function save() {
+    if (saving) return;
     if (!name.trim()) { setError("ロール名を入力してください"); return; }
     setSaving(true); setError(null);
-    const payload = { name: name.trim(), can_manage_system: flags.manage_system, can_manage_members: flags.manage_members, can_create_schedule: flags.create_schedule, can_create_menu: flags.create_menu, can_create_notice: flags.create_notice, can_decide_practice: flags.decide_practice, color, category: role?.is_everyone ? null : category || null, sort_order: sortOrder };
-    const query = role ? createClient().from("roles").update(payload).eq("id", role.id) : createClient().from("roles").insert(payload);
-    const { data, error: saveError } = await query.select("*").single();
-    if (saveError || !data) { setError("保存できませんでした。もう一度お試しください"); setSaving(false); return; }
-    if (!(await refreshRoleCatalog())) showToast("保存しました。画面の更新に時間がかかる場合があります");
-    setSaving(false); onSaved(data as AppRole);
+    try {
+      const payload = { name: name.trim(), can_manage_system: flags.manage_system, can_manage_members: flags.manage_members, can_create_schedule: flags.create_schedule, can_create_menu: flags.create_menu, can_create_notice: flags.create_notice, can_decide_practice: flags.decide_practice, color, category: role?.is_everyone ? null : category || null, sort_order: sortOrder };
+      const query = role ? createClient().from("roles").update(payload).eq("id", role.id) : createClient().from("roles").insert(payload);
+      const { data, error: saveError } = await query.select("*").single();
+      if (saveError || !data) { setError("保存できませんでした。もう一度お試しください"); return; }
+      if (!(await refreshRoleCatalog())) showToast("保存しました。画面の更新に時間がかかる場合があります");
+      onSaved(data as AppRole);
+    } catch {
+      setError("保存できませんでした。もう一度お試しください");
+    } finally { setSaving(false); }
   }
 
-  return <FormModal open={open} onOpenChange={(next) => !next && onClose()} title={role ? "ロールを編集" : "ロールを作成"}><div className="space-y-4 pb-4">
+  return <FormModal open={open} onOpenChange={(next) => !next && onClose()} title={role ? "ロールを編集" : "ロールを作成"}><fieldset disabled={saving} className="min-w-0 space-y-4 pb-4">
+    <FormDraftGuard dirty={draft !== initialDraft} busy={saving} onSave={save} />
     <div><p className="section-label mb-1.5">ロール名</p><Input value={name} onChange={(event) => setName(event.target.value)} placeholder="例: 会計担当 / 主将" maxLength={20} /></div>
     {namedRoleCapabilities(name.trim()).map(text => <p key={text} className="text-caption">ロール名で適用: {text}</p>)}
     {role && namedRoleCapabilities(role.name).length > 0 && <p className="text-caption">名前を変更すると、名前に対応する権限も変わります。</p>}
@@ -154,11 +162,21 @@ function RoleEditor({ open, onClose, onSaved, sortOrder, role, categories, canMa
     <div><p className="section-label mb-1.5">権限</p><div className="space-y-2">{PERMISSION_LIST.map((permission) => { const administrativeForEveryone = role?.is_everyone && (permission.key === "manage_system" || permission.key === "manage_members"); const disabled = administrativeForEveryone || (permission.key === "manage_system" && !canManageSystem); return <Toggle key={permission.key} checked={flags[permission.key]} onChange={() => setFlags((current) => ({ ...current, [permission.key]: !current[permission.key] }))} label={permission.label} description={administrativeForEveryone ? "全員ロールには安全上付与できません" : permission.key === "manage_system" && !canManageSystem ? `${permission.desc}（システム管理者のみ変更可）` : permission.desc} disabled={disabled} />; })}</div></div>
     <div><p className="section-label mb-1.5">ロールの色</p><div data-ui-swatches className="grid grid-cols-8 gap-2">{ROLE_COLORS.map((option) => <button data-ui-choice key={option} type="button" onClick={() => setColor(option)} aria-pressed={color === option} aria-label={`色 ${option}`} className="flex aspect-square items-center justify-center rounded-lg border" style={{ borderColor: color === option ? option : "#e5e5ea", backgroundColor: `${option}18` }}><span className="h-5 w-5 rounded-full" style={{ backgroundColor: option }} /></button>)}</div></div>
     {error && <p className="text-center text-caption text-danger">{error}</p>}<FormModalFooter><Button size="lg" onClick={save} disabled={saving}>{saving ? "保存中…" : role ? "保存する" : "作成する"}</Button></FormModalFooter>
-  </div></FormModal>;
+  </fieldset></FormModal>;
 }
 
 function CategoryEditor({ open, onClose, onSaved, sortOrder }: { open: boolean; onClose: () => void; onSaved: (category: RoleCategory) => void; sortOrder: number }) {
   const [name, setName] = useState(""); const [saving, setSaving] = useState(false); const [error, setError] = useState("");
-  async function save() { if (!name.trim()) return; setSaving(true); setError(""); const { data, error: saveError } = await createClient().from("role_categories").insert({ name: name.trim(), sort_order: sortOrder }).select("*").single(); if (saveError || !data) { setError("保存できませんでした。同じ名前のカテゴリがないか確認してください"); setSaving(false); return; } onSaved(data as RoleCategory); }
-  return <FormModal open={open} onOpenChange={(next) => !next && onClose()} title="ロールカテゴリを作成"><div className="space-y-4 pb-4"><Input value={name} onChange={(event) => setName(event.target.value)} placeholder="例: 運営 / 種目別" maxLength={20} />{error && <p className="text-caption text-danger">{error}</p>}<FormModalFooter><Button size="lg" onClick={save} disabled={saving || !name.trim()}>{saving ? "作成中…" : "作成する"}</Button></FormModalFooter></div></FormModal>;
+  async function save() {
+    if (saving) return;
+    if (!name.trim()) { setError("カテゴリ名を入力してください"); return; }
+    setSaving(true); setError("");
+    try {
+      const { data, error: saveError } = await createClient().from("role_categories").insert({ name: name.trim(), sort_order: sortOrder }).select("*").single();
+      if (saveError || !data) { setError("保存できませんでした。同じ名前のカテゴリがないか確認してください"); return; }
+      onSaved(data as RoleCategory);
+    } catch { setError("保存できませんでした。もう一度お試しください"); }
+    finally { setSaving(false); }
+  }
+  return <FormModal open={open} onOpenChange={(next) => !next && onClose()} title="ロールカテゴリを作成"><fieldset disabled={saving} className="min-w-0 space-y-4 pb-4"><FormDraftGuard dirty={name !== ""} busy={saving} onSave={save} /><Input value={name} onChange={(event) => setName(event.target.value)} placeholder="例: 運営 / 種目別" maxLength={20} />{error && <p className="text-caption text-danger">{error}</p>}<FormModalFooter><Button size="lg" onClick={save} disabled={saving || !name.trim()}>{saving ? "作成中…" : "作成する"}</Button></FormModalFooter></fieldset></FormModal>;
 }
