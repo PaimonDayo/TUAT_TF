@@ -13,20 +13,20 @@ import { OB_DUTY_SLOTS, dutyRows, dutyTimeCell, obCsvCell } from "@/lib/ob-meet"
 import { dutyRoleText, type ObDuty, type ObDutyRole } from "@/lib/ob-duty";
 import { ObDutyEditor, type DutyTarget } from "./ObDutyEditor";
 import { ObMeetRoster } from "@/lib/ob-operations";
-import { SegmentedControl } from "@/components/ui/segmented";
+
 
 export function ObDutyTable({entries,members,duties=[],roles=[],integrated=false,onEvent,canEditDuties=true}:{entries:ObEntry[];members:EntryMember[];duties?:ObDuty[];roles?:ObDutyRole[];integrated?:boolean;onEvent?:(event:string)=>void;canEditDuties?:boolean}) {
   const [search,setSearch]=useState("");
-  const [people,setPeople]=useState("all");
-  const [period,setPeriod]=useState("all");
+
+
   const [detail,setDetail]=useState<{name:string;text:string;events:string[]}|null>(null);
   const [editing,setEditing]=useState<DutyTarget|null>(null);
 
   const [selectedEvent,setSelectedEvent]=useState<typeof OB_DUTY_SLOTS[number]|null>(null);
   const findDuty=(profileId:string,time:string,event:string)=>duties.find((d)=>d.profile_id===profileId&&d.slot_time===time&&d.event_name===event);
   const roster=useMemo(()=>integrated?new ObMeetRoster(entries,members).rows:dutyRows(entries,members).map(row=>({...row,alumni:false})),[entries,members,integrated]);
-  const rows=roster.filter((row)=>normalizeEntryName(row.name+row.grade).toLowerCase().includes(normalizeEntryName(search).toLowerCase())&&(!integrated||people==="all"||(people==="alumni"?row.alumni:!row.alumni)));
-  const slots=OB_DUTY_SLOTS.filter(s=>!integrated||period==="all"||(period==="am"?s.time<"12:00":s.time>="12:00"));
+  const rows=roster.filter((row)=>normalizeEntryName(row.name+row.grade).toLowerCase().includes(normalizeEntryName(search).toLowerCase()));
+  const slots=OB_DUTY_SLOTS;
   function download() {
     const values=[
       ["補助員検討用：開始時刻別の出場登録。終了時刻・アップ・移動は未反映。出場登録なしは担当可能の確約ではありません。"],
@@ -39,7 +39,6 @@ export function ObDutyTable({entries,members,duties=[],roles=[],integrated=false
   return <div className="space-y-4">{integrated?<div className="space-y-3">
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-caption"><span className="text-accent">● 出場</span><span className="text-amber-700">■ 補助担当</span><span><span className="ob-concurrent mr-1 inline-block h-3 w-4" />別種目出場</span><span className="text-violet-700">OB・OG</span><span>△ 当日確認</span></div>
     <p className="text-micro text-muted2">同じ開始時刻の出場を表示。終了時刻・アップ・移動は別途確認してください。空欄は補助可能の確約ではありません。</p>
-    <div className="grid gap-2 sm:grid-cols-2"><SegmentedControl items={[{key:"all",label:"全員"},{key:"active",label:"現役"},{key:"alumni",label:"OB・OG"}]} value={people} onChange={setPeople}/><SegmentedControl items={[{key:"all",label:"終日"},{key:"am",label:"午前"},{key:"pm",label:"午後"}]} value={period} onChange={setPeriod}/></div>
   </div>:<Card className="space-y-2 p-4"><h2 className="text-headline">補助員の割り当て</h2>
     <p className="text-caption">種目ごとに担当を登録します。○は同時刻に出場するため補助員に割り当てられない枠です。アップ・移動・競技終了時刻を確認して担当を決めてください。空欄でもアップ・移動時間を考慮してください。リレーは当日確認です。</p>
     <p className="text-caption">学年を問わず、エントリーがある現役部員を表示しています。灰色の行はアプリの部員とまだ照合していない回答です。アプリ未登録でも、参加回答に担当を登録できます。</p>

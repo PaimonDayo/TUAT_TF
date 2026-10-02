@@ -16,6 +16,7 @@
 | OB戦のシステム限定運営機能 | [運営表・組み分け・試技記録](OB-OPERATIONS-2026-10-02.md) |
 | OB戦の補助員選択 | [候補の重複除外と前後の予定](OB-DUTY-CANDIDATES-2026-10-02.md) |
 | OB戦の未登録補助員 | [参加回答による補助員の割り当て](OB-UNREGISTERED-HELPERS-2026-10-02.md) |
+| OB戦の組み分け操作 | [組別の配置表への作り直し](OB-HEATS-REBUILD-2026-10-02.md) |
 | コメントとシートの削除 | [再取り込み防止](COMMENT-REIMPORT-PREVENTION-2026-10-01.md) / [コメント管理](COMMENT-MODERATION-2026-09-29.md) |
 | 9/27の残作業・稼働確認 | [定期処理移設と予備構成の検証](OPERATIONS-2026-09-27.md) |
 | 開発環境・コマンド | [README](../README.md) |

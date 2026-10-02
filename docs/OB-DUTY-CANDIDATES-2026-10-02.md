@@ -17,3 +17,11 @@
 - 合成の実React画面をChrome/WebKit320/390/820/1440px×新旧UIの16条件で確認。別種目担当／出場／OBの除外、同種目兼務・別時刻・解除済みの候補維持、前後の役職名、既存重複の解除payload、保存失敗時の選択保持、個人画面の追加抑止、320px文字1.5倍での収まりを確認。実機は未確認。
 
 DB migration、DB内容、GAS、PC jobs、予備同期の変更なし。公開後のSHA・Production確認結果はローカル追記する。
+
+## 本番反映完了
+
+`fa1aadf2da9fc465d1a72e84698b9d2d60130c5a` をmasterへFFして1回push（`dcc6ce1..fa1aadf master -> master`）。既存33ファイルの未コミット変更はハッシュ不変、文書索引の他作業追記は3方向統合で保持。作業ブランチのpushなし。
+
+公式GitHub deploymentsの `Production – tuat-tf` と `Production – tuat-tf-pc-preview` が同SHAでsuccess、本番 `/api/version` も同SHAを確認。Vercel CLIの保存認証は403のため、公式GitHub経由でProductionを確認した。
+
+本番IABで11:00砲丸投げの補助担当者が100mの候補から除外されること、直前の出場・補助種目と役職名、次の予定の表示を確認。保存は行わず元の一覧へ戻した。実機は未確認。完了記録だけをローカルに保持し、追加pushなし。
