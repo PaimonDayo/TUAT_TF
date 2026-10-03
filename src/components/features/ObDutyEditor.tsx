@@ -10,14 +10,14 @@ import { useToast } from "@/components/ui/toast";
 import { saveDutyRoles } from "@/app/(app)/ob-entries/actions";
 import { concurrentDuties, type ObDuty, type ObDutyRole } from "@/lib/ob-duty";
 
-export type DutyTarget = {profileId:string;entryId?:string;name:string;grade:string;time:string;label:string;entryText:string;competing:boolean;existing?:ObDuty};
+export type DutyTarget = {profileId:string;entryId?:string;name:string;grade:string;time:string;label:string;entryText:string;competing:boolean;absent?:boolean;existing?:ObDuty};
 export function ObDutyEditor({target,onClose,roles,duties,members}:{target:DutyTarget;onClose:()=>void;roles:ObDutyRole[];duties:ObDuty[];members:EntryMember[]}) {
   const [selected,setSelected]=useState<string[]>(target.existing?.role_ids ?? []);
   const [saving,setSaving]=useState(false);
   const [confirm,setConfirm]=useState<"discard"|"clear"|null>(null);
   const original=target.existing?.role_ids ?? [];
   const otherDuties=concurrentDuties(target.profileId,target.time,target.label,duties);
-  const blocked=target.competing||otherDuties.length>0;
+  const blocked=target.absent||target.competing||otherDuties.length>0;
   const dirty=[...selected].sort().join()!==[...original].sort().join();
   const router=useRouter();const {showToast}=useToast();
   async function save(value:string[]) {
@@ -32,7 +32,7 @@ export function ObDutyEditor({target,onClose,roles,duties,members}:{target:DutyT
   return <FormModal open autoFocus={false} title="補助員の担当" onOpenChange={(open)=>{if(!open&&!saving&&!confirm){if(dirty)setConfirm("discard");else onClose();}}}>
     <div className="space-y-4">
       <div><p className="text-headline">{target.grade} {target.name}</p><p className="mt-1 text-body">{target.time}　{target.label}</p></div>
-      <p className={`text-body ${target.competing?"text-danger":""}`}>{target.competing?"この時間帯に出場登録があります：":"出場予定："}{target.entryText}</p>
+      <p className={`text-body ${target.competing||target.absent?"text-danger":""}`}>{target.absent?"欠席のため、担当を追加できません。割当済みの担当は解除できます。":`${target.competing?"この時間帯に出場登録があります：":"出場予定："}${target.entryText}`}</p>
       {otherDuties.length>0&&<p className="text-body text-danger">同時刻の補助担当：{otherDuties.map(d=>d.event_name).join("・")}。別種目への追加はできません。</p>}
       <p className="text-caption">競技の終了時刻・アップ・移動を確認して割り当ててください。</p>
       <p className="text-caption">複数選択できます。人数はこの部員の選択を含む保存後の人数です。</p>

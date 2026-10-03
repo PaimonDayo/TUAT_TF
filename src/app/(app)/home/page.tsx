@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 import { format, subDays } from "date-fns";
 import { ja } from "date-fns/locale";
 import { ChevronRight, Folder, Pencil } from "lucide-react";
-import { getMyObEntry, getMyObEntryCandidates, getMyObDuties } from "@/lib/queries/ob-entries";
+import { getMyObEntry, getMyObEntryCandidates, getMyObDuties, getMyObParticipation } from "@/lib/queries/ob-entries";
 import { entryEventRows } from "@/lib/ob-entries";
 import { OB_PROGRAM_PATH, OB_MY_ENTRY_PATH, canManageObMeet, obEventTime } from "@/lib/ob-meet";
 import { ObHomeSchedule } from "@/components/features/ObHomeSchedule";
@@ -88,9 +88,10 @@ async function ObEntrySection() {
   const staff = canManageObMeet(profile.roles);
   const entry = await getMyObEntry(profile.id);
   // 本人照合は係だけ（一般部員は未紐付けの回答を読めない）。
-  const [candidates, duties] = await Promise.all([
+  const [candidates, duties, participation] = await Promise.all([
     entry || !staff ? Promise.resolve([]) : getMyObEntryCandidates(profile.id),
     getMyObDuties(profile.id, entry?.id ?? null).catch(() => null),
+    entry ? getMyObParticipation(entry.id).catch(() => []) : Promise.resolve([]),
   ]);
   const rows = entry ? entryEventRows(entry) : [];
   const footer = (label: string, hint: string, href: string) => (
@@ -105,13 +106,14 @@ async function ObEntrySection() {
       <Card className="p-4">
         {entry ? (
           <>
+            {entry.absent&&<p className="mb-3 rounded-lg bg-bg p-3 text-body">大会欠席として登録されています</p>}
             <Link data-ui-row href={`${OB_MY_ENTRY_PATH}?from=home`} prefetch={false} className="block">
               {rows.length ? (
                 <ul className="space-y-1">
                   {rows.map((row) => (
                     <li key={row.event} className="flex items-baseline justify-between gap-3 text-[15px]">
                       <span className="w-12 shrink-0 text-caption tabular-nums">{obEventTime(row.event) ?? ""}</span>
-                      <span className="min-w-0 flex-1 break-words font-medium">{row.event}</span>
+                      <span className="min-w-0 flex-1 break-words font-medium">{row.event}{participation.find(value=>value.event===row.event)?.status==="DNS"&&<span className="ml-2 text-caption">欠場（DNS）</span>}</span>
                       <span className="max-w-[35%] truncate text-caption">{row.mark}</span>
                     </li>
                   ))}
@@ -129,7 +131,7 @@ async function ObEntrySection() {
             {staff && <Link data-ui-row href={`${OB_PROGRAM_PATH}?edit=identity`} prefetch={false} className="mt-2 block text-right text-caption text-accent">回答済みなら本人照合で探す →</Link>}
           </>
         )}
-        <ObHomeSchedule duties={duties} />
+        <ObHomeSchedule duties={duties} absent={entry?.absent} />
       </Card>
     </section>
   );

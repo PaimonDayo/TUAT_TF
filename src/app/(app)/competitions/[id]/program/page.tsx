@@ -13,7 +13,8 @@ import { getCompetitionById, getCompetitionProgramEntries } from "@/lib/queries"
 import { getMyObEntryFull, getObEntries } from "@/lib/queries/ob-entries";
 import { canManageObMeet, canViewObHistory, isObCompetition } from "@/lib/ob-meet";
 import { permissionsOf } from "@/lib/permissions";
-import { ObOperations } from "@/components/features/ObOperations";
+import { ObDayWorkspace } from "@/components/features/ObDayWorkspace";
+import { ObMeetParticipants } from "@/components/features/ObMeetParticipants";
 import { getObEventOperations } from "@/lib/queries/ob-operations";
 
 export default async function CompetitionProgramPage({
@@ -50,29 +51,26 @@ export default async function CompetitionProgramPage({
       duties: roster!.duties.data ?? [], roles: roster!.dutyRoles.data ?? [], operations,
     };
     const me = { id: profile.id, display_name: profile.display_name, grade: profile.grade };
-    const management = roster ? <>
-      {staff ? <ObEntryReview competition={competition}
-        operations={canManage ? program.operations : undefined}
+    const management = roster && staff ? <ObMeetParticipants entries={program.entries} duties={program.duties} roles={program.roles} operations={program.operations} openDetails={edit === "identity"} details={<>
+      <ObEntryReview competition={competition}
         initial={roster.entries.data ?? []} members={roster.members.data ?? []}
         viewerId={profile.id} me={me} openIdentity={edit === "identity"}
         party={roster.party.data ?? []} duties={roster.duties.data ?? []}
         dutyRoles={roster.dutyRoles.data ?? []}
         history={(roster.history.data ?? []).flatMap(h => h.profile_id ? [{ submitted_name: h.submitted_name, profile_id: h.profile_id }] : [])}
-      /> : <ObOperations entries={roster.entries.data ?? []} members={roster.members.data ?? []}
-        duties={roster.duties.data ?? []} roles={roster.dutyRoles.data ?? []}
-        initial={program.operations} canEditDuties={false} />}
+      />
       {canViewObHistory(profile.roles) && <ObEntryHistory />}
-    </> : undefined;
+    </>}/> : undefined;
     return <>{header}<ObMeetWorkspace key={edit ?? "program"}
       userId={profile.id}
-      dutyIssues={obDutyIssues(program.entries,program.members,program.duties,program.roles)}
-      initialView={edit === "mine" ? "mine" : edit === "identity" && staff ? "management" : "program"}
+      dutyIssues={obDutyIssues(program.entries,program.members,program.duties,program.roles,program.operations)}
+      initialView={edit === "mine" ? "mine" : edit === "identity" && staff ? "management" : staff || canManage ? "day" : "program"}
       program={<ObPublicProgram {...program} />}
       duties={<ObPublicProgram {...program} view="duties" canEditDuties={staff} />}
-      mine={<><ObMyEntry embedded entry={mine.entry} party={mine.party ?? undefined} me={me} duties={program.duties.filter(duty=>duty.profile_id===profile.id)} roles={program.roles} openEditor={edit === "mine"} />
+      mine={<><ObMyEntry embedded entry={mine.entry} party={mine.party ?? undefined} me={me} duties={program.duties.filter(duty=>duty.profile_id===profile.id)} roles={program.roles} operations={program.operations} openEditor={edit === "mine"} />
         {!management && canViewObHistory(profile.roles) && <ObEntryHistory />}</>}
       management={management}
-      heats={canManage ? <ObOperations onlyGroups entries={program.entries} members={program.members} duties={program.duties} roles={program.roles} initial={program.operations} canEditDuties={staff}/> : undefined}
+      day={staff || canManage ? <ObDayWorkspace entries={program.entries} members={program.members} duties={program.duties} roles={program.roles} operations={program.operations} canRegister={staff}/> : undefined}
     /></>;
   }
 

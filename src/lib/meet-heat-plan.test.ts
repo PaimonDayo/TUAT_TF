@@ -39,7 +39,25 @@ it("keeps trials when unassigning and refuses malformed changes atomically",()=>
  expect(next.participants[0]).toEqual({...a,group:null,order:null});
  expect(()=>plan().move(["a","a"],1)).toThrow();
  expect(()=>plan().swap(["a"])).toThrow();
- const full={...data,participants:[{...a,order:99},b,c]};
+ const full={...data,participants:[{...a,order:300},b,c]};
  expect(()=>plan(full).move(["c"],1)).toThrow("番号");
  expect(full.participants[2]).toBe(c);
+});
+it("keeps all 300 non-lane entrants in one group and accepts their numbers",()=>{
+ const fresh:MeetEventData={participants:Array.from({length:300},(_,i)=>emptyPerformance("p"+i)),confirmed:false};
+ const next=plan(fresh).initial(false);
+ expect(new Set(next.participants.map(p=>p.group))).toEqual(new Set([1]));
+ expect(next.participants.at(-1)?.order).toBe(300);
+ expect(new MeetEvent({name:"1500m",discipline:"track",wind:false},next).validate()).toBeNull();
+});
+it("DNS and restoration keep every trial and number and reject a occupied return position",()=>{
+ const dns=plan().setDns("a",true);
+ expect(dns.participants[0]).toEqual({...a,status:"DNS"});
+ expect(plan(dns).setDns("a",false).participants[0]).toEqual(a);
+ const occupied={...dns,participants:[dns.participants[0],{...b,group:1,order:1},c]};
+ expect(()=>plan(occupied).setDns("a",false)).toThrow("別の人");
+ expect(occupied.participants[0].status).toBe("DNS");
+ const absentPlan=new MeetHeatPlan(data,new Set(["b","c"]));
+ expect(()=>absentPlan.setDns("a",true)).toThrow("欠席");
+ expect(()=>absentPlan.move(["a"],2)).toThrow();
 });

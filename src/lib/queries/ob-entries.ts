@@ -23,9 +23,18 @@ export async function getObEntries() {
 export async function getMyObEntry(profileId: string) {
   const client = entryClient(await createClient());
   const { data, error } = await client.from("ob_meet_entries")
-    .select("id,events,qualification_marks").eq("meet_key", OB_MEET.meetKey).eq("profile_id", profileId).limit(1).maybeSingle();
+    .select("id,events,qualification_marks,absent").eq("meet_key", OB_MEET.meetKey).eq("profile_id", profileId).limit(1).maybeSingle();
   if (error) throw new Error("自分のエントリーを取得できませんでした");
-  return data as { id: string; events: string[]; qualification_marks: Record<string, string | null> } | null;
+  return data as { id: string; events: string[]; qualification_marks: Record<string, string | null>; absent: boolean } | null;
+}
+
+/** Only the viewer's own event state is sent to the home client. */
+export async function getMyObParticipation(entryId: string) {
+  const { getObEventOperations } = await import("./ob-operations");
+  return (await getObEventOperations()).flatMap(operation => {
+    const person = operation.data.participants.find(value => value.entryId === entryId);
+    return person ? [{event:operation.event_name,status:person.status}] : [];
+  });
 }
 
 /** ホーム用: まだ誰にも紐付いていない回答のうち、氏名照合で自分が候補に挙がるもの（自動確定はしない）。 */

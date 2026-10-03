@@ -38,7 +38,7 @@ export class MeetEvent {
     for (const p of participants) {
       if (!p || typeof p.entryId !== "string" || ids.has(p.entryId)) return "出場者が重複しています";
       ids.add(p.entryId);
-      if (![p.group, p.order].every(n => n === null || Number.isInteger(n) && n >= 1 && n <= 99)) return "組・順番は1〜99で入力してください";
+      if (!(p.group === null || Number.isInteger(p.group) && p.group >= 1 && p.group <= 99) || !(p.order === null || Number.isInteger(p.order) && p.order >= 1 && p.order <= 300)) return "組は1〜99、順番は1〜300で入力してください";
       if (p.group !== null && p.order !== null && p.status !== "DNS") {
         const key = `${p.group}:${p.order}`;
         if (positions.has(key)) return "同じ組のレーン・試技順が重複しています";

@@ -4,55 +4,62 @@ import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { FormModal } from "@/components/ui/form-modal";
-import { SegmentedControl } from "@/components/ui/segmented";
 import { ObDutyTable } from "./ObDutyTable";
 import { OB_PROGRAM } from "@/lib/ob-meet";
 import { MeetEvent } from "@/lib/meet-operations";
-import { obEventRule, type ObEventOperation } from "@/lib/ob-operations";
+import { obEventParticipants, obEventRule, type ObEventOperation } from "@/lib/ob-operations";
 import type { ObEntry } from "@/lib/ob-entries";
 import type { EntryMember } from "@/lib/entry-identity";
 import { type ObDuty, type ObDutyRole } from "@/lib/ob-duty";
 
-/** 閲覧は時刻と種目から。出場者や補助担当の詳細は必要なときだけ開く。 */
+/** One event opens the whole start list, including withdrawals and already recorded results. */
 export function ObPublicProgram({ entries, members, duties, roles, operations, view = "program", canEditDuties = false }: {
   view?: "program" | "duties"; canEditDuties?: boolean; entries: ObEntry[]; members: EntryMember[]; duties: ObDuty[]; roles: ObDutyRole[]; operations: ObEventOperation[];
 }) {
   const [event, setEvent] = useState<string | null>(null);
-  const [gender, setGender] = useState("男子");
-  const eventName = gender + event;
-  const saved = operations.find(o => o.event_name === eventName);
-  const people = entries.filter(e => e.events.includes(eventName)).sort((a, b) => {
-    const x = saved?.data.participants.find(p => p.entryId === a.id), y = saved?.data.participants.find(p => p.entryId === b.id);
-    return (x?.group ?? 100) - (y?.group ?? 100) || (x?.order ?? 100) - (y?.order ?? 100) || a.submitted_name.localeCompare(b.submitted_name, "ja");
-  });
+  function eventRows(name: string) {
+    return (["男子", "女子"] as const).flatMap(division => {
+      const eventName = division + name;
+      const saved = operations.find(operation => operation.event_name === eventName);
+      return obEventParticipants(eventName, entries, saved?.data).map(row => ({ ...row, division, eventName, saved }));
+    }).sort((a, b) => {
+      const aOut = !a.state.canParticipate && !a.state.recorded, bOut = !b.state.canParticipate && !b.state.recorded;
+      return Number(aOut) - Number(bOut) || (a.performance.group ?? 100) - (b.performance.group ?? 100) || a.division.localeCompare(b.division, "ja") || (a.performance.order ?? 100) - (b.performance.order ?? 100) || (a.entry?.submitted_name ?? "").localeCompare(b.entry?.submitted_name ?? "", "ja");
+    });
+  }
+  const people = event ? eventRows(event) : [];
   return <section className="space-y-3">
-    {view === "program" ? <>
-      <p className="text-caption">種目を押すと出場者・組分け・記録を確認できます。</p>
-      <Card className="divide-y divide-separator px-3">
-        {OB_PROGRAM.map(slot => <div key={slot.time + slot.label} className="flex gap-3 py-2">
-          <span className="w-12 shrink-0 pt-3 text-body font-semibold tabular-nums">{slot.time}</span>
-          <div className="min-w-0 flex-1">{slot.events.length ? slot.events.map(name => <button key={name} type="button" onClick={() => { setEvent(name); setGender(entries.some(e => e.events.includes("男子" + name)) ? "男子" : "女子"); }} className="flex min-h-12 w-full items-center gap-2 text-left pressable">
-            <span className="min-w-0 flex-1 break-words text-body font-medium">{name === "立ち五段" ? "立ち五段跳び" : name}</span>
-            <span className="shrink-0 text-caption">{entries.filter(e => e.events.some(v => v === "男子" + name || v === "女子" + name)).length}人</span><ChevronRight size={16} className="shrink-0 text-muted" />
-          </button>) : <div className="py-3 text-body">{slot.label}{slot.note && <p className="text-caption">{slot.note}</p>}</div>}</div>
-        </div>)}
-      </Card>
-    </> : <ObDutyTable integrated canEditDuties={canEditDuties} entries={entries} members={members} duties={duties} roles={roles} />}
-    <FormModal open={event !== null} onOpenChange={open => { if (!open) setEvent(null); }} title={`${event === "立ち五段" ? "立ち五段跳び" : event ?? ""}の出場者`}>
+    {view === "program" ? <Card className="divide-y divide-separator px-3">
+      {OB_PROGRAM.map(slot => <div key={slot.time + slot.label} className="flex gap-3 py-2">
+        <span className="w-12 shrink-0 pt-3 text-body font-semibold tabular-nums">{slot.time}</span>
+        <div className="min-w-0 flex-1">{slot.events.length ? slot.events.map(name => {
+          const rows = eventRows(name);
+          const present = rows.filter(row => row.state.canParticipate || row.state.recorded).length;
+          const unavailable = rows.length - present;
+          return <button key={name} type="button" onClick={() => setEvent(name)} className="flex min-h-14 w-full items-center gap-2 text-left pressable">
+            <span className="min-w-0 flex-1 break-words text-body font-medium">{displayEvent(name)}</span>
+            <span className="shrink-0 text-right text-caption"><span className="block">{present}人</span>{unavailable > 0 && <span className="block text-micro">欠場・取消 {unavailable}</span>}</span><ChevronRight size={16} className="shrink-0 text-muted" />
+          </button>;
+        }) : <div className="py-3 text-body">{slot.label}{slot.note && <p className="text-caption">{slot.note}</p>}</div>}</div>
+      </div>)}
+    </Card> : <ObDutyTable integrated canEditDuties={canEditDuties} entries={entries} members={members} duties={duties} roles={roles} operations={operations} onEvent={name=>setEvent(name.replace(/^(男子|女子)/,""))} />}
+    <FormModal open={event !== null} wide autoFocus={false} onOpenChange={open => { if (!open) setEvent(null); }} title={displayEvent(event ?? "")}>
       <div className="space-y-4">
-        <SegmentedControl value={gender} onChange={setGender} items={["男子", "女子"].map(g => ({ key: g, label: `${g} (${entries.filter(e => e.events.includes(g + event)).length})` }))} />
-        {saved && <p className="text-caption">{saved.data.confirmed ? "組分け・記録は確認済みです" : "組分け・記録は調整中です"}</p>}
-        {people.length ? <ul className="divide-y divide-separator">{people.map(e => {
-          const p = saved?.data.participants.find(p => p.entryId === e.id);
-          const result = p && saved ? new MeetEvent(obEventRule(eventName), saved.data).best(p) : null;
-          return <li key={e.id} className="space-y-1 py-3 text-body">
-            {(p?.group || p?.order) && <p className="text-caption">{p?.group ? `${p.group}組 ` : ""}{p?.order ? `${p.order}番` : ""}</p>}
-            <p className="break-words font-medium">{e.submitted_name}<span className="ml-2 text-caption">{e.grade}</span></p>
-            {e.qualification_marks[eventName] && <p className="text-caption">資格記録：{e.qualification_marks[eventName]}</p>}
-            {result && result !== "—" && <p>記録：{result}</p>}
+        <p className="text-caption">{people.length}人・組分けと記録</p>
+        {people.length ? <ul className="divide-y divide-separator">{people.map(row => {
+          const { entry, performance, state, saved, division, eventName } = row;
+          const result = new MeetEvent(obEventRule(eventName), { participants: [performance], confirmed: saved?.data.confirmed ?? false }).best(performance);
+          const unavailable = !state.canParticipate && !state.recorded;
+          const placement = performance.group ? `${performance.group}組${performance.order ? `・${performance.order}${obEventRule(eventName).discipline === "track" && !["1500m", "3000m"].includes(event ?? "") ? "レーン" : "番"}` : ""}` : "組未定";
+          return <li key={eventName + row.entryId} className={`flex flex-wrap items-center gap-x-4 gap-y-1 py-3 ${unavailable ? "text-muted" : ""}`}>
+            <div className="w-28 shrink-0"><span className="mr-2 text-caption">{division}</span><span className="text-caption">{placement}</span></div>
+            <div className="min-w-0 flex-1 basis-36"><p className="break-words text-body font-medium">{entry?.submitted_name ?? "参加情報なし"}<span className="ml-2 text-caption">{entry?.grade}</span></p>{entry?.qualification_marks[eventName] && !state.recorded && <p className="text-micro text-muted2">資格記録 {entry.qualification_marks[eventName]}</p>}</div>
+            <div className="min-w-20 text-right"><p className={`text-body ${unavailable ? "text-muted" : "font-semibold tabular-nums"}`}>{state.recorded ? result : state.status === "entered" ? "—" : state.label}</p>{state.recorded && (state.absent || !state.registered) && <p className="text-micro text-muted2">{state.absent ? "以降は欠席" : "登録取消・記録保持"}</p>}</div>
           </li>;
         })}</ul> : <p className="text-caption">出場登録はありません。</p>}
       </div>
     </FormModal>
   </section>;
 }
+
+function displayEvent(name: string) { return name === "立ち五段" ? "立ち五段跳び" : name; }

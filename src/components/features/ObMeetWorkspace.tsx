@@ -2,22 +2,22 @@
 
 import { type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
-import { SegmentedControl } from "@/components/ui/segmented";
+import { ObLiveRefresh } from "./ObLiveRefresh";
 import { ObDutyReviewProvider, useObDutyReview } from "./ObDutyReviewProvider";
 import type { ObDutyIssue } from "@/lib/ob-duty-issues";
 
 type WorkspaceProps = {
-  program: ReactNode; duties: ReactNode; mine: ReactNode; management?: ReactNode; heats?: ReactNode; initialView?: string; userId: string; dutyIssues?: ObDutyIssue[];
+  program: ReactNode; duties: ReactNode; mine: ReactNode; management?: ReactNode; day?: ReactNode; initialView?: string; userId: string; dutyIssues?: ObDutyIssue[];
 };
 export function ObMeetWorkspace(props: WorkspaceProps) {
   return <ObDutyReviewProvider userId={props.userId}><Workspace {...props}/></ObDutyReviewProvider>;
 }
-function Workspace({ program, duties, mine, management, heats, initialView = "program", dutyIssues = [] }: WorkspaceProps) {
+function Workspace({ program, duties, mine, management, day, initialView = "program", dutyIssues = [] }: WorkspaceProps) {
   const {unread}=useObDutyReview(dutyIssues);
   const dutyProblemCount=new Set(unread.map(issue=>issue.time+"/"+issue.event)).size;
   const params = useSearchParams();
-  const requested = params.get("view") ?? initialView;
-  const view = ["program", "duties", "mine", ...(heats ? ["heats"] : []), ...(management ? ["management"] : [])].includes(requested) ? requested : "program";
+  const requested = params.get("view") === "heats" ? "day" : params.get("view") ?? initialView;
+  const view = ["program", "duties", "mine", ...(day ? ["day"] : []), ...(management ? ["management"] : [])].includes(requested) ? requested : "program";
   function setView(next: string) {
     const url = new URL(window.location.href);
     url.searchParams.set("view", next);
@@ -26,11 +26,12 @@ function Workspace({ program, duties, mine, management, heats, initialView = "pr
     window.history.replaceState(null, "", url.pathname + url.search);
   }
   return <div data-ob-workspace className="space-y-4 px-4 pb-8 pt-2">
-    <SegmentedControl value={view} onChange={setView} items={[
-      { key: "mine", label: "自分の予定" }, { key: "program", label: "プログラム" }, { key: "duties", label: dutyProblemCount ? `補助員 ！${dutyProblemCount}` : "補助員" },
-      ...(heats ? [{key:"heats",label:"組分け"}] : []),
-      ...(management ? [{ key: "management", label: "運営・登録" }] : []),
-    ]} />
-    {view === "program" ? program : view === "duties" ? duties : view === "heats" && heats ? heats : view === "management" && management ? management : mine}
+    <nav aria-label="OB戦の画面" className="flex gap-1 overflow-x-auto border-b border-separator">{[
+      ...(day ? [{key:"day",label:"当日運営"}] : []),
+      {key:"program",label:"プログラム"},{key:"duties",label:"補助員"},
+      ...(management ? [{key:"management",label:"参加者"}] : []),{key:"mine",label:"自分"},
+    ].map(item=><button key={item.key} type="button" aria-current={view===item.key?"page":undefined} onClick={()=>setView(item.key)} className={`flex min-h-12 shrink-0 items-center gap-1.5 border-b-2 px-3 text-sm font-semibold md:px-5 ${view===item.key?"border-accent text-accent":"border-transparent text-muted"}`}>{item.label}{item.key==="duties"&&dutyProblemCount>0&&<span aria-label={`未確認${dutyProblemCount}種目`} className="rounded-full bg-danger/10 px-1.5 py-0.5 text-xs text-danger">{dutyProblemCount}</span>}</button>)}</nav>
+    <ObLiveRefresh/>
+    {view === "program" ? program : view === "duties" ? duties : view === "day" && day ? day : view === "management" && management ? management : mine}
   </div>;
 }

@@ -11,6 +11,8 @@ vi.mock("@/components/features/ObEntryHistory",()=>({ObEntryHistory:"history"}))
 vi.mock("@/components/features/ObEntryReview",()=>({ObEntryReview:"review"}));
 vi.mock("@/components/features/ObMyEntry",()=>({ObMyEntry:"mine"}));
 vi.mock("@/components/features/ObOperations",()=>({ObOperations:"operations"}));
+vi.mock("@/components/features/ObDayWorkspace",()=>({ObDayWorkspace:"day"}));
+vi.mock("@/components/features/ObMeetParticipants",()=>({ObMeetParticipants:"participants"}));
 vi.mock("@/components/features/CompetitionProgramView",()=>({CompetitionProgramView:"other"}));
 vi.mock("@/components/layout/SubHeader",()=>({SubHeader:"header"}));
 import Page from "./page";
@@ -38,11 +40,11 @@ it("preserves the home edit link for the viewer",async()=>{
 });
 it("keeps staff registration management separate from system operation editing",async()=>{
   mock.roles=[{name:"OB戦2026",can_manage_system:false,can_manage_members:false}];
-  const w=await workspace("identity");expect(w.initialView).toBe("management");expect(find(w.management as ReactNode,"review")?.operations).toBeUndefined();expect(mock.program).not.toHaveBeenCalled();expect(mock.roster).toHaveBeenCalledTimes(1);
+  const w=await workspace("identity");expect(w.initialView).toBe("management");expect(find(w.management as ReactNode,"participants")?.openDetails).toBe(true);expect(find(w.day as ReactNode,"day")?.canRegister).toBe(true);expect(mock.program).not.toHaveBeenCalled();expect(mock.roster).toHaveBeenCalledTimes(1);
 });
 it("allows system operation management without granting helper edits",async()=>{
   mock.roles=[{name:"system",can_manage_system:true,can_manage_members:false}];
-  const w=await workspace();expect(w.initialView).toBe("program");expect(find(w.management as ReactNode,"operations")?.canEditDuties).toBe(false);expect(find(w.management as ReactNode,"review")).toBeUndefined();
+  const w=await workspace();expect(w.initialView).toBe("day");expect(find(w.day as ReactNode,"day")?.canRegister).toBe(false);expect(w.management).toBeUndefined();expect(find(w.duties as ReactNode,"program")?.canEditDuties).toBe(false);
 });
 it("does not give a suppressed staff role a management tab",async()=>{
   mock.roles=[{name:"OB戦2026",can_manage_system:false,can_manage_members:false,permissions_suppressed:true}];

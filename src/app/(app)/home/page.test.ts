@@ -2,12 +2,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  obEntry: vi.fn(), obDuties: vi.fn(), profile: vi.fn(), notices: vi.fn(), competition: vi.fn(), schedules: vi.fn(),
+  obEntry: vi.fn(), obDuties: vi.fn(), participation: vi.fn().mockResolvedValue([]), profile: vi.fn(), notices: vi.fn(), competition: vi.fn(), schedules: vi.fn(),
   attendance: vi.fn(), summary: vi.fn(), notes: vi.fn(), feed: vi.fn(), program: vi.fn(),
 }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined }) }));
 vi.mock("@/lib/supabase/auth", () => ({ getCurrentProfile: mocks.profile, getCurrentUserId: async () => "me" }));
-vi.mock("@/lib/queries/ob-entries", () => ({ getMyObDuties: mocks.obDuties, getMyObEntry: mocks.obEntry, getMyObEntryCandidates: async () => [] }));
+vi.mock("@/lib/queries/ob-entries", () => ({ getMyObDuties: mocks.obDuties, getMyObEntry: mocks.obEntry, getMyObEntryCandidates: async () => [], getMyObParticipation: mocks.participation }));
 vi.mock("@/lib/queries", () => ({
   getHomeNotices: mocks.notices, getHomeCompetition: mocks.competition,
   getAttendanceSchedules: mocks.schedules, getAttendancesForSchedules: mocks.attendance,
@@ -62,6 +62,7 @@ describe("home OB entry card",()=>{
   beforeEach(()=>{
     mocks.profile.mockResolvedValue({id:"me",blocks:[],roles:[],display_name:"テスト"});
     mocks.obEntry.mockResolvedValue(null);mocks.obDuties.mockResolvedValue([]);
+    mocks.participation.mockResolvedValue([]);
     mocks.competition.mockResolvedValue(null);mocks.schedules.mockResolvedValue([]);
     mocks.notes.mockResolvedValue([]);mocks.feed.mockResolvedValue([]);mocks.notices.mockResolvedValue([]);
   });
@@ -82,6 +83,15 @@ it("keeps the entry and program available when duty retrieval fails",async()=>{
   expect(html).toContain("補助担当を取得できませんでした");
   expect(html).not.toContain("補助担当はまだ登録されていません");
   expect(html).toContain("プログラム・補助員表を見る");
+});
+it("makes whole-meet absence and event DNS visible without hiding assigned duties",async()=>{
+  mocks.obEntry.mockResolvedValue({id:"my-entry",events:["男子100m"],qualification_marks:{},absent:true});
+  mocks.participation.mockResolvedValue([{event:"男子100m",status:"DNS"}]);
+  mocks.obDuties.mockResolvedValue([{time:"13:00",event:"走り高跳び",assignment:"計測"}]);
+  const body=HomePage().props.children[1].props.children;
+  const content=await body.type(body.props);
+  const html=renderToStaticMarkup(content.props.children[2]);
+  expect(html).toContain("大会欠席");expect(html).toContain("DNS");expect(html).toContain("計測");
 });
 
 });

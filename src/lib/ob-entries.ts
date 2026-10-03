@@ -3,6 +3,8 @@ export type ObEntry = {
   profile_id: string | null; revision: number; imported_at: string;
   qualification_marks: Record<string, string | null>;
   competition_division?: "男子" | "女子" | null;
+  /** Whole-meet absence is separate from an individual event's DNS. */
+  absent?: boolean;
 };
 import { compareObEvents } from "./ob-entry-edit";
 export { entryGrade, matchEntryMember, normalizeEntryName, type EntryMember } from "./entry-identity";

@@ -41,3 +41,31 @@ it("invalidates review after assignment changes while ignoring unrelated entry e
  expect(obDutyIssues([entry],members,[duty],[role,{...role,id:"unrelated",revision:3}])[0].fingerprint).toBe(original);
  expect(obDutyIssues([entry],members,[{...duty,revision:1}],[role])[0].fingerprint).not.toBe(original);
 });
+it("distinguishes absence from missing data and counts absent helpers as a shortage",()=>{
+ const issues=obDutyIssues([{...entry,absent:true}],members,[duty],[role]);
+ expect(issues.map(issue=>issue.kind)).toEqual(["absent","shortage"]);
+ expect(issues[0].text).toContain("欠席のため交代");
+ expect(obDutyIssues([],members,[duty],[role])[0].text).toContain("参加情報が見つかりません");
+ const shortage=obDutyIssues([entry],members,[duty],[role]).find(issue=>issue.kind==="shortage");
+ expect(issues.find(issue=>issue.kind==="shortage")?.fingerprint).not.toBe(shortage?.fingerprint);
+});
+it("event DNS does not automatically make someone available for helper assignment",()=>{
+ const operations=[{meet_key:"ob-2026",event_name:"男子100m",revision:1,updated_at:"",data:{confirmed:false,participants:[{entryId:"e",group:1,order:1,status:"DNS" as const,trials:[]}]}}];
+ const issues=obDutyIssues([entry],members,[duty],[role],operations);
+ expect(issues.map(issue=>issue.kind)).toEqual(["competition","shortage"]);
+ expect(issues[0].text).toContain("DNS登録あり");
+ expect(issues[0].fingerprint).not.toBe(obDutyIssues([entry],members,[duty],[role])[0].fingerprint);
+});
+it("retains actual competition occupancy after cancellation but releases empty cancelled entries",()=>{
+ const cancelled={...entry,events:[]};
+ const person={entryId:"e",group:1,order:1,status:"entered" as const,trials:[]};
+ const operation={meet_key:"ob-2026",event_name:"男子100m",revision:1,updated_at:"",data:{confirmed:false,participants:[person]}};
+ for(const performance of [person,{...person,status:"DNS" as const}])expect(obDutyIssues([cancelled],members,[duty],[role],[{...operation,data:{...operation.data,participants:[performance]}}])).toEqual([]);
+ for(const performance of [{...person,status:"DNF" as const},{...person,status:"DQ" as const},{...person,trials:[{status:"valid" as const,mark:"12.34",wind:""}]},{...person,trials:[{status:"pass" as const,mark:"",wind:""}]}]){
+  const operations=[{...operation,data:{...operation.data,participants:[performance]}}];
+  const issues=obDutyIssues([cancelled],members,[duty],[role],operations);
+  expect(issues.map(issue=>issue.kind)).toEqual(["competition","shortage"]);
+  expect(issues[0].text).toContain("男子100m");
+  expect(obDutyIssues([cancelled],members,[duty],[role],[{...operations[0],meet_key:"other"}])).toEqual([]);
+ }
+});

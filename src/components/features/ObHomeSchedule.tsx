@@ -6,10 +6,11 @@ import { OB_PROGRAM, OB_PROGRAM_PATH } from "@/lib/ob-meet";
 export type ObHomeDuty = { time: string; event: string; assignment: string };
 
 /** Home shows only the viewer's assignments; the full roster stays on the program page. */
-export function ObHomeSchedule({ duties }: { duties: ObHomeDuty[] | null }) {
+export function ObHomeSchedule({ duties, absent = false }: { duties: ObHomeDuty[] | null; absent?: boolean }) {
   return <div className="mt-4 space-y-3 border-t border-separator pt-3">
     <section aria-label="自分の補助担当" className="space-y-2">
       <h3 className="text-headline">自分の補助担当</h3>
+      {absent&&<p className="text-caption">大会欠席のため、以下の補助担当は交代の確認が必要です。</p>}
       {duties === null ? <p className="text-caption">補助担当を取得できませんでした。プログラム・補助員表から確認してください。</p> : duties.length ? <>
         <ul className="space-y-2">{duties.map(duty => <li key={`${duty.time}/${duty.event}`} className="flex items-baseline gap-3 text-body">
           <span className="w-12 shrink-0 text-caption tabular-nums">{duty.time}</span>
