@@ -33,6 +33,7 @@ export async function POST(request: Request) {
   const dryRun = body?.dryRun === true;
   const onlySheet = typeof body?.onlySheet === "string" ? body.onlySheet : undefined;
   const resetCycle = body?.resetCycle === true;
+  const skipSheetWrites = body?.skipSheetWrites === true;
 
   const secret = process.env.SHEET_SYNC_SECRET;
   const authHeader = request.headers.get("authorization") ?? "";
@@ -119,6 +120,7 @@ export async function POST(request: Request) {
       dryRun,
       onlySheet,
       onlySheets: chunk?.sheetNames,
+      skipSheetWrites,
     });
     console.info("sheet_sync_complete", {
       trigger,
@@ -134,14 +136,14 @@ export async function POST(request: Request) {
       await admin
         .from("sheet_sync_runs")
         .update({
-          status: "success",
+          status: result.sheetWritesSkipped ? "error" : "success",
           pulled_count: result.inserted + result.updated,
           pushed_count: result.pushed,
           failed_members: result.failedMembers,
           error_text:
             result.failedMembers.length > 0
               ? `${result.failedMembers.length}件が部分失敗（詳細はfailed_members参照）`
-              : null,
+              : result.sheetWritesSkipped ? "送信を保留し、記録の取り込みのみ実行しました" : null,
           finished_at: new Date().toISOString(),
         })
         .eq("id", runId);

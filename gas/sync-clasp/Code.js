@@ -227,10 +227,18 @@ function writeCellsRecord(data) {
 
   const unmapped = [];
   const protectedHeaders = [];
-  // 中長距離表の実際の距離は強度別の入力から計算する列。
-  // 既に数式が消された行でも、ここへ値や空欄を再送しない。
-  const hasIntensityInputs = headerRow.some(function (h) {
-    return /低強度|中強度|高強度|解糖系/.test(normalizeHeaderCell(h));
+  // 日付行に式がある距離列を保護する。月間合計の式だけを持つ手入力列は区別する。
+  // 既に数式が消された行でも、計算列へ値や空欄を再送しない。
+  const formulas = sheet.getDataRange().getFormulas();
+  const calculatedDistanceColumns = new Set();
+  headerRow.forEach(function (h, col) {
+    if (/実際の距離|実距離|走行距離|総距離/.test(normalizeHeaderCell(h))
+      && formulas.some(function (row, index) {
+        return Boolean(row[col] && values[index] && values[index][0] != null
+          && /^\d{4}-\d{2}-\d{2}$/.test(parseSheetDate(values[index][0])));
+      })) {
+      calculatedDistanceColumns.add(col);
+    }
   });
   Object.keys(cells).forEach(function (h) {
     const header = normalizeHeaderCell(h);
@@ -241,7 +249,7 @@ function writeCellsRecord(data) {
     }
     const cell = sheet.getRange(sheetRowNum, col + 1);
     if (header === '日付' || header === '曜日' || header.indexOf('週合計') !== -1
-      || (hasIntensityInputs && /実際の距離|実距離|走行距離|総距離/.test(header))
+      || calculatedDistanceColumns.has(col)
       || cell.getFormula()) {
       protectedHeaders.push(h);
       return;

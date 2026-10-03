@@ -21,10 +21,15 @@ export async function gasPost<T>(body: Record<string, unknown>, signal?: AbortSi
     headers: { "Content-Type": "application/json;charset=utf-8" },
     body: JSON.stringify({ ...body, secret }),
   });
-  return readGasJson<T>(res);
+  const result = await readGasJson<T>(res);
+  if (["writeCells", "writeReply", "deleteReply", "writeMiddleLongMenu"].includes(String(body.action))
+    && (result as { success?: boolean }).success !== true) {
+    throw new Error("スプレッドシートへの書き込み完了を確認できませんでした。送信結果を確認するまで再送を保留してください。");
+  }
+  return result;
 }
 
-// GAS はエラー時に HTML ページ(<!DOCTYPE...)を返すことがある。JSONで読めない時は分かりやすく案内。
+// 本文・認証情報をエラーへ含めず、HTTP状態と応答形式だけを知らせる。
 export async function readGasJson<T>(res: Response): Promise<T> {
   const text = await res.text();
   let json: T & { error?: string };
@@ -32,10 +37,12 @@ export async function readGasJson<T>(res: Response): Promise<T> {
     json = JSON.parse(text);
   } catch {
     throw new Error(
-      "スプレッドシート連携(GAS)に接続できません。GASの公開設定を確認してください（アクセス=全員／新バージョンでデプロイ／プロジェクトは sync-api のみ）。",
+      `スプレッドシートから正常な応答を受け取れませんでした（HTTP ${res.status}・${/^\s*</.test(text) ? "HTML" : "JSON以外"}）。公開設定の不備とは限らないため、送信結果を確認してください。`,
     );
   }
-  if (json && json.error) throw new Error(`GASエラー: ${json.error}`);
+  if (!res.ok) throw new Error(`スプレッドシートとの通信に失敗しました（HTTP ${res.status}・JSON）。送信結果を確認してください。`);
+  if (!json || typeof json !== "object" || Array.isArray(json)) throw new Error("スプレッドシートの応答形式が不正です。送信結果を確認してください。");
+  if (json.error) throw new Error(`GASエラー: ${json.error}`);
   return json;
 }
 

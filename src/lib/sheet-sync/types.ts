@@ -6,6 +6,8 @@ export type SyncOptions = {
   dryRun?: boolean;
   onlySheet?: string;
   onlySheets?: string[];
+  /** 結果不明の送信を保留し、通常の取り込みだけを継続する復旧モード。 */
+  skipSheetWrites?: boolean;
 };
 
 export type SyncResult = {
@@ -20,4 +22,5 @@ export type SyncResult = {
   failedMembers: { member: string; reason: string }[];
   sheetReplies: number;
   dryRun: boolean;
+  sheetWritesSkipped?: boolean;
 };

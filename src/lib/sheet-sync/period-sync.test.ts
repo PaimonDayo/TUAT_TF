@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { OCTOBER_SHEET_ID } from "@/lib/sheet-period";
 
-const state = vi.hoisted(() => ({ profiles: [] as Record<string, unknown>[], records: [] as Record<string, unknown>[], writes: [] as { table: string; op: string; value: unknown }[], fetch: vi.fn(), gas: vi.fn(), replies: vi.fn() }));
-vi.mock("./reply-deletions", () => ({ flushReplyDeletions: async () => [] }));
+const state = vi.hoisted(() => ({ profiles: [] as Record<string, unknown>[], records: [] as Record<string, unknown>[], clears: [] as Record<string, unknown>[], writes: [] as { table: string; op: string; value: unknown }[], fetch: vi.fn(), gas: vi.fn(), replies: vi.fn(), flush: vi.fn() }));
+vi.mock("./reply-deletions", () => ({ flushReplyDeletions: state.flush }));
 vi.mock("./gas-client", () => ({ fetchAllRaw: state.fetch, gasPost: state.gas }));
 vi.mock("./replies", () => ({ reconcileSheetReplies: state.replies }));
 import { runSheetSync } from "./run";
@@ -17,9 +17,9 @@ const admin = { from(table: string) {
     eq: (key: string, value: unknown) => { filters.push([key, value]); return q; }, gte: () => q,
     insert: (value: unknown) => { op = "insert"; state.writes.push({ table, op, value }); return q; },
     update: (value: unknown) => { op = "update"; state.writes.push({ table, op, value }); return q; },
-    upsert: (value: unknown) => { op = "upsert"; state.writes.push({ table, op, value }); return q; }, delete: () => q,
+    upsert: (value: unknown) => { op = "upsert"; state.writes.push({ table, op, value }); return q; }, delete: () => { op = "delete"; state.writes.push({ table, op, value: null }); return q; },
     then(resolve: (value: unknown) => void) {
-      let data = table === "profiles" ? state.profiles : table === "practice_records" ? state.records : [];
+      let data = table === "profiles" ? state.profiles : table === "practice_records" ? state.records : table === "sheet_pending_clears" ? state.clears : [];
       data = data.filter(row => filters.every(([key, value]) => Array.isArray(value) ? value.includes(row[key]) : row[key] === value));
       return Promise.resolve({ data: op === "select" ? data : [], error: null }).then(resolve);
     },
@@ -33,7 +33,8 @@ function profile(mode?: "sheet" | "app_only" | "off", id = "regular") {
 }
 beforeEach(() => {
   vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-02T03:00:00Z"));
-  state.writes = []; state.records = []; state.profiles = [];
+  state.writes = []; state.records = []; state.profiles = []; state.clears = [];
+  state.flush.mockReset().mockResolvedValue([]);
   state.gas.mockReset().mockResolvedValue({ success: true });
   state.replies.mockReset().mockResolvedValue({ synced: 0, failedMembers: [] });
   state.fetch.mockReset().mockImplementation(async (inputs: { name: string }[], spreadsheetId?: string) => ({
@@ -69,6 +70,21 @@ describe("period-aware scheduled synchronization", () => {
     expect(result.inserted).toBe(0); expect(result.pushed).toBe(0);
     expect(state.fetch).not.toHaveBeenCalled(); expect(state.gas).not.toHaveBeenCalled();
     expect(state.replies).not.toHaveBeenCalled();
+  });
+  it("continues imports while holding pending sends and replies after an uncertain write", async () => {
+    state.profiles = [profile("sheet")];
+    state.records = [{ id: "r", user_id: "regular", recorded_date: "2026-10-01", memo: "未送信の入力", pending_sheet_push: true }];
+    state.clears = [{ user_id: "regular", recorded_date: "2026-10-02" }];
+    const result = await runSheetSync(admin, { skipSheetWrites: true });
+    expect(result.sheetWritesSkipped).toBe(true);
+    expect(result.inserted).toBe(1); // September import still proceeds.
+    expect(result.pushed).toBe(0);
+    expect(state.gas).not.toHaveBeenCalled();
+    expect(state.replies).not.toHaveBeenCalled();
+    expect(state.flush).not.toHaveBeenCalled();
+    expect(state.writes.some(w => w.table === "sheet_pending_clears" && w.op === "delete")).toBe(false);
+    expect(state.writes.some(w => w.table === "practice_records" && w.op === "update")).toBe(false);
+    expect(state.records[0].pending_sheet_push).toBe(true);
   });
   it("does not route an unconfirmed member's October records to the old workbook", async () => {
     state.profiles = [profile()];

@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { readFileSync } from 'node:fs';
 import { JOBS, slotAt, initialState, recoverState, dueJobs, successfulPayload, tick } from './scheduler.mjs';
 import { executeLocalJob, validateConfig } from './run.mjs';
 
@@ -49,6 +48,28 @@ test('HTTP 200 partial failures and malformed payloads are not success', async (
   const state = initialState(at);
   await tick({ state, now: at, ready: async () => true, save: async () => {}, execute: async () => ({ ok: true, status: 200, value: {} }) });
   assert.equal(state.jobs.program.status, 'failed');
+});
+test('a failed sheet write holds all sheet writes but does not stop tomorrow imports', async () => {
+  const state = initialState(at - 86400000);
+  const failed = { slot: slotAt(JOBS[0], at), status: 'failed', httpStatus: 200 };
+  state.jobs.sheets = { ...failed };
+  let calls = [];
+  await tick({ state, now: at, save: async () => {}, ready: async () => true, execute: async job => { calls.push(job); return success(job); } });
+  assert(!calls.some(job => job.id === 'sheets')); // No same-slot replay.
+  calls = [];
+  await tick({ state, now: at + 86400000, save: async () => {}, ready: async () => true, execute: async job => {
+    calls.push(job);
+    return job.id === 'sheets' ? { ok: true, status: 200, value: { ok: true, failedMembers: [], sheetWritesSkipped: true } } : success(job);
+  } });
+  assert.equal(calls.find(job => job.id === 'sheets').skipSheetWrites, true);
+  assert.equal(state.sheetWritesBlocked, true);
+  assert.equal(state.jobs.sheets.status, 'partial');
+  assert.deepEqual(state.sheetFailures, [failed]);
+  assert(dueJobs(recoverState(JSON.parse(JSON.stringify(state))), at + 2 * 86400000).some(job => job.id === 'sheets'));
+});
+
+test('an older API that does not confirm held writes cannot be counted as a successful import-only run', () => {
+  assert.equal(successfulPayload({ ...JOBS[0], skipSheetWrites: true }, { ok: true, failedMembers: [] }), false);
 });
 test('backend/backup maintenance guard prevents dispatch and preserves catch-up slot', async () => {
   const state = initialState(at);

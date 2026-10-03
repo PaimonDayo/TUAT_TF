@@ -14,7 +14,7 @@ export function initialState(activateAt) {
 export function validateState(state) {
   if (state?.version !== 1 || !Number.isFinite(state.activateAt) || !state.jobs || typeof state.jobs !== 'object' || Array.isArray(state.jobs)) throw Error('Invalid scheduler journal');
   for (const [id, value] of Object.entries(state.jobs)) {
-    if (!JOBS.some(j => j.id === id) || !Number.isFinite(value.slot) || !['running', 'success', 'failed', 'uncertain'].includes(value.status)) throw Error('Invalid job journal');
+    if (!JOBS.some(j => j.id === id) || !Number.isFinite(value.slot) || !['running', 'success', 'partial', 'failed', 'uncertain'].includes(value.status)) throw Error('Invalid job journal');
   }
   return state;
 }
@@ -30,7 +30,8 @@ export function dueJobs(state, now) {
   validateState(state);
   return JOBS.filter(job => {
     const slot = slotAt(job, now), last = state.jobs[job.id];
-    if (slot < state.activateAt || (last && last.status !== 'success')) return false;
+    const pullCanContinue = job.id === 'sheets' && last && ['partial', 'failed', 'uncertain'].includes(last.status);
+    if (slot < state.activateAt || (last && last.status !== 'success' && !pullCanContinue)) return false;
     return !last || slot > last.slot;
   });
 }
@@ -39,7 +40,8 @@ export function successfulPayload(job, value) {
   if (!value || typeof value !== 'object') return false;
   if (job.id === 'cleanup') return Number.isInteger(value.deleted) && value.deleted >= 0;
   if (value.ok !== true) return false;
-  if (job.id === 'sheets') return Array.isArray(value.failedMembers) && value.failedMembers.length === 0;
+  if (job.id === 'sheets') return Array.isArray(value.failedMembers) && value.failedMembers.length === 0
+    && (!job.skipSheetWrites || value.sheetWritesSkipped === true);
   if (!Array.isArray(value.results)) return false;
   return value.results.every(result => !result.error && result.ok !== false);
 }
@@ -49,17 +51,26 @@ export async function tick({ state, now, save, execute, ready }) {
   if (!await ready()) return { skipped: 'backend-not-ready' };
   for (const job of dueJobs(state, now)) {
     if (!await ready()) break;
+    const previous = state.jobs[job.id];
+    if (job.id === 'sheets' && previous && previous.status !== 'success') {
+      state.sheetWritesBlocked = true;
+      state.sheetFailures ??= [];
+      if (['failed', 'uncertain'].includes(previous.status) && !state.sheetFailures.some(value => value.slot === previous.slot)) state.sheetFailures.push({ ...previous });
+    }
+    const dispatch = job.id === 'sheets' && state.sheetWritesBlocked ? { ...job, skipSheetWrites: true } : job;
     const record = { slot: slotAt(job, now), status: 'running', startedAt: now };
+    if (dispatch.skipSheetWrites) record.sheetWritesSkipped = true;
     state.jobs[job.id] = record;
     await save(state); // Failure here must prevent the request.
     try {
-      const result = await execute(job);
-      record.status = result.ok && successfulPayload(job, result.value) ? 'success' : 'failed';
+      const result = await execute(dispatch);
+      record.status = result.ok && successfulPayload(dispatch, result.value) ? (dispatch.skipSheetWrites ? 'partial' : 'success') : 'failed';
       record.httpStatus = result.status;
     } catch {
       record.status = 'uncertain';
     }
     record.finishedAt = Date.now();
+    if (job.id === 'sheets' && ['failed', 'uncertain'].includes(record.status)) state.sheetWritesBlocked = true;
     await save(state); // Failure stops the scheduler; startup sees running/uncertain.
   }
   return state;

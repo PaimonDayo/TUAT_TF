@@ -248,7 +248,7 @@ async function runSheetSyncBatch(
   const pushLimit = Number.isFinite(configuredPushLimit)
     ? Math.min(100, Math.max(1, configuredPushLimit))
     : 25;
-  const scheduledPushes = pushes.slice(0, pushLimit);
+  const scheduledPushes = options.skipSheetWrites ? [] : pushes.slice(0, pushLimit);
 
   if (dryRun) {
     result.inserted = inserts.length;
@@ -327,7 +327,7 @@ async function runSheetSyncBatch(
     }
   }
 
-  try {
+  if (!options.skipSheetWrites) try {
     const replySync = await reconcileSheetReplies(
       admin,
       processedProfiles.filter(profile => !profile.appOnly).map((profile) => ({ id: profile.id, sheet_name: profile.sheet_name })),
@@ -346,7 +346,7 @@ async function runSheetSyncBatch(
     });
   }
 
-  for (const queued of resolvedClears) {
+  for (const queued of options.skipSheetWrites ? [] : resolvedClears) {
     const { error } = await admin
       .from("sheet_pending_clears")
       .delete()
@@ -447,12 +447,13 @@ export async function runSheetSync(admin: SupabaseClient, options: SyncOptions =
     if (transition && profile.sheet_name) groups.october.push({ ...profile, appOnly: transition.mode === "app_only" });
   }
   const total: SyncResult = { inserted: 0, updated: 0, pushed: 0, sheetReplies: 0, conflicts: [], skippedMembers: [],
-    unchangedMembers: [], failedMembers: [], dryRun: !!options.dryRun };
-  if (!options.dryRun) total.failedMembers.push(...await flushReplyDeletions(admin));
+    unchangedMembers: [], failedMembers: [], dryRun: !!options.dryRun,
+    ...(options.skipSheetWrites ? { sheetWritesSkipped: true } : {}) };
+  if (!options.dryRun && !options.skipSheetWrites) total.failedMembers.push(...await flushReplyDeletions(admin));
   for (const period of ["legacy", "october"] as const) {
     if (!groups[period].length) continue;
     try {
-      const result = await runSheetSyncBatch(admin, { dryRun: options.dryRun }, groups[period], period);
+      const result = await runSheetSyncBatch(admin, { dryRun: options.dryRun, skipSheetWrites: options.skipSheetWrites }, groups[period], period);
       for (const key of ["inserted", "updated", "pushed", "sheetReplies"] as const) total[key] += result[key];
       for (const key of ["conflicts", "skippedMembers", "unchangedMembers", "failedMembers"] as const) total[key].push(...result[key] as never[]);
     } catch (error) {

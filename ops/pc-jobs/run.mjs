@@ -24,7 +24,7 @@ export async function executeLocalJob(base, env, job) {
   const response = await fetch(base + job.path, {
     method: job.method, redirect: 'error', signal: AbortSignal.timeout(job.timeout),
     headers: { authorization: `Bearer ${job.id === 'cleanup' ? env.CRON_SECRET : env.SHEET_SYNC_SECRET}`, 'content-type': 'application/json' },
-    ...(job.method === 'POST' ? { body: '{}' } : {}),
+    ...(job.method === 'POST' ? { body: job.skipSheetWrites ? JSON.stringify({ skipSheetWrites: true }) : '{}' } : {}),
   });
   return { ok: response.ok, status: response.status, value: await response.json() };
 }
