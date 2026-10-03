@@ -154,3 +154,6 @@
 - 検証資産は `.contingency/audit-followup-ui/`、DB退避・復旧・検証は `.contingency/backend/menu-visibility-*`（非公開）。iPhone/Android実機、実ユーザーによる保存/削除は未確認・未実施。
 
 アプリ追加分の公開結果は、masterへの1回pushとVercel・本番表示の確認後に追記する。追加の未決質問はなく、GAS旧版を保持する判断で作業を進めた。
+
+## 2026-10-03 OB戦の閲覧・登録・削除
+オーナーの追加依頼で実装。両DB適用・権限/操作のROLLBACK検証済み。公開状況・検証範囲は [作業記録](OB-ACCESS-2026-10-03.md) を参照。

@@ -53,3 +53,19 @@ export async function getMyObEntryFull(profileId: string) {
   if (partyResult.error) throw new Error("懇親会の回答を取得できませんでした");
   return { entry: (entry ?? null) as ObEntry | null, party: partyResult.data as ObPartyResponse | null };
 }
+
+/** Shared program excludes party answers and identity history. */
+export async function getObProgram() {
+  const client = entryClient(await createClient());
+  const { getObEventOperations } = await import("./ob-operations");
+  const [entries, members, duties, roles, entryDuties, operations] = await Promise.all([
+    client.from("ob_meet_entries").select("*").eq("meet_key", OB_MEET.meetKey),
+    client.from("profiles").select("id,display_name,grade").eq("status", "active").eq("approved", true),
+    client.from("ob_meet_duties").select("*").eq("meet_key", OB_MEET.meetKey),
+    client.from("ob_duty_roles").select("*").eq("meet_key", OB_MEET.meetKey),
+    client.from("ob_entry_duties").select("*").eq("meet_key", OB_MEET.meetKey),
+    getObEventOperations(),
+  ]);
+  if (entries.error || members.error || duties.error || roles.error || entryDuties.error) throw new Error("プログラムを取得できませんでした");
+  return { entries: entries.data ?? [], members: members.data ?? [], duties: combineObDuties(duties.data ?? [], entryDuties.data ?? [], entries.data ?? []), roles: roles.data ?? [], operations };
+}

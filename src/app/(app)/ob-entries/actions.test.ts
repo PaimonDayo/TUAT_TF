@@ -3,7 +3,7 @@ const mocks = vi.hoisted(() => ({ user: vi.fn(), roles: vi.fn(), preview: vi.fn(
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: mocks.user }, from: mocks.from, rpc: mocks.rpc }) }));
 vi.mock("@/lib/supabase/auth", () => ({ fetchRolesByProfileIds: mocks.roles, isMemberPreviewActive: mocks.preview }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.refresh }));
-import { confirmEntryMember, saveEntry, saveParty, saveDuty, saveDutyRole, saveDutyRoles, deleteDutyRole, getObEntryHistory } from "./actions";
+import { createGuestEntry, deleteEntry, confirmEntryMember, saveEntry, saveParty, saveDuty, saveDutyRole, saveDutyRoles, deleteDutyRole, getObEntryHistory } from "./actions";
 const id = "10000000-0000-4000-8000-000000000001";
 
 it("deletes only the expected role and refreshes only after its ID is returned",async()=>{
@@ -195,4 +195,37 @@ it("pages administrator history and resolves the actor without returning raw sna
 it("rejects malformed history cursors before database access", async()=>{
   expect((await getObEntryHistory({id:"bad",at:"invalid"})).ok).toBe(false);
   expect(mocks.from).not.toHaveBeenCalled();
+});
+
+it("registers a named guest and requires the returned ID for deletion", async()=>{
+  const guest={name:" 合成参加者 ",grade:"B1",events:["男子100m"],marks:{},partyStatus:"未回答"};
+  expect((await createGuestEntry(guest)).ok).toBe(true);
+  expect(mocks.rpc).toHaveBeenLastCalledWith("create_ob_guest_registration",expect.objectContaining({p_name:"合成参加者",p_grade:"B1"}));
+  mocks.rpc.mockResolvedValueOnce({data:null,error:null});
+  expect((await deleteEntry({entryId:id,revision:1})).ok).toBe(false);
+  expect((await deleteEntry({entryId:id,revision:1})).ok).toBe(true);
+});
+it("rejects invalid names and grades without DB writes", async()=>{
+  for(const [name,grade] of [[" ","B1"],["x".repeat(101),"B1"],["合成","unknown"]]) {
+    expect((await createGuestEntry({name,grade,events:["男子100m"],marks:{},partyStatus:"参加"})).ok).toBe(false);
+  }
+  expect(mocks.rpc).not.toHaveBeenCalled();
+});
+it("keeps guest addition and deletion staff-only, including preview mode", async()=>{
+  const guest={name:"合成",grade:"OB・OG",events:["女子100m"],marks:{},partyStatus:"不参加"};
+  mocks.roles.mockResolvedValue(new Map([["system",[{name:"システム",can_manage_system:true}]]]));
+  expect((await createGuestEntry(guest)).ok).toBe(false);
+  expect((await deleteEntry({entryId:id,revision:0})).ok).toBe(false);
+  mocks.roles.mockResolvedValue(new Map([["system",[{name:"OB戦2026",can_manage_system:false}]]]));
+  mocks.preview.mockResolvedValue(true);
+  expect((await createGuestEntry(guest)).ok).toBe(false);
+  expect((await deleteEntry({entryId:id,revision:0})).ok).toBe(false);
+  expect(mocks.rpc).not.toHaveBeenCalled();
+});
+it("explains retained duties and race data when deletion is refused",async()=>{
+  for(const [error,expected] of [["entry_has_duties","補助担当"],["entry_has_operations","競技記録"]]) {
+    mocks.rpc.mockResolvedValueOnce({error:{message:error}});
+    expect((await deleteEntry({entryId:id,revision:0})).message).toContain(expected);
+  }
+  expect(mocks.refresh).not.toHaveBeenCalled();
 });

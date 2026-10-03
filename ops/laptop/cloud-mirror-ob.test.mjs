@@ -20,6 +20,14 @@ test('exhausted retries are excluded from replay but never from overwrite protec
 });
 
 import { orderObReplay, obReplayHeaders } from './cloud-mirror-ob.mjs';
+test('replays queued audit inserts before deleting their registration', () => {
+  const create={id:2,table_name:'ob_meet_entries',op:'INSERT',pk:{id:'e'}};
+  const audit={id:1,table_name:'ob_entry_changes',op:'INSERT',row_data:{entry_id:'e',after_data:{id:'e'}}};
+  const detach={id:3,table_name:'ob_entry_changes',op:'UPDATE',row_data:{entry_id:null,after_data:{id:'e'}}};
+  const remove={id:4,table_name:'ob_meet_entries',op:'DELETE',pk:{id:'e'}};
+  const recreate={id:5,table_name:'ob_meet_entries',op:'INSERT',pk:{id:'new'}};
+  assert.deepEqual(orderObReplay([audit,create,detach,remove,recreate]),[create,audit,detach,remove,recreate]);
+});
 test('replays original audit rows after parents and suppresses only matching regenerated logs', () => {
   const entry={id:2,table_name:'ob_meet_entries',op:'UPDATE',pk:{id:'e'},row_data:{revision:3}};
   const audit={id:1,table_name:'ob_entry_changes',op:'INSERT',row_data:{after_data:{id:'e',revision:3}}};

@@ -1,3 +1,4 @@
+import { GRADE_OPTIONS } from "./constants";
 /** 種目は当日の実施順（プログラムの時刻順、同じ時刻は並びどおり）。 */
 export const OB_EVENT_ORDER = ["1500m", "ジャベリックスロー", "立ち五段", "100m", "砲丸投げ", "300mH", "走り高跳び", "300m", "やり投げ", "走り幅跳び", "3000m"];
 /** 実施順で並べる（同じ種目は男子→女子）。 */
@@ -25,3 +26,16 @@ export function validEntryEdit(input: EntryEdit, allowPartyOnly = false): boolea
 }
 
 export type EntryChange = { id: string; changed_at: string; actor_id: string | null; before_data: unknown; after_data: unknown };
+
+export type GuestEntryEdit = { name: string; grade: string; events: string[]; marks: Record<string, string | null>; partyStatus: string; partyId?: string | null; partyRevision?: number | null };
+export function validGuestEntry(input: GuestEntryEdit): boolean {
+  return !!input && typeof input.name === "string" && input.name.trim().length >= 1 && input.name.trim().length <= 100
+    && [...GRADE_OPTIONS.map(g => g.short), "OB・OG"].includes(input.grade)
+    && (input.partyId == null ? input.partyRevision == null : validEntryDelete({entryId:input.partyId,revision:input.partyRevision!}))
+    && ["参加", "不参加", "未回答"].includes(input.partyStatus)
+    && validEntryEdit({ entryId: null, profileId: "00000000-0000-0000-0000-000000000000", revision: null, events: input.events, marks: input.marks }, input.partyStatus !== "未回答");
+}
+export function validEntryDelete(input: { entryId: string; revision: number }): boolean {
+  return !!input && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.entryId)
+    && Number.isSafeInteger(input.revision) && input.revision >= 0;
+}

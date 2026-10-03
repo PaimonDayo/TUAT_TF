@@ -1,3 +1,5 @@
+import { ObPublicProgram } from "@/components/features/ObPublicProgram";
+import { getObProgram } from "@/lib/queries/ob-entries";
 import { ObEntryHistory } from "@/components/features/ObEntryHistory";
 import { notFound } from "next/navigation";
 import { SubHeader } from "@/components/layout/SubHeader";
@@ -40,11 +42,12 @@ export default async function CompetitionProgramPage({
     }
     // 係（OB戦2026ロール）は全員分、それ以外の部員は自分のエントリーだけを扱う。
     if (!canManageObMeet(profile.roles)) {
-      const mine = await getMyObEntryFull(profile.id);
+      const [mine, program] = await Promise.all([getMyObEntryFull(profile.id), getObProgram()]);
       return (
         <>
           {header}
           <ObMyEntry entry={mine.entry} party={mine.party ?? undefined} me={{ id: profile.id, display_name: profile.display_name, grade: profile.grade }} openEditor={edit === "mine"} />
+          <div data-ob-workspace className="space-y-4 px-4 pb-8 pt-2"><ObPublicProgram {...program} /></div>
           {canViewObHistory(profile.roles) && <ObEntryHistory />}
         </>
       );

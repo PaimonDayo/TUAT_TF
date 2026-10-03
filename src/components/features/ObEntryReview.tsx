@@ -66,7 +66,7 @@ export function ObEntryReview({ competition, initial, members, viewerId, me, his
     {(view === "events" || view === "identity") && <Input aria-label="氏名・種目・学年で検索" placeholder="検索" value={search} onChange={(event) => setSearch(event.target.value)} />}
     {view === "events" && <SegmentedControl items={[{key:"all",label:"すべて"},{key:"男子",label:"男子"},{key:"女子",label:"女子"}]} value={division} onChange={setDivision} />}
     {view === "identity" && <Button size="sm" variant={unlinked ? "primary" : "outline"} aria-pressed={unlinked} onClick={() => setUnlinked(!unlinked)}>未確認のみ</Button>}
-    {managerOpen && <ObEntryManager entries={initial} canAdd={newMembers.length > 0} onClose={() => setManagerOpen(false)} onEdit={(id) => { setManagerOpen(false); setEditingId(id); }} onNew={() => { setManagerOpen(false); setAdding(true); }} />}
+    {managerOpen && <ObEntryManager entries={initial} canAdd={true} onClose={() => setManagerOpen(false)} onEdit={(id) => { setManagerOpen(false); setEditingId(id); }} onNew={() => { setManagerOpen(false); setAdding(true); }} />}
     {adding && <ObEntryEditor parties={party} members={newMembers} onClose={() => setAdding(false)} />}
     {editing && <ObEntryEditor key={`${editing.id}:${editing.revision}`} entry={editing} party={party.find((p)=>p.entry_id===editing.id)} members={members} onClose={() => setEditingId(null)} />}
     {view === "party" ? <ObPartyView responses={party} /> : view === "duty" ? operations ? <ObOperations entries={initial} members={members} duties={duties} roles={dutyRoles} initial={operations}/> : <ObDutyTable entries={initial} members={members} duties={duties} roles={dutyRoles} /> : view === "events" ? <div className="space-y-3">

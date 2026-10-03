@@ -19,7 +19,20 @@ export function changesPath(offset, page, maxAttempts, includeBlocked = false) {
 
 // A trigger can enqueue the audit row before its newly inserted parent.
 export function orderObReplay(changes) {
-  return [...changes.filter(c => c.table_name !== 'ob_entry_changes'), ...changes.filter(c => c.table_name === 'ob_entry_changes')];
+  let audits = changes.filter(c => c.table_name === 'ob_entry_changes');
+  const ordered = [];
+  for (const change of changes.filter(c => c.table_name !== 'ob_entry_changes')) {
+    if (change.table_name === 'ob_meet_entries' && change.op === 'DELETE') {
+      // A registration created and deleted during an outage can still have
+      // queued audit inserts with a parent FK. Replay those before its deletion;
+      // ON DELETE SET NULL then retains every historical snapshot.
+      const belongs = c => c.row_data?.entry_id === change.pk.id || c.row_data?.after_data?.id === change.pk.id;
+      ordered.push(...audits.filter(belongs));
+      audits = audits.filter(c => !belongs(c));
+    }
+    ordered.push(change);
+  }
+  return [...ordered, ...audits];
 }
 export function obReplayHeaders(change, changes) {
   if (!['ob_meet_entries', 'ob_party_responses'].includes(change.table_name)) return {};

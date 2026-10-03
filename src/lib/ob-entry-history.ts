@@ -12,7 +12,9 @@ export function historyProfileIds(changes: EntryChange[]): string[] {
 export function describeObChange(change: EntryChange, names: Map<string, string>): ObHistoryItem {
   const before = object(change.before_data), after = object(change.after_data);
   const details: string[] = [];
-  if (after.change_type === "party") {
+  if (after.change_type === "entry_deleted") {
+    details.push("エントリーを削除（懇親会の回答は保持）");
+  } else if (after.change_type === "party") {
     if (before.status !== after.status) details.push(`懇親会：${before.status ? text(before.status) : "回答なし"} → ${text(after.status)}`);
     if (before.entry_id !== after.entry_id) details.push(after.entry_id ? "競技エントリーとの紐付けを設定" : "競技エントリーとの紐付けを解除");
   } else {

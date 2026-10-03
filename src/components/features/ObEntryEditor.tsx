@@ -8,7 +8,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import { useToast } from "@/components/ui/toast";
-import { saveEntry } from "@/app/(app)/ob-entries/actions";
+import { Input } from "@/components/ui/input";
+import { GRADE_OPTIONS } from "@/lib/constants";
+import { SegmentedControl } from "@/components/ui/segmented";
+import { createGuestEntry, saveEntry } from "@/app/(app)/ob-entries/actions";
 import { Card } from "@/components/ui/card";
 import { Disclosure } from "@/components/ui/disclosure";
 import { OB_ENTRY_EVENTS, entryDivision } from "@/lib/ob-entry-edit";
@@ -21,6 +24,9 @@ export function ObEntryEditor({ entry, members, initialProfileId = "", party, pa
   function findParty(id: string) {return party ?? parties.find((p)=>!p.entry_id&&!p.needs_review&&normalizeEntryName(p.submitted_name)===normalizeEntryName(members.find((m)=>m.id===id)?.display_name??""));}
   const [selectedParty,setSelectedParty]=useState(()=>findParty(initialProfileId));
   const [partyStatus, setPartyStatus] = useState<PartyStatus>(selectedParty?.status ?? "未回答");
+  const [mode, setMode] = useState("member");
+  const [guestName, setGuestName] = useState("");
+  const [guestGrade, setGuestGrade] = useState("");
   const [profileId, setProfileId] = useState(initialProfileId);
   const [events, setEvents] = useState(entry?.events ?? []);
   const [marks, setMarks] = useState(entry?.qualification_marks ?? {});
@@ -32,12 +38,12 @@ export function ObEntryEditor({ entry, members, initialProfileId = "", party, pa
   const router = useRouter();
   const { showToast } = useToast();
   const cleanMarks = Object.fromEntries(Object.entries(marks).filter(([event]) => events.includes(event)));
-  const dirty = partyStatus !== (party?.status ?? "未回答") || JSON.stringify(events) !== JSON.stringify(entry?.events ?? []) || JSON.stringify(cleanMarks) !== JSON.stringify(entry?.qualification_marks ?? {}) || (!entry && !!profileId);
+  const dirty = partyStatus !== (party?.status ?? "未回答") || JSON.stringify(events) !== JSON.stringify(entry?.events ?? []) || JSON.stringify(cleanMarks) !== JSON.stringify(entry?.qualification_marks ?? {}) || (!entry && (!!profileId || !!guestName || !!guestGrade));
   const removed = entry?.events.filter((event) => !events.includes(event)) ?? [];
   async function save() {
     setSaving(true);
     try {
-      const result = await saveEntry({ entryId: entry?.id ?? null, profileId: entry ? null : profileId, revision: entry?.revision ?? null, events, marks: cleanMarks }, {id:selectedParty?.id ?? null,revision:selectedParty?.revision ?? null,status:partyStatus});
+      const result = !entry && !self && mode === "guest" ? await createGuestEntry({name:guestName,grade:guestGrade,events,marks:cleanMarks,partyStatus,partyId:selectedParty?.id??null,partyRevision:selectedParty?.revision??null}) : await saveEntry({ entryId: entry?.id ?? null, profileId: entry ? null : profileId, revision: entry?.revision ?? null, events, marks: cleanMarks }, {id:selectedParty?.id ?? null,revision:selectedParty?.revision ?? null,status:partyStatus});
       if (!result.ok) { showToast(result.message ?? "保存できませんでした"); setConfirm(null); return; }
       showToast("回答を保存しました", "success");
       router.refresh(); onClose();
@@ -50,7 +56,9 @@ export function ObEntryEditor({ entry, members, initialProfileId = "", party, pa
     {entry && <p className="text-headline">{entry.grade} {entry.submitted_name}</p>}
     <ObProgramDisclosure />
     {!entry && self && <p className="text-headline">{members[0] ? `${entryGrade(members[0].grade)} ${members[0].display_name}` : ""}</p>}
-    {!entry && !self && <Select value={profileId} onValueChange={(value)=>{
+    {!entry && !self && <SegmentedControl value={mode} onChange={value => {if(saving)return;setMode(value);const answer=value==="member"?findParty(profileId):parties.find(p=>!p.entry_id&&!p.needs_review&&normalizeEntryName(p.submitted_name)===normalizeEntryName(guestName));setSelectedParty(answer);setPartyStatus(answer?.status??"未回答");}} items={[{key:"member",label:"部員を選ぶ"},{key:"guest",label:"名前を入力"}]} />}
+    {!entry && !self && mode === "guest" && <div className="space-y-3"><Input aria-label="参加者の氏名" placeholder="氏名を入力" maxLength={100} value={guestName} disabled={saving} onChange={e=>{setGuestName(e.target.value);const answer=parties.find(p=>!p.entry_id&&!p.needs_review&&normalizeEntryName(p.submitted_name)===normalizeEntryName(e.target.value));setSelectedParty(answer);setPartyStatus(answer?.status??"未回答");}} /><Select ariaLabel="参加者の学年・所属" value={guestGrade} disabled={saving} onValueChange={setGuestGrade} options={[{value:"",label:"学年・所属を選択"},...GRADE_OPTIONS.map(g=>({value:g.short,label:g.short})),{value:"OB・OG",label:"OB・OG"}]} /><p className="text-caption">アプリのアカウントを作らずに登録できます。</p></div>}
+    {!entry && !self && mode === "member" && <Select value={profileId} onValueChange={(value)=>{
       setProfileId(value);
       const answer=findParty(value);
       setSelectedParty(answer);
@@ -93,7 +101,7 @@ export function ObEntryEditor({ entry, members, initialProfileId = "", party, pa
     </>}
     <FormModalFooter><div className="flex items-center gap-3">
       <span className="shrink-0 text-body">{events.length}種目</span>
-      <Button className="flex-1" disabled={saving || !dirty || (!entry && (!profileId || (!events.length && partyStatus === "未回答")))} onClick={() => removed.length ? setConfirm("save") : void save()}>{saving ? "保存中…" : entry ? "変更を保存する" : "登録する"}</Button>
+      <Button className="flex-1" disabled={saving || !dirty || (!entry && ((mode === "guest" && !self ? !guestName.trim() || !guestGrade : !profileId) || (!events.length && partyStatus === "未回答")))} onClick={() => removed.length ? setConfirm("save") : void save()}>{saving ? "保存中…" : entry ? "変更を保存する" : "登録する"}</Button>
     </div></FormModalFooter>
     <ConfirmDialog open={confirm !== null} onOpenChange={(open) => { if (!open && !saving) setConfirm(null); }}
       title={confirm === "division" ? "出場区分を変更しますか？" : confirm === "close" ? "変更を破棄しますか？" : "エントリーを取り消しますか？"}

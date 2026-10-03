@@ -162,3 +162,24 @@ export async function getObEntryHistory(cursor?: { at: string; id: string }): Pr
   const last = rows.at(-1);
   return { ok: true, items: rows.map(row => describeObChange(row, names)), nextCursor: result.data.length > 30 && last ? { at: last.changed_at, id: last.id } : null };
 }
+
+export async function createGuestEntry(input: import("@/lib/ob-entry-edit").GuestEntryEdit): Promise<{ok:boolean;message?:string}> {
+  const { validGuestEntry } = await import("@/lib/ob-entry-edit");
+  if (!validGuestEntry(input)) return {ok:false,message:"氏名・学年・種目・資格記録を確認してください"};
+  const client = await editClient();
+  if (!client) return {ok:false,message:"権限がありません"};
+  const result = await client.rpc("create_ob_guest_registration", {p_name:input.name.trim(),p_grade:input.grade,p_events:input.events,p_marks:input.marks,p_party_status:input.partyStatus,p_party_id:input.partyId??null,p_party_revision:input.partyRevision??null});
+  if (result.error) return {ok:false,message:result.error.code === "23505" ? "同じ名前の回答があります。エントリー管理・懇親会の回答を確認してください" : "登録できませんでした。入力内容を確認してください"};
+  if (!result.data) return {ok:false,message:"登録を確認できませんでした。画面を更新してください"};
+  refreshObPages(); return {ok:true};
+}
+export async function deleteEntry(input: {entryId:string;revision:number}): Promise<{ok:boolean;message?:string}> {
+  const { validEntryDelete } = await import("@/lib/ob-entry-edit");
+  if (!validEntryDelete(input)) return {ok:false,message:"エントリーを確認してください"};
+  const client = await editClient();
+  if (!client) return {ok:false,message:"権限がありません"};
+  const result = await client.rpc("delete_ob_registration", {p_entry_id:input.entryId,p_revision:input.revision});
+  if (result.error) return {ok:false,message:result.error.message.includes("entry_has_duties") ? "補助担当があります。先に担当を解除してください" : result.error.message.includes("entry_has_operations") ? "組み分け・競技記録に登録されています。削除せず、エントリー編集で種目を取り消してください" : "削除できませんでした。他の操作で更新されていないか、画面を更新して確認してください"};
+  if (result.data !== input.entryId) return {ok:false,message:"削除を確認できませんでした。画面を更新してください"};
+  refreshObPages(); return {ok:true};
+}
