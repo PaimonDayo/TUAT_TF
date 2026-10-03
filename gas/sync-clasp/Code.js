@@ -191,7 +191,7 @@ function handleFetchMember(memberName) {
   return createJsonResponse({ data: member });
 }
 
-// 見出し名でセルを upsert（実際の距離などの数式列は触らない＝渡された見出しだけ書く）
+// 入力セルだけを更新する。送信側のマッピングを信頼して数式を上書きしない。
 function writeCellsRecord(data) {
   const memberName = data.memberName;
   const date = data.date;
@@ -226,13 +226,27 @@ function writeCellsRecord(data) {
   }
 
   const unmapped = [];
+  const protectedHeaders = [];
+  // 中長距離表の実際の距離は強度別の入力から計算する列。
+  // 既に数式が消された行でも、ここへ値や空欄を再送しない。
+  const hasIntensityInputs = headerRow.some(function (h) {
+    return /低強度|中強度|高強度|解糖系/.test(normalizeHeaderCell(h));
+  });
   Object.keys(cells).forEach(function (h) {
-    const col = colOf[normalizeHeaderCell(h)];
+    const header = normalizeHeaderCell(h);
+    const col = colOf[header];
     if (col === undefined) {
       unmapped.push(h);
       return;
     }
-    sheet.getRange(sheetRowNum, col + 1).setValue(cells[h]);
+    const cell = sheet.getRange(sheetRowNum, col + 1);
+    if (header === '日付' || header === '曜日' || header.indexOf('週合計') !== -1
+      || (hasIntensityInputs && /実際の距離|実距離|走行距離|総距離/.test(header))
+      || cell.getFormula()) {
+      protectedHeaders.push(h);
+      return;
+    }
+    cell.setValue(cells[h]);
   });
 
   return {
@@ -240,6 +254,7 @@ function writeCellsRecord(data) {
     action: rowIdx === -1 ? 'created' : 'updated',
     row: sheetRowNum,
     unmapped: unmapped, // 見出しが見つからず書き込めなかった項目（タブに列が無いケースの可視化用）
+    protectedHeaders: protectedHeaders,
   };
 }
 
