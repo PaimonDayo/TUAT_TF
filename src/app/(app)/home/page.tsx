@@ -7,7 +7,7 @@ import { ja } from "date-fns/locale";
 import { ChevronRight, Folder, Pencil } from "lucide-react";
 import { getMyObEntry, getMyObEntryCandidates, getMyObDuties } from "@/lib/queries/ob-entries";
 import { entryEventRows } from "@/lib/ob-entries";
-import { OB_PROGRAM_PATH, canManageObMeet, obEventTime } from "@/lib/ob-meet";
+import { OB_PROGRAM_PATH, OB_MY_ENTRY_PATH, canManageObMeet, obEventTime } from "@/lib/ob-meet";
 import { ObHomeSchedule } from "@/components/features/ObHomeSchedule";
 import { ObHomeIdentity } from "@/components/features/ObHomeIdentity";
 import { Header } from "@/components/layout/Header";
@@ -105,7 +105,7 @@ async function ObEntrySection() {
       <Card className="p-4">
         {entry ? (
           <>
-            <Link data-ui-row href={`${OB_PROGRAM_PATH}?edit=mine`} prefetch={false} className="block">
+            <Link data-ui-row href={`${OB_MY_ENTRY_PATH}?from=home`} prefetch={false} className="block">
               {rows.length ? (
                 <ul className="space-y-1">
                   {rows.map((row) => (
@@ -118,18 +118,18 @@ async function ObEntrySection() {
                 </ul>
               ) : <p className="text-[15px] text-muted">競技の出場登録なし</p>}
             </Link>
-            {footer("編集する", "種目の追加・取り消し、資格記録を変更できます", `${OB_PROGRAM_PATH}?edit=mine`)}
+            {footer("編集する", "種目の追加・取り消し、資格記録を変更できます", `${OB_MY_ENTRY_PATH}?from=home`)}
           </>
         ) : (
           <>
             {candidates.length
               ? <ObHomeIdentity candidates={candidates} profileId={profile.id} />
               : <p className="text-[15px] text-muted">まだエントリーしていません</p>}
-            {footer("エントリーする", "種目・資格記録と懇親会の出欠を登録できます", `${OB_PROGRAM_PATH}?edit=mine`)}
+            {footer("エントリーする", "種目・資格記録と懇親会の出欠を登録できます", `${OB_MY_ENTRY_PATH}?from=home`)}
             {staff && <Link data-ui-row href={`${OB_PROGRAM_PATH}?edit=identity`} prefetch={false} className="mt-2 block text-right text-caption text-accent">回答済みなら本人照合で探す →</Link>}
           </>
         )}
-        <ObHomeSchedule duties={duties} />
+        <ObHomeSchedule duties={duties?.map(duty=>({...duty,conflict:entry?.events.some(event=>obEventTime(event)===duty.time)}))??null} />
       </Card>
     </section>
   );

@@ -5,7 +5,7 @@ import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
 import { useSystemGlass } from "@/components/layout/glass/system-glass-state";
-import { OB_PROGRAM_PATH } from "@/lib/ob-meet";
+import { OB_MY_ENTRY_PATH } from "@/lib/ob-meet";
 
 const KEY = "tuat-ob-entry-prompt";
 const DONE = "done";
@@ -32,7 +32,7 @@ export function ObEntryPrompt({ hasEntry, today }: { hasEntry: boolean; today: s
           </Dialog.Description>
           <div data-ui-group className="mt-5 grid grid-cols-2 gap-2">
             <Button type="button" variant="outline" onClick={() => close()}>あとで</Button>
-            <Button asChild><Link href={`${OB_PROGRAM_PATH}?edit=mine`} onClick={() => close(true)}>{hasEntry ? "確認する" : "エントリーする"}</Link></Button>
+            <Button asChild><Link href={`${OB_MY_ENTRY_PATH}?from=home`} onClick={() => close(true)}>{hasEntry ? "確認する" : "エントリーする"}</Link></Button>
           </div>
         </Dialog.Content>
       </Dialog.Portal>

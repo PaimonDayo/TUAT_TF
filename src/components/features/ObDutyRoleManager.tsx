@@ -7,10 +7,11 @@ import {Input} from "@/components/ui/input";
 import {ConfirmDialog} from "@/components/ui/confirm-dialog";
 import {ActionMenu} from "@/components/ui/action-menu";
 import {useToast} from "@/components/ui/toast";
-import {deleteDutyRole,saveDutyRole,saveDutyRoles} from "@/app/(app)/ob-entries/actions";
+import {deleteDutyRole,saveDutyRole,saveDutyPeople} from "@/app/(app)/ob-entries/actions";
 import {adjacentCommitments,concurrentDuties,dutyRoleText,type ObDuty,type ObDutyRole,type DutyRoleEdit,type DutyCommitment} from "@/lib/ob-duty";
 import {OB_DUTY_SLOTS,compareByGrade,dutyRows,dutyTimeCell,isCompeting} from "@/lib/ob-meet";
 import type {ObEntry} from "@/lib/ob-entries";
+import {obDutyIssues} from "@/lib/ob-duty-issues";
 import {entryGrade,type EntryMember} from "@/lib/entry-identity";
 
 /**
@@ -19,12 +20,15 @@ import {entryGrade,type EntryMember} from "@/lib/entry-identity";
  * 役職名・必要人数の変更と未割当の役職削除は「…」から。
  */
 export function ObDutyRoleManager({entries,time,event,roles,allRoles=roles,duties,members,onClose}:{entries:ObEntry[];time:string;event:string;roles:ObDutyRole[];allRoles?:ObDutyRole[];duties:ObDuty[];members:EntryMember[];onClose:()=>void}) {
- const [draft,setDraft]=useState<DutyRoleEdit|null>(null),[people,setPeople]=useState<{role:ObDutyRole;selected:string[]}|null>(null);
+ const [draft,setDraft]=useState<DutyRoleEdit|null>(null),[people,setPeople]=useState<{role:ObDutyRole;selected:string[];expected:{profileId:string;revision:number}[]}|null>(null);
  const [saving,setSaving]=useState(false),[discard,setDiscard]=useState(false);
  const [deleted,setDeleted]=useState<string[]>([]);
  const deleting=useRef(false);
  const visibleRoles=roles.filter(role=>!deleted.includes(role.id));
  const router=useRouter();const {showToast}=useToast();
+ const [message,setMessage]=useState("");
+ const issues=obDutyIssues(entries,members,duties,allRoles);
+ const snapshot=()=>duties.filter(d=>d.slot_time===time&&d.event_name===event).map(d=>({profileId:d.profile_id,revision:d.revision}));
  const slot=OB_DUTY_SLOTS.find(s=>s.time===time&&s.label===event)!;
  const slotDuty=(profileId:string)=>duties.find(d=>d.profile_id===profileId&&d.slot_time===time&&d.event_name===event);
  const rolePeople=(id:string)=>duties.filter(d=>d.slot_time===time&&d.event_name===event&&d.role_ids?.includes(id));
@@ -52,20 +56,18 @@ export function ObDutyRoleManager({entries,time,event,roles,allRoles=roles,dutie
   if(!people)return;
   if(people.selected.some(id=>!peopleOriginal.includes(id)&&!candidates.some(r=>r.id===id))){showToast("候補の予定が変わりました。画面を開き直して確認してください");return;}
   setSaving(true);
-  const role=people.role.id;
-  const removed=peopleOriginal.filter(id=>!people.selected.includes(id)),added=people.selected.filter(id=>!peopleOriginal.includes(id));
+  setMessage("");
   try{
-   // 外す人を先に保存して、必要人数の上限に引っかからないようにする。
-   for(const profileId of [...removed,...added]){
-    const current=slotDuty(profileId);const ids=current?.role_ids??[];
-    const result=await saveDutyRoles({profileId,entryId:roster.find(r=>r.id===profileId)?.entry?.id,slotTime:time,eventName:event,roleIds:removed.includes(profileId)?ids.filter(x=>x!==role):[...ids,role],revision:current?.revision??null});
-    if(!result.ok){showToast(`${member(profileId)?.display_name??""}：${result.message??"保存できませんでした"}`);router.refresh();return;}
-   }
+   const result=await saveDutyPeople({roleId:people.role.id,revision:people.role.revision,expected:people.expected,people:people.selected});
+   if(!result.ok){setMessage(result.message??"保存できませんでした。選択は残っています");router.refresh();return;}
    showToast("補助員を保存しました","success");router.refresh();setPeople(null);
-  }catch{showToast("保存できませんでした");router.refresh();}finally{setSaving(false);}
+  }catch{setMessage("通信できませんでした。選択は残っています。接続を確認して再度保存してください");}finally{setSaving(false);}
  }
- return <FormModal open title={draft?"役職の設定":people?`${people.role.name}の担当者`:"補助員一覧"} autoFocus={false} onOpenChange={open=>{if(!open&&!saving){if(draft||peopleDirty)setDiscard(true);else if(people)setPeople(null);else onClose();}}}>
+
+ return <FormModal open wide title={draft?"役職の設定":people?`${people.role.name}の担当者`:"補助員一覧"} autoFocus={false} onOpenChange={open=>{if(!open&&!saving){if(draft||peopleDirty)setDiscard(true);else if(people)setPeople(null);else onClose();}}}>
  <div className="space-y-4"><h2 className="text-headline">{time}　{event}</h2>
+ {issues.filter(issue=>issue.time===time&&issue.event===event).length>0&&<section className="rounded-xl border border-danger/30 bg-danger/5 p-3"><h3 className="text-headline text-danger">！補助員の確認が必要です</h3>{issues.filter(issue=>issue.time===time&&issue.event===event).map(issue=><p key={issue.key} className="mt-1 text-body">{issue.text}</p>)}</section>}
+ {message&&<p role="alert" className="text-body text-danger">{message}</p>}
  {draft?<div className="space-y-4">
   <label className="block text-body">役職名<Input value={draft.name} maxLength={200} disabled={saving} onChange={e=>setDraft({...draft,name:e.target.value})}/></label>
   <label className="block text-body">表の略称（1〜8文字）<Input value={draft.abbreviation} maxLength={8} disabled={saving} onChange={e=>setDraft({...draft,abbreviation:e.target.value})}/></label>
@@ -90,10 +92,10 @@ export function ObDutyRoleManager({entries,time,event,roles,allRoles=roles,dutie
   })}</div>
  </div>:<>
  <p className="text-caption">割当済み / 必要人数。「人を編集」で担当者を選べます。役職の設定・削除は「…」から行えます。担当者がいる役職は、先に担当を解除してください。</p>
- <div className="divide-y divide-separator">{visibleRoles.map(role=>{const assigned=rolePeople(role.id);return <section key={role.id} className="py-3"><div data-ui-duty-role-heading className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="text-headline break-words">{role.name} <span className="text-caption">{role.abbreviation}</span></h3><p className={assigned.length<role.required_count?"text-accent text-body":"text-body"}>{assigned.length} / {role.required_count}人</p></div>
-  <div data-ui-group className="flex shrink-0 items-center gap-2"><Button size="sm" variant="outline" disabled={saving} aria-label={`${role.name}の担当者を編集`} onClick={()=>setPeople({role,selected:assigned.map(d=>d.profile_id)})}>人を編集</Button>
+ <div className="grid gap-x-6 lg:grid-cols-2">{visibleRoles.map(role=>{const assigned=rolePeople(role.id);const problem=issues.some(issue=>issue.roleId===role.id||assigned.some(d=>issue.personId===d.profile_id&&issue.time===time&&issue.event===event));return <section key={role.id} className="border-b border-separator py-3"><div data-ui-duty-role-heading className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="text-headline break-words">{problem&&<span className="mr-1 text-danger">！</span>}{role.name} <span className="text-caption">{role.abbreviation}</span></h3><p className={problem?"text-danger text-body":"text-body"}>{assigned.length} / {role.required_count}人</p></div>
+  <div data-ui-group className="flex shrink-0 items-center gap-2"><Button size="sm" variant="outline" disabled={saving} aria-label={`${role.name}の担当者を編集`} onClick={()=>{setMessage("");setPeople({role,selected:assigned.map(d=>d.profile_id),expected:snapshot()});}}>人を編集</Button>
   <ActionMenu triggerLabel={`${role.name}の役職メニュー`} editLabel="役職の設定" onEdit={()=>{if(!saving)setDraft({id:role.id,slotTime:time,eventName:event,name:role.name,abbreviation:role.abbreviation,requiredCount:role.required_count,revision:role.revision});}} onDelete={!assigned.length?()=>removeRole(role):undefined} deleteLabel="役職を削除する" deleteTitle="役職を削除しますか？" deleteDescription={`${time} ${event}の「${role.name}」を削除します。削除した役職は元に戻せません。`}/></div></div>
-  <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1">{[...assigned].sort(byGrade).map(d=>{const m=member(d.profile_id);return <li key={d.profile_id} className="text-body"><span className="mr-2 text-caption">{entryGrade(m?.grade??null)}</span>{m?.display_name??"名簿確認待ち"}</li>;})}</ul>{!assigned.length&&<p className="text-caption">未割当</p>}</section>;})}</div>
+  <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1">{[...assigned].sort(byGrade).map(d=>{const m=member(d.profile_id);const problems=issues.filter(issue=>issue.personId===d.profile_id&&issue.time===time&&issue.event===event);return <li key={d.profile_id} className={problems.length?"text-body text-danger":"text-body"} title={problems.map(issue=>issue.text).join("。")}><span className="mr-2 text-caption">{entryGrade(m?.grade??null)}</span>{m?.display_name??"名簿確認待ち"}{problems.length>0&&" ！"}</li>;})}</ul>{!assigned.length&&<p className="text-caption">未割当</p>}</section>;})}</div>
  {!visibleRoles.length&&<p className="text-body">役職と必要人数を追加してください。</p>}
  <Button variant="outline" disabled={saving} onClick={()=>setDraft({id:null,slotTime:time,eventName:event,name:"",abbreviation:"",requiredCount:1,revision:null})}>役職を追加</Button>
  </>}

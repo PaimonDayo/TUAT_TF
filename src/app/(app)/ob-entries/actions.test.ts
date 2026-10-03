@@ -3,7 +3,7 @@ const mocks = vi.hoisted(() => ({ user: vi.fn(), roles: vi.fn(), preview: vi.fn(
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: mocks.user }, from: mocks.from, rpc: mocks.rpc }) }));
 vi.mock("@/lib/supabase/auth", () => ({ fetchRolesByProfileIds: mocks.roles, isMemberPreviewActive: mocks.preview }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.refresh }));
-import { createGuestEntry, deleteEntry, confirmEntryMember, saveEntry, saveParty, saveDuty, saveDutyRole, saveDutyRoles, deleteDutyRole, getObEntryHistory } from "./actions";
+import { createGuestEntry, deleteEntry, confirmEntryMember, saveEntry, saveParty, saveDuty, saveDutyRole, saveDutyRoles, saveDutyPeople, deleteDutyRole, getObEntryHistory } from "./actions";
 const id = "10000000-0000-4000-8000-000000000001";
 
 it("deletes only the expected role and refreshes only after its ID is returned",async()=>{
@@ -73,7 +73,7 @@ it("refuses party updates by ordinary members and preview sessions", async () =>
 });
 it("saves the entry and party response through one transaction",async()=>{
   expect((await saveEntry({entryId:id,profileId:null,revision:0,events:[],marks:{}},{id,revision:2,status:"不参加"})).ok).toBe(true);
-  expect(mocks.rpc).toHaveBeenCalledWith("save_ob_registration",expect.objectContaining({p_entry_id:id,p_party_id:id,p_party_revision:2,p_party_status:"不参加"}));
+  expect(mocks.rpc).toHaveBeenCalledWith("save_ob_registration_checked",expect.objectContaining({p_entry_id:id,p_party_id:id,p_party_revision:2,p_party_status:"不参加",p_confirm_duties:false}));
   mocks.rpc.mockResolvedValueOnce({error:{message:"entry_conflict"}});
   expect((await saveParty({id,revision:0,status:"参加"})).message).toContain("更新されています");
 });
@@ -87,7 +87,34 @@ beforeEach(() => {
   mocks.update.mockReturnValue(chain);
   mocks.eq.mockReturnValue(chain);
   mocks.result.mockResolvedValue({ data: { id }, error: null });
-  mocks.rpc.mockResolvedValue({ data: id, error: null });
+  mocks.rpc.mockImplementation(async(name:string)=>({data:name==="save_ob_registration_checked"?{entryId:id,conflicts:[]}:id,error:null}));
+});
+
+it("keeps entry input when a fresh DB conflict requires confirmation and sends acknowledgement explicitly",async()=>{
+ const input={entryId:id,profileId:null,revision:0,events:["男子100m"],marks:{}};
+ const conflicts=[{time:"11:00",event:"砲丸投げ",assignment:"計測"}];
+ mocks.rpc.mockResolvedValueOnce({error:{message:"entry_duty_conflict",details:JSON.stringify(conflicts)}});
+ expect(await saveEntry(input)).toMatchObject({ok:false,dutyConflicts:conflicts});
+ expect(mocks.refresh).not.toHaveBeenCalled();
+ mocks.rpc.mockResolvedValueOnce({data:{entryId:id,conflicts},error:null});
+ expect(await saveEntry(input,undefined,true)).toMatchObject({ok:true,dutyConflicts:conflicts});
+ expect(mocks.rpc).toHaveBeenLastCalledWith("save_ob_registration_checked",expect.objectContaining({p_confirm_duties:true}));
+});
+it("rejects absent entry save results and malformed conflict details",async()=>{
+ const input={entryId:id,profileId:null,revision:0,events:[],marks:{}};
+ mocks.rpc.mockResolvedValueOnce({data:null,error:null});expect((await saveEntry(input)).ok).toBe(false);
+ mocks.rpc.mockResolvedValueOnce({error:{message:"entry_duty_conflict",details:"bad"}});expect((await saveEntry(input)).ok).toBe(false);
+ expect(mocks.refresh).not.toHaveBeenCalled();
+});
+it("saves helper membership in one RPC and retains revisions and authorization checks",async()=>{
+ const input={roleId:id,revision:2,expected:[{profileId:id,revision:1}],people:[id]};
+ expect(await saveDutyPeople(input)).toEqual({ok:true});
+ expect(mocks.rpc).toHaveBeenLastCalledWith("save_ob_role_people",{p_role_id:id,p_revision:2,p_expected:input.expected,p_people:[id]});
+ mocks.rpc.mockResolvedValueOnce({error:{message:"entry_conflict"}});expect((await saveDutyPeople(input)).ok).toBe(false);
+ mocks.rpc.mockResolvedValueOnce({data:null,error:null});expect((await saveDutyPeople(input)).ok).toBe(false);
+ mocks.preview.mockResolvedValueOnce(true);expect((await saveDutyPeople(input)).ok).toBe(false);
+ mocks.roles.mockResolvedValueOnce(new Map());expect((await saveDutyPeople(input)).ok).toBe(false);
+ expect((await saveDutyPeople({...input,people:[id,id]})).ok).toBe(false);
 });
 
 it("rejects entry edits from preview sessions (ordinary members are limited to their own entry by the DB)", async () => {

@@ -11,10 +11,13 @@ import { ObEntryEditor } from "@/components/features/ObEntryEditor";
 import { entryEventRows, type ObEntry } from "@/lib/ob-entries";
 import { entryGrade, type EntryMember } from "@/lib/entry-identity";
 import { obEventTime, type ObPartyResponse } from "@/lib/ob-meet";
+import type { ObDuty, ObDutyRole } from "@/lib/ob-duty";
 
 /** 一般部員向け: 自分のエントリーだけを見て、登録・編集する画面。プログラムも同じ画面で見られる。 */
-export function ObMyEntry({ entry, party, me, openEditor = false, embedded = false }: { entry: ObEntry | null; party?: ObPartyResponse; me: EntryMember; openEditor?: boolean; embedded?: boolean }) {
+export function ObMyEntry({ entry, party, me, openEditor = false, embedded = false, returnHref, duties = [], roles = [] }: { entry: ObEntry | null; party?: ObPartyResponse; me: EntryMember; openEditor?: boolean; embedded?: boolean; returnHref?: string; duties?: ObDuty[]; roles?: ObDutyRole[] }) {
+  const router = useRouter();
   const [editing, setEditing] = useState(openEditor);
+  function close() { setEditing(false); if (returnHref) router.replace(returnHref); }
   const rows = entry ? entryEventRows(entry) : [];
   return <div className={embedded ? "space-y-4" : "space-y-4 px-4 pt-2 pb-6"}>
     <Card className="p-4">
@@ -31,8 +34,8 @@ export function ObMyEntry({ entry, party, me, openEditor = false, embedded = fal
     </Card>
     {!entry && <ClaimCard />}
     {editing && (entry
-      ? <ObEntryEditor key={`${entry.id}:${entry.revision}`} entry={entry} party={party} members={[me]} self onClose={() => setEditing(false)} />
-      : <ObEntryEditor members={[me]} initialProfileId={me.id} self onClose={() => setEditing(false)} />)}
+      ? <ObEntryEditor key={`${entry.id}:${entry.revision}`} entry={entry} party={party} members={[me]} duties={duties} roles={roles} self onClose={close} />
+      : <ObEntryEditor members={[me]} initialProfileId={me.id} duties={duties} roles={roles} self onClose={close} />)}
   </div>;
 }
 

@@ -28,6 +28,11 @@ export function validDutyEdit(value: DutyEdit): boolean {
 export type ObDutyRole = {id:string;meet_key:string;slot_time:string;event_name:string;name:string;abbreviation:string;required_count:number;revision:number};
 export type DutyRoleEdit = {id:string|null;slotTime:string;eventName:string;name:string;abbreviation:string;requiredCount:number;revision:number|null};
 export type DutyRoleDelete = {id:string;slotTime:string;eventName:string;revision:number};
+export type DutyPeopleEdit = { roleId: string; revision: number; expected: {profileId:string;revision:number}[]; people: string[] };
+export function validDutyPeopleEdit(v: DutyPeopleEdit) {
+  return !!v && uuid(v.roleId) && Number.isSafeInteger(v.revision) && v.revision >= 0 && Array.isArray(v.people) && v.people.length <= 300 && v.people.every(uuid) && new Set(v.people).size === v.people.length
+    && Array.isArray(v.expected) && v.expected.length <= 300 && v.expected.every(row => row && uuid(row.profileId) && Number.isSafeInteger(row.revision) && row.revision >= 0) && new Set(v.expected.map(row => row.profileId)).size === v.expected.length;
+}
 export type DutyRolesEdit = Omit<DutyEdit,"assignment"> & {roleIds:string[];entryId?:string};
 const uuid = (value: unknown) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 export function validDutyRolesEdit(v:DutyRolesEdit) {return !!v && (v.entryId===undefined||uuid(v.entryId)) && validDutyEdit({...v,assignment:""}) && Array.isArray(v.roleIds) && v.roleIds.length<=20 && v.roleIds.every(uuid) && new Set(v.roleIds).size===v.roleIds.length;}

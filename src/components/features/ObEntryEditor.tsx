@@ -18,8 +18,10 @@ import { OB_ENTRY_EVENTS, entryDivision } from "@/lib/ob-entry-edit";
 import { entryGrade, normalizeEntryName, type EntryMember } from "@/lib/entry-identity";
 import { OB_PARTY, OB_PROGRAM, PARTY_STATUSES, compareByGrade, obEventTime, type ObPartyResponse, type PartyStatus } from "@/lib/ob-meet";
 import { type ObEntry } from "@/lib/ob-entries";
+import { dutyRoleText, type ObDuty, type ObDutyRole } from "@/lib/ob-duty";
+import { entryDutyConflicts } from "@/lib/ob-duty-issues";
 
-export function ObEntryEditor({ entry, members, initialProfileId = "", party, parties = [], onClose, self = false }: { self?: boolean; entry?: ObEntry; party?: ObPartyResponse; parties?: ObPartyResponse[]; members: EntryMember[]; initialProfileId?: string;
+export function ObEntryEditor({ entry, members, initialProfileId = "", party, parties = [], onClose, self = false, duties = [], roles = [] }: { duties?: ObDuty[]; roles?: ObDutyRole[]; self?: boolean; entry?: ObEntry; party?: ObPartyResponse; parties?: ObPartyResponse[]; members: EntryMember[]; initialProfileId?: string;
   onClose: () => void }) {
   function findParty(id: string) {return party ?? parties.find((p)=>!p.entry_id&&!p.needs_review&&normalizeEntryName(p.submitted_name)===normalizeEntryName(members.find((m)=>m.id===id)?.display_name??""));}
   const [selectedParty,setSelectedParty]=useState(()=>findParty(initialProfileId));
@@ -34,18 +36,21 @@ export function ObEntryEditor({ entry, members, initialProfileId = "", party, pa
   const [gender, setGender] = useState<string>(fixedDivision ?? "");
   const [pendingDivision, setPendingDivision] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [confirm, setConfirm] = useState<"save" | "close" | "division" | null>(null);
+  const [confirm, setConfirm] = useState<"save" | "close" | "division" | "duties" | null>(null);
+  const [serverConflicts,setServerConflicts]=useState<{time:string;event:string;assignment:string}[]>([]);
   const router = useRouter();
   const { showToast } = useToast();
   const cleanMarks = Object.fromEntries(Object.entries(marks).filter(([event]) => events.includes(event)));
   const dirty = partyStatus !== (party?.status ?? "未回答") || JSON.stringify(events) !== JSON.stringify(entry?.events ?? []) || JSON.stringify(cleanMarks) !== JSON.stringify(entry?.qualification_marks ?? {}) || (!entry && (!!profileId || !!guestName || !!guestGrade));
   const removed = entry?.events.filter((event) => !events.includes(event)) ?? [];
-  async function save() {
+  const conflicts=entryDutyConflicts(entry?.profile_id??entry?.id??profileId,events,duties).map(duty=>({time:duty.slot_time,event:duty.event_name,assignment:dutyRoleText(duty,roles)}));
+  const displayedConflicts=serverConflicts.length?serverConflicts:conflicts;
+  async function save(confirmDuties = false) {
     setSaving(true);
     try {
-      const result = !entry && !self && mode === "guest" ? await createGuestEntry({name:guestName,grade:guestGrade,events,marks:cleanMarks,partyStatus,partyId:selectedParty?.id??null,partyRevision:selectedParty?.revision??null}) : await saveEntry({ entryId: entry?.id ?? null, profileId: entry ? null : profileId, revision: entry?.revision ?? null, events, marks: cleanMarks }, {id:selectedParty?.id ?? null,revision:selectedParty?.revision ?? null,status:partyStatus});
-      if (!result.ok) { showToast(result.message ?? "保存できませんでした"); setConfirm(null); return; }
-      showToast("回答を保存しました", "success");
+      const result: {ok:boolean;message?:string;dutyConflicts?:{time:string;event:string;assignment:string}[]} = !entry && !self && mode === "guest" ? await createGuestEntry({name:guestName,grade:guestGrade,events,marks:cleanMarks,partyStatus,partyId:selectedParty?.id??null,partyRevision:selectedParty?.revision??null}) : await saveEntry({ entryId: entry?.id ?? null, profileId: entry ? null : profileId, revision: entry?.revision ?? null, events, marks: cleanMarks }, {id:selectedParty?.id ?? null,revision:selectedParty?.revision ?? null,status:partyStatus},confirmDuties);
+      if (!result.ok) { if ("dutyConflicts" in result && result.dutyConflicts?.length) {setServerConflicts(result.dutyConflicts);setConfirm("duties");} else {showToast(result.message ?? "保存できませんでした");setConfirm(null);} return; }
+      showToast("dutyConflicts" in result && result.dutyConflicts?.length ? "登録を保存しました。補助員の「！」から重複する担当を確認してください" : "回答を保存しました", "success");
       router.refresh(); onClose();
     } catch { showToast("保存できませんでした"); setConfirm(null); }
     finally { setSaving(false); }
@@ -54,6 +59,7 @@ export function ObEntryEditor({ entry, members, initialProfileId = "", party, pa
     onOpenChange={(open) => { if (!open && !saving && !confirm) { if (dirty) setConfirm("close"); else onClose(); } }}>
     <section className="space-y-3" aria-label="エントリー編集">
     {entry && <p className="text-headline">{entry.grade} {entry.submitted_name}</p>}
+    {displayedConflicts.length>0&&<section aria-label="エントリー変更による補助担当の重複" className="rounded-xl border border-danger/30 bg-danger/5 p-3"><h3 className="text-headline text-danger">！出場と補助担当が重複します</h3><ul className="mt-2 space-y-1 text-body">{displayedConflicts.map((duty,index)=><li key={index}>{duty.time} {duty.event}：{duty.assignment}</li>)}</ul><p className="mt-2 text-caption">補助担当は保持します。保存後に担当者が補助員の「！」から代替者を選んでください。</p></section>}
     <ObProgramDisclosure />
     {!entry && self && <p className="text-headline">{members[0] ? `${entryGrade(members[0].grade)} ${members[0].display_name}` : ""}</p>}
     {!entry && !self && <SegmentedControl value={mode} onChange={value => {if(saving)return;setMode(value);const answer=value==="member"?findParty(profileId):parties.find(p=>!p.entry_id&&!p.needs_review&&normalizeEntryName(p.submitted_name)===normalizeEntryName(guestName));setSelectedParty(answer);setPartyStatus(answer?.status??"未回答");}} items={[{key:"member",label:"部員を選ぶ"},{key:"guest",label:"名前を入力"}]} />}
@@ -85,7 +91,7 @@ export function ObEntryEditor({ entry, members, initialProfileId = "", party, pa
           return <div key={event} className="px-3.5">
             <label data-ui-checklist-row className="flex min-h-12 cursor-pointer items-center gap-3 py-3 text-body">
               <input type="checkbox" className="h-5 w-5 shrink-0 accent-accent" checked={selected} disabled={saving} aria-label={event}
-                onChange={() => { setEvents(selected ? events.filter((e) => e !== event) : [...events, event]); if (!selected && !Object.hasOwn(marks, event)) setMarks({ ...marks, [event]: null }); }} />
+                onChange={() => { setServerConflicts([]); setEvents(selected ? events.filter((e) => e !== event) : [...events, event]); if (!selected && !Object.hasOwn(marks, event)) setMarks({ ...marks, [event]: null }); }} />
               <span className="min-w-0 flex-1">{event.slice(2)}</span>
               {obEventTime(event) && <span className="shrink-0 text-caption tabular-nums">{obEventTime(event)}〜</span>}
             </label>
@@ -101,13 +107,13 @@ export function ObEntryEditor({ entry, members, initialProfileId = "", party, pa
     </>}
     <FormModalFooter><div className="flex items-center gap-3">
       <span className="shrink-0 text-body">{events.length}種目</span>
-      <Button className="flex-1" disabled={saving || !dirty || (!entry && ((mode === "guest" && !self ? !guestName.trim() || !guestGrade : !profileId) || (!events.length && partyStatus === "未回答")))} onClick={() => removed.length ? setConfirm("save") : void save()}>{saving ? "保存中…" : entry ? "変更を保存する" : "登録する"}</Button>
+      <Button className="flex-1" disabled={saving || !dirty || (!entry && ((mode === "guest" && !self ? !guestName.trim() || !guestGrade : !profileId) || (!events.length && partyStatus === "未回答")))} onClick={() => conflicts.length ? setConfirm("duties") : removed.length ? setConfirm("save") : void save()}>{saving ? "保存中…" : entry ? "変更を保存する" : "登録する"}</Button>
     </div></FormModalFooter>
     <ConfirmDialog open={confirm !== null} onOpenChange={(open) => { if (!open && !saving) setConfirm(null); }}
-      title={confirm === "division" ? "出場区分を変更しますか？" : confirm === "close" ? "変更を破棄しますか？" : "エントリーを取り消しますか？"}
-      description={confirm === "division" ? "選択した種目と入力中の資格記録をクリアします。" : confirm === "close" ? "保存していない変更は失われます。" : `${removed.join("・")}を取り消して保存します。`}
-      confirmLabel={confirm === "division" ? "変更する" : confirm === "close" ? "破棄する" : "取り消して保存する"} busyLabel="保存中…" busy={saving}
-      onConfirm={() => { if (confirm === "division") { setGender(pendingDivision ?? ""); setEvents([]); setMarks({}); setConfirm(null); } else if (confirm === "close") onClose(); else void save(); }} />
+      title={confirm === "duties" ? "補助担当の調整が必要です" : confirm === "division" ? "出場区分を変更しますか？" : confirm === "close" ? "変更を破棄しますか？" : "エントリーを取り消しますか？"}
+      description={confirm === "duties" ? `${displayedConflicts.map(duty=>`${duty.time} ${duty.event}：${duty.assignment}`).join("。 ")}。補助担当を残して出場登録を保存します。担当者は代替者を選んでください。${removed.length?`${removed.join("・")}の出場登録は取り消します。`:""}` : confirm === "division" ? "選択した種目と入力中の資格記録をクリアします。" : confirm === "close" ? "保存していない変更は失われます。" : `${removed.join("・")}を取り消して保存します。`}
+      confirmLabel={confirm === "duties" ? "確認して保存する" : confirm === "division" ? "変更する" : confirm === "close" ? "破棄する" : "取り消して保存する"} busyLabel="保存中…" busy={saving}
+      onConfirm={() => { if (confirm === "division") { setGender(pendingDivision ?? ""); setEvents([]); setMarks({}); setConfirm(null); } else if (confirm === "close") onClose(); else void save(confirm === "duties"); }} />
   </section></FormModal>;
 }
 

@@ -5,18 +5,17 @@ import { ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { FormModal } from "@/components/ui/form-modal";
 import { SegmentedControl } from "@/components/ui/segmented";
-import { Disclosure } from "@/components/ui/disclosure";
 import { ObDutyTable } from "./ObDutyTable";
-import { OB_PROGRAM, OB_DUTY_SLOTS } from "@/lib/ob-meet";
+import { OB_PROGRAM } from "@/lib/ob-meet";
 import { MeetEvent } from "@/lib/meet-operations";
 import { obEventRule, type ObEventOperation } from "@/lib/ob-operations";
 import type { ObEntry } from "@/lib/ob-entries";
 import type { EntryMember } from "@/lib/entry-identity";
-import { dutyRoleText, hasDuty, type ObDuty, type ObDutyRole } from "@/lib/ob-duty";
+import { type ObDuty, type ObDutyRole } from "@/lib/ob-duty";
 
 /** 閲覧は時刻と種目から。出場者や補助担当の詳細は必要なときだけ開く。 */
-export function ObPublicProgram({ entries, members, duties, roles, operations, view = "program" }: {
-  view?: "program" | "duties"; entries: ObEntry[]; members: EntryMember[]; duties: ObDuty[]; roles: ObDutyRole[]; operations: ObEventOperation[];
+export function ObPublicProgram({ entries, members, duties, roles, operations, view = "program", canEditDuties = false }: {
+  view?: "program" | "duties"; canEditDuties?: boolean; entries: ObEntry[]; members: EntryMember[]; duties: ObDuty[]; roles: ObDutyRole[]; operations: ObEventOperation[];
 }) {
   const [event, setEvent] = useState<string | null>(null);
   const [gender, setGender] = useState("男子");
@@ -38,16 +37,7 @@ export function ObPublicProgram({ entries, members, duties, roles, operations, v
           </button>) : <div className="py-3 text-body">{slot.label}{slot.note && <p className="text-caption">{slot.note}</p>}</div>}</div>
         </div>)}
       </Card>
-    </> : <>
-      <p className="text-caption">種目を開くと補助担当を確認できます。時刻は種目の開始時刻です。</p>
-      <Card className="px-3">{OB_DUTY_SLOTS.map(slot => {
-        const assigned = duties.filter(d => d.slot_time === slot.time && d.event_name === slot.label && hasDuty(d));
-        return <Disclosure key={slot.time + slot.label} title={<span className="flex items-baseline gap-3"><span className="w-12 shrink-0 tabular-nums">{slot.time}</span><span className="min-w-0 flex-1 break-words">{slot.label}</span><span className="shrink-0 text-caption">{assigned.length}人</span></span>}>
-          {assigned.length ? <ul className="divide-y divide-separator">{assigned.map(d => <li key={d.profile_id} className="py-2 text-body"><p>{members.find(m => m.id === d.profile_id)?.display_name ?? entries.find(e => e.id === d.profile_id || e.profile_id === d.profile_id)?.submitted_name ?? "氏名未確認"}</p><p className="text-caption">{dutyRoleText(d, roles)}</p></li>)}</ul> : <p className="text-caption">補助担当はまだ登録されていません。</p>}
-        </Disclosure>;
-      })}</Card>
-      <Disclosure title="全員の補助員表・CSV"><ObDutyTable integrated canEditDuties={false} entries={entries} members={members} duties={duties} roles={roles} /></Disclosure>
-    </>}
+    </> : <ObDutyTable integrated canEditDuties={canEditDuties} entries={entries} members={members} duties={duties} roles={roles} />}
     <FormModal open={event !== null} onOpenChange={open => { if (!open) setEvent(null); }} title={`${event === "立ち五段" ? "立ち五段跳び" : event ?? ""}の出場者`}>
       <div className="space-y-4">
         <SegmentedControl value={gender} onChange={setGender} items={["男子", "女子"].map(g => ({ key: g, label: `${g} (${entries.filter(e => e.events.includes(g + event)).length})` }))} />

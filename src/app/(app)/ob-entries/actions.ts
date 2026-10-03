@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRolesByProfileIds, isMemberPreviewActive } from "@/lib/supabase/auth";
 import { entryClient } from "@/lib/ob-entries-db";
-import { validDutyEdit, type DutyEdit } from "@/lib/ob-duty";
+import { validDutyEdit, validDutyPeopleEdit, type DutyEdit, type DutyPeopleEdit } from "@/lib/ob-duty";
+import type { Json } from "@/types/database";
 import { OB_PROGRAM_PATH, canManageObMeet, canViewObHistory, validPartyEdit, type PartyEdit } from "@/lib/ob-meet";
 import { validEntryEdit, type EntryEdit } from "@/lib/ob-entry-edit";
 /** 旧URL（転送のみ）と、大会ページ配下のプログラムの両方を更新する。 */
@@ -21,13 +22,21 @@ async function editClient(allowSelf = false) {
   return client;
 }
 
-export async function saveEntry(input: EntryEdit, party?: PartyEdit): Promise<{ ok: boolean; message?: string }> {
+export async function saveEntry(input: EntryEdit, party?: PartyEdit, confirmDuties = false): Promise<{ ok: boolean; message?: string; dutyConflicts?: {time:string;event:string;assignment:string}[] }> {
+  if (typeof confirmDuties !== "boolean") return {ok:false,message:"補助担当の確認内容を確認してください"};
   if ((party !== undefined && !validPartyEdit(party)) || !validEntryEdit(input, !!party && party.status !== "未回答")) return { ok: false, message: "種目と資格記録を確認してください（記録は1000文字以内）" };
   const client = await editClient(true);
   if (!client) return { ok: false, message: "権限がありません" };
   const args = { p_entry_id: input.entryId, p_profile_id: input.profileId, p_revision: input.revision, p_events: input.events, p_marks: input.marks };
-  const result = party ? await client.rpc("save_ob_registration", { ...args, p_party_id: party.id, p_party_revision: party.revision, p_party_status: party.status }) : await client.rpc("save_ob_entry", args);
+  const result = await client.rpc("save_ob_registration_checked", { ...args, p_party_id: party?.id ?? null, p_party_revision: party?.revision ?? null, p_party_status: party?.status ?? null, p_confirm_duties: confirmDuties });
   if (result.error) {
+    if (result.error.message.includes("entry_duty_conflict")) {
+      try {
+        const dutyConflicts: unknown = JSON.parse(result.error.details);
+        if (Array.isArray(dutyConflicts) && dutyConflicts.every(row => row && typeof row.time === "string" && typeof row.event === "string" && typeof row.assignment === "string")) return {ok:false,message:"出場と補助担当が重複します。担当を確認してください",dutyConflicts};
+      } catch { /* Keep the form when the returned details cannot be read. */ }
+      return {ok:false,message:"出場と補助担当が重複します。補助員表で担当を確認してください"};
+    }
     const message = result.error.code === "23505" ? "同じ名前の回答がすでにあります。フォームで回答済みなら「自分の回答を呼び出す」を押してください"
       : result.error.message.includes("entry_conflict") ? "他の操作で更新されています。画面を更新してからやり直してください"
       : result.error.message.includes("party_identity_required") ? "懇親会の回答と選択した部員が一致しません。本人照合を確認してください"
@@ -36,8 +45,20 @@ export async function saveEntry(input: EntryEdit, party?: PartyEdit): Promise<{ 
       : result.error.message.includes("entry_member_missing") ? "在籍中で氏名・学年が登録された部員を選んでください" : "保存できませんでした";
     return { ok: false, message };
   }
+  const saved = result.data;
+  if (!saved || typeof saved !== "object" || Array.isArray(saved) || typeof saved.entryId !== "string" || !/^[0-9a-f-]{36}$/i.test(saved.entryId) || !Array.isArray(saved.conflicts)) return {ok:false,message:"保存結果を確認できませんでした。画面を開き直して確認してください"};
   refreshObPages();
-  return { ok: true };
+  return { ok: true, dutyConflicts: saved.conflicts as {time:string;event:string;assignment:string}[] };
+}
+
+export async function saveDutyPeople(input: DutyPeopleEdit): Promise<{ok:boolean;message?:string}> {
+  if (!validDutyPeopleEdit(input)) return {ok:false,message:"担当者の選択を確認してください"};
+  const client = await editClient();
+  if (!client) return {ok:false,message:"権限がありません"};
+  const result = await client.rpc("save_ob_role_people", {p_role_id:input.roleId,p_revision:input.revision,p_expected:input.expected as unknown as Json,p_people:input.people});
+  if (result.error) return {ok:false,message:dutyRoleError(result.error.message)};
+  if (result.data !== input.roleId) return {ok:false,message:"保存結果を確認できませんでした。選択を残しています。画面を開き直して確認してください"};
+  refreshObPages(); return {ok:true};
 }
 
 export async function confirmEntryMember(entryId: string, profileId: string | null, revision: number): Promise<{ ok: boolean; message?: string }> {

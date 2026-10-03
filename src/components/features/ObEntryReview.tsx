@@ -64,8 +64,8 @@ export function ObEntryReview({ competition, initial, members, viewerId, history
     {view === "events" && <SegmentedControl items={[{key:"all",label:"すべて"},{key:"男子",label:"男子"},{key:"女子",label:"女子"}]} value={division} onChange={setDivision} />}
     {view === "identity" && <Button size="sm" variant={unlinked ? "primary" : "outline"} aria-pressed={unlinked} onClick={() => setUnlinked(!unlinked)}>未確認のみ</Button>}
     {managerOpen && <ObEntryManager entries={initial} canAdd={true} onClose={() => setManagerOpen(false)} onEdit={(id) => { setManagerOpen(false); setEditingId(id); }} onNew={() => { setManagerOpen(false); setAdding(true); }} />}
-    {adding && <ObEntryEditor parties={party} members={newMembers} onClose={() => setAdding(false)} />}
-    {editing && <ObEntryEditor key={`${editing.id}:${editing.revision}`} entry={editing} party={party.find((p)=>p.entry_id===editing.id)} members={members} onClose={() => setEditingId(null)} />}
+    {adding && <ObEntryEditor parties={party} members={newMembers} duties={duties} roles={dutyRoles} onClose={() => setAdding(false)} />}
+    {editing && <ObEntryEditor key={`${editing.id}:${editing.revision}`} entry={editing} party={party.find((p)=>p.entry_id===editing.id)} members={members} duties={duties} roles={dutyRoles} onClose={() => setEditingId(null)} />}
     {view === "party" ? <ObPartyView responses={party} /> : view === "duty" ? operations ? <ObOperations entries={initial} members={members} duties={duties} roles={dutyRoles} initial={operations}/> : <ObDutyTable entries={initial} members={members} duties={duties} roles={dutyRoles} /> : view === "events" ? <div className="space-y-3">
       <p className="text-micro text-muted2">種目を開くと出場者と資格記録が見られます。</p>
       <section className="space-y-3">
@@ -88,7 +88,7 @@ export function ObEntryReview({ competition, initial, members, viewerId, history
       </section>
       {query && !groups.length && <EmptyState title="条件に合うエントリーはありません" />}
     </div> : visible.length === 0 ? <Card><EmptyState title="条件に合うエントリーはありません" /></Card> : [...visible].sort((a, b) => compareByGrade({ grade: a.grade, name: a.submitted_name }, { grade: b.grade, name: b.submitted_name })).map((entry) =>
-      <EntryCard key={`${entry.id}:${entry.revision}:${view}`} entry={entry} members={members} history={history} party={party.find((p)=>p.entry_id===entry.id)} identity={view === "identity"} />)}
+      <EntryCard key={`${entry.id}:${entry.revision}:${view}`} entry={entry} members={members} history={history} party={party.find((p)=>p.entry_id===entry.id)} identity={view === "identity"} duties={duties} roles={dutyRoles} />)}
     <p className="text-micro text-muted">変更はアプリ内だけに保存されます。Googleフォームの回答は変わりません。</p>
   </div>;
 }
@@ -119,7 +119,7 @@ function EntryProgramRow({ time, event, entries, viewerId, searching, onEdit }: 
   </div>;
 }
 
-function EntryCard({ entry, members, history, identity, party }: { party?: ObPartyResponse; entry: ObEntry; members: EntryMember[]; history: ConfirmedEntryIdentity[]; identity: boolean }) {
+function EntryCard({ entry, members, history, identity, party, duties, roles }: { duties: ObDuty[]; roles: ObDutyRole[]; party?: ObPartyResponse; entry: ObEntry; members: EntryMember[]; history: ConfirmedEntryIdentity[]; identity: boolean }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const match = matchEntryMember(entry, members, history);
@@ -152,7 +152,7 @@ function EntryCard({ entry, members, history, identity, party }: { party?: ObPar
         <th scope="row" className="break-words py-2 pr-2 align-top font-normal">{event}</th><td className="whitespace-pre-wrap break-words py-2 align-top">{mark}</td>
       </tr>)}</tbody>
     </table>}
-    {editing && <ObEntryEditor entry={entry} party={party} members={members} onClose={() => setEditing(false)} />}
+    {editing && <ObEntryEditor entry={entry} party={party} members={members} duties={duties} roles={roles} onClose={() => setEditing(false)} />}
     {identity && <button data-ui-row type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="mt-1 flex min-h-8 w-full items-center justify-between gap-2 text-left text-caption text-accent">
       <span>{status}{linked ? `：${linked.display_name}` : ""}</span><ChevronDown size={16} className={open ? "rotate-180 shrink-0" : "shrink-0"} />
     </button>}

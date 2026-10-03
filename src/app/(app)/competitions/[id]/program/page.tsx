@@ -2,6 +2,7 @@ import { ObMeetWorkspace } from "@/components/features/ObMeetWorkspace";
 import { ObPublicProgram } from "@/components/features/ObPublicProgram";
 import { getObProgram } from "@/lib/queries/ob-entries";
 import { ObEntryHistory } from "@/components/features/ObEntryHistory";
+import { obDutyIssues } from "@/lib/ob-duty-issues";
 import { notFound } from "next/navigation";
 import { SubHeader } from "@/components/layout/SubHeader";
 import { CompetitionProgramView } from "@/components/features/CompetitionProgramView";
@@ -30,9 +31,9 @@ export default async function CompetitionProgramPage({
   ]);
   if (!competition) notFound();
   const canManage = permissionsOf(profile.roles).manageSystem;
-  // OB戦はホームから開く人が多いので、戻るは必ずホームへ。
+  // 開いた元へ戻る。直接URLを開いた場合だけホームを使う。
   const header = isObCompetition(competition.id)
-    ? <SubHeader title={`${competition.name}プログラム`} backHref="/home" forceBackHref />
+    ? <SubHeader title={competition.name} backHref="/home" />
     : <SubHeader title={`${competition.name}プログラム`} backHref={`/competitions/${competition.id}`} />;
 
   // OB戦のプログラムは出場登録そのもの。本人とOB戦担当者が編集する。
@@ -63,10 +64,12 @@ export default async function CompetitionProgramPage({
       {canViewObHistory(profile.roles) && <ObEntryHistory />}
     </> : undefined;
     return <>{header}<ObMeetWorkspace key={edit ?? "program"}
+      dutyIssues={obDutyIssues(program.entries,program.members,program.duties,program.roles)}
+      dutyProblemCount={new Set(obDutyIssues(program.entries,program.members,program.duties,program.roles).map(issue=>issue.time+"/"+issue.event)).size}
       initialView={edit === "mine" ? "mine" : edit === "identity" && staff ? "management" : "program"}
       program={<ObPublicProgram {...program} />}
-      duties={<ObPublicProgram {...program} view="duties" />}
-      mine={<><ObMyEntry embedded entry={mine.entry} party={mine.party ?? undefined} me={me} openEditor={edit === "mine"} />
+      duties={<ObPublicProgram {...program} view="duties" canEditDuties={staff} />}
+      mine={<><ObMyEntry embedded entry={mine.entry} party={mine.party ?? undefined} me={me} duties={program.duties.filter(duty=>duty.profile_id===profile.id)} roles={program.roles} openEditor={edit === "mine"} />
         {!management && canViewObHistory(profile.roles) && <ObEntryHistory />}</>}
       management={management}
     /></>;

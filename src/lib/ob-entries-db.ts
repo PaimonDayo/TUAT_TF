@@ -4,10 +4,13 @@ import type { ObEntry } from "./ob-entries";
 import type { EntryChange } from "./ob-entry-edit";
 import type { ObDuty, ObDutyRole, ObEntryDuty } from "./ob-duty";
 import type { ObPartyResponse } from "./ob-meet";
+import type { Json } from "@/types/database";
 
 type EntryDatabase = Omit<Database, "public"> & {
   public: Omit<Database["public"], "Tables" | "Functions"> & {
     Functions: Database["public"]["Functions"] & {
+      save_ob_registration_checked: { Args: {p_entry_id:string|null;p_profile_id:string|null;p_revision:number|null;p_events:string[];p_marks:Record<string,string|null>;p_party_id:string|null;p_party_revision:number|null;p_party_status:string|null;p_confirm_duties:boolean}; Returns:Json };
+      save_ob_role_people: { Args: {p_role_id:string;p_revision:number;p_expected:Json;p_people:string[]}; Returns:string };
       create_ob_guest_registration: { Args: {p_name:string;p_grade:string;p_events:string[];p_marks:Record<string,string|null>;p_party_status:string;p_party_id:string|null;p_party_revision:number|null}; Returns:string };
       delete_ob_registration: { Args: {p_entry_id:string;p_revision:number}; Returns:string };
       claim_ob_entry: { Args: Record<string, never>; Returns: string };

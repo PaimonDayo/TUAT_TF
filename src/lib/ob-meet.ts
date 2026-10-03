@@ -7,6 +7,7 @@ import { entryGrade, type EntryMember } from "./entry-identity";
  */
 export const OB_MEET = { competitionId: "3e2a2b1e-21d1-49b0-a1e8-40bf595fb7e5", meetKey: "ob-2026" } as const;
 export const OB_PROGRAM_PATH = `/competitions/${OB_MEET.competitionId}/program`;
+export const OB_MY_ENTRY_PATH = `/competitions/${OB_MEET.competitionId}/entry`;
 export function isObCompetition(competitionId: string): boolean {
   return competitionId === OB_MEET.competitionId;
 }
