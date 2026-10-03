@@ -12,7 +12,6 @@ import { useToast } from "@/components/ui/toast";
 import { confirmEntryMember } from "@/app/(app)/ob-entries/actions";
 import { entryEventRows, isAlumniEntry, type ObEntry } from "@/lib/ob-entries";
 import { entryGrade, matchEntryMember, normalizeEntryName, type EntryMember, type ConfirmedEntryIdentity } from "@/lib/entry-identity";
-import { ObMyEntry } from "./ObMyEntry";
 import { ObEntryManager } from "./ObEntryManager";
 import { ObEntryEditor } from "./ObEntryEditor";
 import { SegmentedControl } from "@/components/ui/segmented";
@@ -33,7 +32,7 @@ function TimeCell({ time }: { time: string }) {
   return <span className="w-12 shrink-0 pt-0.5 text-caption tabular-nums text-muted2">{time}</span>;
 }
 
-export function ObEntryReview({ competition, initial, members, viewerId, me, history = [], party = [], duties = [], dutyRoles = [], openMine = false, openIdentity = false, operations }: { operations?: ObEventOperation[]; openMine?: boolean; openIdentity?: boolean; competition: Pick<CompetitionRow, "name" | "starts_on">; initial: ObEntry[]; members: EntryMember[]; viewerId: string; me: EntryMember; party?: ObPartyResponse[]; duties?: ObDuty[]; dutyRoles?: ObDutyRole[]; history?: ConfirmedEntryIdentity[] }) {
+export function ObEntryReview({ competition, initial, members, viewerId, history = [], party = [], duties = [], dutyRoles = [], openIdentity = false, operations }: { operations?: ObEventOperation[]; openMine?: boolean; openIdentity?: boolean; competition: Pick<CompetitionRow, "name" | "starts_on">; initial: ObEntry[]; members: EntryMember[]; viewerId: string; me: EntryMember; party?: ObPartyResponse[]; duties?: ObDuty[]; dutyRoles?: ObDutyRole[]; history?: ConfirmedEntryIdentity[] }) {
   const dateLabel = format(new Date(`${competition.starts_on}T00:00:00`), "M月d日(E)", { locale: ja });
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"events" | "identity" | "party" | "duty">(openIdentity ? "identity" : "events");
@@ -42,7 +41,6 @@ export function ObEntryReview({ competition, initial, members, viewerId, me, his
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [division, setDivision] = useState("all");
-  const mine = initial.find((entry) => entry.profile_id === viewerId) ?? null;
   const newMembers = members.filter((member) => !initial.some((entry) => entry.profile_id === member.id || normalizeEntryName(entry.submitted_name) === normalizeEntryName(member.display_name)));
   const editing = initial.find((entry) => entry.id === editingId);
   const query = normalizeEntryName(search).toLowerCase();
@@ -50,7 +48,7 @@ export function ObEntryReview({ competition, initial, members, viewerId, me, his
     normalizeEntryName([e.submitted_name, e.grade, ...e.events].join(" ")).toLowerCase().includes(query));
   const eventNames = [...new Set(initial.flatMap((entry) => entry.events))].sort(compareObEvents);
   const groups = eventNames.filter((event) => division === "all" || event.startsWith(division)).map((event) => ({ event, entries: visible.filter((entry) => entry.events.includes(event) && normalizeEntryName([entry.submitted_name, entry.grade, event].join(" ")).toLowerCase().includes(query)).sort((a, b) => compareByGrade({ grade: a.grade, name: a.submitted_name }, { grade: b.grade, name: b.submitted_name })) })).filter((group) => group.entries.length);
-  return <div data-ob-workspace className="space-y-4 px-4 pb-8 pt-2">
+  return <div data-ob-workspace className="space-y-4">
     <Card className="p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -61,8 +59,7 @@ export function ObEntryReview({ competition, initial, members, viewerId, me, his
       </div>
       <p className="mt-2 text-micro text-muted2">現役・OB・OGの出場登録</p>
     </Card>
-    <ObMyEntry embedded entry={mine} party={party.find((p) => p.entry_id === mine?.id)} me={me} openEditor={openMine} />
-    <SegmentedControl items={[{key:"events",label:"予定"},{key:"identity",label:"本人照合"},{key:"party",label:"懇親会"},{key:"duty",label:operations?"運営":"補助員"}]} value={view} onChange={(value) => {setView(value);setSearch("");}} />
+    <SegmentedControl items={[{key:"events",label:"出場登録"},{key:"identity",label:"本人照合"},{key:"party",label:"懇親会"},{key:"duty",label:operations?"運営":"補助員"}]} value={view} onChange={(value) => {setView(value);setSearch("");}} />
     {(view === "events" || view === "identity") && <Input aria-label="氏名・種目・学年で検索" placeholder="検索" value={search} onChange={(event) => setSearch(event.target.value)} />}
     {view === "events" && <SegmentedControl items={[{key:"all",label:"すべて"},{key:"男子",label:"男子"},{key:"女子",label:"女子"}]} value={division} onChange={setDivision} />}
     {view === "identity" && <Button size="sm" variant={unlinked ? "primary" : "outline"} aria-pressed={unlinked} onClick={() => setUnlinked(!unlinked)}>未確認のみ</Button>}

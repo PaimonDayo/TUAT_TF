@@ -1,3 +1,4 @@
+import { ObMeetWorkspace } from "@/components/features/ObMeetWorkspace";
 import { ObPublicProgram } from "@/components/features/ObPublicProgram";
 import { getObProgram } from "@/lib/queries/ob-entries";
 import { ObEntryHistory } from "@/components/features/ObEntryHistory";
@@ -11,8 +12,8 @@ import { getCompetitionById, getCompetitionProgramEntries } from "@/lib/queries"
 import { getMyObEntryFull, getObEntries } from "@/lib/queries/ob-entries";
 import { canManageObMeet, canViewObHistory, isObCompetition } from "@/lib/ob-meet";
 import { permissionsOf } from "@/lib/permissions";
-import { getObEventOperations } from "@/lib/queries/ob-operations";
 import { ObOperations } from "@/components/features/ObOperations";
+import { getObEventOperations } from "@/lib/queries/ob-operations";
 
 export default async function CompetitionProgramPage({
   params,
@@ -36,43 +37,39 @@ export default async function CompetitionProgramPage({
 
   // OB戦のプログラムは出場登録そのもの。本人とOB戦担当者が編集する。
   if (isObCompetition(competition.id)) {
-    if (canManage && !canManageObMeet(profile.roles)) {
-      const [roster, operations] = await Promise.all([getObEntries(), getObEventOperations()]);
-      return <>{header}<div data-ob-workspace className="space-y-4 px-4 pb-8 pt-2"><ObOperations entries={roster.entries.data ?? []} members={roster.members.data ?? []} duties={roster.duties.data ?? []} roles={roster.dutyRoles.data ?? []} initial={operations} canEditDuties={false}/></div></>;
-    }
-    // 係（OB戦2026ロール）は全員分、それ以外の部員は自分のエントリーだけを扱う。
-    if (!canManageObMeet(profile.roles)) {
-      const [mine, program] = await Promise.all([getMyObEntryFull(profile.id), getObProgram()]);
-      return (
-        <>
-          {header}
-          <ObMyEntry entry={mine.entry} party={mine.party ?? undefined} me={{ id: profile.id, display_name: profile.display_name, grade: profile.grade }} openEditor={edit === "mine"} />
-          <div data-ob-workspace className="space-y-4 px-4 pb-8 pt-2"><ObPublicProgram {...program} /></div>
-          {canViewObHistory(profile.roles) && <ObEntryHistory />}
-        </>
-      );
-    }
-    const [{ entries, members, history, party, duties, dutyRoles }, operations] = await Promise.all([getObEntries(), canManage ? getObEventOperations() : Promise.resolve(undefined)]);
-    return (
-      <>
-        {header}
-        <ObEntryReview
-          competition={competition}
-          operations={operations}
-          initial={entries.data ?? []}
-          members={members.data ?? []}
-          viewerId={profile.id}
-          me={{ id: profile.id, display_name: profile.display_name, grade: profile.grade }}
-          openMine={edit === "mine"}
-          openIdentity={edit === "identity"}
-          party={party.data ?? []}
-          duties={duties.data ?? []}
-          dutyRoles={dutyRoles.data ?? []}
-          history={(history.data ?? []).flatMap((h) => h.profile_id ? [{ submitted_name: h.submitted_name, profile_id: h.profile_id }] : [])}
-        />
-        {canViewObHistory(profile.roles) && <ObEntryHistory />}
-      </>
-    );
+    const staff = canManageObMeet(profile.roles);
+    const [mine, publicProgram, roster, operations] = await Promise.all([
+      getMyObEntryFull(profile.id),
+      staff || canManage ? Promise.resolve(null) : getObProgram(),
+      staff || canManage ? getObEntries() : Promise.resolve(null),
+      staff || canManage ? getObEventOperations() : Promise.resolve([]),
+    ]);
+    const program = publicProgram ?? {
+      entries: roster!.entries.data ?? [], members: roster!.members.data ?? [],
+      duties: roster!.duties.data ?? [], roles: roster!.dutyRoles.data ?? [], operations,
+    };
+    const me = { id: profile.id, display_name: profile.display_name, grade: profile.grade };
+    const management = roster ? <>
+      {staff ? <ObEntryReview competition={competition}
+        operations={canManage ? program.operations : undefined}
+        initial={roster.entries.data ?? []} members={roster.members.data ?? []}
+        viewerId={profile.id} me={me} openIdentity={edit === "identity"}
+        party={roster.party.data ?? []} duties={roster.duties.data ?? []}
+        dutyRoles={roster.dutyRoles.data ?? []}
+        history={(roster.history.data ?? []).flatMap(h => h.profile_id ? [{ submitted_name: h.submitted_name, profile_id: h.profile_id }] : [])}
+      /> : <ObOperations entries={roster.entries.data ?? []} members={roster.members.data ?? []}
+        duties={roster.duties.data ?? []} roles={roster.dutyRoles.data ?? []}
+        initial={program.operations} canEditDuties={false} />}
+      {canViewObHistory(profile.roles) && <ObEntryHistory />}
+    </> : undefined;
+    return <>{header}<ObMeetWorkspace key={edit ?? "program"}
+      initialView={edit === "mine" ? "mine" : edit === "identity" && staff ? "management" : "program"}
+      program={<ObPublicProgram {...program} />}
+      duties={<ObPublicProgram {...program} view="duties" />}
+      mine={<><ObMyEntry embedded entry={mine.entry} party={mine.party ?? undefined} me={me} openEditor={edit === "mine"} />
+        {!management && canViewObHistory(profile.roles) && <ObEntryHistory />}</>}
+      management={management}
+    /></>;
   }
 
   const entries = await getCompetitionProgramEntries(id);

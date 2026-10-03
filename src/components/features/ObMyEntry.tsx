@@ -7,7 +7,7 @@ import { claimMyEntry } from "@/app/(app)/ob-entries/actions";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ObEntryEditor, ObProgramDisclosure } from "@/components/features/ObEntryEditor";
+import { ObEntryEditor } from "@/components/features/ObEntryEditor";
 import { entryEventRows, type ObEntry } from "@/lib/ob-entries";
 import { entryGrade, type EntryMember } from "@/lib/entry-identity";
 import { obEventTime, type ObPartyResponse } from "@/lib/ob-meet";
@@ -30,7 +30,6 @@ export function ObMyEntry({ entry, party, me, openEditor = false, embedded = fal
       <Button className="mt-4 w-full" onClick={() => setEditing(true)}><Pencil size={16} className="mr-1" />{entry ? "エントリーを編集する" : "エントリーする"}</Button>
     </Card>
     {!entry && <ClaimCard />}
-    {!embedded && <Card className="p-1"><ObProgramDisclosure defaultOpen /></Card>}
     {editing && (entry
       ? <ObEntryEditor key={`${entry.id}:${entry.revision}`} entry={entry} party={party} members={[me]} self onClose={() => setEditing(false)} />
       : <ObEntryEditor members={[me]} initialProfileId={me.id} self onClose={() => setEditing(false)} />)}
