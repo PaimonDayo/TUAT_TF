@@ -5,9 +5,10 @@ import { cookies } from "next/headers";
 import { format, subDays } from "date-fns";
 import { ja } from "date-fns/locale";
 import { ChevronRight, Folder, Pencil } from "lucide-react";
-import { getMyObEntry, getMyObEntryCandidates } from "@/lib/queries/ob-entries";
+import { getMyObEntry, getMyObEntryCandidates, getMyObDuties } from "@/lib/queries/ob-entries";
 import { entryEventRows } from "@/lib/ob-entries";
-import { OB_PROGRAM_PATH, canManageObMeet } from "@/lib/ob-meet";
+import { OB_PROGRAM_PATH, canManageObMeet, obEventTime } from "@/lib/ob-meet";
+import { ObHomeSchedule } from "@/components/features/ObHomeSchedule";
 import { ObHomeIdentity } from "@/components/features/ObHomeIdentity";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
@@ -87,7 +88,10 @@ async function ObEntrySection() {
   const staff = canManageObMeet(profile.roles);
   const entry = await getMyObEntry(profile.id);
   // 本人照合は係だけ（一般部員は未紐付けの回答を読めない）。
-  const candidates = entry || !staff ? [] : await getMyObEntryCandidates(profile.id);
+  const [candidates, duties] = await Promise.all([
+    entry || !staff ? Promise.resolve([]) : getMyObEntryCandidates(profile.id),
+    getMyObDuties(profile.id, entry?.id ?? null).catch(() => null),
+  ]);
   const rows = entry ? entryEventRows(entry) : [];
   const footer = (label: string, hint: string, href: string) => (
     <Link data-ui-row href={href} prefetch={false} className="mt-3 flex items-center justify-between gap-3 border-t border-separator pt-3">
@@ -106,8 +110,9 @@ async function ObEntrySection() {
                 <ul className="space-y-1">
                   {rows.map((row) => (
                     <li key={row.event} className="flex items-baseline justify-between gap-3 text-[15px]">
-                      <span className="font-medium">{row.event}</span>
-                      <span className="truncate text-caption">{row.mark}</span>
+                      <span className="w-12 shrink-0 text-caption tabular-nums">{obEventTime(row.event) ?? ""}</span>
+                      <span className="min-w-0 flex-1 break-words font-medium">{row.event}</span>
+                      <span className="max-w-[35%] truncate text-caption">{row.mark}</span>
                     </li>
                   ))}
                 </ul>
@@ -124,6 +129,7 @@ async function ObEntrySection() {
             {staff && <Link data-ui-row href={`${OB_PROGRAM_PATH}?edit=identity`} prefetch={false} className="mt-2 block text-right text-caption text-accent">回答済みなら本人照合で探す →</Link>}
           </>
         )}
+        <ObHomeSchedule duties={duties} />
       </Card>
     </section>
   );

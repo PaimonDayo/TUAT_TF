@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { entryClient } from "@/lib/ob-entries-db";
 import { isAlumniEntry, matchEntryMember, type ObEntry } from "@/lib/ob-entries";
 import { OB_MEET, type ObPartyResponse } from "@/lib/ob-meet";
-import { combineObDuties } from "@/lib/ob-duty";
+import { combineObDuties, dutyRoleText, hasDuty } from "@/lib/ob-duty";
 
 export async function getObEntries() {
   const client = entryClient(await createClient());
@@ -68,4 +68,18 @@ export async function getObProgram() {
   ]);
   if (entries.error || members.error || duties.error || roles.error || entryDuties.error) throw new Error("プログラムを取得できませんでした");
   return { entries: entries.data ?? [], members: members.data ?? [], duties: combineObDuties(duties.data ?? [], entryDuties.data ?? [], entries.data ?? []), roles: roles.data ?? [], operations };
+}
+
+/** Home: only confirmed identity IDs are used, never a name-based assignment. */
+export async function getMyObDuties(profileId: string, entryId: string | null) {
+  const client = entryClient(await createClient());
+  const [legacy, byEntry, roles] = await Promise.all([
+    client.from("ob_meet_duties").select("*").eq("meet_key", OB_MEET.meetKey).eq("profile_id", profileId),
+    entryId ? client.from("ob_entry_duties").select("*").eq("meet_key", OB_MEET.meetKey).eq("entry_id", entryId) : Promise.resolve({ data: [], error: null }),
+    client.from("ob_duty_roles").select("*").eq("meet_key", OB_MEET.meetKey),
+  ]);
+  if (legacy.error || byEntry.error || roles.error) throw new Error("自分の補助担当を取得できませんでした");
+  return combineObDuties(legacy.data ?? [], byEntry.data ?? [], entryId ? [{id:entryId,profile_id:profileId}] : [])
+    .filter(hasDuty).sort((a,b) => a.slot_time.localeCompare(b.slot_time) || a.event_name.localeCompare(b.event_name, "ja"))
+    .map(duty => ({time:duty.slot_time,event:duty.event_name,assignment:dutyRoleText(duty, roles.data ?? [])}));
 }

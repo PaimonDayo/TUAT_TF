@@ -4,10 +4,10 @@ import type { ObEntry } from "./ob-entries";
 export type ObDuty = { meet_key: string; profile_id: string; slot_time: string; event_name: string; assignment: string; revision: number; role_ids?: string[] };
 export type ObEntryDuty = Omit<ObDuty,"profile_id"> & {entry_id:string};
 /** UIの人物キーへ変換するだけで、保存先の参加回答IDは変更しない。 */
-export function entryDutiesForRoster(duties:ObEntryDuty[], entries:ObEntry[]):ObDuty[] {
+export function entryDutiesForRoster(duties:ObEntryDuty[], entries:Pick<ObEntry,"id"|"profile_id">[]):ObDuty[] {
   return duties.map(d=>({...d,profile_id:entries.find(e=>e.id===d.entry_id)?.profile_id??d.entry_id}));
 }
-export function combineObDuties(legacy:ObDuty[], entryDuties:ObEntryDuty[], entries:ObEntry[]):ObDuty[] {
+export function combineObDuties(legacy:ObDuty[], entryDuties:ObEntryDuty[], entries:Pick<ObEntry,"id"|"profile_id">[]):ObDuty[] {
   const result=new Map<string,ObDuty>();
   for(const duty of [...legacy,...entryDutiesForRoster(entryDuties,entries)]) {
     const key=JSON.stringify([duty.meet_key,duty.profile_id,duty.slot_time,duty.event_name]);

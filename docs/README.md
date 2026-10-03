@@ -60,3 +60,5 @@
 - GAS連携APIの現役ソースは `gas/sync-clasp/Code.js`。`gas/combined.gs` は旧アプリ合体版で、外部の利用状況を確認せず削除しない。
 
 - [OB戦の全員閲覧・未登録者追加・削除](OB-ACCESS-2026-10-03.md)
+
+- [ホームのOB戦・補助時間・プログラム](OB-HOME-SCHEDULE-2026-10-03.md)

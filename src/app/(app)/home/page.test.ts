@@ -1,12 +1,13 @@
+import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  profile: vi.fn(), notices: vi.fn(), competition: vi.fn(), schedules: vi.fn(),
+  obEntry: vi.fn(), obDuties: vi.fn(), profile: vi.fn(), notices: vi.fn(), competition: vi.fn(), schedules: vi.fn(),
   attendance: vi.fn(), summary: vi.fn(), notes: vi.fn(), feed: vi.fn(), program: vi.fn(),
 }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined }) }));
 vi.mock("@/lib/supabase/auth", () => ({ getCurrentProfile: mocks.profile, getCurrentUserId: async () => "me" }));
-vi.mock("@/lib/queries/ob-entries", () => ({ getMyObEntry: async () => null, getMyObEntryCandidates: async () => [] }));
+vi.mock("@/lib/queries/ob-entries", () => ({ getMyObDuties: mocks.obDuties, getMyObEntry: mocks.obEntry, getMyObEntryCandidates: async () => [] }));
 vi.mock("@/lib/queries", () => ({
   getHomeNotices: mocks.notices, getHomeCompetition: mocks.competition,
   getAttendanceSchedules: mocks.schedules, getAttendancesForSchedules: mocks.attendance,
@@ -18,6 +19,8 @@ import HomePage from "./page";
 describe("home content loading", () => {
   beforeEach(() => {
     mocks.profile.mockResolvedValue({ id: "me", blocks: ["middle_long"], roles: [], display_name: "テスト", sheet_name: null });
+    mocks.obEntry.mockResolvedValue(null);
+    mocks.obDuties.mockResolvedValue([]);
     mocks.competition.mockResolvedValue(null);
     mocks.schedules.mockResolvedValue([]);
     mocks.summary.mockResolvedValue({ distance: 0, count: 0 });
@@ -53,4 +56,32 @@ describe("home content loading", () => {
     expect(mocks.attendance).not.toHaveBeenCalled();
     expect(mocks.program).not.toHaveBeenCalled();
   });
+});
+
+describe("home OB entry card",()=>{
+  beforeEach(()=>{
+    mocks.profile.mockResolvedValue({id:"me",blocks:[],roles:[],display_name:"テスト"});
+    mocks.obEntry.mockResolvedValue(null);mocks.obDuties.mockResolvedValue([]);
+    mocks.competition.mockResolvedValue(null);mocks.schedules.mockResolvedValue([]);
+    mocks.notes.mockResolvedValue([]);mocks.feed.mockResolvedValue([]);mocks.notices.mockResolvedValue([]);
+  });
+it("renders personal duty times and competition times in the home entry card",async()=>{
+  mocks.obEntry.mockResolvedValue({id:"my-entry",events:["男子100m"],qualification_marks:{"男子100m":"12.34"}});
+  mocks.obDuties.mockResolvedValue([{time:"13:00",event:"走り高跳び",assignment:"計測"}]);
+  const body=HomePage().props.children[1].props.children;
+  const content=await body.type(body.props);
+  const html=renderToStaticMarkup(content.props.children[2]);
+  expect(mocks.obDuties).toHaveBeenCalledWith("me","my-entry");
+  for(const text of ["11:00","13:00","計測","自分の補助担当","プログラム（タイムテーブル）"])expect(html).toContain(text);
+});
+it("keeps the entry and program available when duty retrieval fails",async()=>{
+  mocks.obDuties.mockRejectedValue(new Error("unavailable"));
+  const body=HomePage().props.children[1].props.children;
+  const content=await body.type(body.props);
+  const html=renderToStaticMarkup(content.props.children[2]);
+  expect(html).toContain("補助担当を取得できませんでした");
+  expect(html).not.toContain("補助担当はまだ登録されていません");
+  expect(html).toContain("プログラム・補助員表を見る");
+});
+
 });
