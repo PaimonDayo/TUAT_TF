@@ -12,6 +12,8 @@ import {adjacentCommitments,concurrentDuties,dutyRoleText,type ObDuty,type ObDut
 import {OB_DUTY_SLOTS,compareByGrade,dutyRows,dutyTimeCell,isCompeting} from "@/lib/ob-meet";
 import type {ObEntry} from "@/lib/ob-entries";
 import {obDutyIssues} from "@/lib/ob-duty-issues";
+import { useObDutyReview } from "./ObDutyReviewProvider";
+import { ObDutyIssues } from "./ObDutyIssues";
 import {entryGrade,type EntryMember} from "@/lib/entry-identity";
 
 /**
@@ -27,7 +29,8 @@ export function ObDutyRoleManager({entries,time,event,roles,allRoles=roles,dutie
  const visibleRoles=roles.filter(role=>!deleted.includes(role.id));
  const router=useRouter();const {showToast}=useToast();
  const [message,setMessage]=useState("");
- const issues=obDutyIssues(entries,members,duties,allRoles);
+ const allIssues=obDutyIssues(entries,members,duties,allRoles);
+ const {unread:issues}=useObDutyReview(allIssues);
  const snapshot=()=>duties.filter(d=>d.slot_time===time&&d.event_name===event).map(d=>({profileId:d.profile_id,revision:d.revision}));
  const slot=OB_DUTY_SLOTS.find(s=>s.time===time&&s.label===event)!;
  const slotDuty=(profileId:string)=>duties.find(d=>d.profile_id===profileId&&d.slot_time===time&&d.event_name===event);
@@ -66,7 +69,7 @@ export function ObDutyRoleManager({entries,time,event,roles,allRoles=roles,dutie
 
  return <FormModal open wide title={draft?"役職の設定":people?`${people.role.name}の担当者`:"補助員一覧"} autoFocus={false} onOpenChange={open=>{if(!open&&!saving){if(draft||peopleDirty)setDiscard(true);else if(people)setPeople(null);else onClose();}}}>
  <div className="space-y-4"><h2 className="text-headline">{time}　{event}</h2>
- {issues.filter(issue=>issue.time===time&&issue.event===event).length>0&&<section className="rounded-xl border border-danger/30 bg-danger/5 p-3"><h3 className="text-headline text-danger">！補助員の確認が必要です</h3>{issues.filter(issue=>issue.time===time&&issue.event===event).map(issue=><p key={issue.key} className="mt-1 text-body">{issue.text}</p>)}</section>}
+ <ObDutyIssues issues={allIssues.filter(issue=>issue.time===time&&issue.event===event)}/>
  {message&&<p role="alert" className="text-body text-danger">{message}</p>}
  {draft?<div className="space-y-4">
   <label className="block text-body">役職名<Input value={draft.name} maxLength={200} disabled={saving} onChange={e=>setDraft({...draft,name:e.target.value})}/></label>

@@ -35,3 +35,9 @@ it("reports overfilled roles and does not modify the input roster",()=>{
  expect(obDutyIssues([{...entry,events:[]}],members,[duty],[{...role,required_count:0}])[0].kind).toBe("excess");
  expect(JSON.stringify([entry,duty,role])).toBe(before);
 });
+it("invalidates review after assignment changes while ignoring unrelated entry edits",()=>{
+ const original=obDutyIssues([entry],members,[duty],[role])[0].fingerprint;
+ expect(obDutyIssues([{...entry,revision:2}],members,[duty],[role])[0].fingerprint).toBe(original);
+ expect(obDutyIssues([entry],members,[duty],[role,{...role,id:"unrelated",revision:3}])[0].fingerprint).toBe(original);
+ expect(obDutyIssues([entry],members,[{...duty,revision:1}],[role])[0].fingerprint).not.toBe(original);
+});

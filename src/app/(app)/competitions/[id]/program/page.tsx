@@ -64,14 +64,15 @@ export default async function CompetitionProgramPage({
       {canViewObHistory(profile.roles) && <ObEntryHistory />}
     </> : undefined;
     return <>{header}<ObMeetWorkspace key={edit ?? "program"}
+      userId={profile.id}
       dutyIssues={obDutyIssues(program.entries,program.members,program.duties,program.roles)}
-      dutyProblemCount={new Set(obDutyIssues(program.entries,program.members,program.duties,program.roles).map(issue=>issue.time+"/"+issue.event)).size}
       initialView={edit === "mine" ? "mine" : edit === "identity" && staff ? "management" : "program"}
       program={<ObPublicProgram {...program} />}
       duties={<ObPublicProgram {...program} view="duties" canEditDuties={staff} />}
       mine={<><ObMyEntry embedded entry={mine.entry} party={mine.party ?? undefined} me={me} duties={program.duties.filter(duty=>duty.profile_id===profile.id)} roles={program.roles} openEditor={edit === "mine"} />
         {!management && canViewObHistory(profile.roles) && <ObEntryHistory />}</>}
       management={management}
+      heats={canManage ? <ObOperations onlyGroups entries={program.entries} members={program.members} duties={program.duties} roles={program.roles} initial={program.operations} canEditDuties={staff}/> : undefined}
     /></>;
   }
 

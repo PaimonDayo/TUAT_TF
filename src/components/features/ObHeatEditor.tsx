@@ -8,9 +8,14 @@ import {saveObEventOperation} from "@/app/(app)/ob-entries/operations-actions";
 import {MeetEvent, type MeetEventData} from "@/lib/meet-operations";
 import {obEventRule,reconcileObEvent,type ObEventOperation} from "@/lib/ob-operations";
 import {isAlumniEntry,type ObEntry} from "@/lib/ob-entries";
+import {MeetHeatPlan} from "@/lib/meet-heat-plan";
 
 export function ObHeatEditor({event,entries,initial,onSaved,onClose}:{event:string;entries:ObEntry[];initial?:ObEventOperation;onSaved:(saved:ObEventOperation)=>void;onClose:()=>void}) {
-  const [data,setData]=useState(()=>reconcileObEvent(event,entries,initial?.data));
+  const separate=/^(男子|女子)(100m|300m|300mH)$/.test(event);
+  const [data,setData]=useState(()=>{
+    const reconciled=reconcileObEvent(event,entries,initial?.data);
+    return initial?reconciled:new MeetHeatPlan(reconciled,new Set(entries.filter(e=>e.events.includes(event)).map(e=>e.id))).initial(separate);
+  });
   const [baseline,setBaseline]=useState(()=>JSON.stringify(reconcileObEvent(event,entries,initial?.data)));
   const [revision,setRevision]=useState(initial?.revision??null);
   const [busy,setBusy]=useState(false),[message,setMessage]=useState(""),[failed,setFailed]=useState(false);
@@ -32,7 +37,7 @@ export function ObHeatEditor({event,entries,initial,onSaved,onClose}:{event:stri
     <FormDraftGuard dirty={dirty} busy={busy} onSave={save}/>
     <div className="space-y-4">
       <h2 className="text-headline">組み分け</h2>
-      <MeetHeatBoard data={data} entrants={entries.map(e=>({id:e.id,name:e.submitted_name,grade:e.grade,mark:e.qualification_marks[event]??"",alumni:isAlumniEntry(e),eligible:e.events.includes(event)}))} orderLabel={rule.discipline==="track"?"レーン／順番":"試技順"} disabled={busy} onChange={change}/>
+      <MeetHeatBoard data={data} entrants={entries.map(e=>({id:e.id,name:e.submitted_name,grade:e.grade,mark:e.qualification_marks[event]??"",alumni:isAlumniEntry(e),eligible:e.events.includes(event)}))} orderLabel={separate?"レーン":rule.discipline==="track"?"出走順":"試技順"} disabled={busy} onChange={change}/>
       {message&&<p role={failed?"alert":"status"} className={`text-body ${failed?"text-danger":"text-accent"}`}>{message}</p>}
     </div>
     <FormModalFooter><Button className="w-full" disabled={busy||(!dirty&&revision!==null)} onClick={()=>void save()}>{busy?"保存中…":"組み分けを保存する"}</Button></FormModalFooter>

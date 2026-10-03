@@ -129,7 +129,7 @@ async function ObEntrySection() {
             {staff && <Link data-ui-row href={`${OB_PROGRAM_PATH}?edit=identity`} prefetch={false} className="mt-2 block text-right text-caption text-accent">回答済みなら本人照合で探す →</Link>}
           </>
         )}
-        <ObHomeSchedule duties={duties?.map(duty=>({...duty,conflict:entry?.events.some(event=>obEventTime(event)===duty.time)}))??null} />
+        <ObHomeSchedule duties={duties} />
       </Card>
     </section>
   );

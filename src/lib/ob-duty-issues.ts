@@ -5,7 +5,7 @@ import { OB_DUTY_SLOTS, OB_MEET, obEventTime } from "./ob-meet";
 
 export type ObDutyIssue = {
   key: string; time: string; event: string; kind: "competition" | "concurrent" | "ineligible" | "role" | "shortage" | "excess";
-  text: string; personId?: string; roleId?: string;
+  text: string; personId?: string; roleId?: string; fingerprint?: string;
 };
 
 export function entryForDuty(personId: string, entries: ObEntry[]) {
@@ -48,6 +48,10 @@ export function obDutyIssues(entries: ObEntry[], members: EntryMember[], duties:
     const count = new Set(assigned.map(duty => duty.profile_id)).size;
     if (available < role.required_count) issues.push({ key: `${role.id}/shortage`, time: role.slot_time, event: role.event_name, kind: "shortage", roleId: role.id, text: `${role.name}：${role.required_count - available}人不足しています（担当可能 ${available} / 必要 ${role.required_count}人）` });
     if (count > role.required_count) issues.push({ key: `${role.id}/excess`, time: role.slot_time, event: role.event_name, kind: "excess", roleId: role.id, text: `${role.name}：必要人数を${count - role.required_count}人超えています` });
+  }
+  for (const issue of issues) {
+    const relevant = duties.filter(duty => duty.slot_time === issue.time && (issue.personId ? duty.profile_id === issue.personId : duty.event_name === issue.event && (!issue.roleId || duty.role_ids?.includes(issue.roleId))));
+    issue.fingerprint = JSON.stringify([issue.key, issue.text, relevant.map(duty => [duty.profile_id, duty.event_name, duty.assignment, duty.revision, [...(duty.role_ids ?? [])].sort()]).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))), roles.filter(role=>role.slot_time===issue.time&&role.event_name===issue.event&&(issue.roleId?role.id===issue.roleId:relevant.some(duty=>duty.role_ids?.includes(role.id)))).map(role=>[role.id,role.revision]).sort((a,b)=>String(a[0]).localeCompare(String(b[0])))]);
   }
   return issues.sort((a, b) => a.time.localeCompare(b.time) || OB_DUTY_SLOTS.findIndex(slot => slot.time === a.time && slot.label === a.event) - OB_DUTY_SLOTS.findIndex(slot => slot.time === b.time && slot.label === b.event));
 }

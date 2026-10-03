@@ -1,64 +1,37 @@
-import type { MeetEventData, MeetPerformance } from "./meet-operations";
+import type { MeetEventData } from "./meet-operations";
 
-/** Immutable placement operations. Entry eligibility comes from the meet adapter. */
+/** Moving a person never repacks somebody else's number or erases a performance. */
 export class MeetHeatPlan {
   constructor(readonly data: MeetEventData, readonly eligibleIds: ReadonlySet<string>) {}
-
   get active() { return this.data.participants.filter(p => this.eligibleIds.has(p.entryId) && p.status !== "DNS"); }
   get unassigned() { return this.active.filter(p => p.group === null || p.order === null); }
-  at(group: number, order: number) { return this.active.find(p => p.group === group && p.order === order); }
-
-  private number(value: number) {
-    if (!Number.isInteger(value) || value < 1 || value > 99) throw new Error("組・人数・番号は1〜99で指定してください");
-  }
   private selected(ids: string[]) {
-    if (!ids.length || new Set(ids).size !== ids.length || ids.some(id => !this.active.some(p => p.entryId === id))) throw new Error("配置する出場者を選んでください");
+    if (!ids.length || new Set(ids).size !== ids.length || ids.some(id => !this.active.some(p => p.entryId === id))) throw new Error("移す人を選んでください");
     return ids.map(id => this.active.find(p => p.entryId === id)!);
   }
   private result(positions: Map<string, {group: number | null; order: number | null}>): MeetEventData {
     const participants = this.data.participants.map(p => positions.has(p.entryId) ? {...p, ...positions.get(p.entryId)!} : p);
-    if (participants.every((p, i) => p.group === this.data.participants[i].group && p.order === this.data.participants[i].order)) return this.data;
-    return {...this.data, confirmed: false, participants};
+    if (participants.every((p,i) => p.group === this.data.participants[i].group && p.order === this.data.participants[i].order)) return this.data;
+    return {...this.data, confirmed:false, participants};
   }
-
-  /** Move a selection together, preserving its displayed order. Fail atomically if full. */
-  assign(ids: string[], group: number, capacity: number): MeetEventData {
-    this.number(group); this.number(capacity); this.selected(ids);
-    const occupied = new Set(this.data.participants.filter(p => !ids.includes(p.entryId) && p.status !== "DNS" && p.group === group).map(p => p.order));
-    const free = Array.from({length: capacity}, (_, i) => i + 1).filter(order => !occupied.has(order));
-    if (free.length < ids.length) throw new Error("この組の空きが足りません。人数を増やすか、別の組を選んでください");
-    return this.result(new Map(ids.map((id, i) => [id, {group, order: free[i]}])));
+  move(ids: string[], group: number | null): MeetEventData {
+    const selected = this.selected(ids);
+    if (group === null) return this.result(new Map(ids.map(id => [id,{group:null,order:null}])));
+    if (!Number.isInteger(group) || group < 1 || group > 99) throw new Error("これ以上組を作れません");
+    const incoming = selected.filter(p => p.group !== group || p.order === null);
+    // DNS and cancelled entrants reserve their number for reinstatement.
+    let order = Math.max(0,...this.data.participants.filter(p => p.group === group).map(p => p.order ?? 0));
+    if (order + incoming.length > 99) throw new Error("この組は保存できる番号を超えています。新しい組へ移してください");
+    return this.result(new Map(incoming.map(p => [p.entryId,{group,order:++order}])));
   }
-
-  /** An occupied destination exchanges places; an unassigned source releases its occupant. */
-  place(id: string, group: number, order: number): MeetEventData {
-    this.number(group); this.number(order);
-    const [source] = this.selected([id]);
-    const occupant = this.data.participants.find(p => p.status !== "DNS" && p.group === group && p.order === order && p.entryId !== id);
-    if (occupant && !this.eligibleIds.has(occupant.entryId)) throw new Error("出場取消者の配置を先に外してください");
-    const positions = new Map([[id, {group: group as number | null, order: order as number | null}]]);
-    if (occupant) positions.set(occupant.entryId, source.group !== null && source.order !== null ? {group: source.group, order: source.order} : {group: null, order: null});
-    return this.result(positions);
+  swap(ids: string[]): MeetEventData {
+    if (ids.length !== 2) throw new Error("入れ替える2人を選んでください");
+    const [a,b] = this.selected(ids);
+    return this.result(new Map([[a.entryId,{group:b.group,order:b.order}],[b.entryId,{group:a.group,order:a.order}]]));
   }
-
-  unassign(ids: string[]): MeetEventData {
-    return this.result(new Map(ids.map(id => [id, {group: null, order: null}])));
-  }
-
-  /** Fill unassigned entrants only, in the adapter's roster order. */
-  fill(capacity: number): MeetEventData {
-    this.number(capacity);
-    const used = new Set(this.data.participants.filter(p => p.status !== "DNS" && p.group !== null && p.order !== null).map(p => `${p.group}:${p.order}`));
-    const positions = new Map<string, Pick<MeetPerformance, "group" | "order">>();
-    for (const person of this.unassigned) {
-      let found = false;
-      for (let group = 1; group <= 99 && !found; group++) for (let order = 1; order <= capacity; order++) {
-        const key = `${group}:${order}`;
-        if (used.has(key)) continue;
-        positions.set(person.entryId, {group, order}); used.add(key); found = true; break;
-      }
-      if (!found) throw new Error("配置できる枠がありません");
-    }
-    return this.result(positions);
+  /** First opening only; longer races and field events start together. */
+  initial(separate: boolean): MeetEventData {
+    if (this.data.participants.some(p => p.group !== null || p.order !== null || p.trials.length || p.status !== "entered") || this.data.confirmed) return this.data;
+    return this.result(new Map(this.active.map((p,i) => [p.entryId,{group:Math.floor(i/(separate?8:99))+1,order:i%(separate?8:99)+1}])));
   }
 }
