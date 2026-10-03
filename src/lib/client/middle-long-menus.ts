@@ -28,7 +28,9 @@ export function middleLongMenuQueryOptions({
     initialData,
     enabled: enabled && !!userId && months.length > 0,
     staleTime: 60_000,
-    refetchOnWindowFocus: false,
+    // 月別シートの変更を、予定画面や展開中のホームカードへ反映する。
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
     retry: false,
   });
 }

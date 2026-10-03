@@ -38,11 +38,16 @@ describe("on-demand home menus", () => {
     expect(middleLongMenuQueryOptions({ userId: undefined, schedules: [practice], enabled: true }).enabled).toBe(false);
   });
 
-  it("keeps users in separate caches and disables automatic error retries/focus refetches", async () => {
+  it("keeps users in separate caches, refreshes sheet data, and disables automatic error retries", async () => {
     const options = middleLongMenuQueryOptions({ userId: "me", schedules: [practice], enabled: true });
     const other = middleLongMenuQueryOptions({ userId: "other", schedules: [practice], enabled: true });
     expect(options.queryKey).not.toEqual(other.queryKey);
-    expect(options).toMatchObject({ retry: false, refetchOnWindowFocus: false, staleTime: 60_000 });
+    expect(options).toMatchObject({
+      retry: false,
+      refetchOnWindowFocus: true,
+      refetchInterval: 60_000,
+      staleTime: 60_000,
+    });
     const client = new QueryClient();
     const fetcher = vi.fn().mockResolvedValue({ ok: false });
     vi.stubGlobal("fetch", fetcher);

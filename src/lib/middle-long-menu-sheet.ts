@@ -78,7 +78,7 @@ function parseDateCell(value: string): { exactDate: string | null; monthDay: str
   };
 }
 
-/** 旧アプリと同じ月別シート（A:H = 日付〜補強）を表示用データへ変換する。 */
+/** 月別シート（A:H = 日付〜補強）を予定・メニュー表示用データへ変換する。 */
 export function parseMiddleLongMenuCsv(csv: string, sourceMonth: number): MiddleLongSheetMenuRow[] {
   const parsed = Papa.parse<string[]>(csv, { skipEmptyLines: false });
   const fatal = parsed.errors.find((error) => error.type === "Quotes");
@@ -87,13 +87,14 @@ export function parseMiddleLongMenuCsv(csv: string, sourceMonth: number): Middle
     const row = rawRow.map((cell) => String(cell ?? ""));
     const date = parseDateCell(row[0] ?? "");
     if (!date) return [];
+    const time = (row[2] ?? "").trim();
     const location = (row[3] ?? "").trim();
     const content = (row[4] ?? "").replace(/\\n/g, "\n").trim();
     const pace = (row[5] ?? "").replace(/\\n/g, "\n").trim();
     const remark = (row[6] ?? "").replace(/\\n/g, "\n").trim();
     const supplement = (row[7] ?? "").replace(/\\n/g, "\n").trim();
-    if (!location && !content && !pace && !remark && !supplement) return [];
-    return [{ ...date, sourceMonth, content, pace, remark, supplement }];
+    if (!time && !location && !content && !pace && !remark && !supplement) return [];
+    return [{ ...date, sourceMonth, time, location, content, pace, remark, supplement }];
   });
 }
 

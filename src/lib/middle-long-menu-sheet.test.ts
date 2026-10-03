@@ -64,6 +64,8 @@ describe("parseMiddleLongMenuCsv", () => {
         exactDate: null,
         monthDay: "07-24",
         sourceMonth: 7,
+        time: "17:00",
+        location: "武蔵野",
         content: "400m×5\nつなぎ200m",
         pace: "72秒",
         remark: "給水を忘れずに",
@@ -87,6 +89,8 @@ describe("applyMiddleLongMenuSnapshot", () => {
           exactDate: null,
           monthDay: "07-24",
           sourceMonth: 7,
+          time: "18:30",
+          location: "府中",
           content: "スプシのメニュー",
           pace: "設定ペース",
           remark: "補足",
@@ -104,6 +108,7 @@ describe("applyMiddleLongMenuSnapshot", () => {
       supplement: "補強",
     });
     expect(result.menus).toContain(personal);
+    expect(result).toMatchObject({ meeting_time: "18:30", venue_name: "府中" });
   });
 
   it("removes stale DB content only when that CSV month loaded", () => {

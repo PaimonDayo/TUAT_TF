@@ -4,6 +4,8 @@ export type MiddleLongSheetMenuRow = {
   exactDate: string | null;
   monthDay: string;
   sourceMonth: number;
+  time: string;
+  location: string;
   content: string;
   pace: string;
   remark: string;
@@ -65,7 +67,14 @@ export function applyMiddleLongMenuSnapshot(
     if (!row && !loadedMonths.has(month)) return schedule;
     const menus = (schedule.menus ?? []).filter((menu) => !isMiddleLongBlockMenu(menu));
     const current = row ? sheetMenu(schedule, row) : null;
-    return { ...schedule, menus: current ? [...menus, current] : menus };
+    return {
+      ...schedule,
+      ...(row ? {
+        meeting_time: row.time || null,
+        venue_name: row.location || null,
+      } : {}),
+      menus: current ? [...menus, current] : menus,
+    };
   });
 }
 
