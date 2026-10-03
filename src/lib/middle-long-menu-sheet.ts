@@ -3,17 +3,18 @@ import type {
   MiddleLongMenuSnapshot,
   MiddleLongSheetMenuRow,
 } from "@/lib/middle-long-menu-data";
+import { OCTOBER_SHEET_ID } from "@/lib/sheet-period";
 
 const BASE_URL = "https://docs.google.com/spreadsheets/d";
 const MENU_SHEET_NAME = /^(\d{1,2})月メニュー$/;
 const FETCH_TIMEOUT_MS = 6_000;
-const META_CACHE_MS = 60_000;
+const META_CACHE_MS = 3_600_000;
 const ROWS_CACHE_MS = 60_000;
 let metadataCache: { spreadsheetId: string; expiresAt: number; tabs: SheetTab[] } | null = null;
 /**
  * 取り込んだ月のメニューを短時間だけ覚えておく。ホームと予定は開くたびにここを通るので、
  * 覚えていないと1画面ごとにGoogleへ数本の取得が走り、その分だけ表示が遅れる。
- * 60秒で捨てるので、シートを直した内容が長く古いまま出ることはない。
+ * 60秒で捨てる。Nextの共有fetchキャッシュにも同じ有効期間を指定する。
  */
 const rowsCache = new Map<string, { expiresAt: number; rows: MiddleLongSheetMenuRow[] }>();
 // キャッシュが空・期限切れの瞬間も、同じ取得を人数分並べない。
@@ -24,7 +25,7 @@ const pendingRows = new Map<string, Promise<MiddleLongSheetMenuRow[]>>();
 type SheetTab = { name: string; gid: string; month: number };
 
 function spreadsheetId(): string | null {
-  return process.env.SHEET_SYNC_SPREADSHEET_ID?.trim() || null;
+  return process.env.SHEET_SYNC_SPREADSHEET_ID?.trim() || OCTOBER_SHEET_ID;
 }
 
 function decodeJsString(value: string): string {
@@ -98,11 +99,11 @@ export function parseMiddleLongMenuCsv(csv: string, sourceMonth: number): Middle
   });
 }
 
-async function fetchWithTimeout(url: string): Promise<Response> {
+async function fetchWithTimeout(url: string, revalidateSeconds: number): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    return await fetch(url, { cache: "no-store", redirect: "follow", signal: controller.signal });
+    return await fetch(url, { next: { revalidate: revalidateSeconds }, redirect: "follow", signal: controller.signal });
   } finally {
     clearTimeout(timer);
   }
@@ -115,7 +116,7 @@ async function fetchMenuTabs(id: string): Promise<SheetTab[]> {
   const pending = pendingMetadata.get(id);
   if (pending) return pending;
   const request = (async () => {
-    const response = await fetchWithTimeout(`${BASE_URL}/${encodeURIComponent(id)}/htmlview`);
+    const response = await fetchWithTimeout(`${BASE_URL}/${encodeURIComponent(id)}/htmlview`, META_CACHE_MS / 1000);
     if (!response.ok) return [];
     const tabs = parseMenuTabs(await response.text());
     metadataCache = { spreadsheetId: id, expiresAt: Date.now() + META_CACHE_MS, tabs };
@@ -133,7 +134,8 @@ async function fetchMenuRows(id: string, tab: SheetTab): Promise<MiddleLongSheet
   if (pending) return pending;
   const request = (async () => {
     const response = await fetchWithTimeout(
-      `${BASE_URL}/${encodeURIComponent(id)}/export?format=csv&gid=${encodeURIComponent(tab.gid)}&t=${Date.now()}`,
+      `${BASE_URL}/${encodeURIComponent(id)}/export?format=csv&gid=${encodeURIComponent(tab.gid)}`,
+      ROWS_CACHE_MS / 1000,
     );
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const csv = await response.text();

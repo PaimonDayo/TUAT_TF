@@ -13,6 +13,7 @@
 | 現行作業ルール / 分離前の全履歴 | [AGENTS.md](../AGENTS.md) / [2026-10-02保存履歴](history/AGENTS-2026-10-02.md) |
 | 新UIの適用範囲 | [全画面新UI](NEW-UI-2026-10-01.md) / [位置・Portal](NEW-UI-ALIGNMENT-2026-10-01.md) |
 | ガラスUIの一般部員への開放 | [全員の端末別オン・オフ設定](GLASS-MEMBER-OPTIN-2026-10-03.md) |
+| 中長距離メニューの公開CSV反映 | [2026-10-03の作業記録](MIDDLE-LONG-CSV-2026-10-03.md) |
 | 現行ロール・メニュー権限 | [ロール権限監査](ROLE-PERMISSION-AUDIT-2026-10-01.md) |
 | OB戦のシステム限定運営機能 | [運営表・組み分け・試技記録](OB-OPERATIONS-2026-10-02.md) |
 | OB戦の補助員選択 | [候補の重複除外と前後の予定](OB-DUTY-CANDIDATES-2026-10-02.md) |

@@ -4,7 +4,7 @@ import { middleLongMenuQueryOptions } from "./middle-long-menus";
 import type { ScheduleWithMenus } from "@/types";
 
 const practice = { schedule_type: "practice", schedule_date: "2026-09-23", target_blocks: ["middle_long"] } as ScheduleWithMenus;
-const snapshot = { rows: [], loadedMonths: [8, 9] };
+const snapshot = { rows: [], loadedMonths: [9] };
 afterEach(() => vi.unstubAllGlobals());
 
 describe("on-demand home menus", () => {
@@ -26,7 +26,7 @@ describe("on-demand home menus", () => {
       first.setOptions(options(false));
       first.setOptions(options(true));
       expect(fetcher).toHaveBeenCalledTimes(1);
-      expect(fetcher).toHaveBeenCalledWith("/api/middle-long-menus?months=8,9", expect.objectContaining({ signal: expect.any(AbortSignal) }));
+      expect(fetcher).toHaveBeenCalledWith("/api/middle-long-menus?months=9", expect.objectContaining({ signal: expect.any(AbortSignal) }));
     } finally { off1(); off2(); client.clear(); }
   });
 

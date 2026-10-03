@@ -25,7 +25,7 @@ function menu(overrides: Partial<PracticeMenu> = {}): PracticeMenu {
 function schedule(menus: PracticeMenu[]): ScheduleWithMenus {
   return {
     id: "schedule-1",
-    schedule_date: "2026-07-24",
+    schedule_date: "2026-10-24",
     schedule_type: "practice",
     meeting_time: "17:00:00",
     location: null,
@@ -87,8 +87,8 @@ describe("applyMiddleLongMenuSnapshot", () => {
       {
         rows: [{
           exactDate: null,
-          monthDay: "07-24",
-          sourceMonth: 7,
+          monthDay: "10-24",
+          sourceMonth: 10,
           time: "18:30",
           location: "府中",
           content: "スプシのメニュー",
@@ -96,7 +96,7 @@ describe("applyMiddleLongMenuSnapshot", () => {
           remark: "補足",
           supplement: "補強",
         }],
-        loadedMonths: [7],
+        loadedMonths: [10],
       },
     );
 
@@ -114,7 +114,7 @@ describe("applyMiddleLongMenuSnapshot", () => {
   it("removes stale DB content only when that CSV month loaded", () => {
     const [loaded] = applyMiddleLongMenuSnapshot(
       [schedule([menu()])],
-      { rows: [], loadedMonths: [7] },
+      { rows: [], loadedMonths: [10] },
     );
     expect(loaded.menus).toEqual([]);
 
@@ -124,5 +124,36 @@ describe("applyMiddleLongMenuSnapshot", () => {
       { rows: [], loadedMonths: [] },
     );
     expect(failed).toBe(original);
+  });
+
+  it("preserves existing place and time when the sheet leaves them blank", () => {
+    const [result] = applyMiddleLongMenuSnapshot([schedule([])], {
+      rows: [{ exactDate: null, monthDay: "10-24", sourceMonth: 10,
+        time: "", location: "", content: "ジョグ", pace: "5:00/km", remark: "", supplement: "" }],
+      loadedMonths: [10],
+    });
+    expect(result).toMatchObject({ meeting_time: "17:00:00", venue_name: "武蔵野" });
+  });
+
+  it("does not change the place or time of a schedule shared with other blocks", () => {
+    const shared = { ...schedule([]), target_blocks: [] };
+    const [result] = applyMiddleLongMenuSnapshot([shared], {
+      rows: [{ exactDate: null, monthDay: "10-24", sourceMonth: 10,
+        time: "18:30", location: "府中", content: "ジョグ", pace: "", remark: "", supplement: "" }],
+      loadedMonths: [10],
+    });
+    expect(result).toMatchObject({ meeting_time: "17:00:00", venue_name: "武蔵野" });
+    expect(result.menus[0].source).toBe("sheet");
+  });
+
+  it("does not apply this season's month/day to a different year", () => {
+    const later = { ...schedule([]), schedule_date: "2027-10-24" };
+    const [result] = applyMiddleLongMenuSnapshot([later], {
+      rows: [{ exactDate: null, monthDay: "10-24", sourceMonth: 10,
+        time: "18:30", location: "府中", content: "ジョグ", pace: "", remark: "", supplement: "" }],
+      loadedMonths: [10],
+    });
+    expect(result.menus).toEqual([]);
+    expect(result.venue_name).toBe("武蔵野");
   });
 });

@@ -25,7 +25,7 @@ describe("shared in-flight Google menu reads", () => {
     await read([9]);
     await vi.advanceTimersByTimeAsync(60_001);
     await Promise.all([read([9]), read([9])]);
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
   it("does not mix different spreadsheets or months", async () => {
     const fetchMock = vi.fn(async (url: string) => new Response(url.includes("htmlview") ? tabs : csv));

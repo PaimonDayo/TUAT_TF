@@ -60,7 +60,9 @@ export function applyMiddleLongMenuSnapshot(
     const candidates = snapshot.rows.filter(
       (row) =>
         row.exactDate === schedule.schedule_date ||
-        (row.exactDate === null && row.monthDay === monthDay),
+        (row.exactDate === null && row.monthDay === monthDay &&
+          // This workbook covers the October 2026–March 2027 season.
+          schedule.schedule_date >= "2026-10-01" && schedule.schedule_date < "2027-04-01"),
     );
     const row = candidates.find((candidate) => candidate.sourceMonth === month) ?? candidates[0];
 
@@ -69,9 +71,9 @@ export function applyMiddleLongMenuSnapshot(
     const current = row ? sheetMenu(schedule, row) : null;
     return {
       ...schedule,
-      ...(row ? {
-        meeting_time: row.time || null,
-        venue_name: row.location || null,
+      ...(row && schedule.target_blocks.length === 1 && schedule.target_blocks[0] === "middle_long" ? {
+        ...(/^([01]?\d|2[0-3]):[0-5]\d$/.test(row.time) ? { meeting_time: row.time } : {}),
+        ...(row.location ? { venue_name: row.location } : {}),
       } : {}),
       menus: current ? [...menus, current] : menus,
     };
@@ -85,7 +87,6 @@ export function middleLongMenuMonths(schedules: ScheduleWithMenus[]): number[] {
     if (schedule.target_blocks.length > 0 && !schedule.target_blocks.includes("middle_long")) continue;
     const month = Number(schedule.schedule_date.slice(5, 7));
     months.add(month);
-    months.add(month === 1 ? 12 : month - 1);
   }
   return [...months].sort((a, b) => a - b);
 }
