@@ -24,7 +24,7 @@ async function loadSchedulePageData(signal: AbortSignal): Promise<SchedulePageDa
 export function ScheduleCachedView({ initialData, openId }: { initialData: SchedulePageData; openId?: string }) {
   const queryClient = useQueryClient();
   const queryKey = ["schedule", initialData.userId];
-  const { data, isError, isFetching, refetch } = useQuery({
+  const { data, isError, refetch } = useQuery({
     queryKey,
     queryFn: ({ signal }) => loadSchedulePageData(signal),
     initialData,
@@ -55,5 +55,6 @@ export function ScheduleCachedView({ initialData, openId }: { initialData: Sched
     };
   }, [data, menuQuery.data]);
 
-  return <><RefreshStatus failed={isError} busy={isFetching} retry={() => { void refetch(); }} /><RefreshStatus label="中長距離メニュー" hasData={!!menuQuery.data || !!data.middleLongMenuSnapshot} failed={menuQuery.isError} busy={menuQuery.isFetching} retry={() => { void menuQuery.refetch(); }} /><ScheduleView {...viewData} openId={openId} /></>;
+  // CSV is supplemental to the DB schedule. Refresh silently so the list never jumps.
+  return <><RefreshStatus failed={isError} busy={false} retry={() => { void refetch(); }} /><ScheduleView {...viewData} openId={openId} /></>;
 }
