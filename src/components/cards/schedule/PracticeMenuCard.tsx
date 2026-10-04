@@ -173,12 +173,12 @@ function SheetMenuCard({
 }) {
   const [editing, setEditing] = useState(false);
   return (
-    <div className="relative space-y-2">
+    <div className="relative space-y-3 rounded-xl border border-[#34c759]/45 bg-[#34c759]/8 p-3">
       <p className={cn("text-[10px] font-semibold text-muted2", canManage && "pr-8")}>
         スプレッドシートから最新表示
       </p>
       {canManage && (
-        <div className="absolute -right-1.5 -top-1.5">
+        <div className="absolute right-1.5 top-1.5">
           <ActionMenu
             onEdit={() => setEditing(true)}
             triggerLabel="中長距離メニューの操作"
@@ -190,23 +190,20 @@ function SheetMenuCard({
           icon={<ListChecks size={14} />}
           label="練習メニュー"
           text={menu.content}
-          className="border-blue-200/70 bg-blue-50/70 text-blue-700"
         />
       )}
       {menu.pace && (
         <SheetMenuSection
           icon={<Timer size={14} />}
-          label="ペース目安"
+          label="ペース"
           text={menu.pace}
-          className="border-emerald-200/70 bg-emerald-50/70 text-emerald-700"
         />
       )}
       {menu.remark && (
         <SheetMenuSection
           icon={<StickyNote size={14} />}
-          label="補足・メモ"
+          label="補足"
           text={menu.remark}
-          className="border-amber-200/70 bg-amber-50/70 text-amber-700"
         />
       )}
       {menu.supplement && (
@@ -214,7 +211,6 @@ function SheetMenuCard({
           icon={<Dumbbell size={14} />}
           label="補強"
           text={menu.supplement}
-          className="border-violet-200/70 bg-violet-50/70 text-violet-700"
         />
       )}
       {editing && (
@@ -232,16 +228,14 @@ function SheetMenuSection({
   icon,
   label,
   text,
-  className,
 }: {
   icon: React.ReactNode;
   label: string;
   text: string;
-  className: string;
 }) {
   return (
-    <div className={cn("rounded-xl border p-3", className)}>
-      <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold">
+    <div>
+      <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-muted2">
         {icon}
         {label}
       </p>
