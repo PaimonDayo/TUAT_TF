@@ -24,4 +24,9 @@ describe("sheetRecordCreatedAt", () => {
     const future = Date.parse(sheetRecordCreatedAt("2099-01-01", importedAt));
     expect(future).toBe(importedAt.getTime());
   });
+
+  it("uses the supplied batch time even when rows are processed on another day", () => {
+    vi.setSystemTime(new Date("2026-10-05T15:00:00Z"));
+    expect(sheetRecordCreatedAt("2026-09-12", importedAt)).toBe("2026-09-13T14:59:59.998Z");
+  });
 });

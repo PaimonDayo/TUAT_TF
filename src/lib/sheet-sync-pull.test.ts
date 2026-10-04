@@ -17,6 +17,32 @@ function dbRecord(date: string, memo: string): DbRecord {
 }
 
 describe("computeMemberPull", () => {
+  it("places new and changed imports together above older posts, with newer practice days first", () => {
+    const now = "2026-10-04T15:42:20.000Z";
+    const result = computeMemberPull("user-1", fieldMap, [
+      { date: "2026-09-10", cells: { memo: "new older day" } },
+      { date: "2026-10-04", cells: { memo: "changed day" } },
+      { date: "2026-10-03", cells: { memo: "new newer day" } },
+    ], new Map([["2026-10-04", [dbRecord("2026-10-04", "old")]]]), () => true, now);
+    const imported = [
+      ...result.inserts.map(row => ({ date: row.recorded_date, at: row.created_at as string })),
+      ...result.updates.map(row => ({ date: "2026-10-04", at: row.patch.created_at as string })),
+    ].sort((a, b) => b.at.localeCompare(a.at));
+    expect(imported.map(row => row.date)).toEqual(["2026-10-04", "2026-10-03", "2026-09-10"]);
+    expect(imported.every(row => Date.parse(row.at) > Date.parse("2026-10-04T15:41:00Z"))).toBe(true);
+    // Repeating unchanged content does not refresh timestamps or create a post.
+    const existing = new Map([
+      ["2026-09-10", [dbRecord("2026-09-10", "new older day")]],
+      ["2026-10-04", [dbRecord("2026-10-04", "changed day")]],
+      ["2026-10-03", [dbRecord("2026-10-03", "new newer day")]],
+    ]);
+    expect(computeMemberPull("user-1", fieldMap, [
+      { date: "2026-09-10", cells: { memo: "new older day" } },
+      { date: "2026-10-04", cells: { memo: "changed day" } },
+      { date: "2026-10-03", cells: { memo: "new newer day" } },
+    ], existing, () => true, "2026-10-05T15:00:00Z")).toEqual({ inserts: [], updates: [], conflicts: [] });
+  });
+
   it.each(["0", "0.00", "", " "])("does not import a custom-only placeholder %s", (value) => {
     const map = { builtin: new Map(), custom: new Map([["other", { header: "その他", column: 0, type: "text" }]]) } as FieldMap;
     const result = computeMemberPull("user-1", map, [{ date: "2026-09-07", cells: { その他: value } }], new Map(), () => true, "2026-09-07T00:00:00Z", "replace_mapped");
@@ -37,7 +63,7 @@ describe("computeMemberPull", () => {
 
   it("keeps sheet-main merge behavior for an existing date", () => {
     const result = computeMemberPull("user-1", fieldMap, sheetRecords, existing, () => true, "2026-07-24T15:00:00.000Z", "merge_nonempty");
-    expect(result.updates).toEqual([{ id: "record-2026-07-23", patch: { memo: "sheet value", synced_at: "2026-07-24T15:00:00.000Z" } }]);
+    expect(result.updates).toEqual([{ id: "record-2026-07-23", patch: { memo: "sheet value", created_at: "2026-07-24T14:59:59.998Z", synced_at: "2026-07-24T15:00:00.000Z" } }]);
     expect(result.inserts).toHaveLength(1);
   });
 
@@ -67,7 +93,7 @@ describe("computeMemberPull", () => {
       "replace_mapped",
     );
     expect(result.updates).toEqual([
-      { id: "record-2026-07-23", patch: { memo: null, synced_at: "2026-07-24T15:00:00.000Z" } },
+      { id: "record-2026-07-23", patch: { memo: null, created_at: "2026-07-24T14:59:59.998Z", synced_at: "2026-07-24T15:00:00.000Z" } },
     ]);
   });
   it("does not create a record from an empty numeric custom cell", () => {

@@ -46,6 +46,28 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 describe("period-aware scheduled synchronization", () => {
+  it("timestamps both new and changed imports at their batch time without moving an unchanged day", async () => {
+    state.profiles = [profile("sheet")];
+    state.records = [{ id: "existing", user_id: "regular", recorded_date: "2026-09-30", memo: "before", from_sheet: true }];
+    const result = await runSheetSync(admin);
+    expect(result.updated).toBe(1);
+    const changed = state.writes.find(w => w.table === "practice_records" && w.op === "update")?.value;
+    expect(changed).toMatchObject({ memo: "旧", created_at: "2026-10-02T02:59:59.998Z", synced_at: "2026-10-02T03:00:00.000Z" });
+    expect(state.writes.find(w => w.table === "practice_records" && w.op === "insert")?.value).toEqual([
+      expect.objectContaining({ recorded_date: "2026-10-01", created_at: "2026-10-02T02:59:59.999Z" }),
+    ]);
+    state.writes = [];
+    state.records = [
+      { id: "existing", user_id: "regular", recorded_date: "2026-09-30", memo: "旧" },
+      { id: "new", user_id: "regular", recorded_date: "2026-10-01", memo: "新" },
+    ];
+    vi.setSystemTime(new Date("2026-10-03T03:00:00Z"));
+    const repeated = await runSheetSync(admin);
+    expect(repeated.inserted).toBe(0);
+    expect(repeated.updated).toBe(0);
+    expect(state.writes.filter(w => w.table === "practice_records")).toEqual([]);
+  });
+
   it("imports and sends through a uniquely relocated confirmed comment column", async () => {
     const fields = [{ key: "memo", label: "コメント", type: "text" as const, sourceColumn: 13, sourceHeader: "コメント", showInTimeline: true }];
     state.profiles = [{ ...profile("sheet"), record_fields: fields, sheet_header_signature: relevantSheetHeaderSignature([{ index: 13, label: "コメント" }], fields, false) }];

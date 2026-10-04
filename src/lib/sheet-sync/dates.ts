@@ -48,8 +48,9 @@ export function sheetReplyCutoff(today: string, days = 7): string {
  * ミリ秒だけずらす（人の目には同時刻のまま。並びが毎回変わるのを防ぐだけ）。
  */
 export function sheetRecordCreatedAt(recordedDate: string, importedAt: Date = new Date()): string {
+  const importDay = new Date(importedAt.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const daysBehind = Math.round(
-    (Date.parse(`${todayJST()}T00:00:00+09:00`) - Date.parse(`${recordedDate}T00:00:00+09:00`)) /
+    (Date.parse(`${importDay}T00:00:00+09:00`) - Date.parse(`${recordedDate}T00:00:00+09:00`)) /
       86_400_000,
   );
   // 未来日や極端に古い日で時刻が飛ばないよう、ずらし幅は0〜1秒に収める。

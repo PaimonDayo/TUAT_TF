@@ -57,9 +57,8 @@ export function computeMemberPull(
       inserts.push({
         user_id: profileId,
         recorded_date: sr.date,
-        // タイムラインでは「練習日の0時(JST)に投稿された」扱いで並べる
-        // (オーナー確定 2026-07-12。取込時刻だとまとめ取込のたびに先頭で団子になる)
-        created_at: sheetRecordCreatedAt(sr.date),
+        // 新規/内容変更の取り込みを上部へ。同じバッチ内は練習日の新しい順。
+        created_at: sheetRecordCreatedAt(sr.date, new Date(nowIso)),
         synced_at: nowIso,
         updated_at: nowIso,
         from_sheet: true,
@@ -90,6 +89,7 @@ export function computeMemberPull(
     }
     if (Object.keys(patch).length > 0 || customChanged) {
       if (customChanged) patch.custom = customPatch;
+      patch.created_at = sheetRecordCreatedAt(sr.date, new Date(nowIso));
       patch.synced_at = nowIso;
       updates.push({ id: app.id, patch });
     }
