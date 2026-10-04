@@ -136,14 +136,18 @@ describe("applyMiddleLongMenuSnapshot", () => {
   });
 
   it("does not change the place or time of a schedule shared with other blocks", () => {
-    const shared = { ...schedule([]), target_blocks: [] };
+    const shortMenu = menu({ id: "short-menu", target_block: "short", content: "短距離の種目練" });
+    const shared = { ...schedule([shortMenu]), target_blocks: [] };
     const [result] = applyMiddleLongMenuSnapshot([shared], {
       rows: [{ exactDate: null, monthDay: "10-24", sourceMonth: 10,
-        time: "18:30", location: "府中", content: "ジョグ", pace: "", remark: "", supplement: "" }],
+        time: "18:30", location: "府中", content: "ジョグ", pace: "4:00/km", remark: "補足内容", supplement: "" }],
       loadedMonths: [10],
     });
     expect(result).toMatchObject({ meeting_time: "17:00:00", venue_name: "武蔵野" });
-    expect(result.menus[0].source).toBe("sheet");
+    expect(result.menus).toContain(shortMenu);
+    expect(result.menus.find(item => item.source === "sheet")).toMatchObject({
+      target_block: "middle_long", content: "ジョグ", pace: "4:00/km", remark: "補足内容", status: "published",
+    });
   });
 
   it("does not apply this season's month/day to a different year", () => {

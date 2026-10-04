@@ -24,10 +24,6 @@ const pendingRows = new Map<string, Promise<MiddleLongSheetMenuRow[]>>();
 
 type SheetTab = { name: string; gid: string; month: number };
 
-function spreadsheetId(): string | null {
-  return process.env.SHEET_SYNC_SPREADSHEET_ID?.trim() || OCTOBER_SHEET_ID;
-}
-
 function decodeJsString(value: string): string {
   try {
     return JSON.parse(`"${value}"`) as string;
@@ -117,8 +113,9 @@ async function fetchMenuTabs(id: string): Promise<SheetTab[]> {
   if (pending) return pending;
   const request = (async () => {
     const response = await fetchWithTimeout(`${BASE_URL}/${encodeURIComponent(id)}/htmlview`, META_CACHE_MS / 1000);
-    if (!response.ok) return [];
+    if (!response.ok) throw new Error(`メニューのシート一覧を取得できませんでした (${response.status})`);
     const tabs = parseMenuTabs(await response.text());
+    if (tabs.length === 0) throw new Error("公開ブックの月別メニューを取得できませんでした");
     metadataCache = { spreadsheetId: id, expiresAt: Date.now() + META_CACHE_MS, tabs };
     return tabs;
   })();
@@ -150,26 +147,26 @@ async function fetchMenuRows(id: string, tab: SheetTab): Promise<MiddleLongSheet
 
 /** 必要な月のCSVだけを並列取得する。失敗月はloadedMonthsに含めない。 */
 export async function fetchMiddleLongMenuSnapshot(months: number[]): Promise<MiddleLongMenuSnapshot> {
-  const id = spreadsheetId();
-  if (!id || months.length === 0) return { rows: [], loadedMonths: [] };
-  try {
-    const wanted = new Set(months.filter((month) => month >= 1 && month <= 12));
-    const tabs = (await fetchMenuTabs(id)).filter((tab) => wanted.has(tab.month));
-    const results = await Promise.allSettled(
-      tabs.map(async (tab) => {
-        const rows = await fetchMenuRows(id, tab);
-        return { month: tab.month, rows };
-      }),
-    );
-    const loadedMonths: number[] = [];
-    const rows: MiddleLongSheetMenuRow[] = [];
-    for (const result of results) {
-      if (result.status !== "fulfilled") continue;
-      loadedMonths.push(result.value.month);
-      rows.push(...result.value.rows);
-    }
-    return { rows, loadedMonths };
-  } catch {
-    return { rows: [], loadedMonths: [] };
+  // 記録連携のSHEET_SYNC_SPREADSHEET_IDは旧ブックを指す場合がある。
+  // メニューは依頼された2026年10月開始の公開ブックから読む。
+  const id = OCTOBER_SHEET_ID;
+  if (months.length === 0) return { rows: [], loadedMonths: [] };
+  const wanted = new Set(months.filter((month) => month >= 1 && month <= 12));
+  const tabs = (await fetchMenuTabs(id)).filter((tab) => wanted.has(tab.month));
+  if (tabs.length === 0) throw new Error("指定した月のメニューシートが見つかりません");
+  const results = await Promise.allSettled(
+    tabs.map(async (tab) => {
+      const rows = await fetchMenuRows(id, tab);
+      return { month: tab.month, rows };
+    }),
+  );
+  const loadedMonths: number[] = [];
+  const rows: MiddleLongSheetMenuRow[] = [];
+  for (const result of results) {
+    if (result.status !== "fulfilled") continue;
+    loadedMonths.push(result.value.month);
+    rows.push(...result.value.rows);
   }
+  if (loadedMonths.length === 0) throw new Error("月別メニューのCSVを取得できませんでした");
+  return { rows, loadedMonths };
 }
