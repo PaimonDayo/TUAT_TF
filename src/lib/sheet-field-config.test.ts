@@ -5,6 +5,7 @@ import {
   defaultSelectedSheetColumns,
   memoHeaderCandidates,
   relevantSheetHeaderSignature,
+  relocatedSheetFields,
 } from "./sheet-field-config";
 
 const middleColumns = [
@@ -87,6 +88,30 @@ describe("sheet field configuration", () => {
     const activeRenamed = middleColumns.map((column) => column.index === 11 ? { ...column, label: "振り返り" } : column);
     expect(relevantSheetHeaderSignature(unusedRenamed, fields, true)).toBe(initial);
     expect(relevantSheetHeaderSignature(activeRenamed, fields, true)).not.toBe(initial);
+  });
+
+  it("follows unique confirmed column moves without changing field identity or display choices", () => {
+    const fields = buildSheetRecordFields({ columns: shortColumns, selectedColumns: [1, 2, 3, 4], types: {}, isMiddleLong: false, memoColumn: null });
+    const signature = relevantSheetHeaderSignature(shortColumns, fields, false);
+    const moved = shortColumns.map(c => c.label === "コメント" ? { ...c, index: 8 } : c);
+    const result = relocatedSheetFields(moved, fields, signature, false)!;
+    expect(result.find(f => f.key === "memo")).toEqual({ ...fields.find(f => f.key === "memo"), sourceColumn: 8 });
+    expect(result.map(f => f.key)).toEqual(fields.map(f => f.key));
+    expect(fields.find(f => f.key === "memo")?.sourceColumn).toBe(4);
+    const reordered = shortColumns.map(c => c.index === 3 ? { ...c, index: 4 } : c.index === 4 ? { ...c, index: 3 } : c);
+    expect(relocatedSheetFields(reordered, fields, signature, false)?.find(f => f.key.startsWith("sheet_"))?.sourceColumn).toBe(4);
+  });
+
+  it("holds removed, renamed and duplicate confirmed headers and new fixed distance inputs", () => {
+    const fields = buildSheetRecordFields({ columns: middleColumns, selectedColumns: [11], types: {}, isMiddleLong: true, memoColumn: 11 });
+    const signature = relevantSheetHeaderSignature(middleColumns, fields, true);
+    for (const columns of [
+      middleColumns.filter(c => c.index !== 11),
+      middleColumns.map(c => c.index === 11 ? { ...c, label: "振り返り" } : c),
+      [...middleColumns, { index: 20, label: "感想" }],
+      [...middleColumns, { index: 20, label: "スピード" }],
+    ]) expect(relocatedSheetFields(columns, fields, signature, true)).toBeNull();
+    expect(relocatedSheetFields(middleColumns, fields, "invalid", true)).toBeNull();
   });
 });
 

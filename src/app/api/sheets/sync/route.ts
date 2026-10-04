@@ -136,7 +136,7 @@ export async function POST(request: Request) {
       await admin
         .from("sheet_sync_runs")
         .update({
-          status: result.sheetWritesSkipped ? "error" : "success",
+          status: result.sheetWritesSkipped || result.failedMembers.length > 0 ? "error" : "success",
           pulled_count: result.inserted + result.updated,
           pushed_count: result.pushed,
           failed_members: result.failedMembers,

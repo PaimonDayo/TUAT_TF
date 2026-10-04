@@ -186,6 +186,13 @@ describe("appToCellsFull", () => {
 });
 
 describe("resolveFieldMap", () => {
+  it("maps confirmed short-event comments and keeps unconfirmed comments and event reflections separate", () => {
+    const member = { header: ["日付", "コメント", "感想（大会）"], columns: [{ index: 0, label: "日付" }, { index: 12, label: "コメント" }, { index: 13, label: "感想（大会）" }] };
+    expect(resolveFieldMap(member, []).builtin.has("memo")).toBe(false);
+    const configured = [{ key: "memo", label: "自分の表示名", type: "text" as const, sourceHeader: "コメント", sourceColumn: 14 }];
+    expect(resolveFieldMap(member, configured).builtin.get("memo")).toEqual({ header: "コメント", column: 12, numeric: false });
+    expect(resolveFieldMap({ header: ["感想（大会）"] }, [{ ...configured[0], sourceHeader: "感想（大会）", sourceColumn: 0 }]).builtin.has("memo")).toBe(false);
+  });
   it("does not let a builtin keyword fallback steal a configured custom column", () => {
     const map = resolveFieldMap(
       {

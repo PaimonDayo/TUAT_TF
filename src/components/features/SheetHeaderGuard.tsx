@@ -6,6 +6,7 @@ import { OctoberSheetSetup } from "@/components/features/OctoberSheetSetup";
 import { SHEET_SETUP_PATH } from "@/lib/sheet-period";
 import { SheetHeaderSetupDialog, type SheetHeaderData } from "@/components/features/SheetHeaderSetupDialog";
 import { recordFieldsToJson } from "@/lib/profile-normalize";
+import { relocatedSheetFields } from "@/lib/sheet-field-config";
 import type { Profile, RecordFieldDef } from "@/types";
 
 export function SheetHeaderGuard({
@@ -35,11 +36,15 @@ export function SheetHeaderGuard({
     void fetch(`/api/sheets/header?sheetName=${encodeURIComponent(sheetName)}`, { cache: "no-store" })
       .then(async (response) => response.ok ? response.json() as Promise<SheetHeaderData> : null)
       .then((current) => {
-        if (active && current) setData(current.signature !== signature ? current : null);
+        if (active && current) {
+          const compatible = current.signature === signature || (signature
+            && relocatedSheetFields(current.columns, recordFields, signature, isMiddleLong));
+          setData(compatible ? null : current);
+        }
       })
       .catch(() => undefined);
     return () => { active = false; };
-  }, [sheetName, signature, dedicatedSetup, isMiddleLong, disconnected]);
+  }, [sheetName, signature, recordFields, dedicatedSetup, isMiddleLong, disconnected]);
 
   async function confirm(fields: RecordFieldDef[], nextSignature: string) {
     setBusy(true);

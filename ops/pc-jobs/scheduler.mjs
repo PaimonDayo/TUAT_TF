@@ -52,7 +52,7 @@ export async function tick({ state, now, save, execute, ready }) {
   for (const job of dueJobs(state, now)) {
     if (!await ready()) break;
     const previous = state.jobs[job.id];
-    if (job.id === 'sheets' && previous && previous.status !== 'success') {
+    if (job.id === 'sheets' && previous && previous.status !== 'success' && previous.sheetWritesUncertain !== false) {
       state.sheetWritesBlocked = true;
       state.sheetFailures ??= [];
       if (['failed', 'uncertain'].includes(previous.status) && !state.sheetFailures.some(value => value.slot === previous.slot)) state.sheetFailures.push({ ...previous });
@@ -66,11 +66,12 @@ export async function tick({ state, now, save, execute, ready }) {
       const result = await execute(dispatch);
       record.status = result.ok && successfulPayload(dispatch, result.value) ? (dispatch.skipSheetWrites ? 'partial' : 'success') : 'failed';
       record.httpStatus = result.status;
+      if (job.id === 'sheets') record.sheetWritesUncertain = result.ok && result.value?.sheetWritesUncertain === false ? false : record.status !== 'success';
     } catch {
       record.status = 'uncertain';
     }
     record.finishedAt = Date.now();
-    if (job.id === 'sheets' && ['failed', 'uncertain'].includes(record.status)) state.sheetWritesBlocked = true;
+    if (job.id === 'sheets' && ['failed', 'uncertain'].includes(record.status) && record.sheetWritesUncertain !== false) state.sheetWritesBlocked = true;
     await save(state); // Failure stops the scheduler; startup sees running/uncertain.
   }
   return state;

@@ -101,7 +101,8 @@ export function resolveFieldMap(
     const configured = fields.find((field) => field.key === item.key);
     if (configured?.hidden) continue;
     const hit = headers.find((candidate) => !usedColumns.has(candidate.column)
-      && (item.key !== "memo" || candidate.n === "感想")
+      && (item.key !== "memo" || candidate.n === "感想"
+        || (candidate.n === "コメント" && norm(configured?.sourceHeader ?? "") === "コメント"))
       && (
       (configured?.sourceColumn === candidate.column && norm(configured.sourceHeader ?? candidate.raw) === candidate.n) ||
       (configured?.sourceHeader && norm(configured.sourceHeader) === candidate.n) ||

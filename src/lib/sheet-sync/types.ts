@@ -23,4 +23,6 @@ export type SyncResult = {
   sheetReplies: number;
   dryRun: boolean;
   sheetWritesSkipped?: boolean;
+  /** A sheet write may have committed without a complete acknowledgement. */
+  sheetWritesUncertain?: boolean;
 };

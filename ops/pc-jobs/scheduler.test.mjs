@@ -71,6 +71,30 @@ test('a failed sheet write holds all sheet writes but does not stop tomorrow imp
 test('an older API that does not confirm held writes cannot be counted as a successful import-only run', () => {
   assert.equal(successfulPayload({ ...JOBS[0], skipSheetWrites: true }, { ok: true, failedMembers: [] }), false);
 });
+
+test('a confirmed read-only failure remains failed but allows tomorrow writes, including after restart', async () => {
+  const state = initialState(at - 86400000);
+  await tick({ state, now: at, save: async () => {}, ready: async () => true, execute: async job =>
+    job.id === 'sheets' ? { ok: true, status: 200, value: { ok: true, failedMembers: [{ reason: 'header renamed' }], sheetWritesUncertain: false } } : success(job) });
+  assert.equal(state.jobs.sheets.status, 'failed');
+  assert.equal(state.jobs.sheets.sheetWritesUncertain, false);
+  assert.notEqual(state.sheetWritesBlocked, true);
+  const resumed = recoverState(JSON.parse(JSON.stringify(state)));
+  const calls = [];
+  await tick({ state: resumed, now: at + 86400000, save: async () => {}, ready: async () => true, execute: async job => { calls.push(job); return success(job); } });
+  assert.equal(calls.find(j => j.id === 'sheets').skipSheetWrites, undefined);
+  assert.equal(resumed.jobs.sheets.status, 'success');
+});
+
+test('a safe read failure cannot release an already blocked uncertain write', async () => {
+  const state = initialState(at - 86400000);
+  state.sheetWritesBlocked = true;
+  state.jobs.sheets = { slot: at - 86400000, status: 'failed', sheetWritesUncertain: false };
+  await tick({ state, now: at, save: async () => {}, ready: async () => true, execute: async job =>
+    job.id === 'sheets' ? { ok: true, status: 200, value: { ok: true, failedMembers: [], sheetWritesSkipped: true, sheetWritesUncertain: false } } : success(job) });
+  assert.equal(state.sheetWritesBlocked, true);
+  assert.equal(state.jobs.sheets.status, 'partial');
+});
 test('backend/backup maintenance guard prevents dispatch and preserves catch-up slot', async () => {
   const state = initialState(at);
   await tick({ state, now: at, ready: async () => false, save: async () => { assert.fail(); }, execute: async () => { assert.fail(); } });

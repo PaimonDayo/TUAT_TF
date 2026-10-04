@@ -46,6 +46,33 @@ export function relevantSheetHeaderSignature(
   return sheetHeaderSignature(relevant);
 }
 
+/** Follow a column move only when every confirmed header still has a unique identity. */
+export function relocatedSheetFields(
+  columns: SheetHeaderColumn[], fields: RecordFieldDef[], signature: string, isMiddleLong: boolean,
+): RecordFieldDef[] | null {
+  let confirmed: unknown;
+  try { confirmed = JSON.parse(signature); } catch { return null; }
+  if (!Array.isArray(confirmed) || confirmed.length === 0 || confirmed.some(value =>
+    !Array.isArray(value) || value.length !== 2 || !Number.isInteger(value[0]) || typeof value[1] !== "string")) return null;
+  const entries = confirmed as [number, string][];
+  const labels = entries.map(([, label]) => normalize(label));
+  if (new Set(labels).size !== labels.length) return null;
+  const moved = new Map<number, SheetHeaderColumn>();
+  for (const [index, label] of entries) {
+    const matches = columns.filter(column => normalize(column.label) === normalize(label));
+    if (matches.length !== 1) return null;
+    moved.set(index, matches[0]);
+  }
+  const remapped = fields.map(field => {
+    const column = field.sourceColumn === undefined ? undefined : moved.get(field.sourceColumn);
+    if (!column || normalize(field.sourceHeader ?? field.label) !== normalize(column.label)) return field;
+    return { ...field, sourceColumn: column.index, sourceHeader: column.label };
+  });
+  const current = JSON.parse(relevantSheetHeaderSignature(columns, remapped, isMiddleLong)) as [number, string][];
+  if (current.length !== labels.length || current.some(([, label]) => !labels.includes(normalize(label)))) return null;
+  return remapped;
+}
+
 export function memoHeaderCandidates(columns: SheetHeaderColumn[]): SheetHeaderColumn[] {
   const firstExact = columns.find((column) => normalize(column.label) === "感想");
   return firstExact ? [firstExact] : [];
