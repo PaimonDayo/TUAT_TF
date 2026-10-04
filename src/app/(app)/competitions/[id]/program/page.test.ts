@@ -8,7 +8,6 @@ vi.mock("@/lib/queries/ob-operations", () => ({getObEventOperations:mock.operati
 vi.mock("@/components/features/ObMeetWorkspace",()=>({ObMeetWorkspace:"workspace"}));
 vi.mock("@/components/features/ObPublicProgram",()=>({ObPublicProgram:"program"}));
 vi.mock("@/components/features/ObEntryHistory",()=>({ObEntryHistory:"history"}));
-vi.mock("@/components/features/ObEntryReview",()=>({ObEntryReview:"review"}));
 vi.mock("@/components/features/ObMyEntry",()=>({ObMyEntry:"mine"}));
 vi.mock("@/components/features/ObOperations",()=>({ObOperations:"operations"}));
 vi.mock("@/components/features/ObDayWorkspace",()=>({ObDayWorkspace:"day"}));
@@ -40,7 +39,13 @@ it("preserves the home edit link for the viewer",async()=>{
 });
 it("keeps staff registration management separate from system operation editing",async()=>{
   mock.roles=[{name:"OB戦2026",can_manage_system:false,can_manage_members:false}];
-  const w=await workspace("identity");expect(w.initialView).toBe("management");expect(find(w.management as ReactNode,"participants")?.openDetails).toBe(true);expect(find(w.day as ReactNode,"day")?.canRegister).toBe(true);expect(mock.program).not.toHaveBeenCalled();expect(mock.roster).toHaveBeenCalledTimes(1);
+  const w=await workspace("identity");expect(w.initialView).toBe("management");expect(find(w.management as ReactNode,"participants")?.initialFilter).toBe("identity");expect(find(w.day as ReactNode,"day")?.canRegister).toBe(true);expect(mock.program).not.toHaveBeenCalled();expect(mock.roster).toHaveBeenCalledTimes(1);
+});
+it("opens staff participants with every entry and the history only for history viewers",async()=>{
+  mock.roles=[{name:"OB戦2026",can_manage_system:false,can_manage_members:false}];
+  const participants=find((await workspace()).management as ReactNode,"participants")!;expect(participants.initialFilter).toBe("all");expect(participants.footer).toBeUndefined();
+  mock.roles=[...mock.roles,{name:"部員管理",can_manage_system:false,can_manage_members:true}];
+  const withHistory=find((await workspace()).management as ReactNode,"participants")!;expect(isValidElement(withHistory.footer)&&withHistory.footer.type).toBe("history");
 });
 it("allows system operation management without granting helper edits",async()=>{
   mock.roles=[{name:"system",can_manage_system:true,can_manage_members:false}];

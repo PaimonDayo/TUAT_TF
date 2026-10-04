@@ -24,7 +24,7 @@ export function ObEntryHistory() {
     } catch { setError("履歴を取得できませんでした"); }
     finally { setLoading(false); }
   }
-  return <section className="space-y-3 px-4 pb-8">
+  return <section className="space-y-3">
     <Button variant="outline" aria-expanded={open} onClick={() => { setOpen(!open); if (!open && !loaded) void load(); }}>変更履歴</Button>
     {open && <div className="space-y-3">
       <p className="text-caption">管理者限定。エントリー・資格記録・本人照合・懇親会の変更を新しい順に表示します。</p>

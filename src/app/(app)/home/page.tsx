@@ -95,10 +95,13 @@ async function ObEntrySection() {
   ]);
   const rows = entry ? entryEventRows(entry) : [];
   const footer = (label: string, hint: string, href: string) => (
-    <Link data-ui-row href={href} prefetch={false} className="mt-3 flex items-center justify-between gap-3 border-t border-separator pt-3">
-      <span className="text-caption">{hint}</span>
-      <span className="flex shrink-0 items-center gap-1 text-[14px] font-semibold text-accent"><Pencil size={14} />{label}</span>
-    </Link>
+    // 区切り線は外側に引く。新UI版の行は角丸になるため、線を行に付けると両端が曲がる。
+    <div className="mt-3 border-t border-separator pt-3">
+      <Link data-ui-row href={href} prefetch={false} className="flex items-center justify-between gap-3">
+        <span className="text-caption">{hint}</span>
+        <span className="flex shrink-0 items-center gap-1 text-[14px] font-semibold text-accent"><Pencil size={14} />{label}</span>
+      </Link>
+    </div>
   );
   return (
     <section className="space-y-2">

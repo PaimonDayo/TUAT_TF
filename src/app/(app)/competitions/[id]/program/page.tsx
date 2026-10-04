@@ -6,7 +6,6 @@ import { obDutyIssues } from "@/lib/ob-duty-issues";
 import { notFound } from "next/navigation";
 import { SubHeader } from "@/components/layout/SubHeader";
 import { CompetitionProgramView } from "@/components/features/CompetitionProgramView";
-import { ObEntryReview } from "@/components/features/ObEntryReview";
 import { ObMyEntry } from "@/components/features/ObMyEntry";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import { getCompetitionById, getCompetitionProgramEntries } from "@/lib/queries";
@@ -51,21 +50,17 @@ export default async function CompetitionProgramPage({
       duties: roster!.duties.data ?? [], roles: roster!.dutyRoles.data ?? [], operations,
     };
     const me = { id: profile.id, display_name: profile.display_name, grade: profile.grade };
-    const management = roster && staff ? <ObMeetParticipants entries={program.entries} duties={program.duties} roles={program.roles} operations={program.operations} openDetails={edit === "identity"} details={<>
-      <ObEntryReview competition={competition}
-        initial={roster.entries.data ?? []} members={roster.members.data ?? []}
-        viewerId={profile.id} me={me} openIdentity={edit === "identity"}
-        party={roster.party.data ?? []} duties={roster.duties.data ?? []}
-        dutyRoles={roster.dutyRoles.data ?? []}
-        history={(roster.history.data ?? []).flatMap(h => h.profile_id ? [{ submitted_name: h.submitted_name, profile_id: h.profile_id }] : [])}
-      />
-      {canViewObHistory(profile.roles) && <ObEntryHistory />}
-    </>}/> : undefined;
+    const management = roster && staff ? <ObMeetParticipants entries={program.entries} members={roster.members.data ?? []}
+      history={(roster.history.data ?? []).flatMap(h => h.profile_id ? [{ submitted_name: h.submitted_name, profile_id: h.profile_id }] : [])}
+      party={roster.party.data ?? []} duties={program.duties} roles={program.roles} operations={program.operations}
+      initialFilter={edit === "identity" ? "identity" : "all"}
+      footer={canViewObHistory(profile.roles) ? <ObEntryHistory /> : undefined}
+    /> : undefined;
     return <>{header}<ObMeetWorkspace key={edit ?? "program"}
       userId={profile.id}
       dutyIssues={obDutyIssues(program.entries,program.members,program.duties,program.roles,program.operations)}
       initialView={edit === "mine" ? "mine" : edit === "identity" && staff ? "management" : staff || canManage ? "day" : "program"}
-      program={<ObPublicProgram {...program} />}
+      program={<>{(staff || canManage) && <p className="text-caption">部員に表示されるプログラムです。組分け・DNS・記録の入力は「当日運営」で行います。</p>}<ObPublicProgram {...program} /></>}
       duties={<ObPublicProgram {...program} view="duties" canEditDuties={staff} />}
       mine={<><ObMyEntry embedded entry={mine.entry} party={mine.party ?? undefined} me={me} duties={program.duties.filter(duty=>duty.profile_id===profile.id)} roles={program.roles} operations={program.operations} openEditor={edit === "mine"} />
         {!management && canViewObHistory(profile.roles) && <ObEntryHistory />}</>}
