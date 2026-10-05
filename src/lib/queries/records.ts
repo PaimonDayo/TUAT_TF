@@ -49,7 +49,10 @@ export async function getUserRecordsWithSocialState(
   userId: string,
   currentUserId: string,
 ): Promise<PracticeRecord[]> {
-  const records = (await getUserRecords(userId)) as PracticeRecord[];
+  const today = jstToday();
+  // 元の記録取得には件数上限がないため、全件から公開対象を絞ってからsocialを取得する。
+  const records = ((await getUserRecords(userId)) as PracticeRecord[])
+    .filter((record) => !record.from_sheet || record.recorded_date < today);
   const ids = records.map((record) => record.id);
   const supabase = await createClient();
   void currentUserId;

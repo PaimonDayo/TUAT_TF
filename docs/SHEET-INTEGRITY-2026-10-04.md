@@ -37,3 +37,17 @@ GASの入力更新入口で既存数式・日付・曜日・週合計を保護�
 - 環境差確認は隔離依存でlock一致。TypeScript・対象eslint・Vitest 98ファイル702件・GAS/PC定期処理30件・Next16.3.6本番build成功。既存PCバックエンドの依存は変更していない。
 
 GASと表の修復は本番反映済み。アプリmaster反映、Vercel Production確認、PC固定リリース切替と同期復旧の証跡は完了後に追記する。iOS/Android実機確認・翌日の定時実行は未確認。
+
+## 本番完了記録（同日02:37 JST以降）
+
+- 最新origin/master（96be81a）へ自分の差分だけをrebase。b259ce3 / 7477337をmasterへfast-forwardし、7477337c2885d6a7379c90f7751e0abb9a899692を1回のmaster → master pushで反映。他作業の未コミット文書・コード・未追跡ファイルは保全。
+- 最新master上でNode24.19.0・直接依存35件のlock一致、tsc、対象eslint、Vitest100ファイル724件、GAS/PC定期処理の選択試験29件、Next16.3.6 webpack build成功。PC用隔離リリースも実本番環境でbuild成功。
+- GitHub公式deployment statusで同一SHAの「Production – tuat-tf」successを確認。公開https://tuat-tf.vercel.app/api/versionも同一SHA。別のpc-previewプロジェクトの成功を本番証拠へ流用していない。
+- PC固定リリースを同一SHAへ切替。稼働中の要求を完了して終了し、既存のTUAT PC Jobs S4Uタスクを再起動。DB・中継・本番依存は維持。
+- 初回は送信保留で52人の取り込みが完了し、30件を反映。部分実行のjournalとDB履歴を完全成功に書き換えていない。
+- 未送信3件はGoogle Sheetsの現在セルを読み取り、全30入力項目の一致・計算距離2セルの数式存在を確認。更新日時の条件付きDB更新で送信済みへ戻し、実入力の再送は0件。非公開の照合・更新証跡を保持。
+- GASの個別読み取りで404・POST required・タイムアウトが間欠的に発生。書き込みを再試行せず診断し、残った返信の個別読み取りを確認した後、書き込み待ち・消去待ち・返信削除待ちが全て0件で全同期を実施。
+- 本番実同期は2026-10-04 02:36:48〜02:37:14 JST、52人の全枠完了、失敗0・競合0、DB履歴success・error_textなし、未送信0。同結果に基づいて送信保留を解除し、元の失敗・部分実行履歴を保存したまま定期処理を再開。
+- Google Sheetsの100%表示でも長距離ひな形の10/1〜4と10/5〜11以降の週区切りを確認。全変更セルの値・数式のAPI再取得検証は上記の通り。
+
+この完了追記は文書のみのため手元に保持し、追加push・build・deployは保留する。翌日の定時実行そのもの、iOS/Android実機、GAS外部サービスの将来の安定性は未確認。

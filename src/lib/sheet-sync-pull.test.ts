@@ -12,11 +12,30 @@ function dbRecord(date: string, memo: string): DbRecord {
     dist_low: 0, dist_mid: 0, dist_high: 0, dist_speed: 0, strides: 0,
     dist_actual: 0,
     strength_text: null, result_text: null, memo, menu_text: null, focus_text: null,
-    custom: {}, updated_at: null, synced_at: null,
+    custom: {}, updated_at: null, synced_at: null, from_sheet: true,
   };
 }
 
 describe("computeMemberPull", () => {
+  it.each(["merge_nonempty", "replace_mapped"] as const)("preserves an app-authored post's time when a %s pull changes its contents", (policy) => {
+    const app = { ...dbRecord("2026-10-04", "app entry"), from_sheet: false, created_at: "2026-10-04T05:00:00.000Z" };
+    const result = computeMemberPull("user-1", fieldMap,
+      [{ date: "2026-10-04", cells: { memo: "sheet correction" } }],
+      new Map([[app.recorded_date, [app]]]), () => true, "2026-10-05T15:00:00.000Z", policy);
+    expect(result.updates).toEqual([{ id: app.id, patch: { memo: "sheet correction", synced_at: "2026-10-05T15:00:00.000Z" } }]);
+    expect(app.created_at).toBe("2026-10-04T05:00:00.000Z");
+    expect(app.from_sheet).toBe(false);
+  });
+
+  it("retains app publication time when mapped text is cleared and custom values change", () => {
+    const app = { ...dbRecord("2026-10-04", "app entry"), from_sheet: false, custom: { other: "before" } };
+    const map = { ...fieldMap, custom: new Map([["other", { header: "other", column: 1, type: "text" as const }]]) };
+    const result = computeMemberPull("user-1", map,
+      [{ date: "2026-10-04", cells: { memo: "", other: "after" } }],
+      new Map([[app.recorded_date, [app]]]), () => true, "2026-10-05T15:00:00.000Z", "replace_mapped");
+    expect(result.updates).toEqual([{ id: app.id, patch: { memo: null, custom: { other: "after" }, synced_at: "2026-10-05T15:00:00.000Z" } }]);
+  });
+
   it("places new and changed imports together above older posts, with newer practice days first", () => {
     const now = "2026-10-04T15:42:20.000Z";
     const result = computeMemberPull("user-1", fieldMap, [

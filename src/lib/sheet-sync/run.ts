@@ -8,7 +8,7 @@ import type { RecordFieldDef } from "@/types";
 import { relevantSheetHeaderSignature, relocatedSheetFields } from "@/lib/sheet-field-config";
 import { sheetContentSignature } from "@/lib/sheet-public-csv";
 import type { SyncOptions, SyncResult } from "./types";
-import { SHEET_HISTORY_START, todayJST, sheetPullCutoff, sheetReplyCutoff } from "./dates";
+import { SHEET_HISTORY_START, todayJST, sheetPullCutoff, sheetPullThrough, sheetReplyCutoff } from "./dates";
 import { resolveFieldMap, appToCellsFull } from "./field-map";
 import type { DbRecord } from "./field-map";
 import { gasPost, fetchAllRaw } from "./gas-client";
@@ -45,6 +45,7 @@ async function runSheetSyncBatch(
   };
   const spreadsheetId = period === "october" ? OCTOBER_SHEET_ID : undefined;
   const today = todayJST();
+  const eligibleThrough = sheetPullThrough(today, options.includeToday);
   const inRange = (d: string) => d >= SHEET_HISTORY_START && d <= today && periodContains(d, period);
 
   let linked = batch;
@@ -92,6 +93,25 @@ async function runSheetSyncBatch(
   const signatureByProfile = new Map((syncStates ?? []).map((state) => [state.profile_id, state.content_signature]));
   const configSignatureByProfile = new Map((syncStates ?? []).map((state) => [state.profile_id, state.config_signature]));
   const profilesWithPendingPush = new Set((pendingRows ?? []).filter(row => inRange(row.recorded_date)).map((row) => row.user_id));
+  // Read the DB before fetching CSV. An app edit/write-through completed during
+  // the sheet read must still face the earlier DB timestamp at the guarded UPDATE.
+  // The DB endpoint caps each page at 1,000 rows; read every existing date so
+  // missing pages never become duplicate inserts or hide pending app writes.
+  const existing = await fetchAllPages<DbRecord>((from, to) =>
+    admin
+      .from("practice_records")
+      .select(
+        "id, user_id, recorded_date, from_sheet, dist_low, dist_mid, dist_high, dist_speed, dist_actual, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at, pending_sheet_push, record_fields_snapshot",
+      )
+      .in("user_id", allUserIds)
+      .gte("recorded_date", SHEET_HISTORY_START)
+      .order("id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{ data: DbRecord[] | null; error: unknown }>,
+  );
+  // The earlier pending-only read may precede an app edit seen by this snapshot.
+  for (const record of existing) {
+    if (record.pending_sheet_push && inRange(record.recorded_date)) profilesWithPendingPush.add(record.user_id);
+  }
   const currentConfigSignatures = new Map(linked.map((profile) => [
     profile.id,
     sheetContentSignature(JSON.stringify({
@@ -100,8 +120,11 @@ async function runSheetSyncBatch(
       source: profile.record_source,
       period,
       appOnly: profile.appOnly,
+      // A prefilled future row becomes eligible when the JST date changes,
+      // even if nobody has edited the CSV since the previous pull.
+      eligibleThrough,
       replySourceVersion: 2,
-      recordMappingVersion: 2,
+      recordMappingVersion: 3,
     })),
   ]));
 
@@ -119,36 +142,22 @@ async function runSheetSyncBatch(
   const processedProfiles = linked.filter((profile) => memberByName.has(profile.sheet_name.trim()));
   const sheetToProfile = new Map(processedProfiles.map((profile) => [profile.sheet_name.trim(), profile]));
 
-  const userIds = processedProfiles.map((profile) => profile.id);
-  if (userIds.length === 0) return result;
-  // DBの窓口は1回に最大1,000行しか返さない。1回で読むと超えた分が「アプリに無い」扱いになり、
-  // 既存の日を重複として取り込もうとして失敗し、書き戻し待ちも見えなくなる（2026-09-26に判明）。
-  // 必ずページに分けて全件読む。
-  const existing = await fetchAllPages<DbRecord>((from, to) =>
-    admin
-      .from("practice_records")
-      .select(
-        "id, user_id, recorded_date, dist_low, dist_mid, dist_high, dist_speed, dist_actual, strides, strength_text, result_text, memo, menu_text, focus_text, custom, updated_at, synced_at, pending_sheet_push, record_fields_snapshot",
-      )
-      .in("user_id", userIds)
-      .gte("recorded_date", SHEET_HISTORY_START)
-      .order("id", { ascending: true })
-      .range(from, to) as unknown as PromiseLike<{ data: DbRecord[] | null; error: unknown }>,
-  );
+  if (processedProfiles.length === 0) return result;
 
   // user_id -> date -> 記録の配列（複数/日を検出するため配列で持つ）
   const byUser = new Map<string, Map<string, DbRecord[]>>();
-  for (const uid of userIds) byUser.set(uid, new Map());
+  for (const uid of allUserIds) byUser.set(uid, new Map());
   for (const r of existing) {
     const m = byUser.get(r.user_id)!;
     const arr = m.get(r.recorded_date) ?? [];
     arr.push(r);
     m.set(r.recorded_date, arr);
   }
+  const updatedAtByRecord = new Map(existing.map(record => [record.id, record.updated_at]));
 
   const nowIso = new Date().toISOString();
   const inserts: Record<string, unknown>[] = [];
-  const updates: { id: string; profileId: string; patch: Record<string, unknown> }[] = [];
+  const updates: { id: string; profileId: string; expectedUpdatedAt: string | null; patch: Record<string, unknown> }[] = [];
   const pushes: {
     /** 記録の再送なら記録ID、消した記録の欄を空にする送信なら null */
     id: string | null;
@@ -243,12 +252,12 @@ async function runSheetSyncBatch(
       map,
       sheetRecordsWithoutPendingPushes(member.records, excludedDates),
       appByDate,
-      (date) => date >= cutoff && inRange(date),
+      (date) => date >= cutoff && date <= eligibleThrough && inRange(date),
       nowIso,
       profile.record_source === "sheet" && stagedSheetFlow ? "replace_mapped" : "merge_nonempty",
     );
     inserts.push(...pulled.inserts);
-    updates.push(...pulled.updates.map((update) => ({ ...update, profileId: profile.id })));
+    updates.push(...pulled.updates.map((update) => ({ ...update, profileId: profile.id, expectedUpdatedAt: updatedAtByRecord.get(update.id) ?? null })));
     result.inserted += pulled.inserts.length;
     result.updated += pulled.updates.length;
     for (const d of pulled.conflicts) result.conflicts.push(`${sheetName} ${d}`); // 複数/日は触らない
@@ -311,8 +320,13 @@ async function runSheetSyncBatch(
   }
   for (const u of updates) {
     try {
-      const { error } = await admin.from("practice_records").update(u.patch).eq("id", u.id);
+      // The CSV and DB snapshots precede this write. Keep an app edit made
+      // after either snapshot instead of overwriting it with stale sheet data.
+      let query = admin.from("practice_records").update(u.patch).eq("id", u.id).eq("pending_sheet_push", false);
+      query = u.expectedUpdatedAt === null ? query.is("updated_at", null) : query.eq("updated_at", u.expectedUpdatedAt);
+      const { data: saved, error } = await query.select("id");
       if (error) throw error;
+      if (saved?.length !== 1) throw new Error("同期中に記録の状態が変わりました。アプリの最新入力を保持し、この記録の取り込みを保留しました");
     } catch (err) {
       result.updated--;
       result.failedMembers.push({
@@ -474,7 +488,7 @@ export async function runSheetSync(admin: SupabaseClient, options: SyncOptions =
     if (!groups[period].length) continue;
     const sheetWriteState = { attempted: false };
     try {
-      const result = await runSheetSyncBatch(admin, { dryRun: options.dryRun, skipSheetWrites: options.skipSheetWrites }, groups[period], period, sheetWriteState);
+      const result = await runSheetSyncBatch(admin, { dryRun: options.dryRun, skipSheetWrites: options.skipSheetWrites, includeToday: options.includeToday }, groups[period], period, sheetWriteState);
       if (result.sheetWritesUncertain) total.sheetWritesUncertain = true;
       for (const key of ["inserted", "updated", "pushed", "sheetReplies"] as const) total[key] += result[key];
       for (const key of ["conflicts", "skippedMembers", "unchangedMembers", "failedMembers"] as const) total[key].push(...result[key] as never[]);

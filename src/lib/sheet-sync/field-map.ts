@@ -147,6 +147,8 @@ export type DbRecord = {
   id: string;
   user_id: string;
   recorded_date: string;
+  /** Existing app-authored records retain their original publication time on a sheet pull. */
+  from_sheet?: boolean;
   dist_low: number;
   dist_mid: number;
   dist_high: number;

@@ -7,6 +7,14 @@ export function todayJST(): string {
   return jstToday();
 }
 
+/** JST 0時の定期取り込みで、まだ始まっていない当日行を投稿しない。 */
+export function sheetPullThrough(today: string, includeToday = true): string {
+  if (includeToday) return today;
+  const date = new Date(`${today}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
+
 /** 初回は全履歴、完了後は同日の1か月前からを同期対象にする。 */
 export function sheetPullCutoff(today: string, historyImportedAt: string | null): string {
   if (!historyImportedAt) return SHEET_HISTORY_START;

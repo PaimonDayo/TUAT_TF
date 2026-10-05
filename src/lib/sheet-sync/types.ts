@@ -8,6 +8,8 @@ export type SyncOptions = {
   onlySheets?: string[];
   /** 結果不明の送信を保留し、通常の取り込みだけを継続する復旧モード。 */
   skipSheetWrites?: boolean;
+  /** 定期取り込みは前日まで。当日の明示的な手動取り込みは既定で許可する。 */
+  includeToday?: boolean;
 };
 
 export type SyncResult = {

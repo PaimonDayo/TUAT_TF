@@ -89,7 +89,9 @@ export function computeMemberPull(
     }
     if (Object.keys(patch).length > 0 || customChanged) {
       if (customChanged) patch.custom = customPatch;
-      patch.created_at = sheetRecordCreatedAt(sr.date, new Date(nowIso));
+      // A sheet can correct an app-authored record without publishing it again.
+      // Only records originally imported from a sheet move to this batch's time.
+      if (app.from_sheet === true) patch.created_at = sheetRecordCreatedAt(sr.date, new Date(nowIso));
       patch.synced_at = nowIso;
       updates.push({ id: app.id, patch });
     }

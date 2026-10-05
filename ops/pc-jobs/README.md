@@ -28,6 +28,8 @@ config.enabled=falseにすると次の処理へ進まず、実行中の要求を
 
 外部メール監視は取りやめ済み。GAS監視・Worker health・署名鍵を稼働条件に含めず、外部healthは書かない。状態はPCのjournal/status.jsonに保存する。旧監視用の準備スクリプトは実行しない。
 
+2026-10-05の修正以降、APIが `sheetWritesUncertain=false` を明示した読み取り失敗/見出し不整合はfailedとして保持し、翌日の送信を保留しない。応答不明・旧API・書き込み後の不一致は従来どおり保留する。既に保留中の書き込みを読み取り成功だけで解除しない。稼働固定リリース、実データ照合、復旧証跡は [10/5の同期復旧](../../docs/SHEET-SYNC-RECOVERY-2026-10-05.md) を参照。
+
 ## 本番切替
 
 1. 全dryRun、同期元、バックアップ、現行Productionを確認する。

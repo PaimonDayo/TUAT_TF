@@ -20,11 +20,14 @@ export async function getFeed(
   },
 ): Promise<FeedItem[]> {
   const supabase = await createClient();
+  const today = jstToday();
 
   let recordsQuery = supabase
     .from("practice_records")
     .select(`${RECORD_LIST_SELECT}, ${RECORD_LIST_AUTHOR_SELECT}`)
-    .lte("recorded_date", jstToday())
+    .lte("recorded_date", today)
+    // 今日の事前入力済みの予定を出さないよう、シート由来は前日までDBで絞る。
+    .or(`from_sheet.eq.false,and(from_sheet.eq.true,recorded_date.lt.${today})`)
     .or(RECORD_NONEMPTY_OR)
     .or(SHEET_TIMELINE_OR)
     .order("created_at", { ascending: false })
@@ -117,7 +120,7 @@ export async function getFeed(
 
 /**
  * 通知からのパーマリンク用。単一の投稿を FeedItem と同じ形で取得する。
- * タイムライン表示用の間引き（未来日除外・空の記録の除外・SHEET_TIMELINE_CUTOFF）は
+ * タイムライン表示用の間引き（未来日/当日シート除外・空の記録の除外・SHEET_TIMELINE_CUTOFF）は
  * 一切かけない。古い投稿や空に近い記録に付いたコメント通知からも必ず開けるようにするため。
  * 閲覧できるかどうかは RLS（部員なら全件 SELECT 可）が担保する。
  */
@@ -225,13 +228,15 @@ export async function getUserActivity(
   limit = 50,
 ): Promise<FeedItem[]> {
   const supabase = await createClient();
+  const today = jstToday();
 
   const [recordsResult, tweetItems] = await Promise.all([
     supabase
       .from("practice_records")
       .select(`${RECORD_LIST_SELECT}, ${RECORD_LIST_AUTHOR_SELECT}`)
       .eq("user_id", userId)
-      .lte("recorded_date", jstToday())
+      .lte("recorded_date", today)
+      .or(`from_sheet.eq.false,and(from_sheet.eq.true,recorded_date.lt.${today})`)
       .or(RECORD_NONEMPTY_OR)
       .or(SHEET_TIMELINE_OR)
       .order("created_at", { ascending: false })

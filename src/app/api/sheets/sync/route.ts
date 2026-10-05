@@ -121,6 +121,9 @@ export async function POST(request: Request) {
       onlySheet,
       onlySheets: chunk?.sheetNames,
       skipSheetWrites,
+      // Midnight cron publishes completed days; an administrator's manual pull
+      // can explicitly retrieve today's entries without waiting for midnight.
+      includeToday: !isCron,
     });
     console.info("sheet_sync_complete", {
       trigger,

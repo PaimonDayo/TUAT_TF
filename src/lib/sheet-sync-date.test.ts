@@ -1,5 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sheetRecordCreatedAt } from "./sheet-sync";
+import { sheetPullThrough } from "./sheet-sync/dates";
+
+describe("sheetPullThrough", () => {
+  it("includes today for manual imports and uses yesterday for cron imports", () => {
+    expect(sheetPullThrough("2026-10-06")).toBe("2026-10-06");
+    expect(sheetPullThrough("2026-10-06", false)).toBe("2026-10-05");
+  });
+
+  it("preserves the previous day across month, year, and leap-year boundaries", () => {
+    expect(sheetPullThrough("2026-10-01", false)).toBe("2026-09-30");
+    expect(sheetPullThrough("2027-01-01", false)).toBe("2026-12-31");
+    expect(sheetPullThrough("2028-03-01", false)).toBe("2028-02-29");
+  });
+});
 
 describe("sheetRecordCreatedAt", () => {
   const importedAt = new Date("2026-09-13T15:00:00.000Z"); // JST 9/14 0:00 の同期
