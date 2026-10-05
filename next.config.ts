@@ -13,8 +13,11 @@ if (process.env.NEXT_PUBLIC_PC_TRIAL === "true") {
   if (vercelPcTrial) {
     const bridge = process.env.PC_TRIAL_BRIDGE_URL ?? "";
     if (process.env.VERCEL_ENV !== "preview" || !/^https:\/\/[a-z0-9-]+\.trycloudflare\.com\/_pc\/bridge$/.test(bridge) || process.env.NEXT_PUBLIC_SUPABASE_URL !== `${bridge}/_pc/supabase` || (process.env.PC_TRIAL_BRIDGE_KEY?.length ?? 0) < 32 || process.env.IMAGE_STORAGE_READ_ONLY !== "true") throw new Error("Vercel PC trial requires an isolated Preview and private PC bridge");
-  } else if (process.env.VERCEL || process.env.NEXT_PUBLIC_SUPABASE_URL !== "http://127.0.0.1:8000") {
-    throw new Error("PC trial requires a local build and the loopback Supabase API");
+  } else if (process.env.VERCEL || process.env.NEXT_PUBLIC_SUPABASE_URL !== "http://127.0.0.1:18000"
+    || process.env.IMAGE_STORAGE_READ_ONLY !== "true" || process.env.NEXT_PUBLIC_CLOUD_AUTH_URL
+    || process.env.NEXT_PUBLIC_PC_BACKEND === "true" || process.env.PC_BACKEND_ENABLED === "true"
+    || (process.env.PC_TRIAL_BRIDGE_KEY?.length ?? 0) < 32) {
+    throw new Error("PC trial requires its independent loopback review API, disabled cloud Auth and read-only images");
   }
 } else if (vercelPcTrial) {
   throw new Error("Vercel PC trial requires trial protections");

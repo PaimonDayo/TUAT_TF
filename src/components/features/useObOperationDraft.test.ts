@@ -1,0 +1,140 @@
+/* eslint-disable react-hooks/rules-of-hooks -- Actual hook is invoked against a deterministic hook runtime to verify save sequences. */
+import { beforeEach, expect, it, vi } from "vitest";
+import { emptyPerformance, type MeetEventData } from "@/lib/meet-operations";
+import type { ObEventOperation } from "@/lib/ob-operations";
+import type { ObEntry } from "@/lib/ob-entries";
+
+const hooks = vi.hoisted(() => ({ cursor: 0, values: [] as unknown[] }));
+const mocks = vi.hoisted(() => ({ write: vi.fn(), check: vi.fn(), refresh: vi.fn(), onSaved: vi.fn() }));
+vi.mock("react", () => ({
+  useState<T>(initial: T | (() => T)) {
+    const slot = hooks.cursor++;
+    if (!(slot in hooks.values)) hooks.values[slot] = typeof initial === "function" ? (initial as () => T)() : initial;
+    return [hooks.values[slot] as T, (next: T | ((before: T) => T)) => {
+      hooks.values[slot] = typeof next === "function" ? (next as (before: T) => T)(hooks.values[slot] as T) : next;
+    }];
+  },
+  useRef<T>(initial: T) {
+    const slot = hooks.cursor++;
+    if (!(slot in hooks.values)) hooks.values[slot] = { current: initial };
+    return hooks.values[slot] as { current: T };
+  },
+}));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
+vi.mock("@/app/(app)/ob-entries/operations-actions", () => ({ saveObEventOperation: mocks.write, checkObEventOperation: mocks.check }));
+import { useObOperationDraft } from "./useObOperationDraft";
+
+const entries: ObEntry[] = ["a", "b"].map(id => ({ id, meet_key: "ob-2026", submitted_name: `合成${id}`, grade: "B1", profile_id: null, events: ["男子100m"], qualification_marks: {}, revision: 0, imported_at: "" }));
+const initial: ObEventOperation = { meet_key: "ob-2026", event_name: "男子100m", revision: 2, updated_at: "2026-10-05T00:00:00Z", data: {
+  confirmed: false, participants: [
+    { ...emptyPerformance("a"), group: 1, order: 1 }, { ...emptyPerformance("b"), group: 1, order: 2 },
+  ],
+} };
+function render(source = initial, roster = entries) {
+  hooks.cursor = 0;
+  return useObOperationDraft("男子100m", roster, source, mocks.onSaved);
+}
+function entered(): MeetEventData {
+  return { ...initial.data, participants: initial.data.participants.map(person => person.entryId === "a" ? { ...person, trials: [{ mark: "12.34", status: "valid" as const, wind: "" }] } : person) };
+}
+beforeEach(() => {
+  hooks.values = []; hooks.cursor = 0; vi.clearAllMocks();
+  mocks.write.mockResolvedValue({ ok: true, saved: { ...initial, revision: 3, data: entered() } });
+  mocks.check.mockResolvedValue({ ok: false, message: "保存結果を確認できませんでした" });
+});
+
+it("reads again without rewriting after the save response was lost", async () => {
+  mocks.write.mockRejectedValueOnce(new Error("response lost after commit"));
+  render().change(entered());
+  await render().save();
+  await render().save();
+  expect(mocks.write).toHaveBeenCalledTimes(1);
+  expect(mocks.check).toHaveBeenCalledTimes(2);
+  expect(mocks.onSaved).not.toHaveBeenCalled();
+});
+
+it("holds the submitted snapshot and refuses input, discard and refresh changes until it is confirmed", async () => {
+  mocks.write.mockRejectedValueOnce(new Error("response lost after commit"));
+  render().change(entered());
+  await render().save();
+  let draft = render();
+  expect(draft).toMatchObject({ busy: false, unconfirmed: true, locked: true, failed: true });
+  draft.change({ ...entered(), confirmed: true });
+  draft.discardPerson("a");
+  const remote = { ...initial, revision: 4, data: { ...initial.data, participants: [...initial.data.participants, emptyPerformance("new")] } };
+  draft = render(remote, [...entries, { ...entries[0], id: "new" }]);
+  expect(draft.data).toEqual(entered());
+  await draft.save();
+  expect(mocks.write).toHaveBeenCalledTimes(1);
+  expect(mocks.check.mock.calls[1][0]).toEqual({ event: "男子100m", revision: 2, data: entered(), baseData: initial.data });
+  expect(mocks.refresh).not.toHaveBeenCalled();
+});
+
+it("adopts the confirmed latest operation including independent changes and new entrants", async () => {
+  mocks.write.mockResolvedValueOnce({ ok: false, uncertain: true });
+  mocks.check.mockResolvedValueOnce({ ok: false }).mockResolvedValueOnce({ ok: true, saved: {
+    ...initial, revision: 5, data: { ...entered(), participants: [
+      entered().participants[0], { ...initial.data.participants[1], trials: [{ mark: "13.45", status: "valid", wind: "" }] }, emptyPerformance("new"),
+    ] },
+  } });
+  render().change(entered());
+  await render().save();
+  await render().save();
+  const draft = render();
+  expect(draft).toMatchObject({ unconfirmed: false, locked: false, dirty: false, failed: false, revision: 5, message: "保存しました" });
+  expect(draft.data.participants.map(person => person.entryId)).toEqual(["a", "b", "new"]);
+  expect(draft.data.participants[1].trials[0].mark).toBe("13.45");
+  expect(mocks.onSaved).toHaveBeenCalledTimes(1);
+  expect(mocks.onSaved.mock.calls[0][0].data).toEqual(draft.data);
+  expect(mocks.write).toHaveBeenCalledTimes(1);
+});
+
+it("keeps the operation uncertain if confirmation itself cannot be read", async () => {
+  mocks.write.mockRejectedValueOnce(new Error("response lost"));
+  mocks.check.mockRejectedValue(new Error("read unavailable"));
+  render().change(entered());
+  await render().save();
+  await render().save();
+  expect(render()).toMatchObject({ unconfirmed: true, locked: true, busy: false, failed: true });
+  expect(render().data).toEqual(entered());
+  expect(mocks.write).toHaveBeenCalledTimes(1);
+  expect(mocks.check).toHaveBeenCalledTimes(2);
+});
+
+it("permits editing and explicit retry after a definitive rejected transaction", async () => {
+  mocks.write.mockResolvedValueOnce({ ok: false, message: "入力を確認してください" });
+  render().change(entered());
+  await render().save();
+  expect(render()).toMatchObject({ unconfirmed: false, locked: false, failed: true });
+  const corrected = { ...entered(), participants: [{ ...entered().participants[0], trials: [{ mark: "12.45", status: "valid" as const, wind: "" }] }, initial.data.participants[1]] };
+  render().change(corrected);
+  expect(render().data).toEqual(corrected);
+  await render().save();
+  expect(mocks.write).toHaveBeenCalledTimes(2);
+  expect(mocks.check).not.toHaveBeenCalled();
+});
+
+it("preserves the existing explicit conflict review instead of treating a rollback as uncertain", async () => {
+  const latest = { ...initial, revision: 3, data: { ...initial.data, participants: [{ ...initial.data.participants[0], trials: [{ mark: "12.99", status: "valid" as const, wind: "" }] }, initial.data.participants[1]] } };
+  mocks.write.mockResolvedValueOnce({ ok: false, latest, message: "変更箇所を確認してください" });
+  render().change(entered());
+  await render().save();
+  expect(render()).toMatchObject({ unconfirmed: false, locked: false, reviewing: true });
+  expect(render().review?.conflicts.map(conflict => conflict.key)).toEqual(["a:trials"]);
+  expect(mocks.check).not.toHaveBeenCalled();
+});
+
+it("prevents a second save and input changes while the first request is pending", async () => {
+  let respond!: (value: unknown) => void;
+  mocks.write.mockReturnValue(new Promise(resolve => { respond = resolve; }));
+  render().change(entered());
+  const save = render().save();
+  expect(render()).toMatchObject({ busy: true, locked: true });
+  render().change({ ...entered(), confirmed: true });
+  await render().save();
+  expect(render().data).toEqual(entered());
+  expect(mocks.write).toHaveBeenCalledTimes(1);
+  respond({ ok: true, saved: { ...initial, revision: 3, data: entered() } });
+  await save;
+  expect(render()).toMatchObject({ locked: false, busy: false, unconfirmed: false, dirty: false });
+});

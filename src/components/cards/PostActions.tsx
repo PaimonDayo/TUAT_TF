@@ -15,6 +15,7 @@ type InteractionState = {
   likes: number;
   commentCount: number;
   busy: boolean;
+  pending: { desiredLiked: boolean } | null;
 };
 type TimelineCache = {
   pages: FeedItem[][];
@@ -47,17 +48,17 @@ export function PostActions({
   const interactionKey = ["social-like", currentUser.id, targetType, targetId] as const;
   const { data: interaction } = useQuery({
     queryKey: interactionKey,
-    queryFn: async () => ({ liked: initialLiked, likes: initialLikes, commentCount: initialComments, busy: false }),
-    initialData: { liked: initialLiked, likes: initialLikes, commentCount: initialComments, busy: false },
+    queryFn: async (): Promise<InteractionState> => ({ liked: initialLiked, likes: initialLikes, commentCount: initialComments, busy: false, pending: null }),
+    initialData: { liked: initialLiked, likes: initialLikes, commentCount: initialComments, busy: false, pending: null } as InteractionState,
     staleTime: Infinity,
     enabled: false,
   });
-  const { liked, likes, commentCount, busy } = interaction;
+  const { liked, likes, commentCount, pending } = interaction;
   const mutationBusy = useRef(false);
 
   useEffect(() => {
-    if (mutationBusy.current) return;
-    queryClient.setQueryData(interactionKey, (previous: InteractionState | undefined) => ({ liked: initialLiked, likes: initialLikes, commentCount: previous?.commentCount ?? initialComments, busy: false }));
+    if (mutationBusy.current || queryClient.getQueryData<InteractionState>(interactionKey)?.pending) return;
+    queryClient.setQueryData(interactionKey, (previous: InteractionState | undefined) => ({ liked: initialLiked, likes: initialLikes, commentCount: previous?.commentCount ?? initialComments, busy: false, pending: null }));
   // interactionKey is fully represented by the primitive dependencies below.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialComments, initialLiked, initialLikes, queryClient, targetId, targetType, currentUser.id]);
@@ -77,6 +78,7 @@ export function PostActions({
           likes: initialLikes,
           commentCount: initialComments,
           busy: false,
+          pending: null,
         }),
         commentCount: count,
       }),
@@ -227,45 +229,100 @@ export function PostActions({
     setOpenComments((open) => !open);
   }
 
+  function finishLike(nextLiked: boolean, nextLikes: number) {
+    queryClient.setQueryData(interactionKey, (current: InteractionState | undefined) => ({
+      ...(current ?? interaction), liked: nextLiked, likes: nextLikes, busy: false, pending: null,
+    }));
+    updateTimelineLikeState(nextLiked, nextLikes);
+  }
+
+  async function confirmLikeResult(desiredLiked: boolean) {
+    queryClient.setQueryData(interactionKey, (current: InteractionState | undefined) => ({
+      ...(current ?? interaction), busy: true, pending: { desiredLiked },
+    }));
+    try {
+      const supabase = createClient();
+      const [total, own] = await Promise.all([
+        supabase.from("likes").select("id", { count: "exact", head: true })
+          .eq("target_type", targetType).eq("target_id", targetId),
+        supabase.from("likes").select("id", { count: "exact", head: true })
+          .eq("target_type", targetType).eq("target_id", targetId).eq("user_id", currentUser.id),
+      ]);
+      if (total.error || own.error || total.count === null || own.count === null ||
+        !Number.isInteger(total.count) || total.count < 0 || (own.count !== 0 && own.count !== 1) || total.count < own.count) {
+        throw new Error("Like state was not confirmed");
+      }
+      const confirmedLiked = own.count === 1;
+      if (confirmedLiked === desiredLiked) finishLike(confirmedLiked, total.count);
+      else {
+        // A lost write response can still be in flight. A mismatched read does
+        // not prove rejection, so retain the original intent without replaying it.
+        queryClient.setQueryData(interactionKey, (current: InteractionState | undefined) => ({
+          ...(current ?? interaction), liked: confirmedLiked, likes: total.count!, busy: false, pending: { desiredLiked },
+        }));
+        updateTimelineLikeState(confirmedLiked, total.count);
+        showToast("いいねの保存結果を確認できませんでした");
+      }
+    } catch {
+      queryClient.setQueryData(interactionKey, (current: InteractionState | undefined) => ({
+        ...(current ?? interaction), busy: false, pending: { desiredLiked },
+      }));
+      showToast("いいねの保存結果を確認できませんでした");
+    }
+  }
+
   async function toggleLike() {
-    if (busy || mutationBusy.current) return;
+    const current = queryClient.getQueryData<InteractionState>(interactionKey) ?? interaction;
+    if (current.busy || mutationBusy.current) return;
     mutationBusy.current = true;
-    const previous = { ...interaction, busy: false };
-    const next = !liked;
+    if (current.pending) {
+      try { await confirmLikeResult(current.pending.desiredLiked); }
+      finally { mutationBusy.current = false; }
+      return;
+    }
+    const previous = { ...current, busy: false };
+    const next = !current.liked;
     const optimistic = {
-      ...interaction,
+      ...current,
       liked: next,
-      likes: Math.max(0, likes + (next ? 1 : -1)),
+      likes: Math.max(0, current.likes + (next ? 1 : -1)),
       busy: true,
     };
     queryClient.setQueryData(interactionKey, optimistic);
 
-    const supabase = createClient();
     updateTimelineLikeState(next, optimistic.likes);
-    // 認証確認・insert/delete・件数再取得をDB内の1トランザクションへまとめる。
-    // UIは先に楽観反映し、RPCが返した実件数だけで確定する。
-    const { data, error } = await supabase.rpc("set_like_state", {
-      target_type_in: targetType,
-      target_id_in: targetId,
-      desired_liked: next,
-    });
-    const confirmedRow = data?.[0];
-    if (error || !confirmedRow || confirmedRow.liked !== next) {
-      queryClient.setQueryData(interactionKey, previous);
-      showToast(next ? "いいねできませんでした" : "いいねを解除できませんでした");
-      updateTimelineLikeState(previous.liked, previous.likes);
+    let writeStarted = false;
+    try {
+      const supabase = createClient();
+      // 認証確認・insert/delete・件数再取得をDB内の1トランザクションへまとめる。
+      // UIは先に楽観反映し、RPCが返した実件数だけで確定する。
+      writeStarted = true;
+      const { data, error } = await supabase.rpc("set_like_state", {
+        target_type_in: targetType,
+        target_id_in: targetId,
+        desired_liked: next,
+      });
+      if (error && !error.code) {
+        await confirmLikeResult(next);
+        return;
+      }
+      const confirmedRow = data?.[0];
+      const confirmedLikes = Number(confirmedRow?.likes_count);
+      if (error || !confirmedRow || confirmedRow.liked !== next || !Number.isInteger(confirmedLikes) || confirmedLikes < 0) {
+        finishLike(previous.liked, previous.likes);
+        showToast(next ? "いいねできませんでした" : "いいねを解除できませんでした");
+        return;
+      }
+      finishLike(next, confirmedLikes);
+    } catch {
+      if (writeStarted) await confirmLikeResult(next);
+      else {
+        finishLike(previous.liked, previous.likes);
+        showToast(next ? "いいねできませんでした" : "いいねを解除できませんでした");
+      }
+    } finally {
       mutationBusy.current = false;
-      return;
     }
-
-    const confirmed = {
-      ...optimistic,
-      likes: Number(confirmedRow.likes_count),
-      busy: false,
-    };
-    queryClient.setQueryData(interactionKey, confirmed);
-    updateTimelineLikeState(next, confirmed.likes);
-    mutationBusy.current = false;
   }
   useEffect(() => {
     toggleLikeRef.current = toggleLike;
@@ -284,7 +341,7 @@ export function PostActions({
           type="button"
           aria-pressed={liked}
           aria-label={
-            liked
+            pending ? "いいねの保存結果を確認" : liked
               ? `\u3044\u3044\u306d\u3092\u89e3\u9664\u3001\u73fe\u5728${likes}\u4ef6`
               : `\u3044\u3044\u306d\u3001\u73fe\u5728${likes}\u4ef6`
           }
@@ -314,8 +371,8 @@ export function PostActions({
         >
           <Heart size={18} fill={liked ? "#ff3b30" : "none"} strokeWidth={2} />
           {/* 常に数字を描画し0は透明にする＝箱が一定でガクつかない */}
-          <span className={cn("inline-block w-5 text-left tabular-nums", likes === 0 && "opacity-0")}>
-            {likes}
+          <span className={cn("inline-block text-left tabular-nums", pending ? "text-[11px]" : "w-5", !pending && likes === 0 && "opacity-0")}>
+            {pending ? "確認する" : likes}
           </span>
         </button>
         <button

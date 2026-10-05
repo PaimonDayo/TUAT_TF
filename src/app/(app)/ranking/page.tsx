@@ -17,8 +17,10 @@ export default async function RankingPage({
   const [year, monthNumber] = month.split("-").map(Number);
   const periodStart = `${month}-01`;
   const periodEnd = new Date(Date.UTC(year, monthNumber, 0)).toISOString().slice(0, 10);
-  const profile = await getCurrentProfile();
-  const rows = await getMonthlyRanking(periodStart, periodEnd);
+  const [profile, rows] = await Promise.all([
+    getCurrentProfile(),
+    getMonthlyRanking(periodStart, periodEnd),
+  ]);
 
   return (
     <>

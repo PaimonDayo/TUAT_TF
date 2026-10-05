@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import "@/components/layout/glass/system-glass.css";
+import "@/components/layout/glass/new-ui.css";
 import { APP_NAME, APP_DESCRIPTION } from "@/lib/app";
 import SplashCountdown from "@/components/SplashCountdown";
 import { SPLASH_COVER_ID, splashCoverScript } from "@/lib/splash-countdown";
@@ -58,7 +60,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ja" className="h-full">
-      <body className="min-h-full">
+      <body data-new-ui-surface className="min-h-full">
         {/*
           起動画面の下地。本文より前に置き、直後のスクリプトが同期で判定する。
           これが無いと、Reactがハイドレートして起動画面を出すまでの間ホームが見えてしまう。

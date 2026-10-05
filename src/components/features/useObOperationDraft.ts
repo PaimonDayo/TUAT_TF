@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { saveObEventOperation } from "@/app/(app)/ob-entries/operations-actions";
+import { checkObEventOperation, saveObEventOperation } from "@/app/(app)/ob-entries/operations-actions";
 import { emptyPerformance, MeetEvent, type MeetEventData } from "@/lib/meet-operations";
 import { effectiveObParticipation, obEventRule, reconcileObEvent, type ObEventOperation } from "@/lib/ob-operations";
 import { reviewObOperation, type OperationChoices } from "@/lib/ob-operation-draft";
@@ -18,13 +18,16 @@ export function useObOperationDraft(event: string, entries: ObEntry[], initial: 
   const [revision, setRevision] = useState(initial?.revision ?? null);
   const [observedRevision, setObservedRevision] = useState(initial?.revision ?? -1);
   const [busy, setBusy] = useState(false);
+  const [unconfirmed, setUnconfirmed] = useState(false);
+  const [pendingData, setPendingData] = useState<MeetEventData | null>(null);
   const [message, setMessage] = useState("");
   const [failed, setFailed] = useState(false);
   const [latest, setLatest] = useState<ObEventOperation | null>(null);
   const [choices, setChoices] = useState<OperationChoices>({});
   const saving = useRef(false);
-  const data = reconcileObEvent(event, entries, draft);
-  const dirty = JSON.stringify(data) !== JSON.stringify(base);
+  const pendingSave = useRef<Parameters<typeof checkObEventOperation>[0] | null>(null);
+  const data = pendingData ?? reconcileObEvent(event, entries, draft);
+  const dirty = data.confirmed !== base.confirmed || JSON.stringify(data.participants) !== JSON.stringify(base.participants);
   const review = latest ? reviewObOperation(base, data, latest.data, choices) : null;
   const blocked = data.participants.filter(person => {
     const entry = entries.find(e => e.id === person.entryId), before = base.participants.find(p => p.entryId === person.entryId) ?? emptyPerformance(person.entryId);
@@ -35,7 +38,7 @@ export function useObOperationDraft(event: string, entries: ObEntry[], initial: 
 
   // Refreshes can bring a new entrant or another operator's edit while this form is open.
   // Adopt only non-overlapping changes; keep overlapping input for explicit review.
-  if (initial && initial.revision > observedRevision && !busy) {
+  if (initial && initial.revision > observedRevision && !busy && !unconfirmed && !pendingData) {
     setObservedRevision(initial.revision);
     if (initial.revision > (revision ?? -1) && !latest) {
       const refreshed = reviewObOperation(base, data, initial.data);
@@ -44,38 +47,63 @@ export function useObOperationDraft(event: string, entries: ObEntry[], initial: 
     }
   }
 
-  function change(next: MeetEventData) { setDraft(next); setMessage(""); }
+  function change(next: MeetEventData) { if (saving.current || pendingSave.current) return; setDraft(next); setMessage(""); }
   function discardPerson(id: string) {
+    if (saving.current || pendingSave.current) return;
     const before = base.participants.find(p => p.entryId === id) ?? emptyPerformance(id);
     setDraft({ ...data, participants: data.participants.map(p => p.entryId === id ? before : p) });
     setMessage("この人の未保存の変更を取り消しました。他の入力は残っています"); setFailed(false);
   }
   function applyReview() {
-    if (!latest || !review || review.conflicts.some(c => !choices[c.key])) return;
+    if (saving.current || pendingSave.current || !latest || !review || review.conflicts.some(c => !choices[c.key])) return;
     setDraft(review.data); setBase(latest.data); setRevision(latest.revision);
     setLatest(null); setChoices({}); setFailed(false);
     setMessage("確認した内容を反映しました。配置・記録を確認して保存してください");
   }
   async function save() {
     if (saving.current || latest) return;
-    if (blocked.length) { setMessage("欠席・出場取消になった人の未保存の変更を確認してください"); setFailed(true); return; }
-    const rule = obEventRule(event);
-    const error = new MeetEvent(rule, { ...data, confirmed: false }).validate()
-      ?? (data.confirmed ? new MeetEvent(rule, { ...data, participants: data.participants.filter(p => effectiveObParticipation(event, entries.find(e => e.id === p.entryId), p).canParticipate) }).validate() : null);
-    if (error) { setMessage(error); setFailed(true); return; }
+    if (!pendingSave.current) {
+      if (blocked.length) { setMessage("欠席・出場取消になった人の未保存の変更を確認してください"); setFailed(true); return; }
+      const rule = obEventRule(event);
+      const error = new MeetEvent(rule, { ...data, confirmed: false }).validate()
+        ?? (data.confirmed ? new MeetEvent(rule, { ...data, participants: data.participants.filter(p => effectiveObParticipation(event, entries.find(e => e.id === p.entryId), p).canParticipate) }).validate() : null);
+      if (error) { setMessage(error); setFailed(true); return; }
+    }
     saving.current = true; setBusy(true); setMessage("");
     try {
-      const result = await saveObEventOperation({ event, revision, data, baseData: base });
-      if (!result.ok || !result.saved) {
-        setFailed(true); setMessage(result.message ?? "保存できませんでした。入力は残っています");
-        if (result.latest) { setLatest(result.latest); setChoices({}); }
-        router.refresh();
-        return;
+      let saved: ObEventOperation | undefined;
+      if (!pendingSave.current) {
+        pendingSave.current = structuredClone({ event, revision, data, baseData: base });
+        setPendingData(pendingSave.current.data);
+        try {
+          const result = await saveObEventOperation(pendingSave.current);
+          if (result.ok && result.saved) saved = result.saved;
+          else if (!result.ok && !result.uncertain) {
+            pendingSave.current = null; setPendingData(null);
+            setFailed(true); setMessage(result.message ?? "保存できませんでした。入力は残っています");
+            if (result.latest) { setLatest(result.latest); setChoices({}); }
+            router.refresh();
+            return;
+          }
+        } catch { /* The save may have committed; only check it from now on. */ }
       }
-      setRevision(result.saved.revision); setBase(result.saved.data); setDraft(result.saved.data);
-      onSaved(result.saved); setFailed(false); setMessage("保存しました");
-    } catch { setFailed(true); setMessage("通信できませんでした。入力は残っています。接続後にもう一度保存してください"); }
+      if (!saved) {
+        setUnconfirmed(true);
+        const result = await checkObEventOperation(pendingSave.current!);
+        if (!result.ok || !result.saved) {
+          setFailed(true); setMessage(result.message ?? "保存結果を確認できませんでした。入力は残っています。もう一度結果を確認してください");
+          return;
+        }
+        saved = result.saved;
+      }
+      pendingSave.current = null; setPendingData(null); setUnconfirmed(false);
+      setRevision(saved.revision); setBase(saved.data); setDraft(saved.data);
+      onSaved(saved); setFailed(false); setMessage("保存しました");
+    } catch {
+      if (pendingSave.current) setUnconfirmed(true);
+      setFailed(true); setMessage("保存結果を確認できませんでした。入力は残っています。接続後にもう一度結果を確認してください");
+    }
     finally { saving.current = false; setBusy(false); }
   }
-  return { data, change, dirty, busy, message, failed, revision, save, review, choices, setChoices, applyReview, reviewing: latest !== null, blocked, discardPerson };
+  return { data, change, dirty, busy, unconfirmed, locked: busy || unconfirmed, message, failed, revision, save, review, choices, setChoices, applyReview, reviewing: latest !== null, blocked, discardPerson };
 }

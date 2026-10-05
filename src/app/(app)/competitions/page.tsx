@@ -5,8 +5,10 @@ import { getCompetitions } from "@/lib/queries";
 import { permissionsOf } from "@/lib/permissions";
 
 export default async function CompetitionsPage() {
-  const profile = await getCurrentProfile();
-  const competitions = await getCompetitions();
+  const [profile, competitions] = await Promise.all([
+    getCurrentProfile(),
+    getCompetitions(),
+  ]);
   // Server Component: リクエスト時刻を初期HTMLとクライアントで共有する。
   // eslint-disable-next-line react-hooks/purity
   const initialNow = Date.now();

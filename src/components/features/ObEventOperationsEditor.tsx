@@ -18,7 +18,7 @@ export function ObEventOperationsEditor({ event, entries, initial, onSaved, onCl
   const [group, setGroup] = useState<string>("all");
   const [message, setMessage] = useState("");
   const data = draft.data, rule = obEventRule(event), model = new MeetEvent(rule, data);
-  const disabled = draft.busy || draft.reviewing;
+  const disabled = draft.locked || draft.reviewing;
   const people = new Map(entries.map(e => [e.id, e]));
   const ordered = [...data.participants].sort((a, b) => (a.group ?? 100) - (b.group ?? 100) || (a.order ?? 301) - (b.order ?? 301));
   const groups = [...new Set(ordered.map(p => p.group).filter((g): g is number => g !== null))];
@@ -47,7 +47,7 @@ export function ObEventOperationsEditor({ event, entries, initial, onSaved, onCl
   const statusControl = (p: MeetPerformance) => <select aria-label={`${people.get(p.entryId)?.submitted_name ?? "出場者"}の出場状況`} className="h-11 w-full min-w-0 rounded-xl border border-separator bg-card px-2 text-body" disabled={disabled || !editable(p)} value={p.status} onChange={e => status(p, e.target.value as MeetPerformance["status"])}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>;
   const trialCount = rule.discipline === "distance" ? 6 : Math.max(3, person?.trials.length ?? 0);
   return <FormModal open wide="full" autoFocus={false} title={`${event} · 記録`} onOpenChange={open => !open && onClose()}>
-    <FormDraftGuard dirty={draft.dirty} busy={draft.busy} onSave={draft.save}/>
+    <FormDraftGuard dirty={draft.dirty} busy={draft.locked} onSave={draft.save}/>
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-body">{data.confirmed ? "結果確認済み" : "速報"} · {data.participants.length}人</p>{onAddEntry && <Button variant="outline" disabled={disabled} onClick={() => onAddEntry(event)}>出場者を追加</Button>}</div>
       <ObOperationConflict draft={draft} entries={entries}/>
@@ -78,6 +78,6 @@ export function ObEventOperationsEditor({ event, entries, initial, onSaved, onCl
       {message && <p role="alert" className="text-body text-danger">{message}</p>}
       {draft.message && <p role={draft.failed ? "alert" : "status"} className={`text-body ${draft.failed ? "text-danger" : "text-accent"}`}>{draft.message}</p>}
     </div>
-    <FormModalFooter><div className="flex flex-wrap items-center justify-between gap-2"><label className="flex min-h-11 items-center gap-2 text-body"><input type="checkbox" disabled={disabled} checked={data.confirmed} onChange={e => draft.change({ ...data, confirmed: e.target.checked })}/>結果を確認済みにする</label><Button disabled={disabled || !draft.dirty} onClick={() => void draft.save()}>{draft.busy ? "保存中…" : "保存する"}</Button></div></FormModalFooter>
+    <FormModalFooter><div className="flex flex-wrap items-center justify-between gap-2"><label className="flex min-h-11 items-center gap-2 text-body"><input type="checkbox" disabled={disabled} checked={data.confirmed} onChange={e => draft.change({ ...data, confirmed: e.target.checked })}/>結果を確認済みにする</label><Button disabled={draft.busy || draft.reviewing || !draft.dirty && !draft.unconfirmed} onClick={() => void draft.save()}>{draft.busy ? draft.unconfirmed ? "確認中…" : "保存中…" : draft.unconfirmed ? "保存結果を確認" : "保存する"}</Button></div></FormModalFooter>
   </FormModal>;
 }

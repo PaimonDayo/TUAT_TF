@@ -11,20 +11,20 @@ import { MEMBER_PREVIEW_COOKIE } from "@/lib/member-preview";
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>;
 
 /**
- * cookieの中のセッションからログイン中のユーザーを取り出す。未ログインなら /login へ。
+ * 署名・期限を検証したJWTから本人IDを取り出す。検証できなければ /login へ。
  *
- * 画面遷移のセッション検証・トークン更新は proxy.ts で行うため、ここでは
- * ネットワークを使わない getSession でユーザーIDだけ取り出す。API Routeは
- * Proxy対象外なので、各Route HandlerがgetUserまたはBearerで直接認証する。
- * データ自体のアクセス制御は Supabase の RLS が担保する。
+ * proxy.tsとは独立に検証し、cookie内の未検証user情報を認可へ使わない。
+ * 公開鍵方式ではキャッシュ済みの鍵で検証し、DB取得は行わない。
+ * 鍵の初回取得・期限切れの更新・共通鍵方式の本人確認にはAuth通信が必要。
+ * データ自体のアクセス制御は引き続きSupabaseのRLSが担保する。
  */
-const getSessionUser = cache(async () => {
+const getVerifiedIdentity = cache(async () => {
   const supabase = await createClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.user) redirect("/login");
-  return session.user;
+  const claims = await supabase.auth.getClaims()
+    .then(({ data, error }) => error ? null : data?.claims)
+    .catch(() => null);
+  if (!claims || typeof claims.sub !== "string" || !claims.sub) redirect("/login");
+  return { id: claims.sub, email: typeof claims.email === "string" ? claims.email : "" };
 });
 
 /**
@@ -39,14 +39,14 @@ const getSessionUser = cache(async () => {
  *
  * プロフィールの中身（所属ブロック・権限など）が要るときは getCurrentProfile() を待つ。
  */
-export const getCurrentUserId = cache(async (): Promise<string> => (await getSessionUser()).id);
+export const getCurrentUserId = cache(async (): Promise<string> => (await getVerifiedIdentity()).id);
 
 /**
  * 現在ログイン中のユーザーのプロフィール（ロール込み）。
  * 未ログインなら /login へリダイレクト。
  */
 const getStoredProfile = cache(async (): Promise<Profile> => {
-  const [supabase, user] = await Promise.all([createClient(), getSessionUser()]);
+  const [supabase, user] = await Promise.all([createClient(), getVerifiedIdentity()]);
 
   // ロール取得とは切り離してプロフィール本体を取得する。
   // （roles テーブル未適用などでロール取得に失敗しても、名前等は表示できるように）

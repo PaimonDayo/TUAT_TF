@@ -14,7 +14,7 @@ import { RecordFieldsSetting } from "@/components/features/RecordFieldsSetting";
 import { RecordSourceSetting } from "@/components/features/RecordSourceSetting";
 import { SystemSyncStatus } from "@/components/features/SystemSyncStatus";
 import { MemberPreviewSetting } from "@/components/features/MemberPreviewSetting";
-import { NewUiSetting } from "@/components/features/NewUiSetting";
+
 import { EditProfileButton } from "@/components/features/MyPageActions";
 import { SHEET_INPUT_MODE_LABELS } from "@/lib/sheet-input-mode";
 import { SHEET_SETUP_PATH } from "@/lib/sheet-period";
@@ -48,7 +48,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </Section>
 
         <Section title="表示" collapsible>
-          <NewUiSetting userId={profile.id} />
           <AttendanceViewSetting userId={profile.id} initial={profile.attendance_default_block} />
           <TimelineViewSetting userId={profile.id} initial={profile.timeline_default_block} />
           <ScheduleViewSetting userId={profile.id} initial={profile.schedule_view_all_blocks ?? false} />

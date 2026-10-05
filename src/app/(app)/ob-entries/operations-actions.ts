@@ -9,6 +9,7 @@ import { OB_ENTRY_EVENTS, validEntryDelete, validGuestEntry } from "@/lib/ob-ent
 import { OB_PROGRAM_PATH, canManageObMeet } from "@/lib/ob-meet";
 import { MeetEvent, type MeetEventData } from "@/lib/meet-operations";
 import { obEventRule, type ObEventOperation } from "@/lib/ob-operations";
+import { obOperationSaveMatches } from "@/lib/ob-operation-draft";
 import type { Json } from "@/types/database";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -19,7 +20,11 @@ async function authorizedClient(staffOnly = false) {
   if (!user || await isMemberPreviewActive()) return null;
   const roleMap = await fetchRolesByProfileIds(client, [user.id]);
   const roles = roleMap.get(user.id);
-  if (!canManageObMeet(roles) && (staffOnly || !permissionsOf(roles).manageSystem)) return null;
+  if (!canManageObMeet(roles) && (staffOnly || !permissionsOf(roles).manageSystem)) {
+    if (staffOnly) return null;
+    const { data: profile, error } = await client.from("profiles").select("id,approved,status").eq("id", user.id).maybeSingle();
+    if (error || !profile || profile.id !== user.id || !profile.approved || profile.status !== "active") return null;
+  }
   return operationClient(client);
 }
 
@@ -54,7 +59,32 @@ function failure(message: string): string {
   return "保存できませんでした。入力内容を確認して再度保存してください";
 }
 
-export async function saveObEventOperation(input: { event: string; revision: number | null; data: MeetEventData; baseData?: MeetEventData }): Promise<{ ok: boolean; message?: string; saved?: ObEventOperation; latest?: ObEventOperation }> {
+type SaveOperationInput = { event: string; revision: number | null; data: MeetEventData; baseData?: MeetEventData };
+
+function matchesAttempt(input: SaveOperationInput, saved: ObEventOperation): boolean {
+  return saved.revision > (input.revision ?? -1)
+    && (!input.baseData || obOperationSaveMatches(input.baseData, input.data, saved.data));
+}
+
+/** An uncertain save can only be checked by reading the same meet/event as the verified operator. */
+export async function checkObEventOperation(input: SaveOperationInput): Promise<{ ok: boolean; message?: string; saved?: ObEventOperation }> {
+  if (!input || !OB_ENTRY_EVENTS.includes(input.event) || !input.baseData
+    || !(input.revision === null || Number.isSafeInteger(input.revision) && input.revision >= 0)
+    || !validData(input.event, input.data) || !validData(input.event, input.baseData)) return { ok: false, message: "確認する保存内容を確認してください" };
+  try {
+    const client = await authorizedClient();
+    if (!client) return { ok: false, message: "ログイン状態と記録入力の権限を確認してください。入力は残っています" };
+    const { data, error } = await client.from("ob_event_operations")
+      .select("meet_key,event_name,revision,data,updated_at").eq("meet_key", "ob-2026").eq("event_name", input.event).maybeSingle();
+    if (error) return { ok: false, message: "保存結果を取得できませんでした。入力は残っています。接続後にもう一度確認してください" };
+    if (!savedOperation(data, input.event) || !matchesAttempt(input, data)) return { ok: false, message: "送信した変更の保存を確認できませんでした。入力は残っています。もう一度結果を確認してください" };
+    return { ok: true, saved: data };
+  } catch {
+    return { ok: false, message: "保存結果を取得できませんでした。入力は残っています。接続後にもう一度確認してください" };
+  }
+}
+
+export async function saveObEventOperation(input: SaveOperationInput): Promise<{ ok: boolean; message?: string; saved?: ObEventOperation; latest?: ObEventOperation; uncertain?: boolean }> {
   if (!input || !OB_ENTRY_EVENTS.includes(input.event)
     || !(input.revision === null || Number.isSafeInteger(input.revision) && input.revision >= 0)
     || !validData(input.event, input.data) || (input.baseData !== undefined && !validData(input.event, input.baseData))) return { ok: false, message: "入力内容を確認してください" };
@@ -69,9 +99,11 @@ export async function saveObEventOperation(input: { event: string; revision: num
     if (result.error.message.includes("operation_conflict")) {
       try { const value: unknown = JSON.parse(result.error.details ?? "null"); if (savedOperation(value, input.event)) latest = value; } catch { /* No unverified data is returned. */ }
     }
-    return { ok: false, message: failure(result.error.message), ...(latest ? { latest } : {}) };
+    // A SQLSTATE establishes transaction rollback; a transport response does not.
+    const uncertain = !result.error.code || !/^[A-Z0-9]{5}$/.test(result.error.code);
+    return { ok: false, message: failure(result.error.message), ...(latest ? { latest } : {}), ...(uncertain ? { uncertain: true } : {}) };
   }
-  if (!savedOperation(result.data, input.event)) return { ok: false, message: "保存結果を確認できませんでした。画面を更新して確認してください" };
+  if (!savedOperation(result.data, input.event) || !matchesAttempt(input, result.data)) return { ok: false, uncertain: true, message: "保存結果を確認できませんでした。入力は残っています。結果を確認してください" };
   revalidatePath(OB_PROGRAM_PATH);
   return { ok: true, saved: result.data };
 }

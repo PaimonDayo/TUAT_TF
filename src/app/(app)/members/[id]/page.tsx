@@ -16,6 +16,7 @@ import type { CompetitionEvent } from "@/lib/competition-goals";
 import { TrainingChart } from "@/components/features/TrainingChart";
 import { FavoriteButton } from "@/components/features/FavoriteButton";
 import { ListSkeleton } from "@/components/ui/page-skeletons";
+import { Skeleton } from "@/components/ui/skeleton";
 import { NoteList } from "@/components/features/NotesView";
 import { getCurrentProfile } from "@/lib/supabase/auth";
 import {
@@ -48,61 +49,24 @@ async function MemberContent({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const profile = (await getProfileById(id)) as Profile | null;
+  const [profile, viewer] = await Promise.all([
+    getProfileById(id) as Promise<Profile | null>,
+    getCurrentProfile(),
+  ]);
   if (!profile) notFound();
 
-  const viewer = await getCurrentProfile();
   const isSelf = viewer.id === id;
-  const canManageSystem = permissionsOf(viewer.roles).manageSystem;
-  const [records, tweets, pbs, notes, favorited, cookieStore, events, competitions] = await Promise.all([
-    getUserRecordsWithSocialState(id, viewer.id),
-    getUserTweets(id, viewer.id),
-    getPbRecords(id) as Promise<PbRecord[]>,
-    getPublishedPersonalNotes(id),
-    isSelf ? Promise.resolve(false) : isFavorite(viewer.id, id),
-    cookies(),
-    getCompetitionEvents(),
-    canManageSystem ? getCompetitions() : Promise.resolve([]),
-  ]);
-  const showRecordSource = showRecordSourceFor(
-    canManageSystem,
-    cookieStore.get(RECORD_SOURCE_COOKIE)?.value,
-  );
-
-  const authorMini = {
-    id: profile.id,
-    display_name: profile.display_name,
-    avatar_url: profile.avatar_url,
-    blocks: profile.blocks,
-    grade: profile.grade,
-  };
-  const currentUser = {
-    id: viewer.id,
-    display_name: viewer.display_name,
-    avatar_url: viewer.avatar_url,
-    systemRecordForm: Boolean(viewer.sheet_name),
-          canModerateComments: canModerateComments(viewer.roles),
-  };
-
-  // 記録とつぶやきを一つの「これまでの投稿」にまとめる。
-  // つぶやきはマイページにしか出ておらず、他の人のプロフィールでは
-  // 記録しか見えていなかった。
-  const activity = sortFeedItems([
-    ...records.map(
-      (record): FeedItem => ({
-        kind: "record",
-        ...(record as RecordWithAuthor),
-        author: authorMini,
-      }),
-    ),
-    ...tweets,
-  ]);
 
   return (
     <>
       <SubHeader
         title={profile.display_name || "部員"}
-        right={!isSelf ? <FavoriteButton targetId={id} initial={favorited} /> : undefined}
+        sideWidth={!isSelf ? 120 : undefined}
+        right={!isSelf ? (
+          <Suspense fallback={<Skeleton className="h-9 w-24 rounded-full" />}>
+            <MemberFavorite viewerId={viewer.id} targetId={id} />
+          </Suspense>
+        ) : undefined}
       />
 
       <div className="px-4 space-y-5 pt-1">
@@ -150,6 +114,71 @@ async function MemberContent({
           </div>
         </Card>
 
+        <Suspense fallback={
+          <div role="status" aria-label="部員の記録を読み込み中" className="space-y-5">
+            <span className="sr-only">部員の記録を読み込み中</span>
+            {profile.blocks.includes("middle_long") && <Skeleton className="h-[172px] w-full rounded-card" />}
+            <Skeleton className="h-20 w-full rounded-card" />
+            <Skeleton className="h-40 w-full rounded-card" />
+          </div>
+        }>
+          <MemberDetails profile={profile} viewer={viewer} />
+        </Suspense>
+      </div>
+    </>
+  );
+}
+
+async function MemberFavorite({ viewerId, targetId }: { viewerId: string; targetId: string }) {
+  const initial = await isFavorite(viewerId, targetId);
+  return <FavoriteButton targetId={targetId} initial={initial} />;
+}
+
+/** 履歴の取得が遅くても、部員名・プロフィールと戻る操作を先に使えるようにする。 */
+async function MemberDetails({ profile, viewer }: { profile: Profile; viewer: Profile }) {
+  const id = profile.id;
+  const isSelf = viewer.id === id;
+  const canManageSystem = permissionsOf(viewer.roles).manageSystem;
+  const [records, tweets, pbs, notes, cookieStore, events, competitions] = await Promise.all([
+    getUserRecordsWithSocialState(id, viewer.id),
+    getUserTweets(id, viewer.id),
+    getPbRecords(id) as Promise<PbRecord[]>,
+    getPublishedPersonalNotes(id),
+    cookies(),
+    getCompetitionEvents(),
+    canManageSystem ? getCompetitions() : Promise.resolve([]),
+  ]);
+  const showRecordSource = showRecordSourceFor(
+    canManageSystem,
+    cookieStore.get(RECORD_SOURCE_COOKIE)?.value,
+  );
+  const authorMini = {
+    id: profile.id,
+    display_name: profile.display_name,
+    avatar_url: profile.avatar_url,
+    blocks: profile.blocks,
+    grade: profile.grade,
+  };
+  const currentUser = {
+    id: viewer.id,
+    display_name: viewer.display_name,
+    avatar_url: viewer.avatar_url,
+    systemRecordForm: Boolean(viewer.sheet_name),
+    canModerateComments: canModerateComments(viewer.roles),
+  };
+  const activity = sortFeedItems([
+    ...records.map(
+      (record): FeedItem => ({
+        kind: "record",
+        ...(record as RecordWithAuthor),
+        author: authorMini,
+      }),
+    ),
+    ...tweets,
+  ]);
+
+  return (
+    <>
         {profile.blocks.includes("middle_long") && (
           <TrainingChart records={records} showIntensitySummary />
         )}
@@ -195,7 +224,6 @@ async function MemberContent({
             />
           )}
         </section>
-      </div>
     </>
   );
 }

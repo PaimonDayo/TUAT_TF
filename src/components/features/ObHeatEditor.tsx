@@ -15,13 +15,13 @@ export function ObHeatEditor({ event, entries, initial, onSaved, onClose, onAddE
   const draft = useObOperationDraft(event, entries, initial, onSaved, data => new MeetHeatPlan(data, new Set(entries.filter(e => e.events.includes(event) && !e.absent).map(e => e.id))).initial(separate));
   const present = entries.filter(e => e.events.includes(event) && !e.absent).length;
   return <FormModal open wide="full" autoFocus={false} title={`${event} · 組分け`} onOpenChange={open => !open && onClose()}>
-    <FormDraftGuard dirty={draft.dirty} busy={draft.busy} onSave={draft.save}/>
+    <FormDraftGuard dirty={draft.dirty} busy={draft.locked} onSave={draft.save}/>
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-body">出場登録 {present}人</p>{onAddEntry && <Button variant="outline" disabled={draft.busy || draft.reviewing} onClick={() => onAddEntry(event)}>出場者を追加</Button>}</div>
+      <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-body">出場登録 {present}人</p>{onAddEntry && <Button variant="outline" disabled={draft.locked || draft.reviewing} onClick={() => onAddEntry(event)}>出場者を追加</Button>}</div>
       <ObOperationConflict draft={draft} entries={entries}/>
-      <MeetHeatBoard key={draft.revision ?? "new"} data={draft.data} entrants={entries.map(e => ({ id: e.id, name: e.submitted_name, grade: e.grade, mark: e.qualification_marks[event] ?? "", alumni: isAlumniEntry(e), eligible: e.events.includes(event), absent: e.absent }))} orderLabel={separate ? "レーン" : rule.discipline === "track" ? "番号" : "試技順"} disabled={draft.busy || draft.reviewing} onChange={draft.change}/>
+      <MeetHeatBoard key={draft.revision ?? "new"} data={draft.data} entrants={entries.map(e => ({ id: e.id, name: e.submitted_name, grade: e.grade, mark: e.qualification_marks[event] ?? "", alumni: isAlumniEntry(e), eligible: e.events.includes(event), absent: e.absent }))} orderLabel={separate ? "レーン" : rule.discipline === "track" ? "番号" : "試技順"} disabled={draft.locked || draft.reviewing} onChange={draft.change}/>
       {draft.message && <p role={draft.failed ? "alert" : "status"} className={`text-body ${draft.failed ? "text-danger" : "text-accent"}`}>{draft.message}</p>}
     </div>
-    <FormModalFooter><div className="flex items-center gap-3"><p className="min-w-0 flex-1 text-caption">{draft.dirty ? "未保存の変更があります" : "保存済み"}</p><Button className="min-w-32" disabled={draft.busy || draft.reviewing || !draft.dirty} onClick={() => void draft.save()}>{draft.busy ? "保存中…" : "保存する"}</Button></div></FormModalFooter>
+    <FormModalFooter><div className="flex items-center gap-3"><p className="min-w-0 flex-1 text-caption">{draft.unconfirmed ? "保存結果を確認してください" : draft.dirty ? "未保存の変更があります" : "保存済み"}</p><Button className="min-w-32" disabled={draft.busy || draft.reviewing || !draft.dirty && !draft.unconfirmed} onClick={() => void draft.save()}>{draft.busy ? draft.unconfirmed ? "確認中…" : "保存中…" : draft.unconfirmed ? "保存結果を確認" : "保存する"}</Button></div></FormModalFooter>
   </FormModal>;
 }

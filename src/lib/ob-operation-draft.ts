@@ -6,6 +6,28 @@ export type OperationChoices = Record<string, "own" | "current">;
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const value = (p: MeetPerformance, field: OperationField) => field === "position" ? [p.group, p.order] : p[field];
 
+const sameTrials = (a: MeetPerformance, b: MeetPerformance) => a.trials.length === b.trials.length
+  && a.trials.every((trial, i) => trial.mark === b.trials[i].mark && trial.status === b.trials[i].status && trial.wind === b.trials[i].wind);
+
+/** Confirm only submitted changes, retaining other people's edits and newly added participants. */
+export function obOperationSaveMatches(base: MeetEventData, own: MeetEventData, current: MeetEventData): boolean {
+  if (own.confirmed !== base.confirmed && current.confirmed !== own.confirmed) return false;
+  const before = new Map(base.participants.map(person => [person.entryId, person]));
+  const submitted = new Map(own.participants.map(person => [person.entryId, person]));
+  const saved = new Map(current.participants.map(person => [person.entryId, person]));
+  // Removing participants is not an accepted operation; a read must not silently approve one.
+  if (base.participants.some(person => !submitted.has(person.entryId))) return false;
+  return own.participants.every(person => {
+    const original = before.get(person.entryId), latest = saved.get(person.entryId);
+    if (!latest) return false;
+    if ((!original || original.group !== person.group || original.order !== person.order)
+      && (latest.group !== person.group || latest.order !== person.order)) return false;
+    if ((!original || original.status !== person.status) && latest.status !== person.status) return false;
+    if ((!original || !sameTrials(original, person)) && !sameTrials(latest, person)) return false;
+    return true;
+  });
+}
+
 /** Rebase only the changed fields. Choosing a position never replaces the person's results. */
 export function reviewObOperation(base: MeetEventData, own: MeetEventData, current: MeetEventData, choices: OperationChoices = {}) {
   const before = new Map(base.participants.map(p => [p.entryId, p]));

@@ -1,9 +1,17 @@
 import { beforeEach, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ user: vi.fn(), roles: vi.fn(), preview: vi.fn(), rpc: vi.fn(), refresh: vi.fn() }));
-vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: mocks.user }, rpc: mocks.rpc }) }));
+const mocks = vi.hoisted(() => ({ user: vi.fn(), roles: vi.fn(), preview: vi.fn(), rpc: vi.fn(), refresh: vi.fn(), profile: vi.fn(), read: vi.fn(), reads: [] as { table: string; select: string; filters: [string, string][] }[] }));
+vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: mocks.user }, rpc: mocks.rpc, from: (table: string) => {
+  const read = { table, select: "", filters: [] as [string, string][] };
+  const query = {
+    select(columns: string) { read.select = columns; return query; },
+    eq(column: string, value: string) { read.filters.push([column, value]); return query; },
+    maybeSingle() { mocks.reads.push(read); return table === "profiles" ? mocks.profile() : mocks.read(); },
+  };
+  return query;
+} }) }));
 vi.mock("@/lib/supabase/auth", () => ({ fetchRolesByProfileIds: mocks.roles, isMemberPreviewActive: mocks.preview }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.refresh }));
-import { addObDayEntry, saveObEventOperation, setObAttendance } from "./operations-actions";
+import { addObDayEntry, checkObEventOperation, saveObEventOperation, setObAttendance } from "./operations-actions";
 import { emptyPerformance, type MeetEventData } from "@/lib/meet-operations";
 
 const entryId = "10000000-0000-4000-8000-000000000001";
@@ -18,8 +26,11 @@ beforeEach(() => {
   mocks.preview.mockResolvedValue(false);
   mocks.roles.mockResolvedValue(new Map([["u", [{ name: "system", can_manage_system: true }]]]));
   mocks.rpc.mockResolvedValue({ data: stored(), error: null });
+  mocks.profile.mockResolvedValue({data:null,error:null});
+  mocks.read.mockResolvedValue({data:null,error:null});
+  mocks.reads = [];
 });
-it("permits OB staff and system operators but rejects anonymous, ordinary and suppressed access", async () => {
+it("permits OB staff and system operators but rejects anonymous, unverified profiles and preview access", async () => {
   mocks.user.mockResolvedValueOnce({ data: { user: null } });
   expect((await saveObEventOperation(input)).ok).toBe(false);
   for (const roles of [[], [{ name: "OB戦2026", permissions_suppressed: true }], [{ can_manage_system: true, permissions_suppressed: true }]]) {
@@ -33,6 +44,20 @@ it("permits OB staff and system operators but rejects anonymous, ordinary and su
   expect((await saveObEventOperation(input)).ok).toBe(true);
   expect((await saveObEventOperation(input)).ok).toBe(true);
 });
+it("lets an approved active member record without a helper assignment, retaining staff-only actions", async () => {
+  mocks.roles.mockResolvedValue(new Map([["u", []]]));
+  mocks.profile.mockResolvedValue({data:{id:"u",approved:true,status:"active"},error:null});
+  expect((await saveObEventOperation(input)).ok).toBe(true);
+  expect((await setObAttendance({entryId,revision:3,absent:true})).ok).toBe(false);
+  expect((await addObDayEntry(dayInput)).ok).toBe(false);
+  expect(mocks.rpc).toHaveBeenCalledTimes(1);
+  for (const data of [{id:"u",approved:false,status:"active"},{id:"u",approved:true,status:"graduated"},{id:"other",approved:true,status:"active"}]) {
+    mocks.profile.mockResolvedValueOnce({data,error:null});
+    expect((await saveObEventOperation(input)).ok).toBe(false);
+  }
+  mocks.profile.mockResolvedValueOnce({data:{id:"u",approved:true,status:"active"},error:{message:"unavailable"}});
+  expect((await saveObEventOperation(input)).ok).toBe(false);
+});
 it("passes base data for merging and returns the actual server-merged operation", async () => {
   const merged = stored({ confirmed: false, participants: [emptyPerformance(entryId)] });
   mocks.rpc.mockResolvedValueOnce({ data: merged, error: null });
@@ -45,9 +70,9 @@ it("passes base data for merging and returns the actual server-merged operation"
 });
 it("returns verified latest data for a conflicting edit without treating it as saved", async () => {
   const latest = { ...stored(), revision: 4 };
-  mocks.rpc.mockResolvedValueOnce({ error: { message: "operation_conflict", details: JSON.stringify(latest) } });
+  mocks.rpc.mockResolvedValueOnce({ error: { code: "P0001", message: "operation_conflict", details: JSON.stringify(latest) } });
   expect(await saveObEventOperation(input)).toEqual({ ok: false, message: expect.stringContaining("他の端末"), latest });
-  mocks.rpc.mockResolvedValueOnce({ error: { message: "operation_conflict", details: '{"event_name":"other"}' } });
+  mocks.rpc.mockResolvedValueOnce({ error: { code: "P0001", message: "operation_conflict", details: '{"event_name":"other"}' } });
   expect((await saveObEventOperation(input)).latest).toBeUndefined();
   expect(mocks.refresh).not.toHaveBeenCalled();
 });
@@ -118,5 +143,76 @@ it("rejects invalid day entries before authentication and shows actionable failu
     mocks.rpc.mockResolvedValueOnce({ error: { message: error } });
     expect((await addObDayEntry(dayInput)).message).toContain(text);
   }
+  expect(mocks.refresh).not.toHaveBeenCalled();
+});
+
+const beforeData: MeetEventData = { confirmed: false, participants: [{ ...emptyPerformance(entryId), group: 1, order: 1 }] };
+const desiredData: MeetEventData = { ...beforeData, participants: [{ ...beforeData.participants[0], trials: [{ mark: "12.34", status: "valid", wind: "+0.5" }] }] };
+const attempt = { event: input.event, revision: 2, data: desiredData, baseData: beforeData };
+
+it("checks an uncertain operation using only a verified event read and keeps disjoint changes", async () => {
+  const latest = { ...stored(desiredData), revision: 5, data: { ...desiredData, participants: [
+    { ...desiredData.participants[0], group: 2 }, emptyPerformance(operationId),
+  ] } };
+  mocks.read.mockResolvedValueOnce({ data: latest, error: null });
+  expect(await checkObEventOperation(attempt)).toEqual({ ok: true, saved: latest });
+  expect(mocks.reads).toEqual([{ table: "ob_event_operations", select: "meet_key,event_name,revision,data,updated_at", filters: [["meet_key", "ob-2026"], ["event_name", input.event]] }]);
+  expect(mocks.rpc).not.toHaveBeenCalled();
+  expect(mocks.refresh).not.toHaveBeenCalled();
+});
+
+it("rejects a missing, malformed, older or differently saved result without attempting a write", async () => {
+  for (const data of [null, { ...stored(desiredData), revision: 2 }, { ...stored(desiredData), revision: 3, event_name: "女子100m" },
+    { ...stored(beforeData), revision: 3 }, { ...stored(desiredData), revision: 3, data: {} }]) {
+    mocks.read.mockResolvedValueOnce({ data, error: null });
+    expect((await checkObEventOperation(attempt)).ok).toBe(false);
+  }
+  expect(mocks.rpc).not.toHaveBeenCalled();
+});
+
+it("holds confirmation after read errors or exceptions without reporting an empty result as saved", async () => {
+  mocks.read.mockResolvedValueOnce({ data: null, error: { message: "read failed" } });
+  expect((await checkObEventOperation(attempt)).message).toContain("取得できません");
+  mocks.read.mockRejectedValueOnce(new Error("read failed"));
+  expect((await checkObEventOperation(attempt)).message).toContain("取得できません");
+  expect(mocks.rpc).not.toHaveBeenCalled();
+});
+
+it("validates confirmation input before auth and prevents anonymous or preview reads", async () => {
+  for (const bad of [{ ...attempt, event: "other" }, { ...attempt, revision: -1 }, { ...attempt, baseData: undefined }, { ...attempt, data: {} }]) {
+    expect((await checkObEventOperation(bad as typeof attempt)).ok).toBe(false);
+  }
+  expect(mocks.user).not.toHaveBeenCalled();
+  mocks.user.mockResolvedValueOnce({ data: { user: null } });
+  expect((await checkObEventOperation(attempt)).ok).toBe(false);
+  mocks.preview.mockResolvedValueOnce(true);
+  expect((await checkObEventOperation(attempt)).ok).toBe(false);
+  expect(mocks.read).not.toHaveBeenCalled();
+  expect(mocks.rpc).not.toHaveBeenCalled();
+});
+
+it("confirms for an approved active member using the verified profile id, not a helper assignment", async () => {
+  mocks.roles.mockResolvedValue(new Map([["u", []]]));
+  mocks.profile.mockResolvedValueOnce({ data: { id: "u", approved: true, status: "active" }, error: null });
+  mocks.read.mockResolvedValueOnce({ data: { ...stored(desiredData), revision: 3 }, error: null });
+  expect((await checkObEventOperation(attempt)).ok).toBe(true);
+  expect(mocks.reads[0]).toMatchObject({ table: "profiles", filters: [["id", "u"]] });
+  mocks.profile.mockResolvedValueOnce({ data: { id: "other", approved: true, status: "active" }, error: null });
+  expect((await checkObEventOperation(attempt)).ok).toBe(false);
+  expect(mocks.read).toHaveBeenCalledTimes(1);
+  expect(mocks.rpc).not.toHaveBeenCalled();
+});
+
+it("distinguishes SQL rollback from unknown transport and malformed success responses", async () => {
+  mocks.rpc.mockResolvedValueOnce({ data: null, error: { code: "P0001", message: "operation_position" } });
+  expect((await saveObEventOperation(attempt)).uncertain).toBeUndefined();
+  mocks.rpc.mockResolvedValueOnce({ data: null, error: { code: "42501", message: "permission denied" } });
+  expect((await saveObEventOperation(attempt)).uncertain).toBeUndefined();
+  mocks.rpc.mockResolvedValueOnce({ data: null, error: { code: "", message: "fetch failed" } });
+  expect((await saveObEventOperation(attempt)).uncertain).toBe(true);
+  mocks.rpc.mockResolvedValueOnce({ data: null, error: null });
+  expect((await saveObEventOperation(attempt)).uncertain).toBe(true);
+  mocks.rpc.mockResolvedValueOnce({ data: { ...stored(beforeData), revision: 3 }, error: null });
+  expect((await saveObEventOperation(attempt)).uncertain).toBe(true);
   expect(mocks.refresh).not.toHaveBeenCalled();
 });

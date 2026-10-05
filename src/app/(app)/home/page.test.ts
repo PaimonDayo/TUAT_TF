@@ -82,7 +82,7 @@ it("keeps the entry and program available when duty retrieval fails",async()=>{
   const html=renderToStaticMarkup(content.props.children[2]);
   expect(html).toContain("補助担当を取得できませんでした");
   expect(html).not.toContain("補助担当はまだ登録されていません");
-  expect(html).toContain("プログラム・補助員表を見る");
+  expect(html).toContain("OB戦を開く");
 });
 it("makes whole-meet absence and event DNS visible without hiding assigned duties",async()=>{
   mocks.obEntry.mockResolvedValue({id:"my-entry",events:["男子100m"],qualification_marks:{},absent:true});

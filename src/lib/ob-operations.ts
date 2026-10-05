@@ -18,7 +18,7 @@ export function obDutyCompetitionEvents(entry: (Pick<ObEntry, "events"> & Partia
 }
 
 /** Keep registration, meet attendance and event results independent; never rewrite the source entry. */
-export function effectiveObParticipation(event: string, entry?: ObEntry, performance?: MeetPerformance) {
+export function effectiveObParticipation(event: string, entry?: Pick<ObEntry, "events" | "absent">, performance?: MeetPerformance) {
   const registered = !!entry?.events.includes(event);
   const absent = entry?.absent === true;
   const recorded = hasRecordedObPerformance(performance);
