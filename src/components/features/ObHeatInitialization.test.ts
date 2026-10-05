@@ -59,6 +59,7 @@ it.each(["男子100m", "女子300m", "男子300mH", "男子1500m", "女子3000m"
   event => {
     const entries = roster(event);
     expect(render(event, entries).data.participants).toEqual(entries.map(entry => emptyPerformance(entry.id)));
+    expect(mocks.guard).toHaveBeenLastCalledWith(expect.objectContaining({ dirty: false }));
     hooks.values = [];
     expect(render(event, entries).data.participants).toEqual(entries.map(entry => emptyPerformance(entry.id)));
     expect(mocks.write).not.toHaveBeenCalled();
@@ -96,5 +97,6 @@ it("preserves saved positions, trials and DNS while newly registered people rema
   const added = render(event, entries, saved).data;
   expect(added.participants.slice(0, 2)).toEqual(saved.data.participants);
   expect(added.participants.slice(2)).toEqual(entries.slice(2).map(entry => emptyPerformance(entry.id)));
+  expect(mocks.guard).toHaveBeenLastCalledWith(expect.objectContaining({ dirty: false }));
   expect(mocks.write).not.toHaveBeenCalled();
 });

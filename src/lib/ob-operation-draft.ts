@@ -9,6 +9,33 @@ const value = (p: MeetPerformance, field: OperationField) => field === "position
 const sameTrials = (a: MeetPerformance, b: MeetPerformance) => a.trials.length === b.trials.length
   && a.trials.every((trial, i) => trial.mark === b.trials[i].mark && trial.status === b.trials[i].status && trial.wind === b.trials[i].wind);
 
+/** Empty trailing input slots are display scaffolding; recorded trial positions remain significant. */
+function meaningfulTrialCount(person: MeetPerformance): number {
+  let count = person.trials.length;
+  while (count > 0) {
+    const trial = person.trials[count - 1];
+    if (trial.status !== "pending" || trial.mark !== "" || trial.wind !== "") break;
+    count--;
+  }
+  return count;
+}
+
+/** Compare displayed content, preserving the exact server snapshot for save/conflict checks. */
+export function obOperationHasChanges(base: MeetEventData, current: MeetEventData): boolean {
+  if (base.confirmed !== current.confirmed || base.participants.length !== current.participants.length) return true;
+  const before = new Map(base.participants.map(person => [person.entryId, person]));
+  if (before.size !== base.participants.length || new Set(current.participants.map(person => person.entryId)).size !== current.participants.length) return true;
+  return current.participants.some(person => {
+    const original = before.get(person.entryId);
+    if (!original || original.group !== person.group || original.order !== person.order || original.status !== person.status) return true;
+    const count = meaningfulTrialCount(person);
+    return meaningfulTrialCount(original) !== count || person.trials.slice(0, count).some((trial, index) => {
+      const previous = original.trials[index];
+      return trial.mark !== previous.mark || trial.status !== previous.status || trial.wind !== previous.wind;
+    });
+  });
+}
+
 /** Confirm only submitted changes, retaining other people's edits and newly added participants. */
 export function obOperationSaveMatches(base: MeetEventData, own: MeetEventData, current: MeetEventData): boolean {
   if (own.confirmed !== base.confirmed && current.confirmed !== own.confirmed) return false;

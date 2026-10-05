@@ -1,10 +1,40 @@
 import { expect, it } from "vitest";
 import { emptyPerformance, type MeetEventData } from "./meet-operations";
-import { obOperationSaveMatches, reviewObOperation } from "./ob-operation-draft";
+import { obOperationHasChanges, obOperationSaveMatches, reviewObOperation } from "./ob-operation-draft";
 
 const a = { ...emptyPerformance("a"), group: 1, order: 1 };
 const b = { ...emptyPerformance("b"), group: 1, order: 2 };
 const base: MeetEventData = { participants: [a, b], confirmed: false };
+it("compares actual operation values without changing snapshots or considering JSON order", () => {
+  const saved = { ...base, participants: [{ ...a, trials: [{ mark: "12.34", status: "valid" as const, wind: "0" }] }, b] };
+  const equivalent = { ...saved, participants: [...saved.participants].reverse().map(person => ({
+    trials: person.trials.map(trial => ({ wind: trial.wind, status: trial.status, mark: trial.mark })),
+    status: person.status, order: person.order, group: person.group, entryId: person.entryId,
+  })) };
+  const snapshots = JSON.stringify([saved, equivalent]);
+  expect(obOperationHasChanges(saved, equivalent)).toBe(false);
+  expect(JSON.stringify([saved, equivalent])).toBe(snapshots);
+  for (const patch of [{ group: 2 }, { order: 3 }, { status: "DNS" as const }, { trials: [{ mark: "12.35", status: "valid" as const, wind: "0" }] }, { trials: [{ mark: "12.34", status: "valid" as const, wind: "+0.1" }] }]) {
+    expect(obOperationHasChanges(saved, { ...saved, participants: [{ ...saved.participants[0], ...patch }, b] })).toBe(true);
+  }
+  expect(obOperationHasChanges(saved, { ...saved, confirmed: true })).toBe(true);
+  expect(obOperationHasChanges(base, { ...base, participants: [a] })).toBe(true);
+  expect(obOperationHasChanges(base, { ...base, participants: [a, a] })).toBe(true);
+});
+
+it("ignores only blank pending trial tails and preserves meaningful trial order, statuses and gaps", () => {
+  const blank = { mark: "", status: "pending" as const, wind: "" };
+  const mark = { mark: "5.20", status: "valid" as const, wind: "0" };
+  const saved = { ...base, participants: [{ ...a, trials: [blank, mark] }, b] };
+  expect(obOperationHasChanges(base, { ...base, participants: [{ ...a, trials: [blank, blank] }, b] })).toBe(false);
+  expect(obOperationHasChanges(saved, { ...saved, participants: [{ ...a, trials: [blank, mark, blank] }, b] })).toBe(false);
+  for (const trials of [[mark], [mark, blank], [blank, { ...mark, status: "foul" as const }], [blank, mark, { ...blank, wind: "0" }]]) {
+    expect(obOperationHasChanges(saved, { ...saved, participants: [{ ...a, trials }, b] })).toBe(true);
+  }
+  // Save-result matching remains exact, even when a blank tail is ignored for the edit indicator.
+  expect(obOperationSaveMatches(base, { ...base, participants: [{ ...a, trials: [blank] }, b] }, base)).toBe(false);
+});
+
 it("keeps a new entrant and independent saved results while moving another person", () => {
   const own = { ...base, participants: [{ ...a, group: 2 }, b] };
   const current = { ...base, participants: [{ ...a, trials: [{ status: "valid" as const, mark: "12.34", wind: "0" }] }, b, emptyPerformance("new")] };

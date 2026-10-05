@@ -6,6 +6,13 @@ import { emptyPerformance, type MeetEventData, type MeetEventRule, type MeetPerf
 export type ObEventOperation = { meet_key: string; event_name: string; revision: number; data: MeetEventData; updated_at: string };
 export type ObParticipationStatus = MeetPerformance["status"] | "absent" | "withdrawn" | "missing";
 
+/** Editable lane frames; existing saved positions outside them remain visible. */
+export function obHeatCapacity(event: string): 8 | 6 | undefined {
+  if (/^(男子|女子)100m$/.test(event)) return 8;
+  if (/^(男子|女子)(300m|300mH|1500m|3000m)$/.test(event)) return 6;
+  return undefined;
+}
+
 /** DNS is a declaration, not a completed performance. DNF/DQ and all attempted trials are historical results. */
 export function hasRecordedObPerformance(performance?: MeetPerformance): boolean {
   return !!performance && (performance.status === "DNF" || performance.status === "DQ" || performance.trials.some(trial => trial.status !== "pending" || !!trial.mark || !!trial.wind));

@@ -43,6 +43,87 @@ beforeEach(() => {
   mocks.check.mockResolvedValue({ ok: false, message: "保存結果を確認できませんでした" });
 });
 
+it("opens an unsaved event without marking the displayed roster as an edit or writing it", async () => {
+  const fresh = () => {
+    hooks.cursor = 0;
+    return useObOperationDraft("男子100m", entries, undefined, mocks.onSaved);
+  };
+  expect(fresh().data.participants).toEqual(entries.map(entry => emptyPerformance(entry.id)));
+  expect(fresh().dirty).toBe(false);
+  await fresh().save();
+  expect(mocks.write).not.toHaveBeenCalled();
+  expect(mocks.check).not.toHaveBeenCalled();
+});
+
+it("keeps roster-only additions clean and sends the exact saved base only after a real edit", async () => {
+  render();
+  const roster = [...entries, { ...entries[0], id: "new" }];
+  const displayed = render(initial, roster);
+  expect(displayed.dirty).toBe(false);
+  await displayed.save();
+  expect(mocks.write).not.toHaveBeenCalled();
+  const edited = { ...displayed.data, participants: displayed.data.participants.map(person => person.entryId === "new" ? { ...person, group: 2, order: 1 } : person) };
+  displayed.change(edited);
+  expect(render(initial, roster).dirty).toBe(true);
+  mocks.write.mockResolvedValueOnce({ ok: true, saved: { ...initial, revision: 3, data: edited } });
+  await render(initial, roster).save();
+  expect(mocks.write).toHaveBeenCalledWith({ event: "男子100m", revision: initial.revision, baseData: initial.data, data: edited });
+  expect(render(initial, roster).dirty).toBe(false);
+});
+
+it("returns to clean after undo or moving someone back while an added entrant remains displayed", async () => {
+  const roster = [...entries, { ...entries[0], id: "new" }];
+  const original = render(initial, roster).data;
+  render(initial, roster).change({ ...original, participants: original.participants.map(person => person.entryId === "a" ? { ...person, group: 2, order: 7 } : person) });
+  expect(render(initial, roster).dirty).toBe(true);
+  render(initial, roster).change(original);
+  expect(render(initial, roster).dirty).toBe(false);
+  await render(initial, roster).save();
+  expect(mocks.write).not.toHaveBeenCalled();
+});
+
+it("ignores participant order, object key order and an empty pending trial tail", async () => {
+  const saved = { ...initial, data: entered() };
+  render(saved);
+  const equivalent: MeetEventData = {
+    confirmed: false,
+    participants: [...saved.data.participants].reverse().map(person => ({
+      trials: person.trials.map(trial => ({ wind: trial.wind, status: trial.status, mark: trial.mark })).concat([{ wind: "", status: "pending", mark: "" }]),
+      status: person.status, order: person.order, group: person.group, entryId: person.entryId,
+    })),
+  };
+  render(saved).change(equivalent);
+  expect(render(saved).dirty).toBe(false);
+  await render(saved).save();
+  expect(mocks.write).not.toHaveBeenCalled();
+});
+
+it("does not call a roster-driven confirmation reset a local edit but tracks an explicit confirmation change", () => {
+  const saved = { ...initial, data: { confirmed: true, participants: initial.data.participants.map(person => ({ ...person, trials: [{ mark: "12.34", status: "valid" as const, wind: "" }] })) } };
+  expect(render(saved).dirty).toBe(false);
+  render(saved).change({ ...saved.data, confirmed: false });
+  expect(render(saved).dirty).toBe(true);
+  render(saved).change(saved.data);
+  expect(render(saved).dirty).toBe(false);
+  const roster = [...entries, { ...entries[0], id: "new" }];
+  expect(render(saved, roster).data.confirmed).toBe(false);
+  expect(render(saved, roster).dirty).toBe(false);
+});
+
+it("guards a real edit to an absent entrant and becomes clean after explicitly discarding that edit", async () => {
+  const roster = entries.map(entry => ({ ...entry, absent: entry.id === "a" }));
+  expect(render(initial, roster).dirty).toBe(false);
+  render(initial, roster).change(entered());
+  expect(render(initial, roster).dirty).toBe(true);
+  expect(render(initial, roster).blocked.map(person => person.entryId)).toEqual(["a"]);
+  await render(initial, roster).save();
+  expect(render(initial, roster).failed).toBe(true);
+  expect(mocks.write).not.toHaveBeenCalled();
+  render(initial, roster).discardPerson("a");
+  expect(render(initial, roster).dirty).toBe(false);
+  expect(render(initial, roster).blocked).toEqual([]);
+});
+
 it("reads again without rewriting after the save response was lost", async () => {
   mocks.write.mockRejectedValueOnce(new Error("response lost after commit"));
   render().change(entered());
@@ -58,7 +139,7 @@ it("holds the submitted snapshot and refuses input, discard and refresh changes 
   render().change(entered());
   await render().save();
   let draft = render();
-  expect(draft).toMatchObject({ busy: false, unconfirmed: true, locked: true, failed: true });
+  expect(draft).toMatchObject({ busy: false, unconfirmed: true, locked: true, failed: true, dirty: true });
   draft.change({ ...entered(), confirmed: true });
   draft.discardPerson("a");
   const remote = { ...initial, revision: 4, data: { ...initial.data, participants: [...initial.data.participants, emptyPerformance("new")] } };
@@ -105,7 +186,7 @@ it("permits editing and explicit retry after a definitive rejected transaction",
   mocks.write.mockResolvedValueOnce({ ok: false, message: "入力を確認してください" });
   render().change(entered());
   await render().save();
-  expect(render()).toMatchObject({ unconfirmed: false, locked: false, failed: true });
+  expect(render()).toMatchObject({ unconfirmed: false, locked: false, failed: true, dirty: true });
   const corrected = { ...entered(), participants: [{ ...entered().participants[0], trials: [{ mark: "12.45", status: "valid" as const, wind: "" }] }, initial.data.participants[1]] };
   render().change(corrected);
   expect(render().data).toEqual(corrected);
@@ -119,7 +200,7 @@ it("preserves the existing explicit conflict review instead of treating a rollba
   mocks.write.mockResolvedValueOnce({ ok: false, latest, message: "変更箇所を確認してください" });
   render().change(entered());
   await render().save();
-  expect(render()).toMatchObject({ unconfirmed: false, locked: false, reviewing: true });
+  expect(render()).toMatchObject({ unconfirmed: false, locked: false, reviewing: true, dirty: true });
   expect(render().review?.conflicts.map(conflict => conflict.key)).toEqual(["a:trials"]);
   expect(mocks.check).not.toHaveBeenCalled();
 });

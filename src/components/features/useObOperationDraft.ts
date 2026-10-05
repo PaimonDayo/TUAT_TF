@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { checkObEventOperation, saveObEventOperation } from "@/app/(app)/ob-entries/operations-actions";
 import { emptyPerformance, MeetEvent, type MeetEventData } from "@/lib/meet-operations";
 import { effectiveObParticipation, obEventRule, reconcileObEvent, type ObEventOperation } from "@/lib/ob-operations";
-import { reviewObOperation, type OperationChoices } from "@/lib/ob-operation-draft";
+import { obOperationHasChanges, reviewObOperation, type OperationChoices } from "@/lib/ob-operation-draft";
 import type { ObEntry } from "@/lib/ob-entries";
 
 export function useObOperationDraft(event: string, entries: ObEntry[], initial: ObEventOperation | undefined, onSaved: (saved: ObEventOperation) => void) {
@@ -24,7 +24,8 @@ export function useObOperationDraft(event: string, entries: ObEntry[], initial: 
   const saving = useRef(false);
   const pendingSave = useRef<Parameters<typeof checkObEventOperation>[0] | null>(null);
   const data = pendingData ?? reconcileObEvent(event, entries, draft);
-  const dirty = data.confirmed !== base.confirmed || JSON.stringify(data.participants) !== JSON.stringify(base.participants);
+  // Roster reconciliation is display-only; the stored base still anchors RPC and conflict checks.
+  const dirty = obOperationHasChanges(reconcileObEvent(event, entries, base), data);
   const review = latest ? reviewObOperation(base, data, latest.data, choices) : null;
   const blocked = data.participants.filter(person => {
     const entry = entries.find(e => e.id === person.entryId), before = base.participants.find(p => p.entryId === person.entryId) ?? emptyPerformance(person.entryId);
@@ -59,6 +60,7 @@ export function useObOperationDraft(event: string, entries: ObEntry[], initial: 
   }
   async function save() {
     if (saving.current || latest) return;
+    if (!pendingSave.current && !dirty) return;
     if (!pendingSave.current) {
       if (blocked.length) { setMessage("欠席・出場取消になった人の未保存の変更を確認してください"); setFailed(true); return; }
       const rule = obEventRule(event);

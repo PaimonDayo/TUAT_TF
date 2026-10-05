@@ -22,3 +22,13 @@
 - 環境確認、TypeScript、対象ESLint、Vitest全107ファイル821条件が成功。独立レビューでは統合履歴190件を7ページで取得し、マイクロ秒差と日時の時差を含む境界の欠落・重複がないこと、元snapshotや内部IDを表示DTOへ渡さないことを確認した。これらの成功を実機確認の代わりにはしない。
 
 コード検証・最終公開確認中。本番へのmigration実適用・pushはまだ行っていない。既存の全体品質改善の保留範囲は公開へ混ぜない。
+
+## 本番反映完了（2026-10-05 19:57 JST）
+
+- commit `8d9cc74ecf62041d8926fb872b5a4a9e9ff0ff27` をmasterへfast-forwardし、1回のpushで `master -> master` を確認した。作業ブランチはpushしていない。関連する前回のOB本番完了記録も今回のコードとまとめた。
+- 最終commitの `npm run build -- --webpack` はNext 16.3.6・合成環境値で成功。環境確認、型検査、対象eslint、全107ファイル821条件のVitest、Chrome/WebKitの320/390/1440pxを確認。実iOS PWA・Androidと本番ユーザーでの保存操作は未確認。
+- migration `20261005020000` をPC・クラウドへ適用し、両履歴表のpolicy一致、対象データ保持、helper/failover設定保持を確認した。PCはhealthy・maintenance=false。新規表や保存権限の変更はない。
+- GitHub公式deployment statusで同SHAの `Production – tuat-tf` がsuccess。公開 `https://tuat-tf.vercel.app/api/version` は200・同SHAとなり、本番反映を確認した。別projectのpreview成功を本番の根拠にしていない。
+- 既存の変更済み・未追跡105ファイルはmerge前後のSHA-256一致を確認し、既存索引の他作業の追記も保持した。本番PCのnode_modules、本番設定、環境変数、課金プラン、別作業の保留は変更していない。
+
+この完了追記は文書のみのローカル保持。追加のpush・build・deployは行わず、次のコード変更と一緒に公開する。
