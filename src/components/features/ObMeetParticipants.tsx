@@ -63,6 +63,7 @@ export function ObMeetParticipants({ entries, members, history, party, duties, r
       </div>
       <Button onClick={() => setAdding(true)}>参加者を登録</Button>
     </div>
+    {footer}
     <SegmentedControl items={[{ key: "entries", label: "エントリー" }, { key: "party", label: "懇親会" }]} value={view} onChange={setView} />
     {view === "party" ? <ObPartyView responses={party} /> : <>
       <Input aria-label="参加者の氏名・学年・種目で検索" placeholder="氏名・学年・種目で検索" value={search} onChange={event => setSearch(event.target.value)} />
@@ -86,7 +87,6 @@ export function ObMeetParticipants({ entries, members, history, party, duties, r
       {!visible.length && <p className="py-6 text-center text-caption">{filter === "identity" && !query ? "本人照合が必要な参加者はいません" : "該当する参加者はいません"}</p>}
       <p className="text-micro text-muted">変更はアプリ内だけに保存されます。Googleフォームの回答は変わりません。</p>
     </>}
-    {footer}
     {target && <ParticipantDetail key={target.id} entry={target} members={members} history={history} party={party.find(value => value.entry_id === target.id)}
       duties={duties} roles={roles} operations={operations} onClose={() => setTargetId(null)} onDelete={() => remove(target)}
       onEdit={() => { setTargetId(null); setEditingId(target.id); }}

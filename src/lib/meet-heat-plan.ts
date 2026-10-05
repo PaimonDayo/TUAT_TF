@@ -39,9 +39,4 @@ export class MeetHeatPlan {
     }
     return { ...this.data, confirmed: false, participants: this.data.participants.map(p => p.entryId === id ? { ...p, status: dns ? "DNS" : "entered" } : p) };
   }
-  /** First opening only; longer races and field events start together. */
-  initial(separate: boolean): MeetEventData {
-    if (this.data.participants.some(p => p.group !== null || p.order !== null || p.trials.length || p.status !== "entered") || this.data.confirmed) return this.data;
-    return this.result(new Map(this.active.map((p,i) => [p.entryId,{group:separate?Math.floor(i/8)+1:1,order:separate?i%8+1:i+1}])));
-  }
 }

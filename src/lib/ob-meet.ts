@@ -22,8 +22,8 @@ export const OB_STAFF_ROLE = "OB戦2026";
 export function canManageObMeet(roles: { name: string; can_manage_system: boolean; permissions_suppressed?: boolean }[] | null | undefined): boolean {
   return !!roles?.some((r) => !r.permissions_suppressed && r.name === OB_STAFF_ROLE);
 }
-export function canViewObHistory(roles: { can_manage_system: boolean; can_manage_members: boolean }[] | null | undefined): boolean {
-  return !!roles?.some((r) => r.can_manage_system || r.can_manage_members);
+export function canViewObHistory(roles: { name: string; can_manage_system: boolean; can_manage_members: boolean; permissions_suppressed?: boolean }[] | null | undefined): boolean {
+  return canManageObMeet(roles) || !!roles?.some((r) => !r.permissions_suppressed && (r.can_manage_system || r.can_manage_members));
 }
 /** 種目名（"男子100m" など）の開始時刻。プログラムを見ながらエントリーできるようにする。 */
 export function obEventTime(event: string): string | undefined {

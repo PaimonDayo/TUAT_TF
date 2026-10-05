@@ -28,11 +28,13 @@ it("reserves DNS and withdrawn numbers so reinstatement cannot collide",()=>{
  expect(next.participants[3]).toBe(dns);expect(next.participants[4]).toBe(old);
  expect(()=>plan({...data,participants:[a,b,c,dns,old]}).move(["dns"],1)).toThrow();
 });
-it("creates one initial group for 30 non-separate entrants and never reseeds saved performances",()=>{
+it("places only explicitly selected entrants while the remaining people stay unassigned",()=>{
  const fresh:MeetEventData={participants:Array.from({length:30},(_,i)=>emptyPerformance("p"+i)),confirmed:false};
- expect(new Set(plan(fresh).initial(false).participants.map(p=>p.group))).toEqual(new Set([1]));
- expect(plan(fresh).initial(true).participants.at(-1)).toMatchObject({group:4,order:6});
- expect(plan().initial(false)).toBe(data);
+ const next=plan(fresh).move(["p0","p29"],2);
+ expect(next.participants[0]).toMatchObject({group:2,order:1});
+ expect(next.participants[29]).toMatchObject({group:2,order:2});
+ expect(next.participants.slice(1,29)).toEqual(fresh.participants.slice(1,29));
+ expect(fresh.participants.every(p=>p.group===null&&p.order===null)).toBe(true);
 });
 it("keeps trials when unassigning and refuses malformed changes atomically",()=>{
  const next=plan().move(["a"],null);
@@ -43,9 +45,9 @@ it("keeps trials when unassigning and refuses malformed changes atomically",()=>
  expect(()=>plan(full).move(["c"],1)).toThrow("番号");
  expect(full.participants[2]).toBe(c);
 });
-it("keeps all 300 non-lane entrants in one group and accepts their numbers",()=>{
+it("allows an explicit manual placement of all 300 non-lane entrants in one group",()=>{
  const fresh:MeetEventData={participants:Array.from({length:300},(_,i)=>emptyPerformance("p"+i)),confirmed:false};
- const next=plan(fresh).initial(false);
+ const next=plan(fresh).move(fresh.participants.map(p=>p.entryId),1);
  expect(new Set(next.participants.map(p=>p.group))).toEqual(new Set([1]));
  expect(next.participants.at(-1)?.order).toBe(300);
  expect(new MeetEvent({name:"1500m",discipline:"track",wind:false},next).validate()).toBeNull();

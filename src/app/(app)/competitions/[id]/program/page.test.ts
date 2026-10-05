@@ -108,15 +108,17 @@ it.each([{ view: "management" }, { view: "operations", section: "participants" }
   mock.roles = [staff];
   const result = await workspace(requested);
   expect(result).toMatchObject({ view: "operations", section: "participants", staff: true });
-  expect(find(result.children as ReactNode, "participants")).toMatchObject({ initialFilter: requested.edit === "identity" ? "identity" : "all", footer: undefined });
+  const participants = find(result.children as ReactNode, "participants")!;
+  expect(participants).toMatchObject({ initialFilter: requested.edit === "identity" ? "identity" : "all" });
+  expect(isValidElement(participants.footer) && participants.footer.type).toBe("history");
   expect(mock.mine).not.toHaveBeenCalled();
   expect(mock.program).not.toHaveBeenCalled();
   expect(mock.roster).toHaveBeenCalledTimes(1);
   expect(mock.operations).toHaveBeenCalledTimes(1);
 });
 
-it("includes history only for a staff member with the existing history permission", async () => {
-  mock.roles = [staff, { name: "部員管理", can_manage_system: false, can_manage_members: true }];
+it("includes history for an OB staff member without another management role", async () => {
+  mock.roles = [staff];
   const result = await workspace({ view: "operations", section: "participants" });
   const participants = find(result.children as ReactNode, "participants")!;
   expect(isValidElement(participants.footer) && participants.footer.type).toBe("history");

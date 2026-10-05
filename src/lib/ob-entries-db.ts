@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { ObEntry } from "./ob-entries";
 import type { EntryChange } from "./ob-entry-edit";
+import type { ObOperationChange } from "./ob-entry-history";
 import type { ObDuty, ObDutyRole, ObEntryDuty } from "./ob-duty";
 import type { ObPartyResponse } from "./ob-meet";
 import type { Json } from "@/types/database";
@@ -29,6 +30,7 @@ type EntryDatabase = Omit<Database, "public"> & {
       ob_entry_duties: { Row: ObEntryDuty; Insert: never; Update: never; Relationships: [] };
       ob_party_responses: { Row: ObPartyResponse; Insert: never; Update: never; Relationships: [] };
       ob_entry_changes: { Row: EntryChange & { entry_id: string | null }; Insert: never; Update: never; Relationships: [] };
+      ob_operation_changes: { Row: ObOperationChange; Insert: never; Update: never; Relationships: [] };
       ob_meet_entries: {
         Row: ObEntry;
         Insert: { id?: string; meet_key: string; submitted_name: string; grade: string; events: string[]; qualification_marks?: Record<string, string | null>; profile_id?: string | null; revision?: number; imported_at?: string };

@@ -186,11 +186,14 @@ it("reports capacity errors and sends multiple roles atomically",async()=>{
 });
 
 
-it("refuses history reads by staff, anonymous and preview sessions before querying", async () => {
+it("refuses history reads by ordinary, anonymous, preview and suppressed sessions before querying", async () => {
+  mocks.roles.mockResolvedValueOnce(new Map());
   expect((await getObEntryHistory()).ok).toBe(false);
   mocks.user.mockResolvedValueOnce({data:{user:null}});
   expect((await getObEntryHistory()).ok).toBe(false);
   mocks.preview.mockResolvedValueOnce(true);
+  expect((await getObEntryHistory()).ok).toBe(false);
+  mocks.roles.mockResolvedValueOnce(new Map([["system", [{name:"OB戦2026",can_manage_system:true,can_manage_members:true,permissions_suppressed:true}]]]));
   expect((await getObEntryHistory()).ok).toBe(false);
   expect(mocks.from).not.toHaveBeenCalled();
 });
@@ -202,26 +205,89 @@ it("does not grant administrators other-person editing without the OB role", asy
 });
 
 
-it("pages administrator history and resolves the actor without returning raw snapshots", async () => {
+it("pages administrator entry history with a shared cursor on both history tables", async () => {
   mocks.roles.mockResolvedValue(new Map([["system", [{name:"管理者",can_manage_system:false,can_manage_members:true}]]]));
-  const rows = Array.from({length:31},(_,i)=>({id:`change-${i}`,actor_id:id,changed_at:"2026-09-28T00:00:00+00:00",before_data:{events:["男子100m"]},after_data:{submitted_name:"対象",events:[]}}));
+  const rows = Array.from({length:31},(_,i)=>({id:`10000000-0000-4000-8000-${String(100-i).padStart(12,"0")}`,actor_id:id,changed_at:"2026-09-28T00:00:00+00:00",before_data:{events:["男子100m"]},after_data:{submitted_name:"対象",events:[],private_value:"not-for-client"}}));
   const filter=vi.fn(); const limit=vi.fn();
   const historyChain = { select:()=>historyChain, eq:()=>historyChain, order:()=>historyChain, limit:(n:number)=>{limit(n);return historyChain;}, or:(value:string)=>{filter(value);return historyChain;}, then:(resolve:(value:unknown)=>void)=>resolve({data:rows,error:null}) };
   const peopleChain = {select:()=>peopleChain,in:()=>Promise.resolve({data:[{id,display_name:"担当者"}],error:null})};
-  mocks.from.mockImplementation(table=>table==="ob_entry_changes"?historyChain:peopleChain);
+  const operationChain = { ...historyChain, select:()=>operationChain, eq:()=>operationChain, order:()=>operationChain, limit:(n:number)=>{limit(n);return operationChain;}, or:(value:string)=>{filter(value);return operationChain;}, then:(resolve:(value:unknown)=>void)=>resolve({data:[],error:null}) };
+  mocks.from.mockImplementation(table=>table==="ob_entry_changes"?historyChain:table==="ob_operation_changes"?operationChain:peopleChain);
   const result=await getObEntryHistory({id,at:"2026-09-28T01:00:00Z"});
   expect(result.ok).toBe(true);
   if(result.ok) {
-    expect(result.items).toHaveLength(30); expect(result.nextCursor?.id).toBe("change-29");
-    expect(result.items[0]).toMatchObject({actor:"担当者",subject:"対象",details:expect.arrayContaining(["種目取消：男子100m"])});
+    expect(result.items).toHaveLength(30); expect(result.nextCursor?.id).toBe(rows[29].id);
+    expect(result.items[0]).toMatchObject({id:`entry:${rows[0].id}`,actor:"担当者",subject:"対象",details:expect.arrayContaining([{label:"種目取消",before:"男子100m",after:"取消"}])});
     expect(result.items[0]).not.toHaveProperty("after_data");
+    expect(JSON.stringify(result)).not.toContain("not-for-client");
   }
   expect(limit).toHaveBeenCalledWith(31);
+  expect(limit).toHaveBeenCalledTimes(2); expect(filter).toHaveBeenCalledTimes(2);
   expect(filter).toHaveBeenCalledWith(`changed_at.lt.2026-09-28T01:00:00Z,and(changed_at.eq.2026-09-28T01:00:00Z,id.lt.${id})`);
 });
 it("rejects malformed history cursors before database access", async()=>{
   expect((await getObEntryHistory({id:"bad",at:"invalid"})).ok).toBe(false);
   expect(mocks.from).not.toHaveBeenCalled();
+});
+
+function mockHistoryTables(entryRows: unknown[], operationRows: unknown[], failedTable?: string) {
+  const selects = vi.fn();
+  const data: Record<string, unknown[]> = {
+    ob_entry_changes: entryRows, ob_operation_changes: operationRows,
+    profiles: [{id,display_name:"担当者"}], ob_meet_entries: [{id,submitted_name:"競技の出場者"}],
+  };
+  mocks.from.mockImplementation(table => {
+    const chain = {
+      select: (columns: string) => { selects(table, columns); return chain; },
+      eq: () => chain, order: () => chain, limit: () => chain, or: () => chain, in: () => chain,
+      then: (resolve: (value: unknown) => void) => resolve(table === failedTable ? {data:null,error:{message:"unavailable"}} : {data:data[table],error:null}),
+    };
+    return chain;
+  });
+  return selects;
+}
+
+it("lets OB staff read mixed entry and operation history in true microsecond order with named targets", async () => {
+  const uuid = (index: number) => `20000000-0000-4000-8000-${String(100-index).padStart(12,"0")}`;
+  const at = (index: number) => `2026-10-05T00:00:00.123${String(index).padStart(3,"0")}+00:00`;
+  const entries = Array.from({length:17}, (_, index) => {
+    const number = 34-index*2;
+    return {id:uuid(number),actor_id:id,changed_at:at(number),before_data:{events:[]},after_data:{submitted_name:"対象",events:["男子100m"]}};
+  });
+  const operations = Array.from({length:17}, (_, index) => {
+    const number = 33-index*2;
+    return {id:uuid(number),meet_key:"ob-2026",event_name:"男子100m",actor_id:id,changed_at:at(number),
+      before_data:{participants:[{entryId:id,group:null,order:null,status:"entered",trials:[]}],confirmed:false},
+      after_data:{participants:[{entryId:id,group:2,order:3,status:"entered",trials:[]}],confirmed:false,private_value:"hidden-snapshot"},
+      request_payload:{secret:"hidden-payload"}};
+  });
+  const selects = mockHistoryTables(entries, operations);
+  const result = await getObEntryHistory();
+  expect(result.ok).toBe(true);
+  if (result.ok) {
+    expect(result.items).toHaveLength(30);
+    expect(result.items.slice(0,4).map(item=>item.id)).toEqual([`entry:${uuid(34)}`,`operation:${uuid(33)}`,`entry:${uuid(32)}`,`operation:${uuid(31)}`]);
+    expect(result.nextCursor).toEqual({id:uuid(5),at:at(5)});
+    expect(result.items[1].details).toContainEqual({subject:"競技の出場者",label:"組",before:"未割当",after:"2"});
+    expect(result.items[1].actor).toBe("担当者");
+    expect(JSON.stringify(result)).not.toMatch(/hidden-snapshot|hidden-payload|request_payload|before_data|actor_id|entryId/);
+  }
+  expect(selects).toHaveBeenCalledWith("ob_operation_changes","id,meet_key,event_name,actor_id,changed_at,before_data,after_data");
+});
+
+it.each(["ob_entry_changes","ob_operation_changes","profiles","ob_meet_entries"])("does not report a partial history when %s fails", async (table) => {
+  const entry = {id,actor_id:id,changed_at:"2026-10-05T00:00:00Z",before_data:null,after_data:{submitted_name:"対象",events:[]}};
+  const operation = {...entry,meet_key:"ob-2026",event_name:"男子100m",after_data:{participants:[{entryId:id,group:null,order:null,status:"entered",trials:[]}]}};
+  mockHistoryTables([entry],[operation],table);
+  expect(await getObEntryHistory()).toEqual({ok:false,message:"履歴を取得できませんでした"});
+});
+
+it("preserves member-manager entry-only history when operation RLS returns no rows", async () => {
+  mocks.roles.mockResolvedValue(new Map([["system", [{name:"部員管理",can_manage_system:false,can_manage_members:true}]]]));
+  mockHistoryTables([{id,actor_id:id,changed_at:"2026-10-05T00:00:00Z",before_data:null,after_data:{submitted_name:"対象",events:[]}}],[]);
+  const result = await getObEntryHistory();
+  expect(result.ok).toBe(true);
+  if(result.ok) {expect(result.items.map(item=>item.id)).toEqual([`entry:${id}`]);expect(result.nextCursor).toBeNull();}
 });
 
 it("registers a named guest and requires the returned ID for deletion", async()=>{

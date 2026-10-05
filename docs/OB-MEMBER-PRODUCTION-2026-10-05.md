@@ -35,3 +35,13 @@ OB・OG向けページ・QR・匿名公開クエリ・認証除外は公開差�
 12:43 JSTの最終候補をChrome390px・WebKit320pxで確認。ホーム→運営→自分の登録→補助員→ホーム、直接URLの戻り先、旧URL、本人編集を閉じて再読込、公開参加者リンク無しが成功し、JS例外は双方0件。`/ob-entries` は実応答307・relative Location・空bodyになり、変更前に同じ操作で出たWebKit診断も0件になった。共通部品の320/390/1024px検証では戻る44px・見出しの間隔・右操作幅・未保存確認・OBの入れ子フォームの戻りを確認した。
 
 旧入口の追加1条件も成功（全体105 files / 798 testsに加え、対象route 1 file / 1 test）。本番反映はこの後に行い、最終のcommit・Production・公開version確認を追記する。
+
+## 本番反映の完了（12:49 JST）
+
+- commit `2c7d4602553de36e353ac8fc58e6fbe2acb23063` を最新masterへfast-forwardし、1回のpushで `master -> master` を確認した。作業ブランチはpushしていない。
+- migration `20261005010000` をPC・クラウド双方へ適用。helperと2保存RPCの定義hashとACLが一致し、反映前後の9表データは同一。PCのfailover記録off・クラウドonを保持し、PCはhealthy・maintenance=false。
+- Vercel `dpl_GsCfE6tupdtxET7z4N9KcPkGSVz1` の対象project・`target=production`・`state=READY`・commit SHA完全一致を公式CLI/APIで確認。GitHub `Production – tuat-tf` のdeployment `6850942882`もsuccess。公開 `/api/version` は200・同SHA。公開loginは200、初回SSRに標準ガラスのmarkerを確認。
+- 本番向けbuildは最終commit後にも成功。運営の一連操作は専用Auth/DBの最終候補で検証済み。本番の実ユーザーで保存操作を代行していない。実iOS PWA・AndroidのOSキーボードとタッチは未確認。
+- 本番設定・課金プラン・環境変数は変更していない。OB・OG向けサイトとQRは後日の別サイトへ保留。別作業の変更・型・文書を保全し、公開したsourceと重なる未コミット変更は無し。
+
+この完了追記は文書のみのため手元に保持し、次のコード変更と一緒にpushする。追加のbuild・deploy・pushは行わない。

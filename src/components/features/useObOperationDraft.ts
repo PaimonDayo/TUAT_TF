@@ -8,13 +8,10 @@ import { effectiveObParticipation, obEventRule, reconcileObEvent, type ObEventOp
 import { reviewObOperation, type OperationChoices } from "@/lib/ob-operation-draft";
 import type { ObEntry } from "@/lib/ob-entries";
 
-export function useObOperationDraft(event: string, entries: ObEntry[], initial: ObEventOperation | undefined, onSaved: (saved: ObEventOperation) => void, prepare?: (data: MeetEventData) => MeetEventData) {
+export function useObOperationDraft(event: string, entries: ObEntry[], initial: ObEventOperation | undefined, onSaved: (saved: ObEventOperation) => void) {
   const router = useRouter();
   const [base, setBase] = useState<MeetEventData>(initial?.data ?? { participants: [], confirmed: false });
-  const [draft, setDraft] = useState(() => {
-    const value = reconcileObEvent(event, entries, initial?.data);
-    return prepare && !initial ? prepare(value) : value;
-  });
+  const [draft, setDraft] = useState(() => reconcileObEvent(event, entries, initial?.data));
   const [revision, setRevision] = useState(initial?.revision ?? null);
   const [observedRevision, setObservedRevision] = useState(initial?.revision ?? -1);
   const [busy, setBusy] = useState(false);

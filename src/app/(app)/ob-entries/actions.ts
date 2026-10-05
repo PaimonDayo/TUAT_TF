@@ -163,25 +163,40 @@ export async function getObEntryHistory(cursor?: { at: string; id: string }): Pr
   { ok: true; items: import("@/lib/ob-entry-history").ObHistoryItem[]; nextCursor: { at: string; id: string } | null } | { ok: false; message: string }
 > {
   const denied = { ok: false as const, message: "履歴を取得できませんでした" };
-  if (cursor && (!/^[0-9a-f-]{36}$/i.test(cursor.id) || !/^\d{4}-\d{2}-\d{2}T[0-9:.+-]+Z?$/.test(cursor.at) || !Number.isFinite(Date.parse(cursor.at)))) return denied;
+  if (cursor && (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cursor.id) || !/^\d{4}-\d{2}-\d{2}T[0-9:.+-]+Z?$/.test(cursor.at) || !Number.isFinite(Date.parse(cursor.at)))) return denied;
   const base = await createClient();
   const { data: { user } } = await base.auth.getUser();
   if (!user || await isMemberPreviewActive()) return denied;
   const roles = await fetchRolesByProfileIds(base, [user.id]);
-  if (!canViewObHistory(roles.get(user.id))) return { ok: false, message: "管理者だけが変更履歴を閲覧できます" };
-  let query = entryClient(base).from("ob_entry_changes").select("id,actor_id,changed_at,before_data,after_data")
+  if (!canViewObHistory(roles.get(user.id))) return { ok: false, message: "OB戦担当・管理者だけが変更履歴を閲覧できます" };
+  const client = entryClient(base);
+  let entryQuery = client.from("ob_entry_changes").select("id,actor_id,changed_at,before_data,after_data")
     .eq("after_data->>meet_key", "ob-2026").order("changed_at", { ascending: false }).order("id", { ascending: false }).limit(31);
-  if (cursor) query = query.or(`changed_at.lt.${cursor.at},and(changed_at.eq.${cursor.at},id.lt.${cursor.id})`);
-  const result = await query;
-  if (result.error) return denied;
-  const rows = result.data.slice(0, 30);
-  const { describeObChange, historyProfileIds } = await import("@/lib/ob-entry-history");
-  const ids = historyProfileIds(rows);
-  const people = ids.length ? await base.from("profiles").select("id,display_name").in("id", ids) : { data: [], error: null };
-  if (people.error) return denied;
-  const names = new Map((people.data ?? []).map(p => [p.id, p.display_name]));
-  const last = rows.at(-1);
-  return { ok: true, items: rows.map(row => describeObChange(row, names)), nextCursor: result.data.length > 30 && last ? { at: last.changed_at, id: last.id } : null };
+  let operationQuery = client.from("ob_operation_changes").select("id,meet_key,event_name,actor_id,changed_at,before_data,after_data")
+    .eq("meet_key", "ob-2026").order("changed_at", { ascending: false }).order("id", { ascending: false }).limit(31);
+  if (cursor) {
+    const filter = `changed_at.lt.${cursor.at},and(changed_at.eq.${cursor.at},id.lt.${cursor.id})`;
+    entryQuery = entryQuery.or(filter); operationQuery = operationQuery.or(filter);
+  }
+  const [entryResult, operationResult] = await Promise.all([entryQuery, operationQuery]);
+  if (entryResult.error || operationResult.error || !entryResult.data || !operationResult.data) return denied;
+  const { describeObChange, describeObOperationChange, historyProfileIds, historyEntryIds, compareObHistoryPosition } = await import("@/lib/ob-entry-history");
+  const combined = [
+    ...entryResult.data.map(row => ({ kind: "entry" as const, row })),
+    ...operationResult.data.map(row => ({ kind: "operation" as const, row })),
+  ].sort((a, b) => compareObHistoryPosition(a.row, b.row));
+  const rows = combined.slice(0, 30);
+  const ids = historyProfileIds(rows.map(item => item.row));
+  const entryIds = historyEntryIds(rows.flatMap(item => item.kind === "operation" ? [item.row] : []));
+  const [people, entries] = await Promise.all([
+    ids.length ? base.from("profiles").select("id,display_name").in("id", ids) : Promise.resolve({ data: [], error: null }),
+    entryIds.length ? client.from("ob_meet_entries").select("id,submitted_name").eq("meet_key", "ob-2026").in("id", entryIds) : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (people.error || entries.error || !people.data || !entries.data) return denied;
+  const names = new Map(people.data.map(person => [person.id, person.display_name]));
+  const entryNames = new Map(entries.data.map(entry => [entry.id, entry.submitted_name]));
+  const last = rows.at(-1)?.row;
+  return { ok: true, items: rows.map(item => item.kind === "entry" ? describeObChange(item.row, names) : describeObOperationChange(item.row, names, entryNames)), nextCursor: combined.length > 30 && last ? { at: last.changed_at, id: last.id } : null };
 }
 
 export async function createGuestEntry(input: import("@/lib/ob-entry-edit").GuestEntryEdit): Promise<{ok:boolean;message?:string}> {

@@ -7,12 +7,11 @@ import { ObOperationConflict } from "./ObOperationConflict";
 import { useObOperationDraft } from "./useObOperationDraft";
 import { obEventRule, type ObEventOperation } from "@/lib/ob-operations";
 import { isAlumniEntry, type ObEntry } from "@/lib/ob-entries";
-import { MeetHeatPlan } from "@/lib/meet-heat-plan";
 
 export function ObHeatEditor({ event, entries, initial, onSaved, onClose, onAddEntry }: { event: string; entries: ObEntry[]; initial?: ObEventOperation; onSaved: (saved: ObEventOperation) => void; onClose: () => void; onAddEntry?: (event: string) => void }) {
   const separate = /^(男子|女子)(100m|300m|300mH)$/.test(event);
   const rule = obEventRule(event);
-  const draft = useObOperationDraft(event, entries, initial, onSaved, data => new MeetHeatPlan(data, new Set(entries.filter(e => e.events.includes(event) && !e.absent).map(e => e.id))).initial(separate));
+  const draft = useObOperationDraft(event, entries, initial, onSaved);
   const present = entries.filter(e => e.events.includes(event) && !e.absent).length;
   return <FormModal open wide="full" autoFocus={false} title={`${event} · 組分け`} onOpenChange={open => !open && onClose()}>
     <FormDraftGuard dirty={draft.dirty} busy={draft.locked} onSave={draft.save}/>
