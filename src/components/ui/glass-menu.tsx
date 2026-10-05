@@ -19,12 +19,13 @@ export type GlassMenuItem = {
 };
 
 /** Anchored action dialog: Radix owns dismissal, focus and scroll-lock handoff. */
-export function GlassMenu({ open, onOpenChange, trigger, label, items }: {
+export function GlassMenu({ open, onOpenChange, trigger, label, items, placement = "auto" }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   trigger: ReactElement;
   label: string;
   items: GlassMenuItem[];
+  placement?: "auto" | "above";
 }) {
   const anchor = useRef<HTMLButtonElement>(null);
   const pending = useRef<(() => void) | null>(null);
@@ -39,7 +40,7 @@ export function GlassMenu({ open, onOpenChange, trigger, label, items }: {
       <Dialog.Trigger ref={anchor} data-glass-menu-trigger="" asChild>{trigger}</Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay className="system-glass-menu-scrim" data-handoff={handoff || undefined} />
-        <MenuSurface anchor={anchor} label={label} handoff={handoff} onClosed={() => {
+        <MenuSurface anchor={anchor} label={label} handoff={handoff} placement={placement} onClosed={() => {
           const action = pending.current;
           pending.current = null;
           if (!alive.current) return;
@@ -72,36 +73,43 @@ export function GlassMenu({ open, onOpenChange, trigger, label, items }: {
   );
 }
 
-function MenuSurface({ anchor, label, handoff, onClosed, children }: {
+function MenuSurface({ anchor, label, handoff, placement, onClosed, children }: {
   anchor: RefObject<HTMLButtonElement | null>;
   label: string;
   handoff: boolean;
+  placement: "auto" | "above";
   onClosed: () => void;
   children: ReactNode;
 }) {
   const content = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
+    let frame = 0;
     const position = () => {
+      frame = 0;
       const node = content.current, button = anchor.current;
       if (!node || !button) return;
       const v = window.visualViewport;
       const viewport = { left: v?.offsetLeft ?? 0, top: v?.offsetTop ?? 0, width: v?.width ?? innerWidth, height: v?.height ?? innerHeight };
-      const p = glassMenuPosition(button.getBoundingClientRect(), viewport, node.scrollHeight + 2);
+      const p = glassMenuPosition(button.getBoundingClientRect(), viewport, node.scrollHeight + 2, placement);
       Object.assign(node.style, { left: `${p.left}px`, top: `${p.top}px`, width: `${p.width}px`, maxHeight: `${p.maxHeight}px`, transformOrigin: p.origin, visibility: "visible" });
     };
+    // Floating anchors follow the viewport in their own animation frame.
+    // Read their updated bounds after that update instead of during the event.
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(position); };
     position();
-    const resize = new ResizeObserver(position);
+    const resize = new ResizeObserver(schedule);
     if (content.current) resize.observe(content.current);
-    window.addEventListener("resize", position);
-    window.visualViewport?.addEventListener("resize", position);
-    window.visualViewport?.addEventListener("scroll", position);
+    window.addEventListener("resize", schedule);
+    window.visualViewport?.addEventListener("resize", schedule);
+    window.visualViewport?.addEventListener("scroll", schedule);
     return () => {
       resize.disconnect();
-      window.removeEventListener("resize", position);
-      window.visualViewport?.removeEventListener("resize", position);
-      window.visualViewport?.removeEventListener("scroll", position);
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", schedule);
+      window.visualViewport?.removeEventListener("resize", schedule);
+      window.visualViewport?.removeEventListener("scroll", schedule);
     };
-  }, [anchor]);
+  }, [anchor, placement]);
   return (
     <Dialog.Content ref={content} className="system-glass-menu" data-handoff={handoff || undefined} aria-describedby={undefined}
       style={{ visibility: "hidden" }}

@@ -435,7 +435,7 @@ function ContextualFAB({
           </div>
         )}
 
-        {systemGlass && hasMenu ? <GlassMenu open={speedDialOpen} onOpenChange={setSpeedDialOpen} label="作成メニュー" trigger={trigger} items={glassItems} /> : trigger}
+        {systemGlass && hasMenu ? <GlassMenu open={speedDialOpen} onOpenChange={setSpeedDialOpen} label="作成メニュー" trigger={trigger} items={glassItems} placement="above" /> : trigger}
       </FloatingActionPosition>
 
       <FormModal open={recordOpen} onOpenChange={(open) => { if (!open) { if (recordDirty) setPendingTimelineClose("record"); else closeTimelineForm("record"); } }} title="練習記録">

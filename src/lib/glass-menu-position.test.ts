@@ -14,6 +14,37 @@ describe("anchored glass menu placement", () => {
     expect(p.left).toBe(12);
     expect(p.width).toBe(216);
   });
+  it("keeps a one-item create menu above the FAB even when it fits below", () => {
+    const anchor = { left: 314, right: 370, top: 688, bottom: 744 };
+    const p = glassMenuPosition(anchor, viewport, 64, "above");
+    expect(p.top + 64).toBe(anchor.top - 10);
+    expect(p.origin).toContain("100%");
+    expect(glassMenuPosition(anchor, viewport, 64).top).toBe(anchor.bottom + 10);
+  });
+  it("keeps every create menu above its opener at phone, tablet and desktop widths", () => {
+    for (const width of [320, 390, 820, 1280]) {
+      for (const height of [64, 164, 216]) {
+        const anchor = { left: width - 76, right: width - 20, top: 688, bottom: 744 };
+        const p = glassMenuPosition(anchor, { ...viewport, width }, height, "above");
+        expect(p.top + height).toBe(anchor.top - 10);
+        expect(p.left).toBeGreaterThanOrEqual(12);
+        expect(p.left + p.width).toBeLessThanOrEqual(width - 12);
+      }
+    }
+  });
+  it("makes tall create menus scroll in the space above the FAB", () => {
+    const anchor = { left: 314, right: 370, top: 204, bottom: 260 };
+    const p = glassMenuPosition(anchor, { ...viewport, height: 360 }, 216, "above");
+    expect(p.top).toBe(12);
+    expect(p.maxHeight).toBe(182);
+    expect(p.top + p.maxHeight).toBe(anchor.top - 10);
+  });
+  it("keeps an upward create menu above its opener in an offset visual viewport", () => {
+    const anchor = { left: 314, right: 370, top: 614, bottom: 670 };
+    const p = glassMenuPosition(anchor, { ...viewport, top: 20, height: 750 }, 64, "above");
+    expect(p.top + 64).toBe(anchor.top - 10);
+    expect(p.top).toBeGreaterThanOrEqual(32);
+  });
   it("limits tall menus above the software keyboard", () => {
     const p = glassMenuPosition({ left: 340, right: 384, top: 310, bottom: 354 }, { ...viewport, height: 320 }, 500);
     expect(p.top).toBe(12);
