@@ -51,3 +51,13 @@
 - 隔離検査は3コンテナ・内部ネットワーク・別volume・合成プロフィール7件、別JWT拒否、公開資産182件に秘密値0件、公開表60件でRLS有効、外部通知停止が通過した。
 
 画像の展開方向は合成ブラウザの実Nextでも再現して修正を確認した。実機Safari/iOS PWA/AndroidでOSのバー・キーボードを開閉した確認と、アプリデータの実保存は未確認。コードと私有ログはローカルに保持し、masterへの反映・push・Production反映・DB変更は行っていない。
+
+追加修正のcommitはローカル`03d7d17a9c547b52a2286a669cc4f2e237fee9ee`（同じ独立ブランチ）へ記録した。commit番号の追記は文書のみの手元差分として保持する。本人用公開URLを維持し、ビルド識別子とsrc一致を最終確認した。
+
+## 本番反映の承認と準備
+
+2026-10-05、所有者から「本番反映」の明示指示を受けた。今回のFAB本体・placeholderの表示領域追従と、作成メニューの上向き配置・高さ制限・追従を本番公開する。ほかの本人用UI改善は今回の公開へ混ぜない。rootの既存108ファイルと独立ブランチの文書追記を非公開領域へ保全し、`git pull --ff-only`で最新master `6027483`との一致を確認した。DB・環境変数・Vercel設定は変更しない。
+
+上記の合成ブラウザ検証に加え、最新master起点の本番対象を環境確認・全体tsc・対象eslint・Vitest・通常buildで確認してから、masterへfast-forwardし1回だけpushする。公開結果は公式GitHubのProduction deploymentと本番`/api/version`のSHA一致で確認する。実機未確認の境界は維持する。
+
+本番対象の追加検証は`npm run check:environment`（Node 22.14.0/直接依存35件一致）、`npx tsc --noEmit`、変更6ファイルのeslint、Vitest 107ファイル842テストが通過。`npm run build -- --webpack`は69ページを生成して成功した。初回はPowerShell経由で引数が失われTurbopackの依存リンク制約へ当たり、次は独立worktreeにenvを置かない構成で必要な公開API設定が不足した。npm CLIへ引数を直接渡し、既存root envを読取り専用でbuildプロセスに渡して解消した。依存・アプリ設定・環境ファイルを変更する修正は行っていない。このbuildを実ユーザーの操作・本番環境設定の一致の証拠とは扱わず、Vercel Productionの結果は別に確認する。
