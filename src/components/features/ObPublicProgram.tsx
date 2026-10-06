@@ -7,8 +7,8 @@ import { FormModal } from "@/components/ui/form-modal";
 import { ObDutyTable } from "./ObDutyTable";
 import { OB_PROGRAM } from "@/lib/ob-meet";
 import { MeetEvent } from "@/lib/meet-operations";
-import { fieldOrderRows } from "@/lib/meet-field-order";
-import { obEventParticipants, obEventRule, type ObEventOperation } from "@/lib/ob-operations";
+import { obMixedFieldNumbers, obMixedGroupLabel, projectObMixedEvent } from "@/lib/ob-mixed-operations";
+import { effectiveObParticipation, obEventRule, type ObEventOperation } from "@/lib/ob-operations";
 import type { ObEntry } from "@/lib/ob-entries";
 import type { EntryMember } from "@/lib/entry-identity";
 import { type ObDuty, type ObDutyRole } from "@/lib/ob-duty";
@@ -20,19 +20,17 @@ export function ObPublicProgram({ entries, members, duties, roles, operations, v
   const [event, setEvent] = useState<string | null>(null);
   function eventRows(name: string) {
     const field = obEventRule(name).discipline !== "track";
-    const rows = (["男子", "女子"] as const).flatMap(division => {
-      const eventName = division + name;
-      const saved = operations.find(operation => operation.event_name === eventName);
-      const participants = obEventParticipants(eventName, entries, saved?.data);
-      if (!field) return participants.map(row => ({ ...row, division, eventName, saved, number: null as number | null }));
-      const byId = new Map(participants.map(row => [row.entryId, row]));
-      return fieldOrderRows({ participants: participants.map(row => row.performance), confirmed: saved?.data.confirmed ?? false })
-        .map(({ person, number }) => ({ ...byId.get(person.entryId)!, division, eventName, saved, number }));
-    });
-    return field ? rows : rows.sort((a, b) => {
-      const aOut = !a.state.canParticipate && !a.state.recorded, bOut = !b.state.canParticipate && !b.state.recorded;
-      return Number(aOut) - Number(bOut) || (a.performance.group ?? 100) - (b.performance.group ?? 100) || a.division.localeCompare(b.division, "ja") || (a.performance.order ?? 100) - (b.performance.order ?? 100) || (a.entry?.submitted_name ?? "").localeCompare(b.entry?.submitted_name ?? "", "ja");
-    });
+    const projection = projectObMixedEvent(name, entries, operations);
+    const numbers = field ? obMixedFieldNumbers(projection) : new Map<string, number | null>();
+    return [...projection.data.participants].sort((a, b) => field
+      ? (numbers.get(a.entryId) ?? 601) - (numbers.get(b.entryId) ?? 601)
+      : (a.group ?? 298) - (b.group ?? 298) || (a.order ?? 601) - (b.order ?? 601) || Number(b.status === "DNS") - Number(a.status === "DNS"))
+      .map(person => {
+        const source = projection.sourceById.get(person.entryId)!;
+        const entry = entries.find(entry => entry.id === source.entryId);
+        const saved = operations.find(operation => operation.event_name === source.event);
+        return { id: person.entryId, entryId: source.entryId, entry, performance: source.person, state: effectiveObParticipation(source.event, entry, source.person), division: source.division, eventName: source.event, saved, group: person.group, number: numbers.get(person.entryId) ?? null };
+      });
   }
   const people = event ? eventRows(event) : [];
   const field = event !== null && obEventRule(event).discipline !== "track";
@@ -55,12 +53,12 @@ export function ObPublicProgram({ entries, members, duties, roles, operations, v
       <div className="space-y-4">
         <p className="text-caption">{people.length}人・{field ? "試技順" : "組分け"}と記録</p>
         {people.length ? <ul className="divide-y divide-separator">{people.map(row => {
-          const { entry, performance, state, saved, division, eventName, number } = row;
+          const { entry, performance, state, saved, division, eventName, number, group } = row;
           const result = new MeetEvent(obEventRule(eventName), { participants: [performance], confirmed: saved?.data.confirmed ?? false }).best(performance);
           const unavailable = !state.canParticipate && !state.recorded;
-          const placement = field ? number === null ? "順番未定" : `試技順 ${number}番` : performance.group ? `${performance.group}組${performance.order ? `・${performance.order}${!["1500m", "3000m"].includes(event ?? "") ? "レーン" : "番"}` : ""}` : "組未定";
-          return <li key={eventName + row.entryId} className={`flex flex-wrap items-center gap-x-4 gap-y-1 py-3 ${unavailable ? "text-muted" : ""}`}>
-            <div className="w-28 shrink-0"><span className="mr-2 text-caption">{division}</span><span className="text-caption">{placement}</span></div>
+          const placement = field ? number === null ? "順番未定" : `試技順 ${number}番` : group !== null ? `${obMixedGroupLabel(group)}${performance.order ? `・${performance.order}${!["1500m", "3000m"].includes(event ?? "") ? "レーン" : "番"}` : ""}` : "組未定";
+          return <li key={row.id} className={`flex flex-wrap items-center gap-x-4 gap-y-1 py-3 ${unavailable ? "text-muted" : ""}`}>
+            <div className="w-28 shrink-0"><span className="block text-caption">{division}</span><span className="block text-caption">{placement}</span></div>
             <div className="min-w-0 flex-1 basis-36"><p className="break-words text-body font-medium">{entry?.submitted_name ?? "参加情報なし"}<span className="ml-2 text-caption">{entry?.grade}</span></p>{entry?.qualification_marks[eventName] && !state.recorded && <p className="text-micro text-muted2">資格記録 {entry.qualification_marks[eventName]}</p>}</div>
             <div className="min-w-20 text-right"><p className={`text-body ${unavailable ? "text-muted" : "font-semibold tabular-nums"}`}>{state.recorded ? result : state.status === "entered" ? "—" : state.label}</p>{state.recorded && (state.absent || !state.registered) && <p className="text-micro text-muted2">{state.absent ? "以降は欠席" : "登録取消・記録保持"}</p>}</div>
           </li>;

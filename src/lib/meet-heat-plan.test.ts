@@ -159,3 +159,16 @@ it("rejects duplicated or incomplete slide slots instead of dropping an occupant
  }
  expect(plan().reorder(1,[1,2,3,4,5,6],6)).toBe(data);
 });
+it("opts into 297 projected groups and order600 without changing generic limits or losing DNS reservations", () => {
+ const crowd=Array.from({length:600},(_,i)=>emptyPerformance("p"+i));
+ const source={participants:crowd,confirmed:true};
+ const ids=new Set(crowd.map(p=>p.entryId));
+ expect(()=>new MeetHeatPlan(source,ids).move([...ids],199)).toThrow("組");
+ const limits={maxGroups:297,maxOrder:600,groupLabel:(group:number)=>`混合${group-198}組`};
+ const next=new MeetHeatPlan(source,ids,limits).move([...ids],199);
+ expect(next.participants.at(-1)?.order).toBe(600);
+ expect(new MeetHeatPlan(next,ids,limits).move([...ids],199)).toBe(next);
+ const dns={...next.participants[0],status:"DNS" as const};
+ const occupied={...next,participants:[dns,{...next.participants[1],order:1}]};
+ expect(()=>new MeetHeatPlan(occupied,ids,limits).setDns(dns.entryId,false)).toThrow("混合1組");
+});

@@ -43,3 +43,67 @@ export function obReplayHeaders(change, changes) {
   // Legacy queued writes without an original audit record still run the PC trigger.
   return recorded ? { 'x-tuat-mirror': '1' } : {};
 }
+
+const operationChange = change => change.table_name === 'ob_event_operations' && ['INSERT', 'UPDATE'].includes(change.op);
+const familyOf = change => {
+  const event = change.row_data?.event_name ?? change.pk?.event_name;
+  return (change.row_data?.meet_key ?? change.pk?.meet_key) === 'ob-2026' && typeof event === 'string'
+    ? event.match(/^(男子|女子)(.+)$/)?.[2] : undefined;
+};
+
+/** The two operation rows share transaction now(); retain every original journal snapshot. */
+export function obOperationReplayUnits(changes) {
+  const pairs = new Map();
+  for (const change of changes) {
+    const family = operationChange(change) && familyOf(change), time = change.row_data?.updated_at;
+    if (!family || typeof time !== 'string' || !time) continue;
+    const key = JSON.stringify([family, time]);
+    if (!pairs.has(key)) pairs.set(key, []);
+    pairs.get(key).push(change);
+  }
+  const byId = new Map();
+  for (const pair of pairs.values()) for (const change of pair) byId.set(change.id, pair);
+  const emitted = new Set(), units = [];
+  for (const change of orderObReplay(changes)) {
+    if (emitted.has(change.id)) continue;
+    const members = byId.get(change.id) ?? [change];
+    members.forEach(member => emitted.add(member.id));
+    units.push({ changes: members, operations: operationChange(change) });
+  }
+  return units;
+}
+
+/** A held operation also protects its sibling division from becoming an inconsistent mirror. */
+export function obReplayProtection(changes) {
+  const pending = new Map();
+  const hold = (table, pk) => {
+    if (!pending.has(table)) pending.set(table, new Set());
+    pending.get(table).add(JSON.stringify(pk));
+  };
+  for (const change of changes) {
+    hold(change.table_name, change.pk);
+    const family = operationChange(change) && familyOf(change);
+    if (family) for (const division of ['男子', '女子']) hold('ob_event_operations', { meet_key: 'ob-2026', event_name: division + family });
+  }
+  return pending;
+}
+
+/** RPC and journal acknowledgement each operate on the complete family unit. */
+export async function replayObChanges(changes, { maxAttempts, applyChange, applyOperations, acknowledge }) {
+  const result = { applied: 0, failed: 0 };
+  for (const unit of obOperationReplayUnits(changes)) {
+    if (unit.changes.some(change => change.attempts >= maxAttempts)) continue;
+    let outcome;
+    try {
+      const events = unit.changes.map(change => change.row_data?.event_name);
+      const ambiguous = unit.operations && (unit.changes.length > 2 || new Set(events).size !== events.length);
+      outcome = ambiguous ? 'operation_replay_conflict' : unit.operations
+        ? await applyOperations(unit.changes.map(change => change.row_data))
+        : await applyChange(unit.changes[0], obReplayHeaders(unit.changes[0], changes));
+    } catch (error) { outcome = error instanceof Error ? error.message : String(error); }
+    // An uncertain acknowledgement leaves the whole unit pending for an idempotent replay.
+    await acknowledge(unit.changes, outcome);
+    result[outcome === true ? 'applied' : 'failed'] += unit.changes.length;
+  }
+  return result;
+}

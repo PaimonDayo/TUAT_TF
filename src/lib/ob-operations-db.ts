@@ -18,6 +18,7 @@ type OperationDatabase = Omit<Database, "public"> & { public: Omit<Database["pub
   Functions: Database["public"]["Functions"] & {
     save_ob_event_operation: { Args: { p_event: string; p_revision: number | null; p_data: Json }; Returns: ObEventOperation };
     save_ob_event_operation_checked: { Args: { p_event: string; p_revision: number | null; p_data: Json; p_base_data: Json }; Returns: ObEventOperation };
+    save_ob_family_operation_checked: { Args: { p_family: string; p_operations: Json }; Returns: { operations: ObEventOperation[] } };
     set_ob_attendance: { Args: { p_entry_id: string; p_revision: number; p_absent: boolean }; Returns: AttendanceResult };
     add_ob_day_entry: { Args: { p_request_id: string; p_event: string; p_entry_id: string | null; p_revision: number | null; p_name: string | null; p_grade: string | null; p_group: number | null }; Returns: DayEntryResult };
   };

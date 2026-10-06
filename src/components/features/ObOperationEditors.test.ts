@@ -5,15 +5,16 @@ import type { useObOperationDraft } from "./useObOperationDraft";
 import { emptyPerformance } from "@/lib/meet-operations";
 import type { ObEntry } from "@/lib/ob-entries";
 
-const mocks = vi.hoisted(() => ({ draft: {} as ReturnType<typeof useObOperationDraft>, guard: vi.fn(), board: vi.fn() }));
+const mocks = vi.hoisted(() => ({ draft: {} as ReturnType<typeof useObOperationDraft>, guard: vi.fn(), board: vi.fn(), heatBoard: vi.fn(), fieldBoard: vi.fn(), familyDraft: vi.fn() }));
 vi.mock("./useObOperationDraft", () => ({ useObOperationDraft: () => mocks.draft }));
+vi.mock("./useObFamilyDraft", () => ({ useObFamilyDraft: mocks.familyDraft }));
 vi.mock("@/components/ui/form-modal", () => ({
   FormModal: ({ children }: { children: ReactNode }) => createElement("div", {}, children),
   FormModalFooter: ({ children }: { children: ReactNode }) => createElement("footer", {}, children),
   FormDraftGuard: (props: unknown) => { mocks.guard(props); return null; },
 }));
-vi.mock("./MeetHeatBoard", () => ({ MeetHeatBoard: (props: unknown) => { mocks.board(props); return null; } }));
-vi.mock("./MeetFieldOrderBoard", () => ({ MeetFieldOrderBoard: (props: unknown) => { mocks.board(props); return null; } }));
+vi.mock("./MeetHeatBoard", () => ({ MeetHeatBoard: (props: unknown) => { mocks.board(props); mocks.heatBoard(props); return null; } }));
+vi.mock("./MeetFieldOrderBoard", () => ({ MeetFieldOrderBoard: (props: unknown) => { mocks.board(props); mocks.fieldBoard(props); return null; } }));
 import { ObEventOperationsEditor } from "./ObEventOperationsEditor";
 import { ObHeatEditor } from "./ObHeatEditor";
 
@@ -28,6 +29,10 @@ beforeEach(() => {
     review: null, choices: {}, setChoices: vi.fn(), applyReview: vi.fn(), reviewing: false, latestData: undefined,
     blocked: [], discardPerson: vi.fn(),
   };
+  mocks.familyDraft.mockImplementation(() => ({ ...mocks.draft, revision: "2:3", entrants: [
+    { id: "男子100m:e", name: "合成部員", grade: "B1", mark: "", alumni: false, eligible: true, division: "男子" },
+    { id: "女子100m:f", name: "合成女子", grade: "B1", mark: "", alumni: false, eligible: true, division: "女子" },
+  ], conflictEntries: [] }));
 });
 
 it.each([ObEventOperationsEditor, ObHeatEditor])("locks the form and close guard while leaving read-only confirmation available", (Editor) => {
@@ -58,4 +63,23 @@ it("locks field trial order while confirming an uncertain save", () => {
   renderToStaticMarkup(createElement(ObHeatEditor, { ...props, event: "男子走り幅跳び" }));
   expect(mocks.board).toHaveBeenCalledWith(expect.objectContaining({ disabled: true }));
   expect(mocks.guard).toHaveBeenCalledWith(expect.objectContaining({ busy: true }));
+});
+
+it.each([["100m", 8], ["300m", 6], ["300mH", 6], ["1500m", undefined], ["3000m", undefined]])("opens one %s board with both source divisions while preserving event capacities", (family, capacity) => {
+  const initial: [] = [], onSaved = vi.fn();
+  renderToStaticMarkup(createElement(ObHeatEditor, { family: family as string, entries: [entry], initial, onSaved, onClose: vi.fn() }));
+  expect(mocks.familyDraft).toHaveBeenCalledWith(family, [entry], initial, onSaved);
+  const board = mocks.heatBoard.mock.lastCall![0];
+  expect(board).toMatchObject({ capacity, groupLimit: 297, disabled: true, modelLimits: { maxGroups: 297, maxOrder: 600, maxParticipants: 600 } });
+  expect(board.entrants.map((person: { division: string }) => person.division)).toEqual(["男子", "女子"]);
+  expect(board.groupLabel(1)).toBe("男子1組");
+  expect(board.groupLabel(100)).toBe("女子1組");
+  expect(board.groupLabel(199)).toBe("混合1組");
+  expect(mocks.fieldBoard).not.toHaveBeenCalled();
+});
+
+it("keeps the shared field trial-order list free of group controls", () => {
+  renderToStaticMarkup(createElement(ObHeatEditor, { family: "走り幅跳び", entries: [entry], initial: [], onSaved: vi.fn(), onClose: vi.fn() }));
+  expect(mocks.heatBoard).not.toHaveBeenCalled();
+  expect(mocks.fieldBoard).toHaveBeenCalledWith(expect.objectContaining({ modelLimits: expect.objectContaining({ defaultGroup: 199, maxParticipants: 600 }) }));
 });

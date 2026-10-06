@@ -76,8 +76,8 @@ describe("OB competition history", () => {
     const last = { ...person, entryId: "last", group: 2, order: 1 };
     const result = describeObOperationChange({ ...operation, event_name: "男子走り幅跳び", before_data: { participants: [last, dns, first] }, after_data: { participants: [{ ...first, group: 2, order: 1 }, dns, { ...last, group: 1, order: 7 }] } }, new Map(), new Map([["first", "先の人"], ["dns", "DNSの人"], ["last", "後の人"]]));
     expect(result.details).toEqual(expect.arrayContaining([
-      { subject: "先の人", label: "試技順", before: "1", after: "3" },
-      { subject: "後の人", label: "試技順", before: "3", after: "1" },
+      { subject: "先の人", label: "種目内の試技順", before: "1", after: "3" },
+      { subject: "後の人", label: "種目内の試技順", before: "3", after: "1" },
     ]));
     expect(result.details.some(detail => detail.subject === "DNSの人")).toBe(false);
     expect(result.categories).toEqual(["試技順"]);
@@ -91,6 +91,48 @@ describe("OB competition history", () => {
     ]);
     const incomplete = describeObOperationChange({ ...operation, event_name: "男子走り高跳び", before_data: { participants: [person] }, after_data: { participants: [{ ...person, order: 1 }] } }, new Map(), new Map());
     expect(incomplete.details).toContainEqual(expect.objectContaining({ label: "保存時の順番", before: "未割当", after: "1" }));
+  });
+  it("shows a heat scope change as a physical position change and ignores an explicit unchanged default", () => {
+    const saved = { ...person, group: 1, order: 2 };
+    const result = describeObOperationChange({ ...operation, before_data: { participants: [saved] }, after_data: { participants: [{ ...saved, heatScope: "混合" }] } }, new Map(), new Map([["entry", "対象"]]));
+    expect(result.details).toContainEqual({ subject: "対象", label: "組", before: "男子1組", after: "混合1組" });
+    const unchanged = describeObOperationChange({ ...operation, before_data: { participants: [saved] }, after_data: { participants: [{ ...saved, heatScope: "男子" }] } }, new Map(), new Map());
+    expect(unchanged.details).toEqual([{ label: "競技情報", before: null, after: "保存（表示項目の変更なし）" }]);
+    const next = { ...saved, group: 2 };
+    const contextual = describeObOperationChange({ ...operation, before_data: { participants: [saved], family_positions: [{ event_name: operation.event_name, participants: [saved] }] }, after_data: { participants: [next], family_positions: [{ event_name: operation.event_name, participants: [next] }] } }, new Map(), new Map([["entry", "対象"]]));
+    expect(contextual.details).toContainEqual({ subject: "対象", label: "組", before: "男子1組", after: "男子2組" });
+  });
+  it.each([1, 600])("uses family context for exact field ranks and shifted peers at saved order %s", order => {
+    const male = { ...person, group: 1, order };
+    const female = { ...male, entryId: "female" };
+    const moved = { ...male, heatScope: "混合" };
+    const before = { participants: [male], confirmed: false, family_positions: [{ event_name: "男子走り幅跳び", participants: [male] }, { event_name: "女子走り幅跳び", participants: [female] }] };
+    const after = { participants: [moved], confirmed: false, family_positions: [{ event_name: "男子走り幅跳び", participants: [moved] }, { event_name: "女子走り幅跳び", participants: [female] }] };
+    const change = { ...operation, event_name: "男子走り幅跳び", before_data: before, after_data: after };
+    expect(historyEntryIds([change])).toEqual(["entry", "female"]);
+    const result = describeObOperationChange(change, new Map(), new Map([["entry", "男性対象"], ["female", "女性対象"]]));
+    expect(result.details).toEqual([
+      { subject: "男子 男性対象", label: "試技順", before: "1", after: "2" },
+      { subject: "女子 女性対象", label: "試技順", before: "2", after: "1" },
+    ]);
+    const json = JSON.stringify(result);
+    expect(json).not.toContain("family_positions"); expect(json).not.toContain("entryId"); expect(json).not.toContain("heatScope");
+  });
+  it("retains qualified raw field facts when a shared family snapshot is unavailable or malformed", () => {
+    const saved = { ...person, group: 1, order: 1 };
+    const result = describeObOperationChange({ ...operation, event_name: "男子走り幅跳び", before_data: { participants: [saved] }, after_data: { participants: [{ ...saved, heatScope: "混合" }], family_positions: [{ event_name: "女子走り幅跳び", participants: [{ ...saved, status: "private-invalid-status" }] }] } }, new Map(), new Map([["entry", "対象"]]));
+    expect(result.details).toContainEqual({ subject: "対象", label: "保存時の組情報", before: "男子1組", after: "混合1組" });
+    expect(result.details.some(detail => detail.label === "試技順")).toBe(false);
+    expect(JSON.stringify(result)).not.toContain("private-invalid-status");
+  });
+  it("recognizes the first saved operation when before-data only contains family audit metadata", () => {
+    const male = { ...person, group: 1, order: 1 };
+    const female = { ...male, entryId: "female" };
+    const before = { family_positions: [{ event_name: "女子走り幅跳び", participants: [female] }] };
+    const after = { confirmed: false, participants: [male], family_positions: [{ event_name: "男子走り幅跳び", participants: [male] }, { event_name: "女子走り幅跳び", participants: [female] }] };
+    const result = describeObOperationChange({ ...operation, event_name: "男子走り幅跳び", before_data: before, after_data: after }, new Map(), new Map([["entry", "対象"], ["female", "別の人"]]));
+    expect(result.details).toContainEqual({ label: "記録の確定", before: "保存なし", after: "速報" });
+    expect(result.details).toContainEqual({ subject: "女子 別の人", label: "試技順", before: "1", after: "2" });
   });
   it("compares participant identities rather than array positions and preserves deleted trials", () => {
     const second = { ...person, entryId: "second" };

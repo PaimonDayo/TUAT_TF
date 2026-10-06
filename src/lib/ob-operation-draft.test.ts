@@ -112,3 +112,18 @@ it("does not confirm a missing participant or an unsupported removal from the su
   expect(obOperationSaveMatches(base, base, { ...base, participants: [a] })).toBe(false);
   expect(obOperationSaveMatches(base, { ...base, participants: [a] }, { ...base, participants: [a] })).toBe(false);
 });
+it("treats heat scope as part of position while an omitted original scope equals the source division", () => {
+ const base={participants:[{...emptyPerformance("scope"),group:1,order:1}],confirmed:true};
+ const explicit={...base,participants:[{...base.participants[0],heatScope:"男子" as const}]};
+ expect(obOperationHasChanges(base,explicit,"男子")).toBe(false);
+ const own={...base,confirmed:false,participants:[{...base.participants[0],heatScope:"混合" as const}]};
+ expect(obOperationHasChanges(base,own,"男子")).toBe(true);
+ expect(obOperationSaveMatches(base,own,base,"男子")).toBe(false);
+ expect(obOperationSaveMatches(base,own,own,"男子")).toBe(true);
+ const current={...base,participants:[{...base.participants[0],heatScope:"女子" as const,trials:[{mark:"12.34",status:"valid" as const,wind:""}]}]};
+ const review=reviewObOperation(base,own,current,{},"男子");
+ expect(review.conflicts.map(c=>c.field)).toEqual(["position"]);
+ expect(review.data.participants[0].heatScope).toBe("混合");
+ expect(review.data.participants[0].trials).toBe(current.participants[0].trials);
+ expect(reviewObOperation(base,own,current,{"scope:position":"current"},"男子").data.participants[0].heatScope).toBe("女子");
+});

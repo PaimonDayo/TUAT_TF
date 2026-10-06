@@ -9,7 +9,8 @@ import { OB_ENTRY_EVENTS, validEntryDelete, validGuestEntry } from "@/lib/ob-ent
 import { OB_PROGRAM_PATH, canManageObMeet } from "@/lib/ob-meet";
 import { MeetEvent, type MeetEventData } from "@/lib/meet-operations";
 import { obEventRule, type ObEventOperation } from "@/lib/ob-operations";
-import { obOperationSaveMatches } from "@/lib/ob-operation-draft";
+import { obOperationHasChanges, obOperationSaveMatches } from "@/lib/ob-operation-draft";
+import { obSourceDivision, type ObMixedInput } from "@/lib/ob-mixed-operations";
 import type { Json } from "@/types/database";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -31,7 +32,7 @@ async function authorizedClient(staffOnly = false) {
 function validData(event: string, data: MeetEventData | undefined): boolean {
   if (!data || typeof data !== "object") return false;
   // Roster-aware completeness (including absence/cancellation) is checked in the locked RPC.
-  try { return typeof data.confirmed === "boolean" && JSON.stringify(data).length <= 250000 && !new MeetEvent(obEventRule(event), { ...data, confirmed: false }).validate(); }
+  try { return typeof data.confirmed === "boolean" && JSON.stringify(data).length <= 250000 && !new MeetEvent(obEventRule(event), { ...data, confirmed: false }, { maxOrder: 600 }).validate(); }
   catch { return false; }
 }
 
@@ -63,7 +64,7 @@ type SaveOperationInput = { event: string; revision: number | null; data: MeetEv
 
 function matchesAttempt(input: SaveOperationInput, saved: ObEventOperation): boolean {
   return saved.revision > (input.revision ?? -1)
-    && (!input.baseData || obOperationSaveMatches(input.baseData, input.data, saved.data));
+    && (!input.baseData || obOperationSaveMatches(input.baseData, input.data, saved.data, obSourceDivision(input.event)));
 }
 
 /** An uncertain save can only be checked by reading the same meet/event as the verified operator. */
@@ -106,6 +107,68 @@ export async function saveObEventOperation(input: SaveOperationInput): Promise<{
   if (!savedOperation(result.data, input.event) || !matchesAttempt(input, result.data)) return { ok: false, uncertain: true, message: "保存結果を確認できませんでした。入力は残っています。結果を確認してください" };
   revalidatePath(OB_PROGRAM_PATH);
   return { ok: true, saved: result.data };
+}
+
+type FamilyOperationInput = { family: string; operations: ObMixedInput[] };
+type FamilyOperationResult = { ok: boolean; message?: string; saved?: ObEventOperation[]; latest?: ObEventOperation[]; uncertain?: boolean };
+
+function validFamilyInput(input: FamilyOperationInput): boolean {
+  if (!input || typeof input.family !== "string" || !Array.isArray(input.operations) || input.operations.length !== 2
+    || !OB_ENTRY_EVENTS.includes(`男子${input.family}`) || !OB_ENTRY_EVENTS.includes(`女子${input.family}`)) return false;
+  const events = new Set(input.operations.map(operation => operation?.event));
+  return events.size === 2 && events.has(`男子${input.family}`) && events.has(`女子${input.family}`)
+    && input.operations.every(operation => operation && (operation.revision === null || Number.isSafeInteger(operation.revision) && operation.revision >= 0)
+      && validData(operation.event, operation.data) && validData(operation.event, operation.baseData));
+}
+function familySaved(value: unknown, input: FamilyOperationInput): value is ObEventOperation[] {
+  if (!Array.isArray(value) || new Set(value.map(op => op?.event_name)).size !== value.length) return false;
+  if (!value.every(op => input.operations.some(request => savedOperation(op, request.event)))) return false;
+  return input.operations.every(request => {
+    const saved = value.find(op => op.event_name === request.event);
+    const changed = obOperationHasChanges(request.baseData, request.data, obSourceDivision(request.event));
+    if (!saved) return !changed && request.revision === null && !request.data.participants.length;
+    return saved.revision >= (request.revision ?? -1) && (!changed || saved.revision > (request.revision ?? -1))
+      && obOperationSaveMatches(request.baseData, request.data, saved.data, obSourceDivision(request.event));
+  });
+}
+async function readFamily(client: Awaited<ReturnType<typeof authorizedClient>>, input: FamilyOperationInput) {
+  if (!client) return null;
+  const result = await client.from("ob_event_operations").select("meet_key,event_name,revision,data,updated_at")
+    .eq("meet_key", "ob-2026").in("event_name", input.operations.map(operation => operation.event));
+  if (result.error || !Array.isArray(result.data) || !result.data.every(op => input.operations.some(request => savedOperation(op, request.event)))) return null;
+  return result.data;
+}
+
+/** One read proves the frozen changes in both registration events; no retry writes. */
+export async function checkObFamilyOperation(input: FamilyOperationInput): Promise<FamilyOperationResult> {
+  if (!validFamilyInput(input)) return { ok: false, message: "確認する保存内容を確認してください" };
+  try {
+    const client = await authorizedClient(true);
+    if (!client) return { ok: false, message: "大会担当者の権限がありません。入力は残っています" };
+    const saved = await readFamily(client, input);
+    if (!saved) return { ok: false, message: "保存結果を取得できませんでした。入力は残っています。接続後にもう一度確認してください" };
+    if (!familySaved(saved, input)) return { ok: false, message: "男女両方の保存を確認できませんでした。入力は残っています。もう一度結果を確認してください" };
+    return { ok: true, saved };
+  } catch { return { ok: false, message: "保存結果を取得できませんでした。入力は残っています。接続後にもう一度確認してください" }; }
+}
+
+export async function saveObFamilyOperation(input: FamilyOperationInput): Promise<FamilyOperationResult> {
+  if (!validFamilyInput(input)) return { ok: false, message: "入力内容を確認してください" };
+  const client = await authorizedClient(true);
+  if (!client) return { ok: false, message: "大会担当者の権限がありません" };
+  if (!input.operations.some(request => obOperationHasChanges(request.baseData, request.data, obSourceDivision(request.event)))) return { ok: false, message: "変更はありません" };
+  const result = await client.rpc("save_ob_family_operation_checked", { p_family: input.family, p_operations: input.operations as unknown as Json });
+  if (result.error) {
+    const uncertain = !result.error.code || !/^[A-Z0-9]{5}$/.test(result.error.code);
+    let latest: ObEventOperation[] | null = null;
+    if (result.error.message.includes("operation_conflict")) {
+      try { latest = await readFamily(client, input); } catch { /* A review read failure does not change a proven rollback. */ }
+    }
+    return { ok: false, message: failure(result.error.message), ...(latest ? { latest } : {}), ...(uncertain ? { uncertain: true } : {}) };
+  }
+  if (!familySaved(result.data?.operations, input)) return { ok: false, uncertain: true, message: "保存結果を確認できませんでした。入力は残っています。結果を確認してください" };
+  revalidatePath(OB_PROGRAM_PATH);
+  return { ok: true, saved: result.data.operations };
 }
 
 export async function setObAttendance(input: { entryId: string; revision: number; absent: boolean }): Promise<{ ok: boolean; message?: string; entryId?: string; revision?: number; absent?: boolean }> {

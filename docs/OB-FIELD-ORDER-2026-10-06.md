@@ -35,3 +35,12 @@ iOS PWA・Android実機、実ユーザーの試験保存は未確認。本番DB�
 ## 本番反映
 
 検証完了、本番未変更。関連修正と前回の公開完了追記をまとめ、masterへ1回だけpushして今回のProduction成功・公開SHA一致まで確認する。
+
+
+### 公開完了（2026-10-06 13:28 JST）
+
+- commit: `470d79587fd392eba9148c4db8d7f8c99fab48a1`。関連21ファイルをまとめ、最新origin/masterを基準にmasterへfast-forwardし、`master -> master`を1回だけpushした。作業ブランチはpushしていない。
+- 主checkoutの別作業103ファイルの内容を反映後もハッシュ一致で確認した。重なる文書は元の追記を復元して索引を合成し、前回の公開完了追記を今回のコード変更に含めた。実ユーザーの登録・配置・記録に試験書込みは行っていない。
+- 公式GitHub deploymentで今回のSHA・`Production – tuat-tf`・`success`を確認。本番 `https://tuat-tf.vercel.app/api/version` は200で同じSHAを返した。
+- 検証範囲は上記の実コンポーネントと合成ブラウザ操作。iOS PWA・Android実機、実ユーザーの保存は未確認。本番DB・migration・環境設定は変更していない。
+- この公開後の追記は文書だけのため手元に保持し、次のコード変更とまとめる。追加push・ビルド・デプロイは行わない。

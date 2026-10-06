@@ -28,6 +28,7 @@ vi.mock("react", async importOriginal => ({
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
 vi.mock("@/app/(app)/ob-entries/operations-actions", () => ({ saveObEventOperation: mocks.write, checkObEventOperation: mocks.check }));
+vi.mock("./useObFamilyDraft", () => ({ useObFamilyDraft: vi.fn() }));
 vi.mock("@/components/ui/form-modal", () => ({
   FormModal: ({ children, title }: { children: ReactNode; title: string }) => { mocks.modal(title); return createElement("div", {}, children); },
   FormModalFooter: ({ children }: { children: ReactNode }) => createElement("footer", {}, children),

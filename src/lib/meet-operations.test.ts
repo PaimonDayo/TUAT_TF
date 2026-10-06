@@ -50,3 +50,13 @@ it('retains withdrawn entrants records when reconciling new registrations',()=>{
   const old=person('old');const data=reconcileObEvent('男子100m',[entry('new')],{confirmed:false,participants:[old]});
   expect(data.participants).toEqual([old,emptyPerformance('new')]);
 });
+it("keeps generic order and participant limits while allowing OB order600 and separate physical scopes", () => {
+  const a = { ...emptyPerformance("a"), group: 1, order: 600 };
+  const rule = { name: "男子1500m", discipline: "track" as const, wind: false };
+  expect(new MeetEvent(rule, { participants: [a], confirmed: false }).validate()).toContain("300");
+  expect(new MeetEvent(rule, { participants: [a], confirmed: false }, { maxOrder: 600 }).validate()).toBeNull();
+  const b = { ...a, entryId: "b", heatScope: "女子" as const };
+  expect(new MeetEvent(rule, { participants: [a, b], confirmed: false }, { maxOrder: 600 }).validate()).toBeNull();
+  expect(new MeetEvent(rule, { participants: [a, { ...b, heatScope: "男子" }], confirmed: false }, { maxOrder: 600 }).validate()).toContain("重複");
+  expect(new MeetEvent(rule, { participants: Array.from({ length: 301 }, (_, i) => emptyPerformance(String(i))), confirmed: false }, { maxOrder: 600 }).validate()).toContain("出場者");
+});

@@ -18,7 +18,7 @@
 import { readFileSync, writeFileSync, renameSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
-import { OB_TABLES, changesPath, orderObReplay, obReplayHeaders } from './cloud-mirror-ob.mjs';
+import { OB_TABLES, changesPath, obReplayProtection, replayObChanges } from './cloud-mirror-ob.mjs';
 
 const WINDOW_DAYS = 3;
 const FULL_CHECK_MS = 24 * 3600_000;
@@ -293,25 +293,30 @@ async function readChanges(includeBlocked = false) {
 
 /** クラウドへ入った書き込みを古い順にPCへ書く。成功した記録は消し、失敗は回数と理由を残す。 */
 async function writeBack(apply, authDue) {
-  const changes = await readChanges();
+  const changes = await readChanges(true);
   // 停止中に初めてログインした部員がいれば（クラウドで名簿が追加されていれば）、先にPCへアカウントを作る
   const newMembers = changes.some((c) => c.table_name === "profiles" && c.op === "INSERT");
   const result = { authUsersCreated: authDue || newMembers ? await syncAuthUsersBack(apply) : 0, pending: changes.length, applied: 0, failed: 0 };
   if (!apply) return result;
-  for (const change of orderObReplay(changes)) {
-    let outcome;
-    try { outcome = await applyChange(change, obReplayHeaders(change, changes)); } catch (error) { outcome = error instanceof Error ? error.message : String(error); }
-    if (outcome === true) {
-      await request(cloud, `/rest/v1/failover_changes?id=eq.${change.id}`, { method: "DELETE" });
-      result.applied++;
-    } else {
-      await request(cloud, `/rest/v1/failover_changes?id=eq.${change.id}`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ attempts: change.attempts + 1, last_error: String(outcome).slice(0, 500) }),
+  const replay = await replayObChanges(changes, {
+    maxAttempts: MAX_ATTEMPTS,
+    applyChange,
+    applyOperations: async rows => {
+      const response = await pcWrite('/rest/v1/rpc/replay_ob_family_operations', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ p_rows: rows }),
       });
-      result.failed++;
-    }
-  }
+      return response.ok || `${response.status} ${response.text.slice(0, 200)}`;
+    },
+    acknowledge: async (members, outcome) => {
+      const filter = members.length === 1 ? `eq.${members[0].id}` : `in.(${members.map(change => change.id).join(',')})`;
+      if (outcome === true) await request(cloud, `/rest/v1/failover_changes?id=${filter}`, { method: 'DELETE' });
+      else await request(cloud, `/rest/v1/failover_changes?id=${filter}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ attempts: Math.max(...members.map(change => change.attempts ?? 0)) + 1, last_error: String(outcome).slice(0, 500) }),
+      });
+    },
+  });
+  result.applied = replay.applied; result.failed = replay.failed;
   return result;
 }
 
@@ -323,11 +328,7 @@ async function main() {
   const authDue = full || now - (state?.authCheckedAt ?? 0) > AUTH_CHECK_MS;
   const writeback = await writeBack(apply, authDue);
   // 書き戻しの途中や後にクラウドへ入った書き込みは、次の回に書き戻す。それまで写しで上書き・削除しない。
-  const pending = new Map();
-  for (const change of await readChanges(true)) {
-    if (!pending.has(change.table_name)) pending.set(change.table_name, new Set());
-    pending.get(change.table_name).add(JSON.stringify(change.pk));
-  }
+  const pending = obReplayProtection(await readChanges(true));
   const summary = { apply, full, windowStartDate, writeback, authUsersCreated: authDue ? await syncAuthUsers(apply) : 0, tables: {} };
   const nextTables = {};
   const ctx = { ids: {}, recentScheduleIds: [] };

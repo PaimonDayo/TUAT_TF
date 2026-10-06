@@ -7,8 +7,10 @@ import { emptyPerformance, MeetEvent, type MeetEventData } from "@/lib/meet-oper
 import { effectiveObParticipation, obEventRule, reconcileObEvent, type ObEventOperation } from "@/lib/ob-operations";
 import { obOperationHasChanges, reviewObOperation, type OperationChoices } from "@/lib/ob-operation-draft";
 import type { ObEntry } from "@/lib/ob-entries";
+import { obSourceDivision } from "@/lib/ob-mixed-operations";
 
 export function useObOperationDraft(event: string, entries: ObEntry[], initial: ObEventOperation | undefined, onSaved: (saved: ObEventOperation) => void) {
+  const division = obSourceDivision(event);
   const router = useRouter();
   const [base, setBase] = useState<MeetEventData>(initial?.data ?? { participants: [], confirmed: false });
   const [draft, setDraft] = useState(() => reconcileObEvent(event, entries, initial?.data));
@@ -25,8 +27,8 @@ export function useObOperationDraft(event: string, entries: ObEntry[], initial: 
   const pendingSave = useRef<Parameters<typeof checkObEventOperation>[0] | null>(null);
   const data = pendingData ?? reconcileObEvent(event, entries, draft);
   // Roster reconciliation is display-only; the stored base still anchors RPC and conflict checks.
-  const dirty = obOperationHasChanges(reconcileObEvent(event, entries, base), data);
-  const review = latest ? reviewObOperation(base, data, latest.data, choices) : null;
+  const dirty = obOperationHasChanges(reconcileObEvent(event, entries, base), data, division);
+  const review = latest ? reviewObOperation(base, data, latest.data, choices, division) : null;
   const blocked = data.participants.filter(person => {
     const entry = entries.find(e => e.id === person.entryId), before = base.participants.find(p => p.entryId === person.entryId) ?? emptyPerformance(person.entryId);
     const changed = JSON.stringify(person) !== JSON.stringify(before);
@@ -39,7 +41,7 @@ export function useObOperationDraft(event: string, entries: ObEntry[], initial: 
   if (initial && initial.revision > observedRevision && !busy && !unconfirmed && !pendingData) {
     setObservedRevision(initial.revision);
     if (initial.revision > (revision ?? -1) && !latest) {
-      const refreshed = reviewObOperation(base, data, initial.data);
+      const refreshed = reviewObOperation(base, data, initial.data, {}, division);
       if (refreshed.conflicts.length) { setLatest(initial); setChoices({}); }
       else { setDraft(refreshed.data); setBase(initial.data); setRevision(initial.revision); }
     }
@@ -64,8 +66,8 @@ export function useObOperationDraft(event: string, entries: ObEntry[], initial: 
     if (!pendingSave.current) {
       if (blocked.length) { setMessage("欠席・出場取消になった人の未保存の変更を確認してください"); setFailed(true); return; }
       const rule = obEventRule(event);
-      const error = new MeetEvent(rule, { ...data, confirmed: false }).validate()
-        ?? (data.confirmed ? new MeetEvent(rule, { ...data, participants: data.participants.filter(p => effectiveObParticipation(event, entries.find(e => e.id === p.entryId), p).canParticipate) }).validate() : null);
+      const error = new MeetEvent(rule, { ...data, confirmed: false }, { maxOrder: 600 }).validate()
+        ?? (data.confirmed ? new MeetEvent(rule, { ...data, participants: data.participants.filter(p => effectiveObParticipation(event, entries.find(e => e.id === p.entryId), p).canParticipate) }, { maxOrder: 600 }).validate() : null);
       if (error) { setMessage(error); setFailed(true); return; }
     }
     saving.current = true; setBusy(true); setMessage("");

@@ -1,8 +1,8 @@
-import type { MeetEventData } from "./meet-operations";
+import type { MeetEventData, MeetOperationLimits } from "./meet-operations";
 
 /** Checklist moves affect selected people; explicit slides reorder only editable slots. */
 export class MeetHeatPlan {
-  constructor(readonly data: MeetEventData, readonly eligibleIds: ReadonlySet<string>) {}
+  constructor(readonly data: MeetEventData, readonly eligibleIds: ReadonlySet<string>, readonly limits: MeetOperationLimits = {}) {}
   get active() { return this.data.participants.filter(p => this.eligibleIds.has(p.entryId) && p.status === "entered"); }
   get unassigned() { return this.active.filter(p => p.group === null || p.order === null); }
   private selected(ids: string[]) {
@@ -18,12 +18,12 @@ export class MeetHeatPlan {
     return {...this.data, confirmed:false, participants};
   }
   private validCapacity(capacity: number) {
-    if (!Number.isInteger(capacity) || capacity < 1 || capacity > 300) throw new Error("組の枠数を確認してください");
+    if (!Number.isInteger(capacity) || capacity < 1 || capacity > (this.limits.maxOrder ?? 300)) throw new Error("組の枠数を確認してください");
   }
   move(ids: string[], group: number | null, capacity?: number): MeetEventData {
     const selected = this.selected(ids);
     if (group === null) return this.result(new Map(ids.map(id => [id,{group:null,order:null}])));
-    if (!Number.isInteger(group) || group < 1 || group > 99) throw new Error("これ以上組を作れません");
+    if (!Number.isInteger(group) || group < 1 || group > (this.limits.maxGroups ?? 99)) throw new Error("これ以上組を作れません");
     if (capacity !== undefined) {
       this.validCapacity(capacity);
       const incoming = selected.filter(p => p.group !== group || p.order === null || p.order > capacity
@@ -38,12 +38,12 @@ export class MeetHeatPlan {
     const incoming = selected.filter(p => p.group !== group || p.order === null);
     // DNS and cancelled entrants reserve their number for reinstatement.
     let order = Math.max(0,...this.data.participants.filter(p => p.group === group).map(p => p.order ?? 0));
-    if (order + incoming.length > 300) throw new Error("この組の番号が300を超えています。新しい組へ移してください");
+    if (order + incoming.length > (this.limits.maxOrder ?? 300)) throw new Error(`この組の番号が${this.limits.maxOrder ?? 300}を超えています。新しい組へ移してください`);
     return this.result(new Map(incoming.map(p => [p.entryId,{group,order:++order}])));
   }
   /** Original slot numbers in their new order, including blanks and excluding pinned inactive slots. */
   reorder(group: number, slotOrders: number[], capacity?: number): MeetEventData {
-    if (!Number.isInteger(group) || group < 1 || group > 99) throw new Error("組を確認してください");
+    if (!Number.isInteger(group) || group < 1 || group > (this.limits.maxGroups ?? 99)) throw new Error("組を確認してください");
     if (capacity !== undefined) this.validCapacity(capacity);
     const placed = this.data.participants.filter(p => p.group === group && p.order !== null);
     const occupied = new Set<number>();
@@ -78,7 +78,7 @@ export class MeetHeatPlan {
     if (dns && person.status !== "entered") throw new Error("記録画面で出場状況を確認してください");
     if (!dns && person.status !== "DNS") return this.data;
     if (!dns && person.group !== null && person.order !== null && this.data.participants.some(p => p.entryId !== id && p.status !== "DNS" && p.group === person.group && p.order === person.order)) {
-      throw new Error(`${person.group}組${person.order}番を別の人が使用しています。その人を移してから出場に戻してください`);
+      throw new Error(`${this.limits.groupLabel?.(person.group) ?? `${person.group}組`}${person.order}番を別の人が使用しています。その人を移してから出場に戻してください`);
     }
     return { ...this.data, confirmed: false, participants: this.data.participants.map(p => p.entryId === id ? { ...p, status: dns ? "DNS" : "entered" } : p) };
   }

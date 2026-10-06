@@ -1,7 +1,9 @@
 /** Framework/DB independent competition objects. Adapters supply entries and event rules. */
 export type MeetDiscipline = "track" | "distance" | "height";
+export type MeetHeatScope = "男子" | "女子" | "混合";
+export type MeetOperationLimits = { maxParticipants?: number; maxGroups?: number; maxOrder?: number; defaultGroup?: number; groupLabel?: (group: number) => string };
 export type MeetTrial = { mark: string; status: "pending" | "valid" | "foul" | "pass"; wind: string };
-export type MeetPerformance = { entryId: string; group: number | null; order: number | null; status: "entered" | "DNS" | "DNF" | "DQ"; trials: MeetTrial[] };
+export type MeetPerformance = { entryId: string; group: number | null; order: number | null; heatScope?: MeetHeatScope; status: "entered" | "DNS" | "DNF" | "DQ"; trials: MeetTrial[] };
 export type MeetEventData = { participants: MeetPerformance[]; confirmed: boolean };
 export type MeetEventRule = { name: string; discipline: MeetDiscipline; wind: boolean };
 export const emptyTrial = (): MeetTrial => ({ mark: "", status: "pending", wind: "" });
@@ -22,7 +24,7 @@ export class MeetMark {
 
 /** Event aggregate: validation, seeding and best marks are shared by UI and server actions. */
 export class MeetEvent {
-  constructor(readonly rule: MeetEventRule, readonly data: MeetEventData) {}
+  constructor(readonly rule: MeetEventRule, readonly data: MeetEventData, readonly limits: MeetOperationLimits = {}) {}
 
   best(person: MeetPerformance): string {
     if (person.status !== "entered") return person.status;
@@ -33,14 +35,16 @@ export class MeetEvent {
 
   validate(): string | null {
     const { participants, confirmed } = this.data;
-    if (!Array.isArray(participants) || participants.length > 300 || typeof confirmed !== "boolean") return "出場者情報を確認してください";
+    const maxParticipants = this.limits.maxParticipants ?? 300, maxGroups = this.limits.maxGroups ?? 99, maxOrder = this.limits.maxOrder ?? 300;
+    if (!Array.isArray(participants) || participants.length > maxParticipants || typeof confirmed !== "boolean") return "出場者情報を確認してください";
     const ids = new Set<string>(), positions = new Set<string>();
     for (const p of participants) {
       if (!p || typeof p.entryId !== "string" || ids.has(p.entryId)) return "出場者が重複しています";
       ids.add(p.entryId);
-      if (!(p.group === null || Number.isInteger(p.group) && p.group >= 1 && p.group <= 99) || !(p.order === null || Number.isInteger(p.order) && p.order >= 1 && p.order <= 300)) return "組は1〜99、順番は1〜300で入力してください";
+      if (!(p.group === null || Number.isInteger(p.group) && p.group >= 1 && p.group <= maxGroups) || !(p.order === null || Number.isInteger(p.order) && p.order >= 1 && p.order <= maxOrder)) return `組は1〜${maxGroups}、順番は1〜${maxOrder}で入力してください`;
+      if (p.heatScope !== undefined && !["男子", "女子", "混合"].includes(p.heatScope)) return "組の区分を確認してください";
       if (p.group !== null && p.order !== null && p.status !== "DNS") {
-        const key = `${p.group}:${p.order}`;
+        const key = `${p.heatScope ?? this.rule.name.match(/^(男子|女子)/)?.[1] ?? ""}:${p.group}:${p.order}`;
         if (positions.has(key)) return "同じ組のレーン・試技順が重複しています";
         positions.add(key);
       }
