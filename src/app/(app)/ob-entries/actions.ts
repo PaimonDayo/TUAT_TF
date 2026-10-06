@@ -22,13 +22,16 @@ async function editClient(allowSelf = false) {
   return client;
 }
 
-export async function saveEntry(input: EntryEdit, party?: PartyEdit, confirmDuties = false): Promise<{ ok: boolean; message?: string; dutyConflicts?: {time:string;event:string;assignment:string}[] }> {
+export async function saveEntry(input: EntryEdit, party?: PartyEdit, confirmDuties = false): Promise<{ ok: boolean; message?: string; uncertain?: boolean; dutyConflicts?: {time:string;event:string;assignment:string}[] }> {
   if (typeof confirmDuties !== "boolean") return {ok:false,message:"補助担当の確認内容を確認してください"};
   if ((party !== undefined && !validPartyEdit(party)) || !validEntryEdit(input, !!party && party.status !== "未回答")) return { ok: false, message: "種目と資格記録を確認してください（記録は1000文字以内）" };
-  const client = await editClient(true);
+  const client = await editClient(!input.details);
   if (!client) return { ok: false, message: "権限がありません" };
   const args = { p_entry_id: input.entryId, p_profile_id: input.profileId, p_revision: input.revision, p_events: input.events, p_marks: input.marks };
-  const result = await client.rpc("save_ob_registration_checked", { ...args, p_party_id: party?.id ?? null, p_party_revision: party?.revision ?? null, p_party_status: party?.status ?? null, p_confirm_duties: confirmDuties });
+  const registration = { ...args, p_party_id: party?.id ?? null, p_party_revision: party?.revision ?? null, p_party_status: party?.status ?? null, p_confirm_duties: confirmDuties };
+  const result = input.details
+    ? await client.rpc("save_ob_registration_details_checked", { ...registration, p_entry_id: input.entryId!, p_revision: input.revision!, p_name: input.details.name.trim(), p_grade: input.details.grade })
+    : await client.rpc("save_ob_registration_checked", registration);
   if (result.error) {
     if (result.error.message.includes("entry_duty_conflict")) {
       try {
@@ -37,16 +40,20 @@ export async function saveEntry(input: EntryEdit, party?: PartyEdit, confirmDuti
       } catch { /* Keep the form when the returned details cannot be read. */ }
       return {ok:false,message:"出場と補助担当が重複します。補助員表で担当を確認してください"};
     }
-    const message = result.error.code === "23505" ? "同じ名前の回答がすでにあります。フォームで回答済みなら「自分の回答を呼び出す」を押してください"
+    const message = result.error.code === "23505" ? input.details ? "同じ氏名の参加者・回答が登録されています。氏名を確認してください" : "同じ名前の回答がすでにあります。フォームで回答済みなら「自分の回答を呼び出す」を押してください"
       : result.error.message.includes("entry_conflict") ? "他の操作で更新されています。画面を更新してからやり直してください"
       : result.error.message.includes("party_identity_required") ? "懇親会の回答と選択した部員が一致しません。本人照合を確認してください"
       : result.error.message.includes("entry_division_") ? "登録済みの男女区分と種目が一致しません。画面を更新して確認してください"
       : result.error.message.includes("entry_forbidden") ? "自分のエントリーだけ登録・編集できます"
-      : result.error.message.includes("entry_member_missing") ? "在籍中で氏名・学年が登録された部員を選んでください" : "保存できませんでした";
-    return { ok: false, message };
+      : result.error.message.includes("entry_member_missing") ? "在籍中で氏名・学年が登録された部員を選んでください"
+      : result.error.message.includes("entry_duplicate") ? "同じ氏名の参加者が登録されています。氏名を確認してください" : "保存できませんでした";
+    const uncertain = !!input.details && (!result.error.code || !/^[A-Z0-9]{5}$/.test(result.error.code));
+    return { ok: false, message, ...(uncertain ? { uncertain: true } : {}) };
   }
   const saved = result.data;
-  if (!saved || typeof saved !== "object" || Array.isArray(saved) || typeof saved.entryId !== "string" || !/^[0-9a-f-]{36}$/i.test(saved.entryId) || !Array.isArray(saved.conflicts)) return {ok:false,message:"保存結果を確認できませんでした。画面を開き直して確認してください"};
+  if (!saved || typeof saved !== "object" || Array.isArray(saved) || typeof saved.entryId !== "string" || !/^[0-9a-f-]{36}$/i.test(saved.entryId) || !Array.isArray(saved.conflicts)
+    || input.details && (saved.entryId !== input.entryId || !saved.conflicts.every(row => row && typeof row === "object" && !Array.isArray(row) && typeof row.time === "string" && typeof row.event === "string" && typeof row.assignment === "string")
+      || !entryDetailsSaved(saved, input, party))) return {ok:false,...(input.details ? {uncertain:true} : {}),message:"保存結果を確認できませんでした。入力は残っています。結果を確認してください"};
   refreshObPages();
   return { ok: true, dutyConflicts: saved.conflicts as {time:string;event:string;assignment:string}[] };
 }
@@ -197,6 +204,39 @@ export async function getObEntryHistory(cursor?: { at: string; id: string }): Pr
   const entryNames = new Map(entries.data.map(entry => [entry.id, entry.submitted_name]));
   const last = rows.at(-1)?.row;
   return { ok: true, items: rows.map(item => item.kind === "entry" ? describeObChange(item.row, names) : describeObOperationChange(item.row, names, entryNames)), nextCursor: combined.length > 30 && last ? { at: last.changed_at, id: last.id } : null };
+}
+
+function entryDetailsSaved(value: unknown, input: EntryEdit, party?: PartyEdit): boolean {
+  if (!input.details || !value || typeof value !== "object" || Array.isArray(value)) return false;
+  const snapshot = value as { entry?: Record<string, unknown>; party?: Record<string, unknown> | null };
+  const saved = snapshot.entry;
+  if (!Object.hasOwn(snapshot, "party") || snapshot.party !== null && (!snapshot.party || typeof snapshot.party !== "object" || Array.isArray(snapshot.party))) return false;
+  if (!saved || typeof saved !== "object" || Array.isArray(saved) || saved.id !== input.entryId || !Number.isSafeInteger(saved.revision) || (saved.revision as number) <= input.revision!
+    || saved.submitted_name !== input.details.name.trim() || saved.grade !== input.details.grade || !Array.isArray(saved.events)
+    || saved.events.length !== input.events.length || new Set(saved.events).size !== input.events.length || !saved.events.every(event => typeof event === "string" && input.events.includes(event))) return false;
+  const marks = saved.qualification_marks;
+  if (!marks || typeof marks !== "object" || Array.isArray(marks)) return false;
+  const expected = Object.entries(input.marks).sort(([a], [b]) => a.localeCompare(b));
+  if (JSON.stringify(Object.entries(marks).sort(([a], [b]) => a.localeCompare(b))) !== JSON.stringify(expected)) return false;
+  if (!party) return true;
+  if (snapshot.party === null) return party.id === null && party.revision === null && party.status === "未回答";
+  return (!party.id || snapshot.party.id === party.id)
+    && typeof snapshot.party.id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(snapshot.party.id)
+    && snapshot.party.entry_id === input.entryId && snapshot.party.status === party.status
+    && Number.isSafeInteger(snapshot.party.revision) && (snapshot.party.revision as number) >= (party.revision ?? 0);
+}
+
+/** Confirm only the frozen metadata/registration attempt after a lost response. */
+export async function checkEntryDetails(input: EntryEdit, party?: PartyEdit): Promise<{ok:boolean;message?:string}> {
+  if (!input?.details || !validEntryEdit(input, !!party && party.status !== "未回答") || party !== undefined && !validPartyEdit(party)) return {ok:false,message:"確認する保存内容を確認してください"};
+  try {
+    const client = await editClient();
+    if (!client) return {ok:false,message:"大会担当者の権限を確認してください。入力は残っています"};
+    const result = await client.rpc("get_ob_registration_details_snapshot", {p_entry_id:input.entryId!});
+    if (result.error || !entryDetailsSaved(result.data, input, party)) return {ok:false,message:"保存結果を確認できませんでした。入力は残っています。もう一度結果を確認してください"};
+    refreshObPages();
+    return {ok:true};
+  } catch { return {ok:false,message:"保存結果を取得できませんでした。入力は残っています。接続後にもう一度確認してください"}; }
 }
 
 export async function createGuestEntry(input: import("@/lib/ob-entry-edit").GuestEntryEdit): Promise<{ok:boolean;message?:string}> {

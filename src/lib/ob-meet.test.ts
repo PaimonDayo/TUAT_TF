@@ -28,6 +28,14 @@ it("keeps unconfirmed identities separate and avoids duplicating confirmed membe
   const rows=dutyRows([{...entry,profile_id:null}],members);
   expect(rows).toHaveLength(1);expect(rows.filter(r=>!r.linked)).toHaveLength(1);
 });
+it("shows corrected entry names and grades for linked helpers without changing their profile identity",()=>{
+  const corrected={...entry,submitted_name:"大会の修正名",grade:"M2"};
+  const members=[{id:"p",display_name:"プロフィールの旧名",grade:"1"}];
+  const before=structuredClone({corrected,members});
+  expect(dutyRows([corrected],members)).toEqual([{id:"p",name:"大会の修正名",grade:"M2",entry:corrected,linked:true}]);
+  expect({corrected,members}).toEqual(before);
+  expect(dutyRows([{...corrected,profile_id:null}],members)).toEqual([{id:"e",name:"大会の修正名",grade:"M2",entry:{...corrected,profile_id:null},linked:false}]);
+});
 it("includes senior entrants but excludes unentered active members",()=>{
   const members=[{id:"p",display_name:"B2 member",grade:"2"},{id:"q",display_name:"B3 member",grade:"3"},{id:"r",display_name:"no entry",grade:"1"}];
   const rows=dutyRows([entry,{...entry,id:"senior",profile_id:"q",grade:"B3"},{...entry,id:"junior",profile_id:null,grade:"B1"},{...entry,id:"graduate",profile_id:null,grade:"M1"}],members);

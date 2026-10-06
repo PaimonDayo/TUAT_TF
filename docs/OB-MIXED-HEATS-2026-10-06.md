@@ -40,3 +40,12 @@
 iOS PWA・Android実機、PC停止中の混在保存から実際の復旧までの通し操作は未確認。合成ブラウザ・分離DB・同期単体試験の結果を実機・障害切替の実運用確認として扱わない。
 
 DB適用済み、画面公開前。検証した関連変更と前回の公開後記録をまとめてmasterへ1回だけpushし、自分のProduction成功と公開`/api/version`のSHA一致を確認する。
+
+
+### 公開完了（2026-10-07 00:27 JST）
+
+- commit: `69e377ad046d7a0608362ce6fa93024073ef31a4`。関連35ファイルをまとめ、最新origin/masterを基準にmasterへfast-forwardし、`master -> master`を1回だけpushした。作業ブランチはpushしていない。
+- 主checkoutの別作業103ファイルは公開後もハッシュ一致。重なる文書の既存追記を保全し、索引へ今回の入口を合成した。実ユーザーの配置・登録・記録を試験操作で書き換えていない。
+- 公式GitHub deploymentは今回のSHA・`Production – tuat-tf`・`success`。本番`https://tuat-tf.vercel.app/api/version`は200で同じSHAを返した。master・origin/masterも同じSHAを確認した。
+- PC/クラウドのDB適用・既存全データ一致は上記のとおり。合成Chrome/WebKit操作、型・lint・974テスト・同期11テスト・ビルドが成功。iOS PWA/Android実機とPC停止からの実復旧通し操作は未確認。
+- この公開後の追記は文書だけのため手元に保持し、次のコード変更とまとめる。追加push・ビルド・デプロイは行わない。

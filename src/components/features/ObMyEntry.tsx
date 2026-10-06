@@ -33,7 +33,7 @@ export function ObMyEntry({ entry, party, me, openEditor = false, embedded = fal
   return <div className={embedded ? "space-y-4" : "space-y-4 px-4 pt-2 pb-6"}>
     <Card className="p-4">
       <h2 className="mb-2 text-headline">自分のエントリー</h2>
-      <p className="text-caption">{entryGrade(me.grade)} {me.display_name}</p>
+      <p className="text-caption">{entry ? `${entry.grade} ${entry.submitted_name}` : `${entryGrade(me.grade)} ${me.display_name}`}</p>
       {entry ? <>
         {entry.absent&&<p className="mt-3 rounded-lg bg-bg p-3 text-body">大会全体の欠席として登録されています。変更は大会担当者へ連絡してください。</p>}
         {rows.length ? <ul className="mt-2 space-y-1">{rows.map((row) => <li key={row.event} className="flex items-baseline gap-3 text-[15px]">

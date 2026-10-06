@@ -13,6 +13,16 @@ it("finds another concurrent competition and counts an unavailable helper as a s
  expect(issues[1].text).toContain("担当可能 0 / 必要 1");
  expect(entryDutyConflicts("m",["男子100m"],[duty])).toEqual([duty]);
 });
+it("uses the corrected entry name for a linked helper warning and retains profile-only assigned helpers",()=>{
+ const corrected={...entry,submitted_name:"大会の修正名",grade:"M2"};
+ const profile={...members[0],display_name:"プロフィールの旧名",grade:"B1"};
+ const issues=obDutyIssues([corrected],[profile],[duty],[role]);
+ expect(issues.find(issue=>issue.kind==="competition")?.text).toContain("大会の修正名：");
+ expect(issues.some(issue=>issue.text.includes("プロフィールの旧名"))).toBe(false);
+ const missing=obDutyIssues([], [profile], [duty], [role]);
+ expect(missing.find(issue=>issue.kind==="ineligible")?.text).toBe("プロフィールの旧名：参加情報が見つかりません");
+ expect(missing.find(issue=>issue.kind==="ineligible")?.personId).toBe(profile.id);
+});
 it("cleared assignments and other meets never create false conflicts",()=>{
  expect(entryDutyConflicts("m",entry.events,[{...duty,assignment:"",role_ids:[]},{...duty,meet_key:"other"}])).toEqual([]);
  expect(obDutyIssues([entry],members,[{...duty,assignment:"",role_ids:[]}],[role]).map(issue=>issue.kind)).toEqual(["shortage"]);

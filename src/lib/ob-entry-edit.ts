@@ -8,7 +8,15 @@ export function compareObEvents(a: string, b: string): number {
 }
 export const OB_ENTRY_EVENTS = ["男子", "女子"].flatMap((gender) =>
   OB_EVENT_ORDER.map((event) => gender + event));
-export type EntryEdit = { entryId: string | null; profileId: string | null; revision: number | null; events: string[]; marks: Record<string, string | null> };
+export type EntryDetails = { name: string; grade: string };
+export type EntryEdit = { entryId: string | null; profileId: string | null; revision: number | null; events: string[]; marks: Record<string, string | null>; details?: EntryDetails };
+export function validEntryDetails(details: unknown): details is EntryDetails {
+  if (!details || typeof details !== "object" || Array.isArray(details)) return false;
+  const value = details as Record<string, unknown>;
+  return Object.keys(value).length === 2 && Object.keys(value).every(key => key === "name" || key === "grade")
+    && typeof value.name === "string" && value.name.trim().length >= 1 && value.name.trim().length <= 100
+    && typeof value.grade === "string" && [...GRADE_OPTIONS.map(grade => grade.short), "OB・OG"].includes(value.grade);
+}
 export function entryDivision(entry: { events: string[]; competition_division?: "男子" | "女子" | null }): "男子" | "女子" | null {
   if (entry.competition_division) return entry.competition_division;
   const divisions = new Set(entry.events.map((event) => event.slice(0, 2)));
@@ -20,6 +28,7 @@ export function validEntryEdit(input: EntryEdit, allowPartyOnly = false): boolea
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!input || typeof input !== "object") return false;
   if (input.entryId === null ? !input.profileId || !uuid.test(input.profileId) || input.revision !== null : !uuid.test(input.entryId) || !Number.isSafeInteger(input.revision) || input.revision! < 0 || input.profileId !== null) return false;
+  if (input.details !== undefined && (input.entryId === null || !validEntryDetails(input.details))) return false;
   if (!Array.isArray(input.events) || input.events.length > 22 || new Set(input.events).size !== input.events.length || input.events.some((event) => !OB_ENTRY_EVENTS.includes(event)) || (input.entryId === null && !input.events.length && !allowPartyOnly)) return false;
   if (input.events.length && !entryDivision({ events: input.events })) return false;
   return !!input.marks && typeof input.marks === "object" && !Array.isArray(input.marks) && Object.entries(input.marks).every(([event, mark]) => input.events.includes(event) && (mark === null || typeof mark === "string" && mark.length <= 1000));

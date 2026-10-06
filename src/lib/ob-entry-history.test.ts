@@ -48,6 +48,13 @@ describe("OB permissions and history", () => {
     const result = describeObOperationChange({ ...operation, after_data: { participants: [person], private: "hidden" } }, new Map(), new Map());
     expect(JSON.stringify(result)).not.toContain("hidden"); expect(result).not.toHaveProperty("after_data");
   });
+  it("reports corrected names and grades using stored snapshots and preserves independent party source labels", () => {
+    const result = describeObChange({ ...base, before_data: { submitted_name: "フォームの旧名", grade: "B1", profile_id: "same" }, after_data: { submitted_name: "大会の修正名", grade: "M2", profile_id: "same" } }, new Map([["actor", "大会担当"]]));
+    expect(result).toMatchObject({ subject: "大会の修正名", actor: "大会担当", categories: ["登録情報"] });
+    expect(result.details).toEqual([{ label: "氏名", before: "フォームの旧名", after: "大会の修正名" }, { label: "学年", before: "B1", after: "M2" }]);
+    const party = describeObChange({ ...base, before_data: { change_type: "party", submitted_name: "フォームの旧名", group_label: "2000年卒", status: "参加" }, after_data: { change_type: "party", submitted_name: "大会の修正名", group_label: "2000年卒", status: "参加" } }, new Map());
+    expect(party.details).toEqual([{ label: "氏名", before: "フォームの旧名", after: "大会の修正名" }]);
+  });
 });
 
 describe("OB competition history", () => {

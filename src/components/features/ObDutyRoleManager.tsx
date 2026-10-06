@@ -37,7 +37,7 @@ export function ObDutyRoleManager({entries,time,event,roles,allRoles=roles,dutie
  const slotDuty=(profileId:string)=>duties.find(d=>d.profile_id===profileId&&d.slot_time===time&&d.event_name===event);
  const rolePeople=(id:string)=>duties.filter(d=>d.slot_time===time&&d.event_name===event&&d.role_ids?.includes(id));
  const roster=dutyRows(entries,members);
- const member=(id:string)=>members.find(x=>x.id===id)??(()=>{const r=roster.find(x=>x.id===id);return r?{id,display_name:r.name,grade:r.grade}:undefined;})();
+ const member=(id:string)=>{const row=roster.find(x=>x.id===id);return row?{id,display_name:row.name,grade:row.grade}:members.find(x=>x.id===id);};
  const byGrade=(a:ObDuty,b:ObDuty)=>compareByGrade({grade:member(a.profile_id)?.grade??null,name:member(a.profile_id)?.display_name??""},{grade:member(b.profile_id)?.grade??null,name:member(b.profile_id)?.display_name??""});
  const peopleOriginal=people?rolePeople(people.role.id).map(d=>d.profile_id):[];
  const peopleDirty=!!people&&[...people.selected].sort().join()!==[...peopleOriginal].sort().join();

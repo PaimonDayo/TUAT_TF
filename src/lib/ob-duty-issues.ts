@@ -30,7 +30,7 @@ export function obDutyIssues(entries: ObEntry[], members: EntryMember[], duties:
   for (const duty of active) {
     const entry = entryForDuty(duty.profile_id, entries);
     const member = members.find(person => person.id === duty.profile_id);
-    const name = member?.display_name ?? entry?.submitted_name ?? "名簿確認待ち";
+    const name = entry?.submitted_name ?? member?.display_name ?? "名簿確認待ち";
     const base = { time: duty.slot_time, event: duty.event_name, personId: duty.profile_id };
     const add = (kind: ObDutyIssue["kind"], text: string) => {
       invalid.add(duty);
