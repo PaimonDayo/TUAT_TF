@@ -66,9 +66,31 @@ describe("OB competition history", () => {
       { label: "記録の確定", before: "確定", after: "速報" },
     ]));
   });
-  it.each([["男子1500m", "番号"], ["女子3000m", "番号"], ["男子走り幅跳び", "試技順"]])("uses the event's order label for %s", (event_name, label) => {
+  it.each([["男子1500m", "番号"], ["女子3000m", "番号"]])("uses the event's order label for %s", (event_name, label) => {
     const result = describeObOperationChange({ ...operation, event_name, before_data: { participants: [person] }, after_data: { participants: [{ ...person, order: 1 }] } }, new Map(), new Map());
     expect(result.details).toContainEqual(expect.objectContaining({ label, before: "未割当", after: "1" }));
+  });
+  it("uses the full field snapshots for trial ordinals across legacy groups and inactive people", () => {
+    const first = { ...person, entryId: "first", group: 1, order: 7 };
+    const dns = { ...person, entryId: "dns", group: 2, order: 1, status: "DNS" };
+    const last = { ...person, entryId: "last", group: 2, order: 1 };
+    const result = describeObOperationChange({ ...operation, event_name: "男子走り幅跳び", before_data: { participants: [last, dns, first] }, after_data: { participants: [{ ...first, group: 2, order: 1 }, dns, { ...last, group: 1, order: 7 }] } }, new Map(), new Map([["first", "先の人"], ["dns", "DNSの人"], ["last", "後の人"]]));
+    expect(result.details).toEqual(expect.arrayContaining([
+      { subject: "先の人", label: "試技順", before: "1", after: "3" },
+      { subject: "後の人", label: "試技順", before: "3", after: "1" },
+    ]));
+    expect(result.details.some(detail => detail.subject === "DNSの人")).toBe(false);
+    expect(result.categories).toEqual(["試技順"]);
+    expect(JSON.stringify(result)).not.toContain("entryId");
+  });
+  it("preserves old field placement edits when their visible ordinal does not change", () => {
+    const result = describeObOperationChange({ ...operation, event_name: "女子砲丸投げ", before_data: { participants: [{ ...person, group: 1, order: 3 }] }, after_data: { participants: [{ ...person, group: 2, order: 7 }] } }, new Map(), new Map([["entry", "対象"]]));
+    expect(result.details).toEqual([
+      { subject: "対象", label: "保存時の組情報", before: "1", after: "2" },
+      { subject: "対象", label: "保存時の順番", before: "3", after: "7" },
+    ]);
+    const incomplete = describeObOperationChange({ ...operation, event_name: "男子走り高跳び", before_data: { participants: [person] }, after_data: { participants: [{ ...person, order: 1 }] } }, new Map(), new Map());
+    expect(incomplete.details).toContainEqual(expect.objectContaining({ label: "保存時の順番", before: "未割当", after: "1" }));
   });
   it("compares participant identities rather than array positions and preserves deleted trials", () => {
     const second = { ...person, entryId: "second" };

@@ -202,6 +202,9 @@ it("preserves the existing explicit conflict review instead of treating a rollba
   await render().save();
   expect(render()).toMatchObject({ unconfirmed: false, locked: false, reviewing: true, dirty: true });
   expect(render().review?.conflicts.map(conflict => conflict.key)).toEqual(["a:trials"]);
+  expect(render().latestData).toBe(latest.data);
+  expect(render().data.participants[0].trials[0].mark).toBe("12.34");
+  expect(render().latestData?.participants[0].trials[0].mark).toBe("12.99");
   expect(mocks.check).not.toHaveBeenCalled();
 });
 

@@ -8,21 +8,25 @@ import { MeetEvent, emptyTrial, type MeetPerformance, type MeetTrial } from "@/l
 import { effectiveObParticipation, obEventRule, type ObEventOperation } from "@/lib/ob-operations";
 import { type ObEntry } from "@/lib/ob-entries";
 import { MeetHeatPlan } from "@/lib/meet-heat-plan";
+import { fieldOrderRows } from "@/lib/meet-field-order";
 import { useObOperationDraft } from "./useObOperationDraft";
 import { ObOperationConflict } from "./ObOperationConflict";
 
 const statusLabels = { entered: "出場", DNS: "DNS", DNF: "途中棄権", DQ: "失格" } as const;
 export function ObEventOperationsEditor({ event, entries, initial, onSaved, onClose, onAddEntry }: { event: string; entries: ObEntry[]; initial?: ObEventOperation; onSaved: (saved: ObEventOperation) => void; onClose: () => void; onAddEntry?: (event: string) => void }) {
   const draft = useObOperationDraft(event, entries, initial, onSaved);
-  const [personId, setPersonId] = useState(draft.data.participants[0]?.entryId ?? "");
+  const [personId, setPersonId] = useState(() => (obEventRule(event).discipline === "track" ? draft.data.participants[0] : fieldOrderRows(draft.data)[0]?.person)?.entryId ?? "");
   const [group, setGroup] = useState<string>("all");
   const [message, setMessage] = useState("");
   const data = draft.data, rule = obEventRule(event), model = new MeetEvent(rule, data);
   const disabled = draft.locked || draft.reviewing;
   const people = new Map(entries.map(e => [e.id, e]));
-  const ordered = [...data.participants].sort((a, b) => (a.group ?? 100) - (b.group ?? 100) || (a.order ?? 301) - (b.order ?? 301));
+  const fieldRows = rule.discipline !== "track" ? fieldOrderRows(data) : [];
+  const fieldNumbers = new Map(fieldRows.map(row => [row.person.entryId, row.number]));
+  const fieldPlacement = (p: MeetPerformance) => fieldNumbers.get(p.entryId) == null ? "順番未定" : `試技順 ${fieldNumbers.get(p.entryId)}番`;
+  const ordered = rule.discipline === "track" ? [...data.participants].sort((a, b) => (a.group ?? 100) - (b.group ?? 100) || (a.order ?? 301) - (b.order ?? 301)) : fieldRows.map(row => row.person);
   const groups = [...new Set(ordered.map(p => p.group).filter((g): g is number => g !== null))];
-  const visible = ordered.filter(p => group === "all" || String(p.group) === group);
+  const visible = ordered.filter(p => rule.discipline !== "track" || group === "all" || String(p.group) === group);
   const person = visible.find(p => p.entryId === personId) ?? visible[0];
   const stateOf = (p: MeetPerformance) => effectiveObParticipation(event, people.get(p.entryId), p);
   const editable = (p: MeetPerformance) => { const state = stateOf(p); return state.registered && !state.absent; };
@@ -50,8 +54,8 @@ export function ObEventOperationsEditor({ event, entries, initial, onSaved, onCl
     <FormDraftGuard dirty={draft.dirty} busy={draft.locked} onSave={draft.save}/>
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-body">{data.confirmed ? "結果確認済み" : "速報"} · {data.participants.length}人</p>{onAddEntry && <Button variant="outline" disabled={disabled} onClick={() => onAddEntry(event)}>出場者を追加</Button>}</div>
-      <ObOperationConflict draft={draft} entries={entries}/>
-      {groups.length > 1 && <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="表示する組">{["all", ...groups.map(String)].map(value => <Button key={value} size="sm" variant={group === value ? "primary" : "outline"} aria-pressed={group === value} onClick={() => setGroup(value)}>{value === "all" ? "全員" : `${value}組`}</Button>)}</div>}
+      <ObOperationConflict draft={draft} entries={entries} event={event}/>
+      {rule.discipline === "track" && groups.length > 1 && <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="表示する組">{["all", ...groups.map(String)].map(value => <Button key={value} size="sm" variant={group === value ? "primary" : "outline"} aria-pressed={group === value} onClick={() => setGroup(value)}>{value === "all" ? "全員" : `${value}組`}</Button>)}</div>}
       {rule.discipline === "track" ? <>
         <p className="text-caption">タイムを直接入力してください。秒、分:秒に対応しています。</p>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{visible.map(p => {
@@ -63,9 +67,9 @@ export function ObEventOperationsEditor({ event, entries, initial, onSaved, onCl
           </section>;
         })}</div>
       </> : <div className="grid min-w-0 items-start gap-4 md:grid-cols-[minmax(200px,1fr)_minmax(0,3fr)]">
-        <div className="overflow-hidden rounded-xl border border-separator"><h3 className="bg-bg p-3 text-headline">出場者</h3><div className="max-h-52 overflow-y-auto md:max-h-[calc(100dvh-240px)]">{visible.map(p => <button key={p.entryId} className={`flex min-h-14 w-full items-center justify-between gap-2 border-b border-separator p-3 text-left last:border-0 ${p.entryId === person?.entryId ? "bg-accent/10" : "bg-card"}`} aria-pressed={p.entryId === person?.entryId} onClick={() => setPersonId(p.entryId)}><span className="min-w-0"><span className="block break-words text-body">{people.get(p.entryId)?.submitted_name ?? "登録解除済み"}</span><span className="block text-caption">{p.group === null ? "組未定" : `${p.group}組 ${p.order ?? "—"}番`}{stateOf(p).absent || !stateOf(p).registered ? ` · ${stateOf(p).label}` : ""}</span></span><span className="shrink-0 text-caption tabular-nums">{model.best(p)}</span></button>)}</div></div>
+        <div className="overflow-hidden rounded-xl border border-separator"><h3 className="bg-bg p-3 text-headline">試技順</h3><div className="max-h-52 overflow-y-auto md:max-h-[calc(100dvh-240px)]">{visible.map(p => <button key={p.entryId} className={`flex min-h-14 w-full items-center justify-between gap-2 border-b border-separator p-3 text-left last:border-0 ${p.entryId === person?.entryId ? "bg-accent/10" : "bg-card"}`} aria-pressed={p.entryId === person?.entryId} onClick={() => setPersonId(p.entryId)}><span className="min-w-0"><span className="block break-words text-body">{people.get(p.entryId)?.submitted_name ?? "登録解除済み"}</span><span className="block text-caption">{fieldPlacement(p)}{stateOf(p).absent || !stateOf(p).registered ? ` · ${stateOf(p).label}` : ""}</span></span><span className="shrink-0 text-caption tabular-nums">{model.best(p)}</span></button>)}</div></div>
         {person && <section aria-label="選択した出場者の試技" className="min-w-0 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-title">{people.get(person.entryId)?.submitted_name ?? "登録解除済み"}</h3><p className="text-body">ベスト {model.best(person)}</p></div><div className="w-40">{statusControl(person)}</div></div>
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-title">{people.get(person.entryId)?.submitted_name ?? "登録解除済み"}</h3><p className="text-body">{fieldPlacement(person)} · ベスト {model.best(person)}</p></div><div className="w-40">{statusControl(person)}</div></div>
           <p className="text-caption">{rule.discipline === "height" ? "高さをmで入力し、○・×・−を選びます。同じ高さも1試技ずつ記録してください。" : "記録をmで入力してください。失敗は×、パスは−を選びます。"}</p>
           <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">{Array.from({ length: trialCount }, (_, index) => {
             const trial = person.trials[index] ?? emptyTrial(), locked = disabled || !editable(person) || person.status !== "entered";

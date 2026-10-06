@@ -9,7 +9,7 @@ export type ObParticipationStatus = MeetPerformance["status"] | "absent" | "with
 /** Editable lane frames; existing saved positions outside them remain visible. */
 export function obHeatCapacity(event: string): 8 | 6 | undefined {
   if (/^(男子|女子)100m$/.test(event)) return 8;
-  if (/^(男子|女子)(300m|300mH|1500m|3000m)$/.test(event)) return 6;
+  if (/^(男子|女子)(300m|300mH)$/.test(event)) return 6;
   return undefined;
 }
 

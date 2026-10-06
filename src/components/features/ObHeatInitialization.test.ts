@@ -9,7 +9,7 @@ import type { ObEventOperation } from "@/lib/ob-operations";
 
 const hooks = vi.hoisted(() => ({ cursor: 0, values: [] as unknown[] }));
 const mocks = vi.hoisted(() => ({
-  board: vi.fn(), guard: vi.fn(), write: vi.fn(), check: vi.fn(), refresh: vi.fn(), onSaved: vi.fn(),
+  board: vi.fn(), heatBoard: vi.fn(), fieldBoard: vi.fn(), modal: vi.fn(), guard: vi.fn(), write: vi.fn(), check: vi.fn(), refresh: vi.fn(), onSaved: vi.fn(),
 }));
 vi.mock("react", async importOriginal => ({
   ...await importOriginal<typeof import("react")>(),
@@ -29,11 +29,12 @@ vi.mock("react", async importOriginal => ({
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
 vi.mock("@/app/(app)/ob-entries/operations-actions", () => ({ saveObEventOperation: mocks.write, checkObEventOperation: mocks.check }));
 vi.mock("@/components/ui/form-modal", () => ({
-  FormModal: ({ children }: { children: ReactNode }) => createElement("div", {}, children),
+  FormModal: ({ children, title }: { children: ReactNode; title: string }) => { mocks.modal(title); return createElement("div", {}, children); },
   FormModalFooter: ({ children }: { children: ReactNode }) => createElement("footer", {}, children),
   FormDraftGuard: (props: unknown) => { mocks.guard(props); return null; },
 }));
-vi.mock("./MeetHeatBoard", () => ({ MeetHeatBoard: (props: unknown) => { mocks.board(props); return null; } }));
+vi.mock("./MeetHeatBoard", () => ({ MeetHeatBoard: (props: unknown) => { mocks.board(props); mocks.heatBoard(props); return null; } }));
+vi.mock("./MeetFieldOrderBoard", () => ({ MeetFieldOrderBoard: (props: unknown) => { mocks.board(props); mocks.fieldBoard(props); return null; } }));
 import { ObHeatEditor } from "./ObHeatEditor";
 
 type Board = { data: MeetEventData; onChange: (data: MeetEventData) => void };
@@ -54,7 +55,7 @@ beforeEach(() => {
   } }));
 });
 
-it.each(["男子100m", "女子300m", "男子300mH", "男子1500m", "女子3000m", "男子走り幅跳び", "女子走り高跳び"])(
+it.each(["男子100m", "女子300m", "男子300mH", "男子1500m", "女子3000m", "男子走り幅跳び", "女子走り高跳び", "男子砲丸投げ"])(
   "leaves every entrant unassigned when first opening %s and does not save on opening",
   event => {
     const entries = roster(event);
@@ -64,6 +65,10 @@ it.each(["男子100m", "女子300m", "男子300mH", "男子1500m", "女子3000m"
     expect(render(event, entries).data.participants).toEqual(entries.map(entry => emptyPerformance(entry.id)));
     expect(mocks.write).not.toHaveBeenCalled();
     expect(mocks.check).not.toHaveBeenCalled();
+    const field = ["男子走り幅跳び", "女子走り高跳び", "男子砲丸投げ"].includes(event);
+    expect(mocks.modal).toHaveBeenLastCalledWith(`${event} · ${field ? "試技順" : "組分け"}`);
+    expect(field ? mocks.fieldBoard : mocks.heatBoard).toHaveBeenCalled();
+    expect(field ? mocks.heatBoard : mocks.fieldBoard).not.toHaveBeenCalled();
   },
 );
 

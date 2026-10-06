@@ -1,4 +1,6 @@
 import type { EntryChange } from "./ob-entry-edit";
+import { fieldOrderRows } from "./meet-field-order";
+import { emptyPerformance } from "./meet-operations";
 
 export type ObHistoryDetail = { label: string; before: string | null; after: string | null; subject?: string };
 export type ObHistoryItem = { id: string; changedAt: string; actor: string; subject: string; categories: string[]; details: ObHistoryDetail[] };
@@ -21,6 +23,12 @@ export function historyProfileIds(changes: EntryChange[]): string[] {
 function participants(value: unknown): Record<string, unknown>[] {
   const rows = object(value).participants;
   return Array.isArray(rows) ? rows.map(object).filter(row => typeof row.entryId === "string") : [];
+}
+
+function fieldNumbers(value: unknown): Map<string, number | null> {
+  const position = (value: unknown) => typeof value === "number" && Number.isInteger(value) && value > 0 ? value : null;
+  const rows = participants(value).map(row => ({ ...emptyPerformance(row.entryId as string), group: position(row.group), order: position(row.order), ...(row.status === "DNS" ? { status: "DNS" as const } : {}) }));
+  return new Map(fieldOrderRows({ participants: rows, confirmed: false }).map(row => [row.person.entryId, row.number]));
 }
 
 export function historyEntryIds(changes: ObOperationChange[]): string[] {
@@ -81,13 +89,24 @@ export function describeObOperationChange(change: ObOperationChange, names: Map<
   const status = (value: unknown) => ({ entered: "出場", DNS: "DNS（欠場）", DNF: "DNF（途中棄権）", DQ: "DQ（失格）" }[String(value)] ?? "未登録");
   const trialStatus = (value: unknown) => ({ pending: "未記録", valid: "成功", foul: "失敗", pass: "パス" }[String(value)] ?? "試技なし");
   const isTrack = /^(男子|女子)(100m|300m|300mH|1500m|3000m)$/.test(change.event_name);
-  const orderLabel = /^(男子|女子)(100m|300m|300mH)$/.test(change.event_name) ? "レーン" : isTrack ? "番号" : "試技順";
+  const orderLabel = /^(男子|女子)(100m|300m|300mH)$/.test(change.event_name) ? "レーン" : "番号";
+  const oldNumbers = isTrack ? new Map<string, number | null>() : fieldNumbers(before);
+  const newNumbers = isTrack ? new Map<string, number | null>() : fieldNumbers(after);
   for (const entryId of new Set([...oldPeople.keys(), ...newPeople.keys()])) {
     const previous = oldPeople.get(entryId), next = newPeople.get(entryId);
     const subject = entryNames.get(entryId) ?? "名前を取得できない出場者";
     if (!previous || !next) add("出場者", "出場者", previous ? "登録あり" : "登録なし", next ? "追加" : "削除", subject);
-    for (const [key, label] of [["group", "組"], ["order", orderLabel]]) {
-      if (placement(previous?.[key]) !== placement(next?.[key])) add("組・順番", label, placement(previous?.[key]), placement(next?.[key]), subject);
+    if (isTrack) {
+      for (const [key, label] of [["group", "組"], ["order", orderLabel]]) {
+        if (placement(previous?.[key]) !== placement(next?.[key])) add("組・順番", label, placement(previous?.[key]), placement(next?.[key]), subject);
+      }
+    } else {
+      const oldNumber = oldNumbers.get(entryId) ?? null, newNumber = newNumbers.get(entryId) ?? null;
+      if (oldNumber !== newNumber) add("試技順", "試技順", oldNumber === null ? "順番未定" : String(oldNumber), newNumber === null ? "順番未定" : String(newNumber), subject);
+      else for (const [key, label] of [["group", "保存時の組情報"], ["order", "保存時の順番"]]) {
+        // Old group/slot edits can retain the same visible ordinal; keep that historical fact.
+        if (placement(previous?.[key]) !== placement(next?.[key])) add("試技順", label, placement(previous?.[key]), placement(next?.[key]), subject);
+      }
     }
     if (status(previous?.status) !== status(next?.status)) add("出場状況", "出場状況", status(previous?.status), status(next?.status), subject);
     const oldTrials = Array.isArray(previous?.trials) ? previous.trials.map(object) : [];

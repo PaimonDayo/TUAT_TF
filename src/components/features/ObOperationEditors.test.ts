@@ -13,6 +13,7 @@ vi.mock("@/components/ui/form-modal", () => ({
   FormDraftGuard: (props: unknown) => { mocks.guard(props); return null; },
 }));
 vi.mock("./MeetHeatBoard", () => ({ MeetHeatBoard: (props: unknown) => { mocks.board(props); return null; } }));
+vi.mock("./MeetFieldOrderBoard", () => ({ MeetFieldOrderBoard: (props: unknown) => { mocks.board(props); return null; } }));
 import { ObEventOperationsEditor } from "./ObEventOperationsEditor";
 import { ObHeatEditor } from "./ObHeatEditor";
 
@@ -24,7 +25,7 @@ beforeEach(() => {
     data: { confirmed: false, participants: [{ ...emptyPerformance(entry.id), group: 1, order: 1 }] },
     change: vi.fn(), dirty: true, busy: false, unconfirmed: true, locked: true,
     message: "結果を確認してください", failed: true, revision: 2, save: vi.fn(),
-    review: null, choices: {}, setChoices: vi.fn(), applyReview: vi.fn(), reviewing: false,
+    review: null, choices: {}, setChoices: vi.fn(), applyReview: vi.fn(), reviewing: false, latestData: undefined,
     blocked: [], discardPerson: vi.fn(),
   };
 });
@@ -50,5 +51,11 @@ it.each([ObEventOperationsEditor, ObHeatEditor])("disables confirmation while it
   mocks.draft.busy = true;
   const html = renderToStaticMarkup(createElement(Editor, props));
   expect(html.match(/<button\b[^>]*>確認中…<\/button>/)?.[0]).toContain('disabled=""');
+  expect(mocks.guard).toHaveBeenCalledWith(expect.objectContaining({ busy: true }));
+});
+
+it("locks field trial order while confirming an uncertain save", () => {
+  renderToStaticMarkup(createElement(ObHeatEditor, { ...props, event: "男子走り幅跳び" }));
+  expect(mocks.board).toHaveBeenCalledWith(expect.objectContaining({ disabled: true }));
   expect(mocks.guard).toHaveBeenCalledWith(expect.objectContaining({ busy: true }));
 });

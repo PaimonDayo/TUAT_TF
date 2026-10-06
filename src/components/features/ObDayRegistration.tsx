@@ -10,7 +10,7 @@ import { GRADE_OPTIONS } from "@/lib/constants";
 import { entryDivision, OB_ENTRY_EVENTS } from "@/lib/ob-entry-edit";
 import { normalizeEntryName } from "@/lib/entry-identity";
 import type { ObEntry } from "@/lib/ob-entries";
-import { hasRecordedObPerformance, obHeatCapacity, type ObEventOperation } from "@/lib/ob-operations";
+import { hasRecordedObPerformance, obEventRule, obHeatCapacity, type ObEventOperation } from "@/lib/ob-operations";
 import { addObDayEntry } from "@/app/(app)/ob-entries/operations-actions";
 
 export function ObDayRegistration({ event: initialEvent, entries, operations, onClose, onSaved }: {
@@ -32,6 +32,8 @@ export function ObDayRegistration({ event: initialEvent, entries, operations, on
   const candidates = entries.filter(entry => normalizeEntryName(entry.submitted_name + entry.grade).toLowerCase().includes(normalized));
   const operation = operations.find(value => value.event_name === event);
   const fixedLanes = obHeatCapacity(event) !== undefined;
+  const field = !!event && obEventRule(event).discipline !== "track";
+  const unplaced = fixedLanes || field;
   const groups = [...new Set(operation?.data.participants.flatMap(person => person.group ? [person.group] : []) ?? [])].sort((a, b) => a - b);
   const nextGroup = Math.max(0, ...groups) + 1;
   const closedGroup = (value: number) => !!operation?.data.confirmed || !!operation?.data.participants.some(person => person.group === value && hasRecordedObPerformance(person));
@@ -43,7 +45,7 @@ export function ObDayRegistration({ event: initialEvent, entries, operations, on
     sending.current = true; setBusy(true); setMessage("");
     request.current ??= crypto.randomUUID();
     try {
-      pending.current ??= {operationId:request.current, event, ...(guest ? {name:search.trim(), grade} : {entryId:chosen!.id, revision:chosen!.revision}), group:fixedLanes ? null : group ? Number(group) : null};
+      pending.current ??= {operationId:request.current, event, ...(guest ? {name:search.trim(), grade} : {entryId:chosen!.id, revision:chosen!.revision}), group:unplaced ? null : group ? Number(group) : null};
       setRetry(true);
       const result = await addObDayEntry(pending.current);
       if (!result.ok || !result.entryId) {
@@ -56,7 +58,7 @@ export function ObDayRegistration({ event: initialEvent, entries, operations, on
     finally { sending.current = false; setBusy(false); }
   }
   return <FormModal open title="当日エントリー" autoFocus={false} onOpenChange={open => !open && onClose()}>
-    <FormDraftGuard dirty={!!search || !!selected || !!grade || !fixedLanes && !!group} busy={busy} onSave={save}/>
+    <FormDraftGuard dirty={!!search || !!selected || !!grade || !unplaced && !!group} busy={busy} onSave={save}/>
     <fieldset disabled={busy} className="space-y-5">
       <label className="block space-y-2 text-body"><span>種目</span><Select ariaLabel="追加する種目" value={event} onValueChange={value => {setEvent(value); setGroup(""); if (chosen && (wrongDivision(chosen, value) || chosen.events.includes(value))) setSelected(null); changed();}} options={OB_ENTRY_EVENTS.map(value => ({value,label:value}))}/></label>
       <label className="block space-y-2 text-body"><span>{guest ? "氏名" : "参加者を探す"}</span><Input aria-label={guest ? "新しい参加者の氏名" : "当日エントリーの氏名検索"} value={search} maxLength={100} placeholder="氏名を入力" onChange={e => {setSearch(e.target.value); setSelected(null); changed();}}/></label>
@@ -67,9 +69,9 @@ export function ObDayRegistration({ event: initialEvent, entries, operations, on
         </div>
         <Button variant="outline" className="w-full" onClick={() => {setGuest(true); setSelected(null); changed();}}>名簿にいない人を追加</Button>
       </>}
-      {event && (fixedLanes ? <p className="text-caption">追加した人は組未定に入ります。組分けで選んで組へ移してください。</p> : <label className="block space-y-2 text-body"><span>入れる組</span><Select ariaLabel="当日エントリーの組" value={group} onValueChange={value => {setGroup(value); changed();}} options={[{value:"",label:"未定に入れる"},...groups.map(value=>({value:String(value),label:`${value}組${closedGroup(value)?"（記録入力済み）":""}`,disabled:closedGroup(value)})),...(nextGroup <= 99 ? [{value:String(nextGroup),label:"新しい組を作る",disabled:!!operation?.data.confirmed}] : [])]}/></label>)}
+      {event && (field ? <p className="text-caption">追加した人は順番未定で表示されます。試技順で並べ替えてください。</p> : fixedLanes ? <p className="text-caption">追加した人は組未定に入ります。組分けで選んで組へ移してください。</p> : <label className="block space-y-2 text-body"><span>入れる組</span><Select ariaLabel="当日エントリーの組" value={group} onValueChange={value => {setGroup(value); changed();}} options={[{value:"",label:"未定に入れる"},...groups.map(value=>({value:String(value),label:`${value}組${closedGroup(value)?"（記録入力済み）":""}`,disabled:closedGroup(value)})),...(nextGroup <= 99 ? [{value:String(nextGroup),label:"新しい組を作る",disabled:!!operation?.data.confirmed}] : [])]}/></label>)}
       {message&&<p role="alert" className="text-body text-danger">{message}</p>}
     </fieldset>
-    <FormModalFooter><Button className="w-full" disabled={busy||!ready} onClick={()=>void save()}>{busy?"追加中…":!fixedLanes&&group?"登録して組に入れる":"登録して未定に入れる"}</Button></FormModalFooter>
+    <FormModalFooter><Button className="w-full" disabled={busy||!ready} onClick={()=>void save()}>{busy?"追加中…":field?"登録する":!unplaced&&group?"登録して組に入れる":"登録して未定に入れる"}</Button></FormModalFooter>
   </FormModal>;
 }

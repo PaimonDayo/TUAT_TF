@@ -104,5 +104,5 @@ export function useObOperationDraft(event: string, entries: ObEntry[], initial: 
     }
     finally { saving.current = false; setBusy(false); }
   }
-  return { data, change, dirty, busy, unconfirmed, locked: busy || unconfirmed, message, failed, revision, save, review, choices, setChoices, applyReview, reviewing: latest !== null, blocked, discardPerson };
+  return { data, change, dirty, busy, unconfirmed, locked: busy || unconfirmed, message, failed, revision, save, review, latestData: latest?.data, choices, setChoices, applyReview, reviewing: latest !== null, blocked, discardPerson };
 }

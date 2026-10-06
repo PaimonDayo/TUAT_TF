@@ -1,10 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { effectiveObParticipation, hasRecordedObPerformance, obEventParticipants, ObMeetRoster, reconcileObEvent } from "./ob-operations";
-import { emptyPerformance, type MeetEventData } from "./meet-operations";
+import { effectiveObParticipation, hasRecordedObPerformance, obEventParticipants, obEventRule, obHeatCapacity, ObMeetRoster, reconcileObEvent } from "./ob-operations";
+import { emptyPerformance, MeetEvent, type MeetEventData } from "./meet-operations";
+import { MeetHeatPlan } from "./meet-heat-plan";
 import { OB_DUTY_SLOTS } from "./ob-meet";
 import type { ObEntry } from "./ob-entries";
 
 const entry: ObEntry = { id: "e", meet_key: "ob-2026", submitted_name: "合成人物", grade: "B1", profile_id: "p", events: ["男子1500m"], qualification_marks: {}, revision: 0, imported_at: "" };
+
+describe("OB race group sizes", () => {
+  it.each(["男子1500m", "女子1500m", "男子3000m", "女子3000m"])("puts nine runners in one group for %s", event => {
+    const ids = Array.from({ length: 9 }, (_, index) => `runner-${index}`);
+    const data = { confirmed: false, participants: ids.map(emptyPerformance) };
+    const moved = new MeetHeatPlan(data, new Set(ids)).move(ids, 1, obHeatCapacity(event));
+    expect(moved.participants.map(person => [person.group, person.order])).toEqual(ids.map((_, index) => [1, index + 1]));
+    expect(new MeetEvent(obEventRule(event), moved).validate()).toBeNull();
+    expect(data.participants.every(person => person.group === null)).toBe(true);
+  });
+
+  it.each(["男子100m", "女子100m", "男子300m", "女子300m", "男子300mH", "女子300mH"])("keeps the lane limit for %s", event => {
+    const capacity = event.endsWith("100m") ? 8 : 6;
+    const ids = Array.from({ length: capacity + 1 }, (_, index) => `runner-${index}`);
+    const data = { confirmed: false, participants: ids.map(emptyPerformance) };
+    expect(() => new MeetHeatPlan(data, new Set(ids)).move(ids, 1, obHeatCapacity(event))).toThrow("空き枠");
+    expect(data.participants.every(person => person.group === null)).toBe(true);
+  });
+});
 
 describe("effective competition participation", () => {
   it("separates whole-meet absence from explicit event DNS and restores attendance without changing DNS", () => {
