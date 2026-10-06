@@ -43,4 +43,15 @@ describe("sheetRecordCreatedAt", () => {
     vi.setSystemTime(new Date("2026-10-05T15:00:00Z"));
     expect(sheetRecordCreatedAt("2026-09-12", importedAt)).toBe("2026-09-13T14:59:59.998Z");
   });
+
+  it("keeps initial history before the latest eligible date at the practice day's JST midnight", () => {
+    expect(sheetRecordCreatedAt("2026-09-12", importedAt, "2026-09-13")).toBe("2026-09-11T15:00:00.000Z");
+    expect(sheetRecordCreatedAt("2026-09-13", importedAt, "2026-09-13")).toBe("2026-09-13T14:59:59.999Z");
+  });
+
+  it("distinguishes initial history from the latest eligible day across New Year", () => {
+    const newYearBatch = new Date("2026-12-31T15:00:00.000Z");
+    expect(sheetRecordCreatedAt("2026-12-30", newYearBatch, "2026-12-31")).toBe("2026-12-29T15:00:00.000Z");
+    expect(sheetRecordCreatedAt("2026-12-31", newYearBatch, "2026-12-31")).toBe("2026-12-31T14:59:59.999Z");
+  });
 });

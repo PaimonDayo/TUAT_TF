@@ -2,7 +2,7 @@
 
 import { type RawMember } from "@/lib/sheet-public-csv";
 import { sheetRecordCreatedAt } from "./dates";
-import { appBuiltin, sheetToAppValues, valuesEmpty } from "./field-map";
+import { appBuiltin, normalizeBuiltinValue, normalizeCustomValue, sheetToAppValues, valuesEmpty } from "./field-map";
 import type { BuiltinKey, FieldMap, DbRecord } from "./field-map";
 
 export type MemberPullComputation = {
@@ -33,6 +33,7 @@ export function computeMemberPull(
   inRangeForProfile: (date: string) => boolean,
   nowIso: string,
   existingRecordPolicy: ExistingSheetRecordPolicy = "merge_nonempty",
+  historicalBefore?: string,
 ): MemberPullComputation {
   const inserts: Record<string, unknown>[] = [];
   const updates: { id: string; patch: Record<string, unknown> }[] = [];
@@ -57,8 +58,8 @@ export function computeMemberPull(
       inserts.push({
         user_id: profileId,
         recorded_date: sr.date,
-        // 新規/内容変更の取り込みを上部へ。同じバッチ内は練習日の新しい順。
-        created_at: sheetRecordCreatedAt(sr.date, new Date(nowIso)),
+        // 初回の古い履歴は練習日へ、最新対象日と通常の新規入力は同期時刻へ置く。
+        created_at: sheetRecordCreatedAt(sr.date, new Date(nowIso), historicalBefore),
         synced_at: nowIso,
         updated_at: nowIso,
         from_sheet: true,
@@ -75,23 +76,21 @@ export function computeMemberPull(
     for (const [key, mapping] of map.builtin) {
       const v = builtin[key];
       const shouldApply = replaceMapped || (mapping.numeric ? Number(v) > 0 : (v ?? "").toString().trim() !== "");
-      if (shouldApply && v !== appBuiltin(app, key as BuiltinKey)) patch[key] = v;
+      if (shouldApply && v !== normalizeBuiltinValue(key, mapping, appBuiltin(app, key as BuiltinKey))) patch[key] = v;
     }
     const customPatch: Record<string, string | number | null> = { ...(app.custom ?? {}) };
     let customChanged = false;
     for (const [key, mapping] of map.custom) {
       const v = custom[key];
       const shouldApply = replaceMapped || (mapping.type === "number" ? Number(v) > 0 : (v ?? "").toString().trim() !== "");
-      if (shouldApply && v !== (app.custom?.[key] ?? null)) {
+      if (shouldApply && v !== normalizeCustomValue(mapping.type, app.custom?.[key])) {
         customPatch[key] = v;
         customChanged = true;
       }
     }
     if (Object.keys(patch).length > 0 || customChanged) {
       if (customChanged) patch.custom = customPatch;
-      // A sheet can correct an app-authored record without publishing it again.
-      // Only records originally imported from a sheet move to this batch's time.
-      if (app.from_sheet === true) patch.created_at = sheetRecordCreatedAt(sr.date, new Date(nowIso));
+      // Correct an existing post in place; an edit never changes its publication time or origin.
       patch.synced_at = nowIso;
       updates.push({ id: app.id, patch });
     }

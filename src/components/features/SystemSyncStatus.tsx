@@ -53,7 +53,7 @@ export function SystemSyncStatus() {
         {health && <div className="mt-3 grid grid-cols-3 gap-2 text-center">
           <Metric label="スプレッドシート連携" value={`${health.sheetProfileCount}人`} />
           <Metric label="未書き込み" value={`${health.pendingPushCount}件`} danger={health.pendingPushCount > 0} />
-          <Metric label="前回エラー" value={`${health.latest?.failedCount ?? 0}人`} danger={(health.latest?.failedCount ?? 0) > 0} />
+          <Metric label="未解消エラー" value={`${health.latest?.failedCount ?? 0}人`} danger={(health.latest?.failedCount ?? 0) > 0} />
         </div>}
         {health?.latest && <p className="mt-3 flex items-center gap-1 text-micro text-muted"><Activity size={12} />最終確認 {new Date(health.latest.finishedAt ?? health.latest.startedAt).toLocaleString("ja-JP")}　取り込み {health.latest.pulledCount} / 書き込み {health.latest.pushedCount}</p>}
       </div>

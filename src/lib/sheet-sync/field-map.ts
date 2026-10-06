@@ -67,7 +67,7 @@ export function parseSheetNum(val: string | number | null | undefined): number {
   }, 0);
 }
 
-export const txt = (v: string | null | undefined) => {
+export const txt = (v: string | number | null | undefined) => {
   const s = (v ?? "").toString().trim();
   return s.length > 0 ? s : null;
 };
@@ -147,7 +147,7 @@ export type DbRecord = {
   id: string;
   user_id: string;
   recorded_date: string;
-  /** Existing app-authored records retain their original publication time on a sheet pull. */
+  /** The original creation source is retained on every sheet pull. */
   from_sheet?: boolean;
   dist_low: number;
   dist_mid: number;
@@ -171,6 +171,26 @@ export function appBuiltin(rec: DbRecord, key: BuiltinKey): number | string | nu
   return rec[key] ?? null;
 }
 
+/** Compare stored and sheet values using the same supported field representation. */
+export function normalizeBuiltinValue(
+  key: BuiltinKey,
+  mapping: { numeric: boolean; integer?: boolean },
+  value: string | number | null | undefined,
+): number | string | null {
+  if (!mapping.numeric) return txt(value);
+  const parsed = parseSheetNum(value);
+  if (mapping.integer) return Math.round(parsed);
+  return DISTANCE_KEYS.has(key) ? roundKm(parsed) : Math.round(parsed * 10) / 10;
+}
+
+export function normalizeCustomValue(
+  type: "text" | "number",
+  value: string | number | null | undefined,
+): string | number | null {
+  const text = txt(value);
+  return type === "number" && text !== null ? Math.round(parseSheetNum(value) * 10) / 10 : text;
+}
+
 
 /** シートのセルから、アプリへ書き込む値（マップされた項目のみ）を作る */
 export function sheetToAppValues(map: FieldMap, record: RawMember["records"][number]) {
@@ -178,23 +198,12 @@ export function sheetToAppValues(map: FieldMap, record: RawMember["records"][num
   const builtin: Record<string, number | string | null> = {};
   for (const [key, m] of map.builtin) {
     const value = valueAt(m.header, m.column);
-    builtin[key] = m.numeric
-      ? m.integer
-        ? Math.round(parseSheetNum(value))
-        : DISTANCE_KEYS.has(key)
-          ? roundKm(parseSheetNum(value))
-          : Math.round(parseSheetNum(value) * 10) / 10
-      : txt(value);
+    builtin[key] = normalizeBuiltinValue(key, m, value);
   }
   const custom: Record<string, string | number | null> = {};
   for (const [key, m] of map.custom) {
     const value = valueAt(m.header, m.column);
-    const textValue = txt(value);
-    custom[key] = m.type === "number"
-      ? textValue === null
-        ? null
-        : Math.round(parseSheetNum(value) * 10) / 10
-      : textValue;
+    custom[key] = normalizeCustomValue(m.type, value);
   }
   return { builtin, custom };
 }

@@ -124,7 +124,7 @@ async function runSheetSyncBatch(
       // even if nobody has edited the CSV since the previous pull.
       eligibleThrough,
       replySourceVersion: 2,
-      recordMappingVersion: 3,
+      recordMappingVersion: 4,
     })),
   ]));
 
@@ -255,6 +255,7 @@ async function runSheetSyncBatch(
       (date) => date >= cutoff && date <= eligibleThrough && inRange(date),
       nowIso,
       profile.record_source === "sheet" && stagedSheetFlow ? "replace_mapped" : "merge_nonempty",
+      profile.sheet_history_imported_at ? undefined : eligibleThrough,
     );
     inserts.push(...pulled.inserts);
     updates.push(...pulled.updates.map((update) => ({ ...update, profileId: profile.id, expectedUpdatedAt: updatedAtByRecord.get(update.id) ?? null })));

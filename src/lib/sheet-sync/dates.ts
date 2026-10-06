@@ -43,19 +43,19 @@ export function sheetReplyCutoff(today: string, days = 7): string {
 }
 
 /**
- * スプレッドシート由来の記録を、タイムラインで「いつ投稿されたもの」として扱うか。
+ * スプレッドシート由来の新規記録を、タイムラインで「いつ投稿されたもの」として扱うか。
  *
- * **取り込んだ時刻**を使う（オーナー指示 2026-09-13）。同期は毎晩JST 0時に走るので、
- * その晩に入った分がタイムラインの一番上に出る。
+ * 通常は取り込んだ時刻を使う。初回の履歴補完では historicalBefore より前の行を
+ * 練習日0時(JST)へ置き、過去の練習が新着としてまとめて表示されるのを防ぐ。
+ * 最新の対象日と、初回補完後に書かれた新しい行は同期時刻を維持する。
  *
- * 2026-07-12から2026-09-13までは「練習日の0時(JST)」にしていた。当時は数日ぶんを
- * まとめて取り込むことがあり、取込時刻にすると毎回先頭が団子になって荒れたため。
- * 毎晩1日ぶんずつ入る今の運用ではその問題が起きないので戻した。
- *
- * 同じ取り込みに複数日ぶんが混ざったときは、練習日が新しいものほど上に来るように
+ * 同じ通常取り込みに複数日ぶんが混ざったときは、練習日が新しいものほど上に来るように
  * ミリ秒だけずらす（人の目には同時刻のまま。並びが毎回変わるのを防ぐだけ）。
  */
-export function sheetRecordCreatedAt(recordedDate: string, importedAt: Date = new Date()): string {
+export function sheetRecordCreatedAt(recordedDate: string, importedAt: Date = new Date(), historicalBefore?: string): string {
+  if (historicalBefore && recordedDate < historicalBefore) {
+    return new Date(`${recordedDate}T00:00:00+09:00`).toISOString();
+  }
   const importDay = new Date(importedAt.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const daysBehind = Math.round(
     (Date.parse(`${importDay}T00:00:00+09:00`) - Date.parse(`${recordedDate}T00:00:00+09:00`)) /

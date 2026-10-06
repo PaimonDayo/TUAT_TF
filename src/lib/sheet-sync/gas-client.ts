@@ -2,6 +2,7 @@
 // シートとの通信はすべてこのモジュールを通す。
 
 import { fetchPublicMember, fetchPublicMemberSnapshot, fetchPublicSheetMembers, type RawMember, type SheetMember } from "@/lib/sheet-public-csv";
+import { fetchGasResponse } from "./gas-http";
 
 // ── 設定 / GAS 呼び出し ──────────────────────────────────────────────────────
 export function gasConfig() {
@@ -14,13 +15,7 @@ export function gasConfig() {
 
 export async function gasPost<T>(body: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
   const { url, secret } = gasConfig();
-  const res = await fetch(url, {
-    method: "POST",
-    signal,
-    redirect: "follow",
-    headers: { "Content-Type": "application/json;charset=utf-8" },
-    body: JSON.stringify({ ...body, secret }),
-  });
+  const res = await fetchGasResponse(url, JSON.stringify({ ...body, secret }), signal);
   const result = await readGasJson<T>(res);
   if (["writeCells", "writeReply", "deleteReply", "writeMiddleLongMenu"].includes(String(body.action))
     && (result as { success?: boolean }).success !== true) {
@@ -159,9 +154,6 @@ export async function fetchAllRaw(inputs: MemberFetchInput[], spreadsheetId?: st
     });
   }
 
-  if (sheetMembers.length > 0 && members.length === 0 && failedMembers.length > 0) {
-    throw new Error(`部員のシートを読み込めませんでした（${failedMembers.length}人）`);
-  }
   return {
     members: members.sort((a, b) => a.name.localeCompare(b.name)),
     failedMembers,

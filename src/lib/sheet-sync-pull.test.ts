@@ -17,14 +17,17 @@ function dbRecord(date: string, memo: string): DbRecord {
 }
 
 describe("computeMemberPull", () => {
-  it.each(["merge_nonempty", "replace_mapped"] as const)("preserves an app-authored post's time when a %s pull changes its contents", (policy) => {
-    const app = { ...dbRecord("2026-10-04", "app entry"), from_sheet: false, created_at: "2026-10-04T05:00:00.000Z" };
+  it.each([
+    ["merge_nonempty", false], ["replace_mapped", false],
+    ["merge_nonempty", true], ["replace_mapped", true],
+  ] as const)("preserves publication time when a %s pull changes a post with from_sheet=%s", (policy, fromSheet) => {
+    const app = { ...dbRecord("2026-10-04", "app entry"), from_sheet: fromSheet, created_at: "2026-10-04T05:00:00.000Z" };
     const result = computeMemberPull("user-1", fieldMap,
       [{ date: "2026-10-04", cells: { memo: "sheet correction" } }],
-      new Map([[app.recorded_date, [app]]]), () => true, "2026-10-05T15:00:00.000Z", policy);
+      new Map([[app.recorded_date, [app]]]), () => true, "2026-10-05T15:00:00.000Z", policy, "2026-10-05");
     expect(result.updates).toEqual([{ id: app.id, patch: { memo: "sheet correction", synced_at: "2026-10-05T15:00:00.000Z" } }]);
     expect(app.created_at).toBe("2026-10-04T05:00:00.000Z");
-    expect(app.from_sheet).toBe(false);
+    expect(app.from_sheet).toBe(fromSheet);
   });
 
   it("retains app publication time when mapped text is cleared and custom values change", () => {
@@ -36,19 +39,69 @@ describe("computeMemberPull", () => {
     expect(result.updates).toEqual([{ id: app.id, patch: { memo: null, custom: { other: "after" }, synced_at: "2026-10-05T15:00:00.000Z" } }]);
   });
 
-  it("places new and changed imports together above older posts, with newer practice days first", () => {
+  it.each(["merge_nonempty", "replace_mapped"] as const)("does not treat equivalent text or numeric representations as a %s content change", (policy) => {
+    const app = { ...dbRecord("2026-09-20", " same content "), dist_low: 8, custom: { text: " same custom content ", number: "8.0", empty: "" } };
+    const map = {
+      builtin: new Map([
+        ["memo", { header: "memo", column: 0, numeric: false }],
+        ["dist_low", { header: "distance", column: 1, numeric: true }],
+      ]),
+      custom: new Map([
+        ["text", { header: "text", column: 2, type: "text" }],
+        ["number", { header: "number", column: 3, type: "number" }],
+        ["empty", { header: "empty", column: 4, type: "text" }],
+      ]),
+    } as FieldMap;
+    const result = computeMemberPull("user-1", map,
+      [{ date: app.recorded_date, cells: { memo: "same content", distance: "8.00", text: "same custom content", number: "８．０", empty: "" } }],
+      new Map([[app.recorded_date, [app]]]), () => true, "2026-10-06T15:00:15.000Z", policy);
+    expect(result).toEqual({ inserts: [], updates: [], conflicts: [] });
+    expect(app.memo).toBe(" same content ");
+    expect(app.custom).toEqual({ text: " same custom content ", number: "8.0", empty: "" });
+  });
+
+  it("does not turn an already blank builtin field into an update", () => {
+    const app = dbRecord("2026-09-20", "");
+    const result = computeMemberPull("user-1", fieldMap,
+      [{ date: app.recorded_date, cells: { memo: " " } }],
+      new Map([[app.recorded_date, [app]]]), () => true, "2026-10-06T15:00:15.000Z", "replace_mapped");
+    expect(result.updates).toEqual([]);
+  });
+
+  it("applies a real custom value change without moving the post or losing other custom input", () => {
+    const app = { ...dbRecord("2026-09-20", "existing"), custom: { number: "8.0", unmapped: "keep" }, created_at: "2026-09-20T05:00:00.000Z" };
+    const map = { builtin: new Map(), custom: new Map([["number", { header: "number", column: 0, type: "number" }]]) } as FieldMap;
+    const result = computeMemberPull("user-1", map,
+      [{ date: app.recorded_date, cells: { number: "8.1" } }],
+      new Map([[app.recorded_date, [app]]]), () => true, "2026-10-06T15:00:15.000Z", "replace_mapped");
+    expect(result.updates).toEqual([{ id: app.id, patch: { custom: { number: 8.1, unmapped: "keep" }, synced_at: "2026-10-06T15:00:15.000Z" } }]);
+    expect(app.created_at).toBe("2026-09-20T05:00:00.000Z");
+  });
+
+  it("keeps publication time when a rebuilt field mapping adds a custom key", () => {
+    const app = { ...dbRecord("2026-09-20", "existing"), custom: { old_key: "same content" } };
+    const map = { builtin: new Map(), custom: new Map([["relocated_key", { header: "custom", column: 0, type: "text" }]]) } as FieldMap;
+    const result = computeMemberPull("user-1", map,
+      [{ date: app.recorded_date, cells: { custom: "same content" } }],
+      new Map([[app.recorded_date, [app]]]), () => true, "2026-10-06T15:00:15.000Z", "replace_mapped");
+    expect(result.updates).toEqual([{ id: app.id, patch: { custom: { old_key: "same content", relocated_key: "same content" }, synced_at: "2026-10-06T15:00:15.000Z" } }]);
+  });
+
+  it("places only new imports at the batch time and preserves changed posts' original positions", () => {
     const now = "2026-10-04T15:42:20.000Z";
+    const changed = { ...dbRecord("2026-10-04", "old"), created_at: "2026-10-04T05:00:00.000Z" };
     const result = computeMemberPull("user-1", fieldMap, [
       { date: "2026-09-10", cells: { memo: "new older day" } },
       { date: "2026-10-04", cells: { memo: "changed day" } },
       { date: "2026-10-03", cells: { memo: "new newer day" } },
-    ], new Map([["2026-10-04", [dbRecord("2026-10-04", "old")]]]), () => true, now);
+    ], new Map([["2026-10-04", [changed]]]), () => true, now);
     const imported = [
       ...result.inserts.map(row => ({ date: row.recorded_date, at: row.created_at as string })),
-      ...result.updates.map(row => ({ date: "2026-10-04", at: row.patch.created_at as string })),
     ].sort((a, b) => b.at.localeCompare(a.at));
-    expect(imported.map(row => row.date)).toEqual(["2026-10-04", "2026-10-03", "2026-09-10"]);
+    expect(imported.map(row => row.date)).toEqual(["2026-10-03", "2026-09-10"]);
     expect(imported.every(row => Date.parse(row.at) > Date.parse("2026-10-04T15:41:00Z"))).toBe(true);
+    expect(result.updates).toEqual([{ id: changed.id, patch: { memo: "changed day", synced_at: now } }]);
+    expect(changed.created_at).toBe("2026-10-04T05:00:00.000Z");
     // Repeating unchanged content does not refresh timestamps or create a post.
     const existing = new Map([
       ["2026-09-10", [dbRecord("2026-09-10", "new older day")]],
@@ -82,7 +135,7 @@ describe("computeMemberPull", () => {
 
   it("keeps sheet-main merge behavior for an existing date", () => {
     const result = computeMemberPull("user-1", fieldMap, sheetRecords, existing, () => true, "2026-07-24T15:00:00.000Z", "merge_nonempty");
-    expect(result.updates).toEqual([{ id: "record-2026-07-23", patch: { memo: "sheet value", created_at: "2026-07-24T14:59:59.998Z", synced_at: "2026-07-24T15:00:00.000Z" } }]);
+    expect(result.updates).toEqual([{ id: "record-2026-07-23", patch: { memo: "sheet value", synced_at: "2026-07-24T15:00:00.000Z" } }]);
     expect(result.inserts).toHaveLength(1);
   });
 
@@ -112,7 +165,7 @@ describe("computeMemberPull", () => {
       "replace_mapped",
     );
     expect(result.updates).toEqual([
-      { id: "record-2026-07-23", patch: { memo: null, created_at: "2026-07-24T14:59:59.998Z", synced_at: "2026-07-24T15:00:00.000Z" } },
+      { id: "record-2026-07-23", patch: { memo: null, synced_at: "2026-07-24T15:00:00.000Z" } },
     ]);
   });
   it("does not create a record from an empty numeric custom cell", () => {

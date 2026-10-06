@@ -91,6 +91,52 @@ beforeEach(() => {
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 describe("period-aware scheduled synchronization", () => {
+  it("fills initial history in its original dates, including legacy rows, and publishes only the latest eligible day", async () => {
+    vi.setSystemTime(new Date("2026-10-06T15:00:00.000Z")); // 10/7 00:00 JST
+    state.profiles = [profile("sheet")];
+    state.records = [{ id: "existing-history", user_id: "regular", recorded_date: "2026-09-29", memo: "before", from_sheet: true, created_at: "2026-09-29T05:00:00.000Z" }];
+    const dates = ["2026-09-29", "2026-09-30", "2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05", "2026-10-06", "2026-10-07"];
+    state.fetch.mockImplementation(async (inputs: { name: string }[]) => ({
+      members: inputs.map(input => ({ name: input.name, header: ["日付", "感想"], records: dates.map(date => ({ date, cells: { 感想: "synthetic history" } })) })),
+      signatures: new Map(), failedMembers: [], unchangedMembers: [],
+    }));
+    expect(await runSheetSync(admin, { includeToday: false })).toMatchObject({ inserted: 7, updated: 1, failedMembers: [] });
+    expect(state.records[0]).toMatchObject({ memo: "synthetic history", from_sheet: true, created_at: "2026-09-29T05:00:00.000Z" });
+    const rows = state.writes.filter(write => write.table === "practice_records" && write.op === "insert").flatMap(write => write.value as Record<string, unknown>[]);
+    expect(rows.map(row => [row.recorded_date, row.created_at])).toEqual([
+      ["2026-09-30", "2026-09-29T15:00:00.000Z"],
+      ["2026-10-01", "2026-09-30T15:00:00.000Z"],
+      ["2026-10-02", "2026-10-01T15:00:00.000Z"],
+      ["2026-10-03", "2026-10-02T15:00:00.000Z"],
+      ["2026-10-04", "2026-10-03T15:00:00.000Z"],
+      ["2026-10-05", "2026-10-04T15:00:00.000Z"],
+      ["2026-10-06", "2026-10-06T14:59:59.999Z"],
+    ]);
+    expect(rows.every(row => row.synced_at === "2026-10-06T15:00:00.000Z" && row.updated_at === "2026-10-06T15:00:00.000Z" && row.from_sheet === true)).toBe(true);
+    expect(state.writes.find(write => write.table === "profiles" && write.op === "update")?.value).toEqual({ sheet_history_imported_at: "2026-10-06T15:00:00.000Z" });
+  });
+
+  it("continues publishing a late new sheet entry at sync time after initial history is complete", async () => {
+    vi.setSystemTime(new Date("2026-10-07T15:00:00.000Z"));
+    state.profiles = [{ ...profile("sheet"), sheet_history_imported_at: "2026-10-01T00:00:00.000Z" }];
+    useIdenticalCsv("日付,感想\n10/5,late new entry");
+    expect(await runSheetSync(admin, { includeToday: false })).toMatchObject({ inserted: 1, updated: 0 });
+    expect(state.writes.find(write => write.table === "practice_records" && write.op === "insert")?.value).toEqual([
+      expect.objectContaining({ recorded_date: "2026-10-05", created_at: "2026-10-07T14:59:59.997Z", synced_at: "2026-10-07T15:00:00.000Z" }),
+    ]);
+  });
+
+  it("fills initial prior-year history without turning it into a new post on January 1", async () => {
+    vi.setSystemTime(new Date("2026-12-31T15:00:00.000Z"));
+    state.profiles = [profile("sheet")];
+    useIdenticalCsv("日付,感想\n12/30,history\n12/31,yesterday\n1/1,prefilled today");
+    expect(await runSheetSync(admin, { includeToday: false })).toMatchObject({ inserted: 2, updated: 0 });
+    expect(state.writes.find(write => write.table === "practice_records" && write.op === "insert")?.value).toEqual([
+      expect.objectContaining({ recorded_date: "2026-12-30", created_at: "2026-12-29T15:00:00.000Z" }),
+      expect.objectContaining({ recorded_date: "2026-12-31", created_at: "2026-12-31T14:59:59.999Z" }),
+    ]);
+  });
+
   it("preserves an app save and completed write-through occurring during a stale CSV read", async () => {
     vi.setSystemTime(new Date("2026-10-07T15:00:00.000Z"));
     state.profiles = [{ ...profile("sheet"), sheet_history_imported_at: "2026-10-01T00:00:00.000Z" }];
@@ -151,6 +197,23 @@ describe("period-aware scheduled synchronization", () => {
     expect(state.selects.some(query => query.table === "practice_records" && query.columns.includes("from_sheet"))).toBe(true);
     expect(state.writes.find(write => write.table === "practice_records" && write.op === "update")?.value).toEqual({ memo: "旧", synced_at: "2026-10-02T03:00:00.000Z" });
     expect(state.records[0]).toMatchObject({ from_sheet: false, created_at: "2026-09-30T05:00:00.000Z" });
+  });
+
+  it("keeps old sheet input unchanged when the daily CSV recheck differs only in stored representations", async () => {
+    vi.setSystemTime(new Date("2026-10-07T15:00:00.000Z"));
+    const fields = [{ key: "sleep", label: "睡眠", type: "number" as const, sourceColumn: 2, sourceHeader: "睡眠" }];
+    state.profiles = [{ ...profile("sheet"), record_fields: fields, sheet_history_imported_at: "2026-10-01T00:00:00.000Z" }];
+    const stored = { id: "old-sheet-post", user_id: "regular", recorded_date: "2026-10-05", memo: " rest ", custom: { sleep: "8.0" }, from_sheet: true, created_at: "2026-10-05T05:00:00.000Z", synced_at: "2026-10-05T05:00:00.000Z" };
+    state.records = [{ ...stored }];
+    useIdenticalCsv("日付,感想,睡眠\n10/5,rest,8");
+    expect(await runSheetSync(admin, { includeToday: false })).toMatchObject({ inserted: 0, updated: 0, failedMembers: [] });
+    expect(state.records).toEqual([stored]);
+    keepSuccessfulImports();
+    vi.setSystemTime(new Date("2026-10-08T15:00:00.000Z"));
+    expect(await runSheetSync(admin, { includeToday: false })).toMatchObject({ inserted: 0, updated: 0, failedMembers: [] });
+    expect(state.fetch.mock.calls.at(-1)?.[0][0].forceParse).toBe(true);
+    expect(state.writes.filter(write => write.table === "practice_records")).toEqual([]);
+    expect(state.records).toEqual([stored]);
   });
 
   it("rechecks an identical CSV when a future day becomes eligible, while skipping same-day repeats", async () => {
@@ -226,13 +289,14 @@ describe("period-aware scheduled synchronization", () => {
     expect(state.writes.filter(write => write.table === "practice_records" && write.op === "insert").flatMap(write => write.value as Record<string, unknown>[]).map(row => row.recorded_date)).toEqual(["2026-10-07", "2026-10-07"]);
   });
 
-  it("timestamps both new and changed imports at their batch time without moving an unchanged day", async () => {
-    state.profiles = [profile("sheet")];
-    state.records = [{ id: "existing", user_id: "regular", recorded_date: "2026-09-30", memo: "before", from_sheet: true }];
+  it("timestamps only new imports at their batch time and keeps a changed sheet post in its original position", async () => {
+    state.profiles = [{ ...profile("sheet"), sheet_history_imported_at: "2026-09-30T00:00:00.000Z" }];
+    state.records = [{ id: "existing", user_id: "regular", recorded_date: "2026-09-30", memo: "before", from_sheet: true, created_at: "2026-09-30T05:00:00.000Z" }];
     const result = await runSheetSync(admin);
     expect(result.updated).toBe(1);
     const changed = state.writes.find(w => w.table === "practice_records" && w.op === "update")?.value;
-    expect(changed).toMatchObject({ memo: "旧", created_at: "2026-10-02T02:59:59.998Z", synced_at: "2026-10-02T03:00:00.000Z" });
+    expect(changed).toEqual({ memo: "旧", synced_at: "2026-10-02T03:00:00.000Z" });
+    expect(state.records[0]).toMatchObject({ memo: "旧", from_sheet: true, created_at: "2026-09-30T05:00:00.000Z" });
     expect(state.writes.find(w => w.table === "practice_records" && w.op === "insert")?.value).toEqual([
       expect.objectContaining({ recorded_date: "2026-10-01", created_at: "2026-10-02T02:59:59.999Z" }),
     ]);
