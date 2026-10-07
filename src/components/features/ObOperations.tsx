@@ -12,6 +12,8 @@ import type { EntryMember } from "@/lib/entry-identity";
 import type { ObDuty, ObDutyRole } from "@/lib/ob-duty";
 import { obEventParticipants, obEventRule, type ObEventOperation } from "@/lib/ob-operations";
 import { obMixedGroupPosition, projectObMixedEvent } from "@/lib/ob-mixed-operations";
+import { obResultSheets, obResultsFileName } from "@/lib/ob-results-sheet";
+import { buildXlsx, XLSX_MIME } from "@/lib/xlsx-writer";
 
 type Props = { onlyGroups?: boolean; entries: ObEntry[]; members: EntryMember[]; duties: ObDuty[]; roles: ObDutyRole[]; initial: ObEventOperation[]; canEditGroups?: boolean; canEditDuties?: boolean; onAddEntry?: (event: string) => void };
 export function ObOperations({ entries, initial, onlyGroups = false, canEditGroups = true, onAddEntry }: Props) {
@@ -22,13 +24,26 @@ export function ObOperations({ entries, initial, onlyGroups = false, canEditGrou
   for (const value of local) if (!latest.has(value.event_name) || latest.get(value.event_name)!.revision < value.revision) latest.set(value.event_name, value);
   const events = [...new Set([...entries.flatMap(e => e.events), ...latest.keys()])].sort(compareObEvents);
   const families = [...new Set(events.map(e => e.replace(/^(男子|女子)/, "")))];
+  const [exportError, setExportError] = useState("");
   function saved(values: ObEventOperation[]) {
     const updated = new Set(values.map(value => value.event_name));
     setSaved(current => [...current.filter(value => !updated.has(value.event_name)), ...values]);
     router.refresh();
   }
+  /** Reads only what this screen already shows; nothing is saved or re-placed. */
+  function download() {
+    try {
+      const blob = new Blob([buildXlsx(obResultSheets(entries, [...latest.values()])).slice().buffer], { type: XLSX_MIME });
+      const url = URL.createObjectURL(blob), a = document.createElement("a");
+      a.href = url; a.download = obResultsFileName(new Date()); a.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setExportError("");
+    } catch { setExportError("ファイルを作れませんでした。画面を開き直してからもう一度お試しください"); }
+  }
   return <div className="space-y-4">
-    <p className="text-caption">{canEditGroups ? "競技の順に並んでいます。種目を選んで組分け・試技順・DNS・記録を操作できます。" : "種目を選んで記録を入力できます。補助員の割当がなくても入力できます。"}</p>
+    <div className="flex flex-wrap items-center justify-between gap-2"><p className="min-w-0 flex-1 basis-60 text-caption">{canEditGroups ? "競技の順に並んでいます。種目を選んで組分け・試技順・DNS・記録を操作できます。" : "種目を選んで記録を入力できます。補助員の割当がなくても入力できます。"}</p>{events.length > 0 && <Button size="sm" variant="outline" className="shrink-0" onClick={download}>スプレッドシートに出力</Button>}</div>
+    {events.length > 0 && <p className="text-micro text-muted2">組と記録を種目ごとのシートに分けて保存します。Excel形式で、Googleスプレッドシートでも開けます。</p>}
+    {exportError && <p role="alert" className="text-body text-danger">{exportError}</p>}
     <div className="grid min-w-0 items-start gap-4 lg:grid-cols-2 2xl:grid-cols-3">{families.map(family => {
       const names = events.filter(e => e.replace(/^(男子|女子)/, "") === family);
       const field = obEventRule(family).discipline !== "track";

@@ -28,9 +28,14 @@ export class MeetEvent {
 
   best(person: MeetPerformance): string {
     if (person.status !== "entered") return person.status;
-    const valid = person.trials.filter(t => t.status === "valid").map(t => ({ text: t.mark, value: MeetMark.parse(t.mark, this.rule.discipline) })).filter(t => t.value !== null);
+    return this.bestTrial(person)?.mark ?? (person.trials.some(t => t.status === "foul") ? "記録なし" : "—");
+  }
+
+  /** The trial holding the best valid mark; equal marks keep the earlier attempt. */
+  bestTrial(person: MeetPerformance): MeetTrial | undefined {
+    const valid = person.trials.filter(t => t.status === "valid").map(t => ({ trial: t, value: MeetMark.parse(t.mark, this.rule.discipline) })).filter(t => t.value !== null);
     valid.sort((a, b) => this.rule.discipline === "track" ? a.value! - b.value! : b.value! - a.value!);
-    return valid[0]?.text ?? (person.trials.some(t => t.status === "foul") ? "記録なし" : "—");
+    return valid[0]?.trial;
   }
 
   validate(): string | null {

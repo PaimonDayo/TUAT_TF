@@ -210,3 +210,12 @@ it("labels projected conflict groups without exposing virtual group numbers", ()
   expect(html).toContain("混合1組 1番");
   expect(html).not.toContain("199組");
 });
+
+it("offers the results workbook only when there is an event to export", () => {
+  const html = renderToStaticMarkup(createElement(ObOperations, { ...props, initial: [operation] }));
+  expect(html).toContain("スプレッドシートに出力");
+  expect(html).toContain("組と記録を種目ごとのシートに分けて保存します");
+  const empty = renderToStaticMarkup(createElement(ObOperations, { ...props, entries: [], initial: [] }));
+  expect(empty).toContain("出場登録がある種目はありません");
+  expect(empty).not.toContain("スプレッドシートに出力");
+});

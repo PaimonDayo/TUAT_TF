@@ -5,10 +5,10 @@ import { ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { FormModal } from "@/components/ui/form-modal";
 import { ObDutyTable } from "./ObDutyTable";
-import { OB_PROGRAM } from "@/lib/ob-meet";
+import { OB_PROGRAM, obFamilyLabel as displayEvent } from "@/lib/ob-meet";
 import { MeetEvent } from "@/lib/meet-operations";
-import { obMixedFieldNumbers, obMixedGroupLabel, projectObMixedEvent } from "@/lib/ob-mixed-operations";
-import { effectiveObParticipation, obEventRule, type ObEventOperation } from "@/lib/ob-operations";
+import { obFamilyRows, obMixedGroupLabel } from "@/lib/ob-mixed-operations";
+import { obEventRule, type ObEventOperation } from "@/lib/ob-operations";
 import type { ObEntry } from "@/lib/ob-entries";
 import type { EntryMember } from "@/lib/entry-identity";
 import { type ObDuty, type ObDutyRole } from "@/lib/ob-duty";
@@ -18,20 +18,7 @@ export function ObPublicProgram({ entries, members, duties, roles, operations, v
   view?: "program" | "duties"; canEditDuties?: boolean; entries: ObEntry[]; members: EntryMember[]; duties: ObDuty[]; roles: ObDutyRole[]; operations: ObEventOperation[];
 }) {
   const [event, setEvent] = useState<string | null>(null);
-  function eventRows(name: string) {
-    const field = obEventRule(name).discipline !== "track";
-    const projection = projectObMixedEvent(name, entries, operations);
-    const numbers = field ? obMixedFieldNumbers(projection) : new Map<string, number | null>();
-    return [...projection.data.participants].sort((a, b) => field
-      ? (numbers.get(a.entryId) ?? 601) - (numbers.get(b.entryId) ?? 601)
-      : (a.group ?? 298) - (b.group ?? 298) || (a.order ?? 601) - (b.order ?? 601) || Number(b.status === "DNS") - Number(a.status === "DNS"))
-      .map(person => {
-        const source = projection.sourceById.get(person.entryId)!;
-        const entry = entries.find(entry => entry.id === source.entryId);
-        const saved = operations.find(operation => operation.event_name === source.event);
-        return { id: person.entryId, entryId: source.entryId, entry, performance: source.person, state: effectiveObParticipation(source.event, entry, source.person), division: source.division, eventName: source.event, saved, group: person.group, number: numbers.get(person.entryId) ?? null };
-      });
-  }
+  const eventRows = (name: string) => obFamilyRows(name, entries, operations);
   const people = event ? eventRows(event) : [];
   const field = event !== null && obEventRule(event).discipline !== "track";
   return <section className="space-y-3">
@@ -67,5 +54,3 @@ export function ObPublicProgram({ entries, members, duties, roles, operations, v
     </FormModal>
   </section>;
 }
-
-function displayEvent(name: string) { return name === "立ち五段" ? "立ち五段跳び" : name; }

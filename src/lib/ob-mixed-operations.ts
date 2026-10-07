@@ -1,7 +1,7 @@
 import { fieldOrderRows } from "./meet-field-order";
 import type { MeetEventData, MeetPerformance, MeetHeatScope, MeetOperationLimits } from "./meet-operations";
 import { obOperationHasChanges } from "./ob-operation-draft";
-import { obEventParticipants, type ObEventOperation } from "./ob-operations";
+import { effectiveObParticipation, obEventParticipants, obEventRule, type ObEventOperation } from "./ob-operations";
 import { isAlumniEntry, type ObEntry } from "./ob-entries";
 
 export type ObDivision = "男子" | "女子";
@@ -108,4 +108,20 @@ export function splitObMixedEvent(projection: ObMixedProjection, next: MeetEvent
 
 export function obMixedFieldNumbers(projection: Pick<ObMixedProjection, "data">): Map<string, number | null> {
   return new Map(fieldOrderRows(projection.data).map(row => [row.person.entryId, row.number]));
+}
+
+/** One event's whole start list in program order, including withdrawals and already recorded results. */
+export function obFamilyRows(family: string, entries: ObEntry[], operations: ObEventOperation[]) {
+  const field = obEventRule(family).discipline !== "track";
+  const projection = projectObMixedEvent(family, entries, operations);
+  const numbers = field ? obMixedFieldNumbers(projection) : new Map<string, number | null>();
+  return [...projection.data.participants].sort((a, b) => field
+    ? (numbers.get(a.entryId) ?? 601) - (numbers.get(b.entryId) ?? 601)
+    : (a.group ?? 298) - (b.group ?? 298) || (a.order ?? 601) - (b.order ?? 601) || Number(b.status === "DNS") - Number(a.status === "DNS"))
+    .map(person => {
+      const source = projection.sourceById.get(person.entryId)!;
+      const entry = entries.find(entry => entry.id === source.entryId);
+      const saved = operations.find(operation => operation.event_name === source.event);
+      return { id: person.entryId, entryId: source.entryId, entry, performance: source.person, state: effectiveObParticipation(source.event, entry, source.person), division: source.division, eventName: source.event, saved, group: person.group, number: numbers.get(person.entryId) ?? null };
+    });
 }
