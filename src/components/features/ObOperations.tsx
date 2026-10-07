@@ -42,7 +42,7 @@ export function ObOperations({ entries, initial, onlyGroups = false, canEditGrou
   }
   return <div className="space-y-4">
     <div className="flex flex-wrap items-center justify-between gap-2"><p className="min-w-0 flex-1 basis-60 text-caption">{canEditGroups ? "競技の順に並んでいます。種目を選んで組分け・試技順・DNS・記録を操作できます。" : "種目を選んで記録を入力できます。補助員の割当がなくても入力できます。"}</p>{events.length > 0 && <Button size="sm" variant="outline" className="shrink-0" onClick={download}>スプレッドシートに出力</Button>}</div>
-    {events.length > 0 && <p className="text-micro text-muted2">組と記録を種目ごとのシートに分けて保存します。Excel形式で、Googleスプレッドシートでも開けます。</p>}
+    {events.length > 0 && <p className="text-micro text-muted2">プログラムと種目ごとのスタートリストを、シートに分けて保存します。記録が入った種目は記録も出ます。Excel形式で、Googleスプレッドシートでも開けます。</p>}
     {exportError && <p role="alert" className="text-body text-danger">{exportError}</p>}
     <div className="grid min-w-0 items-start gap-4 lg:grid-cols-2 2xl:grid-cols-3">{families.map(family => {
       const names = events.filter(e => e.replace(/^(男子|女子)/, "") === family);

@@ -40,7 +40,7 @@ describe("xlsx writer", () => {
 
   it("writes one worksheet per sheet with a frozen bold header and literal text", () => {
     const files = unzip(buildXlsx([
-      { name: "100m", widths: [10, 18], rows: [["組", "氏名"], ["男子1組", "=HYPERLINK(\"x\")"], [3, null], ["a<b&c\u0007", ""]] },
+      { name: "100m", widths: [10, 18], rows: [["組", "氏名"], ["男子1組", "=HYPERLINK(\"x\")"], [3, null], ["a<b&c\u0007", ""], [], [null, "次の組"]] },
       { name: "走り高跳び", rows: [["試技順"]] },
     ]));
     expect([...files.keys()]).toEqual(["[Content_Types].xml", "_rels/.rels", "xl/workbook.xml", "xl/_rels/workbook.xml.rels", "xl/styles.xml", "xl/worksheets/sheet1.xml", "xl/worksheets/sheet2.xml"]);
@@ -56,6 +56,9 @@ describe("xlsx writer", () => {
     expect(sheet).toContain('<row r="3"><c r="A3"><v>3</v></c></row>');
     expect(sheet).toContain("a&lt;b&amp;c</t>");
     expect(sheet).toContain('<row r="4"><c r="A4" t="inlineStr">');
+    // A blank separator line keeps its row number empty; the next heat starts on row 6 column B.
+    expect(sheet).not.toContain('<row r="5"');
+    expect(sheet).toContain('<row r="6"><c r="B6" t="inlineStr"><is><t xml:space="preserve">次の組</t></is></c></row>');
     expect(files.get("xl/worksheets/sheet2.xml")).not.toContain("tabSelected");
   });
 

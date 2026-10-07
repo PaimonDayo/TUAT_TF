@@ -39,7 +39,8 @@ export function buildXlsx(sheets: XlsxSheet[]): Uint8Array {
 
 function worksheetXml(sheet: XlsxSheet, selected: boolean, ns: string): string {
   const cols = sheet.widths?.length ? "<cols>" + sheet.widths.map((width, i) => `<col min="${i + 1}" max="${i + 1}" width="${width}" customWidth="1"/>`).join("") + "</cols>" : "";
-  const rows = sheet.rows.map((row, r) => `<row r="${r + 1}">` + row.map((value, c) => cellXml(value, `${columnName(c)}${r + 1}`, r === 0)).join("") + "</row>").join("");
+  // Blank separator rows are left out; their row numbers simply stay empty.
+  const rows = sheet.rows.map((row, r) => { const cells = row.map((value, c) => cellXml(value, `${columnName(c)}${r + 1}`, r === 0)).join(""); return cells ? `<row r="${r + 1}">${cells}</row>` : ""; }).join("");
   return `<worksheet ${ns}><sheetViews><sheetView${selected ? ' tabSelected="1"' : ""} workbookViewId="0">`
     + '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
     + `<sheetFormatPr defaultRowHeight="15"/>${cols}<sheetData>${rows}</sheetData></worksheet>`;
