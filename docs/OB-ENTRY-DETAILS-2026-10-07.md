@@ -41,3 +41,12 @@ OB登録の定期再取り込みはtracked app/GAS/PC schedulerに存在しな�
 ブラウザは合成データ。iOS PWA/Android実機、実ユーザーの訂正保存、PC停止中の編集から復帰までの通し試験は未確認。実ユーザーの登録・組・記録に試験書込みは行っていない。
 
 DB適用済み、画面公開前。最終ビルド後、前回公開後の記録を含む関連変更をまとめてmasterへ1回だけpushし、Production成功と公開SHA一致を確認する。
+
+
+### 公開完了（2026-10-07 00:52 JST）
+
+- commit: `e49d8dc3123cfc8ddda0bdf9e6e4547eba3e6fb4`。関連19ファイルと前回公開後記録をまとめ、最新origin/masterを基準にmasterへfast-forwardし、`master -> master`を1回だけpushした。作業ブランチはpushしていない。
+- 主checkoutの別作業103ファイルは公開後もハッシュ一致。重なる文書2ファイルの既存追記を保全し、索引へ今回の入口を合成した。実ユーザーの登録・組・記録に試験書込みは行っていない。
+- 公式GitHub deploymentは今回のSHA・`Production – tuat-tf`・`success`。本番`https://tuat-tf.vercel.app/api/version`は200で同じSHAを返した。master・origin/masterも同じSHAを確認した。
+- PC/クラウドへの冪等関数適用と既存8表の全データ一致、合成Chrome/WebKitの編集から一覧・履歴の操作、型・lint・1015テスト・ビルドを確認した。iOS PWA/Android実機、実ユーザーの訂正保存、PC停止中の編集から復帰までの通し試験は未確認。
+- この公開後の追記は文書だけのため手元に保持し、次のコード変更とまとめる。追加push・ビルド・デプロイは行わない。

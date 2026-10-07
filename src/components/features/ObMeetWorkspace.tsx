@@ -16,12 +16,10 @@ function Workspace({ children, section, canOperate, staff, dutyIssues = [] }: Pr
   const { unread } = useObDutyReview(dutyIssues);
   const dutyProblemCount = new Set(unread.map(issue => issue.time + "/" + issue.event)).size;
   return <div data-ob-workspace className="space-y-4 px-4 pb-8 pt-2">
-    {canOperate && <>
-      <h2 className="text-headline">当日の運営</h2>
-      <nav aria-label="運営の作業" className="flex gap-1 border-b border-separator">
-        {([{ key: "events", label: "競技・記録" }, { key: "duties", label: "補助員" }, { key: "mine", label: "自分の登録" }, ...(staff ? [{ key: "participants", label: "参加者管理" }] : [])]).map(item => <Link replace key={item.key} prefetch={false} href={`${OB_PROGRAM_PATH}?view=operations&section=${item.key}`} aria-current={section === item.key ? "page" : undefined} className={`flex min-h-12 min-w-0 flex-1 items-center justify-center gap-1 border-b-2 px-1 text-xs font-semibold sm:text-sm ${section === item.key ? "border-accent text-accent" : "border-transparent text-muted"}`}>{item.label}{item.key === "duties" && dutyProblemCount > 0 && <span aria-label={`未確認${dutyProblemCount}種目`} className="rounded-full bg-danger/10 px-1.5 py-0.5 text-xs text-danger">{dutyProblemCount}</span>}</Link>)}
-      </nav>
-    </>}
+    <h2 className="text-headline">{canOperate ? "当日の運営" : "大会のプログラム"}</h2>
+    <nav aria-label="運営の作業" className="flex gap-1 overflow-x-auto border-b border-separator">
+      {([...(canOperate ? [{ key: "events", label: "競技・記録" }] : []), { key: "program", label: "組分け" }, { key: "duties", label: "補助員" }, { key: "mine", label: "自分の登録" }, ...(staff ? [{ key: "participants", label: "参加者管理" }] : [])]).map(item => <Link replace key={item.key} prefetch={false} href={`${OB_PROGRAM_PATH}?view=operations&section=${item.key}`} aria-current={section === item.key ? "page" : undefined} className={`flex min-h-12 min-w-fit flex-1 items-center justify-center gap-1 whitespace-nowrap border-b-2 px-2 text-xs font-semibold sm:text-sm ${section === item.key ? "border-accent text-accent" : "border-transparent text-muted"}`}>{item.label}{item.key === "duties" && dutyProblemCount > 0 && <span aria-label={`未確認${dutyProblemCount}種目`} className="rounded-full bg-danger/10 px-1.5 py-0.5 text-xs text-danger">{dutyProblemCount}</span>}</Link>)}
+    </nav>
     <ObLiveRefresh />
     {children}
   </div>;

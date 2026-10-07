@@ -70,6 +70,7 @@ export default async function CompetitionProgramPage({
         <ObMyEntry embedded entry={mine!.entry} party={mine!.party ?? undefined} me={me} duties={program.duties.filter(duty=>duty.profile_id===profile.id)} roles={program.roles} operations={program.operations} openEditor={edit === "mine"} returnHref={edit === "mine" ? `${OB_PROGRAM_PATH}?view=operations&section=mine` : undefined} />
         <h2 className="text-headline">全体のプログラム</h2><ObPublicProgram {...program} />
       </> : section === "participants" ? management : section === "duties" ? <ObPublicProgram {...program} view="duties" canEditDuties={staff} />
+      : section === "program" ? <ObPublicProgram {...program} />
       : <ObDayWorkspace entries={program.entries} members={program.members} duties={program.duties} roles={program.roles} operations={program.operations} canRegister={staff} canEditGroups={staff || canManage}/>}
     </ObMeetWorkspace></>;
   }

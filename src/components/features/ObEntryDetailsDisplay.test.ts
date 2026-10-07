@@ -5,15 +5,16 @@ import type { ObEntry } from "@/lib/ob-entries";
 import type { ObDuty, ObDutyRole } from "@/lib/ob-duty";
 
 const mocks = vi.hoisted(() => ({ write: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), replace: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), replace: vi.fn() }), useSearchParams: () => new URLSearchParams({ issue: "11:00/砲丸投げ" }) }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
-vi.mock("@/app/(app)/ob-entries/actions", () => ({ claimMyEntry: mocks.write, deleteDutyRole: mocks.write, saveDutyRole: mocks.write, saveDutyPeople: mocks.write }));
+vi.mock("@/app/(app)/ob-entries/actions", () => ({ claimMyEntry: mocks.write, deleteDutyRole: mocks.write, saveDutyRole: mocks.write, saveDutyPeople: mocks.write, saveDutyRoles: mocks.write }));
 vi.mock("./ObEntryEditor", () => ({ ObEntryEditor: () => null }));
 vi.mock("./ObDutyReviewProvider", () => ({ useObDutyReview: () => ({ unread: [] }) }));
 vi.mock("./ObDutyIssues", () => ({ ObDutyIssues: () => null }));
-vi.mock("@/components/ui/form-modal", () => ({ FormModal: ({ children }: { children: ReactNode }) => createElement("div", {}, children), FormModalFooter: ({ children }: { children: ReactNode }) => createElement("footer", {}, children) }));
+vi.mock("@/components/ui/form-modal", () => ({ FormModal: ({ children, title }: { children: ReactNode; title: string }) => createElement("div", { "data-modal-title": title }, children), FormModalFooter: ({ children }: { children: ReactNode }) => createElement("footer", {}, children) }));
 import { ObMyEntry } from "./ObMyEntry";
 import { ObDutyRoleManager } from "./ObDutyRoleManager";
+import { ObDutyTable } from "./ObDutyTable";
 
 const entry: ObEntry = { id: "entry", profile_id: "profile", meet_key: "ob-2026", submitted_name: "大会の修正名", grade: "M2", events: [], qualification_marks: {}, revision: 4, imported_at: "2026-09-24T00:00:00Z" };
 const me = { id: "profile", display_name: "プロフィールの旧名", grade: "1" };
@@ -38,4 +39,19 @@ it("shows corrected details in assigned helper lists and retains profile-only as
   const html = renderToStaticMarkup(createElement(ObDutyRoleManager, { entries: [entry], members: [me, other], duties, roles: [role], time: role.slot_time, event: role.event_name, onClose: vi.fn() }));
   expect(html).toContain("M2</span>大会の修正名"); expect(html).not.toContain("プロフィールの旧名");
   expect(html).toContain("B3</span>登録未確認の担当者"); expect(mocks.write).not.toHaveBeenCalled();
+});
+
+it.each([false, true])("shows corrected roster names in a read-only event helper list (integrated=%s)", integrated => {
+  const other = { id: "other", display_name: "登録未確認の担当者", grade: "3" };
+  const guest: ObEntry = { ...entry, id: "guest", profile_id: null, submitted_name: "未照合の修正名", grade: "B2", absent: true };
+  const role: ObDutyRole = { id: "role", meet_key: "ob-2026", slot_time: "11:00", event_name: "砲丸投げ", name: "計測", abbreviation: "測", required_count: 3, revision: 1 };
+  const duties: ObDuty[] = [me.id, guest.id, other.id].map(profile_id => ({ meet_key: "ob-2026", profile_id, slot_time: role.slot_time, event_name: role.event_name, role_ids: [role.id], assignment: "計測", revision: 2 }));
+  const props = { entries: [entry, guest], members: [me, other], duties, roles: [role], integrated, canEditDuties: false };
+  const before = structuredClone(props);
+  const html = renderToStaticMarkup(createElement(ObDutyTable, props));
+  const list = html.match(/<div data-modal-title="補助員一覧">([\s\S]*?)<\/div>/)?.[1];
+  expect(list).toContain("大会の修正名 · 計測"); expect(list).not.toContain("プロフィールの旧名");
+  expect(list).toContain("未照合の修正名 · 計測"); expect(list).toContain("欠席");
+  expect(list).toContain("登録未確認の担当者 · 計測");
+  expect(props).toEqual(before); expect(mocks.write).not.toHaveBeenCalled();
 });

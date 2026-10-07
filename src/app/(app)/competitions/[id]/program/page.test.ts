@@ -59,6 +59,73 @@ it("lets an approved active member open recording without a helper assignment", 
   expect(mock.program).toHaveBeenCalledTimes(1);
 });
 
+it.each([
+  { label: "ordinary member without assignments", roles: [] as TestRole[], preview: false, canOperate: true },
+  { label: "staff with several roles", roles: [{ name: "全員", can_manage_system: false, can_manage_members: false }, staff], preview: false, canOperate: true },
+  { label: "system operator without OB staff", roles: [{ name: "system", can_manage_system: true, can_manage_members: false }], preview: false, canOperate: true },
+  { label: "member preview with suppressed staff/system roles", roles: [{ ...staff, permissions_suppressed: true }, { name: "system", can_manage_system: true, can_manage_members: false, permissions_suppressed: true }], preview: true, canOperate: false },
+])("shows the complete read-only program for $label without loading participant management", async ({ roles, preview, canOperate }) => {
+  mock.roles = roles; mock.preview = preview;
+  const program = {
+    entries: [
+      { id: "male-entry", meet_key: "ob-2026", submitted_name: "合成男子", grade: "B1", profile_id: null, events: ["男子100m"], qualification_marks: {}, revision: 1, imported_at: "" },
+      { id: "female-entry", meet_key: "ob-2026", submitted_name: "合成女子", grade: "OB・OG", profile_id: null, events: ["女子100m"], qualification_marks: {}, revision: 1, imported_at: "" },
+    ],
+    members: [], duties: [], roles: [],
+    operations: ["男子100m", "女子100m"].map((event_name, index) => ({ meet_key: "ob-2026", event_name, revision: 2, updated_at: "2026-10-07T00:00:00Z", data: { confirmed: false, participants: [{ entryId: index ? "female-entry" : "male-entry", group: 1, order: index + 1, heatScope: "混合", status: "entered", trials: [] }] } })),
+  };
+  mock.program.mockResolvedValue(program);
+  const result = await workspace({ section: "program" });
+  expect(result).toMatchObject({ section: "program", canOperate, staff: roles.some(role => role.name === staff.name && !role.permissions_suppressed) });
+  expect(find(result.children as ReactNode, "program")).toMatchObject(program);
+  expect(find(result.children as ReactNode, "program")?.canEditDuties ?? false).toBe(false);
+  expect(find(result.children as ReactNode, "mine")).toBeUndefined();
+  expect(find(result.children as ReactNode, "day")).toBeUndefined();
+  expect(find(result.children as ReactNode, "participants")).toBeUndefined();
+  expect(find(result.children as ReactNode, "history")).toBeUndefined();
+  expect(mock.program).toHaveBeenCalledTimes(1);
+  expect(mock.mine).not.toHaveBeenCalled(); expect(mock.roster).not.toHaveBeenCalled(); expect(mock.operations).not.toHaveBeenCalled();
+});
+
+it("lets a member without a registration or helper assignment read all duties without gaining duty editing", async () => {
+  const duties = [{ meet_key: "ob-2026", profile_id: "other-helper", slot_time: "11:00", event_name: "砲丸投げ", assignment: "計測", revision: 1, role_ids: [] }];
+  mock.program.mockResolvedValue({ entries: [], members: [], duties, roles: [], operations: [] });
+  const result = await workspace({ section: "duties" });
+  expect(result).toMatchObject({ section: "duties", staff: false });
+  expect(find(result.children as ReactNode, "program")).toMatchObject({ view: "duties", duties, canEditDuties: false });
+  expect(find(result.children as ReactNode, "day")).toBeUndefined(); expect(find(result.children as ReactNode, "participants")).toBeUndefined();
+  expect(mock.program).toHaveBeenCalledTimes(1); expect(mock.mine).not.toHaveBeenCalled(); expect(mock.roster).not.toHaveBeenCalled();
+});
+
+it("keeps preview read-only on both shared views while preserving the own-registration route", async () => {
+  mock.preview = true;
+  mock.roles = [{ ...staff, permissions_suppressed: true }, { name: "system", can_manage_system: true, can_manage_members: false, permissions_suppressed: true }];
+  for (const section of ["program", "duties"]) {
+    const result = await workspace({ view: "operations", section });
+    expect(result).toMatchObject({ view: "participant", section, canOperate: false, staff: false });
+    expect(find(result.children as ReactNode, "program")).toBeDefined();
+    expect(find(result.children as ReactNode, "program")?.canEditDuties ?? false).toBe(false);
+    expect(find(result.children as ReactNode, "mine")).toBeUndefined(); expect(find(result.children as ReactNode, "day")).toBeUndefined();
+    expect(find(result.children as ReactNode, "participants")).toBeUndefined();
+  }
+  expect(mock.mine).not.toHaveBeenCalled(); expect(mock.roster).not.toHaveBeenCalled();
+  const own = await workspace({ edit: "mine", section: "program" });
+  expect(own).toMatchObject({ section: "mine", canOperate: false });
+  expect(find(own.children as ReactNode, "mine")).toMatchObject({ openEditor: true, me: { id: "me" } });
+  expect(mock.mine).toHaveBeenCalledWith("me");
+});
+
+it("keeps mixed-role staff editing independent of the read-only program destination", async () => {
+  mock.roles = [{ name: "全員", can_manage_system: false, can_manage_members: false }, staff];
+  const readOnly = await workspace({ section: "program" });
+  expect(find(readOnly.children as ReactNode, "program")).toBeDefined();
+  expect(find(readOnly.children as ReactNode, "program")?.canEditDuties ?? false).toBe(false);
+  const duties = await workspace({ section: "duties" });
+  expect(find(duties.children as ReactNode, "program")).toMatchObject({ canEditDuties: true });
+  const events = await workspace({ section: "events" });
+  expect(find(events.children as ReactNode, "day")).toMatchObject({ canRegister: true, canEditGroups: true });
+});
+
 it("opens the member's own registration from its section and legacy links without loading management data", async () => {
   const entry = { id: "own-entry", profile_id: "me", submitted_name: "自分の登録" };
   const party = { id: "own-party", submitted_name: "自分の登録", status: "参加" };
@@ -149,11 +216,13 @@ it("prevents member preview from entering operations even if the account is appr
   mock.preview = true;
   mock.roles = [{ ...staff, permissions_suppressed: true }, { name: "system", can_manage_system: true, can_manage_members: false, permissions_suppressed: true }];
   const result = await workspace({ view: "operations", section: "participants" });
-  expect(result).toMatchObject({ view: "participant", section: "mine", canOperate: false, staff: false });
-  expect(find(result.children as ReactNode, "mine")).toMatchObject({ embedded: true, openEditor: false });
+  expect(result).toMatchObject({ view: "participant", section: "program", canOperate: false, staff: false });
+  expect(find(result.children as ReactNode, "program")).toBeDefined();
+  expect(find(result.children as ReactNode, "program")?.canEditDuties ?? false).toBe(false);
+  expect(find(result.children as ReactNode, "mine")).toBeUndefined();
   expect(find(result.children as ReactNode, "day")).toBeUndefined();
   expect(find(result.children as ReactNode, "participants")).toBeUndefined();
-  expect(mock.mine).toHaveBeenCalledWith("me");
+  expect(mock.mine).not.toHaveBeenCalled();
   expect(mock.roster).not.toHaveBeenCalled();
   expect(mock.operations).not.toHaveBeenCalled();
 });
@@ -161,11 +230,13 @@ it("prevents member preview from entering operations even if the account is appr
 it.each([{ approved: false, status: "active" }, { approved: true, status: "archived" }])("keeps unapproved or graduated ordinary accounts out of recording and management %j", async (profile) => {
   mock.approved = profile.approved; mock.status = profile.status;
   const result = await workspace({ view: "operations", section: "participants" });
-  expect(result).toMatchObject({ view: "participant", section: "mine", canOperate: false, staff: false });
-  expect(find(result.children as ReactNode, "mine")).toMatchObject({ embedded: true, openEditor: false });
+  expect(result).toMatchObject({ view: "participant", section: "program", canOperate: false, staff: false });
+  expect(find(result.children as ReactNode, "program")).toBeDefined();
+  expect(find(result.children as ReactNode, "program")?.canEditDuties ?? false).toBe(false);
+  expect(find(result.children as ReactNode, "mine")).toBeUndefined();
   expect(find(result.children as ReactNode, "day")).toBeUndefined();
   expect(find(result.children as ReactNode, "participants")).toBeUndefined();
-  expect(mock.mine).toHaveBeenCalledWith("me");
+  expect(mock.mine).not.toHaveBeenCalled();
   expect(mock.roster).not.toHaveBeenCalled();
   expect(mock.operations).not.toHaveBeenCalled();
 });
@@ -188,4 +259,10 @@ it("retains the ordinary competition program and its system edit permission", as
 it("reports program load failure instead of rendering an empty meet", async () => {
   mock.program.mockRejectedValue(new Error("プログラムを取得できませんでした"));
   await expect(workspace({ view: "participant" })).rejects.toThrow("プログラムを取得できませんでした");
+});
+
+it.each(["program", "duties"])("preserves a %s load failure instead of claiming no participants or assignments", async section => {
+  mock.program.mockRejectedValue(new Error("プログラムを取得できませんでした"));
+  await expect(workspace({ section })).rejects.toThrow("プログラムを取得できませんでした");
+  expect(mock.mine).not.toHaveBeenCalled(); expect(mock.roster).not.toHaveBeenCalled();
 });
