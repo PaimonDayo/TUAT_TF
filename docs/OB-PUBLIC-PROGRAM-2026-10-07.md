@@ -34,3 +34,12 @@
 ## 公開状態
 
 DB・migration・環境変数・同期設定の変更は不要。検証済みの10ファイルと前回公開後の記録をmasterへまとめて1回だけpushし、Productionと公開SHAを確認する。iOS PWA/Android実機・実ユーザーでの表示操作は未確認。
+
+
+### 公開完了（2026-10-07 09:57 JST）
+
+- commit: `58b3ccf0562e0698754ccbcf1222b6893b01c9f7`。関連10ファイルと前回公開後記録をまとめ、最新origin/masterを基準にmasterへfast-forwardし、`master -> master`を1回だけpushした。作業ブランチはpushしていない。
+- 主checkoutの別作業104ファイルは公開後もハッシュ一致。重なる文書2ファイルの既存追記を保全し、索引へ今回の入口を合成した。実ユーザーの登録・組・記録に試験書込みは行っていない。
+- 公式GitHub deploymentは今回のSHA・`Production – tuat-tf`・`success`。本番`https://tuat-tf.vercel.app/api/version`は200で同じSHAを返した。master・origin/masterも同じSHAを確認した。
+- PC/クラウドの読取専用RLS試験で全71承認済み部員へ保存済み5表の全データが見えること、合成Chrome/WebKitの組分け・補助員の閲覧と既存権限、型・lint・1080テスト・ビルドを確認した。DB/migration/環境変数/同期設定は変更していない。iOS PWA/Android実機・実ユーザーでの表示操作は未確認。
+- この公開後の追記は文書だけのため手元に保持し、次のコード変更とまとめる。追加push・ビルド・デプロイは行わない。
