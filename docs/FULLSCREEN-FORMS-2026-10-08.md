@@ -19,3 +19,9 @@ FullScreenContentの本文と背面の最大幅・中央寄せを除去し、全
 専用worktreeの依存35件一致、TypeScript、対象6ファイルeslint、全Vitest122ファイル/1098件、差分空白検査が成功。実NoteEditorと共通FormModalを使うブラウザ検証用の私有fixtureで、390/600/768/1024/1440/1920pxの各幅で左0px・画面と同じ幅・横はみ出しなしを測定し、1024pxのフォームを画像でも確認した。幅/高さ変更後の入力保持・固定フッターの画面内表示、戻る→未保存確認→編集継続→入力保持を確認した。fixtureはDBとルーティングが合成のため本番保存・実機キーボード試験とは扱わない。確認ダイアログと選択シートの既存幅は保持した。検証fixtureは公開Gitへ含めない。
 
 公開直前のnpm run buildが成功（Next 16.3.6、型検査・69静的ページ生成完了）。最新origin/masterは引き続き直前の公開commit `3dc1714`。今回のフォーム修正と今回/前回の反映記録9ファイルだけをまとめ、masterへfast-forwardして1回pushする。DB migrationは不要。
+
+## 本番反映完了
+
+commit `fa0296dbdc1a0204458152a0bb9747da23925cbd` をmasterへfast-forwardし、1回の `master -> master` pushを確認した。公式GitHub deployment `6928842324` / environment `Production – tuat-tf` / state `success` / SHA一致、公開 `/api/version` が200かつ同じSHAを返したことを確認した。Vercel MCPは今回のセッションにないため公式GitHub status経路を使用した。
+
+本番の認証済みブラウザでノート→作成→フォルダを再度開き、390/768/1024/1280pxで左0px・幅が画面幅に一致・横はみ出しなしを確認。1280pxでは修正前の672px/左右304pxから1280px/左右0pxになり、フォームの目視確認も済ませた。本番タイムライン→作成→つぶやきも1280/768pxで全幅表示、本文欄1246/734px（通常の内側余白と枠線のみ）を確認した。空のフォームを戻るで閉じ、保存/投稿は行っていない。画面サイズoverrideを解除し、検証タブと検証専用HTTP serverを終了した。実機PWAのソフトキーボードは未確認。この完了追記だけはローカルへ保持し、文書だけの追加push/build/deployは行わない。

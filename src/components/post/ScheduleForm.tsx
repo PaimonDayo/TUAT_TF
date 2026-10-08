@@ -97,7 +97,7 @@ export function ScheduleForm({
           .eq("pinned", true)
           .order("sort", { ascending: true })
           .order("name", { ascending: true }),
-        !schedule && userId
+        !schedule && isPractice && userId
           ? supabase
               .from("practice_schedules")
               .select("meeting_time")
@@ -199,7 +199,10 @@ export function ScheduleForm({
         <SegmentedControl
           items={SCHEDULE_TYPE_OPTIONS}
           value={type}
-          onChange={(k) => setType(k as ScheduleType)}
+          onChange={(k) => {
+            meetingTimeTouched.current = true;
+            setType(k as ScheduleType);
+          }}
         />
       )}
 
@@ -255,12 +258,12 @@ export function ScheduleForm({
 
       {/* 種別ごとの項目（全画面モーダルなので高さが変わってもガクつかない） */}
       <div key={type} className="space-y-4 fade-in">
-        {isPractice ? (
           <div>
             <p className="section-label mb-1.5">集合時間</p>
             <div className="flex items-center gap-2">
               <Input
                 type="time"
+                aria-label="集合時間"
                 value={meetingTime}
                 onChange={(event) => {
                   meetingTimeTouched.current = true;
@@ -282,7 +285,7 @@ export function ScheduleForm({
               </button>
             </div>
           </div>
-        ) : (
+        {!isPractice && (
           <>
             <div>
               <p className="section-label mb-1.5">タイトル</p>
