@@ -39,7 +39,7 @@ function ObHeatEditorView({ event, entrants, draft, entries, onClose, onAddEntry
   const capacity = obHeatCapacity(`男子${event.replace(/^(男子|女子)/, "")}`);
   const field = obEventRule(event).discipline !== "track";
   const present = entrants.filter(e => e.eligible && !e.absent).length;
-  return <FormModal open wide="full" autoFocus={false} title={`${event} · ${field ? "試技順" : "組分け"}`} onOpenChange={open => !open && onClose()}>
+  return <FormModal open autoFocus={false} title={`${event} · ${field ? "試技順" : "組分け"}`} onOpenChange={open => !open && onClose()}>
     <FormDraftGuard dirty={draft.dirty} busy={draft.locked} onSave={draft.save}/>
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-body">出場登録 {present}人</p>{onAddEntry && <Button variant="outline" disabled={draft.locked || draft.reviewing} onClick={() => onAddEntry(event)}>出場者を追加</Button>}</div>

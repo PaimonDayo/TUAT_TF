@@ -75,7 +75,7 @@ export function ObEventOperationsEditor({ event, entries, initial, operations = 
     const number = (source === "own" ? fieldNumbers : currentNumbers)?.get(p.entryId);
     return number === undefined ? "順番を確認できません" : number === null ? "順番未定" : `試技順 ${number}番`;
   };
-  return <FormModal open wide="full" autoFocus={false} title={`${event} · 記録`} onOpenChange={open => !open && onClose()}>
+  return <FormModal open autoFocus={false} title={`${event} · 記録`} onOpenChange={open => !open && onClose()}>
     <FormDraftGuard dirty={draft.dirty} busy={draft.locked} onSave={draft.save}/>
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-body">{data.confirmed ? "結果確認済み" : "速報"} · {data.participants.length}人</p>{onAddEntry && <Button variant="outline" disabled={disabled} onClick={() => onAddEntry(event)}>出場者を追加</Button>}</div>

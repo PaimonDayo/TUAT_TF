@@ -46,7 +46,6 @@ export function FormModal({
   footer,
   autoFocus = true,
   floatingAction,
-  wide = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -55,7 +54,6 @@ export function FormModal({
   footer?: ReactNode;
   autoFocus?: boolean;
   floatingAction?: ReactNode;
-  wide?: boolean | "full";
 }) {
   const draft = useRef<DraftState | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
@@ -88,7 +86,6 @@ export function FormModal({
         footer={footerHost}
         autoFocus={autoFocus}
         floatingAction={floatingAction}
-        className={wide === "full" ? "md:max-w-none" : wide ? "md:max-w-5xl" : undefined}
       >
         <FormModalFooterContext.Provider value={context}>
           <FormDraftContext.Provider value={draft}>

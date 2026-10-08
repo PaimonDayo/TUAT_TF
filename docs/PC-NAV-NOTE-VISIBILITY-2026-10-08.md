@@ -49,3 +49,9 @@ Next 16同梱のCSS、layout/page、use clientガイドを参照。実際の操�
 公開前の専用worktreeでnpm run check:environmentとnpm run buildが成功（Node 24.19.0/ロック一致35依存、Next 16.3.6、型検査・69静的ページ生成完了）。先の対象eslint・全122ファイル/1098件のVitest、Chrome/WebKit・隔離DB検証を保持する。本番PC/クラウドの対象表・定義を非公開退避し、dryRunの閲覧差分・データ不変・編集権限不変を確認して適用する。masterへfast-forward後に1回pushし、Productionと公開versionを照合する。
 
 PC本番・クラウド予備のnotes 15件/note_editors 3件と関連定義をACLで保護した非公開領域へ退避した。両方のrollback付きdryRunでmigration二重適用、行データ不変、編集権限不変、一般部員の閲覧不変、システム管理者の全件閲覧を確認した。両DBへmigrationを適用し、notes_selectとcan_view_noteの定義を再確認した。PC側にはsupabase_migrations.schema_migrationsが存在せず、新規管理表は作らず、適用時刻と定義確認を非公開記録へ保存する。クラウド側は既存migration履歴へ記録する。公開時点のコードは今回の9ファイルだけに限定する。
+
+## 本番反映完了（2026-10-08 / Codex）
+
+commit `3dc171481262b444424c5acbe52344777d22fe30` を最新origin/master `d6bb29b` へfast-forward統合し、1回のpushで `master -> master` を確認した。Vercel MCPのlist_deploymentsはこのセッションに存在せず、既存Vercel CLI認証のAPIは403だったため、AGENTSが認める公式GitHub deployment statusで確認した。deployment `6927949826` / environment `Production – tuat-tf` / status `success` / 対象SHA一致、公開 `https://tuat-tf.vercel.app/api/version` も200かつ同じSHAを返した。PC/クラウドともmigration適用済みである。
+
+本番の認証済みブラウザでノート一覧を確認し、既存の本人下書きフォルダが表示された。1280pxのノート・ホーム双方で左ナビ80pxを測定し、ホームを画像でも確認した。実ユーザーの新規保存は実行しておらず、保存要求自体が失敗する別原因は依然未再現。作成後に非表示となる経路は表示修正・既存本番下書きの表示で確認した。実機PWAは未確認。完了後のこの文書追記だけはローカルに保持し、文書だけの2回目push/build/deployは行わない。元checkoutの別作業差分は保持した。

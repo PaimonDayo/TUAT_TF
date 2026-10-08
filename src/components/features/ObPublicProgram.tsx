@@ -36,7 +36,7 @@ export function ObPublicProgram({ entries, members, duties, roles, operations, v
         }) : <div className="py-3 text-body">{slot.label}{slot.note && <p className="text-caption">{slot.note}</p>}</div>}</div>
       </div>)}
     </Card> : <ObDutyTable integrated canEditDuties={canEditDuties} entries={entries} members={members} duties={duties} roles={roles} operations={operations} onEvent={name=>setEvent(name.replace(/^(男子|女子)/,""))} />}
-    <FormModal open={event !== null} wide autoFocus={false} onOpenChange={open => { if (!open) setEvent(null); }} title={displayEvent(event ?? "")}>
+    <FormModal open={event !== null} autoFocus={false} onOpenChange={open => { if (!open) setEvent(null); }} title={displayEvent(event ?? "")}>
       <div className="space-y-4">
         <p className="text-caption">{people.length}人・{field ? "試技順" : "組分け"}と記録</p>
         {people.length ? <ul className="divide-y divide-separator">{people.map(row => {

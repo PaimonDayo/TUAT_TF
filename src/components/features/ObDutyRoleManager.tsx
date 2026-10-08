@@ -68,7 +68,7 @@ export function ObDutyRoleManager({entries,time,event,roles,allRoles=roles,dutie
   }catch{setMessage("通信できませんでした。選択は残っています。接続を確認して再度保存してください");}finally{setSaving(false);}
  }
 
- return <FormModal open wide title={draft?"役職の設定":people?`${people.role.name}の担当者`:"補助員一覧"} autoFocus={false} onOpenChange={open=>{if(!open&&!saving){if(draft||peopleDirty)setDiscard(true);else if(people)setPeople(null);else onClose();}}}>
+ return <FormModal open title={draft?"役職の設定":people?`${people.role.name}の担当者`:"補助員一覧"} autoFocus={false} onOpenChange={open=>{if(!open&&!saving){if(draft||peopleDirty)setDiscard(true);else if(people)setPeople(null);else onClose();}}}>
  <div className="space-y-4"><h2 className="text-headline">{time}　{event}</h2>
  <ObDutyIssues issues={allIssues.filter(issue=>issue.time===time&&issue.event===event)}/>
  {message&&<p role="alert" className="text-body text-danger">{message}</p>}
