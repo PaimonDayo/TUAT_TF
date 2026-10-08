@@ -6,7 +6,7 @@ import { getNotesData, getThreads } from "@/lib/queries";
 import { permissionsOf } from "@/lib/permissions";
 import type { AuthorMini, NoteWithRelations, ThreadWithAuthor } from "@/types";
 
-export type NotesPageData = { currentUser: AuthorMini; notes: NoteWithRelations[]; threads: ThreadWithAuthor[]; isAdmin: boolean };
+export type NotesPageData = { currentUser: AuthorMini; notes: NoteWithRelations[]; threads: ThreadWithAuthor[]; isAdmin: boolean; canViewAllFolders: boolean };
 export type NoteArticleSearchResult = {
   id: string;
   note_id: string;
@@ -28,6 +28,7 @@ export async function loadNotesPageData(): Promise<NotesPageData> {
     notes: data.notes,
     threads,
     isAdmin: permissionsOf(profile.roles).manageMembers,
+    canViewAllFolders: permissionsOf(profile.roles).manageSystem,
   };
 }
 

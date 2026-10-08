@@ -30,6 +30,7 @@ export function NotesView({
   notes,
   threads = [],
   isAdmin = false,
+  canViewAllFolders = false,
   mine = false,
   initialScope = "shared",
 }: {
@@ -37,6 +38,7 @@ export function NotesView({
   notes: NoteWithRelations[];
   threads?: ThreadWithAuthor[];
   isAdmin?: boolean;
+  canViewAllFolders?: boolean;
   mine?: boolean;
   initialScope?: NotesTab;
 }) {
@@ -58,10 +60,10 @@ export function NotesView({
         if (note.parent_id) return false; // サブフォルダは親フォルダ内でのみ表示
         if (mine && note.author_id !== currentUser.id) return false;
         if (note.scope !== scope) return false;
-        if (!mine && note.status !== "published") return false;
+        if (!mine && !canViewAllFolders && note.author_id !== currentUser.id && note.status !== "published") return false;
         return true;
       }).sort((a, b) => Number(b.pinned) - Number(a.pinned)),
-    [currentUser.id, mine, notes, scope],
+    [canViewAllFolders, currentUser.id, mine, notes, scope],
   );
 
   const matchingFolders = useMemo(() => {
@@ -69,12 +71,12 @@ export function NotesView({
     return notes.filter((note) => {
       if (mine && note.author_id !== currentUser.id) return false;
       if (note.scope !== scope) return false;
-      if (!mine && note.status !== "published") return false;
+      if (!mine && !canViewAllFolders && note.author_id !== currentUser.id && note.status !== "published") return false;
       return `${note.title}\n${note.description ?? ""}`
         .toLocaleLowerCase("ja")
         .includes(normalizedQuery);
     });
-  }, [currentUser.id, mine, normalizedQuery, notes, scope]);
+  }, [canViewAllFolders, currentUser.id, mine, normalizedQuery, notes, scope]);
 
   const matchingArticles = useMemo(
     () =>
@@ -82,10 +84,10 @@ export function NotesView({
         const note = article.note;
         if (!note || note.scope !== scope) return false;
         if (mine && note.author_id !== currentUser.id) return false;
-        if (!mine && note.status !== "published") return false;
+        if (!mine && !canViewAllFolders && note.author_id !== currentUser.id && note.status !== "published") return false;
         return true;
       }),
-    [articleResults, currentUser.id, mine, scope],
+    [articleResults, canViewAllFolders, currentUser.id, mine, scope],
   );
 
   useEffect(() => {

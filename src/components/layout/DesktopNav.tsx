@@ -19,19 +19,15 @@ export function DesktopNav() {
   const pathname = usePathname();
 
   return (
-    <aside data-new-ui-surface={newUi || undefined} data-ui-sidebar className="sticky top-0 hidden h-dvh w-20 shrink-0 flex-col py-4 md:flex lg:w-60 lg:py-6">
+    <aside data-new-ui-surface={newUi || undefined} data-ui-sidebar className="sticky top-0 hidden h-dvh w-20 shrink-0 flex-col py-4 md:flex lg:py-6">
       <Link
         data-ui-row
         href="/home"
         aria-label="ホーム"
-        className="mx-2 flex items-center justify-center gap-3 rounded-card px-2 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent lg:justify-start lg:px-3"
+        className="mx-2 flex items-center justify-center rounded-card px-2 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
         <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-sm font-black tracking-tight text-white shadow-sm">
           TF
-        </span>
-        <span className="hidden min-w-0 lg:block">
-          <span className="block text-[16px] font-bold leading-5 text-ink">TUAT T&amp;F</span>
-          <span className="block text-[11px] leading-4 text-muted2">Track &amp; Field</span>
         </span>
       </Link>
 
@@ -47,22 +43,17 @@ export function DesktopNav() {
               title={label}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex h-12 items-center justify-center gap-3 rounded-xl px-2 text-[15px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent lg:justify-start lg:px-4",
+                "flex h-12 items-center justify-center rounded-xl px-2 text-[15px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
                 active
                   ? "bg-card text-accent shadow-sm ring-1 ring-separator/70"
                   : "text-muted2 hover:bg-card/65 hover:text-ink",
               )}
             >
               <Icon size={21} strokeWidth={active ? 2.4 : 2} />
-              <span className="hidden lg:inline">{label}</span>
             </Link>
           );
         })}
       </nav>
-
-      <p className="mt-auto hidden px-4 text-[11px] leading-5 text-muted lg:block">
-        東京農工大学 陸上競技部
-      </p>
     </aside>
   );
 }

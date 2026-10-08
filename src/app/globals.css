@@ -292,11 +292,6 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 @media (min-width: 1024px) {
   .app-frame:has([data-ob-workspace]) { max-width: none; }
   .app-main:has([data-ob-workspace]) { max-width: none; }
-  .app-frame:has([data-ob-workspace]) > aside { width: 80px; }
-  .app-frame:has([data-ob-workspace]) > aside nav a { justify-content: center; padding-inline: 8px; }
-  .app-frame:has([data-ob-workspace]) > aside nav a > span,
-  .app-frame:has([data-ob-workspace]) > aside > a > span:nth-child(2),
-  .app-frame:has([data-ob-workspace]) > aside > p { display: none; }
   .ob-duty-scroll { max-height: calc(100dvh - 180px); }
   .ob-duty-scroll td p:first-child { white-space: nowrap; text-wrap: nowrap; }
 }
