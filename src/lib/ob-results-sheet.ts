@@ -24,22 +24,31 @@ export function obProgramSheet(): XlsxSheet {
   return { name: "プログラム", widths: [8, 34, 14], rows: [["時刻", "内容", "備考"], ...OB_PROGRAM.map(slot => [slot.time, slot.label, slot.note ?? ""])] };
 }
 
+/** Fixed public workbook: attendance and withdrawals stay visible after later app edits. */
+export function obPublishedResultSheets(entries: ObEntry[], operations: ObEventOperation[]): XlsxSheet[] {
+  return [obProgramSheet(), ...OB_PROGRAM.flatMap(slot => slot.events).map(family => obResultSheet(family, entries, operations, true))];
+}
+
 /**
  * Start list sent to alumni: only people who compete or already have a result, without internal status columns.
  * Record columns appear once the event has a result, so a pre-meet sheet is just the start list.
  */
-export function obResultSheet(family: string, entries: ObEntry[], operations: ObEventOperation[]): XlsxSheet {
-  const rule = obEventRule(family), rows = obFamilyRows(family, entries, operations).filter(row => row.state.canParticipate || row.state.recorded);
+export function obResultSheet(family: string, entries: ObEntry[], operations: ObEventOperation[], published = false): XlsxSheet {
+  const rule = obEventRule(family), rows = obFamilyRows(family, entries, operations).filter(row => published || row.state.canParticipate || row.state.recorded);
   const recorded = rows.some(row => row.state.recorded);
-  const person = (row: Row): XlsxCell[] => [row.division, row.entry?.submitted_name ?? "参加情報なし", row.entry?.grade ?? ""];
+  const results = published || recorded;
+  const personHeaders = ["区分", "氏名", "学年", ...(published ? ["大会参加", "出場状況"] : [])];
+  const personWidths = [6, 18, 7, ...(published ? [10, 18] : [])];
+  const person = (row: Row): XlsxCell[] => [row.division, row.entry?.submitted_name ?? "参加情報なし", row.entry?.grade ?? "",
+    ...(published ? [!row.entry ? "参加情報なし" : row.entry.absent ? "不参加" : "参加", publishedParticipation(row)] : [])];
   const best = (row: Row) => row.state.recorded ? new MeetEvent(obEventRule(row.eventName), { participants: [row.performance], confirmed: false }).best(row.performance) : "";
   const name = obFamilyLabel(family);
 
   if (rule.discipline === "track") {
     const lanes = !["1500m", "3000m"].includes(family);
     const windOf = (row: Row) => { const trial = row.performance.trials[0]; return row.performance.status === "entered" && trial?.status === "valid" ? trial.wind : ""; };
-    const result = (row: Row): XlsxCell[] => recorded ? [best(row), ...(rule.wind ? [windOf(row)] : [])] : [];
-    const lines: XlsxCell[][] = [["組", ...(lanes ? ["レーン"] : []), "区分", "氏名", "学年", ...(recorded ? ["記録", ...(rule.wind ? ["風速"] : [])] : [])]];
+    const result = (row: Row): XlsxCell[] => results ? [best(row), ...(rule.wind ? [windOf(row)] : [])] : [];
+    const lines: XlsxCell[][] = [["組", ...(lanes ? ["レーン"] : []), ...personHeaders, ...(results ? ["記録", ...(rule.wind ? ["風速"] : [])] : [])]];
     let heat: string | undefined;
     for (const row of rows) {
       const label = row.group === null ? "組未定" : obMixedGroupLabel(row.group);
@@ -48,15 +57,15 @@ export function obResultSheet(family: string, entries: ObEntry[], operations: Ob
       lines.push([label === heat ? null : label, ...(lanes ? [row.group === null ? null : row.performance.order] : []), ...person(row), ...result(row)]);
       heat = label;
     }
-    return { name, widths: [10, ...(lanes ? [7] : []), 6, 18, 7, ...(recorded ? [10, ...(rule.wind ? [7] : [])] : [])], rows: lines };
+    return { name, widths: [10, ...(lanes ? [7] : []), ...personWidths, ...(results ? [10, ...(rule.wind ? [7] : [])] : [])], rows: lines };
   }
 
   const order = (row: Row): XlsxCell => row.number ?? "順番未定";
   if (rule.discipline === "height") {
     const heights = heightColumns(rows);
-    return { name, widths: [8, 6, 18, 7, ...(recorded ? [10, ...heights.map(() => 7)] : [])], rows: [
-      ["試技順", "区分", "氏名", "学年", ...(recorded ? ["記録", ...heights.map(height => height.label)] : [])],
-      ...rows.map(row => [order(row), ...person(row), ...(recorded ? [best(row), ...heights.map(height => row.performance.trials.filter(trial => heightKey(trial) === height.key).map(trial => symbols[trial.status]).join(""))] : [])]),
+    return { name, widths: [8, ...personWidths, ...(results ? [10, ...heights.map(() => 7)] : [])], rows: [
+      ["試技順", ...personHeaders, ...(results ? ["記録", ...heights.map(height => height.label)] : [])],
+      ...rows.map(row => [order(row), ...person(row), ...(results ? [best(row), ...heights.map(height => row.performance.trials.filter(trial => heightKey(trial) === height.key).map(trial => symbols[trial.status]).join(""))] : [])]),
     ] };
   }
 
@@ -64,11 +73,22 @@ export function obResultSheet(family: string, entries: ObEntry[], operations: Ob
   const attempts = recorded ? Array.from({ length: count }, (_, i) => i) : [];
   const bestWind = (row: Row) => row.performance.status === "entered" ? new MeetEvent(obEventRule(row.eventName), { participants: [], confirmed: false }).bestTrial(row.performance)?.wind ?? "" : "";
   const trialText = (trial: MeetTrial | undefined) => !trial ? "" : trial.status === "valid" || trial.status === "pending" ? trial.mark : symbols[trial.status];
-  return { name, widths: [8, 6, 18, 7, ...(recorded ? [10, ...(rule.wind ? [8] : [])] : []), ...attempts.flatMap(() => rule.wind ? [8, 7] : [8])], rows: [
-    ["試技順", "区分", "氏名", "学年", ...(recorded ? ["記録", ...(rule.wind ? ["記録の風速"] : [])] : []), ...attempts.flatMap(i => rule.wind ? [`${i + 1}回目`, `${i + 1}回目風速`] : [`${i + 1}回目`])],
-    ...rows.map(row => [order(row), ...person(row), ...(recorded ? [best(row), ...(rule.wind ? [bestWind(row)] : [])] : []),
+  return { name, widths: [8, ...personWidths, ...(results ? [10, ...(rule.wind ? [8] : [])] : []), ...attempts.flatMap(() => rule.wind ? [8, 7] : [8])], rows: [
+    ["試技順", ...personHeaders, ...(results ? ["記録", ...(rule.wind ? ["記録の風速"] : [])] : []), ...attempts.flatMap(i => rule.wind ? [`${i + 1}回目`, `${i + 1}回目風速`] : [`${i + 1}回目`])],
+    ...rows.map(row => [order(row), ...person(row), ...(results ? [best(row), ...(rule.wind ? [bestWind(row)] : [])] : []),
       ...attempts.flatMap(i => { const trial = row.performance.trials[i]; return rule.wind ? [trialText(trial), trial?.status === "valid" ? trial.wind : ""] : [trialText(trial)]; })]),
   ] };
+}
+
+/** Meet attendance is separate from the event declaration; saved marks never disappear. */
+function publishedParticipation(row: Row): string {
+  if (!row.entry) return "参加情報なし";
+  if (!row.state.registered) return row.state.recorded ? "登録取消（記録あり）" : "登録取消";
+  if (row.performance.status === "DNS") return "DNS（欠場）";
+  if (row.performance.status === "DNF") return "DNF（途中棄権）";
+  if (row.performance.status === "DQ") return "DQ（失格）";
+  if (row.entry.absent && !row.state.recorded) return "欠席";
+  return row.state.recorded ? "記録あり" : "出場";
 }
 
 /** High jump attempts are grouped under each bar height; unreadable heights stay as typed. */

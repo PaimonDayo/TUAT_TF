@@ -302,10 +302,19 @@ async function runSheetSyncBatch(
     const { error } = await admin.from("practice_records").insert(inserts);
     if (error) {
       result.inserted = 0;
-      // 一括insertが失敗したら1件ずつ入れ直し、不正な行だけをスキップする。
+      // 型/制約違反はトランザクションの拒否が確定しているので、不正な行だけを分離する。
+      // 通信失敗等では保存済みか分からない。再送せず、次回のDB読み取りで照合する。
       // 失敗した部員は履歴取込完了にせず、次回も全期間を再確認する。
-      // （1セルの型不一致で全部員の新規取込が止まった事故の再発防止。）
+      const definitelyRejected = /^(22|23)[0-9A-Z]{3}$/.test(error.code ?? "");
       for (const row of inserts) {
+        if (!definitelyRejected) {
+          result.failedMembers.push({
+            member: nameById.get(row.user_id as string) ?? String(row.user_id),
+            reason: `${row.recorded_date}: 取り込みの保存結果を確認できませんでした。再送を保留し、次回同期で記録を照合します: ${error.message}`,
+          });
+          historyImportFailures.add(row.user_id as string);
+          continue;
+        }
         const { error: rowErr } = await admin.from("practice_records").insert(row);
         if (rowErr) {
           result.failedMembers.push({

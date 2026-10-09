@@ -40,7 +40,8 @@ export async function getUserRecords(userId: string, fromDate?: string) {
     .or(RECORD_NONEMPTY_OR) // 空の記録は除外
     .gte("recorded_date", fromDate ?? defaultFromDate.toISOString().slice(0, 10))
     .order("recorded_date", { ascending: false });
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) throw error;
   return attachRecordFieldGroups(supabase, (data ?? []).map((row) => normalizePracticeRecord({ ...row, record_fields_snapshot: null })));
 }
 

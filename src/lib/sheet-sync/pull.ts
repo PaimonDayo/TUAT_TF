@@ -8,7 +8,7 @@ import type { BuiltinKey, FieldMap, DbRecord } from "./field-map";
 export type MemberPullComputation = {
   inserts: Record<string, unknown>[];
   updates: { id: string; patch: Record<string, unknown> }[];
-  /** 同日に複数記録がある曖昧な日付（呼び出し側でシート名等を付与して報告する） */
+  /** アプリまたはシートに同日複数記録がある曖昧な日付 */
   conflicts: string[];
 };
 
@@ -38,13 +38,18 @@ export function computeMemberPull(
   const inserts: Record<string, unknown>[] = [];
   const updates: { id: string; patch: Record<string, unknown> }[] = [];
   const conflicts: string[] = [];
+  const sheetCountByDate = new Map<string, number>();
+  for (const record of sheetRecords) {
+    if (!record.date || !inRangeForProfile(record.date)) continue;
+    sheetCountByDate.set(record.date, (sheetCountByDate.get(record.date) ?? 0) + 1);
+  }
 
   for (const sr of sheetRecords) {
     if (!sr.date || !inRangeForProfile(sr.date)) continue; // カットオフ前・未来日は無視
 
     const appList = appByDate.get(sr.date) ?? [];
-    if (appList.length > 1) {
-      conflicts.push(sr.date); // 複数/日は触らない
+    if (appList.length > 1 || sheetCountByDate.get(sr.date)! > 1) {
+      if (!conflicts.includes(sr.date)) conflicts.push(sr.date); // どちら側の複数/日も触らない
       continue;
     }
     const app = appList[0];

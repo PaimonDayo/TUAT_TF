@@ -17,6 +17,19 @@ function dbRecord(date: string, memo: string): DbRecord {
 }
 
 describe("computeMemberPull", () => {
+  it.each([false, true])("holds an ambiguous repeated sheet date with an existing record=%s", (hasExisting) => {
+    const app = dbRecord("2026-10-04", "saved entry");
+    const result = computeMemberPull("user-1", fieldMap, [
+      { date: app.recorded_date, cells: { memo: "first sheet row" } },
+      { date: app.recorded_date, cells: { memo: "second sheet row" } },
+      { date: "2026-10-03", cells: { memo: "unambiguous new entry" } },
+    ], hasExisting ? new Map([[app.recorded_date, [app]]]) : new Map(), () => true, "2026-10-05T15:00:00.000Z");
+    expect(result.conflicts).toEqual([app.recorded_date]);
+    expect(result.updates).toEqual([]);
+    expect(result.inserts).toEqual([expect.objectContaining({ recorded_date: "2026-10-03", memo: "unambiguous new entry" })]);
+    expect(app.memo).toBe("saved entry");
+  });
+
   it.each([
     ["merge_nonempty", false], ["replace_mapped", false],
     ["merge_nonempty", true], ["replace_mapped", true],

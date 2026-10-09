@@ -73,6 +73,19 @@ describe("member public records", () => {
     expect(mocks.social).not.toHaveBeenCalled();
   });
 
+  it("keeps a failed member-history request visible and can recover without losing saved records", async () => {
+    const error = { message: "record backend unavailable" };
+    Object.assign(query, { then: (resolve: (value: unknown) => void) => resolve({ data: null, error }) });
+    await expect(getUserRecordsWithSocialState("owner", "viewer")).rejects.toEqual(error);
+    expect(mocks.fields).not.toHaveBeenCalled();
+    expect(mocks.social).not.toHaveBeenCalled();
+
+    Object.assign(query, { then: (resolve: (value: unknown) => void) => resolve({ data: rows, error: null }) });
+    const recovered = await getUserRecordsWithSocialState("owner", "viewer");
+    expect(recovered.map((record) => record.id)).toEqual(["app-today", "sheet-yesterday"]);
+    expect(recovered[0]).toMatchObject({ likes_count: 5, comments_count: 2 });
+  });
+
   it("publishes today's app record and yesterday's sheet record before loading social data", async () => {
     const records = await getUserRecordsWithSocialState("owner", "viewer");
     expect(records.map((record) => record.id)).toEqual(["app-today", "sheet-yesterday"]);
