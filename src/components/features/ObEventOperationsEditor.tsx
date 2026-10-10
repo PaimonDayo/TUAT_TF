@@ -114,7 +114,7 @@ export function ObEventOperationsEditor({ event, entries, initial, operations = 
   return <FormModal open autoFocus={false} title={`${event} · 記録`} onOpenChange={open => !open && onClose()}>
     <FormDraftGuard dirty={draft.dirty} busy={draft.locked} onSave={draft.save}/>
     <div className="space-y-4" onFocusCapture={e => { if (e.target instanceof HTMLInputElement) setEditing(true); }} onBlurCapture={e => { if (!(e.relatedTarget instanceof HTMLInputElement)) setEditing(false); }}>
-      <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-body">{data.confirmed ? "入力完了" : "入力中"} · {initialEntryId ? `${visible.length}人表示 / ${data.participants.length}人` : `${data.participants.length}人`}</p>{onAddEntry && <Button variant="outline" disabled={disabled} onClick={() => onAddEntry(event)}>出場者を追加</Button>}</div>
+      <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-body">出場者 {initialEntryId ? `${visible.length}人表示 / ${data.participants.length}人` : `${data.participants.length}人`}</p>{onAddEntry && <Button variant="outline" disabled={disabled} onClick={() => onAddEntry(event)}>出場者を追加</Button>}</div>
       <ObOperationConflict draft={draft} entries={entries} event={event} positionLabel={conflictPosition}/>
       {rule.discipline === "track" && groups.length > 1 && <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="表示する組">{["all", ...groups.map(String)].map(value => <Button key={value} size="sm" className="shrink-0" variant={group === value ? "primary" : "outline"} aria-pressed={group === value} onClick={() => setGroup(value)}>{value === "all" ? "全員" : obMixedGroupLabel(Number(value))}</Button>)}</div>}
       {rule.discipline === "track" ? <>
@@ -145,6 +145,6 @@ export function ObEventOperationsEditor({ event, entries, initial, operations = 
       {message && <p role="alert" className="text-body text-danger">{message}</p>}
       {draft.message && <p role={draft.failed ? "alert" : "status"} className={`text-body ${draft.failed ? "text-danger" : "text-accent"}`}>{draft.message}</p>}
     </div>
-    <FormModalFooter><div className="flex flex-wrap items-center justify-between gap-2">{!initialEntryId && <label className="flex min-h-11 items-center gap-2 text-body"><input type="checkbox" disabled={disabled} checked={data.confirmed} onChange={e => draft.change({ ...data, confirmed: e.target.checked })}/>この種目の入力を完了する</label>}{(draft.failed || draft.unconfirmed) && <Button disabled={draft.busy || draft.reviewing || !draft.dirty && !draft.unconfirmed} onClick={() => void draft.save()}>{draft.busy ? draft.unconfirmed ? "確認中…" : "保存中…" : draft.unconfirmed ? "保存結果を確認" : "保存を再試行"}</Button>}</div></FormModalFooter>
+    {(draft.failed || draft.unconfirmed) && <FormModalFooter><Button disabled={draft.busy || draft.reviewing || !draft.dirty && !draft.unconfirmed} onClick={() => void draft.save()}>{draft.busy ? draft.unconfirmed ? "確認中…" : "保存中…" : draft.unconfirmed ? "保存結果を確認" : "保存を再試行"}</Button></FormModalFooter>}
   </FormModal>;
 }
