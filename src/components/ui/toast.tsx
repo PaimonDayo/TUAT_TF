@@ -62,7 +62,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             key={toast.id}
             role={toast.kind === "error" ? "alert" : "status"}
             className={cn(
-              "pointer-events-auto flex min-h-12 items-center gap-3 rounded-xl border bg-card px-3 py-2 shadow-lg",
+              "pointer-events-auto flex min-h-12 items-center gap-3 rounded-card border bg-card px-3 py-2 shadow-lg",
               toast.kind === "error" ? "border-danger/30" : "border-success/30",
             )}
           >

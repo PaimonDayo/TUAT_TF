@@ -273,7 +273,7 @@ export function TrainingChart({
           (r) => r.result_text || r.strength_text || r.memo || r.condition,
         );
         return (
-          <div className="rounded-xl bg-bg p-3">
+          <div className="rounded-card bg-bg p-3">
             <div className="flex items-baseline justify-between mb-1">
               <p className="text-[12px] font-semibold">{bucketLabel(sel, true)}</p>
               <p className="text-[13px] font-bold tabular-nums">
@@ -384,7 +384,7 @@ function IntensitySummary({
   )}`;
 
   return (
-    <div className="rounded-xl bg-bg p-3">
+    <div className="rounded-card bg-bg p-3">
       <div className="flex items-center justify-between gap-3">
         <p className="section-label">走行サマリー</p>
         <p className="text-micro tabular-nums">{dateRange}</p>

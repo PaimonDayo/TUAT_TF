@@ -28,7 +28,7 @@ export function ConfirmDialog({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay data-new-ui-surface={newUi || undefined} className="sheet-overlay fixed inset-0 z-[60] bg-black/30" />
-        <Dialog.Content data-new-ui-surface={newUi || undefined} data-ui-dialog className="fixed left-1/2 top-1/2 z-[60] w-[calc(100%-32px)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-[18px] bg-card p-5 shadow-xl outline-none">
+        <Dialog.Content data-new-ui-surface={newUi || undefined} data-ui-dialog className="fixed left-1/2 top-1/2 z-[60] w-[calc(100%-32px)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-card bg-card p-5 shadow-xl outline-none">
           <Dialog.Title className="text-title">{title}</Dialog.Title>
           <Dialog.Description className="mt-2 text-[14px] text-muted2">
             {description}

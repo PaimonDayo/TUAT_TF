@@ -35,7 +35,7 @@ export function ObOperations({ entries, initial, onlyGroups = false, canEditGrou
       const projection = projectObMixedEvent(family, entries, [...latest.values()]);
       const groups = [...new Set(projection.data.participants.flatMap(person => person.group === null ? [] : [person.group]))];
       const groupSummary = (["男子", "女子", "混合"] as const).map(scope => ({ scope, count: groups.filter(group => obMixedGroupPosition(group).heatScope === scope).length })).filter(value => value.count).map(value => `${value.scope} ${value.count}組`).join(" · ");
-      return <section key={family} aria-label={family} className="min-w-0 overflow-hidden rounded-xl border border-separator bg-card">
+      return <section key={family} aria-label={family} className="min-w-0 overflow-hidden rounded-card border border-separator bg-card">
         <h3 className="flex items-center gap-3 bg-bg p-3 text-title"><span className="text-caption tabular-nums">{obEventTime(names[0])}</span>{family}</h3>
         <div className="divide-y divide-separator">{names.map(event => {
           const state = latest.get(event), rows = obEventParticipants(event, entries, state?.data);
@@ -48,7 +48,7 @@ export function ObOperations({ entries, initial, onlyGroups = false, canEditGrou
         {canEditGroups && <div className="space-y-2 border-t border-separator p-3">{!field && <p className="text-caption" aria-label="保存されている組">{groups.length ? groupSummary : "組分け前"}</p>}<Button variant="outline" className="w-full" aria-label={`${family}の${field ? "試技順" : "組分け"}`} onClick={() => setOpened({ family, view: "groups" })}>{field ? "試技順" : "組分け"}</Button></div>}
       </section>;
     })}</div>
-    {!events.length && <div className="rounded-xl border border-separator p-6 text-center"><p className="text-body">出場登録がある種目はありません</p>{onAddEntry && <Button className="mt-3" onClick={() => onAddEntry("")}>出場者を追加</Button>}</div>}
+    {!events.length && <div className="rounded-card border border-separator p-6 text-center"><p className="text-body">出場登録がある種目はありません</p>{onAddEntry && <Button className="mt-3" onClick={() => onAddEntry("")}>出場者を追加</Button>}</div>}
     {opened?.view === "groups" && <ObHeatEditor key={`${opened.family}:groups`} family={opened.family} entries={entries} initial={[...latest.values()]} onAddEntry={onAddEntry} onSaved={saved} onClose={() => setOpened(null)}/>}
     {opened?.view === "records" && <ObEventOperationsEditor key={`${opened.event}:records`} event={opened.event} entries={entries} initial={latest.get(opened.event)} operations={[...latest.values()]} onAddEntry={onAddEntry} onSaved={value => saved([value])} onClose={() => setOpened(null)}/>}
   </div>;

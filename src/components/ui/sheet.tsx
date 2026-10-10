@@ -111,7 +111,7 @@ export function SheetContent({
           if (systemGlass && openerRef.current?.isConnected) openerRef.current.focus({ preventScroll: true });
         }}
         className={cn(
-          "sheet-content fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-md rounded-t-[20px] bg-bg pb-[max(env(safe-area-inset-bottom),16px)] outline-none md:max-w-xl",
+          "sheet-content fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-md rounded-t-card bg-bg pb-[max(env(safe-area-inset-bottom),16px)] outline-none md:max-w-xl",
           className,
         )}
       >

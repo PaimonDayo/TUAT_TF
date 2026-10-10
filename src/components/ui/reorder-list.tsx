@@ -118,7 +118,7 @@ function SortableRow({
         type="button"
         aria-label={dragLabel}
         disabled={disabled}
-        className="flex w-10 shrink-0 touch-none items-center justify-center rounded-lg text-muted active:bg-separator/50"
+        className="flex w-10 shrink-0 touch-none items-center justify-center rounded-control text-muted active:bg-separator/50"
         {...attributes}
         {...listeners}
       >

@@ -30,7 +30,7 @@ export function Toggle({
       className={cn(
         "w-full flex items-center justify-between active:bg-bg disabled:cursor-not-allowed disabled:opacity-50",
         variant === "card"
-          ? "rounded-xl bg-card border border-separator p-3.5 lg:rounded-lg lg:px-3 lg:py-2.5"
+          ? "rounded-control bg-card border border-separator p-3.5 lg:px-3 lg:py-2.5"
           : "bg-transparent px-4 py-3",
         className,
       )}

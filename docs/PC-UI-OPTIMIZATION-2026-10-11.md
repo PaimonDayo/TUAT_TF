@@ -30,3 +30,31 @@
 ## 本番反映の追加指示（2026-10-11）
 
 所有者から「本番反映して」と明示指示を受けた。今回のPC UI差分だけを公開する。直前のorigin/masterは`c24574e`で作業基準から変更なし。元checkoutの未コミット作業とmaster側の別作業の文書追記を保持し、最終Next build後にmasterへfast-forward統合して1回pushする。DB・認証・Vercel設定・課金・本番PCサービスを変更しない。Production READYのcommit SHAと公開/api/versionの一致まで確認する。
+
+### 本番反映の終了
+
+- 本番設定の専用Next webpack build成功。TypeScriptと72静的ページ生成完了、静的/api/versionへ公開commitを焼き込み済み。既存の本番設定はメモリ内で読み取るだけで変更しなかった。
+- 公開commit `1d0477a8cdc28be3ec1abf3b2005b0ba24c4dbc7`（公開指示の記録を含めて旧ローカル429db34をまとめ直したもの）。masterを`c24574e`からfast-forwardし、`master -> master`を1回push。master側の別作業の文書追記を保全した。
+- Vercel REST確認は403だったため、規則で認められた公式GitHub deployment statusを利用。`Production – tuat-tf`、deployment `6983452388`、creator `vercel[bot]`、state `success`、上記SHAの一致を確認した。本番`https://tuat-tf.vercel.app/api/version`もHTTP200・同じSHAで一致した。
+- 今回のPC UIは本番反映済み。DB・認証・本番PCサービス・Vercel設定・課金設定は変更していない。実機/PWA/文字拡大と実ユーザー保存の未確認は前段のまま。この終了追記はローカル保持し、文書だけの再push/build/deployは行わない。
+
+## 角の形の追加修正（2026-10-11）
+
+所有者から「角がまるいのか四角いのかわからん。統一できていない」と追加指示。PC UIの公開指示を受けた同じ範囲の訂正として対応する。最新origin/masterと作業HEADは`1d0477a`で一致し、他の未公開作業は取り込まない。
+
+- 変更前の実共通部品を私有fixtureへ固定して表示を確認する。コード上でもCardの16pxがガラスCSSで22px、Inputの12pxが16px、Button/SegmentedControlが999pxへ上書きされ、元のPC指定ではInputが8px、タブが6～8pxになる。同用途でも内外カード、OB戦の個別カード、読み込み部品に異なる角が残っていた。
+- 受入条件: カード・囲み・メニュー・確認ダイアログ・通知は16px、入力欄・通常ボタン・タブと選択表示は12pxを共有する。スマホ/PCと読み込み前後で同用途の角を変えず、メニューや候補一覧の子背景が外側の角を隠さない。アバター・アイコンのみの操作・作成ボタン・スイッチ、既存モバイルガラスタブ、表セル/画面端に接する辺は用途どおり保持する。
+- ホーム/予定/タイムライン/ノート/マイページ/OB戦の表示と、タブ切替→入力→選択/メニュー→閉じる→通知までを確認する。合成データと実部品の確認を実認証/本番DB保存の証拠にはしない。
+- データ、権限、認証、保存処理、失敗時の入力保持は変更しない。DB・migration・環境変数・Vercel設定・サービスは変更しない。関連コードと記録をまとめ、必要な検証と直前build後にmasterへ統合・1回pushし、Production成功と公開version一致まで確認する。
+
+### 角の形の変更・検証
+
+- `globals.css`の既存radius tokenへ操作用12pxを追加し、共通部品とガラスCSSを同じtokenへ揃えた。カード/メニュー/ダイアログ/通知/左タブ外枠/記録項目の囲みは16px、入力/通常ボタン/セグメント/選択表示/行操作は12px。PCで角を縮める指定と、ガラスで楕円へ上書きする指定を撤去した。スイッチ・アイコンのみ・FAB・既存モバイル下タブは保持。
+- 練習メニュー・走行グラフ・OB戦の個別カードも16pxへ。OB戦の候補/記録/担当者一覧は子の背景を外枠でクリップし、外枠の角が隠れる問題を修正。既存色・選択状態・ロジックを保持した。
+- 描画確認で、Skeletonの`rounded-card`/`rounded-control`が既定の`rounded-md`と共存し、CSS順で6pxになる不具合を発見。既存`cn`のtailwind-merge設定へ二つのradius tokenを登録し、呼び出し側の形が既定値を置き換えるよう修正。円形アイコンとresponsive指定の保持を含む回帰テストを追加した。
+- 変更前の合成ブラウザでCard22px、Button/タブ999px、field16px、sidebar28px、select menu20px、dialog/toast26px、sheet上辺28pxを再現。変更後390/768/1024/1440pxで外枠16px/操作12pxを計測し、開いたselect/メニュー/確認/sheet/通知も画像確認した。HomeSkeletonのカード9要素16px、ScheduleSkeletonの操作2要素12px・アバター4要素の円形を確認。
+- 実Input/Textarea入力、キーボードのタブ・Toggle・Select切替、GlassMenuのHome/End・編集、ActionMenu削除の取消/確認を合成データで確認。実PracticeMenuCardの手入力/シート表示、実TrainingChartの期間切替・棒選択・詳細展開も4幅で確認。横はみ出し・ページエラー・外部通信0。画像/報告は`.contingency/desktop-ui/shape-*`へ私有保存。
+- 従来PC表示の受入条件も9幅と本文81表示で再確認し、5入口/選択/スクロール/左タブ/固定作成ボタン/フォーム開閉/通知、ホーム/予定/タイムラインの通常・読み込み・空表示、予定の絞り込みを保持。
+- 公開直前fetchで別担当の公開済み`e95e7c3`が追加されていた。対象ファイルが重ならないため未コミット差分を保全してfast-forwardし、最新master基準で再検証。環境確認、TypeScript、変更対象ESLint、全Vitest135ファイル1172件、ガラスsource試験10件、差分空白確認が成功。
+
+未確認は実機/PWA/OS文字拡大/WebKit/実認証から本番保存まで。fixtureは認証/DB/練習メニュー編集フォームをスタブにし、操作の保存は合成状態だけで確認している。本番build・master統合/push・Productionの結果は反映後に追記する。別担当の本番DB/認証変更を再実行しない。
