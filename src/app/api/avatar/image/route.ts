@@ -26,6 +26,22 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "画像が見つかりません" }, { status: 404 });
   }
 
+  // R2 signing uses server credentials, so apply the same membership condition
+  // as the avatars Storage RLS before issuing a URL.
+  try {
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .select("approved")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (error) throw error;
+    if (profile?.approved !== true) {
+      return NextResponse.json({ error: "画像を閲覧する権限がありません" }, { status: 403 });
+    }
+  } catch {
+    return NextResponse.json({ error: "閲覧権限を確認できませんでした" }, { status: 503 });
+  }
+
   let url: string;
   try {
     url = await signedImageUrl(supabase, AVATAR_BUCKET, path, SIGNED_URL_TTL_SECONDS);
