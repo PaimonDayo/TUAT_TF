@@ -15,21 +15,21 @@ function Card({ lines = 2 }: { lines?: number }) {
 export function HomeSkeleton({ withHeader = true }: { withHeader?: boolean } = {}) {
   return <div className="pb-6" role="status" aria-label="ホームを読み込み中">
     {withHeader && <Title action />}
-    <div className="space-y-5 px-4 pt-1" aria-hidden="true">
-      <Skeleton className="h-12 w-full rounded-card" />
-      <div className="grid grid-cols-2 gap-3">
+    <div data-home-grid className="grid grid-cols-1 items-start gap-5 px-4 pt-1 md:px-6 lg:grid-cols-2 lg:gap-6" aria-hidden="true">
+      <Skeleton className="h-12 w-full rounded-card lg:col-span-2" />
+      <div className="grid min-w-0 grid-cols-2 gap-3">
         <Skeleton className="h-[92px] rounded-card" /><Skeleton className="h-[92px] rounded-card" />
       </div>
-      <section className="space-y-2"><Skeleton className="h-3 w-20" /><Skeleton className="h-[112px] w-full rounded-card" /></section>
-      <section className="space-y-2"><Skeleton className="h-3 w-20" />{[0, 1, 2].map(i => <Skeleton key={i} className="h-[76px] w-full rounded-card" />)}</section>
-      <section className="space-y-2"><Skeleton className="h-3 w-16" /><Skeleton className="h-[76px] w-full rounded-card" /></section>
-      <section className="space-y-2"><Skeleton className="h-3 w-24" /><Card lines={2} /></section>
+      <section className="min-w-0 space-y-2"><Skeleton className="h-3 w-20" /><Skeleton className="h-[112px] w-full rounded-card" /></section>
+      <section className="min-w-0 space-y-2"><Skeleton className="h-3 w-20" />{[0, 1, 2].map(i => <Skeleton key={i} className="h-[76px] w-full rounded-card" />)}</section>
+      <section className="min-w-0 space-y-2"><Skeleton className="h-3 w-16" /><Skeleton className="h-[76px] w-full rounded-card" /></section>
+      <section className="min-w-0 space-y-2"><Skeleton className="h-3 w-24" /><Card lines={2} /></section>
     </div>
   </div>;
 }
 
 export function ScheduleSkeleton({ withHeader = true }: { withHeader?: boolean } = {}) {
-  return <div className="pb-6">{withHeader && <Title action />}<div className="space-y-2 px-4 pb-3 pt-1 md:px-6"><Skeleton className="h-9 w-full rounded-lg md:max-w-[520px]" /><Skeleton className="h-9 w-full rounded-lg md:max-w-[520px]" /></div><div className="space-y-3 px-4 pt-1 md:px-6"><Skeleton className="h-3 w-20" />{[0, 1, 2, 3].map((i) => <Card key={i} lines={i === 0 ? 3 : 1} />)}</div></div>;
+  return <div className="pb-6">{withHeader && <Title action />}<div className="px-4 pb-3 pt-1 md:px-6 lg:pb-2"><div className="flex min-h-9 items-center lg:min-h-8"><Skeleton className="h-9 w-full rounded-lg md:max-w-[520px]" /></div><div className="mt-2"><Skeleton className="h-9 w-full rounded-lg md:max-w-[520px]" /></div></div><div data-schedule-grid className="px-4 pt-1 md:px-6 lg:grid lg:grid-cols-2 lg:gap-x-6"><Skeleton className="mb-2 h-3 w-20 lg:col-span-2" />{[0, 1, 2, 3].map((i) => <div key={i} className="mb-3 min-w-0"><Card lines={i === 0 ? 3 : 1} /></div>)}</div></div>;
 }
 
 
@@ -39,8 +39,8 @@ export function NotesSkeleton({ withHeader = true }: { withHeader?: boolean } = 
 export function FeedSkeleton({ withHeader = true }: { withHeader?: boolean } = {}) {
   return <div className="pb-6">
     {withHeader && <Title action />}
-    <div className="px-4 pb-3 pt-1 md:px-6 lg:pb-2"><div className="flex min-h-9 items-center gap-2"><Skeleton className="h-8 min-w-0 flex-1 rounded-lg md:max-w-[420px]" /><Skeleton className="h-8 w-8 shrink-0 rounded-full" /><Skeleton className="h-8 w-8 shrink-0 rounded-full" /></div></div>
-    <div className="space-y-3 px-4 pt-1 md:px-6 lg:space-y-2">{[0, 1, 2, 3].map((i) => <Card key={i} lines={(i % 2) + 1} />)}</div>
+    <div className="w-full px-4 pb-3 pt-1 md:mx-auto md:max-w-[1120px] md:px-6 lg:pb-2"><div className="flex min-h-9 items-center gap-2"><Skeleton className="h-8 min-w-0 flex-1 rounded-lg md:max-w-[420px]" /><Skeleton className="h-8 w-8 shrink-0 rounded-full" /><Skeleton className="h-8 w-8 shrink-0 rounded-full" /></div></div>
+    <div className="w-full space-y-3 px-4 pt-1 md:mx-auto md:max-w-[1120px] md:px-6 lg:space-y-2">{[0, 1, 2, 3].map((i) => <Card key={i} lines={(i % 2) + 1} />)}</div>
   </div>;
 }
 

@@ -206,7 +206,7 @@ export function TimelineView({
 
   return (
     <>
-      <div className="px-4 pt-1 pb-3 md:px-6 lg:pb-2">
+      <div className="w-full px-4 pt-1 pb-3 md:mx-auto md:max-w-[1120px] md:px-6 lg:pb-2">
         <div data-ui-toolbar="timeline" className="flex min-h-9 items-center gap-2 lg:min-h-8">
           <div className="min-w-0 flex-1 md:max-w-[420px]"><SegmentedControl items={SIMPLE_BLOCK_ITEMS} value={block} onChange={setBlock} /></div>
           <button
@@ -242,7 +242,7 @@ export function TimelineView({
       </div>
 
 
-      <div className="px-4 pt-1 md:px-6">
+      <div className="w-full px-4 pt-1 md:mx-auto md:max-w-[1120px] md:px-6">
         {filtered.length === 0 ? (
           <EmptyState title="条件に合う投稿はありません" description="条件を変えてみてください。" />
         ) : (

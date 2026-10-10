@@ -69,15 +69,15 @@ async function HomeContent({ nowJst }: { nowJst: Date }) {
     FeedSection(),
   ]);
   return (
-    <div className="space-y-5 px-4 pt-1">
-      {notices}
-      {competition}
-      {obEntry}
-      {summary}
-      {schedules}
-      {notes}
-      {feed}
-      <InstallPrompt />
+    <div data-home-grid className="grid grid-cols-1 items-start gap-5 px-4 pt-1 md:px-6 lg:grid-cols-2 lg:gap-6">
+      <div data-home-section="notices" className="min-w-0 empty:hidden lg:col-span-2">{notices}</div>
+      <div data-home-section="competition" className="min-w-0 empty:hidden lg:col-span-2">{competition}</div>
+      <div data-home-section="ob-entry" className="min-w-0 empty:hidden">{obEntry}</div>
+      <div data-home-section="summary" className="min-w-0 empty:hidden">{summary}</div>
+      <div data-home-section="schedules" className="min-w-0 empty:hidden">{schedules}</div>
+      <div data-home-section="notes" className="min-w-0 empty:hidden">{notes}</div>
+      <div data-home-section="feed" className="min-w-0 empty:hidden">{feed}</div>
+      <div className="min-w-0 empty:hidden lg:col-span-2"><InstallPrompt /></div>
     </div>
   );
 }

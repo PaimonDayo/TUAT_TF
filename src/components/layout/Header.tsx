@@ -25,11 +25,11 @@ export function Header({
   return (
     <header data-glass-header className="sticky top-0 z-30 bg-bg/80 backdrop-blur-xl pt-[env(safe-area-inset-top)] lg:pt-0">
       <div className="h-12 px-4 flex items-center justify-between md:px-6 lg:h-16">
-        <div className="flex min-w-0 items-baseline gap-3">
-          <h1 className={large ? "shrink-0 text-large-title" : "shrink-0 text-title"}>{title}</h1>
+        <div className="flex min-w-0 flex-1 items-baseline gap-3">
+          <h1 title={title} className={large ? "min-w-0 truncate text-large-title" : "min-w-0 truncate text-title"}>{title}</h1>
           {besideTitle}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="ml-3 flex shrink-0 items-center gap-1">
           {right}
           <Suspense fallback={<div className="h-9 w-9" aria-hidden="true" />}>
             <HeaderBell />

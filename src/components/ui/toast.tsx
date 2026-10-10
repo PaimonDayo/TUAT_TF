@@ -54,7 +54,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         data-new-ui-surface={newUi || undefined}
         aria-live="polite"
         aria-atomic="true"
-        className="pointer-events-none fixed inset-x-0 top-[calc(env(safe-area-inset-top)+12px)] z-[100] mx-auto flex w-full max-w-md flex-col gap-2 px-4 md:max-w-xl"
+        className="pointer-events-none fixed inset-x-0 top-[calc(env(safe-area-inset-top)+12px)] z-[100] mx-auto flex w-full max-w-md flex-col gap-2 px-4 md:inset-x-auto md:top-auto md:right-6 md:bottom-24 md:mx-0 md:max-w-sm md:px-0"
       >
         {toasts.map((toast) => (
           <div

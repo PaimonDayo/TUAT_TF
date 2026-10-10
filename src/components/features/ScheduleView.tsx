@@ -84,9 +84,9 @@ export function ScheduleView({
         </div>
       </div>
 
-      <div className="px-4 pt-1 md:grid md:grid-cols-2 md:gap-x-3 md:px-6">
+      <div data-schedule-grid className="px-4 pt-1 md:px-6 lg:grid lg:grid-cols-2 lg:gap-x-6">
         {filtered.length === 0 ? (
-          <EmptyState title="まだ今後の予定はありません" />
+          <EmptyState title="まだ今後の予定はありません" className="lg:col-span-2" />
         ) : (
           filtered.map((s, index) => {
             const monthKey = s.schedule_date.slice(0, 7);
@@ -96,7 +96,7 @@ export function ScheduleView({
             return (
               <Fragment key={s.id}>
                 {startsMonth && (
-                  <h2 className={index === 0 ? "section-label mb-2 md:col-span-2" : "section-label mb-2 mt-7 md:col-span-2 lg:mt-4"}>
+                  <h2 className={index === 0 ? "section-label mb-2 lg:col-span-2" : "section-label mb-2 mt-7 lg:col-span-2 lg:mt-4"}>
                     {format(new Date(`${s.schedule_date}T00:00:00`), "yyyy年M月")}
                   </h2>
                 )}
