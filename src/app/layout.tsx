@@ -6,9 +6,10 @@ import { APP_NAME, APP_DESCRIPTION } from "@/lib/app";
 import SplashCountdown from "@/components/SplashCountdown";
 import { SPLASH_COVER_ID, splashCoverScript } from "@/lib/splash-countdown";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
+import { configuredAppPublicOrigin } from "@/lib/app-public-origin";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://tuat-tf.vercel.app"),
+  metadataBase: new URL(configuredAppPublicOrigin() ?? "https://tuat-tf.vercel.app"),
   icons: {
     icon: [
       { url: "/branding/summer-favicon.ico", sizes: "any" },

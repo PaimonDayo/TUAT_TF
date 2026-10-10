@@ -5,19 +5,24 @@ import { parseEnv } from 'node:util';
 import { spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { validateConfig } from './run.mjs';
+import { sharedPcReady } from './shared-pc.mjs';
 import { writePrivate } from '../laptop/backend-files.mjs';
 const config = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 const env = parseEnv(readFileSync(config.environmentFile, 'utf8'));
 validateConfig(config, env);
 if (config.enabled) throw Error('Run preflight before activation');
 for (const k of ['PATH','Path','SystemRoot','WINDIR','TEMP','TMP','USERPROFILE']) if (process.env[k]) env[k]=process.env[k];
-const child = spawn(process.execPath, [resolve(config.releaseDirectory,'node_modules/next/dist/bin/next'),'start','--hostname','127.0.0.1','--port',String(config.port)], {cwd:config.releaseDirectory,env:{...env,NODE_ENV:'production'},windowsHide:true,stdio:'ignore'});
-const base = `http://127.0.0.1:${config.port}`;
+const shared = config.runtime === 'shared-pc';
+const child = shared ? undefined : spawn(process.execPath, [resolve(config.releaseDirectory,'node_modules/next/dist/bin/next'),'start','--hostname','127.0.0.1','--port',String(config.port)], {cwd:config.releaseDirectory,env:{...env,NODE_ENV:'production'},windowsHide:true,stdio:'ignore'});
+const base = shared ? config.appOrigin : `http://127.0.0.1:${config.port}`;
 try {
   let ready=false;
   for(let i=0;i<60;i++) {
-    if(child.exitCode!==null) throw Error('Local server exited');
-    try { const r=await fetch(base+'/api/version',{signal:AbortSignal.timeout(1000)}); if(r.ok&&(await r.json()).version===config.releaseCommit){ready=true;break;} } catch {}
+    if(child && child.exitCode!==null) throw Error('Local server exited');
+    try {
+      if (shared) { if (await sharedPcReady(config, env)) { ready=true; break; } }
+      else { const r=await fetch(base+'/api/version',{signal:AbortSignal.timeout(1000),redirect:'error'}); if(r.ok&&(await r.json()).version===config.releaseCommit){ready=true;break;} }
+    } catch {}
     await new Promise(r=>setTimeout(r,500));
   }
   assert(ready,'Pinned server not ready');
@@ -34,5 +39,5 @@ try {
     assert(r.ok&&d.ok===true&&!d.failedMembers?.length,'Dry-run failed; inspect privately');
   }
 } finally {
-  if(child.exitCode===null) {const done=new Promise(r=>child.once('exit',r));child.kill();await done;}
+  if(child && child.exitCode===null) {const done=new Promise(r=>child.once('exit',r));child.kill();await done;}
 }

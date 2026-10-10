@@ -4,22 +4,31 @@ const mocks = vi.hoisted(() => ({
   signed: vi.fn(),
   upload: vi.fn(),
   cleanup: vi.fn(),
+  admin: vi.fn(),
 }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: mocks.create }));
-vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
-vi.mock("@/lib/image-storage", () => ({
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.admin }));
+vi.mock("@/lib/image-storage", async original => ({
+  ...await original<typeof import("@/lib/image-storage")>(),
   signedImageUrl: mocks.signed,
   uploadImage: mocks.upload,
 }));
 vi.mock("@/lib/note-image-cleanup", () => ({
   cleanupNoteImages: mocks.cleanup,
 }));
+vi.mock("sharp", () => ({ default: () => {
+  const pipeline = { rotate: () => pipeline, resize: () => pipeline, webp: () => pipeline, toBuffer: async () => Buffer.from("converted") };
+  return pipeline;
+} }));
 import { GET, POST, DELETE } from "@/app/api/note-image/route";
+import { ImageNotFoundError } from "./image-storage";
 const query = {
   select: vi.fn(),
   eq: vi.fn(),
   maybeSingle: vi.fn(),
   delete: vi.fn(),
+  insert: vi.fn(),
+  single: vi.fn(),
 };
 const rpc = vi.fn();
 beforeEach(() => {
@@ -27,6 +36,7 @@ beforeEach(() => {
   query.select.mockReturnValue(query);
   query.eq.mockReturnValue(query);
   query.delete.mockReturnValue(query);
+  query.insert.mockReturnValue(query);
   query.maybeSingle.mockResolvedValue({ data: null, error: null });
   mocks.create.mockResolvedValue({
     auth: { getUser: async () => ({ data: { user: { id: "owner" } } }) },
@@ -34,6 +44,7 @@ beforeEach(() => {
     rpc,
   });
   mocks.signed.mockResolvedValue("https://r2.example/signed");
+  mocks.upload.mockResolvedValue(undefined);
 });
 describe("private note images", () => {
   it("rejects anonymous reads, uploads and deletion before touching storage", async () => {
@@ -55,6 +66,18 @@ describe("private note images", () => {
         .status,
     ).toBe(404);
     expect(mocks.signed).not.toHaveBeenCalled();
+  });
+  it("reports database failures as unavailable instead of hiding them as a missing image", async () => {
+    query.maybeSingle.mockResolvedValue({ data: null, error: { message: "private database detail" } });
+    expect((await GET(new Request("https://app.example/api/note-image?id=x"))).status).toBe(503);
+    expect(mocks.signed).not.toHaveBeenCalled();
+  });
+  it("distinguishes a missing object from a signing outage", async () => {
+    query.maybeSingle.mockResolvedValue({ data: { path: "allowed" }, error: null });
+    mocks.signed.mockRejectedValueOnce(new ImageNotFoundError());
+    expect((await GET(new Request("https://app.example/api/note-image?id=x"))).status).toBe(404);
+    mocks.signed.mockRejectedValueOnce(new Error("private provider detail"));
+    expect((await GET(new Request("https://app.example/api/note-image?id=x"))).status).toBe(503);
   });
   it("uses private caching and a five-minute signed URL for permitted images", async () => {
     query.maybeSingle.mockResolvedValue({
@@ -121,6 +144,44 @@ describe("private note images", () => {
       ).status,
     ).toBe(200);
     expect(query.delete).not.toHaveBeenCalled();
+    expect(mocks.cleanup).not.toHaveBeenCalled();
+  });
+  it("reconciles a note image registered before its insert response was lost", async () => {
+    const image = { id: "image", path: "11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222.webp" };
+    query.maybeSingle.mockResolvedValueOnce({ data: { note_id: "note" }, error: null })
+      .mockResolvedValueOnce({ data: null, error: null })
+      .mockResolvedValueOnce({ data: image, error: null });
+    rpc.mockResolvedValue({ data: true, error: null });
+    query.single.mockResolvedValue({ data: null, error: { message: "private lost response" } });
+    const response = await POST(new Request("https://app.example/api/note-image?articleId=11111111-1111-4111-8111-111111111111&uploadId=22222222-2222-4222-8222-222222222222", { method: "POST", headers: { "Content-Type": "image/webp" }, body: "synthetic" }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(image);
+    expect(query.insert).toHaveBeenCalledOnce();
+    expect(mocks.admin).not.toHaveBeenCalled();
+    expect(mocks.cleanup).not.toHaveBeenCalled();
+  });
+  it("retains a note object when registration and reconciliation are both uncertain", async () => {
+    query.maybeSingle.mockResolvedValueOnce({ data: { note_id: "note" }, error: null })
+      .mockResolvedValueOnce({ data: null, error: null })
+      .mockResolvedValueOnce({ data: null, error: { message: "private lookup failure" } });
+    rpc.mockResolvedValue({ data: true, error: null });
+    query.single.mockRejectedValue(new Error("private lost response"));
+    const response = await POST(new Request("https://app.example/api/note-image?articleId=11111111-1111-4111-8111-111111111111&uploadId=22222222-2222-4222-8222-222222222222", { method: "POST", headers: { "Content-Type": "image/webp" }, body: "synthetic" }));
+    expect(response.status).toBe(503);
+    expect(JSON.stringify(await response.json())).not.toContain("private");
+    expect(query.insert).toHaveBeenCalledOnce();
+    expect(mocks.admin).not.toHaveBeenCalled();
+    expect(mocks.cleanup).not.toHaveBeenCalled();
+  });
+  it("keeps the six-photo limit response for a confirmed database rejection", async () => {
+    query.maybeSingle.mockResolvedValueOnce({ data: { note_id: "note" }, error: null })
+      .mockResolvedValueOnce({ data: null, error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
+    rpc.mockResolvedValue({ data: true, error: null });
+    query.single.mockResolvedValue({ data: null, error: { code: "P0001", message: "An article can have at most 6 photos" } });
+    const response = await POST(new Request("https://app.example/api/note-image?articleId=11111111-1111-4111-8111-111111111111&uploadId=22222222-2222-4222-8222-222222222222", { method: "POST", headers: { "Content-Type": "image/webp" }, body: "synthetic" }));
+    expect(response.status).toBe(409);
+    expect(mocks.admin).not.toHaveBeenCalled();
     expect(mocks.cleanup).not.toHaveBeenCalled();
   });
 });

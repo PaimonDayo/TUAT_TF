@@ -1,5 +1,17 @@
 # PC定期処理（2026-09-27、稼働中）
 
+## PCアプリ集約候補（2026-10-11、未切替）
+
+`config.shared-pc.example.json` の `runtime: "shared-pc"` は、`ops/pc-host` が起動した一つのNextを再利用する。JobsはNextを起動/停止せず、cloud Supabase Authと非公開R2を維持する。既存configでruntimeを省略した専用Next方式は従来どおり。例はdisabledで、既存タスクや設定を変更しない。
+
+共有方式の `appOrigin` は明示した `http://127.0.0.1:<port>` のrootだけ。公開URL・localhost・path・credentials・redirectは拒否する。`PC_APP_RUNTIME` / `NEXT_PUBLIC_PC_APP_RUNTIME`、固定HTTPS `APP_PUBLIC_ORIGIN`、same-originの公開Supabase URL、`PC_BACKEND_INTERNAL_URL=http://127.0.0.1:8000`、cloud Authペア、R2読書き、同期秘密を固定releaseの環境から検査する。`/api/version` のcommit SHAとreleaseIdの両方を照合し、既存PCのmaintenance/心拍/35分以内backupを確認する。RESTのOpenAPI確認はanon keyでloopbackだけへ行い、部員の行は読まない。Auth障害の監視は既存認証経路で行う。
+
+`run.mjs --check <private-config>` はbuildと設定の検査のみ。共有方式のbuildは `ops/pc-host` が担当し、Jobsの `build-production.mjs` は拒否する。`preflight.mjs` は共有Nextを再利用して未認証拒否と既存APIのdryRunを実施し、終わっても共有Nextを止めない。APIのdryRunは実同期元への読取を伴うので、今回の合成試験と同一視しない。
+
+切替時は既存のJobsをdisabledにして実行終了・lock解放を確認してから、同じstateDirectoryとactivateAtを共有方式へ引き継ぐ。journalを空にしない。特に `uncertain` / `sheetWritesBlocked` / 元の失敗履歴は保持し、新旧を同時実行しない。現在稼働中のタスクはこの準備で変更しない。
+
+合成試験: `node --test ops/pc-jobs/scheduler.test.mjs ops/pc-jobs/shared-pc.test.mjs`。固定release不一致、公開/曖昧URL、古い/未来の心拍、maintenance、共有方式の子プロセス不使用、遅いprobe中の無効化、既存journalの再送停止を確認する。OS再起動・定時実行・R2/GAS本番・実端末の確認は別途必要。
+
 現行Nextアプリを127.0.0.1だけで起動し、既存APIを同じ頻度で呼ぶ。画面はVercelを維持する。
 
 | 処理 | 日本時間 | API |

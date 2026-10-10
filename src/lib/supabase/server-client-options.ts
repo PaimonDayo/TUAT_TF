@@ -1,5 +1,7 @@
 import { pcAvailable, pcBackendFetch } from "../pc-backend";
 import { pcServerOptions } from "./pc-server-options";
+import { getPcAppRuntime } from "../pc-app-runtime";
+import { createPcAppDataFetch } from "../pc-app-transport";
 import { CLOUD_AUTH_COOKIE, cloudAuthConfig, isCloudDataUrl, pcServerHeaders, routeDataToPc, type CloudAuth } from "./cloud-auth";
 
 /**
@@ -30,6 +32,21 @@ function pcRoutedFetch(cloud: CloudAuth): typeof fetch {
  * server.ts と middleware.ts で同じものを使う。
  */
 export function sessionClientConfig(testOptIn = false): { url: string; key: string; options: Record<string, unknown> } {
+  const app = getPcAppRuntime();
+  if (app) {
+    const pcOrigin = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).origin;
+    const transport: typeof fetch = (input, init) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      return url.origin === pcOrigin ? pcBackendFetch(input, init) : fetch(input, init);
+    };
+    return {
+      url: app.cloud.url,
+      key: app.cloud.anonKey,
+      options: { cookieOptions: { name: CLOUD_AUTH_COOKIE }, global: { fetch:
+        createPcAppDataFetch(transport, app.cloud, process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          pcServerHeaders(app.cloud, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)) } },
+    };
+  }
   const cloud = cloudAuthConfig(testOptIn);
   if (cloud) {
     return {

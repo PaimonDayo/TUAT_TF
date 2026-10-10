@@ -1,7 +1,16 @@
 import type { NextConfig } from "next";
+import { configuredAppPublicOrigin } from "./src/lib/app-public-origin";
+import { getPcAppRuntime } from "./src/lib/pc-app-runtime";
+
+const pcApp = getPcAppRuntime();
+const publicOrigin = configuredAppPublicOrigin();
+const releaseId = process.env.PC_APP_RELEASE_ID;
+if (releaseId && (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/.test(releaseId) || releaseId.startsWith("dpl_"))) {
+  throw new Error("PC_APP_RELEASE_ID must be at most 32 characters and cannot start with dpl_");
+}
 
 const vercelPcTrial = process.env.PC_TRIAL_VERCEL === "true";
-if (process.env.PC_BACKEND_ENABLED === "true" || process.env.NEXT_PUBLIC_PC_BACKEND === "true") {
+if (!pcApp && (process.env.PC_BACKEND_ENABLED === "true" || process.env.NEXT_PUBLIC_PC_BACKEND === "true")) {
   if (process.env.PC_BACKEND_ENABLED !== "true" || process.env.NEXT_PUBLIC_PC_BACKEND !== "true" ||
       process.env.NEXT_PUBLIC_PC_TRIAL === "true" || vercelPcTrial ||
       !/^https:\/\/[a-z0-9.-]+\.vercel\.app\/api\/pc-supabase$/.test(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "") ||
@@ -24,6 +33,8 @@ if (process.env.NEXT_PUBLIC_PC_TRIAL === "true") {
 }
 
 const nextConfig: NextConfig = {
+  ...(publicOrigin ? { experimental: { serverActions: { allowedOrigins: [new URL(publicOrigin).host] } } } : {}),
+  ...(pcApp && releaseId ? { deploymentId: releaseId } : {}),
   ...(process.env.NEXT_PUBLIC_PC_TRIAL === "true" && !vercelPcTrial ? { distDir: ".next-pc-trial" } : {}),
   // 注意: cacheComponents(PPR) は有効化しない。
   // 2026-07-12 00:14 に「タブ復元の高速化」目的で有効化した直後から、実機iOS PWAで

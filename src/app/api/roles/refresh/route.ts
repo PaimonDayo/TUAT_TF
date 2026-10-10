@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { ROLE_CATALOG_TAG } from "@/lib/supabase/role-catalog";
+import { getAppPublicOrigin } from "@/lib/app-public-origin";
 
 /** Members may refresh shared display data, including after relinquishing a role. */
 export async function POST(request: Request) {
-  if (request.headers.get("origin") !== new URL(request.url).origin) {
+  if (request.headers.get("origin") !== getAppPublicOrigin(request.url)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const supabase = await createClient();

@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "enabled": false,
+  "sourceId": "REPLACE_WITH_VERIFIED_PC_DATABASE_ID",
+  "pcUrl": "http://127.0.0.1:8000",
+  "cloudAuthUrl": "https://REPLACE_WITH_AUTH_PROJECT.supabase.co",
+  "cloudProjectRef": "REPLACE_WITH_AUTH_PROJECT",
+  "environmentFile": "D:\\TUAT_TF\\.contingency\\pc-auth-sync.env",
+  "stateDirectory": "D:\\TUAT_TF\\.contingency\\pc-auth-sync"
+}

@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ create: vi.fn(), signed: vi.fn(), upload: vi.fn(), remove: vi.fn(), access: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: mocks.create }));
-vi.mock("@/lib/image-storage", () => ({ signedImageUrl: mocks.signed, uploadImage: mocks.upload, removeImages: mocks.remove }));
+vi.mock("@/lib/image-storage", async original => ({ ...await original<typeof import("@/lib/image-storage")>(), signedImageUrl: mocks.signed, uploadImage: mocks.upload, removeImages: mocks.remove }));
+import { ImageNotFoundError } from "./image-storage";
 import { GET as avatar } from "@/app/api/avatar/image/route";
 import { GET as story } from "@/app/api/tweet-image/route";
 import { POST as upload, DELETE as remove } from "@/app/api/tweet-image/upload/route";
@@ -44,6 +45,17 @@ describe("private image routes", () => {
     expect((await story(new Request(`https://app.example/api/tweet-image?path=${path}`))).status).toBe(404);
     expect(mocks.signed).not.toHaveBeenCalled();
   });
+  it("reports failed story reference queries as unavailable, not missing", async () => {
+    maybeSingle.mockResolvedValue({ data: null, error: { message: "private database detail" } });
+    expect((await story(new Request(`https://app.example/api/tweet-image?path=${path}`))).status).toBe(503);
+    expect(mocks.signed).not.toHaveBeenCalled();
+  });
+  it("distinguishes missing story objects from a storage outage", async () => {
+    mocks.signed.mockRejectedValueOnce(new ImageNotFoundError());
+    expect((await story(new Request(`https://app.example/api/tweet-image?path=${path}`))).status).toBe(404);
+    mocks.signed.mockRejectedValueOnce(new Error("private outage detail"));
+    expect((await story(new Request(`https://app.example/api/tweet-image?path=${path}`))).status).toBe(503);
+  });
   it("bounds URL and redirect lifetimes by the story expiry", async () => {
     maybeSingle.mockResolvedValue({ data: { expires_at: "2026-09-06T00:00:45Z" } });
     const response = await story(new Request(`https://app.example/api/tweet-image?path=${path}`));
@@ -64,7 +76,7 @@ describe("private image routes", () => {
   it("does not remove an attached image or one whose reference query failed", async () => {
     for (const result of [{ data: [{ id: "story" }], error: null }, { data: null, error: new Error("offline") }]) {
       limit.mockResolvedValueOnce(result);
-      expect((await remove(new Request(`https://app.example/api/tweet-image/upload?path=${path}`))).status).toBe(409);
+      expect((await remove(new Request(`https://app.example/api/tweet-image/upload?path=${path}`))).status).toBe(result.error ? 503 : 409);
     }
     expect(mocks.remove).not.toHaveBeenCalled();
   });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getAppPublicOrigin } from "@/lib/app-public-origin";
 import {
   encryptGoogleToken,
   exchangeGoogleCode,
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest) {
   const error = request.nextUrl.searchParams.get("error");
   const destination = new URL(
     "/schedule?compose=1&sheets=1&google=connected",
-    request.url,
+    getAppPublicOrigin(request.url),
   );
 
   if (error || !code || !state) {

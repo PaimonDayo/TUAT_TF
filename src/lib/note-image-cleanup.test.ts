@@ -13,7 +13,7 @@ const query = {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.admin.mockReturnValue({ from: () => query });
-  query.select.mockReturnValue(query);
+  query.select.mockResolvedValue({ count: 2, error: null });
   query.order.mockReturnValue(query);
   query.delete.mockReturnValue(query);
   query.limit.mockResolvedValue({
@@ -22,16 +22,19 @@ beforeEach(() => {
   });
   query.in.mockResolvedValue({ error: null });
 });
-it("retains the durable queue when R2 removal fails", async () => {
-  mocks.remove.mockRejectedValue(new Error("offline"));
-  await expect(cleanupNoteImages()).rejects.toThrow("offline");
-  expect(query.delete).not.toHaveBeenCalled();
+it("retains legacy queue rows and objects because their insert outcome is unknown", async () => {
+  const diagnostic = vi.spyOn(console, "info").mockImplementation(() => undefined);
+  try {
+    expect(await cleanupNoteImages()).toBe(0);
+    expect(query.select).toHaveBeenCalledWith("*", { count: "exact", head: true });
+    expect(diagnostic).toHaveBeenCalledWith("Note image cleanup deferred", { queued: 2 });
+    expect(mocks.remove).not.toHaveBeenCalled();
+    expect(query.delete).not.toHaveBeenCalled();
+  } finally { diagnostic.mockRestore(); }
 });
-it("acknowledges queue entries only after successful R2 removal", async () => {
-  mocks.remove.mockResolvedValue(undefined);
-  expect(await cleanupNoteImages()).toBe(1);
-  expect(query.in).toHaveBeenCalledWith("path", ["article/image.webp"]);
-  expect(mocks.remove.mock.invocationCallOrder[0]).toBeLessThan(
-    query.delete.mock.invocationCallOrder[0],
-  );
+it("does not delete anything when queue inspection is unavailable", async () => {
+  query.select.mockResolvedValue({ count: null, error: new Error("offline") });
+  await expect(cleanupNoteImages()).rejects.toThrow("offline");
+  expect(mocks.remove).not.toHaveBeenCalled();
+  expect(query.delete).not.toHaveBeenCalled();
 });

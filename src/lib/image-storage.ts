@@ -8,6 +8,55 @@ import { isSafeTweetImagePath } from "./tweet-image";
 export type ImageBucket = "avatars" | "tweet-images" | "note-images";
 let cached: { signature: string; bucket: string; client: S3Client } | undefined;
 
+export class ImageNotFoundError extends Error {
+  constructor() { super("Image object not found"); this.name = "ImageNotFoundError"; }
+}
+
+export class ImageUploadError extends Error {
+  constructor(public readonly status: 400 | 408 | 413, message: string) { super(message); this.name = "ImageUploadError"; }
+}
+
+/** Diagnostics contain a fixed operation name only, never provider exceptions or image paths. */
+export function logImageFailure(operation: string) {
+  console.warn("Image operation unavailable", { operation });
+}
+
+/** Bound buffered upload bytes even when Content-Length is missing or incorrect. */
+export async function readImageUpload(request: Request, maxBytes: number): Promise<Buffer> {
+  const oversized = () => new ImageUploadError(413, "画像の容量が大きすぎます");
+  if (Number(request.headers.get("content-length") ?? 0) > maxBytes) throw oversized();
+  if (!request.body) throw oversized();
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  let abortRead: () => void = () => undefined;
+  const interrupted = new Promise<never>((_, reject) => {
+    abortRead = () => reject(new ImageUploadError(408, "画像の受信を確認できませんでした"));
+  });
+  const timer = setTimeout(abortRead, 30_000);
+  request.signal.addEventListener("abort", abortRead, { once: true });
+  if (request.signal.aborted) abortRead();
+  try {
+    while (true) {
+      const { done, value } = await Promise.race([reader.read(), interrupted]);
+      if (done) break;
+      length += value.byteLength;
+      if (length > maxBytes) throw oversized();
+      chunks.push(value);
+    }
+    if (!length) throw oversized();
+    return Buffer.concat(chunks, length);
+  } catch (error) {
+    void reader.cancel().catch(() => undefined);
+    if (error instanceof ImageUploadError) throw error;
+    throw new ImageUploadError(400, "画像を読み込めませんでした");
+  } finally {
+    clearTimeout(timer);
+    request.signal.removeEventListener("abort", abortRead);
+    reader.releaseLock();
+  }
+}
+
 export function imageObjectKey(bucket: ImageBucket, path: string): string {
   const valid = bucket === "avatars" ? isSafeAvatarStoragePath(path)
     : (bucket === "tweet-images" || bucket === "note-images") && isSafeTweetImagePath(path);
@@ -33,8 +82,14 @@ function r2() {
 }
 
 function isMissing(error: unknown) {
-  return typeof error === "object" && error !== null && "$metadata" in error &&
-    (error.$metadata as { httpStatusCode?: number })?.httpStatusCode === 404;
+  if (typeof error !== "object" || error === null) return false;
+  const failure = error as { name?: string; code?: string; status?: number; statusCode?: string; message?: string; $metadata?: { httpStatusCode?: number } };
+  if (failure.$metadata?.httpStatusCode === 404) {
+    // A missing bucket/configuration is a dependency failure, not a missing photo.
+    return failure.name === "NotFound" || failure.name === "NoSuchKey";
+  }
+  return ["NoSuchKey", "ObjectNotFound", "object_not_found"].includes(failure.code ?? failure.statusCode ?? "") ||
+    ((failure.status === 404 || failure.statusCode === "404") && failure.message === "Object not found");
 }
 
 /** Admin-only inventory. Bound duration and page count so monitoring stays cheap. */
@@ -64,15 +119,17 @@ export async function signedImageUrl(supabase: SupabaseClient, bucket: ImageBuck
   if (process.env.R2_READ_ENABLED === "true") {
     const { client, bucket: r2Bucket } = r2();
     try {
-      await client.send(new HeadObjectCommand({ Bucket: r2Bucket, Key: key }));
+      await client.send(new HeadObjectCommand({ Bucket: r2Bucket, Key: key }), { abortSignal: AbortSignal.timeout(8000) });
       return await getSignedUrl(client, new GetObjectCommand({ Bucket: r2Bucket, Key: key }), { expiresIn: ttl });
     } catch (error) {
       // Only a missing copy falls back. Never hide invalid credentials/outages.
-      if (!isMissing(error) || bucket === "note-images") throw error;
+      if (!isMissing(error)) throw error;
+      if (bucket === "note-images") throw new ImageNotFoundError();
     }
   }
   const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, ttl);
-  if (error || !data?.signedUrl) throw error ?? new Error("Image not found");
+  if (error) throw isMissing(error) ? new ImageNotFoundError() : error;
+  if (!data?.signedUrl) throw new Error("Image signing response is incomplete");
   return data.signedUrl;
 }
 
@@ -84,13 +141,16 @@ async function assertCapacity(client: S3Client, bucket: string, incomingBytes: n
   if (!Number.isSafeInteger(limit) || limit <= 0) throw new Error("Invalid R2 capacity limit");
   let bytes = incomingBytes;
   let token: string | undefined;
-  do {
-    const page = await client.send(new ListObjectsV2Command({ Bucket: bucket, ContinuationToken: token }));
+  const signal = AbortSignal.timeout(8000);
+  for (let pageNumber = 0; pageNumber < 100; pageNumber++) {
+    const page = await client.send(new ListObjectsV2Command({ Bucket: bucket, ContinuationToken: token }), { abortSignal: signal });
     for (const object of page.Contents ?? []) bytes += object.Size ?? 0;
     if (bytes > limit) throw new Error("画像の保存容量が上限に達しました");
-    token = page.IsTruncated ? page.NextContinuationToken : undefined;
-    if (page.IsTruncated && !token) throw new Error("Incomplete R2 capacity response");
-  } while (token);
+    if (!page.IsTruncated) return;
+    token = page.NextContinuationToken;
+    if (!token) throw new Error("Incomplete R2 capacity response");
+  }
+  throw new Error("R2 capacity inventory is too large");
 }
 
 export async function uploadImage(supabase: SupabaseClient, bucket: ImageBucket, path: string, bytes: Buffer) {

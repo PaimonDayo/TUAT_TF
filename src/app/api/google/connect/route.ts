@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { googleAuthorizationUrl } from "@/lib/google-drive";
+import { getAppPublicOrigin } from "@/lib/app-public-origin";
 
 export async function GET(request: Request) {
   return NextResponse.redirect(
-    new URL("/schedule?compose=1&sheets=1", request.url),
+    new URL("/schedule?compose=1&sheets=1", getAppPublicOrigin(request.url)),
   );
 }
 
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    const loginUrl = new URL("/login", request.url);
+    const loginUrl = new URL("/login", getAppPublicOrigin(request.url));
     loginUrl.searchParams.set("next", "/schedule?compose=1&sheets=1");
     return NextResponse.redirect(loginUrl, 303);
   }

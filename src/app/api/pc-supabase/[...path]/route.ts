@@ -1,6 +1,8 @@
 import { pcAvailable, pcBackendFetch } from "@/lib/pc-backend";
 import { BACKEND_MODE_HEADER, cloudAuthConfig } from "@/lib/supabase/cloud-auth";
 import { allowedPcBrowserApi, isMemberBearer } from "@/lib/pc-browser-api";
+import { getPcAppRuntime } from "@/lib/pc-app-runtime";
+import { getAppPublicOrigin } from "@/lib/app-public-origin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,10 +12,13 @@ async function handle(request: Request) {
   if (process.env.PC_BACKEND_ENABLED !== "true") return new Response(null, { status: 404 });
   const url = new URL(request.url);
   const path = url.pathname.slice("/api/pc-supabase".length);
+  const app = getPcAppRuntime();
+  // Local Auth is private admin infrastructure; cloud remains the only member issuer.
+  if (app && !path.startsWith("/rest/v1/")) return Response.json({ error: "Operation denied" }, { status: 403 });
   if (!allowedPcBrowserApi(path, request.method, url.searchParams)) return Response.json({ error: "Operation denied" }, { status: 403 });
   const read = ["GET", "HEAD"].includes(request.method);
   // Google uses GET for this callback. All client POSTs must originate from this app.
-  if (!read && request.headers.get("origin") !== url.origin) return Response.json({ error: "Origin denied" }, { status: 403 });
+  if (!read && request.headers.get("origin") !== getAppPublicOrigin(url)) return Response.json({ error: "Origin denied" }, { status: 403 });
   const auth = request.headers.get("authorization");
   if ((path.startsWith("/rest/") || path === "/auth/v1/user" || path === "/auth/v1/logout") && !isMemberBearer(auth)) {
     return Response.json({ error: "Login required" }, { status: 401 });
@@ -42,7 +47,7 @@ async function handle(request: Request) {
   }
   // PCが止まっている間は、データをクラウドSupabaseから読み書きする（ログインがクラウドのときだけ）。
   const cloud = cloudAuthConfig();
-  const toCloud = !!cloud && /^\/(rest|storage|functions)\/v1\//.test(path) && !(await pcAvailable());
+  const toCloud = !app && !!cloud && /^\/(rest|storage|functions)\/v1\//.test(path) && !(await pcAvailable());
   try {
     if (toCloud) headers.set("apikey", cloud.anonKey);
     const result = toCloud

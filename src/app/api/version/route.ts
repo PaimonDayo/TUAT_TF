@@ -10,7 +10,10 @@ export async function GET() {
     process.env.VERCEL_GIT_COMMIT_SHA ??
     process.env.VERCEL_DEPLOYMENT_ID ??
     "dev";
-  return new Response(JSON.stringify({ version }), {
+  const payload = process.env.PC_APP_RUNTIME === "true"
+    ? { version, releaseId: process.env.PC_APP_RELEASE_ID }
+    : { version };
+  return new Response(JSON.stringify(payload), {
     headers: { "content-type": "application/json" },
   });
 }

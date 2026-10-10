@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "enabled": false,
+  "runtime": "shared-pc",
+  "releaseDirectory": "D:\\TUAT_TF\\.contingency\\pc-app-release",
+  "stateDirectory": "D:\\TUAT_TF\\.contingency\\pc-jobs-state",
+  "backendDirectory": "D:\\TUAT_TF\\.contingency\\backend",
+  "environmentFile": "D:\\TUAT_TF\\.contingency\\pc-app.env",
+  "releaseCommit": "REPLACE_WITH_VERIFIED_40_CHARACTER_COMMIT",
+  "releaseId": "REPLACE_WITH_VERIFIED_RELEASE_ID",
+  "activateAt": "REPLACE_WITH_APPROVED_FUTURE_UTC_BOUNDARY",
+  "appOrigin": "http://127.0.0.1:3112",
+  "port": 3112
+}

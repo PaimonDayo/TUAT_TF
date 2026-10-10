@@ -65,6 +65,12 @@ export function ProfileEditForm({
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    // Reconciliation/router.refresh can reveal a save whose response was lost.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAvatarUrl(profile.avatar_url ?? "");
+  }, [profile.avatar_url]);
+
   useFormDraft({
     dirty: JSON.stringify([name, blocks, events, grade, sheetName]) !== JSON.stringify([profile.display_name ?? "", normalizeProfileBlocks(profile.blocks), profile.events ?? [], profile.grade, profile.sheet_name ?? ""]),
     busy: saving || processingAvatar || loadingHeader || signingOut,
@@ -143,16 +149,19 @@ export function ProfileEditForm({
         method: "POST",
         headers: { "Content-Type": prepared.type },
         body: prepared,
-      });
-      const result = (await response.json()) as {
+      }).catch(() => { throw new Error("画像の保存結果を確認できませんでした。画面を開き直して確認してください"); });
+      const result = (await response.json().catch(() => { throw new Error("画像の保存結果を確認できませんでした。画面を開き直して確認してください"); })) as {
         avatarUrl?: string;
         error?: string;
       };
       if (!response.ok || !result.avatarUrl) {
-        throw new Error(result.error ?? "画像を保存できませんでした。もう一度お試しください");
+        throw new Error(result.error ?? "画像の保存結果を確認できませんでした。画面を開き直して確認してください");
       }
       setAvatarUrl(result.avatarUrl);
       router.refresh();
+    } catch (saveError) {
+      router.refresh();
+      throw saveError;
     } finally {
       setProcessingAvatar(false);
     }
@@ -163,14 +172,15 @@ export function ProfileEditForm({
     setProcessingAvatar(true);
     setError(null);
     try {
-      const response = await fetch("/api/avatar", { method: "DELETE" });
-      const result = (await response.json()) as { error?: string };
+      const response = await fetch("/api/avatar", { method: "DELETE" }).catch(() => { throw new Error("画像の削除結果を確認できませんでした。画面を開き直して確認してください"); });
+      const result = (await response.json().catch(() => { throw new Error("画像の削除結果を確認できませんでした。画面を開き直して確認してください"); })) as { error?: string };
       if (!response.ok) {
         throw new Error(result.error ?? "画像を削除できませんでした。もう一度お試しください");
       }
       setAvatarUrl("");
       router.refresh();
     } catch (removeError) {
+      router.refresh();
       setError(
         removeError instanceof Error
           ? removeError.message
@@ -295,7 +305,6 @@ export function ProfileEditForm({
           ...attendanceDefaults,
           events: events.filter((ev) => eventOptions.includes(ev)),
           grade,
-          avatar_url: avatarUrl.trim() || null,
           ...(!separateRecordSettings ? { sheet_name: sheetName.trim() || null,
           sheet_header_signature: headerSignature,
           record_source: nextRecordSource,

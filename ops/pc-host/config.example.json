@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "enabled": false,
+  "releaseDirectory": "D:/TUAT_TF_RELEASES/replace-with-pinned-release",
+  "environmentFile": "D:/TUAT_TF_PRIVATE/pc-host/app.env",
+  "stateDirectory": "D:/TUAT_TF_PRIVATE/pc-host/state",
+  "releaseCommit": "replace-with-exact-40-character-commit",
+  "releaseId": "replace-with-distinct-release-id",
+  "publicOrigin": "https://replace-with-fixed-public-host.invalid",
+  "appPort": 18200,
+  "gatewayPort": 18201
+}

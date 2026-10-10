@@ -4,6 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { CLOUD_AUTH_TEST_COOKIE, cloudAuthConfig } from "@/lib/supabase/cloud-auth";
 import { pcAvailable } from "@/lib/pc-backend";
 import { loginAccessStatus } from "@/lib/supabase/login-access";
+import { getAppPublicOrigin } from "@/lib/app-public-origin";
+import { getPcAppRuntime } from "@/lib/pc-app-runtime";
 
 /**
  * Google OAuth コールバック。
@@ -13,7 +15,8 @@ import { loginAccessStatus } from "@/lib/supabase/login-access";
  * 4. プロフィール未設定なら /mypage、設定済みなら /home へ
  */
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = request.nextUrl;
+  const { searchParams } = request.nextUrl;
+  const origin = getAppPublicOrigin(request.nextUrl.href);
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? "/home";
 
@@ -36,6 +39,7 @@ export async function GET(request: NextRequest) {
   }
 
   const email = user.email ?? "";
+  const app = getPcAppRuntime();
   // PC/予備側の署名検証済みJWTで判定。通信不良と許可外を区別する。
   const access = await loginAccessStatus(supabase);
   if (access === "unavailable") {
@@ -48,22 +52,40 @@ export async function GET(request: NextRequest) {
 
   // ログインをクラウドで行っているときは、データを置いているPCにも同じIDのアカウントを用意する
   // （部員名簿がアカウントを参照しているため。PCのトリガーが部員名簿も作る）。
-  // PCが止まっているときは作らない（復帰後の書き戻しがクラウドのアカウントをPCに作る）。
-  if (cloudAuthConfig(request.cookies.get(CLOUD_AUTH_TEST_COOKIE)?.value === "1") && await pcAvailable()) {
+  // 専用PCアプリはこの場で同じIDを用意し、業務データの書戻しには依存しない。
+  if ((app?.cloud ?? cloudAuthConfig(request.cookies.get(CLOUD_AUTH_TEST_COOKIE)?.value === "1")) && await pcAvailable()) {
     const admin = createAdminClient();
-    const { data: existing } = await admin.auth.admin.getUserById(user.id);
-    if (!existing?.user) {
-      const { error: createError } = await admin.auth.admin.createUser({
-        id: user.id,
-        email,
-        email_confirm: true,
-        user_metadata: user.user_metadata,
-        app_metadata: { provider: "google", providers: ["google"] },
-      });
-      if (createError) {
-        console.error("Failed to create the PC account during auth callback", createError.message);
-        return NextResponse.redirect(`${origin}/login?error=profile`);
+    const identityUnavailable = () => NextResponse.json({ error: "アカウントの確認を完了できませんでした。時間をおいて再度お試しください。" }, {
+      status: 503, headers: { "cache-control": "private, no-store" },
+    });
+    const sameIdentity = (local: { id: string; email?: string } | null | undefined) =>
+      !!local && local.id === user.id && local.email?.toLowerCase() === email.toLowerCase();
+    try {
+      const { data: existing, error: lookupError } = await admin.auth.admin.getUserById(user.id);
+      const explicitlyMissing = lookupError?.status === 404 || lookupError?.code === "user_not_found";
+      if (app && (existing?.user ? !!lookupError || !sameIdentity(existing.user) : !explicitlyMissing)) {
+        return identityUnavailable();
       }
+      if (!existing?.user) {
+        const { data: created, error: createError } = await admin.auth.admin.createUser({
+          id: user.id,
+          email,
+          email_confirm: true,
+          user_metadata: user.user_metadata,
+          app_metadata: { provider: "google", providers: ["google"] },
+        });
+        if (app && (createError || !sameIdentity(created?.user))) {
+          // A creation may have committed before its response was lost. Read once; never create again.
+          const { data: reconciled, error: reconcileError } = await admin.auth.admin.getUserById(user.id);
+          if (reconcileError || !sameIdentity(reconciled?.user)) return identityUnavailable();
+        } else if (createError) {
+          console.error("Failed to create the PC account during auth callback", createError.message);
+          return NextResponse.redirect(`${origin}/login?error=profile`);
+        }
+      }
+    } catch (error) {
+      if (app) return identityUnavailable();
+      throw error;
     }
   }
 
@@ -75,11 +97,17 @@ export async function GET(request: NextRequest) {
     .maybeSingle();
 
   if (profileError) {
+    if (app) return NextResponse.json({ error: "プロフィールを確認できませんでした。時間をおいて再度お試しください。" }, {
+      status: 503, headers: { "cache-control": "private, no-store" },
+    });
     console.error("Failed to load profile during auth callback", profileError);
     return NextResponse.redirect(`${origin}/login?error=profile`);
   }
   if (!profile) {
-    await supabase.from("profiles").upsert({ id: user.id, email });
+    const { error: createProfileError } = await supabase.from("profiles").upsert({ id: user.id, email });
+    if (app && createProfileError) return NextResponse.json({ error: "プロフィールの準備を完了できませんでした。時間をおいて再度お試しください。" }, {
+      status: 503, headers: { "cache-control": "private, no-store" },
+    });
   }
 
   // 初期設定が未完了（名前 or ブロック未入力）なら設定画面へ

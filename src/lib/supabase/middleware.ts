@@ -4,6 +4,7 @@ import type { Database } from "@/types/database";
 import { sessionClientConfig } from "./server-client-options";
 import { CLOUD_AUTH_TEST_COOKIE } from "./cloud-auth";
 import { loginAccessStatus } from "./login-access";
+import { getAppPublicOrigin } from "@/lib/app-public-origin";
 
 /**
  * リクエストごとにセッションを更新し、未認証ユーザーを /login へ誘導する。
@@ -67,6 +68,10 @@ export async function updateSession(request: NextRequest) {
   // 次回も再更新が走ってログアウトの原因になる。
   const redirectTo = (path: string, reason?: string) => {
     const url = request.nextUrl.clone();
+    const origin = new URL(getAppPublicOrigin(url));
+    url.protocol = origin.protocol;
+    url.host = origin.host;
+    url.port = origin.port;
     url.pathname = path;
     if (reason) url.searchParams.set("error", reason);
     const redirect = NextResponse.redirect(url);

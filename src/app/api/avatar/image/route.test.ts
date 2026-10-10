@@ -24,9 +24,10 @@ vi.mock("@/lib/supabase/server", () => ({
     },
   }),
 }));
-vi.mock("@/lib/image-storage", () => ({ signedImageUrl: state.sign }));
+vi.mock("@/lib/image-storage", async original => ({ ...await original<typeof import("@/lib/image-storage")>(), signedImageUrl: state.sign }));
 
 import { GET } from "./route";
+import { ImageNotFoundError } from "@/lib/image-storage";
 
 const path = "another-member/avatar.webp";
 function request(imagePath: string | null = path) {
@@ -127,17 +128,22 @@ describe("avatar image login and membership authorization", () => {
     expect(state.sign).not.toHaveBeenCalled();
   });
 
-  it("preserves the existing signing failure response without exposing provider details", async () => {
+  it("reports signing dependency failure without exposing provider details", async () => {
     state.sign.mockRejectedValue(new Error("private provider detail"));
     const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     try {
       const response = await GET(request());
 
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(503);
       expect(response.headers.get("location")).toBeNull();
       expect(JSON.stringify(await response.json())).not.toContain("private provider detail");
+      expect(JSON.stringify(warning.mock.calls)).not.toContain("private provider detail");
     } finally {
       warning.mockRestore();
     }
+  });
+  it("returns 404 only for a confirmed missing image object", async () => {
+    state.sign.mockRejectedValue(new ImageNotFoundError());
+    expect((await GET(request())).status).toBe(404);
   });
 });

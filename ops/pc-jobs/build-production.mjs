@@ -7,6 +7,7 @@ import { validateConfig } from './run.mjs';
 const config = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 const env = parseEnv(readFileSync(config.environmentFile, 'utf8'));
 validateConfig(config, env);
+if (config.runtime === 'shared-pc') throw Error('Build the shared app with ops/pc-host; Jobs must reuse its pinned release');
 if (config.enabled) throw Error('Disable and drain jobs before building a release');
 const manifest = JSON.parse(readFileSync(resolve(config.releaseDirectory, 'pc-jobs-release.json'), 'utf8'));
 if (manifest.commit !== config.releaseCommit) throw Error('Commit mismatch');

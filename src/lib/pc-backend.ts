@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getPcAppRuntime } from "./pc-app-runtime";
 
 export type PcEndpoint = {
   version: 1;
@@ -26,6 +27,7 @@ let cached: { data: PcEndpoint; until: number; config: string } | undefined;
 let pending: Promise<PcEndpoint> | undefined;
 
 export async function getPcEndpoint(force = false): Promise<PcEndpoint> {
+  if (getPcAppRuntime()) throw new Error("The PC app uses its private loopback API");
   const { R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, PC_BACKEND_INSTANCE_ID, PC_BACKEND_BRIDGE_KEY } = process.env;
   if (!R2_ACCOUNT_ID || !/^[a-f0-9]{32}$/.test(R2_ACCOUNT_ID) || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY || !R2_BUCKET_NAME ||
       !PC_BACKEND_INSTANCE_ID || !/^[a-f0-9-]{36}$/.test(PC_BACKEND_INSTANCE_ID) || !PC_BACKEND_BRIDGE_KEY) throw new Error("PC backend is not configured");
@@ -55,14 +57,18 @@ export async function pcBackendFetch(input: RequestInfo | URL, init?: RequestIni
   if (source.origin !== base.origin || !source.pathname.startsWith(`${base.pathname.replace(/\/$/, "")}/`)) throw new Error("Invalid backend destination");
   const path = source.pathname.slice(base.pathname.replace(/\/$/, "").length);
   if (!/^\/(auth|rest|storage|functions)\/v1(?:\/|$)/.test(path)) throw new Error("Invalid backend API");
-  const endpoint = await getPcEndpoint();
+  const app = getPcAppRuntime();
+  const endpoint = app ? undefined : await getPcEndpoint();
   const headers = new Headers(request.headers);
   headers.delete("host");
   headers.delete("cookie");
   headers.delete("x-pc-browser");
-  headers.set("x-pc-backend-key", process.env.PC_BACKEND_BRIDGE_KEY!);
+  if (app) {
+    for (const name of ["x-pc-backend-key", "x-pc-app-key", "x-tuat-app-public-origin", "x-tuat-mirror", "forwarded", "x-tuat-backend", "x-tuat-app-backend", "x-vercel-protection-bypass", "x-vercel-set-bypass-cookie"]) headers.delete(name);
+    for (const name of Array.from(headers.keys())) if (name.startsWith("x-forwarded-")) headers.delete(name);
+  } else headers.set("x-pc-backend-key", process.env.PC_BACKEND_BRIDGE_KEY!);
   const body = ["GET", "HEAD"].includes(request.method) ? undefined : await request.arrayBuffer();
-  return fetch(`${endpoint.origin}/backend${path}${source.search}`, {
+  return fetch(app ? `${app.internalUrl}${path}${source.search}` : `${endpoint!.origin}/backend${path}${source.search}`, {
     method: request.method, headers, body, cache: "no-store", redirect: "manual",
     signal: AbortSignal.any([request.signal, AbortSignal.timeout(25_000)]),
   });
@@ -76,6 +82,9 @@ let downUntil = 0;
  * 接続先を読めなかったときは15秒間それを覚え、要求のたびにR2を読みに行かない。
  */
 export async function pcAvailable(): Promise<boolean> {
+  // The dedicated app owns this data route. Failure must not select cloud business data.
+  // This branch is not a dependency-health assertion.
+  if (getPcAppRuntime()) return true;
   if (Date.now() < downUntil) return false;
   try {
     await getPcEndpoint();
