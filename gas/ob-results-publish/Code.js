@@ -258,7 +258,7 @@ function readObStatusState_(properties) {
   if (!Number.isSafeInteger(count) || count < 1 || count > 25) throw new Error('OB baseline incomplete');
   for (var i = 0; i < count; i++) { var chunk = properties.getProperty('OB_STATUS_' + slot + '_' + i); if (chunk === null) throw new Error('OB baseline incomplete'); raw += chunk; }
   if (raw.slice(0, 3) !== 'gz:') throw new Error('OB baseline encoding invalid');
-  return JSON.parse(Utilities.ungzip(Utilities.newBlob(Utilities.base64Decode(raw.slice(3)))).getDataAsString('UTF-8'));
+  return JSON.parse(Utilities.ungzip(Utilities.newBlob(Utilities.base64Decode(raw.slice(3)), 'application/gzip')).getDataAsString('UTF-8'));
 }
 
 function installObResultsTrigger() {

@@ -68,3 +68,11 @@
 - 本番PCの93登録/22運営行と変更履歴/既存関数定義を所有者ACLへ退避。標準supabase_migrations履歴表はないため、既存関数定義と新関数未存在を確認して新時刻DDLのrollback試行を実施。dryRun不変、試技保持、同一requestId冪等、古い版拒否、anon/authenticated書込不可、rollback後全実データ不変を確認。
 - 新保存関数を本番PCへ適用し、登録/運営/変更履歴が適用前後で不変を確認。新しい表・権限の公開・クラウドへの書込先切替はなし。migration番号を関数comment/私有適用証跡に保存した。
 - Node24/直接依存35件lock一致、tsc、対象eslint、全Vitest 128ファイル1136件、OB mirror運用11件、webpack build71ページ成功。実PCを接続先とするローカルAPIでも93登録/12タブ/246出場欄、専用status dryRun200、readtoken保存401、DB書込0を確認。GASの私有baselineはGoogle公式Utilities gzip/base64で圧縮し、追加人数でProperties容量に達しにくくした（[公式API](https://developers.google.com/apps-script/reference/utilities/utilities)）。
+
+## 双方向連携の実機確認・終了
+
+- `567db1a` をmasterへ統合しProduction成功（公式deployment 6978771660）/公開version一致を確認。本番status dryRun200・読取り鍵保存401。18:18:39の実GAS dryRun成功後、18:19:46初期化成功で「大会参加」を撤去し246欄へ四択のstrict dropdownを設定。元の5分triggerを再利用し、私有bootstrapは除去した。
+- 初回出力後の圧縮baseline読戻しで、実GASのみBlobのcontentType未指定エラーが発生（18:22/18:23）。DB保存前で停止し、スプシ入力を保持。`application/gzip` を明示し、テストのBlobも同じ条件で拒否するよう修正。この本番実行で見つかった後続不具合は別の修正としてまとめる。
+- snapshot/dryRun後、未記録・大会欠席なし・未確定種目の既存出場者1人で、実Googleプルダウンから出場→DNS→出場を操作。18:25:24のpublish成功でDNS保存、18:26:58のpublish成功で出場へ復元。登録全件、組、試技、他種目、最終の運営dataは変更前と一致。新しい状態変更履歴2件だけを保持し、検証用の参加状態は残していない。
+- 18:27:30の時間主導publish成功（2.619秒）で修正後/秘密bootstrap除去後の自動更新継続を確認。最新APIと実Sheet12タブの全生成セル一致（不一致0）、strict dropdown246欄、大会参加見出しなしを確認。最終全Vitest128ファイル1138件成功。
+- 編集者は出場/DNS/DNF/DQを変更でき、約5分でアプリへ反映する。リンク全員は閲覧のまま。氏名・組・結果・追加登録をスプシから編集する機能は今回追加していない。スマホ各実機のプルダウン操作は未確認。GAS修正の追加commit/公開確認は完了後に追記する。

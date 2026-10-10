@@ -56,7 +56,7 @@ function setup() {
     statusPosts: [] as { requestId: string; dryRun: boolean; changes: { token: string; status: string }[] }[] };
   state.properties.OB_RESULTS_WRITE_TOKEN = "b".repeat(64);
   const committed = new Map<string, unknown>();
-  const blob = (value: string | Uint8Array) => ({ getBytes: () => Buffer.from(value), getDataAsString: () => Buffer.from(value).toString("utf8") });
+  const blob = (value: string | Uint8Array, contentType?: string) => ({ contentType, getBytes: () => Buffer.from(value), getDataAsString: () => Buffer.from(value).toString("utf8") });
   const applyBatch = (requests: Request[]) => {
     if (state.rejectBatch) throw new Error("synthetic rejected batch");
     const next = structuredClone(state.workbook);
@@ -116,7 +116,10 @@ function setup() {
         return { values: state.workbook.sheets.find(sheet => sheet.properties.title === name)!.cells.slice(0, Number(count)).map(row => row.slice(0, width).map(cell => cell.userEnteredValue?.stringValue ?? cell.userEnteredValue?.numberValue ?? "")) };
       }) }) },
       batchUpdate: (body: { requests: Request[] }, id: string) => { expect(id).toBe(OB_RESULTS_SPREADSHEET_ID); applyBatch(body.requests); } } },
-    Utilities: { newBlob: blob, gzip: (value: ReturnType<typeof blob>) => blob(gzipSync(value.getBytes())), ungzip: (value: ReturnType<typeof blob>) => blob(gunzipSync(value.getBytes())),
+    Utilities: { newBlob: blob, gzip: (value: ReturnType<typeof blob>) => blob(gzipSync(value.getBytes()), "application/gzip"), ungzip: (value: ReturnType<typeof blob>) => {
+      if (!value.contentType) throw Error("Blob object must have non-null content type");
+      return blob(gunzipSync(value.getBytes()), "application/json");
+    },
       base64Encode: (value: Uint8Array) => Buffer.from(value).toString("base64"), base64Decode: (value: string) => Buffer.from(value, "base64"),
       getUuid: () => "00000000-0000-4000-8000-" + String(state.statusPosts.length + 1).padStart(12, "0"), formatDate: (_date: Date, timezone: string) => { state.timezone = timezone; return "2026-10-10 03:00:00"; } },
     ScriptApp: { getProjectTriggers: () => state.triggers.map(handler => ({ getHandlerFunction: () => handler })), newTrigger: (handler: string) => ({ timeBased: () => ({ everyMinutes: (minutes: number) => ({ create: () => { expect(minutes).toBe(5); state.triggers.push(handler); } }) }) }) },
