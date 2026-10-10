@@ -12,3 +12,4 @@ export * from "./venues";
 export * from "./notes";
 export * from "./competitions";
 export * from "./monthly-results";
+export { getMyObEntry, getMyObEntryCandidates, getMyObDuties, getMyObParticipation } from "./ob-entries";

@@ -9,7 +9,7 @@ import { ObEventOperationsEditor } from "./ObEventOperationsEditor";
 import { ObDutyTable } from "./ObDutyTable";
 import { OB_PROGRAM, obFamilyLabel as displayEvent } from "@/lib/ob-meet";
 import { MeetEvent } from "@/lib/meet-operations";
-import { obFamilyRows, obMixedGroupLabel } from "@/lib/ob-mixed-operations";
+import { obFamilyRows, obFamilyPlacement } from "@/lib/ob-mixed-operations";
 import { obEventRule, type ObEventOperation } from "@/lib/ob-operations";
 import type { ObEntry } from "@/lib/ob-entries";
 import type { EntryMember } from "@/lib/entry-identity";
@@ -51,10 +51,10 @@ export function ObPublicProgram({ entries, members, duties, roles, operations, v
       <div className="space-y-4">
         <p className="text-caption">{people.length}人・{field ? "試技順" : "組分け"}と記録</p>
         {people.length ? <ul className="divide-y divide-separator">{people.map(row => {
-          const { entry, performance, state, saved, division, eventName, number, group } = row;
+          const { entry, performance, state, saved, division, eventName } = row;
           const result = new MeetEvent(obEventRule(eventName), { participants: [performance], confirmed: saved?.data.confirmed ?? false }).best(performance);
           const unavailable = !state.canParticipate && !state.recorded;
-          const placement = field ? number === null ? "順番未定" : `試技順 ${number}番` : group !== null ? `${obMixedGroupLabel(group)}${performance.order ? `・${performance.order}${!["1500m", "3000m"].includes(event ?? "") ? "レーン" : "番"}` : ""}` : "組未定";
+          const placement = obFamilyPlacement(row);
           return <li key={row.id} className={`flex flex-wrap items-center gap-x-4 gap-y-1 py-3 ${unavailable ? "text-muted" : ""}`}>
             <div className="w-28 shrink-0"><span className="block text-caption">{division}</span><span className="block text-caption">{placement}</span></div>
             <div className="min-w-0 flex-1 basis-36"><p className="break-words text-body font-medium">{entry?.submitted_name ?? "参加情報なし"}<span className="ml-2 text-caption">{entry?.grade}</span></p>{entry?.qualification_marks[eventName] && !state.recorded && <p className="text-micro text-muted2">資格記録 {entry.qualification_marks[eventName]}</p>}</div>

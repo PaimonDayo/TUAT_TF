@@ -125,3 +125,13 @@ export function obFamilyRows(family: string, entries: ObEntry[], operations: ObE
       return { id: person.entryId, entryId: source.entryId, entry, performance: source.person, state: effectiveObParticipation(source.event, entry, source.person), division: source.division, eventName: source.event, saved, group: person.group, number: numbers.get(person.entryId) ?? null };
     });
 }
+
+/** Home and the full program describe the same saved placement. */
+export function obFamilyPlacement(row: ReturnType<typeof obFamilyRows>[number]): string {
+  const family = row.eventName.replace(/^(男子|女子)/, "");
+  if (obEventRule(family).discipline !== "track") return row.number === null ? "順番未定" : `試技順 ${row.number}番`;
+  if (row.group === null) return "組未定";
+  const order = row.performance.order;
+  const position = order === null ? "" : `・${order}${["1500m", "3000m"].includes(family) ? "番" : "レーン"}`;
+  return obMixedGroupLabel(row.group) + position;
+}
