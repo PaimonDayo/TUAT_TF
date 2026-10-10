@@ -52,7 +52,7 @@
   padding: 2px;
   gap: 2px;
   align-items: stretch;
-  border-radius: var(--radius-control);
+  border-radius: 999px;
   background: #dfe2e680;
   touch-action: pan-y pinch-zoom;
   -webkit-touch-callout: none;
@@ -63,7 +63,7 @@
   min-height: 44px;
   position: relative;
   z-index: 1;
-  border-radius: var(--radius-control);
+  border-radius: 999px;
   background: transparent;
   box-shadow: none;
   opacity: 1;
@@ -88,7 +88,7 @@
   bottom: 2px;
   left: var(--glass-selection-left, 0);
   pointer-events: none;
-  border-radius: var(--radius-control);
+  border-radius: 999px;
   background: var(--ui-neutral, linear-gradient(155deg, #ffffffda, #ffffff70));
   border: 1px solid var(--ui-edge, #ffffffd9);
   -webkit-backdrop-filter: none;
@@ -104,7 +104,6 @@
 /* Role flags travel with portal controls. Status also retains words and icons. */
 [data-system-glass][data-glass-control][data-glass-attendance] {
   min-height: 44px;
-  border-radius: var(--radius-control);
   --attendance-ink: #075db5;
   --attendance-tint: #007aff0a;
   color: var(--attendance-ink);
@@ -126,7 +125,7 @@
   z-index: 61;
   width: min(280px, calc(100vw - 24px));
   padding: 7px;
-  border-radius: var(--radius-card);
+  border-radius: 28px;
   border: 1px solid #ffffff80;
   background: rgb(244 246 249 / .68);
   -webkit-backdrop-filter: blur(18px) saturate(135%);
@@ -152,7 +151,7 @@
   min-height: 48px;
   padding: 11px 13px;
   text-align: left;
-  border-radius: var(--radius-control);
+  border-radius: 20px;
   font-size: 15px;
   line-height: 22px;
   font-weight: 500;
@@ -168,7 +167,7 @@
 .system-glass-menu-icon { display: flex; flex: 0 0 23px; align-items: center; justify-content: center; }
 .system-glass-menu-description { display: block; font-size: 12px; line-height: 17px; color: var(--color-muted); }
 .system-glass-menu-item[data-destructive] { color: var(--color-danger); }
-.system-glass-menu-item[data-separator] { border-top: 1px solid #26334415; margin-top: 5px; }
+.system-glass-menu-item[data-separator] { border-top: 1px solid #26334415; margin-top: 5px; border-top-left-radius: 0; border-top-right-radius: 0; }
 @media (hover: hover) { .system-glass-menu-item:hover { background: #687a9014; } }
 .system-glass-menu-item:is(:active, [data-glass-pressed]) { background: #687a9026; scale: .985; transition-duration: 60ms; }
 .system-glass-menu-item:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; background: #687a9014; }

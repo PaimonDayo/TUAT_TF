@@ -8,13 +8,13 @@
   --ui-selected: #e8f2ff;
 }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-panel], [data-ui-section]) {
-  border-radius: var(--radius-card);
+  border-radius: 22px;
   border-color: var(--ui-line);
   background: linear-gradient(155deg, #fffffff2, #ffffffd9);
   box-shadow: inset 0 1px 0 #fff, 0 3px 12px #27364c07;
 }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-panel] [data-ui-panel] {
-  border-radius: var(--radius-card);
+  border-radius: 16px;
   box-shadow: none;
 }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-panel][data-ui-embedded] {
@@ -26,7 +26,7 @@
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-action], [data-ui-choice]) {
   min-height: 44px;
   min-width: 44px;
-  border-radius: var(--radius-control);
+  border-radius: 999px;
   border: 1px solid var(--ui-edge);
   background: var(--ui-neutral);
   box-shadow: var(--ui-shadow);
@@ -46,12 +46,11 @@
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-action]:is([data-ui-action="icon"], [data-ui-size="icon"]) {
   padding: 0;
   flex-shrink: 0;
-  border-radius: 999px;
 }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-action] > svg { flex-shrink: 0; }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-action="icon"] > svg { margin: 0; }
-:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-action="row"] { justify-content: flex-start; border-radius: var(--radius-control); }
-:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-action="tile"] { padding-inline: 4px; border-radius: var(--radius-control); }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-action="row"] { justify-content: flex-start; border-radius: 18px; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-action="tile"] { padding-inline: 4px; border-radius: 16px; }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-nav-placeholder] { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; padding: 0; }
 /* Social reactions belong to the content, not to the glass navigation layer.
    Keep a comfortable hit area without drawing a surface around icon + count. */
@@ -60,7 +59,7 @@
   min-width: 44px;
   padding-inline: 0;
   border: 0;
-  border-radius: var(--radius-control);
+  border-radius: 4px;
   background: transparent;
   box-shadow: none;
   justify-content: flex-start;
@@ -118,7 +117,7 @@
 }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-row], [data-ui-disclosure], [data-ui-toggle], [data-ui-choice-row]) {
   min-height: 44px;
-  border-radius: var(--radius-control);
+  border-radius: 14px;
   transition: background-color 120ms ease-out;
   -webkit-tap-highlight-color: transparent;
 }
@@ -129,7 +128,7 @@
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-row][aria-pressed="true"] { background-color: var(--ui-selected); color: #075db5; }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-choice-row] {
   border: 1px solid var(--ui-line);
-  border-radius: var(--radius-control);
+  border-radius: 18px;
   background: var(--ui-neutral);
   box-shadow: var(--ui-shadow);
 }
@@ -138,7 +137,7 @@
    selected state; drawing a glass surface around every row obscures the form. */
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-checklist] {
   border: 1px solid var(--ui-line);
-  border-radius: var(--radius-card);
+  border-radius: 16px;
   background: #fff;
   box-shadow: none;
 }
@@ -161,7 +160,7 @@
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-checklist-row] > input { flex-shrink: 0; accent-color: #0875ed; }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-checklist-row]:has(input:disabled) { cursor: default; }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-checklist-row]:has(input:focus-visible) { outline: 2px solid #0875ed; outline-offset: -2px; }
-:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-checklist] [data-ui-field] { border-radius: var(--radius-control); background: #fff; box-shadow: none; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-checklist] [data-ui-field] { border-radius: 10px; background: #fff; box-shadow: none; }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-checklist-heading] { flex-wrap: wrap; }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-checklist-heading] > :first-child { min-width: 0; flex: 1 1 8rem; }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-duty-role-heading] { flex-wrap: wrap; }
@@ -169,7 +168,7 @@
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-duty-role-heading] > [data-ui-group] { max-width: 100%; flex-wrap: wrap; }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) a[data-ui-row]:has(> [data-ui-panel]) { display: block; }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-field], :where(input[type="search"])) {
-  border-radius: var(--radius-control);
+  border-radius: 16px;
   background: #ffffffc9;
   border: 1px solid #263b591c;
   box-shadow: inset 0 1px 3px #253d5605;
@@ -201,7 +200,7 @@
   min-width: 0;
   padding: 14px;
   border: 1px solid var(--ui-line);
-  border-radius: var(--radius-card);
+  border-radius: 18px;
   background: #fff;
 }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-record-field] > .section-label {
@@ -213,29 +212,29 @@
 }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-record-field] [data-ui-field]:not([data-ui-field="metric"]) {
   min-height: 48px;
-  border-radius: var(--radius-control);
+  border-radius: 12px;
   background: #f5f7fa;
   border-color: transparent;
   box-shadow: none;
 }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-record-field] textarea[data-ui-field] { min-height: 96px; line-height: 1.6; }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-intensity-grid] { grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr)); }
-:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-intensity] [data-ui-panel] { border-radius: var(--radius-card); background: #f5f7fa; box-shadow: none; }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-intensity] [data-ui-panel] { border-radius: 12px; background: #f5f7fa; box-shadow: none; }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-field="metric"] {
-  min-width: 0; min-height: 44px; background: transparent; border-color: transparent; box-shadow: none; border-radius: var(--radius-control);
+  min-width: 0; min-height: 44px; background: transparent; border-color: transparent; box-shadow: none; border-radius: 8px;
 }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-field="metric"] + span { white-space: nowrap; flex-shrink: 0; }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-range] { min-height: 44px; accent-color: #0875ed; }
-:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-drag-handle] { min-width: 44px; border-radius: var(--radius-control); }
+:where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-drag-handle] { min-width: 44px; border-radius: 14px; }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) :is([data-ui-link], [data-ui-chart-bar], [data-ui-drag-handle], [data-ui-range]):focus-visible { outline: 2px solid #0875ed; outline-offset: 2px; }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-link]:hover { text-decoration: underline; text-underline-offset: 3px; }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-group] {
-  border-radius: var(--radius-card);
+  border-radius: 20px;
 }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-group="segmented"] {
   height: auto;
   min-height: 48px;
-  border-radius: var(--radius-control);
+  border-radius: 999px;
   padding: 2px;
   gap: 2px;
   background: #dfe2e680;
@@ -288,12 +287,12 @@
 }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-cell]:is(:active, [data-glass-pressed]) { background: #0875ed14; }
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-poll-option] {
-  border-radius: var(--radius-control);
+  border-radius: 16px;
   border-color: #263b591c;
   background-color: #ffffffb3;
 }
 [data-new-ui-surface][data-ui-select-menu] {
-  border-radius: var(--radius-card);
+  border-radius: 20px;
   border: 1px solid #ffffffc9;
   background: linear-gradient(145deg, #ffffffb3, #f4f6f9d9);
   backdrop-filter: blur(22px) saturate(135%);
@@ -304,15 +303,15 @@
 }
 [data-new-ui-surface] [data-ui-select-option] {
   min-height: 44px;
-  border-radius: var(--radius-control);
+  border-radius: 14px;
   white-space: normal;
   overflow-wrap: anywhere;
 }
 [data-new-ui-surface] [data-ui-select-option][data-highlighted] { color: #075db5; background: #0875ed14; }
 [data-new-ui-surface] [data-ui-select-option][data-state="checked"] { color: #075db5; font-weight: 600; }
-[data-new-ui-surface].sheet-content { border-radius: var(--radius-card) var(--radius-card) 0 0; border: 1px solid #ffffffbd; box-shadow: 0 -8px 32px #17233414; }
+[data-new-ui-surface].sheet-content { border-radius: 28px 28px 0 0; border: 1px solid #ffffffbd; box-shadow: 0 -8px 32px #17233414; }
 [data-new-ui-surface][data-ui-dialog], [data-new-ui-surface] [data-ui-toast] {
-  border-radius: var(--radius-card);
+  border-radius: 26px;
   border: 1px solid #ffffffd9;
   background: linear-gradient(145deg, #fffffff2, #f5f7fbe8);
   box-shadow: inset 0 1px 0 #fff, 0 12px 40px #1723342b;
@@ -320,7 +319,7 @@
 [data-new-ui-surface][data-ui-sidebar] {
   margin-block: 16px;
   border: 1px solid #ffffffa6;
-  border-radius: var(--radius-card);
+  border-radius: 28px;
   background: linear-gradient(150deg, #ffffff70, #ffffff29);
   height: calc(100dvh - 32px);
   box-shadow: var(--ui-shadow);
@@ -329,7 +328,7 @@
 :where(.app-main:has(> [data-new-ui]), [data-new-ui-surface]) [data-ui-composer] {
   bottom: max(12px, calc(var(--ui-composer-inset, 0px) + 12px));
   border: 1px solid #ffffffc9;
-  border-radius: var(--radius-card);
+  border-radius: 24px;
   background: #f6f8fbe8;
   box-shadow: 0 4px 20px #1723341c;
   backdrop-filter: blur(20px);

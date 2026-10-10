@@ -72,7 +72,7 @@ export function ObMeetParticipants({ entries, members, history, party, duties, r
           <Button key={key} size="sm" variant={filter === key ? "primary" : "outline"} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}</Button>)}
       </div>
       <div className="grid gap-2 lg:grid-cols-2 xl:grid-cols-3">{visible.map(entry =>
-        <button key={entry.id} type="button" onClick={() => setTargetId(entry.id)} className="flex min-h-16 items-center gap-3 rounded-card border border-separator bg-card p-3.5 text-left pressable">
+        <button key={entry.id} type="button" onClick={() => setTargetId(entry.id)} className="flex min-h-16 items-center gap-3 rounded-xl border border-separator bg-card p-3.5 text-left pressable">
           <div className="min-w-0 flex-1">
             <p className="break-words font-semibold">{entry.submitted_name}<span className="ml-2 text-caption">{entry.grade}</span></p>
             <p className="mt-1 break-words text-caption">{entry.events.join("・") || "競技の出場登録なし"}</p>

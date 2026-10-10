@@ -98,7 +98,7 @@ export function ActionMenu({
               <button
                 type="button"
                 onClick={() => openForm(onEdit)}
-                className="flex w-full items-center gap-3 rounded-control border border-separator bg-card p-3.5 active:bg-bg"
+                className="flex w-full items-center gap-3 rounded-xl border border-separator bg-card p-3.5 active:bg-bg"
               >
                 <Pencil size={20} className="text-accent" />
                 <span className="text-headline">{editLabel}</span>
@@ -108,7 +108,7 @@ export function ActionMenu({
               <button
                 type="button"
                 onClick={() => openForm(onQuote)}
-                className="flex w-full items-center gap-3 rounded-control border border-separator bg-card p-3.5 active:bg-bg"
+                className="flex w-full items-center gap-3 rounded-xl border border-separator bg-card p-3.5 active:bg-bg"
               >
                 <Quote size={20} className="text-accent" />
                 <span className="text-headline">{quoteLabel}</span>
@@ -121,7 +121,7 @@ export function ActionMenu({
                   setMenuOpen(false);
                   void onShare();
                 }}
-                className="flex w-full items-center gap-3 rounded-control border border-separator bg-card p-3.5 active:bg-bg"
+                className="flex w-full items-center gap-3 rounded-xl border border-separator bg-card p-3.5 active:bg-bg"
               >
                 <Share2 size={20} className="text-accent" />
                 <span className="text-headline">{shareLabel}</span>
@@ -134,7 +134,7 @@ export function ActionMenu({
                   setMenuOpen(false);
                   void onPin();
                 }}
-                className="flex w-full items-center gap-3 rounded-control border border-separator bg-card p-3.5 active:bg-bg"
+                className="flex w-full items-center gap-3 rounded-xl border border-separator bg-card p-3.5 active:bg-bg"
               >
                 {pinned ? <PinOff size={20} className="text-accent" /> : <Pin size={20} className="text-accent" />}
                 <span className="text-headline">{pinned ? "ピン留めを外す" : "ピン留めする"}</span>
@@ -142,7 +142,7 @@ export function ActionMenu({
             )}
             {onArchive && (
               <button type="button" onClick={() => { setMenuOpen(false); void onArchive(); }}
-                className="flex w-full items-center gap-3 rounded-control border border-separator bg-card p-3.5 active:bg-bg">
+                className="flex w-full items-center gap-3 rounded-xl border border-separator bg-card p-3.5 active:bg-bg">
                 {archived ? <ArchiveRestore size={20} className="text-accent" /> : <Archive size={20} className="text-accent" />}
                 <span className="text-left"><span className="block text-headline">{archived ? "アーカイブを解除" : "アーカイブする"}</span><span className="block text-caption text-muted">{archived ? "ホームの表示対象に戻します" : "全員のホームから非表示にします"}</span></span>
               </button>
@@ -154,7 +154,7 @@ export function ActionMenu({
                   setMenuOpen(false);
                   setConfirmOpen(true);
                 }}
-                className="flex w-full items-center gap-3 rounded-control border border-separator bg-card p-3.5 text-danger active:bg-bg"
+                className="flex w-full items-center gap-3 rounded-xl border border-separator bg-card p-3.5 text-danger active:bg-bg"
               >
                 <Trash2 size={20} />
                 <span className="text-headline">{deleteLabel}</span>

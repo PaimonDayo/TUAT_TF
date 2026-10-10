@@ -73,7 +73,7 @@ export function MenuCard({
   return (
     <div
       className={cn(
-        "relative rounded-card border p-3",
+        "relative rounded-xl border p-3",
         isTargeted
           ? "border-accent/45 bg-accent/5" // 自分が対象の個別メニュー＝青系
           : isMyBlock
@@ -173,7 +173,7 @@ function SheetMenuCard({
 }) {
   const [editing, setEditing] = useState(false);
   return (
-    <div className="relative space-y-3 rounded-card border border-[#34c759]/45 bg-[#34c759]/8 p-3">
+    <div className="relative space-y-3 rounded-xl border border-[#34c759]/45 bg-[#34c759]/8 p-3">
       <p className={cn("text-[10px] font-semibold text-muted2", canManage && "pr-8")}>
         スプレッドシートから最新表示
       </p>

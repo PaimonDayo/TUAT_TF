@@ -38,9 +38,8 @@
   --color-int-high: #ff9500;
   --color-int-speed: #ff3b30;
 
-  /* 面は16px、操作・入力欄は12px。端末幅やガラス表示で形を変えない。 */
+  /* 角丸。16pxのカード・入力枠は rounded-card に統一する（rounded-2xl / rounded-[16px] と書かない）。 */
   --radius-card: 16px;
-  --radius-control: 12px;
 
   /* フォント */
   --font-sans:

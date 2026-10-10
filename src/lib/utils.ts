@@ -2,9 +2,9 @@ import { clsx, type ClassValue } from "clsx";
 import { extendTailwindMerge } from "tailwind-merge";
 
 // Match globals.css so caller shapes replace component defaults, including
-// Skeleton's rounded-md and Button's circular icon size.
+// Skeleton's rounded-md and explicit circular shapes.
 const twMerge = extendTailwindMerge({
-  extend: { theme: { radius: ["card", "control"] } },
+  extend: { theme: { radius: ["card"] } },
 });
 
 /** Tailwind クラスを安全に結合する */

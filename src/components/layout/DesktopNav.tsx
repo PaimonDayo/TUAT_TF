@@ -32,7 +32,7 @@ export function DesktopNav() {
               title={label}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex h-12 items-center justify-center rounded-control px-2 text-[15px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+                "flex h-12 items-center justify-center rounded-xl px-2 text-[15px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
                 active
                   ? "bg-card text-accent shadow-sm ring-1 ring-separator/70"
                   : "text-muted2 hover:bg-card/65 hover:text-ink",

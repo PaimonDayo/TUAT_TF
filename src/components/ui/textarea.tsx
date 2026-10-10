@@ -51,7 +51,7 @@ export const Textarea = React.forwardRef<
       data-ui-field
       className={cn(
         // text-base(16px) は必須: iOS Safari は16px未満の入力欄にフォーカスすると自動ズーム→画面がガクつくため
-        "w-full rounded-control bg-card border border-separator px-3 py-2.5 text-base text-ink placeholder:text-muted outline-none focus:border-accent transition-colors resize-none",
+        "w-full rounded-xl bg-card border border-separator px-3 py-2.5 text-base text-ink placeholder:text-muted outline-none focus:border-accent transition-colors resize-none",
         autoGrow && "overflow-y-hidden",
         className,
       )}
