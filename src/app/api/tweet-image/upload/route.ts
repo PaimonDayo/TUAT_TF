@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import sharp from "sharp";
 import { createClient } from "@/lib/supabase/server";
+import { loginAccessResponse } from "@/lib/supabase/login-access";
 import { uploadImage, removeImages } from "@/lib/image-storage";
 import { isSafeTweetImagePath, TWEET_IMAGE_BUCKET, TWEET_IMAGE_MAX_UPLOAD_BYTES } from "@/lib/tweet-image";
 
@@ -10,6 +11,8 @@ export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "ログインが必要です" }, { status: 401 });
+  const accessError = await loginAccessResponse(supabase);
+  if (accessError) return accessError;
   const type = request.headers.get("content-type")?.split(";", 1)[0];
   if (!type || !["image/webp", "image/jpeg", "image/png"].includes(type)) {
     return NextResponse.json({ error: "対応していない画像形式です" }, { status: 415 });
@@ -47,6 +50,8 @@ export async function DELETE(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "ログインが必要です" }, { status: 401 });
+  const accessError = await loginAccessResponse(supabase);
+  if (accessError) return accessError;
   const path = new URL(request.url).searchParams.get("path");
   if (!path || !isSafeTweetImagePath(path) || !path.startsWith(`${user.id}/`)) {
     return NextResponse.json({ error: "Image not found" }, { status: 404 });

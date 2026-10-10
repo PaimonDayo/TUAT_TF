@@ -3,11 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CLOUD_AUTH_TEST_COOKIE, cloudAuthConfig } from "@/lib/supabase/cloud-auth";
 import { pcAvailable } from "@/lib/pc-backend";
+import { loginAccessStatus } from "@/lib/supabase/login-access";
 
 /**
  * Google OAuth コールバック。
  * 1. code をセッションに交換
- * 2. メールドメインを検証（大学ドメイン以外は拒否）
+ * 2. 大学メール/指定メールの許可をDBで検証
  * 3. profiles の存在を確認（トリガー未設定環境向けの保険）
  * 4. プロフィール未設定なら /mypage、設定済みなら /home へ
  */
@@ -34,11 +35,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/login?error=no_user`);
   }
 
-  // メールドメイン検証（サーバー側で担保）
-  const domain = process.env.NEXT_PUBLIC_UNIVERSITY_DOMAIN;
   const email = user.email ?? "";
-  if (domain && !email.endsWith(`@${domain}`)) {
-    await supabase.auth.signOut();
+  // PC/予備側の署名検証済みJWTで判定。通信不良と許可外を区別する。
+  const access = await loginAccessStatus(supabase);
+  if (access === "unavailable") {
+    return NextResponse.json({ error: "ログインの許可を確認できませんでした。時間をおいてログインし直してください。" }, { status: 503 });
+  }
+  if (access === "denied") {
+    await supabase.auth.signOut({ scope: "local" });
     return NextResponse.redirect(`${origin}/login?error=domain`);
   }
 

@@ -31,7 +31,6 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     const supabase = createClient();
-    const domain = process.env.NEXT_PUBLIC_UNIVERSITY_DOMAIN;
     const next =
       new URLSearchParams(window.location.search).get("next") ?? "/home";
 
@@ -39,7 +38,7 @@ export default function LoginPage() {
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
-        queryParams: domain ? { hd: domain, prompt: "select_account" } : {},
+        queryParams: { prompt: "select_account" },
       },
     });
 
@@ -121,9 +120,9 @@ export default function LoginPage() {
         {error && <p className="text-caption text-danger text-center">{error}</p>}
 
         <p className="text-micro text-center pt-2">
-          大学のGoogleアカウント（{process.env.NEXT_PUBLIC_UNIVERSITY_DOMAIN}）
+          大学のGoogleアカウント、または
           <br />
-          でのみログインできます
+          管理者が許可したGoogleアカウントでログインできます
         </p>
       </div>
     </main>
@@ -132,11 +131,8 @@ export default function LoginPage() {
 
 /** /auth/callback が付けてくる ?error= を、部員に分かる言葉にする。 */
 function loginErrorMessage(reason: string): string {
-  const domain = process.env.NEXT_PUBLIC_UNIVERSITY_DOMAIN;
   if (reason === "domain") {
-    return domain
-      ? `大学のGoogleアカウント（@${domain}）でログインしてください`
-      : "大学のGoogleアカウントでログインしてください";
+    return "大学のGoogleアカウント、または管理者が許可したGoogleアカウントでログインしてください";
   }
   return "ログインを完了できませんでした。もう一度お試しください";
 }

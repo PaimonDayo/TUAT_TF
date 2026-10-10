@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ create: vi.fn(), signed: vi.fn(), upload: vi.fn(), remove: vi.fn() }));
+const mocks = vi.hoisted(() => ({ create: vi.fn(), signed: vi.fn(), upload: vi.fn(), remove: vi.fn(), access: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: mocks.create }));
 vi.mock("@/lib/image-storage", () => ({ signedImageUrl: mocks.signed, uploadImage: mocks.upload, removeImages: mocks.remove }));
 import { GET as avatar } from "@/app/api/avatar/image/route";
@@ -16,12 +16,20 @@ beforeEach(() => {
   for (const method of [query.select, query.eq, query.or]) method.mockReturnValue(query);
   maybeSingle.mockResolvedValue({ data: { id: "story", expires_at: "2026-09-06T01:00:00Z" }, error: null });
   limit.mockResolvedValue({ data: [], error: null });
-  mocks.create.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: { id: uid } } }) }, from: () => query });
+  mocks.access.mockResolvedValue({data:true,error:null});
+  mocks.create.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: { id: uid } } }) }, from: () => query, rpc:mocks.access });
   mocks.signed.mockResolvedValue("https://images.example/signed");
   mocks.remove.mockResolvedValue(undefined);
 });
 afterEach(() => vi.useRealTimers());
 describe("private image routes", () => {
+  it("rejects revoked accounts before signing, uploading or deleting R2 images", async () => {
+    mocks.access.mockResolvedValue({data:null,error:{code:"PT403"}});
+    for (const handler of [avatar, upload, remove]) {
+      expect((await handler(new Request(`https://app.example/api/image?path=${path}`))).status).toBe(403);
+    }
+    expect(mocks.signed).not.toHaveBeenCalled(); expect(mocks.upload).not.toHaveBeenCalled(); expect(mocks.remove).not.toHaveBeenCalled();
+  });
   it("rejects unauthenticated reads and writes before accessing storage", async () => {
     mocks.create.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: null } }) } });
     for (const handler of [avatar, story, upload, remove]) {

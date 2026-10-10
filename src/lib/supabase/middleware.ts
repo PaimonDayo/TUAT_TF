@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database";
 import { sessionClientConfig } from "./server-client-options";
 import { CLOUD_AUTH_TEST_COOKIE } from "./cloud-auth";
+import { loginAccessStatus } from "./login-access";
 
 /**
  * リクエストごとにセッションを更新し、未認証ユーザーを /login へ誘導する。
@@ -37,10 +38,10 @@ export async function updateSession(request: NextRequest) {
   // セッションの確認と更新（重要）。getClaims は期限切れならトークンを更新し、署名を公開鍵で確かめる。
   // 公開鍵方式（クラウドのログイン、ES256）ではログインサーバーへ問い合わせずに済む（公開鍵は10分ごとに取得）。
   // 共通鍵のトークン（PCのログイン）は従来どおり getUser で確かめる。
-  let user: { id: string } | null = null;
+  let user: { id: string; email: string } | null = null;
   try {
     const { data } = await supabase.auth.getClaims();
-    user = data?.claims?.sub ? { id: data.claims.sub } : null;
+    user = data?.claims?.sub ? { id: data.claims.sub, email: typeof data.claims.email === "string" ? data.claims.email : "" } : null;
   } catch {
     user = null;
   }
@@ -64,13 +65,31 @@ export async function updateSession(request: NextRequest) {
   // 更新後のクッキーを必ず引き継いでリダイレクトする（重要）。
   // 単に NextResponse.redirect すると getUser で更新されたトークンが失われ、
   // 次回も再更新が走ってログアウトの原因になる。
-  const redirectTo = (path: string) => {
+  const redirectTo = (path: string, reason?: string) => {
     const url = request.nextUrl.clone();
     url.pathname = path;
+    if (reason) url.searchParams.set("error", reason);
     const redirect = NextResponse.redirect(url);
     response.cookies.getAll().forEach((c) => redirect.cookies.set(c));
     return redirect;
   };
+
+  // 指定メールの許可取り消しを、既存のブラウザセッションにも反映する。
+  // 署名検証済み大学メールは従来の経路を維持し、Auth callbackの交換中はここで判定しない。
+  if (user && !user.email.toLowerCase().endsWith("@st.go.tuat.ac.jp") && !pathname.startsWith("/auth")) {
+    try {
+      const access = await loginAccessStatus(supabase);
+      if (access === "unavailable") throw new Error();
+      if (access === "denied") {
+        await supabase.auth.signOut({ scope: "local" });
+        return redirectTo("/login", "domain");
+      }
+    } catch {
+      const unavailable = NextResponse.json({ error: "ログインの許可を確認できませんでした。時間をおいて再読み込みしてください。" }, { status: 503 });
+      response.cookies.getAll().forEach((cookie) => unavailable.cookies.set(cookie));
+      return unavailable;
+    }
+  }
 
   // 認証済みで /login → /home
   if (user && pathname.startsWith("/login")) {

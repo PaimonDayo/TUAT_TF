@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { loginAccessResponse } from "@/lib/supabase/login-access";
 import { signedImageUrl } from "@/lib/image-storage";
 import {
   AVATAR_BUCKET,
@@ -19,6 +20,8 @@ export async function GET(request: Request) {
   }
 
   const path = new URL(request.url).searchParams.get("path");
+  const accessError = await loginAccessResponse(supabase);
+  if (accessError) return accessError;
   if (!path || !isSafeAvatarStoragePath(path)) {
     return NextResponse.json({ error: "画像が見つかりません" }, { status: 404 });
   }

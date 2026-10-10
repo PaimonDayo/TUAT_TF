@@ -6,6 +6,7 @@ export * from "./records";
 export * from "./schedules";
 export * from "./notices";
 export * from "./members";
+export * from "./login-allowlist";
 export * from "./rankings";
 export * from "./venues";
 export * from "./notes";

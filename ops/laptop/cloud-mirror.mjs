@@ -108,6 +108,8 @@ const windowStartTime = new Date(Date.now() - WINDOW_DAYS * 86400_000).toISOStri
  * filter を関数にしている表は、先に読んだ親の表の結果で絞る。
  */
 const TABLES = [
+  // PCだけで管理し、クラウドAuthの登録フックへ配る。予備側からの編集はDBが拒否する。
+  { table: "login_email_allowlist", pk: ["email"] },
   { table: "role_categories", pk: ["id"] },
   { table: "roles", pk: ["id"] },
   { table: "profiles", pk: ["id"] },

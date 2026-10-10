@@ -2,8 +2,9 @@ import { redirect } from "next/navigation";
 import { SubHeader } from "@/components/layout/SubHeader";
 import { RoleManager } from "@/components/features/RoleManager";
 import { AdminMemberList } from "@/components/features/AdminMemberList";
+import { LoginAllowlist } from "@/components/features/LoginAllowlist";
 import { getCurrentProfile } from "@/lib/supabase/auth";
-import { getAllProfiles, getAllRoleCategories, getAllRoles } from "@/lib/queries";
+import { getAllProfiles, getAllRoleCategories, getAllRoles, getLoginAllowedEmails } from "@/lib/queries";
 import { permissionsOf } from "@/lib/permissions";
 
 export default async function AdminPage() {
@@ -11,10 +12,11 @@ export default async function AdminPage() {
   const permissions = permissionsOf(profile.roles);
   if (!permissions.manageMembers) redirect("/home");
 
-  const [members, roles, categories] = await Promise.all([
+  const [members, roles, categories, allowedEmails] = await Promise.all([
     getAllProfiles(),
     getAllRoles(),
     getAllRoleCategories(),
+    getLoginAllowedEmails(),
   ]);
 
   return (
@@ -22,6 +24,11 @@ export default async function AdminPage() {
       <SubHeader title="部員・ロール管理" backHref="/mypage" />
 
       <div className="px-4 pt-2 space-y-6">
+        <section className="space-y-2">
+          <p className="section-label">ログイン許可リスト</p>
+          <p className="text-caption">大学のアカウントがない人のGoogleアカウントを登録できます。大学アカウントは登録不要です。</p>
+          <LoginAllowlist entries={allowedEmails} />
+        </section>
         <section className="space-y-2">
           <p className="section-label">ロール</p>
           <p className="text-caption">

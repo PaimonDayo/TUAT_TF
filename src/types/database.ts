@@ -14,6 +14,12 @@ export type Database = {
   }
   public: {
     Tables: {
+      login_email_allowlist: {
+        Row: { email: string; created_at: string; created_by: string }
+        Insert: { email: string }
+        Update: never
+        Relationships: []
+      }
       sheet_reply_deletions: {
         Row: { id: string; kind: string; actor_id: string | null; record_id: string; sheet_name: string; recorded_date: string; reply_index: number | null; expected_content: string; created_at: string; processed_at: string | null }
         Insert: never
@@ -2168,6 +2174,7 @@ export type Database = {
       }
     }
     Functions: {
+      login_access_allowed: { Args: never; Returns: boolean }
       save_october_sheet_setup: {
         Args: { p_sheet_name: string; p_fields: Json; p_signature: string; p_mode: string }
         Returns: undefined
