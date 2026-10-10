@@ -4,6 +4,8 @@ import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { FormModal } from "@/components/ui/form-modal";
+import { useRouter } from "next/navigation";
+import { ObEventOperationsEditor } from "./ObEventOperationsEditor";
 import { ObDutyTable } from "./ObDutyTable";
 import { OB_PROGRAM, obFamilyLabel as displayEvent } from "@/lib/ob-meet";
 import { MeetEvent } from "@/lib/meet-operations";
@@ -12,14 +14,22 @@ import { obEventRule, type ObEventOperation } from "@/lib/ob-operations";
 import type { ObEntry } from "@/lib/ob-entries";
 import type { EntryMember } from "@/lib/entry-identity";
 import { type ObDuty, type ObDutyRole } from "@/lib/ob-duty";
+import { obResultRanks } from "@/lib/ob-result-ranking";
 
 /** One event opens the whole start list, including withdrawals and already recorded results. */
-export function ObPublicProgram({ entries, members, duties, roles, operations, view = "program", canEditDuties = false }: {
-  view?: "program" | "duties"; canEditDuties?: boolean; entries: ObEntry[]; members: EntryMember[]; duties: ObDuty[]; roles: ObDutyRole[]; operations: ObEventOperation[];
+export function ObPublicProgram({ entries, members, duties, roles, operations, view = "program", canEditDuties = false, canEditRecords = false }: {
+  view?: "program" | "duties"; canEditDuties?: boolean; canEditRecords?: boolean; entries: ObEntry[]; members: EntryMember[]; duties: ObDuty[]; roles: ObDutyRole[]; operations: ObEventOperation[];
 }) {
+  const router = useRouter();
+  const [record,setRecord]=useState<{event:string;entryId:string}>();
+  const [local,setLocal]=useState<ObEventOperation[]>([]);
+  const latest=new Map(operations.map(op=>[op.event_name,op]));
+  for(const op of local) if(op.revision>(latest.get(op.event_name)?.revision??-1)) latest.set(op.event_name,op);
+  const currentOperations=[...latest.values()];
   const [event, setEvent] = useState<string | null>(null);
-  const eventRows = (name: string) => obFamilyRows(name, entries, operations);
+  const eventRows = (name: string) => obFamilyRows(name, entries, currentOperations);
   const people = event ? eventRows(event) : [];
+  const ranks = new Map(["男子", "女子"].flatMap(division => [...obResultRanks(obEventRule(event ?? "100m"), people.filter(row => row.division === division && row.state.canParticipate).map(row => row.performance))]));
   const field = event !== null && obEventRule(event).discipline !== "track";
   return <section className="space-y-3">
     {view === "program" ? <Card className="divide-y divide-separator px-3">
@@ -31,11 +41,12 @@ export function ObPublicProgram({ entries, members, duties, roles, operations, v
           const unavailable = rows.length - present;
           return <button key={name} type="button" onClick={() => setEvent(name)} className="flex min-h-14 w-full items-center gap-2 text-left pressable">
             <span className="min-w-0 flex-1 break-words text-body font-medium">{displayEvent(name)}</span>
-            <span className="shrink-0 text-right text-caption"><span className="block">{present}人</span>{unavailable > 0 && <span className="block text-micro">欠場・取消 {unavailable}</span>}</span><ChevronRight size={16} className="shrink-0 text-muted" />
+            <span className="shrink-0 text-right text-caption"><span className="block">{present}人</span>{unavailable > 0 && <span className="block text-micro">DNS {unavailable}</span>}</span><ChevronRight size={16} className="shrink-0 text-muted" />
           </button>;
         }) : <div className="py-3 text-body">{slot.label}{slot.note && <p className="text-caption">{slot.note}</p>}</div>}</div>
       </div>)}
-    </Card> : <ObDutyTable integrated canEditDuties={canEditDuties} entries={entries} members={members} duties={duties} roles={roles} operations={operations} onEvent={name=>setEvent(name.replace(/^(男子|女子)/,""))} />}
+    </Card> : <ObDutyTable onRecord={canEditRecords?(event,entryId)=>setRecord({event,entryId}):undefined} integrated canEditDuties={canEditDuties} entries={entries} members={members} duties={duties} roles={roles} operations={currentOperations} onEvent={name=>setEvent(name.replace(/^(男子|女子)/,""))} />}
+    {record&&<ObEventOperationsEditor event={record.event} initialEntryId={record.entryId} entries={entries} initial={latest.get(record.event)} operations={operations} onSaved={saved=>{setLocal(current=>[...current.filter(op=>op.event_name!==saved.event_name),saved]);router.refresh();}} onClose={()=>setRecord(undefined)}/>}
     <FormModal open={event !== null} autoFocus={false} onOpenChange={open => { if (!open) setEvent(null); }} title={displayEvent(event ?? "")}>
       <div className="space-y-4">
         <p className="text-caption">{people.length}人・{field ? "試技順" : "組分け"}と記録</p>
@@ -47,7 +58,7 @@ export function ObPublicProgram({ entries, members, duties, roles, operations, v
           return <li key={row.id} className={`flex flex-wrap items-center gap-x-4 gap-y-1 py-3 ${unavailable ? "text-muted" : ""}`}>
             <div className="w-28 shrink-0"><span className="block text-caption">{division}</span><span className="block text-caption">{placement}</span></div>
             <div className="min-w-0 flex-1 basis-36"><p className="break-words text-body font-medium">{entry?.submitted_name ?? "参加情報なし"}<span className="ml-2 text-caption">{entry?.grade}</span></p>{entry?.qualification_marks[eventName] && !state.recorded && <p className="text-micro text-muted2">資格記録 {entry.qualification_marks[eventName]}</p>}</div>
-            <div className="min-w-20 text-right"><p className={`text-body ${unavailable ? "text-muted" : "font-semibold tabular-nums"}`}>{state.recorded ? result : state.status === "entered" ? "—" : state.label}</p>{state.recorded && (state.absent || !state.registered) && <p className="text-micro text-muted2">{state.absent ? "以降は欠席" : "登録取消・記録保持"}</p>}</div>
+            <div className="min-w-20 text-right">{ranks.has(performance.entryId)&&<p className="text-caption">{ranks.get(performance.entryId)}位</p>}<p className={`text-body ${unavailable ? "text-muted" : "font-semibold tabular-nums"}`}>{state.recorded ? result : state.status === "entered" ? "—" : state.label}</p>{state.recorded && (state.absent || !state.registered) && <p className="text-micro text-muted2">{state.absent ? "以降は欠席" : "DNS・記録保持"}</p>}</div>
           </li>;
         })}</ul> : <p className="text-caption">出場登録はありません。</p>}
       </div>

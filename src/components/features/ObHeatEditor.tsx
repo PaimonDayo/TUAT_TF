@@ -44,8 +44,8 @@ function ObHeatEditorView({ event, entrants, draft, entries, onClose, onAddEntry
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-body">出場登録 {present}人</p>{onAddEntry && <Button variant="outline" disabled={draft.locked || draft.reviewing} onClick={() => onAddEntry(event)}>出場者を追加</Button>}</div>
       <ObOperationConflict draft={draft} entries={entries} event={event} groupLabel={groupLabel}/>
-      {field ? <MeetFieldOrderBoard key={draft.revision ?? "new"} data={draft.data} entrants={entrants} disabled={draft.locked || draft.reviewing} onChange={draft.change} modelLimits={modelLimits}/>
-        : <MeetHeatBoard key={draft.revision ?? "new"} data={draft.data} entrants={entrants} orderLabel={separate ? "レーン" : "番号"} capacity={capacity} disabled={draft.locked || draft.reviewing} onChange={draft.change} groupLabel={groupLabel} nextGroup={nextGroup} groupLimit={groupLimit} modelLimits={modelLimits}/>}
+      {field ? <MeetFieldOrderBoard statusActions={false} key={draft.revision ?? "new"} data={draft.data} entrants={entrants} disabled={draft.locked || draft.reviewing} onChange={draft.change} modelLimits={modelLimits}/>
+        : <MeetHeatBoard statusActions={false} key={draft.revision ?? "new"} data={draft.data} entrants={entrants} orderLabel={separate ? "レーン" : "番号"} capacity={capacity} disabled={draft.locked || draft.reviewing} onChange={draft.change} groupLabel={groupLabel} nextGroup={nextGroup} groupLimit={groupLimit} modelLimits={modelLimits}/>}
       {draft.message && <p role={draft.failed ? "alert" : "status"} className={`text-body ${draft.failed ? "text-danger" : "text-accent"}`}>{draft.message}</p>}
     </div>
     <FormModalFooter><div className="flex items-center gap-3"><p className="min-w-0 flex-1 text-caption">{draft.unconfirmed ? "保存結果を確認してください" : draft.dirty ? "未保存の変更があります" : "変更はありません"}</p><Button className="min-w-32" disabled={draft.busy || draft.reviewing || !draft.dirty && !draft.unconfirmed} onClick={() => void draft.save()}>{draft.busy ? draft.unconfirmed ? "確認中…" : "保存中…" : draft.unconfirmed ? "保存結果を確認" : "保存する"}</Button></div></FormModalFooter>

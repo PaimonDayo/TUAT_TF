@@ -135,16 +135,16 @@ export function ObEntryEditor({ entry, members, initialProfileId = "", party, pa
           </div>;
         })}
       </Card>
-      {entry && entry.events.length > 0 && !events.length && <p className="text-caption">保存すると全種目のエントリーを取り消します。</p>}
+      {entry && entry.events.length > 0 && !events.length && <p className="text-caption">保存すると全種目をDNSとして扱います。</p>}
     </>}
     <FormModalFooter><div className="flex items-center gap-3">
       <span className="shrink-0 text-body">{events.length}種目</span>
       <Button className="flex-1" disabled={saving || !unconfirmed && (!dirty || !detailsValid || (!entry && ((mode === "guest" && !self ? !guestName.trim() || !guestGrade : !profileId) || (!events.length && partyStatus === "未回答"))))} onClick={() => unconfirmed ? void save() : conflicts.length ? setConfirm("duties") : removed.length ? setConfirm("save") : void save()}>{saving ? unconfirmed ? "確認中…" : "保存中…" : unconfirmed ? "保存結果を確認" : entry ? "変更を保存する" : "登録する"}</Button>
     </div>{saveMessage && <p role="alert" className="mt-3 text-body text-danger">{saveMessage}</p>}</FormModalFooter>
     <ConfirmDialog open={confirm !== null} onOpenChange={(open) => { if (!open && !saving) setConfirm(null); }}
-      title={confirm === "duties" ? "補助担当の調整が必要です" : confirm === "division" ? "出場区分を変更しますか？" : confirm === "close" ? "変更を破棄しますか？" : "エントリーを取り消しますか？"}
-      description={confirm === "duties" ? `${displayedConflicts.map(duty=>`${duty.time} ${duty.event}：${duty.assignment}`).join("。 ")}。補助担当を残して出場登録を保存します。担当者は代替者を選んでください。${removed.length?`${removed.join("・")}の出場登録は取り消します。`:""}` : confirm === "division" ? "選択した種目と入力中の資格記録をクリアします。" : confirm === "close" ? "保存していない変更は失われます。" : `${removed.join("・")}を取り消して保存します。`}
-      confirmLabel={confirm === "duties" ? "確認して保存する" : confirm === "division" ? "変更する" : confirm === "close" ? "破棄する" : "取り消して保存する"} busyLabel="保存中…" busy={saving}
+      title={confirm === "duties" ? "補助担当の調整が必要です" : confirm === "division" ? "出場区分を変更しますか？" : confirm === "close" ? "変更を破棄しますか？" : "選択した種目をDNSにしますか？"}
+      description={confirm === "duties" ? `${displayedConflicts.map(duty=>`${duty.time} ${duty.event}：${duty.assignment}`).join("。 ")}。補助担当を残して出場登録を保存します。担当者は代替者を選んでください。${removed.length?`${removed.join("・")}はDNSとして扱います。`:""}` : confirm === "division" ? "選択した種目と入力中の資格記録をクリアします。" : confirm === "close" ? "保存していない変更は失われます。" : `${removed.join("・")}をDNSとして扱い、保存します。`}
+      confirmLabel={confirm === "duties" ? "確認して保存する" : confirm === "division" ? "変更する" : confirm === "close" ? "破棄する" : "DNSにする"} busyLabel="保存中…" busy={saving}
       onConfirm={() => { if (confirm === "division") { setGender(pendingDivision ?? ""); setEvents([]); setMarks({}); setConfirm(null); } else if (confirm === "close") onClose(); else void save(confirm === "duties"); }} />
   </section></FormModal>;
 }

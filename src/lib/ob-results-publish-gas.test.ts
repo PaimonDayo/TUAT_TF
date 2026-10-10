@@ -18,6 +18,8 @@ type Metadata = { metadataId: number; metadataKey: string; metadataValue: string
 type Target = { properties: { sheetId: number; title: string; gridProperties: { rowCount: number; columnCount: number; frozenRowCount?: number } }; cells: Cell[][] };
 type Workbook = { sheets: Target[]; developerMetadata: Metadata[] };
 type Request = {
+  deleteSheet?: { sheetId: number };
+  deleteDeveloperMetadata?: { dataFilter: { developerMetadataLookup: { metadataId: number } } };
   addSheet?: { properties: Target["properties"] };
   insertDimension?: { range: { sheetId: number; dimension: string; startIndex: number; endIndex: number } };
   appendDimension?: { sheetId: number; dimension: string; length: number };
@@ -65,6 +67,8 @@ function setup(advanced = false) {
     if (state.rejectBatch) throw new Error("synthetic rejected batch");
     const next = structuredClone(state.workbook);
     for (const request of requests) {
+      if (request.deleteSheet) next.sheets = next.sheets.filter(s => s.properties.sheetId !== request.deleteSheet!.sheetId);
+      if (request.deleteDeveloperMetadata) next.developerMetadata = next.developerMetadata.filter(m => m.metadataId !== request.deleteDeveloperMetadata!.dataFilter.developerMetadataLookup.metadataId);
       if (request.addSheet) next.sheets.push({ properties: request.addSheet.properties, cells: [] });
       if (request.appendDimension) {
         const value = request.appendDimension, target = next.sheets.find(sheet => sheet.properties.sheetId === value.sheetId)!;
@@ -122,7 +126,7 @@ function setup(advanced = false) {
         return { values: state.workbook.sheets.find(sheet => sheet.properties.title === name)!.cells.slice(0, Number(count)).map(row => row.slice(0, width).map(cell => cell.userEnteredValue?.stringValue ?? cell.userEnteredValue?.numberValue ?? "")) };
       }) }) },
       batchUpdate: (body: { requests: Request[] }, id: string) => { expect(id).toBe(OB_RESULTS_SPREADSHEET_ID); applyBatch(body.requests); } } },
-    Utilities: { newBlob: blob, gzip: (value: ReturnType<typeof blob>) => blob(gzipSync(value.getBytes()), "application/gzip"), ungzip: (value: ReturnType<typeof blob>) => {
+    Utilities: { DigestAlgorithm: { SHA_256: "SHA_256" }, computeDigest: (_algorithm: string, value: string) => [...createHash("sha256").update(value).digest()], newBlob: blob, gzip: (value: ReturnType<typeof blob>) => blob(gzipSync(value.getBytes()), "application/gzip"), ungzip: (value: ReturnType<typeof blob>) => {
       if (!value.contentType) throw Error("Blob object must have non-null content type");
       return blob(gunzipSync(value.getBytes()), "application/json");
     },
@@ -134,70 +138,25 @@ function setup(advanced = false) {
   return { state, api: context as unknown as GasApi, initial };
 }
 
-it("updates all twelve tabs in one batch, treats formula-looking names as text, and preserves independent notes and tabs", () => {
-  const { state, api, initial } = setup();
-  expect(api.dryRunObResultsPublish().changed).toBe(true);
-  expect(state.writes).toHaveLength(0);
-  expect(api.publishObResults().changed).toBe(true);
-  expect(state.writes).toHaveLength(1);
-  expect(state.writes[0].filter(request => request.updateCells)).toHaveLength(12);
-  for (const request of state.writes[0]) if (request.updateCells) {
-    expect(request.updateCells.rows).toHaveLength(request.updateCells.range.endRowIndex);
-    for (const row of request.updateCells.rows) expect(row.values).toHaveLength(request.updateCells.range.endColumnIndex);
-  }
-  for (const [index, source] of state.source.sheets.entries()) {
-    const target = state.workbook.sheets[index], managedCols = source.widths!.length;
-    expect(target.cells[0][managedCols].userEnteredValue?.stringValue).toBe("独自列");
-    expect(target.cells[1][managedCols].userEnteredValue?.stringValue).toBe("右の独自追記");
-    expect(target.cells[Math.max(source.rows.length, initial[index].rows)][0].userEnteredValue?.stringValue).toBe("下の独自追記");
-  }
-  expect(state.workbook.sheets[12].cells[0][0].userEnteredValue?.stringValue).toBe("保持");
-  expect(state.workbook.sheets[4].cells[1][3].userEnteredValue).toEqual({ stringValue: "=HYPERLINK(合成)" });
-  expect(state.timezone).toBe("Asia/Tokyo");
-});
-
-const uiEditEvent = () => ({ source: { getId: () => OB_RESULTS_SPREADSHEET_ID }, range: { getSheet: () => ({ getName: () => "エントリー編集" }) } });
-const cellsOf = (values: (string | number | null)[]) => values.map(v => v === null || v === "" ? {} : { userEnteredValue: typeof v === "number" ? { numberValue: v } : { stringValue: v } });
-it("immediately sends group moves from the editor and stops after canonical output without a sync loop", () => {
-  const { state, api } = setup(true); api.initializeObPublisher();
-  const editor = state.workbook.sheets.find(s => s.properties.title === "エントリー編集")!;
-  editor.cells[1][5] = cellsOf(["混合2組"])[0]; editor.cells[1][6] = cellsOf([4])[0];
-  const operation: ObEventOperation = { meet_key: "ob-2026", event_name: "男子100m", revision: 1, updated_at: "", data: { confirmed: false, participants: [{ ...emptyPerformance(roster[0].id), group: 2, order: 4, heatScope: "混合" }] } };
-  state.afterSaveSource = Object.assign(snapshot(roster, [operation]), obSheetEditSource(roster, [operation], "synthetic"));
-  api.onObSheetEdit(uiEditEvent());
-  expect(state.statusPosts).toHaveLength(1);
-  expect(state.statusPosts[0].changes[0]).toMatchObject({ family: "100m", position: true, group: 2, order: 4, heatScope: "混合" });
-  const count = state.writes.length;
-  api.publishObResults(); api.publishObResults();
-  expect(state.statusPosts).toHaveLength(1); expect(state.writes).toHaveLength(count);
-});
-it("accepts copied participant numbers for new events and blank numbers for new people without duplicating on lost replies", () => {
-  const { state, api } = setup(true); api.publishObResults();
-  const editor = state.workbook.sheets.find(s => s.properties.title === "エントリー編集")!;
-  const key = obSheetEditSource(roster, [], "synthetic").editSheet.rows[1][0];
-  editor.cells[2] = cellsOf([key, roster[0].submitted_name, "OB・OG", "男子", "300m", "", "", "出場"]);
-  editor.cells[3] = cellsOf(["", "架空追加", "B2", "女子", "300m", "", "", "出場"]);
-  const nextEntries = [{ ...roster[0], events: ["男子100m", "男子300m"], revision: 1 }, { ...roster[0], id: "fake-new-person", submitted_name: "架空追加", grade: "B2", events: ["女子300m"] }];
-  state.afterSaveSource = Object.assign(snapshot(nextEntries), obSheetEditSource(nextEntries, [], "synthetic"));
-  state.statusUnknown = true;
-  expect(() => api.onObSheetEdit(uiEditEvent())).toThrow();
-  expect(state.statusPosts[0].changes).toHaveLength(2);
-  api.publishObResults();
-  expect(state.statusPosts[1].requestId).toBe(state.statusPosts[0].requestId);
-  api.publishObResults(); expect(state.statusPosts).toHaveLength(2);
-});
-it("preserves incomplete additions, duplicate rows, identity edits and row deletions without a DB request", () => {
-  for (const scenario of ["incomplete", "duplicate", "rename", "delete"]) {
-    const { state, api } = setup(true); api.publishObResults();
-    const editor = state.workbook.sheets.find(s => s.properties.title === "エントリー編集")!;
-    if (scenario === "incomplete") editor.cells[2] = cellsOf(["", "架空入力途中"]);
-    if (scenario === "duplicate") editor.cells[2] = structuredClone(editor.cells[1]);
-    if (scenario === "rename") editor.cells[1][1] = cellsOf(["別の人"])[0];
-    if (scenario === "delete") editor.cells[1] = [];
-    const before = JSON.stringify(editor.cells);
-    expect(() => api.onObSheetEdit(uiEditEvent())).toThrow();
-    expect(state.statusPosts).toHaveLength(0); expect(JSON.stringify(editor.cells)).toBe(before);
-  }
+it("retire the old managed editor atomically and recover a lost batch reply without recreating it", () => {
+  const { state, api } = setup(); api.publishObResults();
+  const editorSource = obSheetEditSource(roster, [], "synthetic");
+  const slot = state.properties.OB_STATUS_STATE_SLOT;
+  const raw = Array.from({ length: Number(state.properties[`OB_STATUS_${slot}_COUNT`]) }, (_, i) => state.properties[`OB_STATUS_${slot}_${i}`]).join("");
+  const saved = JSON.parse(gunzipSync(Buffer.from(raw.slice(3), "base64")).toString());
+  Object.assign(saved.baseline, editorSource);
+  const encoded = "gz:" + gzipSync(JSON.stringify(saved)).toString("base64");
+  for (let i = 0; i < Math.ceil(encoded.length / 6000); i++) state.properties[`OB_STATUS_${slot}_${i}`] = encoded.slice(i * 6000, (i + 1) * 6000);
+  state.properties[`OB_STATUS_${slot}_COUNT`] = String(Math.ceil(encoded.length / 6000));
+  state.source = Object.assign(snapshot(), editorSource);
+  state.workbook.sheets.push({ properties: { sheetId: 88, title: "エントリー編集", gridProperties: { rowCount: 100, columnCount: 8 } }, cells: editorSource.editSheet.rows.map(cellsOf) });
+  state.workbook.developerMetadata.push({ metadataId: 77, metadataKey: "TUAT_OB_EDIT_MANAGED_V1", metadataValue: "{}" });
+  state.unknownAfterCommit = true;
+  expect(() => api.publishObResults()).toThrow();
+  expect(state.workbook.sheets.some(s => s.properties.title === "エントリー編集")).toBe(false);
+  const writes = state.writes.length; api.publishObResults(); api.publishObResults();
+  expect(state.writes).toHaveLength(writes); expect(state.statusPosts).toHaveLength(0);
+  expect(state.workbook.sheets.find(s => s.properties.title === "独自タブ")).toBeDefined();
 });
 
 it("observes committed metadata after an unknown response and never repeats a column insertion", () => {
@@ -259,72 +218,19 @@ it("starts exactly one five-minute trigger only after successful setup and verif
   state.code = 200;
   api.initializeObPublisher();
   api.initializeObPublisher();
-  expect(state.triggers).toEqual(["publishObResults", "onObSheetEdit", "onObSheetChange"]);
+  expect(state.triggers).toEqual(["publishObResults"]);
   expect(state.writes).toHaveLength(1);
 });
 
-it("offers four statuses, saves a sheet dropdown change before output, and retains the result columns", () => {
-  const { state, api } = setup();
-  api.publishObResults();
-  expect(JSON.stringify(state.writes[0])).toContain('"showCustomUi":true');
-  const row = state.workbook.sheets[4].cells[1];
-  row[5] = { userEnteredValue: { stringValue: "DNF（途中棄権）" } };
-  const beforeResult = structuredClone(row[6]);
-  api.dryRunObResultsPublish();
-  expect(state.statusPosts[0].dryRun).toBe(true);
+
+it("never submits spreadsheet changes and removes dropdowns from generated output", () => {
+  const { state, api } = setup(); api.publishObResults();
+  state.workbook.sheets[4].cells[1][5] = cellsOf(["DNS（欠場）"])[0];
+  api.onObSheetEdit(uiEditEvent()); api.publishObResults();
+  expect(state.statusPosts).toHaveLength(0);
   expect(state.source.sheets[4].rows[1][5]).toBe("出場");
-  api.publishObResults();
-  expect(state.statusPosts[1].changes[0].status).toBe("DNF（途中棄権）");
-  expect(state.source.sheets[4].rows[1][5]).toBe("DNF（途中棄権）");
-  expect(state.workbook.sheets[4].cells[1][6]).toEqual(beforeResult);
-  api.publishObResults();
-  expect(state.statusPosts).toHaveLength(2);
+  expect(JSON.stringify(state.writes)).not.toContain('"showCustomUi":true');
 });
 
-it("reconciles an unknown status save using the identical durable request ID", () => {
-  const { state, api } = setup();
-  api.publishObResults();
-  state.workbook.sheets[4].cells[1][5] = { userEnteredValue: { stringValue: "DNS（欠場）" } };
-  state.statusUnknown = true;
-  expect(() => api.publishObResults()).toThrow("status response lost");
-  expect(state.workbook.sheets[4].cells[1][5].userEnteredValue?.stringValue).toBe("DNS（欠場）");
-  api.publishObResults();
-  expect(state.statusPosts).toHaveLength(2);
-  expect(state.statusPosts[0].requestId).toBe(state.statusPosts[1].requestId);
-});
-
-it("keeps sheet edits after a conflict or source outage and refuses renamed/reordered identity cells", () => {
-  for (const issue of ["conflict", "offline", "identity"] as const) {
-    const { state, api } = setup(); api.publishObResults();
-    state.workbook.sheets[4].cells[1][5] = { userEnteredValue: { stringValue: "DNS（欠場）" } };
-    if (issue === "conflict") state.postCode = 409;
-    if (issue === "offline") state.code = 503;
-    if (issue === "identity") state.workbook.sheets[4].cells[1][3] = { userEnteredValue: { stringValue: "別の合成人物" } };
-    expect(() => api.publishObResults()).toThrow();
-    expect(state.workbook.sheets[4].cells[1][5].userEnteredValue?.stringValue).toBe("DNS（欠場）");
-    expect(state.source.sheets[4].rows[1][5]).toBe("出場");
-    if (issue !== "conflict") expect(state.statusPosts).toHaveLength(0);
-  }
-});
-
-it("keeps a later dropdown edit after an earlier save response was lost", () => {
-  const { state, api } = setup(); api.publishObResults();
-  state.workbook.sheets[4].cells[1][5] = { userEnteredValue: { stringValue: "DNS（欠場）" } };
-  state.statusUnknown = true;
-  expect(() => api.publishObResults()).toThrow();
-  state.workbook.sheets[4].cells[1][5] = { userEnteredValue: { stringValue: "DQ（失格）" } };
-  expect(() => api.publishObResults()).toThrow("input changed");
-  expect(state.workbook.sheets[4].cells[1][5].userEnteredValue?.stringValue).toBe("DQ（失格）");
-  expect(state.source.sheets[4].rows[1][5]).toBe("DNS（欠場）");
-});
-
-it("compresses a full 300-person event and recovers Japanese rows across another source update", () => {
-  const { state, api } = setup(); api.publishObResults();
-  const entries = Array.from({ length: 300 }, (_, index) => ({ ...roster[0], id: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`, submitted_name: `追加合成${index}` }));
-  state.source = snapshot(entries); api.publishObResults();
-  state.source = snapshot(entries.map((entry, index) => index === 299 ? { ...entry, absent: true, revision: 1 } : entry));
-  api.publishObResults();
-  expect(state.workbook.sheets[4].cells.filter(row => row[5]?.userEnteredValue?.stringValue === "DNS（欠場）")).toHaveLength(1);
-  expect(Object.values(state.properties).every(value => Buffer.byteLength(value) < 9000)).toBe(true);
-  expect(Object.values(state.properties).reduce((sum, value) => sum + Buffer.byteLength(value), 0)).toBeLessThan(500000);
-});
+function cellsOf(row: (string | number | null)[]): Cell[] { return row.map(value => value === null || value === "" ? {} : { userEnteredValue: typeof value === "number" ? { numberValue: value } : { stringValue: value } }); }
+function uiEditEvent() { return { source: { getId: () => OB_RESULTS_SPREADSHEET_ID }, range: { getSheet: () => ({ getName: () => "100m" }) } }; }

@@ -10,8 +10,8 @@ import type { MeetEventData, MeetOperationLimits, MeetPerformance } from "@/lib/
 type FieldEntrant = { id: string; name: string; grade: string; mark: string; alumni: boolean; eligible: boolean; absent?: boolean; division?: "男子" | "女子" };
 type FieldRow = { id: string; person: MeetPerformance; number: number | null; locked: boolean };
 
-export function MeetFieldOrderBoard({ data, entrants, disabled, onChange, modelLimits }: {
-  data: MeetEventData; entrants: FieldEntrant[]; disabled: boolean; onChange: (data: MeetEventData) => void; modelLimits?: MeetOperationLimits;
+export function MeetFieldOrderBoard({ data, entrants, disabled, onChange, modelLimits, statusActions = true }: {
+  statusActions?: boolean; data: MeetEventData; entrants: FieldEntrant[]; disabled: boolean; onChange: (data: MeetEventData) => void; modelLimits?: MeetOperationLimits;
 }) {
   const [past, setPast] = useState<MeetEventData[]>([]);
   const [message, setMessage] = useState("");
@@ -35,15 +35,15 @@ export function MeetFieldOrderBoard({ data, entrants, disabled, onChange, modelL
   function row(person: MeetPerformance, number: number | null) {
     const entry = people.get(person.entryId), name = entry?.name ?? "登録解除済み";
     const editable = active(person);
-    const reason = entry?.absent ? "大会欠席" : !entry?.eligible ? "出場取消" : person.status === "DNS" ? "DNS" : person.status;
+    const reason = entry?.absent ? "大会欠席" : !entry?.eligible ? "DNS" : person.status === "DNS" ? "DNS" : person.status;
     const marks = person.trials.map((trial, index) => {
       const result = trial.status === "foul" ? "失敗" : trial.status === "pass" ? "パス" : "";
       return trial.mark || result ? `${index + 1}回目 ${trial.mark}${trial.wind ? `（風速 ${trial.wind}）` : ""}${result ? ` ${result}` : ""}` : "";
     }).filter(Boolean);
     return <div role="listitem" className="flex min-h-16 items-center gap-2 border-b border-separator bg-card p-2">
       <span aria-label={`${labelledName(person.entryId, "登録解除済み")}の試技順`} className={`w-12 shrink-0 text-center ${number === null ? "text-caption text-ink/75" : "text-body tabular-nums"}`}>{number === null ? "順番未定" : `${number}番`}</span>
-      <div className="min-w-0 flex-1"><p className={`break-words text-body font-medium ${entry?.alumni ? "text-violet-700" : ""}`}>{name}</p><p className="text-caption">{entry?.division && <span className="font-medium text-ink/75">{entry.division}{entry.grade || entry.mark ? " · " : ""}</span>}{entry?.grade}{entry?.mark ? ` · 資格記録 ${entry.mark}` : ""}</p>{!!marks.length && <p className="break-words text-caption">{marks.join("、")}</p>}{!editable && <p className="text-caption text-ink/75">{reason}{number !== null ? " · 順番を保持" : ""}</p>}{eligible.has(person.entryId) && person.status === "DNS" && <Button size="sm" variant="ghost" className="min-h-11 px-2" disabled={disabled} aria-label={`${labelledName(person.entryId)}を出場に戻す`} onClick={() => change(() => new MeetHeatPlan(data, eligible, modelLimits).setDns(person.entryId, false), `${labelledName(person.entryId)}を出場に戻しました`)}>出場に戻す</Button>}</div>
-      {editable && <Button size="sm" variant="ghost" className="min-h-11 shrink-0 px-2 text-muted2" disabled={disabled} aria-label={`${labelledName(person.entryId)}をDNSにする`} onClick={() => change(() => new MeetHeatPlan(data, eligible, modelLimits).setDns(person.entryId, true), `${labelledName(person.entryId)}をDNSにしました`)}>DNS</Button>}
+      <div className="min-w-0 flex-1"><p className={`break-words text-body font-medium ${entry?.alumni ? "text-violet-700" : ""}`}>{name}</p><p className="text-caption">{entry?.division && <span className="font-medium text-ink/75">{entry.division}{entry.grade || entry.mark ? " · " : ""}</span>}{entry?.grade}{entry?.mark ? ` · 資格記録 ${entry.mark}` : ""}</p>{!!marks.length && <p className="break-words text-caption">{marks.join("、")}</p>}{!editable && <p className="text-caption text-ink/75">{reason}{number !== null ? " · 順番を保持" : ""}</p>}{statusActions && eligible.has(person.entryId) && person.status === "DNS" && <Button size="sm" variant="ghost" className="min-h-11 px-2" disabled={disabled} aria-label={`${labelledName(person.entryId)}を出場に戻す`} onClick={() => change(() => new MeetHeatPlan(data, eligible, modelLimits).setDns(person.entryId, false), `${labelledName(person.entryId)}を出場に戻しました`)}>出場に戻す</Button>}</div>
+      {statusActions && editable && <Button size="sm" variant="ghost" className="min-h-11 shrink-0 px-2 text-muted2" disabled={disabled} aria-label={`${labelledName(person.entryId)}をDNSにする`} onClick={() => change(() => new MeetHeatPlan(data, eligible, modelLimits).setDns(person.entryId, true), `${labelledName(person.entryId)}をDNSにしました`)}>DNS</Button>}
     </div>;
   }
   return <div className="space-y-4">

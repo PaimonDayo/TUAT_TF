@@ -22,7 +22,7 @@ export function ObOperationConflict({ draft, entries, event, groupLabel, positio
   };
   const sameTrialOrder = (id: string) => fieldNumbers.own.has(id) && fieldNumbers.current.has(id) && fieldNumbers.own.get(id) === fieldNumbers.current.get(id);
   const savedGroup = (person: MeetPerformance) => person.group === null ? "組未指定" : groupLabel ? groupLabel(person.group) : `${person.heatScope ?? event?.match(/^(男子|女子)/)?.[1] ?? ""}${person.group}組`;
-  return <>{!!draft.blocked.length && <section aria-label="欠席・出場取消の変更を確認" className="space-y-3 rounded-xl border border-accent bg-accent/5 p-4">
+  return <>{!!draft.blocked.length && <section aria-label="欠席・DNSの変更を確認" className="space-y-3 rounded-xl border border-accent bg-accent/5 p-4">
     <h3 className="text-headline">入力中に欠席・出場取消になった人がいます</h3>
     <p className="text-body">この人の未保存の変更を取り消すか、出場登録を戻してから保存してください。他の人の入力は残ります。</p>
     {draft.blocked.map(person => <div key={person.entryId} className="flex flex-wrap items-center justify-between gap-2"><span className="text-body">{entries.find(e => e.id === person.entryId)?.submitted_name ?? "出場者"}</span><Button variant="outline" disabled={draft.locked || draft.reviewing} onClick={() => draft.discardPerson(person.entryId)}>この人の変更を取り消す</Button></div>)}

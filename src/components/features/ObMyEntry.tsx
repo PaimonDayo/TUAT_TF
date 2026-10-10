@@ -38,7 +38,7 @@ export function ObMyEntry({ entry, party, me, openEditor = false, embedded = fal
         {entry.absent&&<p className="mt-3 rounded-lg bg-bg p-3 text-body">大会全体の欠席として登録されています。変更は大会担当者へ連絡してください。</p>}
         {rows.length ? <ul className="mt-2 space-y-1">{rows.map((row) => <li key={row.event} className="flex items-baseline gap-3 text-[15px]">
           <span className="w-12 shrink-0 text-caption tabular-nums">{obEventTime(row.event) ?? ""}</span>
-          <span className="min-w-0 flex-1 break-words font-medium">{row.event}{!row.state.registered&&row.state.recorded?<span className="ml-2 text-caption">登録取消</span>:!row.state.recorded&&row.state.status!=="entered"&&<span className="ml-2 text-caption">{row.state.label}</span>}</span><span className="max-w-[45%] whitespace-pre-wrap break-words text-caption">{row.result ? `結果 ${row.result}` : row.mark}</span>
+          <span className="min-w-0 flex-1 break-words font-medium">{row.event}{!row.state.registered&&row.state.recorded?<span className="ml-2 text-caption">DNS</span>:!row.state.recorded&&row.state.status!=="entered"&&<span className="ml-2 text-caption">{row.state.label}</span>}</span><span className="max-w-[45%] whitespace-pre-wrap break-words text-caption">{row.result ? `結果 ${row.result}` : row.mark}</span>
         </li>)}</ul> : <p className="mt-2 text-[15px] text-muted">競技の出場登録なし</p>}
         <p className="mt-2 text-caption">懇親会：{party?.status ?? "未回答"}</p>
       </> : <p className="mt-2 text-[15px] text-muted">まだエントリーしていません</p>}

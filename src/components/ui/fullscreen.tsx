@@ -62,12 +62,12 @@ export function FullScreenContent({
       <Dialog.Content
         data-new-ui-surface={systemGlass || undefined}
         ref={attachContent}
-        onKeyDownCapture={(event) => {
+        onKeyDown={(event) => {
           // このモーダルは Portal で描画されるが、React の合成イベントは
           // 「開いた元のカード」の React ツリーを通って伝播する。カードは
           // タップ／Enter で開閉する role="button" なので、入力欄で改行を
           // 押すとカードが閉じ、編集フォームごと消えてしまっていた。
-          // 入力中のキー操作はここで止める（保存は明示的なボタンのみ）。
+          // 入力欄自身のEnter操作を先に処理し、開いた元のカードへは伝えない。
           // Escape（閉じる）と Tab（フォーカス移動）は Radix 側の処理を
           // 残すため素通しする。
           const target = event.target as HTMLElement | null;

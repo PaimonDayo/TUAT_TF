@@ -54,7 +54,7 @@ it("opens trial order from the field overview without a heat count or heat butto
   const html = renderToStaticMarkup(createElement(ObOperations, { ...props, initial: [operation] }));
   const field = html.match(/<section\b[^>]*aria-label="走り幅跳び"[^>]*>[\s\S]*?<\/section>/)?.[0];
   expect(field).toContain('aria-label="走り幅跳びの試技順"');
-  expect(field).toContain("試技順・DNS");
+  expect(field).toContain("試技順");
   expect(field).toContain("順番未定 1人");
   expect(field).not.toContain("組");
 });
@@ -85,7 +85,7 @@ it("shows the same field ordinals in the public program and retains unplaced peo
   }
   expect(html.indexOf("合成dns")).toBeLessThan(html.indexOf("合成a"));
   expect(html.indexOf("合成a")).toBeLessThan(html.indexOf("合成b"));
-  expect(html).toContain("登録取消・記録保持");
+  expect(html).toContain("DNS・記録保持");
   expect(html).toContain("5.31");
 });
 
@@ -98,7 +98,7 @@ it("retains track heat filters and heat labels", () => {
   expect(html).not.toContain("試技順");
   const overview = renderToStaticMarkup(createElement(ObOperations, { ...props, entries: roster, initial: [{ ...operation, event_name: track }] }));
   expect(overview).toContain('aria-label="100mの組分け"');
-  expect(overview).toContain("組分け・DNS");
+  expect(overview).toContain("組分け");
 });
 
 it("compares field conflict choices using each full snapshot instead of an individual's saved slot", () => {
@@ -211,10 +211,10 @@ it("labels projected conflict groups without exposing virtual group numbers", ()
   expect(html).not.toContain("199組");
 });
 
-it("offers the results workbook only when there is an event to export", () => {
+it("keeps download controls out of the live operations screen", () => {
   const html = renderToStaticMarkup(createElement(ObOperations, { ...props, initial: [operation] }));
-  expect(html).toContain("スプレッドシートに出力");
-  expect(html).toContain("プログラムと種目ごとのスタートリストを、シートに分けて保存します");
+  expect(html).not.toContain("スプレッドシートに出力");
+  expect(html).not.toContain("Excel形式");
   const empty = renderToStaticMarkup(createElement(ObOperations, { ...props, entries: [], initial: [] }));
   expect(empty).toContain("出場登録がある種目はありません");
   expect(empty).not.toContain("スプレッドシートに出力");

@@ -47,7 +47,7 @@ export function useObOperationDraft(event: string, entries: ObEntry[], initial: 
     }
   }
 
-  function change(next: MeetEventData) { if (saving.current || pendingSave.current) return; setDraft(next); setMessage(""); }
+  function change(next: MeetEventData) { if (saving.current || pendingSave.current) return; setDraft(next); setMessage(""); setFailed(false); }
   function discardPerson(id: string) {
     if (saving.current || pendingSave.current) return;
     const before = base.participants.find(p => p.entryId === id) ?? emptyPerformance(id);

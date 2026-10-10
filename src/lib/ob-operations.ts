@@ -30,7 +30,7 @@ export function effectiveObParticipation(event: string, entry?: Pick<ObEntry, "e
   const absent = entry?.absent === true;
   const recorded = hasRecordedObPerformance(performance);
   const status: ObParticipationStatus = recorded ? performance!.status : !entry ? "missing" : absent ? "absent" : !registered ? "withdrawn" : performance?.status ?? "entered";
-  const label = status === "entered" ? recorded ? "記録あり" : "出場" : status === "absent" ? "欠席" : status === "withdrawn" ? "登録取消" : status === "missing" ? "参加情報なし" : status === "DNS" ? "DNS（欠場）" : status;
+  const label = status === "entered" ? recorded ? "記録あり" : "出場" : status === "absent" ? "欠席" : status === "withdrawn" ? "DNS（欠場）" : status === "missing" ? "参加情報なし" : status === "DNS" ? "DNS（欠場）" : status;
   return { status, label, registered, absent, recorded, canParticipate: registered && !absent && (!performance || performance.status === "entered") };
 }
 

@@ -11,7 +11,7 @@ import type { MeetEventData, MeetOperationLimits, MeetPerformance } from "@/lib/
 export type HeatEntrant = { id: string; name: string; grade: string; mark: string; alumni: boolean; eligible: boolean; absent?: boolean; division?: "男子" | "女子" };
 type HeatSlot = { id: string; order: number; person?: MeetPerformance; locked: boolean };
 
-export function MeetHeatBoard({ data, entrants, orderLabel, capacity, disabled, onChange, groupLabel = group => `${group}組`, nextGroup: requestedNextGroup, groupLimit = 99, modelLimits }: { data: MeetEventData; entrants: HeatEntrant[]; orderLabel: string; capacity?: number; disabled: boolean; onChange: (data: MeetEventData) => void; groupLabel?: (group: number) => string; nextGroup?: number | null; groupLimit?: number; modelLimits?: MeetOperationLimits }) {
+export function MeetHeatBoard({ data, entrants, orderLabel, capacity, disabled, onChange, groupLabel = group => `${group}組`, nextGroup: requestedNextGroup, groupLimit = 99, modelLimits, statusActions = true }: { statusActions?: boolean; data: MeetEventData; entrants: HeatEntrant[]; orderLabel: string; capacity?: number; disabled: boolean; onChange: (data: MeetEventData) => void; groupLabel?: (group: number) => string; nextGroup?: number | null; groupLimit?: number; modelLimits?: MeetOperationLimits }) {
   const anchor = useId();
   const [selected, setSelected] = useState<string[]>([]);
   const [past, setPast] = useState<MeetEventData[]>([]);
@@ -45,7 +45,7 @@ export function MeetHeatBoard({ data, entrants, orderLabel, capacity, disabled, 
     const entry = people.get(person.entryId), checked = ids.includes(person.entryId);
     const selectable = eligible.has(person.entryId) && person.status === "entered";
     const duplicate = person.group !== null && person.order !== null && (positions.get(`${person.group}:${person.order}`) ?? 0) > 1;
-    const reason = entry?.absent ? "大会欠席" : !entry?.eligible ? "出場取消" : person.status === "DNS" ? "DNS" : person.status;
+    const reason = entry?.absent ? "大会欠席" : !entry?.eligible ? "DNS" : person.status === "DNS" ? "DNS" : person.status;
     const marks = person.trials.map(trial => trial.mark ? `${trial.mark}${trial.wind ? `（風速 ${trial.wind}）` : ""}` : trial.status === "foul" ? "失敗" : trial.status === "pass" ? "パス" : "").filter(Boolean);
     return <div className={`flex min-h-16 items-center gap-1 border-b border-separator ${checked ? "bg-accent/10" : "bg-card"}`}>
       <label className="flex min-h-16 min-w-0 flex-1 items-center gap-2 p-2">
@@ -54,8 +54,8 @@ export function MeetHeatBoard({ data, entrants, orderLabel, capacity, disabled, 
         <span className="min-w-0 flex-1"><span className={`block break-words text-body font-medium ${entry?.alumni ? "text-violet-700" : ""}`}>{entry?.name ?? "登録解除済み"}</span><span className="block text-caption">{entry?.division && <span className="font-medium text-ink/75">{entry.division}{entry.grade || entry.mark ? " · " : ""}</span>}{entry?.grade}{entry?.mark ? ` · ${entry.mark}` : ""}</span>{!!marks.length && <span className="block break-words text-caption">記録: {marks.join("、")}</span>}{!selectable && <span className="block text-caption text-ink/75">{reason} · 配置を保持</span>}{duplicate && <span className="block text-caption text-danger">！ {groupLabel(person.group!)}{person.order}番が重複</span>}</span>
       </label>
       <div className="shrink-0 pr-1">
-        {selectable ? <Button size="sm" variant="ghost" className="min-h-11 px-2 text-muted2" disabled={disabled} aria-label={`${labelledName(person.entryId)}をDNSにする`} onClick={() => change(() => model.setDns(person.entryId, true), `${labelledName(person.entryId)}をDNSにしました`)}>DNS</Button>
-          : eligible.has(person.entryId) && person.status === "DNS" ? <Button size="sm" variant="ghost" className="min-h-11 px-2" disabled={disabled} aria-label={`${labelledName(person.entryId)}を出場に戻す`} onClick={() => change(() => model.setDns(person.entryId, false), `${labelledName(person.entryId)}を出場に戻しました`)}>出場に戻す</Button> : null}
+        {statusActions && (selectable ? <Button size="sm" variant="ghost" className="min-h-11 px-2 text-muted2" disabled={disabled} aria-label={`${labelledName(person.entryId)}をDNSにする`} onClick={() => change(() => model.setDns(person.entryId, true), `${labelledName(person.entryId)}をDNSにしました`)}>DNS</Button>
+          : eligible.has(person.entryId) && person.status === "DNS" ? <Button size="sm" variant="ghost" className="min-h-11 px-2" disabled={disabled} aria-label={`${labelledName(person.entryId)}を出場に戻す`} onClick={() => change(() => model.setDns(person.entryId, false), `${labelledName(person.entryId)}を出場に戻しました`)}>出場に戻す</Button> : null)}
       </div>
     </div>;
   }
