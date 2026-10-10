@@ -7,6 +7,7 @@ import { OB_MEET } from "@/lib/ob-meet";
 import { obPublishedResultSheets } from "@/lib/ob-results-sheet";
 import { obResultsFeedToken, OB_RESULTS_SPREADSHEET_ID } from "@/lib/ob-results-feed-auth";
 import { obSheetStatusTargets } from "@/lib/ob-sheet-status";
+import { obSheetEditSource } from "@/lib/ob-sheet-edits";
 
 export const maxDuration = 60;
 const headers = { "Cache-Control": "private, no-store", "Vary": "Authorization" };
@@ -22,10 +23,11 @@ export async function GET(request: Request) {
     const { entries, operations } = await getObPublishedResults(createAdminClient());
     const sheets = obPublishedResultSheets(entries, operations);
     const statusTargets = obSheetStatusTargets(entries, operations, sheets, secret);
-    const revision = createHash("sha256").update(JSON.stringify([sheets, statusTargets])).digest("hex");
+    const editSource = obSheetEditSource(entries, operations, secret);
+    const revision = createHash("sha256").update(JSON.stringify([sheets, statusTargets, editSource])).digest("hex");
     return NextResponse.json({ schemaVersion: 2, meetKey: OB_MEET.meetKey, spreadsheetId: OB_RESULTS_SPREADSHEET_ID,
       generatedAt: new Date().toISOString(), entryCount: entries.length, revision, sheets,
-      statusTargets }, { headers });
+      statusTargets, ...editSource }, { headers });
   } catch {
     // Never return an empty workbook for a failed or incomplete read.
     return NextResponse.json({ error: "共有用の組・記録を取得できませんでした。前回のスプレッドシートを保持します" }, { status: 503, headers });

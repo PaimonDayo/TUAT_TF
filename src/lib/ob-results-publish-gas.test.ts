@@ -10,6 +10,7 @@ import type { ObEntry } from "./ob-entries";
 import { emptyPerformance } from "./meet-operations";
 import type { ObEventOperation } from "./ob-operations";
 import { obSheetStatusTargets } from "./ob-sheet-status";
+import { obSheetEditSource } from "./ob-sheet-edits";
 
 type Cell = { userEnteredValue?: { stringValue?: string; numberValue?: number } };
 type Bounds = { sheetId: number; rows: number; columns: number };
@@ -17,6 +18,7 @@ type Metadata = { metadataId: number; metadataKey: string; metadataValue: string
 type Target = { properties: { sheetId: number; title: string; gridProperties: { rowCount: number; columnCount: number; frozenRowCount?: number } }; cells: Cell[][] };
 type Workbook = { sheets: Target[]; developerMetadata: Metadata[] };
 type Request = {
+  addSheet?: { properties: Target["properties"] };
   insertDimension?: { range: { sheetId: number; dimension: string; startIndex: number; endIndex: number } };
   appendDimension?: { sheetId: number; dimension: string; length: number };
   updateCells?: { range: { sheetId: number; startRowIndex?: number; startColumnIndex?: number; endRowIndex: number; endColumnIndex: number }; rows: { values: Cell[] }[]; fields: string };
@@ -27,6 +29,7 @@ type GasApi = {
   publishObResults(): { changed: boolean };
   dryRunObResultsPublish(): { changed: boolean };
   initializeObPublisher(): { changed: boolean };
+  onObSheetEdit(event: { source: { getId(): string }; range: { getSheet(): { getName(): string } } }): unknown;
   OB_RESULTS_BOOTSTRAP?: { readToken: string; initialRanges: Bounds[] };
 };
 const roster: ObEntry[] = [{ id: "synthetic-id", meet_key: "ob-2026", submitted_name: "=HYPERLINK(合成)", grade: "OB・OG", events: ["男子100m"], profile_id: null, revision: 0, imported_at: "", qualification_marks: {} }];
@@ -37,8 +40,8 @@ function snapshot(entries = roster, operations: ObEventOperation[] = []) {
     revision: createHash("sha256").update(JSON.stringify([sheets, statusTargets])).digest("hex"), sheets, statusTargets };
 }
 
-function setup() {
-  const source = snapshot();
+function setup(advanced = false) {
+  const source = Object.assign(snapshot(), advanced ? obSheetEditSource(roster, [], "synthetic") : {});
   const originals = [source.sheets[0], ...OB_PROGRAM.flatMap(slot => slot.events).map(family => obResultSheet(family, roster, []))];
   const initial: Bounds[] = originals.map((sheet, i) => ({ sheetId: i + 1, rows: sheet.rows.length, columns: sheet.widths!.length }));
   const cell = (text: string): Cell => ({ userEnteredValue: { stringValue: text } });
@@ -52,6 +55,7 @@ function setup() {
   }) };
   workbook.sheets.push({ properties: { sheetId: 99, title: "独自タブ", gridProperties: { rowCount: 100, columnCount: 26 } }, cells: [[cell("保持")]] });
   const state = { workbook, source, code: 200, writes: [] as Request[][], properties: { OB_RESULTS_READ_TOKEN: "a".repeat(64), OB_RESULTS_INITIAL_RANGES: JSON.stringify(initial) } as Record<string, string>,
+    afterSaveSource: null as typeof source | null,
     unknownAfterCommit: false, rejectBatch: false, triggers: [] as string[], timezone: "", postCode: 200, statusUnknown: false,
     statusPosts: [] as { requestId: string; dryRun: boolean; changes: { token: string; status: string }[] }[] };
   state.properties.OB_RESULTS_WRITE_TOKEN = "b".repeat(64);
@@ -61,6 +65,7 @@ function setup() {
     if (state.rejectBatch) throw new Error("synthetic rejected batch");
     const next = structuredClone(state.workbook);
     for (const request of requests) {
+      if (request.addSheet) next.sheets.push({ properties: request.addSheet.properties, cells: [] });
       if (request.appendDimension) {
         const value = request.appendDimension, target = next.sheets.find(sheet => sheet.properties.sheetId === value.sheetId)!;
         if (value.dimension === "ROWS") { target.properties.gridProperties.rowCount += value.length; for (let i = 0; i < value.length; i++) target.cells.push([]); }
@@ -80,7 +85,7 @@ function setup() {
           for (let col = 0; col < update.range.endColumnIndex; col++) target.cells[row][col] = update.rows[row]?.values[col] ?? {};
         }
       }
-      if (request.createDeveloperMetadata) next.developerMetadata.push({ ...request.createDeveloperMetadata.developerMetadata, metadataId: 1 });
+      if (request.createDeveloperMetadata) next.developerMetadata.push({ ...request.createDeveloperMetadata.developerMetadata, metadataId: next.developerMetadata.length + 1 });
       if (request.updateDeveloperMetadata) {
         const update = request.updateDeveloperMetadata;
         next.developerMetadata.find(value => value.metadataId === update.dataFilters[0].developerMetadataLookup.metadataId)!.metadataValue = update.developerMetadata.metadataValue;
@@ -104,6 +109,7 @@ function setup() {
           if (target) state.source.sheets.find(sheet => sheet.name === tab.name)!.rows[target.row][tab.statusColumn] = change.status;
         }
         state.source.revision = createHash("sha256").update(JSON.stringify(state.source.sheets)).digest("hex");
+        if (state.afterSaveSource) { state.source = state.afterSaveSource; state.afterSaveSource = null; }
         committed.set(request.requestId, result);
       }
       if (state.statusUnknown) { state.statusUnknown = false; throw Error("synthetic status response lost"); }
@@ -122,7 +128,7 @@ function setup() {
     },
       base64Encode: (value: Uint8Array) => Buffer.from(value).toString("base64"), base64Decode: (value: string) => Buffer.from(value, "base64"),
       getUuid: () => "00000000-0000-4000-8000-" + String(state.statusPosts.length + 1).padStart(12, "0"), formatDate: (_date: Date, timezone: string) => { state.timezone = timezone; return "2026-10-10 03:00:00"; } },
-    ScriptApp: { getProjectTriggers: () => state.triggers.map(handler => ({ getHandlerFunction: () => handler })), newTrigger: (handler: string) => ({ timeBased: () => ({ everyMinutes: (minutes: number) => ({ create: () => { expect(minutes).toBe(5); state.triggers.push(handler); } }) }) }) },
+    ScriptApp: { getProjectTriggers: () => state.triggers.map(handler => ({ getHandlerFunction: () => handler, getTriggerSourceId: () => OB_RESULTS_SPREADSHEET_ID })), newTrigger: (handler: string) => ({ timeBased: () => ({ everyMinutes: (minutes: number) => ({ create: () => { expect(minutes).toBe(5); state.triggers.push(handler); } }) }), forSpreadsheet: (id: string) => { expect(id).toBe(OB_RESULTS_SPREADSHEET_ID); const trigger = { onEdit: () => trigger, onChange: () => trigger, create: () => state.triggers.push(handler) }; return trigger; } }) },
   });
   vm.runInContext(readFileSync(new URL("../../gas/ob-results-publish/Code.js", import.meta.url), "utf8"), context);
   return { state, api: context as unknown as GasApi, initial };
@@ -148,6 +154,50 @@ it("updates all twelve tabs in one batch, treats formula-looking names as text, 
   expect(state.workbook.sheets[12].cells[0][0].userEnteredValue?.stringValue).toBe("保持");
   expect(state.workbook.sheets[4].cells[1][3].userEnteredValue).toEqual({ stringValue: "=HYPERLINK(合成)" });
   expect(state.timezone).toBe("Asia/Tokyo");
+});
+
+const uiEditEvent = () => ({ source: { getId: () => OB_RESULTS_SPREADSHEET_ID }, range: { getSheet: () => ({ getName: () => "エントリー編集" }) } });
+const cellsOf = (values: (string | number | null)[]) => values.map(v => v === null || v === "" ? {} : { userEnteredValue: typeof v === "number" ? { numberValue: v } : { stringValue: v } });
+it("immediately sends group moves from the editor and stops after canonical output without a sync loop", () => {
+  const { state, api } = setup(true); api.initializeObPublisher();
+  const editor = state.workbook.sheets.find(s => s.properties.title === "エントリー編集")!;
+  editor.cells[1][5] = cellsOf(["混合2組"])[0]; editor.cells[1][6] = cellsOf([4])[0];
+  const operation: ObEventOperation = { meet_key: "ob-2026", event_name: "男子100m", revision: 1, updated_at: "", data: { confirmed: false, participants: [{ ...emptyPerformance(roster[0].id), group: 2, order: 4, heatScope: "混合" }] } };
+  state.afterSaveSource = Object.assign(snapshot(roster, [operation]), obSheetEditSource(roster, [operation], "synthetic"));
+  api.onObSheetEdit(uiEditEvent());
+  expect(state.statusPosts).toHaveLength(1);
+  expect(state.statusPosts[0].changes[0]).toMatchObject({ family: "100m", position: true, group: 2, order: 4, heatScope: "混合" });
+  const count = state.writes.length;
+  api.publishObResults(); api.publishObResults();
+  expect(state.statusPosts).toHaveLength(1); expect(state.writes).toHaveLength(count);
+});
+it("accepts copied participant numbers for new events and blank numbers for new people without duplicating on lost replies", () => {
+  const { state, api } = setup(true); api.publishObResults();
+  const editor = state.workbook.sheets.find(s => s.properties.title === "エントリー編集")!;
+  const key = obSheetEditSource(roster, [], "synthetic").editSheet.rows[1][0];
+  editor.cells[2] = cellsOf([key, roster[0].submitted_name, "OB・OG", "男子", "300m", "", "", "出場"]);
+  editor.cells[3] = cellsOf(["", "架空追加", "B2", "女子", "300m", "", "", "出場"]);
+  const nextEntries = [{ ...roster[0], events: ["男子100m", "男子300m"], revision: 1 }, { ...roster[0], id: "fake-new-person", submitted_name: "架空追加", grade: "B2", events: ["女子300m"] }];
+  state.afterSaveSource = Object.assign(snapshot(nextEntries), obSheetEditSource(nextEntries, [], "synthetic"));
+  state.statusUnknown = true;
+  expect(() => api.onObSheetEdit(uiEditEvent())).toThrow();
+  expect(state.statusPosts[0].changes).toHaveLength(2);
+  api.publishObResults();
+  expect(state.statusPosts[1].requestId).toBe(state.statusPosts[0].requestId);
+  api.publishObResults(); expect(state.statusPosts).toHaveLength(2);
+});
+it("preserves incomplete additions, duplicate rows, identity edits and row deletions without a DB request", () => {
+  for (const scenario of ["incomplete", "duplicate", "rename", "delete"]) {
+    const { state, api } = setup(true); api.publishObResults();
+    const editor = state.workbook.sheets.find(s => s.properties.title === "エントリー編集")!;
+    if (scenario === "incomplete") editor.cells[2] = cellsOf(["", "架空入力途中"]);
+    if (scenario === "duplicate") editor.cells[2] = structuredClone(editor.cells[1]);
+    if (scenario === "rename") editor.cells[1][1] = cellsOf(["別の人"])[0];
+    if (scenario === "delete") editor.cells[1] = [];
+    const before = JSON.stringify(editor.cells);
+    expect(() => api.onObSheetEdit(uiEditEvent())).toThrow();
+    expect(state.statusPosts).toHaveLength(0); expect(JSON.stringify(editor.cells)).toBe(before);
+  }
 });
 
 it("observes committed metadata after an unknown response and never repeats a column insertion", () => {
@@ -209,7 +259,7 @@ it("starts exactly one five-minute trigger only after successful setup and verif
   state.code = 200;
   api.initializeObPublisher();
   api.initializeObPublisher();
-  expect(state.triggers).toEqual(["publishObResults"]);
+  expect(state.triggers).toEqual(["publishObResults", "onObSheetEdit", "onObSheetChange"]);
   expect(state.writes).toHaveLength(1);
 });
 

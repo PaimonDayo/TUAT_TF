@@ -38,7 +38,7 @@ export function obSheetStatusTargets(entries: ObEntry[], operations: ObEventOper
       if (!cells.length) return [];
       const row = people[person++];
       if (!row?.entry || !row.state.registered) return [];
-      return [{ row: offset + 1, token: signObSheetTarget({ entryId: row.entryId, event: row.eventName, entryRevision: row.entry.revision,
+      return [{ row: offset + 1, key: "P" + createHmac("sha256", secret).update("ob-person-v1:" + row.entryId).digest("hex").slice(0, 16), event: row.eventName, token: signObSheetTarget({ entryId: row.entryId, event: row.eventName, entryRevision: row.entry.revision,
         operationRevision: operations.find(op => op.event_name === row.eventName)?.revision ?? null }, secret) }];
     });
     if (person !== people.length) throw new Error("Status row mapping mismatch");

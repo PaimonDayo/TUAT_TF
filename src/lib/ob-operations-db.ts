@@ -16,6 +16,7 @@ type DayEntryResult = { entryId: string; saved: ObEventOperation };
 type OperationDatabase = Omit<Database, "public"> & { public: Omit<Database["public"], "Tables" | "Functions"> & {
   Tables: Database["public"]["Tables"] & { ob_event_operations: { Row: ObEventOperation; Insert: never; Update: never; Relationships: [] } };
   Functions: Database["public"]["Functions"] & {
+    apply_ob_sheet_edits: { Args: { p_request_id: string; p_context: Json; p_changes: Json; p_dry_run: boolean }; Returns: Json };
     apply_ob_sheet_statuses: { Args: { p_request_id: string; p_changes: Json; p_dry_run: boolean }; Returns: Json };
     save_ob_event_operation: { Args: { p_event: string; p_revision: number | null; p_data: Json }; Returns: ObEventOperation };
     save_ob_event_operation_checked: { Args: { p_event: string; p_revision: number | null; p_data: Json; p_base_data: Json }; Returns: ObEventOperation };
