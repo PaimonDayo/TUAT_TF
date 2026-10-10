@@ -9,14 +9,14 @@ const entry = (id: string, name: string, grade: string, events: string[], extra:
 });
 
 describe("live shared OB workbook", () => {
-  it("keeps all 12 tabs and publishes attendance separately from DNS, withdrawals and preserved records", () => {
+  it("keeps all 12 tabs and unifies participation while preserving withdrawals and records", () => {
     const sheets = obPublishedResultSheets(entries, operations);
     expect(sheets.map(sheet => sheet.name)).toEqual(["プログラム", "1500m", "ジャベリックスロー", "立ち五段跳び", "100m", "砲丸投げ", "300mH", "走り高跳び", "300m", "やり投げ", "走り幅跳び", "3000m"]);
     const track = sheets.find(sheet => sheet.name === "100m")!;
-    expect(track.rows[0]).toEqual(["組", "レーン", "区分", "氏名", "学年", "大会参加", "出場状況", "記録", "風速"]);
-    expect(track.rows.find(row => row.includes("合成三郎"))).toEqual([null, 5, "男子", "合成三郎", "B3", "参加", "DNS（欠場）", "", ""]);
-    expect(track.rows.find(row => row.includes("合成四郎"))).toEqual(["組未定", null, "男子", "合成四郎", "B4", "不参加", "欠席", "", ""]);
-    expect(track.rows.find(row => row.includes("合成五郎"))).toEqual(["男子2組", 1, "男子", "合成五郎", "M1", "参加", "登録取消（記録あり）", "11.90", "0.0"]);
+    expect(track.rows[0]).toEqual(["組", "レーン", "区分", "氏名", "学年", "出場状況", "記録", "風速"]);
+    expect(track.rows.find(row => row.includes("合成三郎"))).toEqual([null, 5, "男子", "合成三郎", "B3", "DNS（欠場）", "", ""]);
+    expect(track.rows.find(row => row.includes("合成四郎"))).toEqual(["組未定", null, "男子", "合成四郎", "B4", "DNS（欠場）", "", ""]);
+    expect(track.rows.find(row => row.includes("合成五郎"))).toEqual(["男子2組", 1, "男子", "合成五郎", "M1", "登録取消（記録あり）", "11.90", "0.0"]);
     expect(track.rows).toContainEqual([]);
     for (const sheet of sheets) expect(sheet.widths).toHaveLength(sheet.rows[0].length);
     expect(sheets.flatMap(sheet => sheet.rows.flat())).not.toContain("11.80");
@@ -25,13 +25,13 @@ describe("live shared OB workbook", () => {
   it("reflects a new entry, meet absence, event DNS and return to participation without editing source data", () => {
     const roster = [entry("new", "追加合成", "OB・OG", ["男子300m"])];
     const result = (extra: Partial<ObEntry>, status: MeetPerformance["status"] = "entered") => obPublishedResultSheets([{ ...roster[0], ...extra }], [operation("男子300m", [placed("new", 1, 1, { status })])]).find(sheet => sheet.name === "300m")!.rows[1];
-    expect(result({}).slice(5, 8)).toEqual(["参加", "出場", ""]);
-    expect(result({ absent: true }).slice(5, 8)).toEqual(["不参加", "欠席", ""]);
-    expect(result({}, "DNS").slice(5, 8)).toEqual(["参加", "DNS（欠場）", ""]);
-    expect(result({}, "DNF").slice(5, 8)).toEqual(["参加", "DNF（途中棄権）", "DNF"]);
-    expect(result({}, "DQ").slice(5, 8)).toEqual(["参加", "DQ（失格）", "DQ"]);
-    expect(result({ events: [] }).slice(5, 8)).toEqual(["参加", "登録取消", ""]);
-    expect(result({ absent: false }).slice(5, 8)).toEqual(["参加", "出場", ""]);
+    expect(result({}).slice(5, 7)).toEqual(["出場", ""]);
+    expect(result({ absent: true }).slice(5, 7)).toEqual(["DNS（欠場）", ""]);
+    expect(result({}, "DNS").slice(5, 7)).toEqual(["DNS（欠場）", ""]);
+    expect(result({}, "DNF").slice(5, 7)).toEqual(["DNF（途中棄権）", "DNF"]);
+    expect(result({}, "DQ").slice(5, 7)).toEqual(["DQ（失格）", "DQ"]);
+    expect(result({ events: [] }).slice(5, 7)).toEqual(["登録取消", ""]);
+    expect(result({ absent: false }).slice(5, 7)).toEqual(["出場", ""]);
     expect(roster[0].absent).toBeUndefined();
   });
 });

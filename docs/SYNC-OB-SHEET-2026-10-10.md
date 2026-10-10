@@ -31,3 +31,40 @@
 - Google Driveコネクタの初回batchは編集権限不足（403）で拒否。共有設定は変更せず、Sheetへの変更は0。所有者の独立GAS初回認可後に初回反映する。シートを更新済みとは扱わない。
 - 独立GAS `TUAT OB戦2026 共有シート連動` を作成し、Drive APIで所有者のみ・shared=falseを確認。Google Apps Script APIだけでは定時triggerを作成できず、初回は所有者が `initializeObPublisher` をエディタから実行して認可する必要がある。
 - 既存GAS、Vercel設定、DBスキーマ、Windowsタスクの種類、共有権限は変更していない。秘密/実データ/一時bootstrapは公開Gitへ入れない。
+
+## 終了時点・公開状態（2026-10-10 03:46 JST）
+
+- 変更20ファイルを `4f553abd41577f845a959474c24481f113f16c6d` としてコミットし、既存master worktreeの未コミット資料を保持してfast-forward統合、masterを1回pushした。公式Production Deployment `6968411064` はsuccess、本番 `/api/version` も同じSHA。Web/API側は反映済み。
+- 公開APIは未認可401・専用認可200、93人/12タブを確認。共有シート本体への書込は0、GAS定時triggerは未開始。所有者限定GASのコード/初期設定を読戻し確認済み。所有者の初回 `initializeObPublisher` 実行・Google認可が残る。
+- PC向け固定releaseはbuild済み。実PCデータのdryRunは競技同期200、練習同期200・失敗0・想定取込2/更新1/送信0。独立loopbackで公開APIも同じ件数/版を確認し、本番DBへの書込は行っていない。
+- 自動承認レビューは「TUAT PC Jobsを一時停止して固定releaseを切替える操作」を、定期同期停止への明示的許可がないとして拒否。拒否されたコマンドは未実行、迂回は行わない。所有者へ実行中処理の完了後の一時停止・切替・再開の承認を依頼し、回答待ち。現在の本番PCは従来releaseのままenabled=true、定期処理は稼働を維持。同期core修正の本番PC反映は未完了。
+- 主checkoutの既存変更、master worktreeの既存日付資料、旧GAS、本番DB、mirror、Jobs journal/未送信2件、R2、node_modulesを保持。残作業はPC切替承認とGoogle初回認可。この終了追記はローカル保持し、文書のみの追加push/buildは行わない。
+
+## 再開・所有者承認後（2026-10-10 17時台 JST）
+
+- 所有者の「やって」で、前回保留した本番PC定期同期の固定release切替を承認。最新origin/masterが4f553abのままであること、既存稼働・候補設定/build/秘密の適用先・backend心拍/バックアップを再確認した。
+- 実行中要求の完了を待つenabled=falseで専用Jobsだけを自然終了し、runner.lockの解放とjournalのバイト一致を確認。stateDirectory/activateAt/portを保持して4f553abへ切替、専用Windowsタスクを再開。旧release/旧環境は保持し、DB/backend/mirror/WSLは停止していない。
+- 本番PCのloopback `/api/version` は4f553ab、runner PID48008/心拍更新を確認。切替後の17:15 JST大会同期はHTTP200/success。0時記録同期と期限切れ整理の既存成功枠を保持し、再送なし。次の0時記録同期そのものはまだ未確認。
+- Googleコネクタで原本12タブの値/書式/規則/注記が準備snapshotから変更されていないと再確認。GASの `initializeObPublisher` は実行されたが、17:15:39 JSTにGoogle Sheets batchUpdateが編集権限不足403で拒否。セル/版情報の一括batchは不適用、定時triggerの設置へ進んでいない。
+- GASの実行者（個人アカウント）はSheetにcanEdit=false/canShare=false、Sheet所有者は大学アカウントと確認。全員リンク共有は変更しない。認可待ちの中断は自動承認レビューで一度拒否されたが、所有者から中断・やり直しの明示承認を受けた時点では既に実行が終了していた。
+- 対象Sheetを開くと大学SSO `tuat.ex-tic.com/auth/session` へ転送。自動承認レビューが関連未確認の外部サイトとしてアクセスを拒否したため、迂回せず大学認証ページへ進む承認を依頼。PC側反映は完了、共有Sheetの編集権限と初回反映/定時triggerは引き続き未完了。
+
+## OB連動の導入完了（2026-10-10 17時台 JST）
+
+- 所有者から大学SSOアクセスの承認を受けた。直接SSOからの戻りはGoogle ACSで認証未確認となったが、元の共有Sheetから認証を開始し直すと大学所有者アカウントで開けた。取得失敗を権限不存在へ変換せず、認証経路とDriveの実権限を別々に確認した。
+- 共有ダイアログで大学アカウントがオーナー、既存個別閲覧者、全員リンク閲覧を確認。本人の個人GAS実行アカウントだけを編集者に追加し、通知チェックを外して適用。Drive APIでもcanEdit=trueを読戻し、全員リンクはreaderのまま。GASプロジェクト自体は本人オーナーのみ/非共有を維持。
+- 原本の生成対象値/書式/入力規則/注記が準備snapshotから未変更と再確認して初期化。17:31:50 JSTの `initializeObPublisher` は正常完了（3.823秒）、17:32:30 JSTの時間主導型 `publishObResults` も正常完了（1.853秒）。時間ベース/5分おき、関数publishObResults、トリガー1本を画面で確認。
+- 最新公開元93人/12タブ、revision `2eb6bb57946db7c98a056f0b27addca1a50862143ce709c7de36d1f818ebef90` と全生成セルを照合し不一致0。追加エントリー/参加不参加/DNS/登録取消の実データ表示を確認。プログラムを含む12タブをGoogleの100%表示で確認し、欄の切れ/重なりなし。
+- 初回設定の値をScriptPropertiesに保存した後、不要となったbootstrapファイルだけを私有GASから除去。除去前sourceは所有者ACLで退避、Code.gs/manifestは維持し2ファイルを読戻し。秘密を共有Sheet/Gitへ出さない。GASの編集権限問題と初回反映/自動更新の保留は解消した。
+- 証跡はGit対象外の私有task領域。文書追記だけはローカル保持し、追加push/buildは行わない。本番PCの修正反映/稼働を維持。次の0時練習記録同期そのものは引き続き未確認であり、既存の合成回帰・dryRun・稼働確認と区別する。
+- 17:37:30 JSTの時間主導型publishObResultsも正常完了（2.123秒）。17:32:30から5分後の2回目であり、bootstrap除去後もScriptPropertiesを使った定時取得/更新が継続することを実機Googleの実行履歴で確認した。自動更新の導入確認は完了。
+- 今後の同種導入では、実行者/対象所有者/canEdit/公開権限/必要OAuth/SSO経路を初回書込より前に一括確認し、認証に所有者操作が必要な箇所だけをまとめて依頼する。今回の段階的な確認依頼は改善対象として記録する。
+
+## 出場状況の統合とスプシからの変更（18時台 JST・着手）
+
+- 新しい所有者指示で大会参加列を撤去し、出場状況に統合。出場/DNS/DNF/DQのプルダウンを既存登録者へ付け、編集者の変更を5分同期でアプリへ戻す。追加登録・組・記録は引き続きアプリから反映する。
+- 受入条件: 登録ID/種目の私有対応で氏名重複・行移動の誤反映を拒否、登録/運営revisionの同時編集競合で全件rollback、元の試技/組/記録/登録を保持、読取り鍵では書けない、通信断後も同一requestIdで一度だけ適用、PC不通時は入力を保持。欠席の出場再開は大会欠席も取り消す。
+- 現行の二列表示・書戻し未実装をコード/実スプシで確認。私有ScriptPropertiesを新設する理由は、共有セルに内部ID/鍵を置かず変更前の対象と版を保存するため。既存GASプロジェクト/5分trigger/公開閲覧権限を再利用する。
+- 本番PCの93登録/22運営行と変更履歴/既存関数定義を所有者ACLへ退避。標準supabase_migrations履歴表はないため、既存関数定義と新関数未存在を確認して新時刻DDLのrollback試行を実施。dryRun不変、試技保持、同一requestId冪等、古い版拒否、anon/authenticated書込不可、rollback後全実データ不変を確認。
+- 新保存関数を本番PCへ適用し、登録/運営/変更履歴が適用前後で不変を確認。新しい表・権限の公開・クラウドへの書込先切替はなし。migration番号を関数comment/私有適用証跡に保存した。
+- Node24/直接依存35件lock一致、tsc、対象eslint、全Vitest 128ファイル1136件、OB mirror運用11件、webpack build71ページ成功。実PCを接続先とするローカルAPIでも93登録/12タブ/246出場欄、専用status dryRun200、readtoken保存401、DB書込0を確認。GASの私有baselineはGoogle公式Utilities gzip/base64で圧縮し、追加人数でProperties容量に達しにくくした（[公式API](https://developers.google.com/apps-script/reference/utilities/utilities)）。

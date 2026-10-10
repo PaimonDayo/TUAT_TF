@@ -37,10 +37,10 @@ export function obResultSheet(family: string, entries: ObEntry[], operations: Ob
   const rule = obEventRule(family), rows = obFamilyRows(family, entries, operations).filter(row => published || row.state.canParticipate || row.state.recorded);
   const recorded = rows.some(row => row.state.recorded);
   const results = published || recorded;
-  const personHeaders = ["区分", "氏名", "学年", ...(published ? ["大会参加", "出場状況"] : [])];
-  const personWidths = [6, 18, 7, ...(published ? [10, 18] : [])];
+  const personHeaders = ["区分", "氏名", "学年", ...(published ? ["出場状況"] : [])];
+  const personWidths = [6, 18, 7, ...(published ? [18] : [])];
   const person = (row: Row): XlsxCell[] => [row.division, row.entry?.submitted_name ?? "参加情報なし", row.entry?.grade ?? "",
-    ...(published ? [!row.entry ? "参加情報なし" : row.entry.absent ? "不参加" : "参加", publishedParticipation(row)] : [])];
+    ...(published ? [publishedParticipation(row)] : [])];
   const best = (row: Row) => row.state.recorded ? new MeetEvent(obEventRule(row.eventName), { participants: [row.performance], confirmed: false }).best(row.performance) : "";
   const name = obFamilyLabel(family);
 
@@ -87,8 +87,8 @@ function publishedParticipation(row: Row): string {
   if (row.performance.status === "DNS") return "DNS（欠場）";
   if (row.performance.status === "DNF") return "DNF（途中棄権）";
   if (row.performance.status === "DQ") return "DQ（失格）";
-  if (row.entry.absent && !row.state.recorded) return "欠席";
-  return row.state.recorded ? "記録あり" : "出場";
+  if (row.entry.absent && !row.state.recorded) return "DNS（欠場）";
+  return "出場";
 }
 
 /** High jump attempts are grouped under each bar height; unreadable heights stay as typed. */

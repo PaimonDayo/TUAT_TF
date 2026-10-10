@@ -28,7 +28,7 @@ it("fixes the target, publishes only cells, and prevents HTTP caching", async ()
   const body = await response.json();
   expect(response.status).toBe(200);
   expect(response.headers.get("cache-control")).toContain("no-store");
-  expect(body).toMatchObject({ schemaVersion: 1, meetKey: "ob-2026", spreadsheetId: OB_RESULTS_SPREADSHEET_ID, entryCount: 0 });
+  expect(body).toMatchObject({ schemaVersion: 2, meetKey: "ob-2026", spreadsheetId: OB_RESULTS_SPREADSHEET_ID, entryCount: 0 });
   expect(body.sheets).toHaveLength(12);
   expect(body.revision).toMatch(/^[a-f0-9]{64}$/);
   expect(body).not.toHaveProperty("entries");
