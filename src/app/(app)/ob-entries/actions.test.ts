@@ -1,3 +1,4 @@
+vi.mock("@/lib/ob-results-notify", () => ({ scheduleObResultsPublish: vi.fn() }));
 import { beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ user: vi.fn(), roles: vi.fn(), preview: vi.fn(), from: vi.fn(), update: vi.fn(), eq: vi.fn(), result: vi.fn(), refresh: vi.fn(), rpc: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: mocks.user }, from: mocks.from, rpc: mocks.rpc }) }));

@@ -1,3 +1,4 @@
+vi.mock("@/lib/ob-results-notify", () => ({ scheduleObResultsPublish: vi.fn() }));
 import { beforeEach, expect, it, vi } from "vitest";
 import { emptyPerformance, type MeetEventData } from "@/lib/meet-operations";
 import type { ObMixedInput } from "@/lib/ob-mixed-operations";

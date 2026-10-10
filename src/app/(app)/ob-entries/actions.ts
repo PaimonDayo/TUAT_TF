@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { scheduleObResultsPublish } from "@/lib/ob-results-notify";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRolesByProfileIds, isMemberPreviewActive } from "@/lib/supabase/auth";
 import { entryClient } from "@/lib/ob-entries-db";
@@ -9,7 +10,7 @@ import type { Json } from "@/types/database";
 import { OB_PROGRAM_PATH, canManageObMeet, canViewObHistory, validPartyEdit, type PartyEdit } from "@/lib/ob-meet";
 import { validEntryEdit, type EntryEdit } from "@/lib/ob-entry-edit";
 /** 旧URL（転送のみ）と、大会ページ配下のプログラムの両方を更新する。 */
-function refreshObPages() { revalidatePath("/ob-entries"); revalidatePath(OB_PROGRAM_PATH); revalidatePath("/home"); }
+function refreshObPages() { scheduleObResultsPublish(); revalidatePath("/ob-entries"); revalidatePath(OB_PROGRAM_PATH); revalidatePath("/home"); }
 
 /** 係（OB戦2026ロール）だけに返す。allowSelf なら一般部員にも返す（本人の分かどうかはDBが確認する）。 */
 async function editClient(allowSelf = false) {

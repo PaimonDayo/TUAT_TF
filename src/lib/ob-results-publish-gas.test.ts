@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { gzipSync, gunzipSync } from "node:zlib";
@@ -28,6 +28,8 @@ type Request = {
   updateDeveloperMetadata?: { dataFilters: { developerMetadataLookup: { metadataId: number } }[]; developerMetadata: { metadataValue: string } };
 };
 type GasApi = {
+  installObResultsTrigger(): void;
+  doPost(event: { postData: { contents: string } }): { text: string };
   publishObResults(): { changed: boolean };
   dryRunObResultsPublish(): { changed: boolean };
   initializeObPublisher(): { changed: boolean };
@@ -126,13 +128,14 @@ function setup(advanced = false) {
         return { values: state.workbook.sheets.find(sheet => sheet.properties.title === name)!.cells.slice(0, Number(count)).map(row => row.slice(0, width).map(cell => cell.userEnteredValue?.stringValue ?? cell.userEnteredValue?.numberValue ?? "")) };
       }) }) },
       batchUpdate: (body: { requests: Request[] }, id: string) => { expect(id).toBe(OB_RESULTS_SPREADSHEET_ID); applyBatch(body.requests); } } },
-    Utilities: { DigestAlgorithm: { SHA_256: "SHA_256" }, computeDigest: (_algorithm: string, value: string) => [...createHash("sha256").update(value).digest()], newBlob: blob, gzip: (value: ReturnType<typeof blob>) => blob(gzipSync(value.getBytes()), "application/gzip"), ungzip: (value: ReturnType<typeof blob>) => {
+    ContentService: { MimeType: { JSON: "json" }, createTextOutput: (text: string) => ({ text, setMimeType() { return this; } }) },
+    Utilities: { computeHmacSha256Signature: (value: string, key: string) => [...createHmac("sha256", key).update(value).digest()], DigestAlgorithm: { SHA_256: "SHA_256" }, computeDigest: (_algorithm: string, value: string) => [...createHash("sha256").update(value).digest()], newBlob: blob, gzip: (value: ReturnType<typeof blob>) => blob(gzipSync(value.getBytes()), "application/gzip"), ungzip: (value: ReturnType<typeof blob>) => {
       if (!value.contentType) throw Error("Blob object must have non-null content type");
       return blob(gunzipSync(value.getBytes()), "application/json");
     },
       base64Encode: (value: Uint8Array) => Buffer.from(value).toString("base64"), base64Decode: (value: string) => Buffer.from(value, "base64"),
       getUuid: () => "00000000-0000-4000-8000-" + String(state.statusPosts.length + 1).padStart(12, "0"), formatDate: (_date: Date, timezone: string) => { state.timezone = timezone; return "2026-10-10 03:00:00"; } },
-    ScriptApp: { getProjectTriggers: () => state.triggers.map(handler => ({ getHandlerFunction: () => handler, getTriggerSourceId: () => OB_RESULTS_SPREADSHEET_ID })), newTrigger: (handler: string) => ({ timeBased: () => ({ everyMinutes: (minutes: number) => ({ create: () => { expect(minutes).toBe(5); state.triggers.push(handler); } }) }), forSpreadsheet: (id: string) => { expect(id).toBe(OB_RESULTS_SPREADSHEET_ID); const trigger = { onEdit: () => trigger, onChange: () => trigger, create: () => state.triggers.push(handler) }; return trigger; } }) },
+    ScriptApp: { getProjectTriggers: () => state.triggers.map(handler => ({ getHandlerFunction: () => handler, getTriggerSourceId: () => OB_RESULTS_SPREADSHEET_ID })), deleteTrigger: (trigger: { getHandlerFunction(): string }) => { state.triggers.splice(state.triggers.indexOf(trigger.getHandlerFunction()), 1); }, newTrigger: (handler: string) => ({ timeBased: () => ({ everyHours: (hours: number) => ({ create: () => { expect(hours).toBe(1); state.triggers.push(handler); } }) }), forSpreadsheet: (id: string) => { expect(id).toBe(OB_RESULTS_SPREADSHEET_ID); const trigger = { onEdit: () => trigger, onChange: () => trigger, create: () => state.triggers.push(handler) }; return trigger; } }) },
   });
   vm.runInContext(readFileSync(new URL("../../gas/ob-results-publish/Code.js", import.meta.url), "utf8"), context);
   return { state, api: context as unknown as GasApi, initial };
@@ -207,7 +210,7 @@ it("preserves the old workbook after source errors, a wrong target, missing rang
   }
 });
 
-it("starts exactly one five-minute trigger only after successful setup and verification", () => {
+it("starts exactly one hourly trigger only after successful setup and verification", () => {
   const { state, api, initial } = setup();
   delete state.properties.OB_RESULTS_READ_TOKEN;
   delete state.properties.OB_RESULTS_INITIAL_RANGES;
@@ -234,3 +237,22 @@ it("never submits spreadsheet changes and removes dropdowns from generated outpu
 
 function cellsOf(row: (string | number | null)[]): Cell[] { return row.map(value => value === null || value === "" ? {} : { userEnteredValue: typeof value === "number" ? { numberValue: value } : { stringValue: value } }); }
 function uiEditEvent() { return { source: { getId: () => OB_RESULTS_SPREADSHEET_ID }, range: { getSheet: () => ({ getName: () => "100m" }) } }; }
+
+it("authenticates wake-ups, rejects expired notices, and repeated notices write once", () => {
+ const {state,api}=setup();
+ const timestamp=Date.now();
+ const signature=createHmac("sha256",state.properties.OB_RESULTS_READ_TOKEN).update(`ob-publish:${timestamp}`).digest("hex");
+ const send=(body: unknown)=>JSON.parse(api.doPost({postData:{contents:JSON.stringify(body)}}).text);
+ expect(send({action:"publish",timestamp,signature:"0".repeat(64)}).ok).toBe(false);
+ expect(send({action:"publish",timestamp:timestamp-180000,signature}).ok).toBe(false);
+ expect(state.writes).toHaveLength(0);
+ expect(send({action:"publish",timestamp,signature})).toMatchObject({ok:true,changed:true});
+ expect(send({action:"publish",timestamp,signature})).toMatchObject({ok:true,changed:false});
+ expect(state.writes).toHaveLength(1);
+});
+it("replaces a legacy timer once and keeps the hourly timer on repeated setup",()=>{
+ const {state,api}=setup(); state.triggers.push("publishObResults","onObSheetEdit","onObSheetChange");
+ api.installObResultsTrigger(); api.installObResultsTrigger();
+ expect(state.triggers).toEqual(["publishObResults"]);
+ expect(state.properties.OB_RESULTS_TRIGGER_PERIOD).toBe("hourly-v1");
+});

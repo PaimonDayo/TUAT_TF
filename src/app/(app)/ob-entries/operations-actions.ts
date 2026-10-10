@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { scheduleObResultsPublish } from "@/lib/ob-results-notify";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRolesByProfileIds, isMemberPreviewActive } from "@/lib/supabase/auth";
 import { permissionsOf } from "@/lib/permissions";
@@ -79,6 +80,7 @@ export async function checkObEventOperation(input: SaveOperationInput): Promise<
       .select("meet_key,event_name,revision,data,updated_at").eq("meet_key", "ob-2026").eq("event_name", input.event).maybeSingle();
     if (error) return { ok: false, message: "保存結果を取得できませんでした。入力は残っています。接続後にもう一度確認してください" };
     if (!savedOperation(data, input.event) || !matchesAttempt(input, data)) return { ok: false, message: "送信した変更の保存を確認できませんでした。入力は残っています。もう一度結果を確認してください" };
+    scheduleObResultsPublish();
     return { ok: true, saved: data };
   } catch {
     return { ok: false, message: "保存結果を取得できませんでした。入力は残っています。接続後にもう一度確認してください" };
@@ -105,6 +107,7 @@ export async function saveObEventOperation(input: SaveOperationInput): Promise<{
     return { ok: false, message: failure(result.error.message), ...(latest ? { latest } : {}), ...(uncertain ? { uncertain: true } : {}) };
   }
   if (!savedOperation(result.data, input.event) || !matchesAttempt(input, result.data)) return { ok: false, uncertain: true, message: "保存結果を確認できませんでした。入力は残っています。結果を確認してください" };
+  scheduleObResultsPublish();
   revalidatePath(OB_PROGRAM_PATH);
   return { ok: true, saved: result.data };
 }
@@ -148,6 +151,7 @@ export async function checkObFamilyOperation(input: FamilyOperationInput): Promi
     const saved = await readFamily(client, input);
     if (!saved) return { ok: false, message: "保存結果を取得できませんでした。入力は残っています。接続後にもう一度確認してください" };
     if (!familySaved(saved, input)) return { ok: false, message: "男女両方の保存を確認できませんでした。入力は残っています。もう一度結果を確認してください" };
+    scheduleObResultsPublish();
     return { ok: true, saved };
   } catch { return { ok: false, message: "保存結果を取得できませんでした。入力は残っています。接続後にもう一度確認してください" }; }
 }
@@ -167,6 +171,7 @@ export async function saveObFamilyOperation(input: FamilyOperationInput): Promis
     return { ok: false, message: failure(result.error.message), ...(latest ? { latest } : {}), ...(uncertain ? { uncertain: true } : {}) };
   }
   if (!familySaved(result.data?.operations, input)) return { ok: false, uncertain: true, message: "保存結果を確認できませんでした。入力は残っています。結果を確認してください" };
+  scheduleObResultsPublish();
   revalidatePath(OB_PROGRAM_PATH);
   return { ok: true, saved: result.data.operations };
 }
@@ -179,6 +184,7 @@ export async function setObAttendance(input: { entryId: string; revision: number
   if (result.error) return { ok: false, message: failure(result.error.message) };
   const saved = result.data;
   if (!saved || saved.entryId !== input.entryId || saved.absent !== input.absent || !Number.isSafeInteger(saved.revision) || saved.revision < input.revision) return { ok: false, message: "保存結果を確認できませんでした。画面を更新して確認してください" };
+  scheduleObResultsPublish();
   revalidatePath(OB_PROGRAM_PATH);
   revalidatePath("/home");
   return { ok: true, ...saved };
@@ -200,6 +206,7 @@ export async function addObDayEntry(input: ObDayEntryInput): Promise<{ ok: boole
   if (result.error) return { ok: false, message: failure(result.error.message), ...(result.error.message === "entry_conflict" ? { stale: true } : {}) };
   const saved = result.data;
   if (!saved || !uuid.test(saved.entryId) || !savedOperation(saved.saved, input.event)) return { ok: false, message: "保存結果を確認できませんでした。再試行するか、画面を更新して確認してください" };
+  scheduleObResultsPublish();
   revalidatePath(OB_PROGRAM_PATH);
   revalidatePath("/home");
   return { ok: true, entryId: saved.entryId, saved: saved.saved };

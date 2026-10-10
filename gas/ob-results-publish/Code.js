@@ -12,6 +12,25 @@ var OB_RESULTS_TABS = ['プログラム', '1500m', 'ジャベリックスロー'
 function dryRunObResultsPublish() { return runObResultsPublish_(true); }
 function publishObResults() { return runObResultsPublish_(false); }
 
+// Signed wake-up only: never accept participant data, destinations or sheet edits.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Web app entrypoint.
+function doPost(event) {
+  var reply = { ok: false };
+  try {
+    var body = JSON.parse(event.postData.contents);
+    var key = PropertiesService.getScriptProperties().getProperty('OB_RESULTS_READ_TOKEN');
+    if (!key || body.action !== 'publish' || !Number.isSafeInteger(body.timestamp)
+        || Math.abs(Date.now() - body.timestamp) > 120000 || !/^[a-f0-9]{64}$/.test(body.signature || '')) throw new Error('Invalid notification');
+    var expected = Utilities.computeHmacSha256Signature('ob-publish:' + body.timestamp, key).map(function(b) { return ('0' + (b & 255).toString(16)).slice(-2); }).join('');
+    var difference = 0;
+    for (var i = 0; i < expected.length; i++) difference |= expected.charCodeAt(i) ^ body.signature.charCodeAt(i);
+    if (difference) throw new Error('Invalid notification');
+    var result = publishObResults();
+    reply = { ok: true, changed: result.changed };
+  } catch (error) { if (error.obBusy) reply.busy = true; }
+  return ContentService.createTextOutput(JSON.stringify(reply)).setMimeType(ContentService.MimeType.JSON);
+}
+
 /** One-time owner action: authorize, validate the source, publish, then start this one trigger. */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Public entrypoint in the Apps Script editor.
 function initializeObPublisher() {
@@ -199,7 +218,12 @@ function installObResultsTrigger() {
   try {
     var existing = ScriptApp.getProjectTriggers().filter(function(trigger) { return trigger.getHandlerFunction() === 'publishObResults'; });
     if (existing.length > 1) throw new Error('Duplicate OB output triggers; review before enabling');
-    if (!existing.length) ScriptApp.newTrigger('publishObResults').timeBased().everyMinutes(5).create();
+    var properties = PropertiesService.getScriptProperties();
+    if (!existing.length || properties.getProperty('OB_RESULTS_TRIGGER_PERIOD') !== 'hourly-v1') {
+      ScriptApp.newTrigger('publishObResults').timeBased().everyHours(1).create();
+      existing.forEach(function(trigger) { ScriptApp.deleteTrigger(trigger); });
+      properties.setProperty('OB_RESULTS_TRIGGER_PERIOD', 'hourly-v1');
+    }
     ScriptApp.getProjectTriggers().filter(function(t) { return ['onObSheetEdit','onObSheetChange'].indexOf(t.getHandlerFunction()) >= 0; }).forEach(function(t) { ScriptApp.deleteTrigger(t); });
   } finally { lock.releaseLock(); }
 }

@@ -1,3 +1,4 @@
+vi.mock("@/lib/ob-results-notify", () => ({ scheduleObResultsPublish: vi.fn() }));
 import { beforeEach, expect, it, vi } from "vitest";
 import type { EntryEdit } from "@/lib/ob-entry-edit";
 import { OB_PROGRAM_PATH, type PartyEdit } from "@/lib/ob-meet";

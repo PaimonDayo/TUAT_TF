@@ -1,3 +1,4 @@
+vi.mock("@/lib/ob-results-notify", () => ({ scheduleObResultsPublish: vi.fn() }));
 import { beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ user: vi.fn(), roles: vi.fn(), preview: vi.fn(), rpc: vi.fn(), refresh: vi.fn(), profile: vi.fn(), read: vi.fn(), reads: [] as { table: string; select: string; filters: [string, string][] }[] }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: mocks.user }, rpc: mocks.rpc, from: (table: string) => {
@@ -215,4 +216,16 @@ it("distinguishes SQL rollback from unknown transport and malformed success resp
   mocks.rpc.mockResolvedValueOnce({ data: { ...stored(beforeData), revision: 3 }, error: null });
   expect((await saveObEventOperation(attempt)).uncertain).toBe(true);
   expect(mocks.refresh).not.toHaveBeenCalled();
+});
+
+import { scheduleObResultsPublish } from "@/lib/ob-results-notify";
+it("notifies only after a verified save, never a rejected or uncertain save",async()=>{
+ expect((await saveObEventOperation(input)).ok).toBe(true);
+ expect(scheduleObResultsPublish).toHaveBeenCalledTimes(1);
+ mocks.rpc.mockResolvedValueOnce({data:null,error:{message:"transport",code:""}});
+ expect((await saveObEventOperation(input)).ok).toBe(false);
+ expect(scheduleObResultsPublish).toHaveBeenCalledTimes(1);
+ mocks.rpc.mockResolvedValueOnce({data:null,error:null});
+ expect((await saveObEventOperation(input)).uncertain).toBe(true);
+ expect(scheduleObResultsPublish).toHaveBeenCalledTimes(1);
 });
