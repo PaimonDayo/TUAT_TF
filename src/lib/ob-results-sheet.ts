@@ -55,9 +55,8 @@ export function obResultSheet(family: string, entries: ObEntry[], operations: Ob
 
   if (rule.discipline === "track") {
     const lanes = !["1500m", "3000m"].includes(family);
-    const windOf = (row: Row) => { const trial = row.performance.trials[0]; return row.performance.status === "entered" && trial?.status === "valid" ? trial.wind : ""; };
-    const result = (row: Row): XlsxCell[] => results ? [best(row), ...(rule.wind ? [windOf(row)] : [])] : [];
-    const lines: XlsxCell[][] = [["組", ...(lanes ? ["レーン"] : []), ...personHeaders, ...(results ? ["記録", ...(rule.wind ? ["風速"] : [])] : [])]];
+    const result = (row: Row): XlsxCell[] => results ? [best(row)] : [];
+    const lines: XlsxCell[][] = [["組", ...(lanes ? ["レーン"] : []), ...personHeaders, ...(results ? ["記録"] : [])]];
     let heat: string | undefined;
     for (const row of rows) {
       const label = row.group === null ? "組未定" : obMixedGroupLabel(row.group);
@@ -66,7 +65,7 @@ export function obResultSheet(family: string, entries: ObEntry[], operations: Ob
       lines.push([label === heat ? null : label, ...(lanes ? [row.group === null ? null : row.performance.order] : []), ...person(row), ...result(row)]);
       heat = label;
     }
-    return ranked({ name, widths: [10, ...(lanes ? [7] : []), ...personWidths, ...(results ? [10, ...(rule.wind ? [7] : [])] : [])], rows: lines });
+    return ranked({ name, widths: [10, ...(lanes ? [7] : []), ...personWidths, ...(results ? [10] : [])], rows: lines });
   }
 
   const order = (row: Row): XlsxCell => row.number ?? "順番未定";
@@ -80,12 +79,11 @@ export function obResultSheet(family: string, entries: ObEntry[], operations: Ob
 
   const count = Math.max(6, ...rows.map(row => row.performance.trials.length));
   const attempts = recorded ? Array.from({ length: count }, (_, i) => i) : [];
-  const bestWind = (row: Row) => row.performance.status === "entered" ? new MeetEvent(obEventRule(row.eventName), { participants: [], confirmed: false }).bestTrial(row.performance)?.wind ?? "" : "";
   const trialText = (trial: MeetTrial | undefined) => !trial ? "" : trial.status === "valid" || trial.status === "pending" ? trial.mark : symbols[trial.status];
-  return ranked({ name, widths: [8, ...personWidths, ...(results ? [10, ...(rule.wind ? [8] : [])] : []), ...attempts.flatMap(() => rule.wind ? [8, 7] : [8])], rows: [
-    ["試技順", ...personHeaders, ...(results ? ["記録", ...(rule.wind ? ["記録の風速"] : [])] : []), ...attempts.flatMap(i => rule.wind ? [`${i + 1}回目`, `${i + 1}回目風速`] : [`${i + 1}回目`])],
-    ...rows.map(row => [order(row), ...person(row), ...(results ? [best(row), ...(rule.wind ? [bestWind(row)] : [])] : []),
-      ...attempts.flatMap(i => { const trial = row.performance.trials[i]; return rule.wind ? [trialText(trial), trial?.status === "valid" ? trial.wind : ""] : [trialText(trial)]; })]),
+  return ranked({ name, widths: [8, ...personWidths, ...(results ? [10] : []), ...attempts.map(() => 8)], rows: [
+    ["試技順", ...personHeaders, ...(results ? ["記録"] : []), ...attempts.map(i => `${i + 1}回目`)],
+    ...rows.map(row => [order(row), ...person(row), ...(results ? [best(row)] : []),
+      ...attempts.map(i => trialText(row.performance.trials[i]))]),
   ] });
 }
 

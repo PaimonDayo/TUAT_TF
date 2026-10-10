@@ -13,10 +13,10 @@ describe("live shared OB workbook", () => {
     const sheets = obPublishedResultSheets(entries, operations);
     expect(sheets.map(sheet => sheet.name)).toEqual(["プログラム", "1500m", "ジャベリックスロー", "立ち五段跳び", "100m", "砲丸投げ", "300mH", "走り高跳び", "300m", "やり投げ", "走り幅跳び", "3000m"]);
     const track = sheets.find(sheet => sheet.name === "100m")!;
-    expect(track.rows[0]).toEqual(["組", "レーン", "区分", "氏名", "学年", "出場状況", "記録", "風速", "順位"]);
-    expect(track.rows.find(row => row.includes("合成三郎"))).toEqual([null, 5, "男子", "合成三郎", "B3", "DNS（欠場）", "", "", ""]);
-    expect(track.rows.find(row => row.includes("合成四郎"))).toEqual(["組未定", null, "男子", "合成四郎", "B4", "DNS（欠場）", "", "", ""]);
-    expect(track.rows.find(row => row.includes("合成五郎"))).toEqual(["男子2組", 1, "男子", "合成五郎", "M1", "DNS（欠場）", "11.90", "0.0", ""]);
+    expect(track.rows[0]).toEqual(["組", "レーン", "区分", "氏名", "学年", "出場状況", "記録", "順位"]);
+    expect(track.rows.find(row => row.includes("合成三郎"))).toEqual([null, 5, "男子", "合成三郎", "B3", "DNS（欠場）", "", ""]);
+    expect(track.rows.find(row => row.includes("合成四郎"))).toEqual(["組未定", null, "男子", "合成四郎", "B4", "DNS（欠場）", "", ""]);
+    expect(track.rows.find(row => row.includes("合成五郎"))).toEqual(["男子2組", 1, "男子", "合成五郎", "M1", "DNS（欠場）", "11.90", ""]);
     expect(track.rows).toContainEqual([]);
     for (const sheet of sheets) expect(sheet.widths).toHaveLength(sheet.rows[0].length);
     expect(sheets.flatMap(sheet => sheet.rows.flat())).not.toContain("11.80");
@@ -100,15 +100,15 @@ describe("OB results workbook", () => {
 
   it("keeps lanes and adds results once recorded, leaving out people who do not compete", () => {
     expect(sheet("100m").rows).toEqual([
-      ["組", "レーン", "区分", "氏名", "学年", "記録", "風速"],
-      ["男子1組", 3, "男子", "合成一郎", "B1", "12.34", "+1.2"],
-      [null, 4, "男子", "合成八郎", "B2", "", ""],
+      ["組", "レーン", "区分", "氏名", "学年", "記録"],
+      ["男子1組", 3, "男子", "合成一郎", "B1", "12.34"],
+      [null, 4, "男子", "合成八郎", "B2", ""],
       [],
-      ["男子2組", 1, "男子", "合成五郎", "M1", "11.90", "0.0"],
+      ["男子2組", 1, "男子", "合成五郎", "M1", "11.90"],
       [],
-      ["混合1組", 4, "女子", "合成花子", "B2", "13.50", "-0.5"],
+      ["混合1組", 4, "女子", "合成花子", "B2", "13.50"],
       [],
-      ["組未定", null, "男子", "合成六郎", "OB・OG", "", ""],
+      ["組未定", null, "男子", "合成六郎", "OB・OG", ""],
     ]);
     const cells = sheets.flatMap(sheet => sheet.rows.flat());
     expect(cells).not.toContain("合成三郎"); // DNS
@@ -116,11 +116,11 @@ describe("OB results workbook", () => {
     for (const header of ["番号", "出場状況", "確認状況", "備考"]) expect(sheets.slice(1).flatMap(sheet => sheet.rows[0])).not.toContain(header);
   });
 
-  it("writes every field attempt with its wind and the best mark's wind", () => {
+  it("writes every field attempt without wind columns, preserving stored results", () => {
     expect(sheet("走り幅跳び").rows).toEqual([
-      ["試技順", "区分", "氏名", "学年", "記録", "記録の風速", "1回目", "1回目風速", "2回目", "2回目風速", "3回目", "3回目風速", "4回目", "4回目風速", "5回目", "5回目風速", "6回目", "6回目風速"],
-      [1, "男子", "合成跳太", "B2", "5.60", "+2.5", "5.31", "+1.0", "×", "", "5.60", "+2.5", "−", "", "5.60", "-0.3", "", ""],
-      [2, "男子", "合成跳次", "B3", "記録なし", "", "×", "", "×", "", "×", "", "", "", "", "", "", ""],
+      ["試技順", "区分", "氏名", "学年", "記録", "1回目", "2回目", "3回目", "4回目", "5回目", "6回目"],
+      [1, "男子", "合成跳太", "B2", "5.60", "5.31", "×", "5.60", "−", "5.60", ""],
+      [2, "男子", "合成跳次", "B3", "記録なし", "×", "×", "×", "", "", ""],
     ]);
   });
 
