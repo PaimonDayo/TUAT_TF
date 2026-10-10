@@ -68,5 +68,9 @@ export async function run(configFile, execute = false) {
   return { stopped: true, drained };
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  run(process.argv[2], process.argv[3] === '--execute').then(value => console.log(JSON.stringify(value))).catch(() => { console.error('PC host was not started or stopped safely; inspect protected state'); process.exitCode = 1; });
+  run(process.argv[2], process.argv[3] === '--execute').then(value => console.log(JSON.stringify(value))).catch(error => {
+    const message = error?.code === 'ERR_PC_HOST_REBUILD_REQUIRED' ? 'PC host receipt requires a rebuild; no host was started.' : error?.code === 'ERR_PC_HOST_TOOL_UNAVAILABLE' ? 'PC host requires its pinned executables; no host was started.' : 'PC host was not started or stopped safely; inspect protected state';
+    console.error(message);
+    process.exitCode = 1;
+  });
 }

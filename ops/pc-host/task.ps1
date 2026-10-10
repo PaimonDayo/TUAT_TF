@@ -1,5 +1,13 @@
-param([Parameter(Mandatory=$true)][string]$NodePath,[Parameter(Mandatory=$true)][string]$ConfigPath)
+param(
+  [Parameter(Mandatory=$true)][string]$NodePath,
+  [Parameter(Mandatory=$true)][string]$ConfigPath,
+  [Parameter(Mandatory=$true)][string]$RuntimeAccount,
+  [Parameter(Mandatory=$true)][string]$DevelopmentAccount,
+  [Parameter(Mandatory=$true)][string]$PowerShellPath
+)
 $ErrorActionPreference='Stop'
+$accountProof=& (Join-Path $PSScriptRoot 'account-preflight.ps1') -NodePath $NodePath -ConfigPath $ConfigPath -RuntimeAccount $RuntimeAccount -DevelopmentAccount $DevelopmentAccount -PowerShellPath $PowerShellPath -PassThru
+if(!$accountProof.accepted){throw 'Dedicated account preflight failed'}
 $taskMutex=[Threading.Mutex]::new($false,'Global\TUAT-PC-Host')
 $taskHeld=$false
 try{

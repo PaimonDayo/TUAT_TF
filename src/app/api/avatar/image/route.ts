@@ -44,6 +44,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "閲覧権限を確認できませんでした" },{ status: 503 });
     }
 
+    // Stop issuing new seven-day signatures after the worker atomically closes
+    // an unreferenced path. Existing redirects keep their six-day cache.
+    const retirement=await supabase.rpc("avatar_image_is_retired",{ p_path: path });
+    if(retirement.error||typeof retirement.data!=="boolean") throw retirement.error??new Error("Invalid retirement result");
+    if(retirement.data) return NextResponse.json({ error: "画像が見つかりません" },{ status: 404,headers: { "Cache-Control": "private, no-store" } });
+
     let url: string;
     try {
       url=await signedImageUrl(supabase,AVATAR_BUCKET,path,SIGNED_URL_TTL_SECONDS);

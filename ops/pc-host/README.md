@@ -17,14 +17,17 @@ Node24と、WindowsではPowerShell7を使用する。独立したrelease checko
 
 `config.example.json` と `environment.example.env` は置換前の例であり、起動設定ではない。実env・stateはGit外の専用directoryへ置く。Windowsでは新規directoryのACLを本人/SYSTEMだけにしてから書き、既存directoryの明示的な他者権限やjunctionを拒否する。これは現在の実行者との境界であり、開発/AIから本番秘密を隔離する専用OSアカウントの配置確認は別途必要。
 
-1. `enabled:false` で `node ops/pc-host/build.mjs <private-config.json>` を実行する。Next出力は保護済みstate内だけへ保存する。固定commit・lockfile・Node・env・buildのreceiptを作成する。
+1. `enabled:false` で `node ops/pc-host/build.mjs <private-config.json>` を実行する。Next出力は保護済みstate内だけへ保存する。固定commit・lockfile・Node・env・buildと、実行依存/publicのmanifestをreceiptへ束ねる。旧receiptは再buildが必要。
 2. `node ops/pc-host/run.mjs <private-config.json>` でreceiptの一致を確認する。`--execute` と `enabled:true` が揃うまではlistenerを起動しない。
-3. `stage-task.ps1` は専用accountを指定して無効なWindows Task XMLを作るだけ。登録/起動や既存タスクの削除は行わない。最終移行時にaccount・ACL・起動条件を照合してから登録する。
-4. 起動はNext/gatewayとも127.0.0.1限定。gateway公開前に `/api/version` のcommitとreleaseIdを照合する。Task wrapperのmutexとstate lockで競合を拒否する。以前の候補で検証したlock primitiveを再利用し、managed wrapperがOS mutexを持ち、元PIDの停止とファイル同一性を再確認できる場合だけ古いlockを回収する。直接起動・生存/再利用PID・権限不明・壊れたlockは拒否する。
+3. Windowsでは、選択したPowerShell7を専用accountで起動し、`account-preflight.ps1 -RuntimeAccount <専用account> -DevelopmentAccount <開発account> -NodePath <絶対path> -ConfigPath <絶対path> -PowerShellPath <現在のPowerShell7絶対path>` で配置を検査する。この検査はaccount・ACL・taskを変更しない。同じaccount、管理者所属、開発側から変更できるrelease/依存/実行ファイル、第三者が読めるenv/stateを拒否する。
+4. 検査に合格した同じaccountで `stage-task.ps1` に同じ引数（RuntimeAccountはAccount）と `-OutputPath <保護済みstate内の新XML>` を指定する。無効なS4U Task XMLを作るだけで、登録/起動や既存taskの削除は行わない。Taskも毎回同じ検査を行う。S4U実行とOS再起動は別の受入試験。
+5. 起動はNext/gatewayとも127.0.0.1限定。gateway公開前に `/api/version` のcommitとreleaseIdを照合する。Task wrapperのmutexとstate lockで競合を拒否する。以前の候補で検証したlock primitiveを再利用し、managed wrapperがOS mutexを持ち、元PIDの停止とファイル同一性を再確認できる場合だけ古いlockを回収する。直接起動・生存/再利用PID・権限不明・壊れたlockは拒否する。
 
 更新前に共有Jobsの新規dispatchを止めてjournalの未解決操作を確認し、host設定を無効にしてgateway経由の進行中要求をdrainする。Nextの標準終了処理をIPC経由で呼び、親死亡時も子だけを終了する。結果不明の書込みを再送しない。旧release/env/receiptを保全したまま、新releaseは別directoryとreleaseIdでbuildする。同じstate内で実行者は一つ。DB変更のrollbackはhostの旧版起動と別に評価する。
 
-buildのreceiptはruntime node_modulesや公開ファイルの全バイトを証明するものではない。専用npm ci、releaseを実行account以外から変更できないACL、復元元の保全を配置時に確認する。`.next/cache`等の可変診断/cacheはhashから除外する。
+receiptは実行時node_modules（`.cache`のみ除外）・public・Node実行ファイルのSHA256とOS/architectureを含む。専用 `npm ci` からbuildし、改変や別platformを起動前に拒否する。Windowsでbuildした依存をLinuxへコピーして使わず、Linux上で改めて `npm ci` / build / receiptを作る。`.next/cache`等の可変診断/cacheはbuild hashから除外する。
+
+Windowsの配置は、releaseとNode/PowerShell実行directoryをSYSTEM/Administrators等の管理主体が所有・変更し、専用accountへ読取り/実行だけを与える。`.next/cache`・trace・trace-build・diagnosticsだけを専用accountの可変領域として扱う。env/config/stateは専用accountとSYSTEMだけの保護ACLに置き、上位directoryからの置換権限も検査する。Gitの所有者確認は検査済みの正確なrelease directoryに限ったコマンド内設定を使用する。管理者権限の保有者による変更は可能であり、この配置で管理者まで排除できるとは扱わない。
 
 ## 合成試験と残条件
 

@@ -3,6 +3,7 @@ import { readFileSync, readdirSync, lstatSync, writeFileSync, renameSync, mkdirS
 import { resolve, relative, isAbsolute, parse } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { parseEnv } from 'node:util';
+import { verifiedReleaseDirectory, verifyRuntimeManifest, runtimeRebuildRequired, hostGitPath, hostWindowsToolPath } from './runtime-manifest.mjs';
 
 const forbiddenEnvFiles = ['.env', '.env.local', '.env.production', '.env.production.local'];
 const reservedPorts = [8000, 3008, 3109, 3112];
@@ -53,7 +54,11 @@ export function digestTree(directory, { exclude = [] } = {}) {
 }
 export function buildHash(directory) { return digestTree(resolve(directory, '.next'), { exclude: ['cache', 'trace', 'trace-build', 'diagnostics'] }); }
 export function sourceProof(directory, commit) {
-  const run = args => execFileSync('git', ['-C', directory, ...args], { encoding: 'utf8', windowsHide: true }).trim();
+  const exactDirectory = verifiedReleaseDirectory(directory);
+  // An immutable release may be SYSTEM-owned. Trust only this checked path for
+  // this command; never change global Git trust or allow a directory wildcard.
+  const git = hostGitPath();
+  const run = args => execFileSync(git, ['-c', `safe.directory=${exactDirectory}`, '-C', exactDirectory, ...args], { encoding: 'utf8', windowsHide: true }).trim();
   if (run(['rev-parse', 'HEAD']) !== commit || run(['status', '--porcelain', '--untracked-files=normal'])) throw Error('Release requires its exact clean commit');
   return { commit, lockfileHash: createHash('sha256').update(readFileSync(resolve(directory, 'package-lock.json'))).digest('hex'), nodeVersion: process.version };
 }
@@ -62,14 +67,15 @@ export function environmentHash(env) {
 }
 export function privateDirectory(directory) {
   if (!isAbsolute(directory) || resolve(directory) === parse(resolve(directory)).root) throw Error('Dedicated private directory required');
+  const tools = process.platform === 'win32' ? { whoami: hostWindowsToolPath('whoami'), icacls: hostWindowsToolPath('icacls') } : undefined;
   const created = !lstatExists(directory);
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   const normalize = value => process.platform === 'win32' ? value.toLowerCase() : value;
   if (normalize(realpathSync(directory)) !== normalize(resolve(directory)) || lstatSync(directory).isSymbolicLink()) throw Error('Private directory may not be redirected');
   if (process.platform === 'win32') {
     if (created) {
-      const owner = execFileSync('whoami', { encoding: 'utf8', windowsHide: true }).trim();
-      execFileSync('icacls', [directory, '/inheritance:r', '/grant:r', `${owner}:(OI)(CI)(F)`, 'SYSTEM:(OI)(CI)(F)'], { stdio: 'ignore', windowsHide: true });
+      const owner = execFileSync(tools.whoami, { encoding: 'utf8', windowsHide: true }).trim();
+      execFileSync(tools.icacls, [directory, '/inheritance:r', '/grant:r', `${owner}:(OI)(CI)(F)`, 'SYSTEM:(OI)(CI)(F)'], { stdio: 'ignore', windowsHide: true });
     }
     const script = "$ErrorActionPreference='Stop'; $owner=[Security.Principal.WindowsIdentity]::GetCurrent().User; $system=[Security.Principal.SecurityIdentifier]::new('S-1-5-18'); $check=Get-Acl -LiteralPath $env:TUAT_HOST_PRIVATE_PATH; if(!$check.AreAccessRulesProtected -or $check.Access.Count -ne 2){throw 'Private ACL invalid'}; foreach($rule in $check.Access){ if($rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -notin @($owner.Value,$system.Value) -or $rule.AccessControlType -ne 'Allow'){throw 'Private ACL invalid'} }";
     execFileSync(resolve(process.env.ProgramFiles, 'PowerShell/7/pwsh.exe'), ['-NoProfile','-NonInteractive','-Command',script], { stdio: 'ignore', windowsHide: true, env: { ...process.env, PSModulePath: resolve(process.env.ProgramFiles, 'PowerShell/7/Modules'), TUAT_HOST_PRIVATE_PATH: directory } });
@@ -92,8 +98,10 @@ export function loadHost(configFile) {
 }
 export function verifyPrepared(config, env) {
   const receipt = JSON.parse(readFileSync(resolve(config.stateDirectory, 'prepared.json'), 'utf8'));
+  if (receipt.version !== 2) throw runtimeRebuildRequired('Prepared receipt is obsolete; rebuild required');
+  verifyRuntimeManifest(receipt.runtime, config.releaseDirectory);
   const source = sourceProof(config.releaseDirectory, config.releaseCommit);
-  if (receipt.version !== 1 || receipt.releaseCommit !== config.releaseCommit || receipt.releaseId !== config.releaseId || receipt.environmentHash !== environmentHash(env) || receipt.buildHash !== buildHash(config.releaseDirectory) || receipt.source?.lockfileHash !== source.lockfileHash || receipt.source?.nodeVersion !== source.nodeVersion) throw Error('Prepared release no longer matches');
+  if (receipt.releaseCommit !== config.releaseCommit || receipt.releaseId !== config.releaseId || receipt.environmentHash !== environmentHash(env) || receipt.buildHash !== buildHash(config.releaseDirectory) || receipt.source?.lockfileHash !== source.lockfileHash || receipt.source?.nodeVersion !== source.nodeVersion) throw Error('Prepared release no longer matches');
   if (JSON.parse(readFileSync(resolve(config.releaseDirectory, '.next/required-server-files.json'), 'utf8')).config?.deploymentId !== config.releaseId) throw Error('Build deployment mismatch');
   return receipt;
 }

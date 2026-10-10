@@ -2192,6 +2192,7 @@ export type Database = {
       check_competition_meet_mutation: {Args:{p_competition_id:string;p_request_id:string;p_command:Json};Returns:Json}
       apply_competition_sheet_edits: {Args:{p_request_id:string;p_context:Json;p_changes:Json;p_dry_run:boolean};Returns:Json}
       replay_competition_meet_changes: {Args:{p_rows:Json};Returns:Json}
+      avatar_image_is_retired: { Args: { p_path: string }; Returns: boolean }
       login_access_allowed: { Args: never; Returns: boolean }
       admin_save_member_sheet_setup: {
         Args: { p_profile_id: string; p_expected: Json; p_sheet_name: string; p_fields: Json; p_signature: string; p_mode: string }

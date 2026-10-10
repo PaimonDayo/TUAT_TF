@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   user: { id: "verified-member" } as { id: string } | null,
   loginAccess: vi.fn(),
+  retirement: vi.fn(),
   profile: vi.fn(),
   identityFilter: vi.fn(),
   sign: vi.fn(),
@@ -10,7 +11,7 @@ const state = vi.hoisted(() => ({
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     auth: { getUser: async () => ({ data: { user: state.user } }) },
-    rpc: state.loginAccess,
+    rpc: (name: string, args?: unknown) => name === "avatar_image_is_retired" ? state.retirement(args) : state.loginAccess(name),
     from: (table: string) => {
       expect(table).toBe("profiles");
       return {
@@ -39,12 +40,29 @@ function request(imagePath: string | null = path) {
 beforeEach(() => {
   state.user = { id: "verified-member" };
   state.loginAccess.mockReset().mockResolvedValue({ data: true, error: null });
+  state.retirement.mockReset().mockResolvedValue({ data: false, error: null });
   state.profile.mockReset().mockResolvedValue({ data: { approved: true }, error: null });
   state.identityFilter.mockReset();
   state.sign.mockReset().mockResolvedValue("https://images.example.test/avatar?signature=synthetic");
 });
 
 describe("avatar image login and membership authorization", () => {
+  it("does not issue a new signature for a closed retired path", async () => {
+    state.retirement.mockResolvedValue({ data: true, error: null });
+    const response = await GET(request());
+    expect(response.status).toBe(404);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(state.retirement).toHaveBeenCalledWith({ p_path: path });
+    expect(state.sign).not.toHaveBeenCalled();
+  });
+  it.each([{ data: null, error: { message: "private database detail" } }, { data: null, error: null }])("fails closed on an unavailable retirement check (%j)", async result => {
+    state.retirement.mockResolvedValue(result);
+    const response = await GET(request());
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(JSON.stringify(await response.json())).not.toContain("private database detail");
+    expect(state.sign).not.toHaveBeenCalled();
+  });
   it("signs an approved member's request and preserves delivery and cache settings", async () => {
     const response = await GET(request());
 
