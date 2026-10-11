@@ -14,8 +14,8 @@ describe("live shared OB workbook", () => {
     expect(sheets.map(sheet => sheet.name)).toEqual(["プログラム", "1500m", "ジャベリックスロー", "立ち五段跳び", "100m", "砲丸投げ", "300mH", "走り高跳び", "300m", "やり投げ", "走り幅跳び", "3000m"]);
     const track = sheets.find(sheet => sheet.name === "100m")!;
     expect(track.rows[0]).toEqual(["組", "レーン", "区分", "氏名", "学年", "出場状況", "記録", "順位"]);
-    expect(track.rows.find(row => row.includes("合成三郎"))).toEqual([null, 5, "男子", "合成三郎", "B3", "DNS（欠場）", "", ""]);
-    expect(track.rows.find(row => row.includes("合成四郎"))).toEqual(["組未定", null, "男子", "合成四郎", "B4", "DNS（欠場）", "", ""]);
+    expect(track.rows.find(row => row.includes("合成三郎"))).toEqual(["組未定", null, "男子", "合成三郎", "B3", "DNS（欠場）", "", ""]);
+    expect(track.rows.find(row => row.includes("合成四郎"))).toEqual([null, null, "男子", "合成四郎", "B4", "DNS（欠場）", "", ""]);
     expect(track.rows.find(row => row.includes("合成五郎"))).toEqual(["男子2組", 1, "男子", "合成五郎", "M1", "DNS（欠場）", "11.90", ""]);
     expect(track.rows).toContainEqual([]);
     for (const sheet of sheets) expect(sheet.widths).toHaveLength(sheet.rows[0].length);

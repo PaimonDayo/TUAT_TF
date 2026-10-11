@@ -78,14 +78,15 @@ it("preserves historical appearances for the same entry in both source events an
   expect(view.sourceById.get(male + ":same")).toMatchObject({ event: male, entryId: "same", division: "男子" });
 });
 
-it("pins DNS, absent, withdrawn and missing historical people across sexes", () => {
+it("releases DNS while preserving absent, withdrawn and missing history across sexes", () => {
   const a = placed("a"), dns = { ...placed("dns", 2), status: "DNS" as const }, absent = placed("absent", 3), old = placed("old", 4), missing = placed("missing", 5);
   const view = projectObMixedEvent("100m", [entry("a"), entry("dns", [female]), { ...entry("absent", [female]), absent: true }, entry("old", [])], [operation(male, [a]), operation(female, [dns, absent, old, missing])]);
   const eligible = new Set(view.entrants.filter(p => p.eligible && !p.absent).map(p => p.id));
   const next = new MeetHeatPlan(view.data, eligible, obMixedLimits).move([male + ":a"], 199, 8);
   const split = splitObMixedEvent(view, next);
-  expect(split[1].data.participants).toEqual([dns, absent, old, missing]);
-  split[1].data.participants.forEach((p, i) => expect(p).toBe([dns, absent, old, missing][i]));
+  expect(split[1].data.participants).toEqual([{...dns,group:null,order:null}, absent, old, missing]);
+  expect(split[1].data.participants[0].trials).toBe(dns.trials);
+  split[1].data.participants.slice(1).forEach((p, i) => expect(p).toBe([absent, old, missing][i]));
   expect(split[1].data.confirmed).toBe(true);
   expect(view.entrants.find(p => p.id === female + ":missing")?.division).toBe("女子");
 });
@@ -122,7 +123,7 @@ it("keeps scopes and confirmation unchanged for a status/trial edit and a semant
   const typedThenCleared: MeetEventData = { ...view.data, participants: [{ ...row, trials: [...row.trials, { mark: "", wind: "", status: "pending" }] }] };
   expect(splitObMixedEvent(view, typedThenCleared)[0].data.participants[0]).toBe(p);
   const next = { ...view.data, participants: [{ ...row, status: "DNS" as const }] };
-  expect(splitObMixedEvent(view, next)[0].data.participants[0]).toEqual({ ...p, status: "DNS" });
+  expect(splitObMixedEvent(view, next)[0].data.participants[0]).toEqual({ entryId: p.entryId,group:null,order:null,trials:p.trials,status:"DNS" });
 });
 
 it("finds mixed empty frames without confusing same-number old heats, and rejects invalid group codes", () => {

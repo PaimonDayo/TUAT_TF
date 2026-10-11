@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { FormModal, FormModalFooter, FormDraftGuard } from "@/components/ui/form-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MeetEvent, MeetMark, emptyTrial, type MeetEventData, type MeetPerformance, type MeetTrial } from "@/lib/meet-operations";
-import { effectiveObParticipation, hasRecordedObPerformance, obEventRule, type ObEventOperation } from "@/lib/ob-operations";
+import { MeetEvent, MeetMark, emptyTrial, withoutMeetPlacement, type MeetEventData, type MeetPerformance, type MeetTrial } from "@/lib/meet-operations";
+import { effectiveObParticipation, obEventRule, type ObEventOperation } from "@/lib/ob-operations";
 import { obAppearanceEntryId, obAppearanceName, type ObEntry } from "@/lib/ob-entries";
 import { MeetHeatPlan } from "@/lib/meet-heat-plan";
 import { fieldOrderRows } from "@/lib/meet-field-order";
@@ -15,7 +15,6 @@ import { ObOperationConflict } from "./ObOperationConflict";
 import { formatObRecordInput } from "@/lib/ob-record-input";
 import { obResultRanks } from "@/lib/ob-result-ranking";
 import { ObDayRegistration } from "./ObDayRegistration";
-import { ObRecordReplacement } from "./ObRecordReplacement";
 
 const statusLabels = { entered: "出場", DNS: "DNS（欠場）", DNF: "DNF（途中棄権）", DQ: "DQ（失格）" } as const;
 export function ObEventOperationsEditor({ event, entries, initial, operations = [], onSaved, onClose, onAddEntry, canRegister = !!onAddEntry, initialEntryId }: { canRegister?: boolean; initialEntryId?: string; event: string; entries: ObEntry[]; initial?: ObEventOperation; operations?: ObEventOperation[]; onSaved: (saved: ObEventOperation) => void; onClose: () => void; onAddEntry?: (event: string) => void }) {
@@ -31,7 +30,6 @@ export function ObEventOperationsEditor({ event, entries, initial, operations = 
   const [group, setGroup] = useState<string>("all");
   const [message, setMessage] = useState("");
   const [adding, setAdding] = useState(false);
-  const [replacingId, setReplacingId] = useState<string | null>(null);
   const [focusedEntryId, setFocusedEntryId] = useState(initialEntryId);
   const disabled = draft.locked || draft.reviewing;
   const [editing, setEditing] = useState(false);
@@ -52,10 +50,10 @@ export function ObEventOperationsEditor({ event, entries, initial, operations = 
   const editable = (p: MeetPerformance) => { const state = stateOf(p); return state.registered && !state.absent; };
   const ranks = obResultRanks(rule, data.participants.filter(p => stateOf(p).canParticipate));
   useEffect(() => {
-    if (adding || replacingId || editing || !draft.dirty || disabled || draft.failed || draft.blocked.length || new MeetEvent(rule, { ...data, confirmed: false }, { maxOrder: 600 }).validate()) return;
+    if (adding || editing || !draft.dirty || disabled || draft.failed || draft.blocked.length || new MeetEvent(rule, { ...data, confirmed: false }, { maxOrder: 600 }).validate()) return;
     const timer = window.setTimeout(() => void draft.save(), 600);
     return () => window.clearTimeout(timer);
-  }, [adding, replacingId, editing, draft, disabled, rule, data]);
+  }, [adding, editing, draft, disabled, rule, data]);
   function nextInput(id: string) {
     const ids = visible.filter(p => editable(p) && p.status === "entered").map(p => p.entryId);
     const target = inputs.current.get(ids[ids.indexOf(id) + 1]);
@@ -78,7 +76,7 @@ export function ObEventOperationsEditor({ event, entries, initial, operations = 
     return true;
   }
   function update(id: string, patch: Partial<MeetPerformance>) {
-    setMessage(""); draft.change({ ...data, confirmed: false, participants: data.participants.map(p => p.entryId === id ? { ...p, ...patch } : p) });
+    setMessage(""); draft.change({ ...data, confirmed: false, participants: data.participants.map(p => p.entryId === id ? patch.status === "DNS" ? withoutMeetPlacement({ ...p, ...patch }) : { ...p, ...patch } : p) });
   }
   function status(p: MeetPerformance, next: MeetPerformance["status"]) {
     if (next === "entered" && p.status === "DNS") {
@@ -116,22 +114,7 @@ export function ObEventOperationsEditor({ event, entries, initial, operations = 
     const number = (source === "own" ? fieldNumbers : currentNumbers)?.get(p.entryId);
     return number === undefined ? "順番を確認できません" : number === null ? "順番未定" : `試技順 ${number}番`;
   };
-  const replacementTarget = data.participants.find(p => p.entryId === replacingId);
-  const replacementCandidates = data.participants.filter(p => p.status === "entered" && editable(p) && !hasRecordedObPerformance(p)).map(p => ({ id: p.entryId, name: people.get(p.entryId)?.submitted_name ?? "登録解除済み", grade: people.get(p.entryId)?.grade ?? "", placement: rule.discipline === "track" ? trackPlacement(p) : fieldPlacement(p) }));
-  function replaceDns(replacementId: string) {
-    try {
-      const target = `${event}:${replacingId}`, replacement = `${event}:${replacementId}`;
-      const eligible = new Set(projection.entrants.filter(entry => entry.eligible && !entry.absent).map(entry => entry.id));
-      const next = new MeetHeatPlan(projection.data, eligible, obMixedLimits).replaceDns(target, replacement);
-      const restored = splitObMixedEvent(projection, next).find(value => value.event === event);
-      if (!restored) throw new Error("出場種目を確認してください");
-      draft.change(restored.data); setReplacingId(null); setGroup("all"); setPersonId(replacementId);
-      if (focusedEntryId) setFocusedEntryId(replacementId);
-      setMessage("元の人のDNSを残して配置しました。入力を終えると自動で保存します");
-    } catch (error) { setReplacingId(null); setMessage((error as Error).message); }
-  }
-  const replaceControl = (p: MeetPerformance) => canRegister && p.status === "DNS" && p.group !== null && p.order !== null && <Button size="sm" variant="outline" className="mt-2 w-full" disabled={disabled || draft.dirty} aria-label={`${people.get(p.entryId)?.submitted_name ?? "DNSの人"}の枠に別の人を入れる`} onClick={() => setReplacingId(p.entryId)}>この枠に別の人を入れる</Button>;
-  return <><FormModal open={!adding && !replacementTarget} autoFocus={false} title={`${event} · 記録`} onOpenChange={open => !open && onClose()}>
+  return <><FormModal open={!adding} autoFocus={false} title={`${event} · 記録`} onOpenChange={open => !open && onClose()}>
     <FormDraftGuard dirty={draft.dirty} busy={draft.locked} onSave={draft.save}/>
     <div className="space-y-4" onFocusCapture={e => { if (e.target instanceof HTMLInputElement) setEditing(true); }} onBlurCapture={e => { if (!(e.relatedTarget instanceof HTMLInputElement)) setEditing(false); }}>
       <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-body">出場登録 {focusedEntryId ? `${visible.length}件表示 / ${data.participants.length}件` : `${data.participants.length}件`}</p>{canRegister && <Button variant="outline" disabled={disabled || draft.dirty} onClick={() => setAdding(true)}>出場者を追加</Button>}</div>
@@ -144,7 +127,7 @@ export function ObEventOperationsEditor({ event, entries, initial, operations = 
           return <section key={p.entryId} aria-label={`${entry?.submitted_name ?? "登録解除済み"}の記録`} className="grid min-w-0 items-center gap-2 bg-card p-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,2fr)_minmax(100px,1fr)]">
             <div className="flex items-center justify-between gap-2"><div className="min-w-0"><h3 className="break-words text-headline">{entry?.submitted_name ?? "登録解除済み"}</h3><p className="text-caption">{division} · {trackPlacement(p)} · {entry?.grade}{state.absent || !state.registered ? ` · ${state.label}` : ""}</p></div><span className="shrink-0 text-caption tabular-nums">{ranks.has(p.entryId) ? `${ranks.get(p.entryId)}位` : ""}</span></div>
             <div className="grid gap-2"><label className="text-body font-medium">タイム<Input className="mt-1 border-ink/30 bg-bg font-normal focus:ring-2 focus:ring-accent/20" ref={node => { if (node) inputs.current.set(p.entryId, node); else inputs.current.delete(p.entryId); }} aria-label={`${entry?.submitted_name ?? "出場者"}のタイム`} placeholder={["1500m", "3000m"].includes(event.slice(2)) ? "例：41234（4分12秒34）" : "例：1234（12秒34）"} inputMode="decimal" enterKeyHint="next" autoComplete="off" disabled={disabled || !editable(p) || p.status !== "entered"} value={trial.mark} onChange={e => mark(p, 0, e.target.value)} onBlur={e => finishMark(p, 0, e.target.value)} onPaste={e => { if (pasteTimes(p.entryId, e.clipboardData.getData("text/plain"))) e.preventDefault(); }} onKeyDown={e => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); nextInput(p.entryId); } }}/></label></div>
-            <div>{statusControl(p)}{replaceControl(p)}</div>
+            <div>{statusControl(p)}</div>
           </section>;
         })}</div>
       </> : <div className="grid min-w-0 items-start gap-4 md:grid-cols-[minmax(200px,1fr)_minmax(0,3fr)]">
@@ -152,7 +135,6 @@ export function ObEventOperationsEditor({ event, entries, initial, operations = 
         {person && <section aria-label="選択した出場者の試技" className="min-w-0 space-y-4">
           <div className="flex gap-2">{([-1, 1] as const).map(direction => { const next = visible[visible.findIndex(p => p.entryId === person.entryId) + direction]; return <Button key={direction} size="sm" variant="outline" disabled={!next} onClick={() => next && setPersonId(next.entryId)}>{direction < 0 ? "前の出場者" : "次の出場者"}</Button>; })}</div>
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-title">{people.get(person.entryId)?.submitted_name ?? "登録解除済み"}</h3><p className="text-body">{division} · {fieldPlacement(person)} · ベスト {model.best(person)}{ranks.has(person.entryId) ? ` · ${ranks.get(person.entryId)}位` : ""}</p></div><div className="w-40">{statusControl(person)}</div></div>
-          {replaceControl(person)}
           <p className="text-caption">{rule.discipline === "height" ? "高さをmで入力し、○・×・−を選びます。同じ高さも1試技ずつ記録してください。" : "記録をmで入力してください。失敗は×、パスは−を選びます。"}</p>
           <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">{Array.from({ length: trialCount }, (_, index) => {
             const trial = person.trials[index] ?? emptyTrial(), locked = disabled || !editable(person) || person.status !== "entered";
@@ -169,6 +151,5 @@ export function ObEventOperationsEditor({ event, entries, initial, operations = 
     {(draft.failed || draft.unconfirmed) && <FormModalFooter><Button disabled={draft.busy || draft.reviewing || !draft.dirty && !draft.unconfirmed} onClick={() => void draft.save()}>{draft.busy ? draft.unconfirmed ? "確認中…" : "保存中…" : draft.unconfirmed ? "保存結果を確認" : "保存を再試行"}</Button></FormModalFooter>}
   </FormModal>
     {adding && <ObDayRegistration event={event} entries={entries} operations={[...operations.filter(op => op.event_name !== event), { meet_key: "ob-2026", event_name: event, data, revision: draft.revision ?? 0, updated_at: initial?.updated_at ?? "" }]} onClose={() => setAdding(false)} onSaved={(id, saved) => { if (saved) onSaved(saved); setAdding(false); setGroup("all"); setPersonId(id); setFocusedEntryId(undefined); }}/>}
-    {replacementTarget && <ObRecordReplacement name={people.get(replacementTarget.entryId)?.submitted_name ?? "DNSの人"} placement={rule.discipline === "track" ? trackPlacement(replacementTarget) : fieldPlacement(replacementTarget)} candidates={replacementCandidates} onClose={() => setReplacingId(null)} onSelect={replaceDns}/>}
   </>;
 }

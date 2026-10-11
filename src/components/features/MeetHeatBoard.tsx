@@ -11,7 +11,7 @@ import type { MeetEventData, MeetOperationLimits, MeetPerformance } from "@/lib/
 export type HeatEntrant = { id: string; name: string; grade: string; mark: string; alumni: boolean; eligible: boolean; absent?: boolean; division?: "男子" | "女子" };
 type HeatSlot = { id: string; order: number; person?: MeetPerformance; locked: boolean };
 
-export function MeetHeatBoard({ data, entrants, orderLabel, capacity, disabled, onChange, groupLabel = group => `${group}組`, nextGroup: requestedNextGroup, groupLimit = 99, modelLimits, statusActions = true }: { statusActions?: boolean; data: MeetEventData; entrants: HeatEntrant[]; orderLabel: string; capacity?: number; disabled: boolean; onChange: (data: MeetEventData) => void; groupLabel?: (group: number) => string; nextGroup?: number | null; groupLimit?: number; modelLimits?: MeetOperationLimits }) {
+export function MeetHeatBoard({ data: savedData, entrants, orderLabel, capacity, disabled, onChange, groupLabel = group => `${group}組`, nextGroup: requestedNextGroup, groupLimit = 99, modelLimits, statusActions = true }: { statusActions?: boolean; data: MeetEventData; entrants: HeatEntrant[]; orderLabel: string; capacity?: number; disabled: boolean; onChange: (data: MeetEventData) => void; groupLabel?: (group: number) => string; nextGroup?: number | null; groupLimit?: number; modelLimits?: MeetOperationLimits }) {
   const anchor = useId();
   const [selected, setSelected] = useState<string[]>([]);
   const [past, setPast] = useState<MeetEventData[]>([]);
@@ -21,7 +21,8 @@ export function MeetHeatBoard({ data, entrants, orderLabel, capacity, disabled, 
   const people = new Map(entrants.map(person => [person.id, person]));
   const labelledName = (id: string, fallback = "出場者") => { const entry = people.get(id), name = entry?.name ?? fallback; return entry?.division ? `${entry.division} ${name}` : name; };
   const eligible = new Set(entrants.filter(person => person.eligible && !person.absent).map(person => person.id));
-  const model = new MeetHeatPlan(data, eligible, modelLimits);
+  const model = new MeetHeatPlan(savedData, eligible, modelLimits);
+  const data = model.data;
   const present = model.active;
   const savedGroups = data.participants.flatMap(person => person.group !== null ? [person.group] : []);
   const groups = [...new Set([...savedGroups, ...emptyGroups, ...(!savedGroups.length && !emptyGroups.length ? [requestedNextGroup ?? 1] : [])])].sort((a, b) => a - b);
@@ -51,7 +52,7 @@ export function MeetHeatBoard({ data, entrants, orderLabel, capacity, disabled, 
       <label className="flex min-h-16 min-w-0 flex-1 items-center gap-2 p-2">
         <input type="checkbox" className="h-5 w-5 shrink-0 accent-accent" checked={checked} disabled={disabled || !selectable} aria-label={`${labelledName(person.entryId, "登録解除済み")}を選択`} onChange={() => { setSelected(current => checked ? current.filter(id => id !== person.entryId) : [...current, person.entryId]); setMessage(""); }}/>
         <span className="w-5 shrink-0 text-center text-body tabular-nums">{person.order ?? "—"}</span>
-        <span className="min-w-0 flex-1"><span className={`block break-words text-body font-medium ${entry?.alumni ? "text-violet-700" : ""}`}>{entry?.name ?? "登録解除済み"}</span><span className="block text-caption">{entry?.division && <span className="font-medium text-ink/75">{entry.division}{entry.grade || entry.mark ? " · " : ""}</span>}{entry?.grade}{entry?.mark ? ` · ${entry.mark}` : ""}</span>{!!marks.length && <span className="block break-words text-caption">記録: {marks.join("、")}</span>}{!selectable && <span className="block text-caption text-ink/75">{reason} · 配置を保持</span>}{duplicate && <span className="block text-caption text-danger">！ {groupLabel(person.group!)}{person.order}番が重複</span>}</span>
+        <span className="min-w-0 flex-1"><span className={`block break-words text-body font-medium ${entry?.alumni ? "text-violet-700" : ""}`}>{entry?.name ?? "登録解除済み"}</span><span className="block text-caption">{entry?.division && <span className="font-medium text-ink/75">{entry.division}{entry.grade || entry.mark ? " · " : ""}</span>}{entry?.grade}{entry?.mark ? ` · ${entry.mark}` : ""}</span>{!!marks.length && <span className="block break-words text-caption">記録: {marks.join("、")}</span>}{!selectable && <span className="block text-caption text-ink/75">{reason}{person.group !== null && person.order !== null ? " · 配置を保持" : ""}</span>}{duplicate && <span className="block text-caption text-danger">！ {groupLabel(person.group!)}{person.order}番が重複</span>}</span>
       </label>
       <div className="shrink-0 pr-1">
         {statusActions && (selectable ? <Button size="sm" variant="ghost" className="min-h-11 px-2 text-muted2" disabled={disabled} aria-label={`${labelledName(person.entryId)}をDNSにする`} onClick={() => change(() => model.setDns(person.entryId, true), `${labelledName(person.entryId)}をDNSにしました`)}>DNS</Button>
@@ -63,7 +64,7 @@ export function MeetHeatBoard({ data, entrants, orderLabel, capacity, disabled, 
     const assigned = data.participants.filter(person => person.group === group && person.order !== null);
     const span = capacity ?? Math.max(1, ...assigned.map(person => person.order!));
     const slots: HeatSlot[] = Array.from({ length: span }, (_, index) => {
-      const order = index + 1, person = assigned.find(person => person.order === order && person.status !== "DNS") ?? assigned.find(person => person.order === order);
+      const order = index + 1, person = assigned.find(person => person.order === order);
       return { id: `${group}:${order}`, order, person, locked: !!person && (!eligible.has(person.entryId) || person.status !== "entered") };
     });
     const shown = new Set(slots.flatMap(slot => slot.person ? [slot.person.entryId] : []));
@@ -72,7 +73,7 @@ export function MeetHeatBoard({ data, entrants, orderLabel, capacity, disabled, 
     return <section key={group} id={`${anchor}-${group}`} aria-label={groupLabel(group)} className="min-w-0 scroll-mt-3 overflow-hidden rounded-xl border border-separator bg-card">
       <h3 className="flex items-center justify-between gap-2 bg-bg px-3 py-3 text-headline"><span>{groupLabel(group)} <span className="text-caption">{present.filter(person => person.group === group && person.order !== null).length}人{capacity ? ` / ${capacity}枠` : ""}</span></span><span className="text-caption">{orderLabel}</span></h3>
       <ReorderList items={slots} enabled={!disabled && !duplicate} isItemDisabled={slot => slot.locked} getDragLabel={slot => `${groupLabel(group)}${slot.order}${orderLabel}の${slot.person ? labelledName(slot.person.entryId) : "空き枠"}をスライドして並べ替え`} onReorder={next => change(() => model.reorder(group, next.filter(slot => !slot.locked).map(slot => slot.order), capacity), `${groupLabel(group)}の順番を変更しました`)} renderItem={slot => slot.person ? row(slot.person) : <div aria-label={`${groupLabel(group)}${slot.order}${orderLabel}の空き枠`} className="flex min-h-16 items-center gap-2 border-b border-separator bg-card p-2"><span className="h-5 w-5 shrink-0"/><span className="w-5 shrink-0 text-center text-body tabular-nums">{slot.order}</span><span className="text-body text-muted2">空き</span></div>}/>
-      {!!extra.length && <div className="border-t border-separator p-2"><p className="px-2 py-2 text-caption">DNS・保存済みの配置</p>{extra.map(person => <div key={person.entryId}>{row(person)}</div>)}</div>}
+      {!!extra.length && <div className="border-t border-separator p-2"><p className="px-2 py-2 text-caption">保存済みの配置</p>{extra.map(person => <div key={person.entryId}>{row(person)}</div>)}</div>}
     </section>;
   }
   return <div className="space-y-4">

@@ -24,7 +24,7 @@ it("returns only personal saved groups, mixed lanes, distance numbers and DNS", 
     operation("男子3000m", [emptyPerformance("mine")]),
   ];
   expect(await getMyObParticipation("mine")).toEqual([
-    {event:"男子100m",status:"DNS",placement:"混合2組・4レーン"},
+    {event:"男子100m",status:"DNS",placement:"組未定"},
     {event:"女子300m",status:"entered",placement:"女子3組・6レーン"},
     {event:"男子1500m",status:"entered",placement:"男子1組・12番"},
     {event:"男子3000m",status:"entered",placement:"組未定"},

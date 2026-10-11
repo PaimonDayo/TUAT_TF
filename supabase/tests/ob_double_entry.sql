@@ -2,7 +2,7 @@
 -- Generated fixtures only. Existing event rows/positions/results are retained.
 DO $test$
 DECLARE actor uuid:=gen_random_uuid(); outsider uuid:=gen_random_uuid(); member uuid:=gen_random_uuid(); staff_role uuid;
- e uuid; replacement_entry uuid; dns_before jsonb; request uuid:=gen_random_uuid(); result jsonb; repeated jsonb; op public.ob_event_operations%ROWTYPE;
+ e uuid; replacement_entry uuid; dns_before jsonb; released_position jsonb; request uuid:=gen_random_uuid(); result jsonb; repeated jsonb; op public.ob_event_operations%ROWTYPE;
  saved jsonb; draft jsonb; before_person jsonb; before_count integer; rev integer; context jsonb; changes jsonb; before_hash text;
  event text:='男子1500m'; other text:='男子3000m'; name text:='__double_entry_'||gen_random_uuid()::text;
 BEGIN
@@ -63,6 +63,7 @@ BEGIN
  SELECT revision INTO rev FROM public.ob_meet_entries WHERE id=e;
  SELECT jsonb_build_object('entries',jsonb_agg(jsonb_build_object('id',id,'revision',revision)),'operations','[]'::jsonb) INTO context FROM public.ob_meet_entries WHERE meet_key='ob-2026';
  SELECT * INTO op FROM public.ob_event_operations WHERE meet_key='ob-2026' AND event_name=event;
+ SELECT value INTO released_position FROM jsonb_array_elements(op.data->'participants') p WHERE value->>'entryId'=e::text||':2';
  changes:=jsonb_build_array(jsonb_build_object('entryId',e::text||':2','entryRevision',rev,'event',event,'operationRevision',op.revision,'status','DNS','position',false,'newKey',NULL,'name',NULL,'grade',NULL));
  PERFORM public.apply_ob_sheet_edits(gen_random_uuid(),context,changes,true);
  IF (SELECT data FROM public.ob_event_operations WHERE meet_key='ob-2026' AND event_name=event) IS DISTINCT FROM op.data THEN RAISE EXCEPTION 'dryRun mutated'; END IF;
@@ -70,19 +71,28 @@ BEGIN
  SELECT * INTO op FROM public.ob_event_operations WHERE meet_key='ob-2026' AND event_name=event;
  IF (SELECT value FROM jsonb_array_elements(op.data->'participants') p WHERE value->>'entryId'=e::text) IS DISTINCT FROM before_person THEN RAISE EXCEPTION 'sheet first overwritten'; END IF;
  IF (SELECT value->>'status' FROM jsonb_array_elements(op.data->'participants') p WHERE value->>'entryId'=e::text||':2')<>'DNS' THEN RAISE EXCEPTION 'second DNS missing'; END IF;
- -- Explicit reuse of a DNS slot retains its historical result and original placement.
+ -- DNS clears group/order/heatScope, but retains both appearances and trials.
+ SELECT value INTO dns_before FROM jsonb_array_elements(op.data->'participants') p WHERE value->>'entryId'=e::text||':2';
+ IF dns_before->'group'<>'null'::jsonb OR dns_before->'order'<>'null'::jsonb OR dns_before ? 'heatScope'
+  OR dns_before->'trials'<>jsonb_build_array(jsonb_build_object('mark','4:20.00','wind','','status','valid')) THEN RAISE EXCEPTION 'DNS did not release placement safely'; END IF;
+ -- Reuse the second appearance's previous slot (first empty number in group 97).
  PERFORM set_config('request.jwt.claim.sub',actor::text,true);
  PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',actor,'role','authenticated')::text,true);
  replacement_entry:=public.create_ob_guest_registration(name||'_replacement','B1',ARRAY[event],'{}','未回答',NULL,NULL);
  SELECT value INTO dns_before FROM jsonb_array_elements(op.data->'participants') p WHERE value->>'entryId'=e::text||':2';
- saved:=public.save_ob_event_operation_checked(event,op.revision,jsonb_build_object('confirmed',false,'participants',(op.data->'participants')||jsonb_build_array(jsonb_build_object('entryId',replacement_entry,'group',dns_before->'group','order',dns_before->'order','status','entered','trials','[]'::jsonb))),NULL);
+ saved:=public.save_ob_event_operation_checked(event,op.revision,jsonb_build_object('confirmed',false,'participants',(op.data->'participants')||jsonb_build_array(jsonb_build_object('entryId',replacement_entry,'group',released_position->'group','order',released_position->'order','status','entered','trials','[]'::jsonb))),NULL);
  IF (SELECT value FROM jsonb_array_elements(saved->'data'->'participants') p WHERE value->>'entryId'=e::text||':2') IS DISTINCT FROM dns_before THEN RAISE EXCEPTION 'replacement erased DNS history'; END IF;
  IF (SELECT value FROM jsonb_array_elements(saved->'data'->'participants') p WHERE value->>'entryId'=e::text) IS DISTINCT FROM before_person THEN RAISE EXCEPTION 'replacement erased first result'; END IF;
  SELECT jsonb_build_object('confirmed',false,'participants',jsonb_agg(CASE WHEN value->>'entryId'=e::text||':2' THEN jsonb_set(value,'{status}','"entered"') ELSE value END)) INTO draft FROM jsonb_array_elements(saved->'data'->'participants');
- BEGIN PERFORM public.save_ob_event_operation_checked(event,(saved->>'revision')::integer,draft,NULL); RAISE EXCEPTION 'resumption collided'; EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'operation_position' THEN RAISE; END IF; END;
+ saved:=public.save_ob_event_operation_checked(event,(saved->>'revision')::integer,draft,NULL);
+ IF (SELECT value->'group' FROM jsonb_array_elements(saved->'data'->'participants') p WHERE value->>'entryId'=e::text||':2')<>'null'::jsonb THEN RAISE EXCEPTION 'restoration occupied a lane'; END IF;
  SELECT jsonb_build_object('confirmed',false,'participants',jsonb_agg(CASE WHEN value->>'entryId'=replacement_entry::text THEN jsonb_set(value,'{order}','596') ELSE value END)) INTO draft FROM jsonb_array_elements(saved->'data'->'participants');
  PERFORM set_config('request.jwt.claim.sub',member::text,true);
  PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',member,'role','authenticated')::text,true);
  BEGIN PERFORM public.save_ob_event_operation_checked(event,(saved->>'revision')::integer,draft,NULL); RAISE EXCEPTION 'member changed replacement'; EXCEPTION WHEN insufficient_privilege THEN IF SQLERRM<>'operation_forbidden' THEN RAISE; END IF; END;
- RAISE NOTICE 'two appearances, recorded heat addition, DNS replacement, safe resumption, permissions, retries and private sheet dryRun passed';
+ -- Ordinary recording permission may release a lane, including malicious proposed coordinates.
+ SELECT jsonb_build_object('confirmed',false,'participants',jsonb_agg(CASE WHEN value->>'entryId'=replacement_entry::text THEN value||jsonb_build_object('status','DNS','group',98,'order',596,'heatScope','混合') ELSE value END)) INTO draft FROM jsonb_array_elements(saved->'data'->'participants');
+ saved:=public.save_ob_event_operation_checked(event,(saved->>'revision')::integer,draft,NULL);
+ IF EXISTS(SELECT 1 FROM jsonb_array_elements(saved->'data'->'participants') p WHERE p->>'entryId'=replacement_entry::text AND (p->'group'<>'null'::jsonb OR p->'order'<>'null'::jsonb OR p ? 'heatScope')) THEN RAISE EXCEPTION 'record permission kept DNS coordinates'; END IF;
+ RAISE NOTICE 'two appearances, recorded heat addition, automatic DNS release, lane reuse, unplaced resumption, permissions, retries and private sheet dryRun passed';
 END $test$;

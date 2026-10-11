@@ -1,26 +1,21 @@
 import {expect,it} from "vitest";
 import {MeetHeatPlan} from "./meet-heat-plan";
-import {emptyPerformance,MeetEvent,type MeetEventData} from "./meet-operations";
+import {emptyPerformance,withoutMeetPlacement,MeetEvent,type MeetEventData} from "./meet-operations";
 const a={...emptyPerformance("a"),group:1,order:1,trials:[{mark:"12.34",status:"valid" as const,wind:"0"}]};
 const b={...emptyPerformance("b"),group:2,order:2};
 const c=emptyPerformance("c");
 const data:MeetEventData={participants:[a,b,c],confirmed:false};
 const plan=(d=data)=>new MeetHeatPlan(d,new Set(d.participants.filter(p=>p.entryId!=="old").map(p=>p.entryId)));
-it("reuses a DNS lane explicitly while retaining DNS, trials and safe reinstatement",()=>{
- const dns={...a,entryId:"dns",status:"DNS" as const};
- const original={...data,participants:[dns,b,c]};
- const next=plan(original).replaceDns("dns","c");
- expect(next.participants[0]).toBe(dns);
- expect(next.participants[1]).toBe(b);
+it("releases a DNS lane automatically, keeps results and restores unplaced after reuse",()=>{
+ const dns=plan({...data,participants:[{...a,heatScope:"混合"},b,c]}).setDns("a",true);
+ expect(dns.participants[0]).toEqual({...a,status:"DNS",group:null,order:null});
+ expect(dns.participants[0].trials).toBe(a.trials);
+ const next=plan(dns).move(["c"],1,1);
  expect(next.participants[2]).toEqual({...c,group:1,order:1});
- expect(new MeetEvent({name:"100m",discipline:"track",wind:true},next).validate()).toBeNull();
- expect(()=>plan(next).setDns("dns",false)).toThrow("別の人が使用しています");
- expect(()=>plan(next).replaceDns("dns","b")).toThrow("別の人が使用しています");
- expect(()=>plan(original).replaceDns("b","c")).toThrow("DNSになった人");
- const reordered=plan(next).reorder(1,[2,1],2);
- expect(reordered.participants[0]).toBe(dns);
- expect(reordered.participants[2].order).toBe(2);
- expect(plan(reordered).setDns("dns",false).participants[0].status).toBe("entered");
+ const restored=plan(next).setDns("a",false);
+ expect(restored.participants[0]).toEqual({...a,group:null,order:null});
+ expect(restored.participants[2]).toBe(next.participants[2]);
+ expect(new MeetEvent({name:"100m",discipline:"track",wind:true},restored).validate()).toBeNull();
 });
 it("moves several people to the end without an eight-person limit or lost results",()=>{
  const crowd=Array.from({length:25},(_,i)=>({...emptyPerformance("p"+i),group:1,order:i+1}));
@@ -36,12 +31,12 @@ it("swaps two people across groups or with an unassigned entrant",()=>{
  expect(plan().swap(["a","c"]).participants[0]).toEqual({...a,group:null,order:null});
  expect(plan().move(["a"],1)).toBe(data);
 });
-it("reserves DNS and withdrawn numbers so reinstatement cannot collide",()=>{
+it("releases legacy DNS positions while retaining withdrawn numbers",()=>{
  const dns={...emptyPerformance("dns"),status:"DNS" as const,group:1,order:3};
  const old={...emptyPerformance("old"),group:1,order:4};
  const next=plan({...data,participants:[a,b,c,dns,old]}).move(["c"],1);
  expect(next.participants[2]).toEqual({...c,group:1,order:5});
- expect(next.participants[3]).toBe(dns);expect(next.participants[4]).toBe(old);
+ expect(next.participants[3]).toEqual(withoutMeetPlacement(dns));expect(next.participants[4]).toBe(old);
  expect(()=>plan({...data,participants:[a,b,c,dns,old]}).move(["dns"],1)).toThrow();
 });
 it("places only explicitly selected entrants while the remaining people stay unassigned",()=>{
@@ -68,13 +63,13 @@ it("allows an explicit manual placement of all 300 non-lane entrants in one grou
  expect(next.participants.at(-1)?.order).toBe(300);
  expect(new MeetEvent({name:"1500m",discipline:"track",wind:false},next).validate()).toBeNull();
 });
-it("DNS and restoration keep every trial and number and reject a occupied return position",()=>{
- const dns=plan().setDns("a",true);
- expect(dns.participants[0]).toEqual({...a,status:"DNS"});
- expect(plan(dns).setDns("a",false).participants[0]).toEqual(a);
- const occupied={...dns,participants:[dns.participants[0],{...b,group:1,order:1},c]};
- expect(()=>plan(occupied).setDns("a",false)).toThrow("別の人");
- expect(occupied.participants[0].status).toBe("DNS");
+it("removes legacy DNS placement and heat scope without affecting eligibility or trials",()=>{
+ const dns={...a,status:"DNS" as const,heatScope:"混合" as const};
+ const occupied={...data,participants:[dns,{...b,group:1,order:1},c]};
+ const next=plan(occupied).setDns("a",false);
+ expect(next.participants[0]).toEqual({...a,group:null,order:null});
+ expect(next.participants[0].trials).toBe(a.trials);
+ expect(next.participants[1]).toBe(occupied.participants[1]);
  const absentPlan=new MeetHeatPlan(data,new Set(["b","c"]));
  expect(()=>absentPlan.setDns("a",true)).toThrow("欠席");
  expect(()=>absentPlan.move(["a"],2)).toThrow();
@@ -85,9 +80,9 @@ it.each([6,8])("fills only selected people into the lowest free slots of a %i-sl
  const old={...emptyPerformance("old"),group:1,order:4};
  const existing={...data,participants:[a,b,c,dns,old],confirmed:true};
  const next=plan(existing).move(["b","c"],1,capacity);
- expect(next.participants[1]).toEqual({...b,group:1,order:3});
- expect(next.participants[2]).toEqual({...c,group:1,order:5});
- expect(next.participants[0]).toBe(a);expect(next.participants[3]).toBe(dns);expect(next.participants[4]).toBe(old);
+ expect(next.participants[1]).toEqual({...b,group:1,order:2});
+ expect(next.participants[2]).toEqual({...c,group:1,order:3});
+ expect(next.participants[0]).toBe(a);expect(next.participants[3]).toEqual(withoutMeetPlacement(dns));expect(next.participants[4]).toBe(old);
  expect(next.confirmed).toBe(false);
 });
 
@@ -114,13 +109,13 @@ it("moves a chosen legacy position into a proper slot in the same group without 
  expect(plan(next).move(["a"],1,6)).toBe(next);
 });
 
-it("lets the checklist resolve a duplicate active slot while keeping the reserved occupant",()=>{
+it("does not move an active entrant merely because a legacy DNS shared that lane",()=>{
  const dns={...emptyPerformance("dns"),status:"DNS" as const,group:1,order:1};
  const existing={...data,participants:[a,b,c,dns]};
  const next=plan(existing).move(["a"],1,6);
- expect(next.participants[0]).toEqual({...a,order:2});
- expect(next.participants[3]).toBe(dns);
- expect(plan(next).reorder(1,[2,3,4,5,6],6)).toBe(next);
+ expect(next.participants[0]).toBe(a);
+ expect(next.participants[3]).toEqual(withoutMeetPlacement(dns));
+ expect(plan(next).reorder(1,[1,2,3,4,5,6],6)).toBe(next);
 });
 
 it("slides an entrant into an empty lane and retains the gap, other groups and every trial",()=>{
@@ -134,7 +129,7 @@ it("slides an entrant into an empty lane and retains the gap, other groups and e
  expect(next.confirmed).toBe(false);
 });
 
-it("slides editable rows around pinned DNS, cancelled and absent slots without moving legacy rows",()=>{
+it("slides editable rows around cancelled and absent slots, leaving DNS unplaced without moving legacy rows",()=>{
  const dns={...emptyPerformance("dns"),status:"DNS" as const,group:1,order:2};
  const cancelled={...emptyPerformance("old"),group:1,order:4};
  const absent={...emptyPerformance("absent"),group:1,order:5};
@@ -142,10 +137,11 @@ it("slides editable rows around pinned DNS, cancelled and absent slots without m
  const legacy={...emptyPerformance("legacy"),group:1,order:9,trials:a.trials};
  const existing={participants:[a,second,dns,cancelled,absent,legacy,b],confirmed:true};
  const model=new MeetHeatPlan(existing,new Set(["a","c","legacy","b"]));
- const next=model.reorder(1,[3,1,6],6);
+ const next=model.reorder(1,[3,2,1,6],6);
  expect(next.participants[0]).toEqual({...a,order:3});
  expect(next.participants[1]).toEqual({...second,order:1});
- for(const index of [2,3,4,5,6]) expect(next.participants[index]).toBe(existing.participants[index]);
+ expect(next.participants[2]).toEqual(withoutMeetPlacement(dns));
+ for(const index of [3,4,5,6]) expect(next.participants[index]).toBe(existing.participants[index]);
  expect(next.participants[0].trials).toBe(a.trials);
  expect(()=>model.reorder(1,[3,1,2,4,5,6],6)).toThrow("枠");
 });
@@ -175,7 +171,7 @@ it("rejects duplicated or incomplete slide slots instead of dropping an occupant
  }
  expect(plan().reorder(1,[1,2,3,4,5,6],6)).toBe(data);
 });
-it("opts into 297 projected groups and order600 without changing generic limits or losing DNS reservations", () => {
+it("opts into 297 projected groups and order600 without changing generic limits and releases legacy DNS placements", () => {
  const crowd=Array.from({length:600},(_,i)=>emptyPerformance("p"+i));
  const source={participants:crowd,confirmed:true};
  const ids=new Set(crowd.map(p=>p.entryId));
@@ -186,5 +182,5 @@ it("opts into 297 projected groups and order600 without changing generic limits 
  expect(new MeetHeatPlan(next,ids,limits).move([...ids],199)).toBe(next);
  const dns={...next.participants[0],status:"DNS" as const};
  const occupied={...next,participants:[dns,{...next.participants[1],order:1}]};
- expect(()=>new MeetHeatPlan(occupied,ids,limits).setDns(dns.entryId,false)).toThrow("混合1組");
+ expect(new MeetHeatPlan(occupied,ids,limits).setDns(dns.entryId,false).participants[0]).toEqual({...dns,status:"entered",group:null,order:null});
 });

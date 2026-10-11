@@ -17,9 +17,9 @@ it("adds the second blank appearance without rewriting the first result",()=>{
  expect(rows.map(row=>row.entryId)).toEqual([id,id+":2"]); expect(rows[0].performance).toBe(first);
  expect(rows[1].performance).toEqual(emptyPerformance(id+":2")); expect(rows.every(row=>row.state.registered)).toBe(true);
 });
-it("withdraws only the second appearance while retaining both saved placements and results",()=>{
+it("withdraws only the second appearance, releases its DNS placement and retains results",()=>{
  const rows=obEventParticipants(event,[{...entry,events:[event]}],operation.data);
- expect(rows[0].state.registered).toBe(true); expect(rows[1].state.registered).toBe(false); expect(rows[1].performance).toBe(second);
+ expect(rows[0].state.registered).toBe(true); expect(rows[1].state.registered).toBe(false); expect(rows[1].performance).toEqual({...second,group:null,order:null});
  const recorded={...second,status:"entered" as const,trials:first.trials};
  expect(obDutyCompetitionEvents({...entry,events:[]},[{...operation,data:{confirmed:false,participants:[recorded]}}])).toEqual([event]);
 });

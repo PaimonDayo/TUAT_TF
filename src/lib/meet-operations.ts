@@ -9,6 +9,14 @@ export type MeetEventRule = { name: string; discipline: MeetDiscipline; wind: bo
 export const emptyTrial = (): MeetTrial => ({ mark: "", status: "pending", wind: "" });
 export const emptyPerformance = (entryId: string): MeetPerformance => ({ entryId, group: null, order: null, status: "entered", trials: [] });
 
+/** Release a placement without changing the person's status or trial history. */
+export function withoutMeetPlacement(person: MeetPerformance): MeetPerformance {
+  if (person.group === null && person.order === null && person.heatScope === undefined) return person;
+  const next = { ...person, group: null, order: null };
+  delete next.heatScope;
+  return next;
+}
+
 /** Value object: numeric comparison never depends on formatted labels or floating point equality. */
 export class MeetMark {
   static parse(text: string, discipline: MeetDiscipline): number | null {

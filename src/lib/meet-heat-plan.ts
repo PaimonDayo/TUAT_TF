@@ -1,8 +1,12 @@
-import type { MeetEventData, MeetOperationLimits } from "./meet-operations";
+import { withoutMeetPlacement, type MeetEventData, type MeetOperationLimits } from "./meet-operations";
 
 /** Checklist moves affect selected people; explicit slides reorder only editable slots. */
 export class MeetHeatPlan {
-  constructor(readonly data: MeetEventData, readonly eligibleIds: ReadonlySet<string>, readonly limits: MeetOperationLimits = {}) {}
+  readonly data: MeetEventData;
+  constructor(data: MeetEventData, readonly eligibleIds: ReadonlySet<string>, readonly limits: MeetOperationLimits = {}) {
+    const participants = data.participants.map(p => p.status === "DNS" ? withoutMeetPlacement(p) : p);
+    this.data = participants.some((p, i) => p !== data.participants[i]) ? { ...data, participants } : data;
+  }
   get active() { return this.data.participants.filter(p => this.eligibleIds.has(p.entryId) && p.status === "entered"); }
   get unassigned() { return this.active.filter(p => p.group === null || p.order === null); }
   private selected(ids: string[]) {
@@ -29,14 +33,14 @@ export class MeetHeatPlan {
       const incoming = selected.filter(p => p.group !== group || p.order === null || p.order > capacity
         || this.data.participants.some(other => other.entryId !== p.entryId && other.group === group && other.order === p.order));
       const moving = new Set(incoming.map(p => p.entryId));
-      // DNS, absence and cancelled entries keep their slots, even when hidden from the active roster.
+      // Absence and cancelled entries retain their saved placement; DNS releases it.
       const reserved = new Set(this.data.participants.filter(p => p.group === group && !moving.has(p.entryId)).map(p => p.order));
       const available = Array.from({length:capacity}, (_, index) => index + 1).filter(order => !reserved.has(order));
       if (available.length < incoming.length) throw new Error(`この組の空き枠は${available.length}枠です。移す人を減らすか別の組を選んでください`);
       return this.result(new Map(incoming.map((p, index) => [p.entryId, {group,order:available[index]}])));
     }
     const incoming = selected.filter(p => p.group !== group || p.order === null);
-    // DNS and cancelled entrants reserve their number for reinstatement.
+    // Append after remaining placements, including cancelled entrants.
     let order = Math.max(0,...this.data.participants.filter(p => p.group === group).map(p => p.order ?? 0));
     if (order + incoming.length > (this.limits.maxOrder ?? 300)) throw new Error(`この組の番号が${this.limits.maxOrder ?? 300}を超えています。新しい組へ移してください`);
     return this.result(new Map(incoming.map(p => [p.entryId,{group,order:++order}])));
@@ -46,7 +50,7 @@ export class MeetHeatPlan {
     if (!Number.isInteger(group) || group < 1 || group > (this.limits.maxGroups ?? 99)) throw new Error("組を確認してください");
     if (capacity !== undefined) this.validCapacity(capacity);
     const assigned = this.data.participants.filter(p => p.group === group && p.order !== null);
-    const placed = assigned.filter(p => p.status !== "DNS" || !assigned.some(other => other.status !== "DNS" && other.order === p.order));
+    const placed = assigned;
     const occupied = new Set<number>();
     for (const person of placed) {
       if (occupied.has(person.order!)) throw new Error("番号が重複しています。名前を選んで別の枠へ移してから並べ替えてください");
@@ -73,22 +77,11 @@ export class MeetHeatPlan {
     const [a,b] = this.selected(ids);
     return this.result(new Map([[a.entryId,{group:b.group,order:b.order}],[b.entryId,{group:a.group,order:a.order}]]));
   }
-  /** Reuse an explicitly selected DNS slot without erasing its original occupant. */
-  replaceDns(id: string, replacementId: string): MeetEventData {
-    const withdrawn = this.data.participants.find(p => p.entryId === id);
-    const [replacement] = this.selected([replacementId]);
-    if (!withdrawn || withdrawn.status !== "DNS" || withdrawn.group === null || withdrawn.order === null) throw new Error("DNSになった人の組・順番を確認してください");
-    if (this.data.participants.some(p => p.entryId !== id && p.entryId !== replacementId && p.status !== "DNS" && p.group === withdrawn.group && p.order === withdrawn.order)) throw new Error("この枠は別の人が使用しています。配置を確認してください");
-    return this.result(new Map([[replacement.entryId, { group: withdrawn.group, order: withdrawn.order }]]));
-  }
   setDns(id: string, dns: boolean): MeetEventData {
     const person = this.data.participants.find(p => p.entryId === id);
     if (!person || !this.eligibleIds.has(id)) throw new Error("大会の欠席・出場登録を先に確認してください");
     if (dns && person.status !== "entered") throw new Error("記録画面で出場状況を確認してください");
     if (!dns && person.status !== "DNS") return this.data;
-    if (!dns && person.group !== null && person.order !== null && this.data.participants.some(p => p.entryId !== id && p.status !== "DNS" && p.group === person.group && p.order === person.order)) {
-      throw new Error(`${this.limits.groupLabel?.(person.group) ?? `${person.group}組`}${person.order}番を別の人が使用しています。その人を移してから出場に戻してください`);
-    }
-    return { ...this.data, confirmed: false, participants: this.data.participants.map(p => p.entryId === id ? { ...p, status: dns ? "DNS" : "entered" } : p) };
+    return { ...this.data, confirmed: false, participants: this.data.participants.map(p => p.entryId === id ? { ...withoutMeetPlacement(p), status: dns ? "DNS" : "entered" } : p) };
   }
 }

@@ -1,7 +1,7 @@
 import { isAlumniEntry, obAppearanceId, obAppearanceEntryId, obAppearanceNumber, obEventCount, type ObEntry } from "./ob-entries";
 import { dutyRows, OB_DUTY_SLOTS, OB_MEET } from "./ob-meet";
 import type { EntryMember } from "./entry-identity";
-import { emptyPerformance, type MeetEventData, type MeetEventRule, type MeetPerformance } from "./meet-operations";
+import { emptyPerformance, withoutMeetPlacement, type MeetEventData, type MeetEventRule, type MeetPerformance } from "./meet-operations";
 
 export type ObEventOperation = { meet_key: string; event_name: string; revision: number; data: MeetEventData; updated_at: string };
 export type ObParticipationStatus = MeetPerformance["status"] | "absent" | "withdrawn" | "missing";
@@ -43,7 +43,8 @@ export function obEventParticipants(event: string, entries: ObEntry[], saved?: M
       if (!participants.some(person => person.entryId === id)) participants.push(emptyPerformance(id));
     }
   }
-  return participants.map(performance => {
+  return participants.map(saved => {
+    const performance = saved.status === "DNS" ? withoutMeetPlacement(saved) : saved;
     const entry = entries.find(entry => entry.id === obAppearanceEntryId(performance.entryId));
     return { entryId: performance.entryId, entry, performance, state: effectiveObParticipation(event, entry, performance) };
   });

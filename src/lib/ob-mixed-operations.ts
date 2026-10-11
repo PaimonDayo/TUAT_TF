@@ -1,5 +1,5 @@
 import { fieldOrderRows } from "./meet-field-order";
-import type { MeetEventData, MeetPerformance, MeetHeatScope, MeetOperationLimits } from "./meet-operations";
+import { withoutMeetPlacement, type MeetEventData, type MeetPerformance, type MeetHeatScope, type MeetOperationLimits } from "./meet-operations";
 import { obOperationHasChanges } from "./ob-operation-draft";
 import { effectiveObParticipation, obEventParticipants, obEventRule, type ObEventOperation } from "./ob-operations";
 import { isAlumniEntry, obAppearanceEntryId, obAppearanceName, type ObEntry } from "./ob-entries";
@@ -93,6 +93,7 @@ export function splitObMixedEvent(projection: ObMixedProjection, next: MeetEvent
         }
       }
     }
+    if (restored.status === "DNS") restored = withoutMeetPlacement(restored);
     if (!byEvent.has(source.event)) byEvent.set(source.event, new Map());
     byEvent.get(source.event)!.set(source.entryId, restored);
   }

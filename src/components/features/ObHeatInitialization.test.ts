@@ -99,9 +99,10 @@ it("preserves saved positions, trials and DNS while newly registered people rema
       { ...emptyPerformance(entries[1].id), group: 3, order: 7, status: "DNS" },
     ] },
   };
-  expect(render(event, entries.slice(0, 2), saved).data).toEqual(saved.data);
+  const released={...saved.data,participants:[saved.data.participants[0],{...saved.data.participants[1],group:null,order:null}]};
+  expect(render(event, entries.slice(0, 2), saved).data).toEqual(released);
   const added = render(event, entries, saved).data;
-  expect(added.participants.slice(0, 2)).toEqual(saved.data.participants);
+  expect(added.participants.slice(0, 2)).toEqual(released.participants);
   expect(added.participants.slice(2)).toEqual(entries.slice(2).map(entry => emptyPerformance(entry.id)));
   expect(mocks.guard).toHaveBeenLastCalledWith(expect.objectContaining({ dirty: false }));
   expect(mocks.write).not.toHaveBeenCalled();

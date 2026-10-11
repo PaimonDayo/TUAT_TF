@@ -64,13 +64,13 @@ it("records all legacy field groups in one trial order including DNS and cancell
   const html = renderToStaticMarkup(createElement(ObEventOperationsEditor, { event, entries, initial: operation, onSaved: vi.fn(), onClose: vi.fn() }));
   expect(html).not.toContain('aria-label="表示する組"');
   expect(html).not.toContain("組未定");
-  for (const [id, placement] of [["dns", "試技順 1番"], ["a", "試技順 2番"], ["b", "試技順 3番"], ["unplaced", "順番未定"]]) {
+  for (const [id, placement] of [["dns", "順番未定"], ["a", "試技順 1番"], ["b", "試技順 2番"], ["unplaced", "順番未定"]]) {
     expect(html).toMatch(new RegExp(`合成${id}<\\/span><span[^>]*>男子 · ${placement}`));
   }
-  expect(html.indexOf("合成dns")).toBeLessThan(html.indexOf("合成a"));
+  expect(html.indexOf("合成dns")).toBeGreaterThan(html.indexOf("合成b"));
   expect(html.indexOf("合成a")).toBeLessThan(html.indexOf("合成b"));
   expect(html).toContain("5.31");
-  expect(html).toContain('aria-label="合成dnsの出場状況"');
+  expect(html).toContain('aria-label="合成aの出場状況"');
 });
 
 it("shows the same field ordinals in the public program and retains unplaced people", () => {
@@ -80,11 +80,11 @@ it("shows the same field ordinals in the public program and retains unplaced peo
   expect(html).not.toContain("組未定");
   expect(html).not.toContain("組分けと記録");
   const rows = html.match(/<li\b[^>]*>[\s\S]*?<\/li>/g) ?? [];
-  for (const [id, placement] of [["dns", "試技順 1番"], ["a", "試技順 2番"], ["b", "試技順 3番"], ["unplaced", "順番未定"]]) {
+  for (const [id, placement] of [["dns", "順番未定"], ["a", "試技順 1番"], ["b", "試技順 2番"], ["unplaced", "順番未定"]]) {
     const row = rows.find(row => row.includes(`合成${id}<`));
     expect(row).toContain(placement);
   }
-  expect(html.indexOf("合成dns")).toBeLessThan(html.indexOf("合成a"));
+  expect(html.indexOf("合成dns")).toBeGreaterThan(html.indexOf("合成b"));
   expect(html.indexOf("合成a")).toBeLessThan(html.indexOf("合成b"));
   expect(html).toContain("DNS・記録保持");
   expect(html).toContain("5.31");
