@@ -7,6 +7,7 @@ import { GET as cleanupStories } from "../app/api/cron/cleanup-stories/route";
 import { SpreadsheetCreationError } from "./google-drive";
 import { POST as pushRecord } from "../app/api/sheets/push-record/route";
 import { gasPost } from "./sheet-sync/gas-client";
+import { SheetPushReceiptError } from "./sheet-sync/push-receipt";
 
 const mocks = vi.hoisted(() => ({ protect: vi.fn(), create: vi.fn(), sync: vi.fn(), cleanup: vi.fn(), rpc: vi.fn(), from: vi.fn(), refresh: vi.fn(), push: vi.fn(), clears: vi.fn() }));
 vi.mock("./pc-backup-status", async original => ({ ...await original<typeof import("./pc-backup-status")>(), pcAppWriteProtectionResponse: mocks.protect }));
@@ -25,7 +26,7 @@ beforeEach(() => {
   mocks.protect.mockReset().mockImplementation(async () => pcBackupUnavailableResponse());
   mocks.rpc.mockReset().mockResolvedValue({ data: true }); mocks.from.mockReset(); mocks.create.mockReset(); mocks.sync.mockReset(); mocks.cleanup.mockReset();
   mocks.refresh.mockReset().mockResolvedValue({ access_token: "synthetic-token" });
-  mocks.push.mockReset().mockResolvedValue({ action: "updated", unmapped: [] }); mocks.clears.mockReset().mockResolvedValue({});
+  mocks.push.mockReset().mockResolvedValue({ action: "updated", unmapped: [], receipt: { outcome: "completed", marker_status: "applied" } }); mocks.clears.mockReset().mockResolvedValue({});
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 it("returns explicit503 before Sheets creation or synchronization dispatch", async () => {
@@ -78,11 +79,12 @@ it.each([true, false])("preserves known GAS delivery when its marker is %s prote
       then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: [], error: protectedMarker ? { code: "PC_BACKUP_UNAVAILABLE" } : null }).then(resolve) };
     return chain;
   });
+  mocks.push.mockRejectedValueOnce(new SheetPushReceiptError("SHEET_SENT_MARKER_UNCONFIRMED", "送信済み状態を確認できませんでした。再送せず、送信先を確認してください。",
+    "11111111-1111-4111-8111-111111111111", true, false, protectedMarker ? { code: "PC_BACKUP_UNAVAILABLE" } : undefined));
   const response = await pushRecord(req({ recordId: "record" }));
   expect(response.status).toBe(protectedMarker ? 503 : 502);
   expect(await response.json()).toMatchObject({ ok: false, outcome: "partial", externallySent: true, markerConfirmed: false, retryable: false });
-  expect(mocks.push).toHaveBeenCalledOnce(); expect(mocks.clears).not.toHaveBeenCalled(); expect(updates).toHaveLength(1);
-  expect(updates[0]).toMatchObject({ pending_sheet_push: false });
+  expect(mocks.push).toHaveBeenCalledOnce(); expect(mocks.clears).not.toHaveBeenCalled(); expect(updates).toHaveLength(0);
 });
 it.each(["network", "malformed"])("reports an unknown GAS %s result after one actual adapter dispatch without another marker or send", async failure => {
   mocks.protect.mockResolvedValue(null); vi.stubEnv("SHEET_SYNC_GAS_URL", "https://gas.example.test/synthetic");

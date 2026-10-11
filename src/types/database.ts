@@ -22,6 +22,18 @@ export type Database = {
       competition_meet_duties: MeetReadTable<{id:string;competition_id:string;participant_id:string;slot_time:string;event_name:string;assignment:string;role_ids:string[];revision:number;source:string}>
       competition_meet_party: MeetReadTable<{id:string;competition_id:string;participant_id:string|null;name:string;group_label:string;status:string;needs_review:boolean;revision:number}>
       competition_meet_requests: MeetReadTable<{id:string;competition_id:string;actor_id:string|null;actor_name:string|null;command:Json;result:Json;changed_at:string;before_data:Json;after_data:Json}>
+      sheet_push_attempts: {
+        Row: {
+          attempt_id: string; kind: "record" | "clear"; profile_id: string; recorded_date: string; record_id: string | null
+          expected_version: string; expected_profile: Json; profile_fingerprint: string; target_slot: string
+          target_fingerprint: string; payload_sha256: string; state: "reserved" | "confirmed" | "completed"
+          provider_complete: boolean; marker_status: "pending" | "applied" | "superseded" | "partial"; marker_version: string | null
+          created_at: string; confirmed_at: string | null; completed_at: string | null
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
       login_email_allowlist: {
         Row: { email: string; created_at: string; created_by: string }
         Insert: { email: string }
@@ -2192,6 +2204,19 @@ export type Database = {
       check_competition_meet_mutation: {Args:{p_competition_id:string;p_request_id:string;p_command:Json};Returns:Json}
       apply_competition_sheet_edits: {Args:{p_request_id:string;p_context:Json;p_changes:Json;p_dry_run:boolean};Returns:Json}
       replay_competition_meet_changes: {Args:{p_rows:Json};Returns:Json}
+      sheet_push_begin: {
+        Args: { p_attempt_id: string; p_kind: string; p_record_id: string | null; p_profile_id: string; p_recorded_date: string;
+          p_expected_version: string; p_expected_profile: Json; p_target_slot: string; p_target_fingerprint: string; p_payload_sha256: string }
+        Returns: Json
+      }
+      sheet_push_finish: {
+        Args: { p_attempt_id: string; p_target_fingerprint: string; p_payload_sha256: string; p_provider_complete: boolean }
+        Returns: Json
+      }
+      sheet_clear_resolve: {
+        Args: { p_profile_id: string; p_recorded_date: string; p_expected_version: string; p_expected_profile: Json; p_target_slot: string }
+        Returns: Json
+      }
       avatar_image_is_retired: { Args: { p_path: string }; Returns: boolean }
       login_access_allowed: { Args: never; Returns: boolean }
       admin_save_member_sheet_setup: {

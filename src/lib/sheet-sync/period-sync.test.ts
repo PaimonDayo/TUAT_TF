@@ -10,7 +10,22 @@ vi.mock("./gas-client", () => ({ fetchAllRaw: state.fetch, gasPost: state.gas })
 vi.mock("./replies", () => ({ reconcileSheetReplies: state.replies }));
 import { runSheetSync } from "./run";
 
-const admin = { from(table: string) {
+const fixtureAttempts = new Map<string, Record<string, unknown>>();
+const admin = { async rpc(name: string, args: Record<string, unknown>) {
+  // Scripted RPC transport for period/import checks. Durable barriers and real
+  // SQL locking are covered by the separate receipt/API and PostgreSQL fixtures.
+  if (name === "sheet_push_begin") {
+    fixtureAttempts.set(String(args.p_attempt_id), args);
+    return { data: { outcome: "send", attempt_id: args.p_attempt_id, marker_status: "pending" }, error: null };
+  }
+  if (name === "sheet_clear_resolve") return { data: { outcome: "resolved" }, error: null };
+  const attempt = fixtureAttempts.get(String(args.p_attempt_id))!;
+  if (!args.p_provider_complete) return { data: { outcome: "confirmed", marker_status: "partial" }, error: null };
+  const record = state.records.find(row => row.id === attempt.p_record_id);
+  const matched = !state.zeroAck && (!record || (record.updated_at ?? "2026-10-01T00:00:00Z") === attempt.p_expected_version);
+  if (record && matched) Object.assign(record, { pending_sheet_push: false, synced_at: new Date().toISOString() });
+  return { data: { outcome: "completed", marker_status: matched ? "applied" : "superseded" }, error: null };
+}, from(table: string) {
   let op = "select";
   let selectedColumns = "";
   let updateValue: Record<string, unknown> | null = null;
@@ -34,7 +49,8 @@ const admin = { from(table: string) {
         state.editBeforePullWrite = null;
       }
       let data = table === "profiles" ? state.profiles : table === "practice_records" ? state.records : table === "sheet_pending_clears" ? state.clears : table === "sheet_member_sync_state" ? state.syncStates : [];
-      if (table === "practice_records") data = data.map(row => ({ updated_at: null, pending_sheet_push: false, ...row }));
+      if (table === "practice_records") data = data.map(row => ({ updated_at: "2026-10-01T00:00:00Z", pending_sheet_push: false, ...row }));
+      if (table === "sheet_pending_clears") data = data.map(row => ({ created_at: "2026-10-01T00:00:00Z", ...row }));
       data = data.filter(row => filters.every(([key, value]) => Array.isArray(value) ? value.includes(row[key]) : value === null ? row[key] == null : row[key] === value));
       if (table === "practice_records" && op === "update" && !state.zeroAck) {
         for (const row of data) {
@@ -49,7 +65,7 @@ const admin = { from(table: string) {
 } } as unknown as SupabaseClient;
 
 function profile(mode?: "sheet" | "app_only" | "off", id = "regular") {
-  return { id, sheet_name: "B1 test", record_fields: [], record_source: "sheet", sheet_header_signature: null, sheet_history_imported_at: null,
+  return { id, sheet_name: "B1 test", record_fields: [], record_source: "sheet", sheet_header_signature: null, sheet_history_imported_at: null, sheet_transition: null,
     ...(mode ? { sheet_transition: { version: "2026-10", mode, confirmed_at: "2026-09-29", legacy: { sheet_name: "B1 old", record_fields: [], sheet_header_signature: null, record_source: "sheet" } } } : {}) };
 }
 function useIdenticalCsv(csv: string) {
@@ -80,8 +96,9 @@ function keepSuccessfulImports() {
 beforeEach(() => {
   vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-02T03:00:00Z"));
   state.writes = []; state.records = []; state.profiles = []; state.clears = []; state.syncStates = []; state.selects = []; state.zeroAck = false; state.editBeforePullWrite = null; state.editBeforeRecordsRead = null;
+  fixtureAttempts.clear(); vi.stubEnv("SHEET_SYNC_GAS_URL", "https://gas.example.test/synthetic/exec");
   state.flush.mockReset().mockResolvedValue([]);
-  state.gas.mockReset().mockResolvedValue({ success: true });
+  state.gas.mockReset().mockResolvedValue({ success: true, action: "updated" });
   state.replies.mockReset().mockResolvedValue({ synced: 0, failedMembers: [] });
   state.fetch.mockReset().mockImplementation(async (inputs: { name: string }[], spreadsheetId?: string) => ({
     members: inputs.map(input => ({ name: input.name, header: ["日付", "感想"], records: [
@@ -89,7 +106,7 @@ beforeEach(() => {
     ] })), signatures: new Map(), failedMembers: [], unchangedMembers: [],
   }));
 });
-afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 describe("period-aware scheduled synchronization", () => {
   it("fills initial history in its original dates, including legacy rows, and publishes only the latest eligible day", async () => {
     vi.setSystemTime(new Date("2026-10-06T15:00:00.000Z")); // 10/7 00:00 JST
@@ -370,7 +387,7 @@ describe("period-aware scheduled synchronization", () => {
   it("retains pending input when the sheet omits an item or a concurrent edit prevents acknowledgement", async () => {
     state.profiles = [profile("app_only")];
     state.records = [{ id: "r", user_id: "regular", recorded_date: "2026-10-01", memo: "保存済みの入力", pending_sheet_push: true }];
-    state.gas.mockResolvedValueOnce({ success: true, unmapped: ["感想"] });
+    state.gas.mockResolvedValueOnce({ success: true, action: "updated", unmapped: ["感想"] });
     let result = await runSheetSync(admin);
     expect(result.pushed).toBe(0);
     expect(result.sheetWritesUncertain).toBe(true);

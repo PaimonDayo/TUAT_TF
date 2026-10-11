@@ -11,11 +11,14 @@ import type { SyncOptions, SyncResult } from "./types";
 import { SHEET_HISTORY_START, todayJST, sheetPullCutoff, sheetPullThrough, sheetReplyCutoff } from "./dates";
 import { resolveFieldMap, appToCellsFull } from "./field-map";
 import type { DbRecord } from "./field-map";
-import { gasPost, fetchAllRaw } from "./gas-client";
+import { fetchAllRaw } from "./gas-client";
 import { sheetRecordsWithoutPendingPushes, computeMemberPull } from "./pull";
 import { reconcileSheetReplies } from "./replies";
 import { fetchAllPages } from "@/lib/fetch-all-pages";
 import { clearCellsFor, sheetRowHasContent, type PendingClear } from "./clear";
+import { listActivePushReceipts, pushProfileSnapshot, resolvePendingClear, writeCellsTargetSlot, writeCellsWithReceipt,
+  type ActivePushReceipt, type PushProfileSnapshot, type WriteCellsTarget } from "./push-receipt";
+import { unmappedRecordFields } from "./push";
 
 // ── 同期本体 ─────────────────────────────────────────────────────────────────
 // 安全方針(docs/SHEETS-SYNC-PLAN.md・事故対策):
@@ -29,6 +32,7 @@ async function runSheetSyncBatch(
   batch: LinkedProfile[],
   period: "unchanged" | "legacy" | "october",
   sheetWriteState: { attempted: boolean },
+  activeReceipts: ActivePushReceipt[],
 ): Promise<SyncResult> {
   const dryRun = !!options.dryRun;
   const result: SyncResult = {
@@ -76,7 +80,7 @@ async function runSheetSyncBatch(
       .eq("pending_sheet_push", true),
     admin
       .from("sheet_pending_clears")
-      .select("user_id, recorded_date")
+      .select("user_id, recorded_date, created_at")
       .in("user_id", allUserIds),
   ]);
   if (stateError) throw stateError;
@@ -84,12 +88,16 @@ async function runSheetSyncBatch(
   if (clearError) throw clearError;
   // アプリで消した（日付を変えた）記録の、スプシ側を空にする予定。user_id -> 日付
   const clearsByUser = new Map<string, Set<string>>();
+  const clearByKey = new Map<string, PendingClear>();
   for (const row of (clearRows ?? []) as PendingClear[]) {
     if (!inRange(row.recorded_date)) continue;
     const dates = clearsByUser.get(row.user_id) ?? new Set<string>();
     dates.add(row.recorded_date);
     clearsByUser.set(row.user_id, dates);
+    clearByKey.set(`${row.user_id}:${row.recorded_date}`, row);
   }
+  const activeRecordIds = new Set(activeReceipts.map(receipt => receipt.record_id).filter(id => id !== null));
+  const activeSlots = new Set(activeReceipts.map(receipt => receipt.target_slot));
   const signatureByProfile = new Map((syncStates ?? []).map((state) => [state.profile_id, state.content_signature]));
   const configSignatureByProfile = new Map((syncStates ?? []).map((state) => [state.profile_id, state.config_signature]));
   const profilesWithPendingPush = new Set((pendingRows ?? []).filter(row => inRange(row.recorded_date)).map((row) => row.user_id));
@@ -161,6 +169,7 @@ async function runSheetSyncBatch(
   const pushes: {
     /** 記録の再送なら記録ID、消した記録の欄を空にする送信なら null */
     id: string | null;
+    profileId: string;
     memberName: string;
     date: string;
     cells: Record<string, string | number>;
@@ -170,9 +179,12 @@ async function runSheetSyncBatch(
     updatedAt?: string | null;
     /** 空にする予定（sheet_pending_clears）の送信。成功したら予定を消す */
     clearQueue?: PendingClear;
+    target: WriteCellsTarget;
+    expectedProfile: PushProfileSnapshot;
+    unmapped: string[];
   }[] = [];
-  /** 送らずに消してよい空にする予定（その日を作り直した・スプシがもう空） */
-  const resolvedClears: PendingClear[] = [];
+  /** DB記録を作り直した日だけ、送らずに解消できる。CSV空欄は実シートの証明ではない。 */
+  const resolvedClears: { queued: PendingClear; expectedProfile: PushProfileSnapshot; targetSlot: string }[] = [];
   const historyImportCandidates = new Set<string>();
   const historyImportFailures = new Set<string>();
   const confirmedProfileIds = new Set<string>();
@@ -203,41 +215,64 @@ async function runSheetSyncBatch(
     }
     confirmedProfileIds.add(profile.id);
     const map = resolveFieldMap(member, profileFields);
+    const target: WriteCellsTarget = { sheetName, fields: profileFields, spreadsheetId, columns };
+    const expectedProfile = profile.expectedProfile;
     const appByDate = byUser.get(profile.id)!;
 
     // 取り込みから外す日。アプリ側の変更をまだスプシへ送れていない日と、アプリで消してスプシを空にする予定の日。
     // ここを取り込むと、古いスプシの値で巻き戻したり、消した記録を復活させたりしてしまう。
-    const excludedDates = new Set<string>();
+    const excludedDates = new Set(activeReceipts.filter(receipt => receipt.profile_id === profile.id).map(receipt => receipt.recorded_date));
+    if (activeSlots.size) for (const row of member.records) {
+      if (activeSlots.has(writeCellsTargetSlot(sheetName, row.date, spreadsheetId))) excludedDates.add(row.date);
+    }
 
-    // 書き戻し待ちの再送。判定は専用フラグ pending_sheet_push のみを見る
+    // pending を対象にし、未確認 receipt があれば再送せず保持する。
     // （updated_at/synced_at の大小比較は、無関係な時刻ズレまで再送対象と誤検知したため使わない）。
     // アプリでの明示的な編集なので、空にした項目も含めて全部送る（空欄を送らないと、消した値がスプシに残る）。
     for (const [date, list] of appByDate) {
       if (!inRange(date) || list.length !== 1) continue; // 複数/日は触らない
       const app = list[0];
       if (!app.pending_sheet_push) continue;
+      const held = excludedDates.has(date) || activeRecordIds.has(app.id)
+        || (activeSlots.size > 0 && activeSlots.has(writeCellsTargetSlot(sheetName, date, spreadsheetId)));
       excludedDates.add(date);
+      if (held) {
+        result.sheetWritesUncertain = true;
+        result.failedMembers.push({ member: sheetName, reason: `${date}: 前の送信結果を確認できていないため、送信を保留しました` });
+        continue;
+      }
       const pushMap = app.record_fields_snapshot ? resolveFieldMap(member, app.record_fields_snapshot) : map;
+      const pushFields = app.record_fields_snapshot ?? profileFields;
       const cells = appToCellsFull(pushMap, app);
       if (Object.keys(cells).length > 0) {
-        pushes.push({ id: app.id, memberName: sheetName, date, cells, clearsPending: true, updatedAt: app.updated_at });
+        pushes.push({ id: app.id, profileId: profile.id, memberName: sheetName, date, cells, clearsPending: true, updatedAt: app.updated_at,
+          target: { ...target, fields: pushFields }, expectedProfile, unmapped: unmappedRecordFields(pushMap, pushFields, app) });
+      } else {
+        result.failedMembers.push({ member: sheetName, reason: `${date}: 書き込める入力項目を確認できないため、送信を保留しました` });
       }
     }
 
     // アプリで消した記録の欄を空にする（オーナー確定 2026-09-26「アプリで消したらスプシも消す」）。
     for (const date of clearsByUser.get(profile.id) ?? []) {
       if (!inRange(date)) continue;
-      const queued = { user_id: profile.id, recorded_date: date };
+      const queued = clearByKey.get(`${profile.id}:${date}`)!;
+      if (excludedDates.has(date) || (activeSlots.size > 0 && activeSlots.has(writeCellsTargetSlot(sheetName, date, spreadsheetId)))) {
+        excludedDates.add(date);
+        result.sheetWritesUncertain = true;
+        result.failedMembers.push({ member: sheetName, reason: `${date}: 前の送信結果を確認できていないため、削除予定を保持しました` });
+        continue;
+      }
       if (appByDate.has(date)) {
         // その日を作り直している。記録側の送信がその日を上書きするので、予定だけ消す。
-        resolvedClears.push(queued);
+        resolvedClears.push({ queued, expectedProfile, targetSlot: writeCellsTargetSlot(sheetName, date, spreadsheetId) });
         continue;
       }
       excludedDates.add(date);
       if (sheetRowHasContent(map, member, date)) {
-        pushes.push({ id: null, memberName: sheetName, date, cells: clearCellsFor(map, date), clearQueue: queued });
+        pushes.push({ id: null, profileId: profile.id, memberName: sheetName, date, cells: clearCellsFor(map, date), clearQueue: queued,
+          target, expectedProfile, unmapped: [] });
       } else {
-        resolvedClears.push(queued);
+        result.failedMembers.push({ member: sheetName, reason: `${date}: スプレッドシートの削除完了を確認できないため、削除予定を保持しました` });
       }
     }
 
@@ -381,43 +416,24 @@ async function runSheetSyncBatch(
     });
   }
 
-  for (const queued of options.skipSheetWrites ? [] : resolvedClears) {
-    const { error } = await admin
-      .from("sheet_pending_clears")
-      .delete()
-      .eq("user_id", queued.user_id)
-      .eq("recorded_date", queued.recorded_date);
-    if (error) {
-      result.failedMembers.push({ member: nameById.get(queued.user_id) ?? "(空にする予定)", reason: error.message });
+  for (const { queued, expectedProfile, targetSlot } of options.skipSheetWrites ? [] : resolvedClears) {
+    try {
+      await resolvePendingClear(admin, { profileId: queued.user_id, date: queued.recorded_date,
+        expectedVersion: queued.created_at, expectedProfile, targetSlot });
+    } catch (error) {
+      result.failedMembers.push({ member: nameById.get(queued.user_id) ?? "(空にする予定)", reason: error instanceof Error ? error.message : "削除予定の状態を確認できませんでした" });
     }
   }
 
   for (const p of scheduledPushes) {
     try {
       sheetWriteState.attempted = true;
-      const receipt = await gasPost<{ unmapped?: string[] }>({ action: "writeCells", spreadsheetId, memberName: p.memberName, date: p.date, cells: p.cells });
-      if (receipt.unmapped?.length) throw new Error("一部の項目をスプレッドシートに反映できませんでした。入力項目と送信結果を確認してください");
-      if (p.clearQueue) {
-        const { error } = await admin
-          .from("sheet_pending_clears")
-          .delete()
-          .eq("user_id", p.clearQueue.user_id)
-          .eq("recorded_date", p.clearQueue.recorded_date);
-        if (error) throw error;
-      } else if (p.id) {
-        let query = admin
-          .from("practice_records")
-          .update({
-            synced_at: new Date().toISOString(),
-            ...(p.clearsPending ? { pending_sheet_push: false } : {}),
-          })
-          .eq("id", p.id);
-        // 送信を組み立てた後に内容が変わっていたら、送信済みにしない（新しい内容は次回送る）。
-        if (p.updatedAt) query = query.eq("updated_at", p.updatedAt);
-        else query = query.is("updated_at", null);
-        const { data: saved, error } = await query.select("id");
-        if (error) throw error;
-        if (saved?.length !== 1) throw new Error("送信中に記録の状態が変わりました。最新の入力とスプレッドシートを確認してください");
+      const expectedVersion = p.clearQueue?.created_at ?? p.updatedAt;
+      if (!expectedVersion) throw new Error("送信対象の更新時刻を確認できませんでした");
+      const written = await writeCellsWithReceipt(admin, { kind: p.clearQueue ? "clear" : "record", recordId: p.id,
+        profileId: p.profileId, date: p.date, expectedVersion, expectedProfile: p.expectedProfile }, p.target, p.cells, p.unmapped);
+      if (written.receipt.outcome !== "completed" || written.receipt.marker_status !== "applied") {
+        throw new Error(written.receipt.marker_status === "superseded" ? "送信中に記録またはシート設定が変わりました。最新の内容を確認してください" : "一部の項目を書き込めませんでした。送信先を確認するまで再送を保留しました");
       }
       result.pushed++;
     } catch (err) {
@@ -467,12 +483,14 @@ type LinkedProfile = {
   record_source: "app" | "sheet"; sheet_linked_at: string | null;
   sheet_header_signature: string | null; sheet_history_imported_at: string | null;
   sheet_transition?: unknown; appOnly?: boolean;
+  expectedProfile: PushProfileSnapshot;
 };
 
 export async function runSheetSync(admin: SupabaseClient, options: SyncOptions = {}): Promise<SyncResult> {
   const { data, error } = await admin.from("profiles")
     .select("id,sheet_name,record_fields,record_source,sheet_linked_at,sheet_header_signature,sheet_history_imported_at,sheet_transition");
   if (error) throw error;
+  const activeReceipts = await listActivePushReceipts(admin);
   const groups: Record<"legacy" | "october", LinkedProfile[]> = { legacy: [], october: [] };
   for (const profile of (data ?? []) as LinkedProfile[]) {
     const transition = parseSheetTransition(profile.sheet_transition);
@@ -480,11 +498,12 @@ export async function runSheetSync(admin: SupabaseClient, options: SyncOptions =
     // Chunk names refer to the current profile, even when the old sheet had a different name.
     if (options.onlySheet && profile.sheet_name?.trim() !== options.onlySheet.trim()) continue;
     if (options.onlySheets && !options.onlySheets.some(name => name.trim() === profile.sheet_name?.trim())) continue;
+    const expectedProfile = pushProfileSnapshot(profile);
     const legacy = transition ? { ...profile, ...transition.legacy } : profile;
     if (legacySyncOpen() && legacy.sheet_name) groups.legacy.push({ ...legacy, sheet_name: legacy.sheet_name,
       // A confirmed app-only choice blocks imports from both workbooks.
-      appOnly: transition?.mode === "app_only" });
-    if (transition && profile.sheet_name) groups.october.push({ ...profile, appOnly: transition.mode === "app_only" });
+      appOnly: transition?.mode === "app_only", expectedProfile });
+    if (transition && profile.sheet_name) groups.october.push({ ...profile, appOnly: transition.mode === "app_only", expectedProfile });
   }
   const total: SyncResult = { inserted: 0, updated: 0, pushed: 0, sheetReplies: 0, conflicts: [], skippedMembers: [],
     unchangedMembers: [], failedMembers: [], dryRun: !!options.dryRun, sheetWritesUncertain: false,
@@ -498,7 +517,7 @@ export async function runSheetSync(admin: SupabaseClient, options: SyncOptions =
     if (!groups[period].length) continue;
     const sheetWriteState = { attempted: false };
     try {
-      const result = await runSheetSyncBatch(admin, { dryRun: options.dryRun, skipSheetWrites: options.skipSheetWrites, includeToday: options.includeToday }, groups[period], period, sheetWriteState);
+      const result = await runSheetSyncBatch(admin, { dryRun: options.dryRun, skipSheetWrites: options.skipSheetWrites, includeToday: options.includeToday }, groups[period], period, sheetWriteState, activeReceipts);
       if (result.sheetWritesUncertain) total.sheetWritesUncertain = true;
       for (const key of ["inserted", "updated", "pushed", "sheetReplies"] as const) total[key] += result[key];
       for (const key of ["conflicts", "skippedMembers", "unchangedMembers", "failedMembers"] as const) total[key].push(...result[key] as never[]);

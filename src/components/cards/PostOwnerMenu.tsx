@@ -100,8 +100,12 @@ export function RecordOwnerMenu({
       showToast("練習記録を削除できませんでした");
       return false;
     }
-    // スプシに連携している人は、同じ日の欄も空にする（予定はDBが削除と同時に作る。失敗しても毎日0時に再試行）。
-    void fetch("/api/sheets/clear-deleted", { method: "POST" }).catch(() => undefined);
+    // アプリ削除は完了。シート側は確定を確認し、結果不明なら予定を保持して再送を保留する。
+    const clearUnconfirmed = () => showToast("アプリの記録は削除できましたが、スプレッドシートの削除完了を確認できないため再送を保留しています", "error");
+    void fetch("/api/sheets/clear-deleted", { method: "POST" }).then(async response => {
+      const result = await response.json().catch(() => null);
+      if (!response.ok || result?.ok !== true || Number(result.failed) > 0) clearUnconfirmed();
+    }).catch(clearUnconfirmed);
     router.refresh();
     return true;
   }
@@ -114,7 +118,7 @@ export function RecordOwnerMenu({
         onShare={copyLink}
         onDelete={isOwner && editable ? remove : undefined}
         deleteTitle="練習記録を削除しますか？"
-        deleteDescription="削除した練習記録は元に戻せません。スプレッドシートに連携している場合は、その日の欄も空になります。"
+        deleteDescription="削除した練習記録は元に戻せません。スプレッドシートに連携している場合は、その日の欄を空にする処理も行います。"
         triggerLabel="練習記録のメニュー"
         className="-mr-1"
       />

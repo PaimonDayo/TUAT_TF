@@ -379,11 +379,11 @@ export const RecordForm = forwardRef<RecordFormHandle, { userId: string; isMiddl
 
     // write-through: 連携シートがある場合は、閉じた後に裏でGASへ1回だけ反映する（応答を待たない）。
     // 保存の時点でDBトリガーが pending_sheet_push を立てており、取り込み側はその日を上書きしない。
-    // 書き込めなかった分は毎日0時の連携が再送する。未連携ならAPI側がskippedで返す。
+    // 結果不明・部分成功は送信を保留する。未連携ならAPI側がskippedで返す。
     void pushRecordToSheet(savedId).then((pushResult) => {
       if (!pushResult.ok) {
         showToast(
-          `記録は保存できました。スプレッドシートへの書き込みは、あとでもう一度自動で試します: ${pushResult.error}`,
+          `記録は保存できました。${pushResult.error}`,
           "error",
         );
       } else if (pushResult.unmapped && pushResult.unmapped.length > 0) {

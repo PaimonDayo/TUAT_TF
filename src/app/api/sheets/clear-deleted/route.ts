@@ -7,7 +7,7 @@ import { recordFieldsFromJson } from "@/lib/profile-normalize";
 
 /**
  * アプリで練習記録を消した直後に呼ぶ。本人の「スプシの欄を空にする予定」を処理する。
- * 予定はDBのトリガーが削除と同時に作るので、ここが失敗しても毎日0時の同期が空にする。
+ * 予定はDB削除と同時に作る。シート側の確定を確認し、結果不明・部分成功は保持して再送しない。
  */
 export async function POST() {
   const supabase = await createClient();
@@ -35,13 +35,17 @@ export async function POST() {
     });
     if (result.failed) {
       const protection = await pcAppWriteProtectionResponse();
-      if (protection) return protection;
+      return NextResponse.json({ ok: false, ...result, retryable: false,
+        code: protection ? "PC_BACKUP_UNAVAILABLE" : "SHEET_CLEAR_UNCONFIRMED",
+        error: "スプレッドシートの削除完了を確認できませんでした。再送せず、送信先を確認してください。" },
+      { status: protection ? 503 : 502, headers: { "cache-control": "private, no-store" } });
     }
-    return NextResponse.json({ ok: result.failed === 0, ...result }, { status: result.failed === 0 ? 200 : 502 });
+    return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     const protection = pcBackupProtectionResponse(err) ?? await pcAppWriteProtectionResponse();
     if (protection) return protection;
-    const message = err instanceof Error ? err.message : "スプレッドシートを更新できませんでした";
-    return NextResponse.json({ ok: false, error: message }, { status: 502 });
+    return NextResponse.json({ ok: false, code: "SHEET_CLEAR_UNCONFIRMED", retryable: false,
+      error: "スプレッドシートの削除完了を確認できませんでした。再送せず、送信先を確認してください。" },
+    { status: 502, headers: { "cache-control": "private, no-store" } });
   }
 }

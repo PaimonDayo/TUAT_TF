@@ -8,9 +8,10 @@ import type { RawMember } from "@/lib/sheet-public-csv";
 import type { RecordFieldDef } from "@/types";
 import { appToCellsFull, resolveFieldMap, sheetToAppValues, valuesEmpty } from "./field-map";
 import type { DbRecord, FieldMap } from "./field-map";
-import { gasPost, fetchMemberRaw } from "./gas-client";
+import { fetchMemberRaw } from "./gas-client";
+import { resolvePendingClear, writeCellsTargetSlot, writeCellsWithReceipt } from "./push-receipt";
 
-export type PendingClear = { user_id: string; recorded_date: string };
+export type PendingClear = { user_id: string; recorded_date: string; created_at: string };
 
 /** その日の欄をすべて空にするために送る cells（連携している項目を全部 "" にする） */
 export function clearCellsFor(map: FieldMap, date: string): Record<string, string | number> {
@@ -51,7 +52,7 @@ export function sheetRowHasContent(map: FieldMap, member: RawMember, date: strin
 /**
  * 1人分の「空にする予定」を処理する（保存・削除の直後に呼ぶ）。
  * - その日にアプリの記録がある（作り直した）なら予定だけ消す。記録側の書き込みがその日を上書きする。
- * - スプシに中身が残っていれば空にしてから予定を消す。書き込めなければ予定を残し、毎日0時の同期で再試行する。
+ * - 確定した書き込みだけ予定を消す。結果不明・部分成功は receipt を保持し再送しない。
  */
 export async function processPendingClears(
   admin: SupabaseClient,
@@ -59,7 +60,7 @@ export async function processPendingClears(
 ): Promise<{ cleared: number; failed: number }> {
   let query = admin
     .from("sheet_pending_clears")
-    .select("user_id, recorded_date")
+    .select("user_id, recorded_date, created_at")
     .eq("user_id", profile.id)
     .order("recorded_date", { ascending: true })
     .limit(20);
@@ -83,18 +84,24 @@ export async function processPendingClears(
     try {
       const target = await sheetForRecord(admin, profile.id, row.recorded_date);
       if (!target) continue; // Closed periods stay untouched.
+      if (recreated.has(row.recorded_date)) {
+        await resolvePendingClear(admin, { profileId: row.user_id, date: row.recorded_date, expectedVersion: row.created_at,
+          expectedProfile: target.expectedProfile, targetSlot: writeCellsTargetSlot(target.sheetName, row.recorded_date, target.spreadsheetId) });
+        continue;
+      }
       const member = await fetchMemberRaw(target.sheetName, { spreadsheetId: target.spreadsheetId });
       const map = resolveFieldMap(member, target.fields);
-      if (!recreated.has(row.recorded_date) && sheetRowHasContent(map, member, row.recorded_date)) {
-        await gasPost({ action: "writeCells", memberName: target.sheetName, spreadsheetId: target.spreadsheetId, date: row.recorded_date, cells: clearCellsFor(map, row.recorded_date) });
+      if (sheetRowHasContent(map, member, row.recorded_date)) {
+        const written = await writeCellsWithReceipt(admin, { kind: "clear", recordId: null, profileId: row.user_id,
+          date: row.recorded_date, expectedVersion: row.created_at, expectedProfile: target.expectedProfile },
+        { ...target, columns: member.columns ?? member.header.map((label, index) => ({ index, label })) }, clearCellsFor(map, row.recorded_date));
+        if (written.receipt.outcome !== "completed" || written.receipt.marker_status !== "applied") throw new Error("削除予定の完了を確認できませんでした");
         cleared++;
+      } else {
+        // Published CSV can lag a completed write. Empty/no-row is not proof
+        // that the actual sheet was cleared; keep the queue without creating a row.
+        failed++;
       }
-      const { error: deleteError } = await admin
-        .from("sheet_pending_clears")
-        .delete()
-        .eq("user_id", row.user_id)
-        .eq("recorded_date", row.recorded_date);
-      if (deleteError) throw deleteError;
     } catch {
       failed++;
     }
