@@ -15,4 +15,17 @@ pwsh -NoProfile -File ops/pc-host/db-review/run.ps1
 pwsh -NoProfile -File ops/pc-host/db-review/run.ps1 -Execute
 ```
 
-結果には固定image、migration/test SHA256、成功範囲とcleanupを保存する。失敗したmigrationを適用済みにせず停止する。cleanupは今回作成した正確なresourceだけをlabel/ID/name/volume absolute mountpoint/network internal属性で照合してから行い、所有者不一致なら残す。全コンテナ/volume/WSLを停止しない。
+実PostgREST/JWTの別試験は `-Api` を付ける。既定は同じく計画だけで、`-Api -Execute` は新規の現在schemaを初期化する。既存SQL/race試験を重複実行せず、その `result.json` を保持して `api-result.json` へ別に記録する。
+
+```powershell
+pwsh -NoProfile -File ops/pc-host/db-review/run.ps1 -Api
+pwsh -NoProfile -File ops/pc-host/db-review/run.ps1 -Api -Execute
+```
+
+固定PostgREST `v14.12` を同じowner付きinternal networkで起動し、HTTPは担当PG containerのcurlから送る。host portを公開しない。ES256/HS256の試験鍵と接続passwordは実行中に生成し、file/Git/ログへ残さない。実JWT署名、改変・期限・audience拒否、本人UUIDと保存件数、他人の更新拒否、複数roleのOR、ノート閲覧範囲、service権限、avatar RPCのmember guard、許可取消後の同じJWTの拒否を確認する。migrationが設定するPostgREST pre-requestを保持し、RLS/policy/Auth helperを追加・置換しない。読み取りの起動確認だけ再試行し、書き込み結果不明を再送しない。
+
+このAPI試験はfictitious signerのJWTを実PostgRESTで検証する範囲。cloud Googleログイン・callback・first-login provisioningのHTTP、実cloud signer/JWKS配布・鍵rotation、公開入口、ブラウザsession、R2/Drive/Push/jobsは未確認のまま。`api-result.json` はJWT/鍵/秘密を含まないassertionとschema hashだけを保存する。
+
+結果には固定image、migration/test SHA256、成功範囲とcleanupを保存する。失敗したmigrationを適用済みにせず停止する。resource作成前に試行を記録し、結果不明でも `cleanup-owned.mjs` が正確なnameから存在を照合する。owner/generation/name/ID/image/公開port/internal network/volume absolute mountpointを検査してから限定削除し、削除後の不存在を確認する。照合の失敗や不明はcleanup成功へ変換せず、資源を残す。全コンテナ/volume/WSLを停止しない。
+
+`node --test ops/pc-host/db-review/cleanup-owned.test.mjs` はDockerを呼ばないadapter試験。PG/Auth/Storage/PostgREST/volume/networkの作成が結果不明になる場合、所有者・世代・公開port・network等の不一致、調査/削除結果不明、削除後も存在する場合を確認する。既存 `result.json` / `api-result.json` は前回の実SQL/API試験の証拠を保持し、このcleanup修正を実DBで再試験した記録にはしない。

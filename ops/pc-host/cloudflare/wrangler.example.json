@@ -1,0 +1,16 @@
+{
+  "name": "REPLACE_WITH_FIXED_WORKER_NAME",
+  "main": "./worker.mjs",
+  "compatibility_date": "2026-10-11",
+  "workers_dev": true,
+  "vars": {
+    "APP_PUBLIC_ORIGIN": "REPLACE_WITH_FIXED_HTTPS_WORKER_ACCOUNT_WORKERS_DEV_ORIGIN"
+  },
+  "vpc_services": [
+    {
+      "binding": "PC_APP",
+      "service_id": "REPLACE_WITH_VPC_SERVICE_ID",
+      "remote": true
+    }
+  ]
+}

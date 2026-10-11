@@ -34,3 +34,15 @@ Windowsの配置は、releaseとNode/PowerShell実行directoryをSYSTEM/Administ
 `synthetic-review.mjs --check` は外部接続やlistener/key生成を行わない。既存のowner-named private stateを指定した `--serve --state-dir <path>` だけが、独立のfake PC API18180/cloud Auth18181を起動する。実サービスの資格情報を引き継がず、画像/Sheetsを無効にする。これはbuilt NextのHTTP/cookie/経路/障害の試験用で、実DBのRLS・Google・Drive・R2・Push・PWAの証拠ではない。
 
 本番前には固定無料入口/hostname、新originのOAuth callback、Drive正規source、R2実効フラグ、Push鍵/購読、専用accountと秘密隔離、実写真/通常保存/旧タブ/実端末PWA、OS再起動と別媒体復元を確認する。現在の候補はこれらの未確認が残るため切替可能とは報告しない。
+
+## 旧backendを止める前の条件
+
+現行 `ops/laptop/run-backend.mjs` は中継・接続先通知・業務mirrorに加え、起動時/15分間隔の暗号化backupを所有する。shared-pc Jobsも同backendのheartbeatと35分未満の検証済みbackupを確認する。このhost候補はbackupやWSLの起動を引き継いでいないため、旧backendの一括停止で構成の撤去を完了扱いしない。
+
+切替計画では、DB/WSLの起動、定期暗号backupと別場所の検証済み保存、backup失敗時の保護停止を維持する主体と配置を決める。backupの間隔/単一実行/失敗/復帰を確認してから旧中継・接続先通知・業務mirrorを退役させ、Jobsのready判定をその主体へ接続する。旧heartbeatを架空の成功状態で更新したり、backup期限を外して通さない。専用accountのapp配置検査だけでWSL/DBや復旧鍵を隔離済みとは扱わない。
+
+この候補のPC専用データ経路はRESTへ直接接続し、旧中継のmaintenance/backup鮮度判定を通らない。Jobsの停止だけでは通常保存の保護停止を確認したことにならない。新しいbackup主体と、通常のREST/Server Actionの書込み保護を接続し、backup未完了/35分超過/状態取得不明のときの保存拒否と復帰を別に検証するまで本番へ切り替えない。
+
+Jobsは現在動いているtaskが指定するconfigの `stateDirectory` と `activateAt` を読み、journalの同じ境界・未解決status・Sheets failure履歴を保持する。例の新stateや2099年の境界で置換しない。現在のreleaseと候補の識別も別に確認する。
+
+旧業務予備の `failover_changes` は、件数のHEAD取得だけでは内容照合を証明できない。mirrorが動作中の件数は瞬間値である。切替前に新しい予備書込みを拒否し、未解決操作の対象snapshot/dry-runとPCの確定状態を照合する。結果不明の操作を一括再送したり、queue/mirror-stateを消して解消扱いしない。本人UUID/許可リスト連携を新しい認証専用経路で確認してから、旧mirror全体を停止する。

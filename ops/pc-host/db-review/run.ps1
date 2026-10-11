@@ -1,4 +1,4 @@
-param([switch]$Execute, [string]$NodePath = 'C:\Users\rainb\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe')
+param([switch]$Execute, [switch]$Api, [string]$NodePath = 'C:\Users\rainb\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe')
 $ErrorActionPreference = 'Stop'
 $candidateRoot = (Resolve-Path (Join-Path $PSScriptRoot '../../..')).Path
 $image = 'supabase/postgres:17.6.1.136'
@@ -15,10 +15,8 @@ $network = "$name-internal"
 $authName = "$name-auth-migrate"
 $storageName = "$name-storage-source"
 $cachePath = Join-Path $PSScriptRoot ".cache/$generation"
-$createdContainer = $false
-$createdVolume = $false
-$createdNetwork = $false
-$report = [ordered]@{ version = 1; owner = $owner; generation = $generation; image = $image; imageId = $imageId; authImage = $authImage; authImageId = $authImageId; storageImage = $storageImage; storageImageId = $storageImageId; network = 'internal'; publishedPorts = @(); productionAccess = $false; providerCalls = $false; securityMigrationsSkipped = @(); migrations = @(); tests = @(); cleanup = $false }
+$attempted = [ordered]@{ pg = $false; auth = $false; storage = $false; api = $false; volume = $false; network = $false }
+$report = [ordered]@{ version = 1; mode = $(if ($Api) { 'api' } else { 'sql' }); owner = $owner; generation = $generation; image = $image; imageId = $imageId; authImage = $authImage; authImageId = $authImageId; storageImage = $storageImage; storageImageId = $storageImageId; network = 'internal'; publishedPorts = @(); productionAccess = $false; providerCalls = $false; securityMigrationsSkipped = @(); migrations = @(); tests = @(); cleanup = $false }
 
 function Docker([Parameter(ValueFromRemainingArguments=$true)][string[]]$Arguments) {
   $text = & wsl.exe -d Ubuntu -- docker @Arguments 2>&1
@@ -33,15 +31,19 @@ function SqlFile([string]$Database, [string]$Path) {
 }
 
 if (!$Execute) {
-  [ordered]@{ execute = $false; image = $image; resourcePrefix = 'codex-auth-dbreview-'; network = 'internal'; database = 'tuat_rls_review'; productionAccess = $false; plan = 'Initialize cached Supabase baseline plus actual cached Auth/Storage migrations; apply every candidate migration; run synthetic RLS SQL; delete exact owned container, volume and internal network.' } | ConvertTo-Json -Depth 4
+  [ordered]@{ execute = $false; mode = $report.mode; image = $image; resourcePrefix = 'codex-auth-dbreview-'; network = 'internal'; database = 'tuat_rls_review'; productionAccess = $false; plan = $(if ($Api) { 'Fresh full candidate schema; actual pinned PostgREST JWT/HTTP/RLS with ephemeral test keys; separate api-result.json; exact owned cleanup.' } else { 'Initialize cached Supabase baseline plus actual cached Auth/Storage migrations; apply every candidate migration; run synthetic RLS SQL; delete exact owned container, volume and internal network.' }) } | ConvertTo-Json -Depth 4
   exit 0
 }
 
 try {
+  if (!(Test-Path -LiteralPath $NodePath -PathType Leaf)) { throw 'Explicit Node runtime required for exact owned cleanup' }
   if ((Docker @('image', 'inspect', $image, '--format', '{{.Id}}')) -ne $imageId) { throw 'Cached image pin mismatch' }
   if ((Docker @('image', 'inspect', $authImage, '--format', '{{.Id}}')) -ne $authImageId) { throw 'Cached Auth image pin mismatch' }
   if ((Docker @('image', 'inspect', $storageImage, '--format', '{{.Id}}')) -ne $storageImageId) { throw 'Cached Storage image pin mismatch' }
   if (Docker @('container', 'ls', '-a', '--filter', "name=^/$name`$", '--format', '{{.ID}}')) { throw 'Fresh container name already exists' }
+  foreach ($transient in @($authName, $storageName, "$name-postgrest")) {
+    if (Docker @('container', 'ls', '-a', '--filter', "name=^/$transient`$", '--format', '{{.ID}}')) { throw 'Fresh transient container name already exists' }
+  }
   if (Docker @('volume', 'ls', '--filter', "name=^$volume`$", '--format', '{{.Name}}')) { throw 'Fresh volume name already exists' }
   if (Docker @('network', 'ls', '--filter', "name=^$network`$", '--format', '{{.Name}}')) { throw 'Fresh internal network name already exists' }
   if (!$candidateRoot.StartsWith('D:\TUAT_TF\.worktrees\')) { throw 'Dedicated candidate source required' }
@@ -49,15 +51,15 @@ try {
   if (!$supabasePath.StartsWith('/mnt/d/TUAT_TF/.worktrees/')) { throw 'Dedicated candidate Supabase source required' }
   $reviewPath = '/mnt/d/' + $PSScriptRoot.Substring(3).Replace('\','/')
   if (!$reviewPath.StartsWith($supabasePath.Substring(0, $supabasePath.Length - 'supabase'.Length))) { throw 'Review source escaped candidate' }
+  $attempted.network = $true
   Docker @('network', 'create', '--internal', '--label', "tuat.owner=$owner", '--label', "tuat.generation=$generation", $network) | Out-Null
-  $createdNetwork = $true
+  $attempted.volume = $true
   Docker @('volume', 'create', '--label', "tuat.owner=$owner", '--label', "tuat.generation=$generation", $volume) | Out-Null
-  $createdVolume = $true
+  $attempted.pg = $true
   Docker @('run', '-d', '--name', $name, '--label', "tuat.owner=$owner", '--label', "tuat.generation=$generation", '--network', $network, '--memory', '512m', '--cpus', '1',
     '--mount', "type=volume,src=$volume,dst=/var/lib/postgresql/data", '--mount', "type=bind,src=$supabasePath,dst=/review/supabase,readonly", '--mount', "type=bind,src=$reviewPath,dst=/review/db-review,readonly",
     '-e', 'POSTGRES_PASSWORD=synthetic-review-local-only', '-e', 'POSTGRES_DB=tuat_rls_review', $image,
     'postgres', '-D', '/etc/postgresql', '-c', 'listen_addresses=*', '-c', 'cron.database_name=tuat_rls_review', '-c', 'cron.launch_active_jobs=off') | Out-Null
-  $createdContainer = $true
   $ready = $false
   for ($attempt = 0; $attempt -lt 90; $attempt++) {
     # The entrypoint's temporary socket-only server must finish platform SQL
@@ -75,6 +77,7 @@ try {
   if (!$networkState[0].Internal -or $networkState[0].Labels.'tuat.owner' -ne $owner -or $networkState[0].Labels.'tuat.generation' -ne $generation) { throw 'External-network isolation failed' }
   $report.stage = 'bootstrap:auth-migrate'
   Sql 'tuat_rls_review' "ALTER ROLE supabase_auth_admin WITH PASSWORD 'synthetic-review-local-only'" | Out-Null
+  $attempted.auth = $true
   Docker @('run', '--rm', '--name', $authName, '--label', "tuat.owner=$owner", '--label', "tuat.generation=$generation", '--network', $network, '--read-only', '--tmpfs', '/tmp', '--entrypoint', 'auth',
     '-e', 'GOTRUE_DB_DRIVER=postgres', '-e', "GOTRUE_DB_DATABASE_URL=postgres://supabase_auth_admin:synthetic-review-local-only@$($name):5432/tuat_rls_review", '-e', 'GOTRUE_SITE_URL=http://127.0.0.1',
     '-e', 'API_EXTERNAL_URL=http://127.0.0.1',
@@ -82,6 +85,7 @@ try {
   $report.authMigrations = Sql 'tuat_rls_review' 'SELECT count(*) FROM auth.schema_migrations'
   $report.stage = 'bootstrap:storage-source'
   New-Item -ItemType Directory -Path $cachePath | Out-Null
+  $attempted.storage = $true
   $storageNames = (Docker @('run', '--rm', '--name', $storageName, '--label', "tuat.owner=$owner", '--label', "tuat.generation=$generation", '--network', 'none', '--read-only', '--entrypoint', 'ls', $storageImage, '/app/migrations/tenant')) -split "`n" | ForEach-Object { $_.Trim() } | Sort-Object { [int]($_.Split('-')[0]) }
   if ($storageNames.Count -ne 67 -or @($storageNames | Where-Object { $_ -notmatch '^\d+-[A-Za-z0-9_-]+\.sql$' }).Count) { throw 'Cached tenant Storage source names mismatch' }
   $storagePaths = @($storageNames | Select-Object -Skip 1 | ForEach-Object { "/app/migrations/tenant/$_" })
@@ -145,6 +149,16 @@ SELECT set_config('storage.install_roles','false',false),
     Docker @('exec', $name, 'psql', '-X', '-q', '-v', 'ON_ERROR_STOP=1', '--single-transaction', '-U', 'supabase_admin', '-d', 'tuat_rls_review', '-f', '/review/supabase/migrations/20261011150000_confirmed_image_cleanup.sql') | Out-Null
     $report.imageMigrationReapply = $true
   }
+  if ($Api) {
+    $report.stage = 'test:postgrest-api'
+    if (!(Test-Path -LiteralPath $NodePath -PathType Leaf)) { throw 'Explicit Node runtime not found for actual PostgREST API review' }
+    $attempted.api = $true
+    $apiOutput = & $NodePath (Join-Path $PSScriptRoot 'api-http.mjs') --container $name 2>&1
+    $apiExit = $LASTEXITCODE
+    $report.apiProof = ($apiOutput | Out-String).Trim() | ConvertFrom-Json
+    $report.apiDriverSha256 = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'api-http.mjs') -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($apiExit -ne 0 -or !$report.apiProof.success -or !$report.apiProof.cleanup) { throw "Actual synthetic API proof failed: $($report.apiProof.failure)" }
+  } else {
   foreach ($test in @('rls_role_profile_guards.sql', 'rls_rpc_note_access.sql', 'confirmed_image_cleanup.sql')) {
     $report.stage = "test:$test"
     $output = SqlFile 'tuat_rls_review' "/review/supabase/tests/$test"
@@ -162,6 +176,7 @@ SELECT set_config('storage.install_roles','false',false),
   $report.imageRaces = ($raceOutput | Out-String).Trim() | ConvertFrom-Json
   if ($report.imageRaces.passed -ne 4 -or !$report.imageRaces.realSql -or !$report.imageRaces.syntheticOnly -or $report.imageRaces.r2Requests -ne 0) { throw 'Real synthetic race evidence incomplete' }
   $report.imageRaceSources = [ordered]@{ driverSha256 = (Get-FileHash -LiteralPath (Join-Path $candidateRoot 'ops/pc-image-cleanup/review-races.mjs') -Algorithm SHA256).Hash.ToLowerInvariant(); adapterSha256 = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'image-races.mjs') -Algorithm SHA256).Hash.ToLowerInvariant() }
+  }
   $report.final = (Sql 'tuat_rls_review' "SELECT json_build_object('auth_users',(SELECT count(*) FROM auth.users),'profiles', (SELECT count(*) FROM public.profiles), 'allowlist',(SELECT count(*) FROM public.login_email_allowlist),'confirmed_images',(SELECT count(*) FROM public.confirmed_image_retirements),'legacy_image_queue',(SELECT count(*) FROM public.note_image_cleanup),'rls_tables',(SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relrowsecurity),'cron_enabled',current_setting('cron.launch_active_jobs'))") | ConvertFrom-Json
   if ($report.final.auth_users -ne 0 -or $report.final.profiles -ne 0 -or $report.final.allowlist -ne 0 -or $report.final.confirmed_images -ne 0 -or $report.final.legacy_image_queue -ne 0 -or $report.final.cron_enabled -ne 'off') { throw 'Synthetic fixture rollback/cleanup or disabled cron failed' }
   foreach ($migration in $expectedMigrations) {
@@ -173,24 +188,11 @@ SELECT set_config('storage.install_roles','false',false),
   $report.failure = $_.Exception.Message
 } finally {
   try {
-    if ($createdContainer) {
-      $labels = (Docker @('inspect', '--format', '{{json .Config.Labels}}', $name)) | ConvertFrom-Json
-      $containerId = Docker @('inspect', '--format', '{{.Id}}', $name)
-      $containerName = Docker @('inspect', '--format', '{{.Name}}', $name)
-      if ($labels.'tuat.owner' -ne $owner -or $labels.'tuat.generation' -ne $generation -or $containerName -ne "/$name" -or $containerId -notmatch '^[a-f0-9]{64}$') { throw 'Cleanup ownership mismatch; resource retained' }
-      Docker @('rm', '-f', $containerId) | Out-Null
-    }
-    if ($createdVolume) {
-      $labels = (Docker @('volume', 'inspect', '--format', '{{json .Labels}}', $volume)) | ConvertFrom-Json
-      $mountpoint = Docker @('volume', 'inspect', '--format', '{{.Mountpoint}}', $volume)
-      if ($labels.'tuat.owner' -ne $owner -or $labels.'tuat.generation' -ne $generation -or !$mountpoint.EndsWith("/volumes/$volume/_data")) { throw 'Cleanup volume ownership/path mismatch; volume retained' }
-      Docker @('volume', 'rm', $volume) | Out-Null
-    }
-    if ($createdNetwork) {
-      $state = (Docker @('network', 'inspect', $network)) | ConvertFrom-Json
-      if (!$state[0].Internal -or $state[0].Labels.'tuat.owner' -ne $owner -or $state[0].Labels.'tuat.generation' -ne $generation -or $state[0].Name -ne $network -or $state[0].Id -notmatch '^[a-f0-9]{64}$' -or @($state[0].Containers.PSObject.Properties).Count -ne 0) { throw 'Cleanup network ownership/isolation mismatch; network retained' }
-      Docker @('network', 'rm', $state[0].Id) | Out-Null
-    }
+    $cleanupOutput = ($attempted | ConvertTo-Json -Compress) | & $NodePath (Join-Path $PSScriptRoot 'cleanup-owned.mjs') --execute-generation $generation
+    $cleanupExit = $LASTEXITCODE
+    $report.resourceCleanup = ($cleanupOutput | Out-String).Trim() | ConvertFrom-Json
+    if ($cleanupExit -ne 0 -or !$report.resourceCleanup.cleanup) { throw 'Exact owned resource cleanup unconfirmed; retained' }
+    $report.cleanupDriverSha256 = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'cleanup-owned.mjs') -Algorithm SHA256).Hash.ToLowerInvariant()
     if (Test-Path -LiteralPath $cachePath) {
       $cacheResolved = (Resolve-Path -LiteralPath $cachePath).Path
       $expectedCache = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".cache/$generation"))
@@ -200,7 +202,8 @@ SELECT set_config('storage.install_roles','false',false),
     $report.cleanup = $true
   } catch { $report.cleanup = $false; $report.cleanupFailure = $_.Exception.Message }
   $report.completedAt = [datetime]::UtcNow.ToString('o')
-  $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $PSScriptRoot 'result.json') -Encoding utf8
+  $resultName = if ($Api) { 'api-result.json' } else { 'result.json' }
+  $report | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $PSScriptRoot $resultName) -Encoding utf8
 }
-[ordered]@{ success = $report.success; stage = $report.stage; migrations = $report.migrations.Count; tests = $report.tests.Count; cleanup = $report.cleanup; failure = $report.failure } | ConvertTo-Json -Depth 4
+[ordered]@{ success = $report.success; mode = $report.mode; stage = $report.stage; migrations = $report.migrations.Count; tests = $report.tests.Count; apiChecks = $report.apiProof.checks.Count; cleanup = $report.cleanup; failure = $report.failure } | ConvertTo-Json -Depth 4
 if (!$report.success -or !$report.cleanup) { exit 1 }

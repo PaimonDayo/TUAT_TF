@@ -1,0 +1,1342 @@
+{
+  "version": 1,
+  "mode": "api",
+  "owner": "codex-auth-db-review",
+  "generation": "9d2ee8afb0f54ac482581756856c3158",
+  "image": "supabase/postgres:17.6.1.136",
+  "imageId": "sha256:f371b5f3f2ac0a05703f33d6e6134515fb2498cab708fb948a0aeb7481467c00",
+  "authImage": "supabase/gotrue:v2.196.0",
+  "authImageId": "sha256:c0c25187a6b835e65a6f6e6c6b39d090e832d40e6de5186f2c038e0411944232",
+  "storageImage": "supabase/storage-api:v1.73.1",
+  "storageImageId": "sha256:c24fb33cc2fa38d0f9582a30312907fc56da333fb9ba0646833186197e4982f3",
+  "network": "internal",
+  "publishedPorts": [],
+  "productionAccess": false,
+  "providerCalls": false,
+  "securityMigrationsSkipped": [],
+  "migrations": [
+    {
+      "name": "20260617144340_init.sql",
+      "sha256": "60f53f71d41da7e7975c81128f58d9abb46ff87a49976d249d1c30d4f1b78f50",
+      "passed": true
+    },
+    {
+      "name": "20260618120000_multiblock_grade_ranking.sql",
+      "sha256": "6b847e95ab49308ebcfe0703c3d0668d3a98b9f1e75605ee4220f9fd98d9fc1f",
+      "passed": true
+    },
+    {
+      "name": "20260618160000_attendance_notices_schedule.sql",
+      "sha256": "7ece5fa8ee6d5c6d27311c1f8db102b67fe53095313871567027f6b439f65675",
+      "passed": true
+    },
+    {
+      "name": "20260618170000_roles_rbac.sql",
+      "sha256": "b85a4b670f235e4fc90e10c80f1657ec6b65282dcb528743128a3e7cc26fa75e",
+      "passed": true
+    },
+    {
+      "name": "20260618180000_pb_ub_goal.sql",
+      "sha256": "209cdee80efb90b4593501935caaf97f3645636e4a5690199d1ebf476edb0038",
+      "passed": true
+    },
+    {
+      "name": "20260618190000_favorites_competitions.sql",
+      "sha256": "e5e194f804b917cef99620b231f160cda6e7fda57dc4f6a358145ad6206669db",
+      "passed": true
+    },
+    {
+      "name": "20260619100000_favorites.sql",
+      "sha256": "1987090e395b423326697dc9d78d6ca44cdb4101ee5f3662be2a7bb0d0229072",
+      "passed": true
+    },
+    {
+      "name": "20260619130000_comment_updates.sql",
+      "sha256": "dbada123973b2c6ec5555d44e758e24aa7a76b892354a8a162e4a43562d9144e",
+      "passed": true
+    },
+    {
+      "name": "20260619140000_pb_official.sql",
+      "sha256": "35e9438787656930e6978032838aa74ad383cd81b0dd7bf0ecffab4f3cb656f8",
+      "passed": true
+    },
+    {
+      "name": "20260619150000_comment_editing.sql",
+      "sha256": "ebd5584afccc0cfdc02a929cebd12618d6eb1fb3cbaf6f701317dfa1444d58f0",
+      "passed": true
+    },
+    {
+      "name": "20260619160000_fix_comment_edit_state.sql",
+      "sha256": "e14f8367ab97fe563c41346bee61d14d3e6ee883faa29d3b37c752c2ab361c3a",
+      "passed": true
+    },
+    {
+      "name": "20260619170000_venues.sql",
+      "sha256": "e262b0e255fc3729910d2601cf0b5dcc61df184a5ccd0ef5cbf351cb4bc7d86c",
+      "passed": true
+    },
+    {
+      "name": "20260619220000_role_venue_order_and_role_delete.sql",
+      "sha256": "072fa7ae1d6ea32146ebbf46d15305572b8d969bec5133670c846cbc4a8b55cf",
+      "passed": true
+    },
+    {
+      "name": "20260619223000_schedule_target_blocks.sql",
+      "sha256": "aa9826194350a42884ec4ad84eb1acd841e85b4dc51d568806498dcbd87deb58",
+      "passed": true
+    },
+    {
+      "name": "20260619230000_practice_menu_refresh.sql",
+      "sha256": "6624c09b4f92f14735f4fcd96e1fc32efdaa976617c1f359a07e10de3193209e",
+      "passed": true
+    },
+    {
+      "name": "20260619231000_practice_menu_save_rpc.sql",
+      "sha256": "d2400d4c2b4ad892af700f13b9e65c5c7f04d5dd1aaded583c23d26a4a4d6efe",
+      "passed": true
+    },
+    {
+      "name": "20260620100000_role_colors.sql",
+      "sha256": "eac417bfa4a99e8d72752d21601f09d35a51549214700113bb56491c2f362497",
+      "passed": true
+    },
+    {
+      "name": "20260620101000_profile_role_assignment_rpc.sql",
+      "sha256": "8df7d2ad14295523f8053ba642b83341127c0df36b7207f82ea78f067e682af3",
+      "passed": true
+    },
+    {
+      "name": "20260620103000_allow_system_role_delete_safely.sql",
+      "sha256": "df39970564220a937ed428401ca6a48c65eea687b0e8f17a18736f089cecbfd2",
+      "passed": true
+    },
+    {
+      "name": "20260620110000_notes.sql",
+      "sha256": "4585f8cf996a6685766893518f20745db1615074d8ef0a652191edea685260f2",
+      "passed": true
+    },
+    {
+      "name": "20260620111000_schedule_sheets.sql",
+      "sha256": "0e50de17cf4bb4cb9bbbd6bf95999a8bf073370325b0236854789dbd1091fd29",
+      "passed": true
+    },
+    {
+      "name": "20260620112000_fix_notes_select_policy.sql",
+      "sha256": "65a73b42a9ea8d5e5e8ff43b09cbcd417074d89e89d2d6cf8784fd79fb45d9c7",
+      "passed": true
+    },
+    {
+      "name": "20260620113000_meet_sheet_without_month.sql",
+      "sha256": "906e997a7c5afe1e8e3c36c83e0038a77a14ff368f3c12c727d881ab1f2c2c53",
+      "passed": true
+    },
+    {
+      "name": "20260620114000_sheet_schedule_end_date.sql",
+      "sha256": "5716ce0aa4c60f440b15fcb7fd449caf8b1a874e4b05fc5fb9b9e057cfc1a5d3",
+      "passed": true
+    },
+    {
+      "name": "20260620115000_schedule_sheet_kinds.sql",
+      "sha256": "26b7946e0a95610f8fba2f87aea796d4f559e9eb6163268859c0e5df14f41c15",
+      "passed": true
+    },
+    {
+      "name": "20260620120000_schedule_import_row_blocks.sql",
+      "sha256": "54898e26d16450353051eb5cdfcce028d0c7c9549ddb82a17a651fa2be141054",
+      "passed": true
+    },
+    {
+      "name": "20260620121000_google_drive_connections.sql",
+      "sha256": "841a006c1c541abfc4312223bb7350c461e7eda01533b831d7564192edec2334",
+      "passed": true
+    },
+    {
+      "name": "20260621120000_note_articles.sql",
+      "sha256": "5a93289fa8cae0ce4f994a680ee134ad02d56ffc3589486fd8903ca67e2ebee2",
+      "passed": true
+    },
+    {
+      "name": "20260621121000_secure_note_edit_access.sql",
+      "sha256": "228293be2cf698a78395b97df1e9ee5b604e79f5ef9411c55b1ea363408487f6",
+      "passed": true
+    },
+    {
+      "name": "20260621121344_add_push_subscriptions_table.sql",
+      "sha256": "98e3bfac101616a1ca284d8fdca7639571c62cf065bc5df1d5b1fe9de188337d",
+      "passed": true
+    },
+    {
+      "name": "20260621140000_practice_record_block_fields.sql",
+      "sha256": "945c68d6cba217593ea04b25568d6ff57f47ec077b431e74d17f43f5012bfa8a",
+      "passed": true
+    },
+    {
+      "name": "20260621150000_profile_events.sql",
+      "sha256": "c6f6a0ab298050035274bd511d52c7b0caaee549274df1ea9d06f8c5cb4c3191",
+      "passed": true
+    },
+    {
+      "name": "20260621160000_notice_reactions.sql",
+      "sha256": "62c85bb15c849f091a99ac5dbc042661517b0e1a6252036366cf0d0c48330159",
+      "passed": true
+    },
+    {
+      "name": "20260621170000_role_category.sql",
+      "sha256": "cb7c59eaea0b8916ec7aeb598f1cd12d7926b04788afc2aa30b6bd56587b093a",
+      "passed": true
+    },
+    {
+      "name": "20260621220000_note_folder_description.sql",
+      "sha256": "64906cb7c69087135f384857e56d1d571e2ecc1d9491d618ca3052d534447e3f",
+      "passed": true
+    },
+    {
+      "name": "20260621230000_notifications.sql",
+      "sha256": "71f0905126f44afda5d50164269ab87c911ad2bbcdf2338a4a30c35891299e68",
+      "passed": true
+    },
+    {
+      "name": "20260621235900_notifications_phase2.sql",
+      "sha256": "18873a7d6b36df13b2348e0a034bd1d545e83d89217e7e658eb013c62a965f64",
+      "passed": true
+    },
+    {
+      "name": "20260622010000_fix_notification_triggers_columns.sql",
+      "sha256": "b6f1a8cf3b44aed81dc2c3f596c453f7c2c1f0fbfe59f953ddb0e13ae9f4d211",
+      "passed": true
+    },
+    {
+      "name": "20260622020000_remove_schedule_notifications.sql",
+      "sha256": "246a59da73133e11ca918059970ddb1ebdf331529f5fec44e99670c2d427a8d8",
+      "passed": true
+    },
+    {
+      "name": "20260622030000_notifications_push_webhook.sql",
+      "sha256": "8c32283adee9bfe7aaa67603d11044808ba4f5407efaa1ec9b372b5ef0645c15",
+      "passed": true
+    },
+    {
+      "name": "20260622040000_notice_notify_toggle.sql",
+      "sha256": "4fc8f323f934404e49a7f55004f1d26c1b618da56a4570dea8915d165d2edbe6",
+      "passed": true
+    },
+    {
+      "name": "20260622050000_menu_block_visibility.sql",
+      "sha256": "a27461bb07875a63747391ae82ace8150e7256f6d2611513d7c1e3b637ecf51f",
+      "passed": true
+    },
+    {
+      "name": "20260622060000_menu_view_all_blocks.sql",
+      "sha256": "8208a3e7d2dc3ea21534ec1da45489236688d0af245e7fd520eaa1ee19eaca3c",
+      "passed": true
+    },
+    {
+      "name": "20260622070000_menu_author_draft_only.sql",
+      "sha256": "c780e078615598ba8029ebe1188c45820972e743d15e43b0dc6e61ffe32ce9db",
+      "passed": true
+    },
+    {
+      "name": "20260622080000_menu_author_always.sql",
+      "sha256": "5115a815ed766d54200bbe35c1e705a1eebac1cacb22ffd14dc013150dafb725",
+      "passed": true
+    },
+    {
+      "name": "20260622090000_tweets_update_policy.sql",
+      "sha256": "4913f9e5917b790f0bbc31bc350104fcfdd4b198560929e63256d1137d62dc31",
+      "passed": true
+    },
+    {
+      "name": "20260623100000_sheet_sync.sql",
+      "sha256": "849a20caf70bb52e6a43121c3052cbf1ce5eb011d21bc512c22fd0d34af1c791",
+      "passed": true
+    },
+    {
+      "name": "20260624100000_record_source.sql",
+      "sha256": "4783750a11d1dfc19e4a10d847d17666384f1d4655428c89a86a27d5ea7db9c2",
+      "passed": true
+    },
+    {
+      "name": "20260624110000_restrict_select_to_authenticated.sql",
+      "sha256": "8bfd7eba1eb84fe7a6d0dc6aecfcf5ef47dd40cd0dd18fed25a891b3e3a13cd5",
+      "passed": true
+    },
+    {
+      "name": "20260624120000_member_approval_gate.sql",
+      "sha256": "71df26ddce1b81bb18bf24237142d11e6b7e92935f25ab5e439483ea16c33a9b",
+      "passed": true
+    },
+    {
+      "name": "20260629120000_role_notice_notifications_and_performance.sql",
+      "sha256": "3153e73a2552d924a92cf5f9d8170e4bbf5de2d36820241d1cdfae396536c51f",
+      "passed": true
+    },
+    {
+      "name": "20260629130000_system_management_permission.sql",
+      "sha256": "c4ae796ab10b453af00a940e081d70278dbfacfe2c6460e71ffadc0cf546dd11",
+      "passed": true
+    },
+    {
+      "name": "20260704120000_menu_pace_supplement.sql",
+      "sha256": "c300ac31dcc2c3452ceb088a3efeab3a071c86e43b4d4aecc961dab956b6dcc0",
+      "passed": true
+    },
+    {
+      "name": "20260704130000_remove_approval_gate.sql",
+      "sha256": "fefe1303c10d0c7badfcdaf9f52d81a257648ad681a6a6650898ba702d3e77f1",
+      "passed": true
+    },
+    {
+      "name": "20260704140000_record_source.sql",
+      "sha256": "3f36097e7c97dc5fd619ee2cbb3c6921976ebca73802fc4a7df81021fbcecc71",
+      "passed": true
+    },
+    {
+      "name": "20260704150000_menu_remark.sql",
+      "sha256": "2cafc2204b9047703d042c52fa03a6aa0e92754ca42f71a8827b9c760894b92b",
+      "passed": true
+    },
+    {
+      "name": "20260704160000_sheet_linked_at.sql",
+      "sha256": "7ce87aaa9bf03b2e4c6eff875944dbb1bf37f37ecbda166ecd2c389c266a7ae7",
+      "passed": true
+    },
+    {
+      "name": "20260704170000_schedule_import_generates_menu.sql",
+      "sha256": "05033ea49334557585cafcf832fd7e24c6cc45ace71ab179c54a1e93746b8b2a",
+      "passed": true
+    },
+    {
+      "name": "20260704180000_sync_robustness.sql",
+      "sha256": "ff4125ce4f1b4e82200c76c7f63dc9942670d06d1780392f7ec56db6d6228c62",
+      "passed": true
+    },
+    {
+      "name": "20260704190000_comment_max_length.sql",
+      "sha256": "1b41918944e8f7712799f609083c63a05ae4b4487637348c514ca7590cf29843",
+      "passed": true
+    },
+    {
+      "name": "20260704200000_comment_counts_rpc.sql",
+      "sha256": "075a49bd8eb5edfb31d87d95d29879dfb42b1f9f8789689eb02317432ba9c976",
+      "passed": true
+    },
+    {
+      "name": "20260710100000_sheet_push_pending_flag.sql",
+      "sha256": "6f8d8bbb8c41ca9bbcc6043eefdb5a791f484f22a2b10160ede806409f5c560c",
+      "passed": true
+    },
+    {
+      "name": "20260711100000_notice_mentions.sql",
+      "sha256": "754d293dd62326bb92a2d6cfe0c7c2355ec634d2c853e381768ff4d5210b46ed",
+      "passed": true
+    },
+    {
+      "name": "20260711150000_attendance_late_and_view.sql",
+      "sha256": "489ce0184ffadfc7cbcbfffeace48d6a3aada55ccf91565629620e8b8063b228",
+      "passed": true
+    },
+    {
+      "name": "20260711160000_attendance_late_invariants.sql",
+      "sha256": "8c5db4581fee91c2f13abfa93617164d4009ffe2e7fe2690e8fd7176f32dfc15",
+      "passed": true
+    },
+    {
+      "name": "20260712150000_sheet_records_created_at_midnight.sql",
+      "sha256": "5498998fd43d76c140bae9d49344dd02776dec8dc6a7b609b003b052195d9a6b",
+      "passed": true
+    },
+    {
+      "name": "20260713100000_note_nested_folders.sql",
+      "sha256": "174e51695d5e0e5a76729c2fb87ffcf3d5d42417269441436e0bf882b3feb924",
+      "passed": true
+    },
+    {
+      "name": "20260713120000_note_folder_cascade_delete.sql",
+      "sha256": "183267ca3fc37668a1d84c3d9711a869e9d117079a74e4ff1a6836a59d0ddb15",
+      "passed": true
+    },
+    {
+      "name": "20260713150000_threads.sql",
+      "sha256": "5c1e0f1772094dda8febb1e168e23a473f83f6975ff88bbdbbc9d51b38fa292a",
+      "passed": true
+    },
+    {
+      "name": "20260713160000_ensure_schedule_for_menu.sql",
+      "sha256": "84dc03547e213b785bc6276b0918a933108f9983fc0ada910107cc4792f6a23f",
+      "passed": true
+    },
+    {
+      "name": "20260713170000_threads_in_note_folders.sql",
+      "sha256": "6fa4464611b03f552efc90f0e8f8b23b720f38831727cca7af647bc4fb5f3c83",
+      "passed": true
+    },
+    {
+      "name": "20260713180000_note_pins.sql",
+      "sha256": "918c7478c9e440cf9cde726dba8dbe67a377aebca2b829c19b1056e587f5e054",
+      "passed": true
+    },
+    {
+      "name": "20260713200000_notice_block_grade_recipients.sql",
+      "sha256": "10742d98b6d166fa97b570eec55acc3044737171d59b7e32c8d67a28c57facd1",
+      "passed": true
+    },
+    {
+      "name": "20260715120000_everyone_role_and_categories.sql",
+      "sha256": "97efea36e98779df1c149db7fb31fb164f3a4f23be9765bdab3a7592b7e54ab0",
+      "passed": true
+    },
+    {
+      "name": "20260715130000_sync_failure_alert.sql",
+      "sha256": "03df4a7c6ad43d73f06b2d38bac2f245c3b688862d1fda779058b61cc16e276e",
+      "passed": true
+    },
+    {
+      "name": "20260715131000_restore_member_approval_gate.sql",
+      "sha256": "f0aabb4303a096600363351025858006bd484e4c8bd5476a9ba9f419516ac69c",
+      "passed": true
+    },
+    {
+      "name": "20260715132000_thread_reply_notifications.sql",
+      "sha256": "66bf96404e1580aed69aa8d115ced75db4f8dc4bfa675ca24f733f97353a1908",
+      "passed": true
+    },
+    {
+      "name": "20260715133000_remove_approval_gate_again.sql",
+      "sha256": "2c1a46e695eee9c798988c1fa5ff8baa82a1aa56cd1644894bdca6ecdd3ac96b",
+      "passed": true
+    },
+    {
+      "name": "20260721100000_chunk_sheet_sync.sql",
+      "sha256": "1bdf3d9e54f1c6b067f8eb09cadb925118e5df936dec327d7d705990e76e4135",
+      "passed": true
+    },
+    {
+      "name": "20260721101000_secure_push_webhook.sql",
+      "sha256": "4b525c5c17522ef9f70b38876ff302b8157c7e90f369dc34b9118e264c4c94ff",
+      "passed": true
+    },
+    {
+      "name": "20260722100000_sheet_record_replies.sql",
+      "sha256": "5a7c89b69753860e43b61f780add9daf53604474e7691d658e12d17d8ac405c6",
+      "passed": true
+    },
+    {
+      "name": "20260722101000_drop_push_secret_configurator.sql",
+      "sha256": "89c7b58a294b3a82dd8cb569b5aff3dbddbdbddfa354271d37b8ec9fc58a490a",
+      "passed": true
+    },
+    {
+      "name": "20260722110000_merge_jump_throw_into_short.sql",
+      "sha256": "971b301a93217e423ad57d8e043933ab749057a30c3afcef8be18500e01c233a",
+      "passed": true
+    },
+    {
+      "name": "20260722170000_enforce_sheet_record_date.sql",
+      "sha256": "d3601221d626cebbf6842f419b0a29d7e8c37ae63a50d845798952d255be6470",
+      "passed": true
+    },
+    {
+      "name": "20260723100000_sheet_push_on_content_change.sql",
+      "sha256": "1ae0110af8bb8ca6f4275d2ec2f5813ab22fc9406b595a90c6abf56504217268",
+      "passed": true
+    },
+    {
+      "name": "20260723110000_tweet_content_length.sql",
+      "sha256": "c976afa9836bc8d4b874b78623be925b8c9e3957f6ceb4a0c5c78b395ac0b67e",
+      "passed": true
+    },
+    {
+      "name": "20260723220000_comment_sheet_reply_order.sql",
+      "sha256": "554578aac6ce041a87e5abcc1ecf85c880e3ea49a2c4abd9e65d4c9e085b37d2",
+      "passed": true
+    },
+    {
+      "name": "20260724110000_avatar_storage.sql",
+      "sha256": "224d3fd17287ca2bb5a9a7f711e2c2a6b9f78e15fa5de92b5150e19b6f5d5ffd",
+      "passed": true
+    },
+    {
+      "name": "20260724112000_avatar_storage_select_policy.sql",
+      "sha256": "5e6a4bf9dc822787d423efbfa65b78f11e52720f40b843a1dfa4501406759b76",
+      "passed": true
+    },
+    {
+      "name": "20260724130000_avatar_jpeg_fallback.sql",
+      "sha256": "477315d91f52dea3c2c0f99fac5ccadd1eda23ff6c0a9d2d1d828879463fcec9",
+      "passed": true
+    },
+    {
+      "name": "20260724140000_deduplicate_sheet_reply_counts.sql",
+      "sha256": "c7e3acbab8afba32840585ae5f76741a91aa878209d71c32777b9e51ecc3a513",
+      "passed": true
+    },
+    {
+      "name": "20260724150000_attendance_default_block.sql",
+      "sha256": "1ab10f0a52bed0d56afb437f5428ba04b62a0a6501ada0146440e85ff7d5cf32",
+      "passed": true
+    },
+    {
+      "name": "20260724160000_private_avatar_storage.sql",
+      "sha256": "16bf9b47196339287ee01de54ad0a614503a9d723b6635ccee462f833968fdc3",
+      "passed": true
+    },
+    {
+      "name": "20260725001000_force_sheet_source_for_linked_profiles.sql",
+      "sha256": "34c34c2c31c43b64e1b359fde5005e90f6736f283ef75efee45aa4f1128e2f95",
+      "passed": true
+    },
+    {
+      "name": "20260725010000_sheet_form_actual_distance.sql",
+      "sha256": "7786e2c04942d249690e73927e6b4b0e85f0b160832efd9a9cca310646177a3b",
+      "passed": true
+    },
+    {
+      "name": "20260725020000_record_form_config_versions.sql",
+      "sha256": "0a27d291c2d6a63dc2bc40db1ccc8752486b08540b49329d062d316e7ff7ccf5",
+      "passed": true
+    },
+    {
+      "name": "20260725030000_fix_sheet_form_defaults.sql",
+      "sha256": "578b0d6e5b8726ba38091219ddc3319ac416d73bb486fd17eacc4a75ad752f1e",
+      "passed": true
+    },
+    {
+      "name": "20260726010000_enable_like_realtime.sql",
+      "sha256": "db53dcafa7a3822c48117483ed17fe2db132c25301344e523b91bd8256da9f86",
+      "passed": true
+    },
+    {
+      "name": "20260727150000_weekly_ranking_intensity_only.sql",
+      "sha256": "ce06bc7b761bdc32256023c0656052ee9269e3a0a8ea76fbdee46bd4768ff90d",
+      "passed": true
+    },
+    {
+      "name": "20260727170000_distance_two_decimal_precision.sql",
+      "sha256": "561b0fb02414cb0b23e16aec669573ef4e91860354104feef2381ad7e40ed4bb",
+      "passed": true
+    },
+    {
+      "name": "20260730010000_only_system_role_is_builtin.sql",
+      "sha256": "370b681a2cf121ee753fe5fe3d439ec32f14b6fb7e8174d979440d414ccb29ac",
+      "passed": true
+    },
+    {
+      "name": "20260730090000_fix_social_counts_and_absence_notes.sql",
+      "sha256": "8bebba2260a912a6fedbefcc91e19a1251db97dcb18f3ed19706ee4949270648",
+      "passed": true
+    },
+    {
+      "name": "20260730100000_unique_practice_record_per_day.sql",
+      "sha256": "e6f0cf6847240fd85c044bf8b60cd6655aeca21fdc9762a3b74b5077c1102054",
+      "passed": true
+    },
+    {
+      "name": "20260730110000_chunk_aware_sync_failure_alert.sql",
+      "sha256": "1ecdaa82b1ef80dc95b2e41c2bf0fa1a50f7ba3999f2a5d397fa067f3c46e063",
+      "passed": true
+    },
+    {
+      "name": "20260730120000_sheet_sync_every_30_minutes.sql",
+      "sha256": "0c5c3c6e26ff6e12543bd57cf25213ee720e294553bc4211c6adac85d4f9eb5a",
+      "passed": true
+    },
+    {
+      "name": "20260730130000_single_profile_block_manager.sql",
+      "sha256": "5237fc6a428131f1e3112b77506232bc997c877467b4d95d558b9daa1b640bfa",
+      "passed": true
+    },
+    {
+      "name": "20260731100000_timeline_default_block.sql",
+      "sha256": "9a5b15115046467fb5bcc5572c10b0aa52599b98f7bf42dd044811759ceb51e9",
+      "passed": true
+    },
+    {
+      "name": "20260731120000_push_subscription_selfheal.sql",
+      "sha256": "3a1c2fa97dcff4fad2b8b73922598b50bde911272c03bec962329c656626a470",
+      "passed": true
+    },
+    {
+      "name": "20260801010000_actual_distance_other.sql",
+      "sha256": "18a790b5b33ee5701bb3bb25c78d0342c8345e77fc2438857caa9455a1821026",
+      "passed": true
+    },
+    {
+      "name": "20260801020000_sheet_history_backfill_window.sql",
+      "sha256": "b86e1c239c5a54fc4f87900fd1b883eaddaf10c1e7104cee6c5fd8ad1cd64b0c",
+      "passed": true
+    },
+    {
+      "name": "20260803100000_schedule_view_all_blocks.sql",
+      "sha256": "cda0c0046c93f7dbdac73a55a6d46755c32f5de3e48692dd56ba44e587cfe83b",
+      "passed": true
+    },
+    {
+      "name": "20260803113000_timeline_post_visibility.sql",
+      "sha256": "e8f3081cf9a970de70171bc09b7df3c6be46826795f80173c09685bdba15d52a",
+      "passed": true
+    },
+    {
+      "name": "20260804002000_remove_timeline_post_visibility.sql",
+      "sha256": "b1de1519f37a63365f71f7063ad4e6799ba7bb004564bc136ea06a86d82ca4bb",
+      "passed": true
+    },
+    {
+      "name": "20260804010000_tweet_stories_and_images.sql",
+      "sha256": "39f20be92130cc6fad503f68bd3a1d971e3e84c72252a45936c3e1066c3889f9",
+      "passed": true
+    },
+    {
+      "name": "20260804011000_restrict_images_to_stories.sql",
+      "sha256": "23df914d6de07031cac62b55b001288dbc87d9f44975956e363060ecb224ebb7",
+      "passed": true
+    },
+    {
+      "name": "20260804012000_allow_image_only_stories.sql",
+      "sha256": "bd563249a0b7df2aeddbb8f98852ea122d17bd0baa5e99a607118ced630ff302",
+      "passed": true
+    },
+    {
+      "name": "20260806170000_tweet_polls_and_mentions.sql",
+      "sha256": "4952179b7e975aa4e389132b7e57b3f5bb5c95dfcadefa49af8155de97e3ef89",
+      "passed": true
+    },
+    {
+      "name": "20260806180000_profile_mention_reading.sql",
+      "sha256": "ab6ffd160417dfeb4018ffd8d16a76c9e1b4715adacdd8865962023a0cd16629",
+      "passed": true
+    },
+    {
+      "name": "20260806200000_poll_voter_profiles.sql",
+      "sha256": "5259e230f9c5b25c78fa99a24e8285e63c5b1ce2bd9387d3851e7640c53dacb8",
+      "passed": true
+    },
+    {
+      "name": "20260810010000_ito_game.sql",
+      "sha256": "7f79cb8a23bb19214719c71ee2862c88bb576db8477caca3e24d50940e6a3f04",
+      "passed": true
+    },
+    {
+      "name": "20260810020000_ito_respond_invitation_auth.sql",
+      "sha256": "a2a5b43b3a52d84d5407714d07f46b1af6688574e414125c20776a74067a93f9",
+      "passed": true
+    },
+    {
+      "name": "20260810030000_ito_mode_theme_admin.sql",
+      "sha256": "d3308085dc61b3c8376cb0efa5232e2a6eef30e5f2a0be0eec51ffb70275cc6c",
+      "passed": true
+    },
+    {
+      "name": "20260810040000_ito_admin_proxy.sql",
+      "sha256": "00311d6409fda140eb5d86ffd3523f6b7ae3402ed978c9e3d34adf8e07a05e93",
+      "passed": true
+    },
+    {
+      "name": "20260811150000_practice_weather_status.sql",
+      "sha256": "34bf213d151c0e0424439318b05467b17e2fc2870dc9aec8b4a862a4e695cdc9",
+      "passed": true
+    },
+    {
+      "name": "20260811210000_practice_cancellation.sql",
+      "sha256": "3f172b71456bd8b82174b74d5511bc62850964d9450c7c5e63c3e45999191782",
+      "passed": true
+    },
+    {
+      "name": "20260829123000_notice_recipient_exclusions.sql",
+      "sha256": "48e86c4259686da0948ac8559e79aacf23c65d8da52ee32f0d4889079c3db0c5",
+      "passed": true
+    },
+    {
+      "name": "20260904090000_remove_ito_feature.sql",
+      "sha256": "29db0d6ad016ba67ba44bdba0823bf4ad1ae3f25f2d53c375d69d8ae532d2974",
+      "passed": true
+    },
+    {
+      "name": "20260904091000_daily_sheet_pull.sql",
+      "sha256": "6d581ab147c049cd9dc2b75dfdb63272db7cf815c28b344cc36a42c39370f232",
+      "passed": true
+    },
+    {
+      "name": "20260904092000_reset_daily_sheet_pull_cursor.sql",
+      "sha256": "6d800b2f6e16914cca77241394de843de483c4a7a7c8a7c9ee74560bfd7af51b",
+      "passed": true
+    },
+    {
+      "name": "20260904100000_reduce_runtime_and_supabase_load.sql",
+      "sha256": "c19a3233046f18c4a0b10c3e47cfe7ff40cb9a8d0ebc4fb4c0724f5a19532fc4",
+      "passed": true
+    },
+    {
+      "name": "20260907010000_record_content_filter.sql",
+      "sha256": "fec1426fbae0ec578674dbdc49e0e62477d7aa46bbaaf4e21bc0936ece1931c9",
+      "passed": true
+    },
+    {
+      "name": "20260908010000_competition_goals_note_images.sql",
+      "sha256": "6fd8e894b9933b0da35b6fa91c8eacfa46a779eb2d1e8ce34293f32b1f3aa9f5",
+      "passed": true
+    },
+    {
+      "name": "20260908020000_competition_event_catalog.sql",
+      "sha256": "55bf6c77db6112e4d9fde8d9a9dde6d78abe8e4dd855e89793448aa53a2a6e6b",
+      "passed": true
+    },
+    {
+      "name": "20260909010000_competition_results_v2.sql",
+      "sha256": "cd3ddbcaf610066b1aa202a800470fb54f685aa4ce63424552e63b88638bdf84",
+      "passed": true
+    },
+    {
+      "name": "20260910010000_preserve_independent_pb_ub_flags.sql",
+      "sha256": "c146fa281fa5e312dbe16cc933444590261efea573da3f36e6d24aa04bfbec00",
+      "passed": true
+    },
+    {
+      "name": "20260910020000_attendance_per_day.sql",
+      "sha256": "ce740e5ecb141aa6825c89fe123f63917c628df96472565ecdb45d204baaf63d",
+      "passed": true
+    },
+    {
+      "name": "20260910030000_note_article_polls.sql",
+      "sha256": "fb2a140d83ae9f3e002318a72cf6d32678bb318ece6f02245c79f83f4b7b2629",
+      "passed": true
+    },
+    {
+      "name": "20260910040000_comment_likes.sql",
+      "sha256": "09d184fe0491a9afc22318309ac73faa7b970f494e5ffd8ed936d2335ae8f26e",
+      "passed": true
+    },
+    {
+      "name": "20260910050000_push_webhook_url_from_vault.sql",
+      "sha256": "a5a7350fb8a90ed2dd864543add917b4b6148fa6a2bd5c8a5c677f73ebaff943",
+      "passed": true
+    },
+    {
+      "name": "20260910060000_event_time_format_and_ub_stage.sql",
+      "sha256": "1cda67a78caaf61801603a22b8836d84e1f823d8e88d6d4377d10d80f35262be",
+      "passed": true
+    },
+    {
+      "name": "20260910070000_test_push_url_from_vault.sql",
+      "sha256": "a6d67d5b4bbb1eeaad751935eb2af8cec2adc14770c07043752d1b70d2ea2d4b",
+      "passed": true
+    },
+    {
+      "name": "20260916100000_competition_program_entries.sql",
+      "sha256": "75491e25fef3004da8bdfae89d9887e014be2e143f55bdeeea544419a5c5f0d2",
+      "passed": true
+    },
+    {
+      "name": "20260919100000_quote_posts.sql",
+      "sha256": "691faf09d754ef300f57adae8f24fa1c9153e33341562c8522b8ac07c3f47330",
+      "passed": true
+    },
+    {
+      "name": "20260921070000_require_permission_identity.sql",
+      "sha256": "91efb0c838f216e1216ae8cfcbb09eebbc761a05c5093c99ffeec397d05fc237",
+      "passed": true
+    },
+    {
+      "name": "20260921071000_post_delete_social_references.sql",
+      "sha256": "590985bd89b071e47d190002dea888a06ae00e49a863f1a50df7903a695e61be",
+      "passed": true
+    },
+    {
+      "name": "20260921072000_authenticated_write_policies.sql",
+      "sha256": "b5a7e8eccb28419cd8b1f7c5dec956ff4cb35dda625d4e8a090ff9b185cf2c41",
+      "passed": true
+    },
+    {
+      "name": "20260921073000_record_field_groups.sql",
+      "sha256": "dfe9867cb3249fc5aa3c41210ec9064c24308ab363d6f19ec1747623c8cc893d",
+      "passed": true
+    },
+    {
+      "name": "20260921110000_device_scoped_test_push.sql",
+      "sha256": "0e2621deda21f74cb63ed5afcc6724363153cde17eeef89550e9b5da42323380",
+      "passed": true
+    },
+    {
+      "name": "20260921113000_atomic_competition_program.sql",
+      "sha256": "94e052e1cad8c6a6b09628e475e7ed4a4055c11e100add611ea4e36494ae61bd",
+      "passed": true
+    },
+    {
+      "name": "20260922010000_notice_archive.sql",
+      "sha256": "5e769a885794b4a9c3a247fe9c5e58bed4506d0648a0bb7aa9dbfe69af506cd4",
+      "passed": true
+    },
+    {
+      "name": "20260924010000_competition_archive.sql",
+      "sha256": "6d7d758566df8af3192d0813900e233f57c46fcdaced923ae1ad9e3aa4c45c1f",
+      "passed": true
+    },
+    {
+      "name": "20260924030000_ob_meet_entries.sql",
+      "sha256": "324f3afd53b460561ea3921dec6b440acd487c364820591504a6218bed6f97e5",
+      "passed": true
+    },
+    {
+      "name": "20260924040000_ob_entry_qualification_marks.sql",
+      "sha256": "bed09bbf12a8bb8de5ba324cd82655a20d44d60c1374fe9ccc7078610211a209",
+      "passed": true
+    },
+    {
+      "name": "20260924050000_ob_entry_edit.sql",
+      "sha256": "ecb94ae28a2129e69cfd3a8d0d93477f33b2f82728d48a5157ff7066879f1a28",
+      "passed": true
+    },
+    {
+      "name": "20260924060000_ob_entry_division.sql",
+      "sha256": "9a9e423b3fdeb01782f398185daea7ba30342aacc30bcba6f9c3bff856897874",
+      "passed": true
+    },
+    {
+      "name": "20260924070000_ob_party.sql",
+      "sha256": "e5141c4168e635ebeba67de64461a677f9a1fa7ade366da16792dd2ee4194899",
+      "passed": true
+    },
+    {
+      "name": "20260924080000_ob_duties.sql",
+      "sha256": "972e7f0aa22367b7beb23736b0740e1bba0151457f548ee0635d26a862f5fc17",
+      "passed": true
+    },
+    {
+      "name": "20260924090000_ob_helper_eligibility.sql",
+      "sha256": "2bad08eb79761104dff164ce1a43fd26f52f168b90d180ece86ec39e91c3a499",
+      "passed": true
+    },
+    {
+      "name": "20260924100000_ob_duty_events.sql",
+      "sha256": "98cdfaf23a5b7c27dd03794985c30b7fbd2c47d6040b0f86e871476fb2cdefb9",
+      "passed": true
+    },
+    {
+      "name": "20260924110000_ob_all_active_helpers.sql",
+      "sha256": "21995352e9233f79ce5346a738c27de37d0d3a96294b2db498d35257b83c8c42",
+      "passed": true
+    },
+    {
+      "name": "20260924120000_ob_helper_competing.sql",
+      "sha256": "32402c5eaa8627d3de8108fdf6c50b95e70db6ca93599421fcbbaa6131fb1bfb",
+      "passed": true
+    },
+    {
+      "name": "20260924130000_ob_duty_roles.sql",
+      "sha256": "8ccabf2f8e869fa4c31916cc59040341536d338f5f25d9ab40eab94eafdcc53f",
+      "passed": true
+    },
+    {
+      "name": "20260925100000_competition_result_links.sql",
+      "sha256": "e77ee8719837f8f88cf8a8405bbbbb8c91dfe3dc77c80dd4ec977d44e846ee23",
+      "passed": true
+    },
+    {
+      "name": "20260925120000_drop_operational_health.sql",
+      "sha256": "9523bafff7b6aa9b4033794e39287a3c69cab19b49466597f95f348421bb1ef1",
+      "passed": true
+    },
+    {
+      "name": "20260925130000_competition_result_links_members_read.sql",
+      "sha256": "f7faee53c99cc69158b5457c424634896d875c4513869a94c239a6ff86956834",
+      "passed": true
+    },
+    {
+      "name": "20260925140000_competition_result_links_system_only.sql",
+      "sha256": "f34c766558dc18a7e3192bae01b680751f5f62b6db1c2673040c31143dd8a55b",
+      "passed": true
+    },
+    {
+      "name": "20260926000000_fix_sync_failure_alert_types.sql",
+      "sha256": "791cf2f119a10b03bf9c57e78f22a8567f59a947968d9fa75d25f044b341cca9",
+      "passed": true
+    },
+    {
+      "name": "20260926010000_sheet_pending_clears.sql",
+      "sha256": "492301b1d934e8dd59afd6527cb4f104153ae4a03ebfeefc0d844b70992d4995",
+      "passed": true
+    },
+    {
+      "name": "20260926020000_restrict_signup_domain_hook.sql",
+      "sha256": "286147a35510bc518c8f3855d23941007e79f075e035dc60ca627723aedbbc0a",
+      "passed": true
+    },
+    {
+      "name": "20260926030000_mirror_write_guard.sql",
+      "sha256": "f4cf9f9b244ab1530f30d886d7804889663435d9dd4ee9d0dec09a8d610af2b8",
+      "passed": true
+    },
+    {
+      "name": "20260926040000_mirror_write_guard_all.sql",
+      "sha256": "54ea0b3971f0e106726487492bdb0e6884df04f702848eab73354a0b4f65b1e9",
+      "passed": true
+    },
+    {
+      "name": "20260926050000_failover_change_log.sql",
+      "sha256": "6561b6823ec811786a05d6a396a558d5b3675d8bc0367ede86ce1f3cfc6e6646",
+      "passed": true
+    },
+    {
+      "name": "20260926060000_ob_meet_staff_and_self_entry.sql",
+      "sha256": "b5da675d6b86bf2f9af5eacce3a528eed50445a05a644f33ef6222bae173ac7a",
+      "passed": true
+    },
+    {
+      "name": "20260927000000_ob_mirror_audit.sql",
+      "sha256": "9b1cff396048a2e162f787fdc77e56a148707b1fd430ab0a50ef196ccf837007",
+      "passed": true
+    },
+    {
+      "name": "20260928000000_push_endpoint_constraint.sql",
+      "sha256": "2918926a74caf83aa4e8079f3d5b455e0dd23a571472897dfeb6e5e18b36e493",
+      "passed": true
+    },
+    {
+      "name": "20260928010000_ob_entry_access_history.sql",
+      "sha256": "dcfde6b98716ce38449bc0b439ef3ec22824608ecfddeba08b3f9f0bf9871f8f",
+      "passed": true
+    },
+    {
+      "name": "20260929000000_admin_comment_delete.sql",
+      "sha256": "d7261d5e1ca2ffd4f7c050bc0f00a601fa4342308e455e2a0ed617efb6d7496a",
+      "passed": true
+    },
+    {
+      "name": "20260929020000_october_sheet_setup.sql",
+      "sha256": "2ca6764aba28dbe87d6f55fb49bf9215d31fea4a73bd049d993ff58f8cec99ed",
+      "passed": true
+    },
+    {
+      "name": "20260930000000_sheet_sync_off.sql",
+      "sha256": "db8fc8825c0148682f84fdc2fd731a247fe84dbc72c12079b6d368cb19741bbe",
+      "passed": true
+    },
+    {
+      "name": "20260930010000_system_notice_visibility.sql",
+      "sha256": "cb09abf9a2977b077b326d1bf383dc081dd5d3d0b7eb31cba8e1b1117a8ec9bf",
+      "passed": true
+    },
+    {
+      "name": "20260930020000_all_member_sheet_setup.sql",
+      "sha256": "6dc0a904794809206c1a178a52ce4162abf81784eaff5f3ac740c050112603a9",
+      "passed": true
+    },
+    {
+      "name": "20261001010000_block_menu_permissions.sql",
+      "sha256": "ab5b7c02011ebf7e5de3d8585e8212c93a810f05a47afc85c1cc1335901a3003",
+      "passed": true
+    },
+    {
+      "name": "20261002010000_ob_event_operations.sql",
+      "sha256": "796caef249dc918bd93fc75cb491011087783eab514d682a284eb51204a16303",
+      "passed": true
+    },
+    {
+      "name": "20261002020000_menu_draft_visibility.sql",
+      "sha256": "61e23bb684581f8435cb51eaf4e471ceab7b32abc76608451c98935350dd01a8",
+      "passed": true
+    },
+    {
+      "name": "20261002030000_ob_entry_helpers.sql",
+      "sha256": "752157e5956595b187a077c67fd5925011ed433b45560b68eecff4853c0fc47a",
+      "passed": true
+    },
+    {
+      "name": "20261002040000_ob_duty_role_delete.sql",
+      "sha256": "a0264142ae33f132f8fed4b358d24059b5b5f5fc03a8612ba59f8eecaf18b677",
+      "passed": true
+    },
+    {
+      "name": "20261003010000_ob_program_access_registration.sql",
+      "sha256": "a62d749939ed74ec9450adc6ee4f0417d30a836bdcd28b22295a2ab536babe95",
+      "passed": true
+    },
+    {
+      "name": "20261004010000_ob_duty_resilience.sql",
+      "sha256": "49f9306634ca413125ca89b45bb4a3aa6f3356df6379fd9645bed6a887c9dd58",
+      "passed": true
+    },
+    {
+      "name": "20261004020000_ob_meet_day.sql",
+      "sha256": "1b25b419a403f9eb7e8025485996afdcb90d7d3c199b09cb9310e85297190d5d",
+      "passed": true
+    },
+    {
+      "name": "20261005010000_ob_member_recording.sql",
+      "sha256": "902337669d7f853604e0fe0b1f07da7b68f2bcc5631eaf2569fca7a429edee1f",
+      "passed": true
+    },
+    {
+      "name": "20261005010000_sheet_import_timeline_order.sql",
+      "sha256": "2ca32c7532b6be280c169fc51ff71e332ac8ebfa9b5d0962f0d39df92e07a4f6",
+      "passed": true
+    },
+    {
+      "name": "20261005020000_ob_staff_history.sql",
+      "sha256": "a292d5d728a7507ab740c9a5b3d94b26ea19bd7c8ade0c6782a290b16da6cf07",
+      "passed": true
+    },
+    {
+      "name": "20261006050000_ob_mixed_heats.sql",
+      "sha256": "feedefd842687aa40f8cb828e76dbbfd768c6171ca7c6f3278c69d699c060f8d",
+      "passed": true
+    },
+    {
+      "name": "20261007010000_ob_entry_details.sql",
+      "sha256": "f1c7a94fe98f4084bc32ed7bb9e7566e999e2ac192d610670bdc9bedc0dbaf24",
+      "passed": true
+    },
+    {
+      "name": "20261008010000_system_admin_note_visibility.sql",
+      "sha256": "3f46a91d8f1d085c2b0b89d27416934f589efa2487cb3a690cbbc8ff10f353fd",
+      "passed": true
+    },
+    {
+      "name": "20261010110000_ob_sheet_status.sql",
+      "sha256": "b0e79d99f7af881da8bce22fdcc3287550e8d0c8fe4ce3cf0689751d56fd8f66",
+      "passed": true
+    },
+    {
+      "name": "20261010130000_ob_sheet_edits.sql",
+      "sha256": "401d50598051ac5a08b0a8527c04c02d0bcc2beecdb30663ce17101a41756bb3",
+      "passed": true
+    },
+    {
+      "name": "20261011010000_login_email_allowlist.sql",
+      "sha256": "21d575e3f3c6bc56f23283281d2b5eb7abb1d28836073b499bc91360650856e9",
+      "passed": true
+    },
+    {
+      "name": "20261011030000_rpc_and_note_access.sql",
+      "sha256": "1fb8386399ff176ff78be94b659f759ec7b57cb3284633f51a7dd7efaa646f57",
+      "passed": true
+    },
+    {
+      "name": "20261011040000_role_profile_guards.sql",
+      "sha256": "7b3bc3e489b629b348ba14eb5dd389b9eb7cdaf026ebb1aca25100b5fca7c686",
+      "passed": true
+    },
+    {
+      "name": "20261011150000_confirmed_image_cleanup.sql",
+      "sha256": "67913e9a0ea016dbbdf5d6249b077f171add59e5b833458375d4f79b40cc14d3",
+      "passed": true
+    }
+  ],
+  "tests": [],
+  "cleanup": true,
+  "stage": "test:postgrest-api",
+  "authMigrations": "77",
+  "storageSourceSha256": "291f531a4f34b6e780590d804c2aab3fb5a2e363e7c9a4fa80826dff72e407d8",
+  "storageMigrations": 67,
+  "storageMigrationNames": [
+    "0001-initialmigration.sql",
+    "0002-storage-schema.sql",
+    "0003-pathtoken-column.sql",
+    "0004-add-migrations-rls.sql",
+    "0005-add-size-functions.sql",
+    "0006-change-column-name-in-get-size.sql",
+    "0007-add-rls-to-buckets.sql",
+    "0008-add-public-to-buckets.sql",
+    "0009-fix-search-function.sql",
+    "00010-search-files-search-function.sql",
+    "0011-add-trigger-to-auto-update-updated_at-column.sql",
+    "0012-add-automatic-avif-detection-flag.sql",
+    "0013-add-bucket-custom-limits.sql",
+    "0014-use-bytes-for-max-size.sql",
+    "0015-add-can-insert-object-function.sql",
+    "0016-add-version.sql",
+    "0017-drop-owner-foreign-key.sql",
+    "0018-add_owner_id_column_deprecate_owner.sql",
+    "0019-alter-default-value-objects-id.sql",
+    "0020-list-objects-with-delimiter.sql",
+    "0021-s3-multipart-uploads.sql",
+    "0022-s3-multipart-uploads-big-ints.sql",
+    "0023-optimize-search-function.sql",
+    "0024-operation-function.sql",
+    "0025-custom-metadata.sql",
+    "0026-objects-prefixes.sql",
+    "0027-search-v2.sql",
+    "0028-object-bucket-name-sorting.sql",
+    "0029-create-prefixes.sql",
+    "0030-update-object-levels.sql",
+    "0031-objects-level-index.sql",
+    "0032-backward-compatible-index-on-objects.sql",
+    "0033-backward-compatible-index-on-prefixes.sql",
+    "0034-optimize-search-function-v1.sql",
+    "0035-add-insert-trigger-prefixes.sql",
+    "0036-optimise-existing-functions.sql",
+    "0037-add-bucket-name-length-trigger.sql",
+    "0038-iceberg-catalog-flag-on-buckets.sql",
+    "0039-add-search-v2-sort-support.sql",
+    "0040-fix-prefix-race-conditions-optimized.sql",
+    "0041-add-object-level-update-trigger.sql",
+    "0042-rollback-prefix-triggers.sql",
+    "0043-fix-object-level.sql",
+    "0044-vector-bucket-type.sql",
+    "0045-vector-buckets.sql",
+    "0046-buckets-objects-grants.sql",
+    "0047-iceberg-table-metadata.sql",
+    "0048-iceberg-catalog-ids.sql",
+    "0049-buckets-objects-grants-postgres.sql",
+    "0050-search-v2-optimised.sql",
+    "0051-index-backward-compatible-search.sql",
+    "0052-drop-not-used-indexes-and-functions.sql",
+    "0053-drop-index-lower-name.sql",
+    "0054-drop-index-object-level.sql",
+    "0055-prevent-direct-deletes.sql",
+    "0056-fix-optimized-search-function.sql",
+    "0057-s3-multipart-uploads-metadata.sql",
+    "0058-operation-ergonomics.sql",
+    "0059-drop-unused-functions.sql",
+    "0060-optimize-existing-functions-again.sql",
+    "0061-mark-filename-immutable.sql",
+    "0062-object-versioning-core.sql",
+    "0063-fix-search-name-relative-to-prefix.sql",
+    "0064-fix-search-by-timestamp-sqli.sql",
+    "0065-objects-key-version-index.sql",
+    "0066-objects-current-version-index.sql",
+    "0067-objects-null-version-index.sql"
+  ],
+  "baseline": {
+    "auth_users": true,
+    "auth_uid": true,
+    "auth_jwt": true,
+    "storage_objects": true,
+    "cron_enabled": "off"
+  },
+  "imageMigrationReapply": true,
+  "apiProof": {
+    "version": 1,
+    "image": "postgrest/postgrest:v14.12",
+    "imageId": "sha256:54000f24847d01a2c2302e0041cf0618b875c57fb48507d743cfa9aaa50bf43c",
+    "realHttp": true,
+    "syntheticOnly": true,
+    "hostPorts": [],
+    "network": "internal",
+    "signingAlgorithms": [
+      "ES256",
+      "HS256"
+    ],
+    "ephemeralTestKeys": true,
+    "productionAccess": false,
+    "providerCalls": 0,
+    "cloudGoogleProved": false,
+    "checks": [
+      {
+        "name": "valid ES256 JWT and same Auth/profile UUID",
+        "passed": true,
+        "status": 200
+      },
+      {
+        "name": "valid HS256 JWT",
+        "passed": true,
+        "status": 200
+      },
+      {
+        "name": "wrong ES256 signature",
+        "passed": true,
+        "status": 401,
+        "code": "PGRST301"
+      },
+      {
+        "name": "wrong HS256 signature",
+        "passed": true,
+        "status": 401,
+        "code": "PGRST301"
+      },
+      {
+        "name": "expired signed token",
+        "passed": true,
+        "status": 401,
+        "code": "PGRST303"
+      },
+      {
+        "name": "future signed token",
+        "passed": true,
+        "status": 401,
+        "code": "PGRST303"
+      },
+      {
+        "name": "wrong JWT audience",
+        "passed": true,
+        "status": 401,
+        "code": "PGRST303"
+      },
+      {
+        "name": "modified subject and role invalidate signature",
+        "passed": true,
+        "status": 401,
+        "code": "PGRST301"
+      },
+      {
+        "name": "anonymous profile read denied",
+        "passed": true,
+        "status": 401,
+        "code": "42501"
+      },
+      {
+        "name": "unlisted external signed token denied",
+        "passed": true,
+        "status": 403,
+        "code": "PT403"
+      },
+      {
+        "name": "own ordinary profile edit commits exactly one row",
+        "passed": true,
+        "status": 200,
+        "rows": 1
+      },
+      {
+        "name": "signed subject overrides untrusted user metadata",
+        "passed": true,
+        "status": 200,
+        "rows": 0
+      },
+      {
+        "name": "ordinary profile privilege escalation denied",
+        "passed": true,
+        "status": 403,
+        "code": "42501"
+      },
+      {
+        "name": "own practice record uses verified subject",
+        "passed": true,
+        "status": 201,
+        "rows": 1
+      },
+      {
+        "name": "other-subject practice record rejected by RLS",
+        "passed": true,
+        "status": 403,
+        "code": "42501"
+      },
+      {
+        "name": "ordinary member has no member-management permission",
+        "passed": true,
+        "status": 200
+      },
+      {
+        "name": "multiple assigned roles combine permissions by OR",
+        "passed": true,
+        "status": 200
+      },
+      {
+        "name": "ordinary member cannot add allowed identities",
+        "passed": true,
+        "status": 403,
+        "code": "42501"
+      },
+      {
+        "name": "permitted manager can add exact allowed identity",
+        "passed": true,
+        "status": 201,
+        "rows": 1
+      },
+      {
+        "name": "private draft hidden from unrelated member",
+        "passed": true,
+        "status": 200,
+        "rows": 0
+      },
+      {
+        "name": "private draft readable by verified author",
+        "passed": true,
+        "status": 200,
+        "rows": 1
+      },
+      {
+        "name": "published note remains readable by member",
+        "passed": true,
+        "status": 200,
+        "rows": 1
+      },
+      {
+        "name": "authenticated token cannot execute service-only sync RPC",
+        "passed": true,
+        "status": 403,
+        "code": "42501"
+      },
+      {
+        "name": "signed service role retains private table read privilege",
+        "passed": true,
+        "status": 200
+      },
+      {
+        "name": "ordinary role cannot read private cleanup table",
+        "passed": true,
+        "status": 403,
+        "code": "42501"
+      },
+      {
+        "name": "approved member can call guarded avatar RPC",
+        "passed": true,
+        "status": 200
+      },
+      {
+        "name": "unapproved allowed identity rejected by avatar RPC",
+        "passed": true,
+        "status": 403,
+        "code": "42501"
+      },
+      {
+        "name": "manager revokes exact external identity",
+        "passed": true,
+        "status": 200,
+        "rows": 1
+      },
+      {
+        "name": "same existing JWT profile read rejected after revoke",
+        "passed": true,
+        "status": 403,
+        "code": "PT403"
+      },
+      {
+        "name": "same existing JWT ordinary save rejected after revoke",
+        "passed": true,
+        "status": 403,
+        "code": "PT403"
+      },
+      {
+        "name": "same existing JWT definer RPC rejected after revoke",
+        "passed": true,
+        "status": 403,
+        "code": "PT403"
+      },
+      {
+        "name": "revocation retains same UUID identity and prior saved profile",
+        "passed": true,
+        "retainedIdentities": 1
+      }
+    ],
+    "cleanup": true,
+    "readiness": {
+      "status": 200,
+      "message": ""
+    },
+    "success": true,
+    "resourceCleanup": {
+      "cleanup": true,
+      "inspected": 1,
+      "removed": 1,
+      "absent": 0
+    }
+  },
+  "apiDriverSha256": "9fc240df3c1bc56fab6f20677d9b7d70bacc65b0e652fcc3cfa49df790a6fd99",
+  "final": {
+    "auth_users": 0,
+    "profiles": 0,
+    "allowlist": 0,
+    "confirmed_images": 0,
+    "legacy_image_queue": 0,
+    "rls_tables": 62,
+    "cron_enabled": "off"
+  },
+  "success": true,
+  "resourceCleanup": {
+    "cleanup": true,
+    "inspected": 3,
+    "removed": 3,
+    "absent": 3
+  },
+  "cleanupDriverSha256": "0c8ddce0a82da2cb18c0cb9226d0f9e46fe4e7b5874d029fbe2e80ac26590983",
+  "completedAt": "2026-10-11T00:28:31.7592468Z"
+}
