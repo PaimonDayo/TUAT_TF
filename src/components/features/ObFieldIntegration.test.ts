@@ -19,6 +19,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("./useObOperationDraft", () => ({ useObOperationDraft: (...args: unknown[]) => { mocks.draftCall(...args); return mocks.draft; } }));
 vi.mock("./ObHeatEditor", () => ({ ObHeatEditor: (props: unknown) => { mocks.heatEditor(props); return null; } }));
 vi.mock("./ObDutyTable", () => ({ ObDutyTable: () => null }));
+vi.mock("./ObDayRegistration", () => ({ ObDayRegistration: () => null }));
 vi.mock("@/components/ui/form-modal", () => ({
   FormModal: ({ children, open }: { children: ReactNode; open: boolean }) => open ? createElement("div", {}, children) : null,
   FormModalFooter: ({ children }: { children: ReactNode }) => createElement("footer", {}, children),

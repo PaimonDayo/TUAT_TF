@@ -8,6 +8,7 @@ import type { ObEntry } from "@/lib/ob-entries";
 const mocks = vi.hoisted(() => ({ draft: {} as ReturnType<typeof useObOperationDraft>, guard: vi.fn(), board: vi.fn(), heatBoard: vi.fn(), fieldBoard: vi.fn(), familyDraft: vi.fn() }));
 vi.mock("./useObOperationDraft", () => ({ useObOperationDraft: () => mocks.draft }));
 vi.mock("./useObFamilyDraft", () => ({ useObFamilyDraft: mocks.familyDraft }));
+vi.mock("./ObDayRegistration", () => ({ ObDayRegistration: () => null }));
 vi.mock("@/components/ui/form-modal", () => ({
   FormModal: ({ children }: { children: ReactNode }) => createElement("div", {}, children),
   FormModalFooter: ({ children }: { children: ReactNode }) => createElement("footer", {}, children),

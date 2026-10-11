@@ -207,6 +207,7 @@ it("keeps system recording separate from helper or participant management", asyn
   const result = await workspace({ view: "operations", section: "duties" });
   expect(result).toMatchObject({ canOperate: true, staff: false });
   expect(find(result.children as ReactNode, "program")?.canEditDuties).toBe(false);
+  expect(find(result.children as ReactNode, "program")?.canRegister).toBe(false);
   expect(mock.roster).not.toHaveBeenCalled();
   const events = await workspace({ view: "operations" });
   expect(find(events.children as ReactNode, "day")).toMatchObject({ canRegister: false, canEditGroups: true });

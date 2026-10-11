@@ -19,8 +19,8 @@ import { type ObDuty, type ObDutyRole } from "@/lib/ob-duty";
 import { obResultRanks } from "@/lib/ob-result-ranking";
 
 /** One event opens the whole start list, including withdrawals and already recorded results. */
-export function ObPublicProgram({ entries, members, duties, roles, operations, view = "program", canEditDuties = false, canEditRecords = false }: {
-  view?: "program" | "duties"; canEditDuties?: boolean; canEditRecords?: boolean; entries: ObEntry[]; members: EntryMember[]; duties: ObDuty[]; roles: ObDutyRole[]; operations: ObEventOperation[];
+export function ObPublicProgram({ entries, members, duties, roles, operations, view = "program", canEditDuties = false, canEditRecords = false, canRegister = false }: {
+  view?: "program" | "duties"; canRegister?: boolean; canEditDuties?: boolean; canEditRecords?: boolean; entries: ObEntry[]; members: EntryMember[]; duties: ObDuty[]; roles: ObDutyRole[]; operations: ObEventOperation[];
 }) {
   const router = useRouter();
   const [record,setRecord]=useState<{event:string;entryId:string}>();
@@ -48,7 +48,7 @@ export function ObPublicProgram({ entries, members, duties, roles, operations, v
         }) : <div className="py-3 text-body">{slot.label}{slot.note && <p className="text-caption">{slot.note}</p>}</div>}</div>
       </div>)}
     </Card> : <ObDutyTable onRecord={canEditRecords?(event,entryId)=>setRecord({event,entryId}):undefined} integrated canEditDuties={canEditDuties} entries={entries} members={members} duties={duties} roles={roles} operations={currentOperations} onEvent={name=>setEvent(name.replace(/^(男子|女子)/,""))} />}
-    {record&&<ObEventOperationsEditor event={record.event} initialEntryId={record.entryId} entries={entries} initial={latest.get(record.event)} operations={operations} onSaved={saved=>{setLocal(current=>[...current.filter(op=>op.event_name!==saved.event_name),saved]);router.refresh();}} onClose={()=>setRecord(undefined)}/>}
+    {record&&<ObEventOperationsEditor event={record.event} initialEntryId={record.entryId} canRegister={canRegister} entries={entries} initial={latest.get(record.event)} operations={currentOperations} onSaved={saved=>{setLocal(current=>[...current.filter(op=>op.event_name!==saved.event_name),saved]);router.refresh();}} onClose={()=>setRecord(undefined)}/>}
     <FormModal open={event !== null} autoFocus={false} onOpenChange={open => { if (!open) setEvent(null); }} title={displayEvent(event ?? "")}>
       <div className="space-y-4">
         <p className="text-caption">{people.length}人・{field ? "試技順" : "組分け"}と記録</p>

@@ -45,7 +45,8 @@ export class MeetHeatPlan {
   reorder(group: number, slotOrders: number[], capacity?: number): MeetEventData {
     if (!Number.isInteger(group) || group < 1 || group > (this.limits.maxGroups ?? 99)) throw new Error("組を確認してください");
     if (capacity !== undefined) this.validCapacity(capacity);
-    const placed = this.data.participants.filter(p => p.group === group && p.order !== null);
+    const assigned = this.data.participants.filter(p => p.group === group && p.order !== null);
+    const placed = assigned.filter(p => p.status !== "DNS" || !assigned.some(other => other.status !== "DNS" && other.order === p.order));
     const occupied = new Set<number>();
     for (const person of placed) {
       if (occupied.has(person.order!)) throw new Error("番号が重複しています。名前を選んで別の枠へ移してから並べ替えてください");
@@ -71,6 +72,14 @@ export class MeetHeatPlan {
     if (ids.length !== 2) throw new Error("入れ替える2人を選んでください");
     const [a,b] = this.selected(ids);
     return this.result(new Map([[a.entryId,{group:b.group,order:b.order}],[b.entryId,{group:a.group,order:a.order}]]));
+  }
+  /** Reuse an explicitly selected DNS slot without erasing its original occupant. */
+  replaceDns(id: string, replacementId: string): MeetEventData {
+    const withdrawn = this.data.participants.find(p => p.entryId === id);
+    const [replacement] = this.selected([replacementId]);
+    if (!withdrawn || withdrawn.status !== "DNS" || withdrawn.group === null || withdrawn.order === null) throw new Error("DNSになった人の組・順番を確認してください");
+    if (this.data.participants.some(p => p.entryId !== id && p.entryId !== replacementId && p.status !== "DNS" && p.group === withdrawn.group && p.order === withdrawn.order)) throw new Error("この枠は別の人が使用しています。配置を確認してください");
+    return this.result(new Map([[replacement.entryId, { group: withdrawn.group, order: withdrawn.order }]]));
   }
   setDns(id: string, dns: boolean): MeetEventData {
     const person = this.data.participants.find(p => p.entryId === id);

@@ -6,6 +6,22 @@ const b={...emptyPerformance("b"),group:2,order:2};
 const c=emptyPerformance("c");
 const data:MeetEventData={participants:[a,b,c],confirmed:false};
 const plan=(d=data)=>new MeetHeatPlan(d,new Set(d.participants.filter(p=>p.entryId!=="old").map(p=>p.entryId)));
+it("reuses a DNS lane explicitly while retaining DNS, trials and safe reinstatement",()=>{
+ const dns={...a,entryId:"dns",status:"DNS" as const};
+ const original={...data,participants:[dns,b,c]};
+ const next=plan(original).replaceDns("dns","c");
+ expect(next.participants[0]).toBe(dns);
+ expect(next.participants[1]).toBe(b);
+ expect(next.participants[2]).toEqual({...c,group:1,order:1});
+ expect(new MeetEvent({name:"100m",discipline:"track",wind:true},next).validate()).toBeNull();
+ expect(()=>plan(next).setDns("dns",false)).toThrow("別の人が使用しています");
+ expect(()=>plan(next).replaceDns("dns","b")).toThrow("別の人が使用しています");
+ expect(()=>plan(original).replaceDns("b","c")).toThrow("DNSになった人");
+ const reordered=plan(next).reorder(1,[2,1],2);
+ expect(reordered.participants[0]).toBe(dns);
+ expect(reordered.participants[2].order).toBe(2);
+ expect(plan(reordered).setDns("dns",false).participants[0].status).toBe("entered");
+});
 it("moves several people to the end without an eight-person limit or lost results",()=>{
  const crowd=Array.from({length:25},(_,i)=>({...emptyPerformance("p"+i),group:1,order:i+1}));
  const next=plan({...data,participants:[...crowd,a,b,c]}).move(["b","c"],1);

@@ -30,7 +30,7 @@ export function MeetHeatBoard({ data, entrants, orderLabel, capacity, disabled, 
   const ids = selected.filter(id => present.some(person => person.entryId === id));
   const unplacedInactive = data.participants.filter(person => (!eligible.has(person.entryId) || person.status !== "entered") && (person.group === null || person.order === null));
   const positions = new Map<string, number>();
-  for (const person of data.participants) if (person.group !== null && person.order !== null) {
+  for (const person of data.participants) if (person.status !== "DNS" && person.group !== null && person.order !== null) {
     const position = `${person.group}:${person.order}`;
     positions.set(position, (positions.get(position) ?? 0) + 1);
   }
@@ -63,15 +63,16 @@ export function MeetHeatBoard({ data, entrants, orderLabel, capacity, disabled, 
     const assigned = data.participants.filter(person => person.group === group && person.order !== null);
     const span = capacity ?? Math.max(1, ...assigned.map(person => person.order!));
     const slots: HeatSlot[] = Array.from({ length: span }, (_, index) => {
-      const order = index + 1, person = assigned.find(person => person.order === order);
+      const order = index + 1, person = assigned.find(person => person.order === order && person.status !== "DNS") ?? assigned.find(person => person.order === order);
       return { id: `${group}:${order}`, order, person, locked: !!person && (!eligible.has(person.entryId) || person.status !== "entered") };
     });
-    const extra = assigned.filter((person, index) => person.order! > span || assigned.findIndex(other => other.order === person.order) !== index);
+    const shown = new Set(slots.flatMap(slot => slot.person ? [slot.person.entryId] : []));
+    const extra = assigned.filter(person => !shown.has(person.entryId));
     const duplicate = assigned.some(person => (positions.get(`${group}:${person.order}`) ?? 0) > 1);
     return <section key={group} id={`${anchor}-${group}`} aria-label={groupLabel(group)} className="min-w-0 scroll-mt-3 overflow-hidden rounded-xl border border-separator bg-card">
       <h3 className="flex items-center justify-between gap-2 bg-bg px-3 py-3 text-headline"><span>{groupLabel(group)} <span className="text-caption">{present.filter(person => person.group === group && person.order !== null).length}人{capacity ? ` / ${capacity}枠` : ""}</span></span><span className="text-caption">{orderLabel}</span></h3>
       <ReorderList items={slots} enabled={!disabled && !duplicate} isItemDisabled={slot => slot.locked} getDragLabel={slot => `${groupLabel(group)}${slot.order}${orderLabel}の${slot.person ? labelledName(slot.person.entryId) : "空き枠"}をスライドして並べ替え`} onReorder={next => change(() => model.reorder(group, next.filter(slot => !slot.locked).map(slot => slot.order), capacity), `${groupLabel(group)}の順番を変更しました`)} renderItem={slot => slot.person ? row(slot.person) : <div aria-label={`${groupLabel(group)}${slot.order}${orderLabel}の空き枠`} className="flex min-h-16 items-center gap-2 border-b border-separator bg-card p-2"><span className="h-5 w-5 shrink-0"/><span className="w-5 shrink-0 text-center text-body tabular-nums">{slot.order}</span><span className="text-body text-muted2">空き</span></div>}/>
-      {!!extra.length && <div className="border-t border-separator p-2"><p className="px-2 py-2 text-caption">保存済みの範囲外・重複した配置</p>{extra.map(person => <div key={person.entryId}>{row(person)}</div>)}</div>}
+      {!!extra.length && <div className="border-t border-separator p-2"><p className="px-2 py-2 text-caption">DNS・保存済みの配置</p>{extra.map(person => <div key={person.entryId}>{row(person)}</div>)}</div>}
     </section>;
   }
   return <div className="space-y-4">
