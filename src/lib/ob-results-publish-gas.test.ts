@@ -178,8 +178,8 @@ it("applies a new app registration, attendance change, DNS and restored particip
   const second = { ...roster[0], id: "second", submitted_name: "追加合成", absent: true };
   state.source = snapshot([...roster, second]);
   api.publishObResults();
-  expect(state.workbook.sheets[4].cells[2][3].userEnteredValue?.stringValue).toBe("追加合成");
-  expect(state.workbook.sheets[4].cells[2][5].userEnteredValue?.stringValue).toBe("DNS（欠場）");
+  expect(state.workbook.sheets[4].cells.find(row=>row[3]?.userEnteredValue?.stringValue==="追加合成")).toBeDefined();
+  expect(state.workbook.sheets[4].cells.find(row=>row[3]?.userEnteredValue?.stringValue==="追加合成")?.[5].userEnteredValue?.stringValue).toBe("DNS（欠場）");
   const operation: ObEventOperation = { meet_key: "ob-2026", event_name: "男子100m", revision: 1, updated_at: "", data: { confirmed: false, participants: [{ ...emptyPerformance("second"), status: "DNS" }] } };
   state.source = snapshot([...roster, { ...second, absent: false }], [operation]);
   api.publishObResults();

@@ -45,6 +45,7 @@ BEGIN
  SELECT jsonb_build_object('confirmed',false,'participants',jsonb_agg(CASE WHEN p->>'entryId'=e::text||':2' THEN jsonb_set(p,'{trials}',jsonb_build_array(jsonb_build_object('mark','4:20.00','wind','','status','valid'))) ELSE p END ORDER BY n)) INTO draft FROM jsonb_array_elements(op.data->'participants') WITH ORDINALITY rows(p,n);
  saved:=public.save_ob_event_operation_checked(event,op.revision,draft,op.data);
  IF (SELECT value FROM jsonb_array_elements(saved->'data'->'participants') p WHERE value->>'entryId'=e::text) IS DISTINCT FROM before_person THEN RAISE EXCEPTION 'first overwritten'; END IF;
+ SELECT value INTO released_position FROM jsonb_array_elements(saved->'data'->'participants') p WHERE value->>'entryId'=e::text||':2';
  -- Cancellation preserves both historical performances and restores without duplication.
  PERFORM public.save_ob_entry(e,NULL,rev,ARRAY[event],'{}');
  SELECT * INTO op FROM public.ob_event_operations WHERE meet_key='ob-2026' AND event_name=event;
@@ -54,6 +55,8 @@ BEGIN
  SELECT * INTO op FROM public.ob_event_operations WHERE meet_key='ob-2026' AND event_name=event;
  saved:=public.save_ob_event_operation_checked(event,op.revision,op.data,NULL);
  IF (SELECT count(*) FROM jsonb_array_elements(saved->'data'->'participants') p WHERE p->>'entryId' IN (e::text,e::text||':2'))<>2 THEN RAISE EXCEPTION 'restore duplicated'; END IF;
+ SELECT jsonb_build_object('confirmed',false,'participants',jsonb_agg(CASE WHEN p->>'entryId'=e::text||':2' THEN released_position ELSE p END ORDER BY n)) INTO draft FROM jsonb_array_elements(saved->'data'->'participants') WITH ORDINALITY rows(p,n);
+ saved:=public.save_ob_event_operation_checked(event,(saved->>'revision')::integer,draft,NULL);
  -- General members can register/edit two own appearances; no role expansion.
  PERFORM set_config('request.jwt.claim.sub',member::text,true);
  PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',member,'role','authenticated')::text,true);

@@ -227,7 +227,7 @@ it("unchanged absent or withdrawn saved results do not prevent an eligible sibli
   expect(render(initial, roster).blocked).toEqual([]);
   await render(initial, roster).save();
   expect(mocks.write).toHaveBeenCalledTimes(1);
-  expect((mocks.write.mock.calls[0][0] as Attempt).operations[0].data).toEqual(initial[0].data);
+  expect((mocks.write.mock.calls[0][0] as Attempt).operations[0].data).toEqual({...initial[0].data,participants:initial[0].data.participants.map(p=>({...p,status:"DNS",group:null,order:null}))});
 });
 
 it("prevents duplicate writes and edits while the atomic request is in flight", async () => {

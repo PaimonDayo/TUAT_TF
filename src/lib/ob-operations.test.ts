@@ -30,7 +30,7 @@ describe("effective competition participation", () => {
   it("separates whole-meet absence from explicit event DNS and restores attendance without changing DNS", () => {
     const performance = emptyPerformance(entry.id);
     expect(effectiveObParticipation("男子1500m", entry, performance)).toMatchObject({ status: "entered", canParticipate: true, recorded: false });
-    expect(effectiveObParticipation("男子1500m", { ...entry, absent: true }, performance)).toMatchObject({ status: "absent", canParticipate: false });
+    expect(effectiveObParticipation("男子1500m", { ...entry, absent: true }, performance)).toMatchObject({ status: "DNS", canParticipate: false });
     const dns = { ...performance, status: "DNS" as const };
     expect(effectiveObParticipation("男子1500m", { ...entry, absent: false }, dns)).toMatchObject({ status: "DNS", canParticipate: false });
     expect(hasRecordedObPerformance(dns)).toBe(false);
@@ -42,8 +42,8 @@ describe("effective competition participation", () => {
     const before = JSON.stringify([entry, saved]);
     for (const person of [{ ...entry, absent: true }, { ...entry, events: [] }]) {
       const state = effectiveObParticipation("男子1500m", person, performance);
-      expect(state).toMatchObject({ status: "entered", recorded: true, canParticipate: false });
-      expect(reconcileObEvent("男子1500m", [person], saved)).toEqual(saved);
+      expect(state).toMatchObject({ status: "DNS", recorded: true, canParticipate: false });
+      expect(reconcileObEvent("男子1500m", [person], saved)).toEqual({...saved,participants:[{...performance,status:"DNS",group:null,order:null}]});
       expect(obEventParticipants("男子1500m", [person], saved)).toHaveLength(1);
     }
     expect(hasRecordedObPerformance({ ...performance, trials: [{ mark: "", status: "foul", wind: "" }] })).toBe(true);
@@ -51,17 +51,17 @@ describe("effective competition participation", () => {
     expect(JSON.stringify([entry, saved])).toBe(before);
   });
 
-  it("keeps original unrecorded statuses, positions and registration data while showing absence/cancellation", () => {
+  it("unifies absence/cancellation as DNS while retaining trials and registration", () => {
     const performance = { ...emptyPerformance(entry.id), group: 2, order: 3 };
     const saved: MeetEventData = { confirmed: true, participants: [performance] };
     const absent = { ...entry, absent: true };
     const reconciled = reconcileObEvent("男子1500m", [absent], saved);
-    expect(reconciled).toEqual(saved);
-    expect(reconciled.participants[0]).toBe(performance);
+    expect(reconciled).toEqual({...saved,participants:[{...performance,status:"DNS",group:null,order:null}]});
+    expect(reconciled.participants[0].trials).toBe(performance.trials);
     expect(absent.events).toEqual(["男子1500m"]);
     expect(reconcileObEvent("男子1500m", [entry], saved).confirmed).toBe(false);
-    expect(effectiveObParticipation("男子1500m", { ...entry, events: [] }, performance).status).toBe("withdrawn");
-    expect(effectiveObParticipation("男子1500m", undefined, performance).status).toBe("missing");
+    expect(effectiveObParticipation("男子1500m", { ...entry, events: [] }, performance).status).toBe("DNS");
+    expect(effectiveObParticipation("男子1500m", undefined, performance).status).toBe("DNS");
   });
 
   it("adds new entries once while retaining removed registrations and unknown saved participants", () => {
@@ -69,7 +69,7 @@ describe("effective competition participation", () => {
     const saved = { participants: [old], confirmed: true };
     const rows = obEventParticipants("男子1500m", [entry], saved);
     expect(rows.map(row => row.entryId)).toEqual(["old", "e"]);
-    expect(rows[0].state.status).toBe("missing");
+    expect(rows[0].state.status).toBe("DNS");
     expect(reconcileObEvent("男子1500m", [entry], saved).confirmed).toBe(false);
     expect(obEventParticipants("男子1500m", [entry], { participants: [emptyPerformance("e")], confirmed: false })).toHaveLength(1);
   });

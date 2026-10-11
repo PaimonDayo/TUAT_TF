@@ -60,7 +60,7 @@ function familyFieldContext(value: unknown, event: string): { projection: ObMixe
     operations.push({ event_name: source.event_name as string, meet_key: "ob-2026", revision: 0, updated_at: "", data: { participants: people, confirmed: false } });
   }
   try {
-    const projection = projectObMixedEvent(family, [], operations);
+    const projection = projectObMixedEvent(family, [], operations, "history");
     return { projection, numbers: obMixedFieldNumbers(projection) };
   } catch { return null; }
 }
@@ -121,7 +121,7 @@ export function describeObOperationChange(change: ObOperationChange, names: Map<
     categories.add(category); details.push({ label, before: previous, after: next, ...(subject ? { subject } : {}) });
   };
   const placement = (value: unknown) => typeof value === "number" ? String(value) : "未割当";
-  const status = (value: unknown) => ({ entered: "出場", DNS: "DNS（欠場）", DNF: "DNF（途中棄権）", DQ: "DQ（失格）" }[String(value)] ?? "未登録");
+  const status = (value: unknown) => ({ entered: "出場", DNS: "DNS", DNF: "DNF（途中棄権）", DQ: "DQ（失格）" }[String(value)] ?? "未登録");
   const trialStatus = (value: unknown) => ({ pending: "未記録", valid: "成功", foul: "失敗", pass: "パス" }[String(value)] ?? "試技なし");
   const validScope = (value: unknown): value is "男子" | "女子" | "混合" => value === "男子" || value === "女子" || value === "混合";
   const scope = (person?: Record<string, unknown>) => validScope(person?.heatScope) ? person.heatScope : change.event_name.startsWith("女子") ? "女子" : "男子";

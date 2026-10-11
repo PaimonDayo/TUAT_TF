@@ -8,6 +8,10 @@ import type { ObEventOperation } from "./ob-operations";
 import type { XlsxSheet } from "./xlsx-writer";
 
 export const OB_SHEET_STATUSES = { "出場": "entered", "DNS（欠場）": "DNS", "DNF（途中棄権）": "DNF", "DQ（失格）": "DQ" } as const;
+/** Accept older sheet labels while presenting one DNS choice. */
+export function obSheetStatusLabel(value: unknown): unknown {
+  return typeof value === "string" && ["DNS", "欠席", "欠場", "出場取消", "登録解除"].includes(value) ? "DNS（欠場）" : value;
+}
 export type ObSheetStatusTarget = { entryId: string; event: string; entryRevision: number; operationRevision: number | null };
 
 export function signObSheetTarget(target: ObSheetStatusTarget, secret: string) {

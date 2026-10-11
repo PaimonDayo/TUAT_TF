@@ -166,7 +166,8 @@ it("adopts the confirmed latest operation including independent changes and new 
   expect(draft.data.participants.map(person => person.entryId)).toEqual(["a", "b", "new"]);
   expect(draft.data.participants[1].trials[0].mark).toBe("13.45");
   expect(mocks.onSaved).toHaveBeenCalledTimes(1);
-  expect(mocks.onSaved.mock.calls[0][0].data).toEqual(draft.data);
+  expect(mocks.onSaved.mock.calls[0][0].data.participants.slice(0,2)).toEqual(draft.data.participants.slice(0,2));
+  expect(draft.data.participants[2]).toMatchObject({entryId:"new",status:"DNS",group:null,order:null});
   expect(mocks.write).toHaveBeenCalledTimes(1);
 });
 

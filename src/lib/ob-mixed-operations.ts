@@ -45,7 +45,7 @@ export function nextMixedGroup(groups: Iterable<number>): number | null {
 }
 
 /** Composite identities keep historical appearances in both source divisions visible. */
-export function projectObMixedEvent(family: string, entries: ObEntry[], operations: ObEventOperation[]): ObMixedProjection {
+export function projectObMixedEvent(family: string, entries: ObEntry[], operations: ObEventOperation[], source: "roster" | "saved" | "history" = "roster"): ObMixedProjection {
   family = family.replace(/^(男子|女子)/, "");
   const participants: MeetPerformance[] = [], entrants: ObMixedEntrant[] = [];
   const sourceById = new Map<string, ObMixedSource>(), originalByEvent = new Map<string, ObMixedInput>();
@@ -54,7 +54,11 @@ export function projectObMixedEvent(family: string, entries: ObEntry[], operatio
     const saved = operations.filter(operation => operation.event_name === event && operation.meet_key === "ob-2026")
       .reduce<ObEventOperation | undefined>((latest, operation) => !latest || latest.revision < operation.revision ? operation : latest, undefined);
     const baseData = saved?.data ?? { participants: [], confirmed: false };
-    const rows = obEventParticipants(event, entries, saved?.data);
+    // Home summaries and immutable audit snapshots deliberately have no registration roster.
+    const rows = source === "roster" ? obEventParticipants(event, entries, saved?.data) : (saved?.data.participants ?? []).map(p => {
+      const performance = source === "saved" && p.status === "DNS" ? withoutMeetPlacement(p) : p;
+      return { entryId: p.entryId, entry: undefined, performance, state: effectiveObParticipation(event, undefined, performance) };
+    });
     originalByEvent.set(event, { event, data: { participants: rows.map(row => row.performance), confirmed: baseData.confirmed }, baseData, revision: saved?.revision ?? null });
     for (const row of rows) {
       const id = `${event}:${row.entryId}`;
@@ -112,9 +116,9 @@ export function obMixedFieldNumbers(projection: Pick<ObMixedProjection, "data">)
 }
 
 /** One event's whole start list in program order, including withdrawals and already recorded results. */
-export function obFamilyRows(family: string, entries: ObEntry[], operations: ObEventOperation[]) {
+export function obFamilyRows(family: string, entries: ObEntry[], operations: ObEventOperation[], source: "roster" | "saved" = "roster") {
   const field = obEventRule(family).discipline !== "track";
-  const projection = projectObMixedEvent(family, entries, operations);
+  const projection = projectObMixedEvent(family, entries, operations, source);
   const numbers = field ? obMixedFieldNumbers(projection) : new Map<string, number | null>();
   return [...projection.data.participants].sort((a, b) => field
     ? (numbers.get(a.entryId) ?? 601) - (numbers.get(b.entryId) ?? 601)

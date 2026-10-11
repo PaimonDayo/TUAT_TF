@@ -74,7 +74,7 @@ it("preserves historical appearances for the same entry in both source events an
   expect(view.data.participants).toHaveLength(2);
   expect(view.entrants.map(p => [p.id, p.division, p.eligible])).toEqual([[male + ":same", "男子", false], [female + ":same", "女子", true]]);
   const split = splitObMixedEvent(view, view.data);
-  expect(split[0].data.participants[0]).toBe(old); expect(split[1].data.participants[0]).toBe(current);
+  expect(split[0].data.participants[0]).toEqual({...old,status:"DNS",group:null,order:null}); expect(split[1].data.participants[0]).toBe(current);
   expect(view.sourceById.get(male + ":same")).toMatchObject({ event: male, entryId: "same", division: "男子" });
 });
 
@@ -84,9 +84,9 @@ it("releases DNS while preserving absent, withdrawn and missing history across s
   const eligible = new Set(view.entrants.filter(p => p.eligible && !p.absent).map(p => p.id));
   const next = new MeetHeatPlan(view.data, eligible, obMixedLimits).move([male + ":a"], 199, 8);
   const split = splitObMixedEvent(view, next);
-  expect(split[1].data.participants).toEqual([{...dns,group:null,order:null}, absent, old, missing]);
+  expect(split[1].data.participants).toEqual([dns,absent,old,missing].map(p=>({...p,status:"DNS",group:null,order:null})));
   expect(split[1].data.participants[0].trials).toBe(dns.trials);
-  split[1].data.participants.slice(1).forEach((p, i) => expect(p).toBe([absent, old, missing][i]));
+  split[1].data.participants.slice(1).forEach((p, i) => expect(p.trials).toBe([absent, old, missing][i].trials));
   expect(split[1].data.confirmed).toBe(true);
   expect(view.entrants.find(p => p.id === female + ":missing")?.division).toBe("女子");
 });

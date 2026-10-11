@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { timingSafeEqualString } from "@/lib/timing-safe";
 import { obResultsStatusToken } from "@/lib/ob-results-feed-auth";
-import { OB_SHEET_STATUSES, readObSheetTarget } from "@/lib/ob-sheet-status";
+import { OB_SHEET_STATUSES, obSheetStatusLabel, readObSheetTarget } from "@/lib/ob-sheet-status";
 import { OB_PROGRAM_PATH } from "@/lib/ob-meet";
 import type { Json } from "@/types/database";
 import { operationClient } from "@/lib/ob-operations-db";
@@ -27,6 +27,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "変更内容を確認してください" }, { status: 400, headers });
     }
     const changes = input.changes.map((change: { token?: unknown; status?: unknown }) => {
+      if (change) change.status = obSheetStatusLabel(change.status);
       const target = readObSheetTarget(change?.token, secret);
       if (!target || typeof change.status !== "string" || !Object.hasOwn(OB_SHEET_STATUSES, change.status)) throw new Error("invalid");
       return { ...target, status: OB_SHEET_STATUSES[change.status as keyof typeof OB_SHEET_STATUSES] };

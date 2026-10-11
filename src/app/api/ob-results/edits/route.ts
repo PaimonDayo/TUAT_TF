@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { timingSafeEqualString } from "@/lib/timing-safe";
 import { obResultsStatusToken } from "@/lib/ob-results-feed-auth";
-import { OB_SHEET_STATUSES, readObSheetTarget } from "@/lib/ob-sheet-status";
+import { OB_SHEET_STATUSES, obSheetStatusLabel, readObSheetTarget } from "@/lib/ob-sheet-status";
 import { readObEditContext, OB_EDIT_EVENTS, OB_EDIT_GRADES } from "@/lib/ob-sheet-edits";
 import { OB_PROGRAM_PATH } from "@/lib/ob-meet";
 import { operationClient } from "@/lib/ob-operations-db";
@@ -20,6 +20,8 @@ export async function POST(request: Request) {
     input = JSON.parse(text); context = readObEditContext(input.context, secret);
     if (!context || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.requestId) || typeof input.dryRun !== "boolean" || !Array.isArray(input.changes) || !input.changes.length || input.changes.length > 600) throw Error();
     changes = input.changes.map((raw: Record<string, unknown>) => {
+      if (!raw || typeof raw !== "object") throw Error();
+      raw.status = obSheetStatusLabel(raw.status);
       if (raw.token) {
         const target = readObSheetTarget(raw.token, secret);
         if (!target || typeof raw.status !== "string" || !Object.hasOwn(OB_SHEET_STATUSES, raw.status)) throw Error();

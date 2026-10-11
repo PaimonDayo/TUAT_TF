@@ -4,7 +4,7 @@ import type { EntryMember } from "./entry-identity";
 import { emptyPerformance, withoutMeetPlacement, type MeetEventData, type MeetEventRule, type MeetPerformance } from "./meet-operations";
 
 export type ObEventOperation = { meet_key: string; event_name: string; revision: number; data: MeetEventData; updated_at: string };
-export type ObParticipationStatus = MeetPerformance["status"] | "absent" | "withdrawn" | "missing";
+export type ObParticipationStatus = MeetPerformance["status"];
 
 /** Editable lane frames; existing saved positions outside them remain visible. */
 export function obHeatCapacity(event: string): 8 | 6 | undefined {
@@ -24,14 +24,14 @@ export function obDutyCompetitionEvents(entry: (Pick<ObEntry, "events"> & Partia
   return [...new Set([...(entry?.events ?? []), ...recorded])];
 }
 
-/** Keep registration, meet attendance and event results independent; never rewrite the source entry. */
+/** Every unavailable appearance is DNS; saved trials and source registration remain separate. */
 export function effectiveObParticipation(event: string, entry?: Pick<ObEntry, "events" | "absent">, performance?: MeetPerformance) {
   const registered = !!entry && obEventCount(entry.events, event) >= obAppearanceNumber(performance?.entryId ?? "");
   const absent = entry?.absent === true;
   const recorded = hasRecordedObPerformance(performance);
-  const status: ObParticipationStatus = recorded ? performance!.status : !entry ? "missing" : absent ? "absent" : !registered ? "withdrawn" : performance?.status ?? "entered";
-  const label = status === "entered" ? recorded ? "記録あり" : "出場" : status === "absent" ? "欠席" : status === "withdrawn" ? "DNS（欠場）" : status === "missing" ? "参加情報なし" : status === "DNS" ? "DNS（欠場）" : status;
-  return { status, label, registered, absent, recorded, canParticipate: registered && !absent && (!performance || performance.status === "entered") };
+  const status: ObParticipationStatus = !registered || absent ? "DNS" : performance?.status ?? "entered";
+  const label = status === "entered" ? recorded ? "記録あり" : "出場" : status;
+  return { status, label, registered, absent, recorded, canParticipate: status === "entered" };
 }
 
 /** Saved participants remain visible after a registration is removed, including their original results. */
@@ -44,8 +44,9 @@ export function obEventParticipants(event: string, entries: ObEntry[], saved?: M
     }
   }
   return participants.map(saved => {
-    const performance = saved.status === "DNS" ? withoutMeetPlacement(saved) : saved;
-    const entry = entries.find(entry => entry.id === obAppearanceEntryId(performance.entryId));
+    const entry = entries.find(entry => entry.id === obAppearanceEntryId(saved.entryId));
+    const unavailable = effectiveObParticipation(event, entry, saved).status === "DNS";
+    const performance = unavailable ? withoutMeetPlacement(saved.status === "DNS" ? saved : { ...saved, status: "DNS" }) : saved;
     return { entryId: performance.entryId, entry, performance, state: effectiveObParticipation(event, entry, performance) };
   });
 }

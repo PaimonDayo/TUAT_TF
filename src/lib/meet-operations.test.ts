@@ -48,7 +48,7 @@ it('includes alumni but never exposes them as linked duty candidates',()=>{
 });
 it('retains withdrawn entrants records when reconciling new registrations',()=>{
   const old=person('old');const data=reconcileObEvent('男子100m',[entry('new')],{confirmed:false,participants:[old]});
-  expect(data.participants).toEqual([old,emptyPerformance('new')]);
+  expect(data.participants).toEqual([{...old,status:'DNS',group:null,order:null},emptyPerformance('new')]);
 });
 it("keeps generic order and participant limits while allowing OB order600 and separate physical scopes", () => {
   const a = { ...emptyPerformance("a"), group: 1, order: 600 };

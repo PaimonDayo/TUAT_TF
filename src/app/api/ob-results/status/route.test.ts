@@ -8,7 +8,7 @@ import { signObSheetTarget } from "@/lib/ob-sheet-status";
 const secret = "synthetic-secret";
 const requestId = "00000000-0000-4000-8000-000000000001";
 const target = { entryId: "00000000-0000-4000-8000-000000000002", event: "男子100m", entryRevision: 2, operationRevision: 3 };
-const body = () => ({ requestId, dryRun: false, changes: [{ token: signObSheetTarget(target, secret), status: "DNS（欠場）" }] });
+const body = () => ({ requestId, dryRun: false, changes: [{ token: signObSheetTarget(target, secret), status: "DNS" }] });
 function request(input = body(), token = obResultsStatusToken(secret)) {
   return new Request("https://example.test/api/ob-results/status", { method: "POST", headers: { authorization: `Bearer ${token}` }, body: JSON.stringify(input) });
 }

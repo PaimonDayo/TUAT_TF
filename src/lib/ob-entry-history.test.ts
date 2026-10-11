@@ -66,7 +66,7 @@ describe("OB competition history", () => {
     expect(result.details).toEqual(expect.arrayContaining([
       { subject: "出場者", label: "組", before: "1", after: "2" },
       { subject: "出場者", label: "レーン", before: "2", after: "3" },
-      { subject: "出場者", label: "出場状況", before: "DNS（欠場）", after: "出場" },
+      { subject: "出場者", label: "出場状況", before: "DNS", after: "出場" },
       { subject: "出場者", label: "タイム", before: "12.0", after: "11.9" },
       { subject: "出場者", label: "記録の結果", before: "成功", after: "未記録" },
       { subject: "出場者", label: "記録の風速", before: "0.1", after: "0.2" },

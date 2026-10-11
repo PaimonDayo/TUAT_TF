@@ -35,7 +35,7 @@ export function MeetFieldOrderBoard({ data, entrants, disabled, onChange, modelL
   function row(person: MeetPerformance, number: number | null) {
     const entry = people.get(person.entryId), name = entry?.name ?? "登録解除済み";
     const editable = active(person);
-    const reason = entry?.absent ? "大会欠席" : !entry?.eligible ? "DNS" : person.status === "DNS" ? "DNS" : person.status;
+    const reason = entry?.absent ? "DNS" : !entry?.eligible ? "DNS" : person.status === "DNS" ? "DNS" : person.status;
     const marks = person.trials.map((trial, index) => {
       const result = trial.status === "foul" ? "失敗" : trial.status === "pass" ? "パス" : "";
       return trial.mark || result ? `${index + 1}回目 ${trial.mark}${trial.wind ? `（風速 ${trial.wind}）` : ""}${result ? ` ${result}` : ""}` : "";
@@ -54,6 +54,6 @@ export function MeetFieldOrderBoard({ data, entrants, disabled, onChange, modelL
       <div role="list"><ReorderList items={rows} enabled={!disabled} isItemDisabled={item => item.locked} getDragLabel={item => `${item.number === null ? "順番未定" : `試技順${item.number}番`}の${labelledName(item.id)}をスライドして並べ替え`} onReorder={next => change(() => model.reorder(next.filter(item => !item.locked).map(item => item.id)), "試技順を変更しました")} renderItem={item => row(item.person, item.number)}/></div>
       {!rows.length && <p className="p-6 text-center text-body">出場予定の人はいません</p>}
     </section>
-    {!!unplacedInactive.length && <section aria-label="順番未定のDNS・欠席・出場取消" className="overflow-hidden rounded-xl border border-separator"><h3 className="bg-bg p-3 text-headline">DNS・欠席など <span className="text-caption">{unplacedInactive.length}人</span></h3><div role="list">{unplacedInactive.map(item => <div key={item.person.entryId}>{row(item.person, null)}</div>)}</div></section>}
+    {!!unplacedInactive.length && <section aria-label="順番未定のDNS" className="overflow-hidden rounded-xl border border-separator"><h3 className="bg-bg p-3 text-headline">DNS <span className="text-caption">{unplacedInactive.length}人</span></h3><div role="list">{unplacedInactive.map(item => <div key={item.person.entryId}>{row(item.person, null)}</div>)}</div></section>}
   </div>;
 }

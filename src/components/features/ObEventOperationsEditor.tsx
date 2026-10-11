@@ -5,7 +5,7 @@ import { FormModal, FormModalFooter, FormDraftGuard } from "@/components/ui/form
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MeetEvent, MeetMark, emptyTrial, withoutMeetPlacement, type MeetEventData, type MeetPerformance, type MeetTrial } from "@/lib/meet-operations";
-import { effectiveObParticipation, obEventRule, type ObEventOperation } from "@/lib/ob-operations";
+import { effectiveObParticipation, hasRecordedObPerformance, obEventRule, type ObEventOperation } from "@/lib/ob-operations";
 import { obAppearanceEntryId, obAppearanceName, type ObEntry } from "@/lib/ob-entries";
 import { MeetHeatPlan } from "@/lib/meet-heat-plan";
 import { fieldOrderRows } from "@/lib/meet-field-order";
@@ -16,7 +16,7 @@ import { formatObRecordInput } from "@/lib/ob-record-input";
 import { obResultRanks } from "@/lib/ob-result-ranking";
 import { ObDayRegistration } from "./ObDayRegistration";
 
-const statusLabels = { entered: "出場", DNS: "DNS（欠場）", DNF: "DNF（途中棄権）", DQ: "DQ（失格）" } as const;
+const statusLabels = { entered: "出場", DNS: "DNS", DNF: "DNF（途中棄権）", DQ: "DQ（失格）" } as const;
 export function ObEventOperationsEditor({ event, entries, initial, operations = [], onSaved, onClose, onAddEntry, canRegister = !!onAddEntry, initialEntryId }: { canRegister?: boolean; initialEntryId?: string; event: string; entries: ObEntry[]; initial?: ObEventOperation; operations?: ObEventOperation[]; onSaved: (saved: ObEventOperation) => void; onClose: () => void; onAddEntry?: (event: string) => void }) {
   const draft = useObOperationDraft(event, entries, initial, onSaved);
   const data = draft.data, rule = obEventRule(event), model = new MeetEvent(rule, data);
@@ -131,7 +131,7 @@ export function ObEventOperationsEditor({ event, entries, initial, operations = 
           </section>;
         })}</div>
       </> : <div className="grid min-w-0 items-start gap-4 md:grid-cols-[minmax(200px,1fr)_minmax(0,3fr)]">
-        <div className="overflow-hidden rounded-xl border border-separator"><h3 className="bg-bg p-3 text-headline">試技順</h3><div className="max-h-52 overflow-y-auto md:max-h-[calc(100dvh-240px)]">{visible.map(p => <button key={p.entryId} className={`flex min-h-14 w-full items-center justify-between gap-2 border-b border-separator p-3 text-left last:border-0 ${p.entryId === person?.entryId ? "bg-accent/10" : "bg-card"}`} aria-pressed={p.entryId === person?.entryId} onClick={() => setPersonId(p.entryId)}><span className="min-w-0"><span className="block break-words text-body">{people.get(p.entryId)?.submitted_name ?? "登録解除済み"}</span><span className="block text-caption">{division} · {fieldPlacement(p)}{stateOf(p).absent || !stateOf(p).registered ? ` · ${stateOf(p).label}` : ""}</span></span><span className="shrink-0 text-caption tabular-nums">{model.best(p)}</span></button>)}</div></div>
+        <div className="overflow-hidden rounded-xl border border-separator"><h3 className="bg-bg p-3 text-headline">試技順</h3><div className="max-h-52 overflow-y-auto md:max-h-[calc(100dvh-240px)]">{visible.map(p => <button key={p.entryId} className={`flex min-h-14 w-full items-center justify-between gap-2 border-b border-separator p-3 text-left last:border-0 ${p.entryId === person?.entryId ? "bg-accent/10" : "bg-card"}`} aria-pressed={p.entryId === person?.entryId} onClick={() => setPersonId(p.entryId)}><span className="min-w-0"><span className="block break-words text-body">{people.get(p.entryId)?.submitted_name ?? "登録解除済み"}</span><span className="block text-caption">{division} · {fieldPlacement(p)}{stateOf(p).absent || !stateOf(p).registered ? ` · ${stateOf(p).label}` : ""}</span></span><span className="shrink-0 text-caption tabular-nums">{model.best(p)}{p.status === "DNS" && hasRecordedObPerformance(p) ? ` · 保存記録 ${model.best({ ...p, status: "entered" })}` : ""}</span></button>)}</div></div>
         {person && <section aria-label="選択した出場者の試技" className="min-w-0 space-y-4">
           <div className="flex gap-2">{([-1, 1] as const).map(direction => { const next = visible[visible.findIndex(p => p.entryId === person.entryId) + direction]; return <Button key={direction} size="sm" variant="outline" disabled={!next} onClick={() => next && setPersonId(next.entryId)}>{direction < 0 ? "前の出場者" : "次の出場者"}</Button>; })}</div>
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-title">{people.get(person.entryId)?.submitted_name ?? "登録解除済み"}</h3><p className="text-body">{division} · {fieldPlacement(person)} · ベスト {model.best(person)}{ranks.has(person.entryId) ? ` · ${ranks.get(person.entryId)}位` : ""}</p></div><div className="w-40">{statusControl(person)}</div></div>

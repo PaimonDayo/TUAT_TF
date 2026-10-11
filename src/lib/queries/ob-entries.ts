@@ -36,7 +36,7 @@ export async function getMyObParticipation(entryId: string) {
   const families = new Set(operations.filter(operation => operation.data.participants.some(person => obAppearanceEntryId(person.entryId) === entryId))
     .map(operation => operation.event_name.replace(/^(男子|女子)/, "")));
   // Field numbers require the whole saved order, including both divisions. Only personal summaries leave the server.
-  return [...families].flatMap(family => obFamilyRows(family, [], operations)
+  return [...families].flatMap(family => obFamilyRows(family, [], operations, "saved")
     .filter(row => obAppearanceEntryId(row.entryId) === entryId)
     .map(row => ({ event: row.eventName, ...(obAppearanceNumber(row.entryId) === 2 ? {occurrence:2} : {}), status: row.performance.status, placement: obFamilyPlacement(row) })));
 }

@@ -42,7 +42,7 @@ export function obResultSheet(family: string, entries: ObEntry[], operations: Ob
   const personWidths = [6, 18, 7, ...(published ? [18] : [])];
   const person = (row: Row): XlsxCell[] => [row.division, obAppearanceName(row.entry, row.eventName, row.entryId), row.entry?.grade ?? "",
     ...(published ? [publishedParticipation(row)] : [])];
-  const best = (row: Row) => row.state.recorded ? new MeetEvent(obEventRule(row.eventName), { participants: [row.performance], confirmed: false }).best(row.performance) : "";
+  const best = (row: Row) => row.state.recorded ? new MeetEvent(obEventRule(row.eventName), { participants: [row.performance], confirmed: false }).best(row.performance.status === "DNS" ? { ...row.performance, status: "entered" } : row.performance) : "";
   const name = obFamilyLabel(family);
   const ranks = new Map(["男子", "女子"].flatMap(division => [...obResultRanks(rule,
     rows.filter(row => row.division === division && row.state.canParticipate).map(row => row.performance))]));
@@ -89,13 +89,7 @@ export function obResultSheet(family: string, entries: ObEntry[], operations: Ob
 
 /** Meet attendance is separate from the event declaration; saved marks never disappear. */
 function publishedParticipation(row: Row): string {
-  if (!row.entry) return "参加情報なし";
-  if (!row.state.registered) return "DNS（欠場）";
-  if (row.performance.status === "DNS") return "DNS（欠場）";
-  if (row.performance.status === "DNF") return "DNF（途中棄権）";
-  if (row.performance.status === "DQ") return "DQ（失格）";
-  if (row.entry.absent && !row.state.recorded) return "DNS（欠場）";
-  return "出場";
+  return row.state.status === "entered" ? "出場" : row.state.status === "DNF" ? "DNF（途中棄権）" : row.state.status === "DQ" ? "DQ（失格）" : "DNS（欠場）";
 }
 
 /** High jump attempts are grouped under each bar height; unreadable heights stay as typed. */

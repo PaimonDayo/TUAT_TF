@@ -16,7 +16,7 @@ describe("live shared OB workbook", () => {
     expect(track.rows[0]).toEqual(["組", "レーン", "区分", "氏名", "学年", "出場状況", "記録", "順位"]);
     expect(track.rows.find(row => row.includes("合成三郎"))).toEqual(["組未定", null, "男子", "合成三郎", "B3", "DNS（欠場）", "", ""]);
     expect(track.rows.find(row => row.includes("合成四郎"))).toEqual([null, null, "男子", "合成四郎", "B4", "DNS（欠場）", "", ""]);
-    expect(track.rows.find(row => row.includes("合成五郎"))).toEqual(["男子2組", 1, "男子", "合成五郎", "M1", "DNS（欠場）", "11.90", ""]);
+    expect(track.rows.find(row => row.includes("合成五郎"))).toEqual([null, null, "男子", "合成五郎", "M1", "DNS（欠場）", "11.90", ""]);
     expect(track.rows).toContainEqual([]);
     for (const sheet of sheets) expect(sheet.widths).toHaveLength(sheet.rows[0].length);
     expect(sheets.flatMap(sheet => sheet.rows.flat())).not.toContain("11.80");
@@ -104,11 +104,10 @@ describe("OB results workbook", () => {
       ["男子1組", 3, "男子", "合成一郎", "B1", "12.34"],
       [null, 4, "男子", "合成八郎", "B2", ""],
       [],
-      ["男子2組", 1, "男子", "合成五郎", "M1", "11.90"],
-      [],
       ["混合1組", 4, "女子", "合成花子", "B2", "13.50"],
       [],
-      ["組未定", null, "男子", "合成六郎", "OB・OG", ""],
+      ["組未定", null, "男子", "合成五郎", "M1", "11.90"],
+      [null, null, "男子", "合成六郎", "OB・OG", ""],
     ]);
     const cells = sheets.flatMap(sheet => sheet.rows.flat());
     expect(cells).not.toContain("合成三郎"); // DNS
