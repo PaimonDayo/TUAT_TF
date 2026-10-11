@@ -184,9 +184,9 @@ BEGIN
   SELECT * INTO a FROM public.google_sheet_creation_attempts WHERE attempt_id = p_attempt_id AND profile_id = auth.uid() FOR UPDATE;
   -- Completed rows may have been legitimately edited/deleted; never revive or reset them.
   IF a.state = 'registered' AND a.setup_confirmed THEN RETURN public.google_sheet_creation_result(a, 'registered'); END IF;
-  IF EXISTS (SELECT 1 FROM public.schedule_sheets s WHERE s.id <> a.schedule_sheet_id AND
-    (s.sheet_url ~ ('^https://docs[.]google[.]com/spreadsheets/(u/[0-9]+/)?d/' || a.spreadsheet_id || '([/?#]|$)')
-      OR s.csv_url ~ ('^https://docs[.]google[.]com/spreadsheets/(u/[0-9]+/)?d/' || a.spreadsheet_id || '([/?#]|$)'))) THEN
+  IF EXISTS (SELECT 1 FROM public.schedule_sheets other_sheet WHERE other_sheet.id <> a.schedule_sheet_id AND
+    (other_sheet.sheet_url ~ ('^https://docs[.]google[.]com/spreadsheets/(u/[0-9]+/)?d/' || a.spreadsheet_id || '([/?#]|$)')
+      OR other_sheet.csv_url ~ ('^https://docs[.]google[.]com/spreadsheets/(u/[0-9]+/)?d/' || a.spreadsheet_id || '([/?#]|$)'))) THEN
     RAISE EXCEPTION 'Known creation resource already claimed' USING ERRCODE = '23514';
   END IF;
   SELECT * INTO s FROM public.schedule_sheets WHERE id = a.schedule_sheet_id FOR UPDATE;

@@ -9,6 +9,7 @@ import http from 'node:http';
 import { run } from './run.mjs';
 import { privateDirectory, sourceProof, buildHash, environmentHash, writeReceipt } from './release.mjs';
 import { createRuntimeManifest, hostGitPath } from './runtime-manifest.mjs';
+import { MIN_MAX_PAIR_BYTES } from '../pc-backup/config.mjs';
 
 async function unusedPort() {
   const server = http.createServer();
@@ -51,6 +52,8 @@ async function fixture(t) {
   const backupConfig = { version: 1, enabled: true, instanceId: config.expectedBackupInstanceId, stateDirectory: join(backupPrivate, 'state'), environmentFile: join(backupPrivate, 'backup.env'),
     wslExecutable: process.execPath, wslSha256: 'a'.repeat(64), dockerExecutable: '/usr/bin/docker', dockerSha256: 'b'.repeat(64), wslDistribution: 'synthetic', wslUser: 'synthetic',
     psqlExecutable: '/usr/bin/psql', pgDumpExecutable: '/usr/bin/pg_dump', pushEnvironmentFile: null,
+    capacity: { inventoryLimit: 100, maxLocalBytes: 4 * MIN_MAX_PAIR_BYTES, maxRemoteBytes: 4 * MIN_MAX_PAIR_BYTES,
+      minFreeLocalBytes: 1024, maxPairBytes: MIN_MAX_PAIR_BYTES, maxRequestCount: 64, maxTransferBytes: 8 * MIN_MAX_PAIR_BYTES },
     target: { containerId: 'c'.repeat(64), containerImageId: `sha256:${'d'.repeat(64)}`, databaseSystemIdentifier: config.expectedBackupDatabaseSystemIdentifier, databaseName: 'postgres',
       containerName: 'synthetic', composeProject: 'synthetic', composeService: 'db', dataMountSource: '/synthetic/data' } };
   writeFileSync(config.backupConfigFile, JSON.stringify(backupConfig), { mode: 0o600 });
