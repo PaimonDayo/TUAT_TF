@@ -1,4 +1,6 @@
 "use client";
+import { obAppearanceName } from "@/lib/ob-entries";
+
 
 import { useState } from "react";
 import { ChevronRight } from "lucide-react";
@@ -57,7 +59,7 @@ export function ObPublicProgram({ entries, members, duties, roles, operations, v
           const placement = obFamilyPlacement(row);
           return <li key={row.id} className={`flex flex-wrap items-center gap-x-4 gap-y-1 py-3 ${unavailable ? "text-muted" : ""}`}>
             <div className="w-28 shrink-0"><span className="block text-caption">{division}</span><span className="block text-caption">{placement}</span></div>
-            <div className="min-w-0 flex-1 basis-36"><p className="break-words text-body font-medium">{entry?.submitted_name ?? "参加情報なし"}<span className="ml-2 text-caption">{entry?.grade}</span></p>{entry?.qualification_marks[eventName] && !state.recorded && <p className="text-micro text-muted2">資格記録 {entry.qualification_marks[eventName]}</p>}</div>
+            <div className="min-w-0 flex-1 basis-36"><p className="break-words text-body font-medium">{obAppearanceName(entry, eventName, row.entryId)}<span className="ml-2 text-caption">{entry?.grade}</span></p>{entry?.qualification_marks[eventName] && !state.recorded && <p className="text-micro text-muted2">資格記録 {entry.qualification_marks[eventName]}</p>}</div>
             <div className="min-w-20 text-right">{ranks.has(performance.entryId)&&<p className="text-caption">{ranks.get(performance.entryId)}位</p>}<p className={`text-body ${unavailable ? "text-muted" : "font-semibold tabular-nums"}`}>{state.recorded ? result : state.status === "entered" ? "—" : state.label}</p>{state.recorded && (state.absent || !state.registered) && <p className="text-micro text-muted2">{state.absent ? "以降は欠席" : "DNS・記録保持"}</p>}</div>
           </li>;
         })}</ul> : <p className="text-caption">出場登録はありません。</p>}

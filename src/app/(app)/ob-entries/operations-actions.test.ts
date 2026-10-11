@@ -229,3 +229,8 @@ it("notifies only after a verified save, never a rejected or uncertain save",asy
  expect((await saveObEventOperation(input)).uncertain).toBe(true);
  expect(scheduleObResultsPublish).toHaveBeenCalledTimes(1);
 });
+
+it("accepts the second appearance returned from the same atomic day registration", async()=>{
+ mocks.roles.mockResolvedValue(new Map([["u",staff]])); mocks.rpc.mockResolvedValue({data:{entryId:entryId+":2",saved:stored()},error:null});
+ expect(await addObDayEntry(dayInput)).toMatchObject({ok:true,entryId:entryId+":2"});
+});

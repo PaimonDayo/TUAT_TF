@@ -17,7 +17,7 @@ import { Disclosure } from "@/components/ui/disclosure";
 import { OB_ENTRY_EVENTS, entryDivision, type EntryEdit } from "@/lib/ob-entry-edit";
 import { entryGrade, normalizeEntryName, type EntryMember } from "@/lib/entry-identity";
 import { OB_PARTY, OB_PROGRAM, PARTY_STATUSES, compareByGrade, obEventTime, type ObPartyResponse, type PartyEdit, type PartyStatus } from "@/lib/ob-meet";
-import { type ObEntry } from "@/lib/ob-entries";
+import { obEventCount, type ObEntry } from "@/lib/ob-entries";
 import { dutyRoleText, type ObDuty, type ObDutyRole } from "@/lib/ob-duty";
 import { entryDutyConflicts } from "@/lib/ob-duty-issues";
 
@@ -55,7 +55,7 @@ export function ObEntryEditor({ entry, members, initialProfileId = "", party, pa
   const locked = saving || unconfirmed;
   const gradeOptions: { value: string; label: string; disabled?: boolean }[] = [...GRADE_OPTIONS.map(g => ({ value: g.short, label: g.short })), { value: "OB・OG", label: "OB・OG" }];
   if (entry?.grade && !gradeOptions.some(option => option.value === entry.grade)) gradeOptions.unshift({ value: entry.grade, label: entry.grade, disabled: true });
-  const removed = entry?.events.filter((event) => !events.includes(event)) ?? [];
+  const removed = entry?.events.filter((event, index, original) => original.slice(0, index + 1).filter(value => value === event).length > obEventCount(events, event)) ?? [];
   const conflicts=(eventsChanged ? entryDutyConflicts(entry?.profile_id??entry?.id??profileId,events,duties) : []).map(duty=>({time:duty.slot_time,event:duty.event_name,assignment:dutyRoleText(duty,roles)}));
   const displayedConflicts=serverConflicts.length?serverConflicts:conflicts;
   async function save(confirmDuties = false) {
@@ -116,10 +116,11 @@ export function ObEntryEditor({ entry, members, initialProfileId = "", party, pa
       <p className="text-caption">本人の出場区分を確認してください。保存後は固定されます。</p>
     </div>}
     {gender && <>
-      <div><h3 className="text-headline">出場種目・資格記録</h3><p className="mt-1 text-caption">出場する種目にチェックし、その下に資格記録を入力してください。</p></div>
+      <div><h3 className="text-headline">出場種目・資格記録</h3><p className="mt-1 text-caption">出場する種目にチェックし、その下に資格記録を入力してください。同じ種目には2件まで登録できます。</p></div>
       <Card data-ui-checklist className="divide-y divide-separator">
         {OB_ENTRY_EVENTS.filter((event) => event.startsWith(gender)).map((event) => {
-          const selected = events.includes(event);
+          const count = obEventCount(events, event);
+          const selected = count > 0;
           return <div key={event} className="px-3.5">
             <label data-ui-checklist-row className="flex min-h-12 cursor-pointer items-center gap-3 py-3 text-body">
               <input type="checkbox" className="h-5 w-5 shrink-0 accent-accent" checked={selected} disabled={locked} aria-label={event}
@@ -127,7 +128,8 @@ export function ObEntryEditor({ entry, members, initialProfileId = "", party, pa
               <span className="min-w-0 flex-1">{event.slice(2)}</span>
               {obEventTime(event) && <span className="shrink-0 text-caption tabular-nums">{obEventTime(event)}〜</span>}
             </label>
-            {selected && <div className="pb-3 pl-8">
+            {selected && <div className="space-y-2 pb-3 pl-8">
+              <Select ariaLabel={`${event}のエントリー数`} value={String(count)} disabled={locked} options={[{value:"1",label:"1件"},{value:"2",label:"2件"}]} onValueChange={value => {setServerConflicts([]); setEvents(current => { if (value !== "1" && value !== "2" || obEventCount(current,event) === Number(value)) return current; const next = [...current]; if (value === "2") next.push(event); else next.splice(next.lastIndexOf(event), 1); return next; });}}/>
               <label htmlFor={`mark-${event}`} className="mb-1 block text-caption">資格記録（任意）</label>
               <Textarea id={`mark-${event}`} autoGrow rows={1} placeholder="未入力" maxLength={1000} disabled={locked} aria-label={`${event}の資格記録`} value={marks[event] ?? ""}
                 onChange={(e) => setMarks({ ...marks, [event]: e.target.value || null })} />
@@ -138,7 +140,7 @@ export function ObEntryEditor({ entry, members, initialProfileId = "", party, pa
       {entry && entry.events.length > 0 && !events.length && <p className="text-caption">保存すると全種目をDNSとして扱います。</p>}
     </>}
     <FormModalFooter><div className="flex items-center gap-3">
-      <span className="shrink-0 text-body">{events.length}種目</span>
+      <span className="shrink-0 text-body">{events.length}件</span>
       <Button className="flex-1" disabled={saving || !unconfirmed && (!dirty || !detailsValid || (!entry && ((mode === "guest" && !self ? !guestName.trim() || !guestGrade : !profileId) || (!events.length && partyStatus === "未回答"))))} onClick={() => unconfirmed ? void save() : conflicts.length ? setConfirm("duties") : removed.length ? setConfirm("save") : void save()}>{saving ? unconfirmed ? "確認中…" : "保存中…" : unconfirmed ? "保存結果を確認" : entry ? "変更を保存する" : "登録する"}</Button>
     </div>{saveMessage && <p role="alert" className="mt-3 text-body text-danger">{saveMessage}</p>}</FormModalFooter>
     <ConfirmDialog open={confirm !== null} onOpenChange={(open) => { if (!open && !saving) setConfirm(null); }}

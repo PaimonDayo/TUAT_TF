@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { entryClient } from "@/lib/ob-entries-db";
-import { isAlumniEntry, matchEntryMember, type ObEntry } from "@/lib/ob-entries";
+import { obAppearanceEntryId, obAppearanceNumber, isAlumniEntry, matchEntryMember, type ObEntry } from "@/lib/ob-entries";
 import { OB_MEET, type ObPartyResponse } from "@/lib/ob-meet";
 import { combineObDuties, dutyRoleText, hasDuty } from "@/lib/ob-duty";
 import { obFamilyRows, obFamilyPlacement } from "@/lib/ob-mixed-operations";
@@ -33,12 +33,12 @@ export async function getMyObEntry(profileId: string) {
 export async function getMyObParticipation(entryId: string) {
   const { getObEventOperations } = await import("./ob-operations");
   const operations = await getObEventOperations();
-  const families = new Set(operations.filter(operation => operation.data.participants.some(person => person.entryId === entryId))
+  const families = new Set(operations.filter(operation => operation.data.participants.some(person => obAppearanceEntryId(person.entryId) === entryId))
     .map(operation => operation.event_name.replace(/^(男子|女子)/, "")));
   // Field numbers require the whole saved order, including both divisions. Only personal summaries leave the server.
   return [...families].flatMap(family => obFamilyRows(family, [], operations)
-    .filter(row => row.entryId === entryId)
-    .map(row => ({ event: row.eventName, status: row.performance.status, placement: obFamilyPlacement(row) })));
+    .filter(row => obAppearanceEntryId(row.entryId) === entryId)
+    .map(row => ({ event: row.eventName, ...(obAppearanceNumber(row.entryId) === 2 ? {occurrence:2} : {}), status: row.performance.status, placement: obFamilyPlacement(row) })));
 }
 
 /** ホーム用: まだ誰にも紐付いていない回答のうち、氏名照合で自分が候補に挙がるもの（自動確定はしない）。 */

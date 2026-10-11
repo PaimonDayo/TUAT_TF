@@ -1,4 +1,5 @@
 "use server";
+import { obAppearanceEntryId } from "@/lib/ob-entries";
 
 import { revalidatePath } from "next/cache";
 import { scheduleObResultsPublish } from "@/lib/ob-results-notify";
@@ -48,6 +49,7 @@ function savedOperation(value: unknown, event: string): value is ObEventOperatio
 function failure(message: string): string {
   if (message.includes("operation_conflict")) return "同じ内容が他の端末でも変更されています。変更箇所を確認してください";
   if (message.includes("operation_absent") || message.includes("entry_absent")) return "欠席になっています。出場させる場合は先に欠席を取り消してください";
+  if (message.includes("entry_limit")) return "同じ種目は2件まで登録できます";
   if (message.includes("operation_started")) return "この組は記録の入力が始まっています。別の組を選ぶか、未配置で登録してください";
   if (message.includes("operation_confirmed")) return "結果が確定した種目には追加できません。種目の確定を解除してください";
   if (message.includes("entry_duplicate")) return "同じ名前の登録があります。登録済みの人から選んでください";
@@ -205,7 +207,7 @@ export async function addObDayEntry(input: ObDayEntryInput): Promise<{ ok: boole
   });
   if (result.error) return { ok: false, message: failure(result.error.message), ...(result.error.message === "entry_conflict" ? { stale: true } : {}) };
   const saved = result.data;
-  if (!saved || !uuid.test(saved.entryId) || !savedOperation(saved.saved, input.event)) return { ok: false, message: "保存結果を確認できませんでした。再試行するか、画面を更新して確認してください" };
+  if (!saved || !uuid.test(obAppearanceEntryId(saved.entryId)) || !savedOperation(saved.saved, input.event)) return { ok: false, message: "保存結果を確認できませんでした。再試行するか、画面を更新して確認してください" };
   scheduleObResultsPublish();
   revalidatePath(OB_PROGRAM_PATH);
   revalidatePath("/home");

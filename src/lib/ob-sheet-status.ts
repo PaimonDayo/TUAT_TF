@@ -21,7 +21,7 @@ export function readObSheetTarget(token: unknown, secret: string): ObSheetStatus
   if (!body || !signature || extra || !timingSafeEqualString(signature, createHmac("sha256", secret).update(`ob-status-row-v1:${body}`).digest("hex"))) return null;
   try {
     const row = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as ObSheetStatusTarget;
-    return /^[0-9a-f-]{36}$/.test(row.entryId) && /^(男子|女子)(1500m|ジャベリックスロー|立ち五段|100m|砲丸投げ|300mH|走り高跳び|300m|やり投げ|走り幅跳び|3000m)$/.test(row.event)
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(:2)?$/.test(row.entryId) && /^(男子|女子)(1500m|ジャベリックスロー|立ち五段|100m|砲丸投げ|300mH|走り高跳び|300m|やり投げ|走り幅跳び|3000m)$/.test(row.event)
       && Number.isSafeInteger(row.entryRevision) && row.entryRevision >= 0
       && (row.operationRevision === null || Number.isSafeInteger(row.operationRevision) && row.operationRevision >= 0) ? row : null;
   } catch { return null; }

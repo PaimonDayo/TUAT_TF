@@ -2,7 +2,7 @@ import { fieldOrderRows } from "./meet-field-order";
 import type { MeetEventData, MeetPerformance, MeetHeatScope, MeetOperationLimits } from "./meet-operations";
 import { obOperationHasChanges } from "./ob-operation-draft";
 import { effectiveObParticipation, obEventParticipants, obEventRule, type ObEventOperation } from "./ob-operations";
-import { isAlumniEntry, type ObEntry } from "./ob-entries";
+import { isAlumniEntry, obAppearanceEntryId, obAppearanceName, type ObEntry } from "./ob-entries";
 
 export type ObDivision = "男子" | "女子";
 export type ObMixedSource = { event: string; entryId: string; division: ObDivision; person: MeetPerformance };
@@ -63,7 +63,7 @@ export function projectObMixedEvent(family: string, entries: ObEntry[], operatio
       delete person.heatScope;
       participants.push({ ...person, entryId: id, group: obMixedGroup(event, row.performance) });
       sourceById.set(id, { event, entryId: row.entryId, division, person: row.performance });
-      entrants.push({ id, name: row.entry?.submitted_name ?? "登録解除済み", grade: row.entry?.grade ?? "", mark: row.entry?.qualification_marks[event] ?? "", alumni: !!row.entry && isAlumniEntry(row.entry), eligible: !!row.entry?.events.includes(event), absent: row.entry?.absent ?? false, division, sourceEvent: event });
+      entrants.push({ id, name: obAppearanceName(row.entry, event, row.entryId), grade: row.entry?.grade ?? "", mark: row.entry?.qualification_marks[event] ?? "", alumni: !!row.entry && isAlumniEntry(row.entry), eligible: row.state.registered, absent: row.entry?.absent ?? false, division, sourceEvent: event });
     }
   }
   const populated = [...originalByEvent.values()].filter(value => value.data.participants.length || value.revision !== null);
@@ -120,7 +120,7 @@ export function obFamilyRows(family: string, entries: ObEntry[], operations: ObE
     : (a.group ?? 298) - (b.group ?? 298) || (a.order ?? 601) - (b.order ?? 601) || Number(b.status === "DNS") - Number(a.status === "DNS"))
     .map(person => {
       const source = projection.sourceById.get(person.entryId)!;
-      const entry = entries.find(entry => entry.id === source.entryId);
+      const entry = entries.find(entry => entry.id === obAppearanceEntryId(source.entryId));
       const saved = operations.find(operation => operation.event_name === source.event);
       return { id: person.entryId, entryId: source.entryId, entry, performance: source.person, state: effectiveObParticipation(source.event, entry, source.person), division: source.division, eventName: source.event, saved, group: person.group, number: numbers.get(person.entryId) ?? null };
     });

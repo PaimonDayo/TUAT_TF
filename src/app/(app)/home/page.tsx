@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 import { format, subDays } from "date-fns";
 import { ja } from "date-fns/locale";
 import { ChevronRight, Folder } from "lucide-react";
-import { entryEventRows } from "@/lib/ob-entries";
+import { entryAppearanceRows, obEventCount } from "@/lib/ob-entries";
 import { OB_PROGRAM_PATH, OB_MY_ENTRY_PATH, canManageObMeet, obEventTime } from "@/lib/ob-meet";
 import { obEventRule } from "@/lib/ob-operations";
 import { ObHomeSchedule } from "@/components/features/ObHomeSchedule";
@@ -94,7 +94,7 @@ async function ObEntrySection() {
     getMyObDuties(profile.id, entry?.id ?? null).catch(() => null),
     entry ? getMyObParticipation(entry.id).catch(() => null) : Promise.resolve([]),
   ]);
-  const rows = entry ? entryEventRows(entry).sort((a, b) => (obEventTime(a.event) ?? "").localeCompare(obEventTime(b.event) ?? "")) : [];
+  const rows = entry ? entryAppearanceRows(entry).sort((a, b) => (obEventTime(a.event) ?? "").localeCompare(obEventTime(b.event) ?? "")) : [];
   return (
     <section className="space-y-2">
       <p className="section-label">OB戦</p>
@@ -110,12 +110,12 @@ async function ObEntrySection() {
             {entry.absent&&<p className="mb-3 rounded-lg bg-bg p-3 text-body">大会欠席として登録されています</p>}
             {participation === null && <p className="mb-2 text-caption">組・出場状況を取得できませんでした。画面を開き直してください。</p>}
             {rows.length ? <ul className="space-y-2">{rows.map(row => {
-              const personal = participation?.find(value => value.event === row.event);
+              const personal = participation?.find(value => value.event === row.event && (value.occurrence ?? 1) === row.occurrence);
               const status = personal?.status;
-              return <li key={row.event} className="flex items-baseline gap-3 text-body">
+              return <li key={row.event + row.occurrence} className="flex items-baseline gap-3 text-body">
                 <span className="w-12 shrink-0 text-caption tabular-nums">{obEventTime(row.event) ?? ""}</span>
                 <div className="min-w-0 flex-1 break-words">
-                  <p className="font-medium">{row.event}{status && status !== "entered" && <span className="ml-2 text-caption">{status === "DNS" ? "欠場（DNS）" : status}</span>}</p>
+                  <p className="font-medium">{row.event}{entry && obEventCount(entry.events, row.event) === 2 ? `（${row.occurrence}件目）` : ""}{status && status !== "entered" && <span className="ml-2 text-caption">{status === "DNS" ? "欠場（DNS）" : status}</span>}</p>
                   <p className="text-caption">{participation === null ? "組・試技順を確認できません" : personal?.placement ?? (obEventRule(row.event).discipline === "track" ? "組未定" : "順番未定")}</p>
                 </div>
               </li>;

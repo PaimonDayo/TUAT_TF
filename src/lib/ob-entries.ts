@@ -18,3 +18,18 @@ export function entryEventRows(entry: Pick<ObEntry, "events" | "qualification_ma
   return [...entry.events].sort(compareObEvents).map((event) => ({ event, mark: Object.hasOwn(entry.qualification_marks, event)
     ? entry.qualification_marks[event]?.trim() || "未回答" : "記録欄なし" }));
 }
+
+/** A person's first appearance keeps its original UUID; the second has a stable slot. */
+export function obAppearanceId(entryId: string, occurrence: number) { return occurrence === 2 ? `${entryId}:2` : entryId; }
+export function obAppearanceEntryId(id: string) { return id.endsWith(":2") ? id.slice(0, -2) : id; }
+export function obAppearanceNumber(id: string) { return id.endsWith(":2") ? 2 : 1; }
+export function obEventCount(events: string[], event: string) { return events.filter(value => value === event).length; }
+export function obAppearanceName(entry: Pick<ObEntry, "submitted_name" | "events"> | undefined, event: string, id: string) {
+  const name = entry?.submitted_name ?? "登録解除済み";
+  return obAppearanceNumber(id) === 2 || entry && obEventCount(entry.events, event) === 2 ? `${name}（${obAppearanceNumber(id)}件目）` : name;
+}
+
+export function entryAppearanceRows(entry: Pick<ObEntry, "events" | "qualification_marks">) {
+  const counts = new Map<string, number>();
+  return entryEventRows(entry).map(row => { const occurrence = (counts.get(row.event) ?? 0) + 1; counts.set(row.event, occurrence); return { ...row, occurrence }; });
+}

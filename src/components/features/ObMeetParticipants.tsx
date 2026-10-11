@@ -1,4 +1,5 @@
 "use client";
+import { emptyPerformance } from "@/lib/meet-operations";
 
 import { useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -15,7 +16,7 @@ import { ObEntryEditor } from "./ObEntryEditor";
 import { ObPartyView } from "./ObPartyView";
 import { confirmEntryMember, deleteEntry } from "@/app/(app)/ob-entries/actions";
 import { setObAttendance } from "@/app/(app)/ob-entries/operations-actions";
-import { entryEventRows, isAlumniEntry, type ObEntry } from "@/lib/ob-entries";
+import { entryAppearanceRows, obAppearanceId, obEventCount, isAlumniEntry, type ObEntry } from "@/lib/ob-entries";
 import { effectiveObParticipation, type ObEventOperation } from "@/lib/ob-operations";
 import { dutyRoleText, type ObDuty, type ObDutyRole } from "@/lib/ob-duty";
 import { compareByGrade, obEventTime, type ObPartyResponse } from "@/lib/ob-meet";
@@ -137,12 +138,12 @@ function ParticipantDetail({ entry, members, history, party, duties, roles, oper
       {entry.absent && <p className="rounded-lg bg-bg p-3 text-body">大会欠席として登録されています</p>}
       <section className="space-y-1">
         <h3 className="text-headline">出場種目・資格記録</h3>
-        {entry.events.length ? <ul className="divide-y divide-separator">{entryEventRows(entry).map(({ event, mark }) => {
-          const performance = operations.find(operation => operation.event_name === event)?.data.participants.find(person => person.entryId === entry.id);
-          const state = effectiveObParticipation(event, entry, performance);
-          return <li key={event} className="flex items-baseline gap-3 py-2 text-body">
+        {entry.events.length ? <ul className="divide-y divide-separator">{entryAppearanceRows(entry).map(({ event, mark, occurrence }) => {
+          const performance = operations.find(operation => operation.event_name === event)?.data.participants.find(person => person.entryId === obAppearanceId(entry.id, occurrence));
+          const state = effectiveObParticipation(event, entry, performance ?? emptyPerformance(obAppearanceId(entry.id, occurrence)));
+          return <li key={event + occurrence} className="flex items-baseline gap-3 py-2 text-body">
             <span className="w-12 shrink-0 text-caption tabular-nums">{obEventTime(event) ?? ""}</span>
-            <span className="min-w-0 flex-1 break-words">{event}{!["entered", "absent"].includes(state.status) && <span className="ml-2 text-caption">{state.label}</span>}</span>
+            <span className="min-w-0 flex-1 break-words">{event}{obEventCount(entry.events, event) === 2 ? `（${occurrence}件目）` : ""}{!["entered", "absent"].includes(state.status) && <span className="ml-2 text-caption">{state.label}</span>}</span>
             <span className="max-w-[45%] whitespace-pre-wrap break-words text-right tabular-nums">{mark}</span>
           </li>;
         })}</ul> : <p className="py-2 text-body text-muted">競技の出場登録なし</p>}

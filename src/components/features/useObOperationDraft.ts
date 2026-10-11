@@ -6,7 +6,7 @@ import { checkObEventOperation, saveObEventOperation } from "@/app/(app)/ob-entr
 import { emptyPerformance, MeetEvent, type MeetEventData } from "@/lib/meet-operations";
 import { effectiveObParticipation, obEventRule, reconcileObEvent, type ObEventOperation } from "@/lib/ob-operations";
 import { obOperationHasChanges, reviewObOperation, type OperationChoices } from "@/lib/ob-operation-draft";
-import type { ObEntry } from "@/lib/ob-entries";
+import { obAppearanceEntryId, type ObEntry } from "@/lib/ob-entries";
 import { obSourceDivision } from "@/lib/ob-mixed-operations";
 
 export function useObOperationDraft(event: string, entries: ObEntry[], initial: ObEventOperation | undefined, onSaved: (saved: ObEventOperation) => void) {
@@ -30,10 +30,10 @@ export function useObOperationDraft(event: string, entries: ObEntry[], initial: 
   const dirty = obOperationHasChanges(reconcileObEvent(event, entries, base), data, division);
   const review = latest ? reviewObOperation(base, data, latest.data, choices, division) : null;
   const blocked = data.participants.filter(person => {
-    const entry = entries.find(e => e.id === person.entryId), before = base.participants.find(p => p.entryId === person.entryId) ?? emptyPerformance(person.entryId);
+    const entry = entries.find(e => e.id === obAppearanceEntryId(person.entryId)), before = base.participants.find(p => p.entryId === person.entryId) ?? emptyPerformance(person.entryId);
     const changed = JSON.stringify(person) !== JSON.stringify(before);
     if (entry?.absent) return JSON.stringify(person.trials) !== JSON.stringify(before.trials) || (person.status === "entered" && changed && JSON.stringify(person) !== JSON.stringify(emptyPerformance(person.entryId)));
-    return !entry?.events.includes(event) && person.status === "entered" && changed;
+    return !effectiveObParticipation(event, entry, person).registered && person.status === "entered" && changed;
   });
 
   // Refreshes can bring a new entrant or another operator's edit while this form is open.

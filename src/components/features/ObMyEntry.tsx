@@ -8,11 +8,11 @@ import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ObEntryEditor } from "@/components/features/ObEntryEditor";
-import { entryEventRows, type ObEntry } from "@/lib/ob-entries";
+import { entryEventRows, obAppearanceEntryId, obAppearanceNumber, obEventCount, type ObEntry } from "@/lib/ob-entries";
 import { entryGrade, type EntryMember } from "@/lib/entry-identity";
 import { obEventTime, type ObPartyResponse } from "@/lib/ob-meet";
 import type { ObDuty, ObDutyRole } from "@/lib/ob-duty";
-import { effectiveObParticipation, obEventRule, type ObEventOperation } from "@/lib/ob-operations";
+import { obEventParticipants, obEventRule, type ObEventOperation } from "@/lib/ob-operations";
 import { compareObEvents } from "@/lib/ob-entry-edit";
 import { MeetEvent } from "@/lib/meet-operations";
 
@@ -22,13 +22,14 @@ export function ObMyEntry({ entry, party, me, openEditor = false, embedded = fal
   const [editing, setEditing] = useState(openEditor);
   function close() { setEditing(false); if (returnHref) router.replace(returnHref); }
   const registeredRows = entry ? entryEventRows(entry) : [];
-  const events = [...new Set([...registeredRows.map(row=>row.event), ...operations.filter(operation=>operation.data.participants.some(person=>person.entryId===entry?.id)).map(operation=>operation.event_name)])].sort(compareObEvents);
-  const rows = entry ? events.map(event => {
+  const events = [...new Set([...registeredRows.map(row=>row.event), ...operations.filter(operation=>operation.data.participants.some(person=>obAppearanceEntryId(person.entryId)===entry?.id)).map(operation=>operation.event_name)])].sort(compareObEvents);
+  const rows = entry ? events.flatMap(event => {
     const saved = operations.find(operation=>operation.event_name===event);
-    const performance = saved?.data.participants.find(person=>person.entryId===entry.id);
-    const state = effectiveObParticipation(event,entry,performance);
-    const result = performance && saved && state.recorded ? new MeetEvent(obEventRule(event),saved.data).best(performance) : null;
-    return {event,state,result,mark:registeredRows.find(row=>row.event===event)?.mark};
+    return obEventParticipants(event, [entry], saved?.data).filter(row => row.entry?.id === entry.id).map(row => {
+      const {performance, state} = row;
+      const result = saved && state.recorded ? new MeetEvent(obEventRule(event),saved.data).best(performance) : null;
+      return {event, id:row.entryId, state, result, mark:registeredRows.find(row=>row.event===event)?.mark};
+    });
   }) : [];
   return <div className={embedded ? "space-y-4" : "space-y-4 px-4 pt-2 pb-6"}>
     <Card className="p-4">
@@ -36,9 +37,9 @@ export function ObMyEntry({ entry, party, me, openEditor = false, embedded = fal
       <p className="text-caption">{entry ? `${entry.grade} ${entry.submitted_name}` : `${entryGrade(me.grade)} ${me.display_name}`}</p>
       {entry ? <>
         {entry.absent&&<p className="mt-3 rounded-lg bg-bg p-3 text-body">大会全体の欠席として登録されています。変更は大会担当者へ連絡してください。</p>}
-        {rows.length ? <ul className="mt-2 space-y-1">{rows.map((row) => <li key={row.event} className="flex items-baseline gap-3 text-[15px]">
+        {rows.length ? <ul className="mt-2 space-y-1">{rows.map((row) => <li key={row.event + row.id} className="flex items-baseline gap-3 text-[15px]">
           <span className="w-12 shrink-0 text-caption tabular-nums">{obEventTime(row.event) ?? ""}</span>
-          <span className="min-w-0 flex-1 break-words font-medium">{row.event}{!row.state.registered&&row.state.recorded?<span className="ml-2 text-caption">DNS</span>:!row.state.recorded&&row.state.status!=="entered"&&<span className="ml-2 text-caption">{row.state.label}</span>}</span><span className="max-w-[45%] whitespace-pre-wrap break-words text-caption">{row.result ? `結果 ${row.result}` : row.mark}</span>
+          <span className="min-w-0 flex-1 break-words font-medium">{row.event}{entry && obEventCount(entry.events, row.event) === 2 || obAppearanceNumber(row.id) === 2 ? `（${obAppearanceNumber(row.id)}件目）` : ""}{!row.state.registered&&row.state.recorded?<span className="ml-2 text-caption">DNS</span>:!row.state.recorded&&row.state.status!=="entered"&&<span className="ml-2 text-caption">{row.state.label}</span>}</span><span className="max-w-[45%] whitespace-pre-wrap break-words text-caption">{row.result ? `結果 ${row.result}` : row.mark}</span>
         </li>)}</ul> : <p className="mt-2 text-[15px] text-muted">競技の出場登録なし</p>}
         <p className="mt-2 text-caption">懇親会：{party?.status ?? "未回答"}</p>
       </> : <p className="mt-2 text-[15px] text-muted">まだエントリーしていません</p>}

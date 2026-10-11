@@ -13,16 +13,18 @@ vi.mock("react", async original => ({ ...await original<typeof import("react")>(
   return [hooks.values[slot], (value: T | ((before: T) => T)) => { hooks.values[slot] = typeof value === "function" ? (value as (before: T) => T)(hooks.values[slot] as T) : value; }];
 }, useRef<T>(initial: T) { const slot = hooks.cursor++; if (!(slot in hooks.values)) hooks.values[slot] = { current: initial }; return hooks.values[slot]; } }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
+vi.mock("@/app/(app)/ob-entries/operations-actions", () => ({ addObDayEntry: vi.fn() }));
 vi.mock("@/app/(app)/ob-entries/actions", () => ({ saveEntry: mocks.save, checkEntryDetails: mocks.check, createGuestEntry: mocks.guest }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ showToast: mocks.toast }) }));
 vi.mock("@/lib/ob-duty-issues", () => ({ entryDutyConflicts: mocks.conflicts }));
-vi.mock("@/components/ui/form-modal", () => ({ FormModal: (props: { children: ReactNode; onOpenChange: (open: boolean) => void }) => { mocks.modal = props; return createElement("div", {}, props.children); }, FormModalFooter: ({ children }: { children: ReactNode }) => createElement("footer", {}, children) }));
+vi.mock("@/components/ui/form-modal", () => ({ FormModal: (props: { children: ReactNode; onOpenChange: (open: boolean) => void }) => { mocks.modal = props; return createElement("div", {}, props.children); }, FormDraftGuard: () => null, FormModalFooter: ({ children }: { children: ReactNode }) => createElement("footer", {}, children) }));
 vi.mock("@/components/ui/input", () => ({ Input: (props: InputProps) => { mocks.inputs.set(props["aria-label"], props); return createElement("input", { value: props.value, disabled: props.disabled }); } }));
 vi.mock("@/components/ui/select", () => ({ Select: (props: SelectProps) => { mocks.selects.set(props.ariaLabel, props); return createElement("select", { disabled: props.disabled }); } }));
 vi.mock("@/components/ui/button", () => ({ Button: (props: ButtonProps) => { if (typeof props.children === "string") mocks.buttons.set(props.children, props); return createElement("button", { disabled: props.disabled }, props.children); } }));
 vi.mock("@/components/ui/confirm-dialog", () => ({ ConfirmDialog: (props: typeof mocks.confirm) => { mocks.confirm = props; return null; } }));
 vi.mock("@/components/ui/disclosure", () => ({ Disclosure: () => null }));
 import { ObEntryEditor } from "./ObEntryEditor";
+import { ObDayRegistration } from "./ObDayRegistration";
 const entry: ObEntry = { id: "20000000-0000-4000-8000-000000000001", meet_key: "ob-2026", submitted_name: "合成取込", grade: "B1", profile_id: null, revision: 2, imported_at: "2026-10-01", competition_division: "男子", events: ["男子100m"], qualification_marks: { "男子100m": "11.50" } };
 function render(props: Partial<Parameters<typeof ObEntryEditor>[0]> = {}) { hooks.cursor = 0; mocks.inputs.clear(); mocks.selects.clear(); mocks.buttons.clear(); return renderToStaticMarkup(createElement(ObEntryEditor, { entry, members: [], onClose: mocks.close, ...props })); }
 const name = (value: string) => mocks.inputs.get("参加者の氏名")!.onChange({ target: { value } });
@@ -54,4 +56,23 @@ it("freezes a linked party revision and its edited status alongside metadata dur
   const party = { id: "20000000-0000-4000-8000-000000000011", meet_key: "ob-2026", submitted_name: entry.submitted_name, group_label: "B1", status: "参加" as const, entry_id: entry.id, revision: 8, needs_review: false };
   mocks.save.mockResolvedValue({ ok: false, uncertain: true }); mocks.check.mockResolvedValue({ ok: false }); render({ party }); name("修正後"); mocks.selects.get("懇親会の出欠")!.onValueChange("不参加"); render({ party }); await click("変更を保存する"); render({ party });
   await click("保存結果を確認"); expect(mocks.check).toHaveBeenCalledWith(expect.objectContaining({ details: { name: "修正後", grade: "B1" } }), { id: party.id, revision: 8, status: "不参加" }); expect(mocks.save).toHaveBeenCalledOnce(); expect(mocks.close).not.toHaveBeenCalled();
+});
+
+it("registers two appearances on the same person and reduces to one only after cancellation confirmation", async () => {
+ render(); mocks.selects.get("男子100mのエントリー数")!.onValueChange("2"); render();
+ await click("変更を保存する"); expect(mocks.save.mock.calls[0][0]).toMatchObject({entryId:entry.id,events:["男子100m","男子100m"],marks:entry.qualification_marks});
+ hooks.values=[]; mocks.save.mockClear(); render({entry:{...entry,events:["男子100m","男子100m"]}}); mocks.selects.get("男子100mのエントリー数")!.onValueChange("1"); render({entry:{...entry,events:["男子100m","男子100m"]}});
+ await click("変更を保存する"); expect(mocks.save).not.toHaveBeenCalled(); render({entry:{...entry,events:["男子100m","男子100m"]}}); mocks.confirm.onConfirm(); for(let i=0;i<8;i++) await Promise.resolve(); expect(mocks.save.mock.calls[0][0].events).toEqual(["男子100m"]);
+});
+
+it("lets a registered person add their second appearance to a heat containing a saved result", () => {
+ const dayEntry={...entry,events:["男子1500m"]};
+ const operation={meet_key:"ob-2026",event_name:"男子1500m",revision:1,updated_at:"",data:{confirmed:false,participants:[{entryId:entry.id,group:1,order:1,status:"entered" as const,trials:[{mark:"4:10.00",wind:"",status:"valid" as const}]}]}};
+ hooks.values=["男子1500m","",entry.id]; hooks.cursor=0;
+ const html=renderToStaticMarkup(createElement(ObDayRegistration,{event:"男子1500m",entries:[dayEntry],operations:[operation],onClose:mocks.close,onSaved:()=>{}}));
+ expect(html).toContain("2件目を追加"); expect(mocks.buttons.get("登録して未定に入れる")!.disabled).toBe(false);
+ const groupSelect=mocks.selects.get("当日エントリーの組")!; expect(groupSelect.options.find(option=>option.value==="1")!.disabled).toBe(false); expect(html).not.toContain("記録入力済み");
+ hooks.values=["男子1500m","",entry.id]; hooks.cursor=0; mocks.buttons.clear();
+ renderToStaticMarkup(createElement(ObDayRegistration,{event:"男子1500m",entries:[{...dayEntry,events:["男子1500m","男子1500m"]}],operations:[operation],onClose:mocks.close,onSaved:()=>{}}));
+ expect(mocks.buttons.get("登録して未定に入れる")!.disabled).toBe(true);
 });

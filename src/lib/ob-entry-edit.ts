@@ -29,7 +29,7 @@ export function validEntryEdit(input: EntryEdit, allowPartyOnly = false): boolea
   if (!input || typeof input !== "object") return false;
   if (input.entryId === null ? !input.profileId || !uuid.test(input.profileId) || input.revision !== null : !uuid.test(input.entryId) || !Number.isSafeInteger(input.revision) || input.revision! < 0 || input.profileId !== null) return false;
   if (input.details !== undefined && (input.entryId === null || !validEntryDetails(input.details))) return false;
-  if (!Array.isArray(input.events) || input.events.length > 22 || new Set(input.events).size !== input.events.length || input.events.some((event) => !OB_ENTRY_EVENTS.includes(event)) || (input.entryId === null && !input.events.length && !allowPartyOnly)) return false;
+  if (!Array.isArray(input.events) || input.events.length > 22 || input.events.some(event => input.events.filter(value => value === event).length > 2) || input.events.some((event) => !OB_ENTRY_EVENTS.includes(event)) || (input.entryId === null && !input.events.length && !allowPartyOnly)) return false;
   if (input.events.length && !entryDivision({ events: input.events })) return false;
   return !!input.marks && typeof input.marks === "object" && !Array.isArray(input.marks) && Object.entries(input.marks).every(([event, mark]) => input.events.includes(event) && (mark === null || typeof mark === "string" && mark.length <= 1000));
 }

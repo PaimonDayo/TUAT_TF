@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { OB_ENTRY_EVENTS, entryDivision, validEntryDetails, validEntryEdit, type EntryEdit } from "./ob-entry-edit";
+import { OB_ENTRY_EVENTS, entryDivision, validEntryDetails, validEntryEdit, validGuestEntry, type EntryEdit } from "./ob-entry-edit";
 import { GRADE_OPTIONS } from "./constants";
 const base: EntryEdit = { entryId: "10000000-0000-4000-8000-000000000001", profileId: null, revision: 1, events: ["男子100m"], marks: { "男子100m": "12秒34" } };
 it("accepts adding a member, changing records and cancelling without deleting the entry", () => {
@@ -9,7 +9,7 @@ it("accepts adding a member, changing records and cancelling without deleting th
   expect(validEntryEdit({ ...base, events: [], marks: {} })).toBe(true);
 });
 it("rejects unsupported events, duplicates, unrelated marks, long text and mixed edit identities", () => {
-  const changes: Partial<EntryEdit>[] = [{ events: ["自由種目"] }, { events: ["男子100m", "男子100m"] }, { marks: { "女子100m": "13秒" } }, { marks: { "男子100m": "a".repeat(1001) } }, { revision: -1 }, { profileId: base.entryId }];
+  const changes: Partial<EntryEdit>[] = [{ events: ["自由種目"] }, { events: ["男子100m", "男子100m", "男子100m"] }, { marks: { "女子100m": "13秒" } }, { marks: { "男子100m": "a".repeat(1001) } }, { revision: -1 }, { profileId: base.entryId }];
   for (const change of changes) {
     expect(validEntryEdit({ ...base, ...change })).toBe(false);
   }
@@ -51,4 +51,9 @@ it("rejects invalid or oversized detail objects and details on a new profile reg
   }
   expect(validEntryEdit({ ...base, entryId: null, profileId: base.entryId, revision: null, details: { name: "合成", grade: "B1" } })).toBe(false);
   expect(validEntryEdit({ ...base, details: undefined })).toBe(true);
+});
+
+it("accepts two appearances with one shared qualifying mark for self and guest registration", () => {
+ expect(validEntryEdit({...base, events:["男子100m","男子100m"]})).toBe(true);
+ expect(validGuestEntry({name:"合成",grade:"OB・OG",events:["男子100m","男子100m"],marks:base.marks,partyStatus:"未回答"})).toBe(true);
 });

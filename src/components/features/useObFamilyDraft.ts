@@ -4,10 +4,10 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { checkObFamilyOperation, saveObFamilyOperation } from "@/app/(app)/ob-entries/operations-actions";
 import { emptyPerformance, MeetEvent, type MeetEventData } from "@/lib/meet-operations";
-import { obEventRule, type ObEventOperation } from "@/lib/ob-operations";
+import { effectiveObParticipation, obEventRule, type ObEventOperation } from "@/lib/ob-operations";
 import { projectObMixedEvent, splitObMixedEvent } from "@/lib/ob-mixed-operations";
 import { obOperationHasChanges, reviewObOperation, type OperationChoices } from "@/lib/ob-operation-draft";
-import type { ObEntry } from "@/lib/ob-entries";
+import { obAppearanceEntryId, obAppearanceName, type ObEntry } from "@/lib/ob-entries";
 
 const fingerprint = (operations: ObEventOperation[]) => operations.map(op => `${op.event_name}:${op.revision}`).sort().join("|");
 const familyOperations = (family: string, operations: ObEventOperation[]) => {
@@ -38,16 +38,16 @@ export function useObFamilyDraft(family: string, entries: ObEntry[], initial: Ob
   const latestData = latest ? projectObMixedEvent(family, entries, latest).data : undefined;
   const review = latestData ? reviewObOperation({ ...projection.data, confirmed: false }, { ...data, confirmed: false }, { ...latestData, confirmed: false }, choices) : null;
   const conflictEntries = [...projection.sourceById].flatMap(([id, source]) => {
-    const entry = entries.find(e => e.id === source.entryId);
-    return entry ? [{ ...entry, id, submitted_name: `${source.division} ${entry.submitted_name}` }] : [];
+    const entry = entries.find(e => e.id === obAppearanceEntryId(source.entryId));
+    return entry ? [{ ...entry, id, submitted_name: `${source.division} ${obAppearanceName(entry, source.event, source.entryId)}` }] : [];
   });
   const blocked = data.participants.filter(person => {
     const source = projection.sourceById.get(person.entryId);
-    const entry = entries.find(e => e.id === source?.entryId);
+    const entry = entries.find(e => e.id === obAppearanceEntryId(source?.entryId ?? ""));
     const before = projection.data.participants.find(p => p.entryId === person.entryId) ?? emptyPerformance(person.entryId);
     const changed = JSON.stringify(person) !== JSON.stringify(before);
     if (entry?.absent) return JSON.stringify(person.trials) !== JSON.stringify(before.trials) || (person.status === "entered" && changed && JSON.stringify(person) !== JSON.stringify(emptyPerformance(person.entryId)));
-    return !source || !entry?.events.includes(source.event) && person.status === "entered" && changed;
+    return !source || !effectiveObParticipation(source.event, entry, source.person).registered && person.status === "entered" && changed;
   });
   const incomingOperations = familyOperations(family, initial);
   const incoming = fingerprint(incomingOperations);

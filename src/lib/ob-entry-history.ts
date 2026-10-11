@@ -1,3 +1,4 @@
+import { obAppearanceEntryId, obAppearanceNumber } from "./ob-entries";
 import type { EntryChange } from "./ob-entry-edit";
 import { fieldOrderRows } from "./meet-field-order";
 import { emptyPerformance, type MeetPerformance } from "./meet-operations";
@@ -65,7 +66,7 @@ function familyFieldContext(value: unknown, event: string): { projection: ObMixe
 }
 
 export function historyEntryIds(changes: ObOperationChange[]): string[] {
-  return [...new Set(changes.flatMap(change => [...participants(change.before_data), ...participants(change.after_data), ...familyParticipants(change.before_data), ...familyParticipants(change.after_data)].map(row => row.entryId as string)))];
+  return [...new Set(changes.flatMap(change => [...participants(change.before_data), ...participants(change.after_data), ...familyParticipants(change.before_data), ...familyParticipants(change.after_data)].map(row => obAppearanceEntryId(row.entryId as string))))];
 }
 
 /** Only display fields leave the server; snapshots, request payloads and internal IDs stay there. */
@@ -83,7 +84,7 @@ export function describeObChange(change: EntryChange, names: Map<string, string>
   } else {
     if (!change.before_data) add("新規登録", "エントリー", "登録なし", "登録");
     const oldEvents = events(before.events), newEvents = events(after.events);
-    const added = newEvents.filter(event => !oldEvents.includes(event)), removed = oldEvents.filter(event => !newEvents.includes(event));
+    const added = newEvents.filter((event,index) => newEvents.slice(0,index+1).filter(value=>value===event).length > oldEvents.filter(value=>value===event).length), removed = oldEvents.filter((event,index) => oldEvents.slice(0,index+1).filter(value=>value===event).length > newEvents.filter(value=>value===event).length);
     if (added.length) add("出場種目", "種目追加", "未登録", added.join("、"));
     if (removed.length) add("出場種目", "種目取消", removed.join("、"), "取消");
     const oldMarks = object(before.qualification_marks), newMarks = object(after.qualification_marks);
@@ -135,7 +136,7 @@ export function describeObOperationChange(change: ObOperationChange, names: Map<
   const scopedField = !isTrack && [...oldPeople.values(), ...newPeople.values()].some(person => validScope(person.heatScope));
   for (const entryId of new Set([...oldPeople.keys(), ...newPeople.keys()])) {
     const previous = oldPeople.get(entryId), next = newPeople.get(entryId);
-    const name = entryNames.get(entryId) ?? "名前を取得できない出場者";
+    const name = (entryNames.get(obAppearanceEntryId(entryId)) ?? "名前を取得できない出場者") + (obAppearanceNumber(entryId) === 2 ? "（2件目）" : "");
     const subject = familyContext ? `${change.event_name.startsWith("女子") ? "女子" : "男子"} ${name}` : name;
     if (!previous || !next) add("出場者", "出場者", previous ? "登録あり" : "登録なし", next ? "追加" : "削除", subject);
     const scopeChanged = scope(previous) !== scope(next);
@@ -182,7 +183,7 @@ export function describeObOperationChange(change: ObOperationChange, names: Map<
     const source = newContext.projection.sourceById.get(key) ?? oldContext?.projection.sourceById.get(key);
     if (!source || source.event === change.event_name) continue;
     const oldNumber = oldContext?.numbers.get(key) ?? null, newNumber = newContext.numbers.get(key) ?? null;
-    if (oldNumber !== newNumber) add("試技順", "試技順", oldNumber === null ? "順番未定" : String(oldNumber), newNumber === null ? "順番未定" : String(newNumber), `${source.division} ${entryNames.get(source.entryId) ?? "名前を取得できない出場者"}`);
+    if (oldNumber !== newNumber) add("試技順", "試技順", oldNumber === null ? "順番未定" : String(oldNumber), newNumber === null ? "順番未定" : String(newNumber), `${source.division} ${(entryNames.get(obAppearanceEntryId(source.entryId)) ?? "名前を取得できない出場者") + (obAppearanceNumber(source.entryId) === 2 ? "（2件目）" : "")}`);
   }
   if (!hadOperation || (before.confirmed === true) !== (after.confirmed === true)) {
     add("確定", "記録の確定", hadOperation ? before.confirmed === true ? "確定" : "速報" : "保存なし", after.confirmed === true ? "確定" : "速報");

@@ -1,6 +1,6 @@
 import { MeetEvent, MeetMark, type MeetTrial } from "./meet-operations";
 import { compareObEvents } from "./ob-entry-edit";
-import type { ObEntry } from "./ob-entries";
+import { obAppearanceName, type ObEntry } from "./ob-entries";
 import { OB_PROGRAM, obFamilyLabel } from "./ob-meet";
 import { obFamilyRows, obMixedGroupLabel } from "./ob-mixed-operations";
 import { obEventRule, type ObEventOperation } from "./ob-operations";
@@ -40,7 +40,7 @@ export function obResultSheet(family: string, entries: ObEntry[], operations: Ob
   const results = published || recorded;
   const personHeaders = ["区分", "氏名", "学年", ...(published ? ["出場状況"] : [])];
   const personWidths = [6, 18, 7, ...(published ? [18] : [])];
-  const person = (row: Row): XlsxCell[] => [row.division, row.entry?.submitted_name ?? "参加情報なし", row.entry?.grade ?? "",
+  const person = (row: Row): XlsxCell[] => [row.division, obAppearanceName(row.entry, row.eventName, row.entryId), row.entry?.grade ?? "",
     ...(published ? [publishedParticipation(row)] : [])];
   const best = (row: Row) => row.state.recorded ? new MeetEvent(obEventRule(row.eventName), { participants: [row.performance], confirmed: false }).best(row.performance) : "";
   const name = obFamilyLabel(family);

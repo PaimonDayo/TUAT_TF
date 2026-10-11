@@ -1,4 +1,4 @@
-import { isAlumniEntry, type ObEntry } from "./ob-entries";
+import { isAlumniEntry, obAppearanceId, obAppearanceEntryId, obAppearanceNumber, obEventCount, type ObEntry } from "./ob-entries";
 import { dutyRows, OB_DUTY_SLOTS, OB_MEET } from "./ob-meet";
 import type { EntryMember } from "./entry-identity";
 import { emptyPerformance, type MeetEventData, type MeetEventRule, type MeetPerformance } from "./meet-operations";
@@ -20,13 +20,13 @@ export function hasRecordedObPerformance(performance?: MeetPerformance): boolean
 
 /** Registration changes cannot erase the fact that somebody competed at this time. */
 export function obDutyCompetitionEvents(entry: (Pick<ObEntry, "events"> & Partial<Pick<ObEntry, "id">>) | undefined, operations: ObEventOperation[] = []) {
-  const recorded = operations.filter(operation => operation.meet_key === OB_MEET.meetKey && operation.data.participants.some(person => person.entryId === entry?.id && hasRecordedObPerformance(person))).map(operation => operation.event_name);
+  const recorded = operations.filter(operation => operation.meet_key === OB_MEET.meetKey && operation.data.participants.some(person => obAppearanceEntryId(person.entryId) === entry?.id && hasRecordedObPerformance(person))).map(operation => operation.event_name);
   return [...new Set([...(entry?.events ?? []), ...recorded])];
 }
 
 /** Keep registration, meet attendance and event results independent; never rewrite the source entry. */
 export function effectiveObParticipation(event: string, entry?: Pick<ObEntry, "events" | "absent">, performance?: MeetPerformance) {
-  const registered = !!entry?.events.includes(event);
+  const registered = !!entry && obEventCount(entry.events, event) >= obAppearanceNumber(performance?.entryId ?? "");
   const absent = entry?.absent === true;
   const recorded = hasRecordedObPerformance(performance);
   const status: ObParticipationStatus = recorded ? performance!.status : !entry ? "missing" : absent ? "absent" : !registered ? "withdrawn" : performance?.status ?? "entered";
@@ -38,10 +38,13 @@ export function effectiveObParticipation(event: string, entry?: Pick<ObEntry, "e
 export function obEventParticipants(event: string, entries: ObEntry[], saved?: MeetEventData) {
   const participants = [...(saved?.participants ?? [])];
   for (const entry of entries.filter(entry => entry.events.includes(event))) {
-    if (!participants.some(person => person.entryId === entry.id)) participants.push(emptyPerformance(entry.id));
+    for (let occurrence = 1; occurrence <= obEventCount(entry.events, event); occurrence++) {
+      const id = obAppearanceId(entry.id, occurrence);
+      if (!participants.some(person => person.entryId === id)) participants.push(emptyPerformance(id));
+    }
   }
   return participants.map(performance => {
-    const entry = entries.find(entry => entry.id === performance.entryId);
+    const entry = entries.find(entry => entry.id === obAppearanceEntryId(performance.entryId));
     return { entryId: performance.entryId, entry, performance, state: effectiveObParticipation(event, entry, performance) };
   });
 }
@@ -62,7 +65,10 @@ export class ObMeetRoster {
   static cell(entry: (Pick<ObEntry, "events"> & Partial<Pick<ObEntry, "id" | "absent">>) | undefined, slot: typeof OB_DUTY_SLOTS[number], operations: ObEventOperation[] = []) {
     const events = obDutyCompetitionEvents(entry, operations).filter(e => OB_DUTY_SLOTS.some(s => s.time === slot.time && s.events.includes(e.slice(2))));
     const own = events.filter(e => slot.events.includes(e.slice(2)));
-    const dns = events.filter(event => operations.find(operation => operation.event_name === event)?.data.participants.find(person => person.entryId === entry?.id)?.status === "DNS");
+    const dns = events.filter(event => {
+      const rows = obEventParticipants(event, entry?.id ? [entry as ObEntry] : [], operations.find(operation => operation.event_name === event)?.data).filter(row => row.entry?.id === entry?.id && row.state.registered);
+      return rows.length > 0 && rows.every(row => row.performance.status === "DNS");
+    });
     return { kind: entry?.absent ? "absent" as const : own.length ? "competing" as const : events.length ? "concurrent" as const : slot.note ? "on-day" as const : "empty" as const, events, own, dns };
   }
 }

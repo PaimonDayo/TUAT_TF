@@ -1,3 +1,4 @@
+import { obAppearanceEntryId } from "./ob-entries";
 import type { EntryMember } from "./entry-identity";
 import type { ObEntry } from "./ob-entries";
 import { hasDuty, type ObDuty, type ObDutyRole } from "./ob-duty";
@@ -40,7 +41,7 @@ export function obDutyIssues(entries: ObEntry[], members: EntryMember[], duties:
     else if (entry.absent) { add("absent", `${name}：欠席のため交代が必要です`); continue; }
     else if (entry.grade === "OB・OG" || entry.profile_id && !member) add("ineligible", `${name}：補助員の参加情報を確認してください`);
     const events = competingEvents(obDutyCompetitionEvents(entry, operations), duty.slot_time);
-    const dns = operations.some(operation => events.includes(operation.event_name) && operation.data.participants.some(person => person.entryId === entry?.id && person.status === "DNS"));
+    const dns = operations.some(operation => events.includes(operation.event_name) && operation.data.participants.some(person => obAppearanceEntryId(person.entryId) === entry?.id && person.status === "DNS"));
     if (events.length) add("competition", `${name}：${events.join("・")}の出場と重複しています${dns ? "（DNS登録あり。担当できるか確認してください）" : ""}`);
     const others = active.filter(other => other.profile_id === duty.profile_id && other.slot_time === duty.slot_time && other.event_name !== duty.event_name);
     if (others.length) add("concurrent", `${name}：${[...new Set(others.map(other => other.event_name))].join("・")}の補助担当と重複しています`);

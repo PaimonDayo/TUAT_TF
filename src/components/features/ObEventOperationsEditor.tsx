@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MeetEvent, MeetMark, emptyTrial, type MeetEventData, type MeetPerformance, type MeetTrial } from "@/lib/meet-operations";
 import { effectiveObParticipation, obEventRule, type ObEventOperation } from "@/lib/ob-operations";
-import { type ObEntry } from "@/lib/ob-entries";
+import { obAppearanceEntryId, obAppearanceName, type ObEntry } from "@/lib/ob-entries";
 import { MeetHeatPlan } from "@/lib/meet-heat-plan";
 import { fieldOrderRows } from "@/lib/meet-field-order";
 import { obMixedFieldNumbers, obMixedGroup, obMixedGroupLabel, obMixedLimits, obSourceDivision, projectObMixedEvent, splitObMixedEvent, type ObMixedProjection } from "@/lib/ob-mixed-operations";
@@ -31,7 +31,7 @@ export function ObEventOperationsEditor({ event, entries, initial, operations = 
   const disabled = draft.locked || draft.reviewing;
   const [editing, setEditing] = useState(false);
   const inputs = useRef(new Map<string, HTMLInputElement>());
-  const people = new Map(entries.map(e => [e.id, e]));
+  const people = new Map(data.participants.map(p => { const entry = entries.find(e => e.id === obAppearanceEntryId(p.entryId)); return [p.entryId, entry ? {...entry, submitted_name: obAppearanceName(entry, event, p.entryId)} : undefined]; }));
   const numbersFor = (context: ObMixedProjection) => {
     const numbers = obMixedFieldNumbers(context);
     return new Map([...context.sourceById].filter(([, source]) => source.event === event).map(([id, source]) => [source.entryId, numbers.get(id) ?? null]));
@@ -114,7 +114,7 @@ export function ObEventOperationsEditor({ event, entries, initial, operations = 
   return <FormModal open autoFocus={false} title={`${event} · 記録`} onOpenChange={open => !open && onClose()}>
     <FormDraftGuard dirty={draft.dirty} busy={draft.locked} onSave={draft.save}/>
     <div className="space-y-4" onFocusCapture={e => { if (e.target instanceof HTMLInputElement) setEditing(true); }} onBlurCapture={e => { if (!(e.relatedTarget instanceof HTMLInputElement)) setEditing(false); }}>
-      <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-body">出場者 {initialEntryId ? `${visible.length}人表示 / ${data.participants.length}人` : `${data.participants.length}人`}</p>{onAddEntry && <Button variant="outline" disabled={disabled} onClick={() => onAddEntry(event)}>出場者を追加</Button>}</div>
+      <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-body">出場登録 {initialEntryId ? `${visible.length}件表示 / ${data.participants.length}件` : `${data.participants.length}件`}</p>{onAddEntry && <Button variant="outline" disabled={disabled} onClick={() => onAddEntry(event)}>出場者を追加</Button>}</div>
       <ObOperationConflict draft={draft} entries={entries} event={event} positionLabel={conflictPosition}/>
       {rule.discipline === "track" && groups.length > 1 && <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="表示する組">{["all", ...groups.map(String)].map(value => <Button key={value} size="sm" className="shrink-0" variant={group === value ? "primary" : "outline"} aria-pressed={group === value} onClick={() => setGroup(value)}>{value === "all" ? "全員" : obMixedGroupLabel(Number(value))}</Button>)}</div>}
       {rule.discipline === "track" ? <>
