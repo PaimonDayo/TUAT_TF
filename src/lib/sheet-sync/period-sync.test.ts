@@ -9,6 +9,17 @@ vi.mock("./reply-deletions", () => ({ flushReplyDeletions: state.flush }));
 vi.mock("./gas-client", () => ({ fetchAllRaw: state.fetch, gasPost: state.gas }));
 vi.mock("./replies", () => ({ reconcileSheetReplies: state.replies }));
 import { runSheetSync } from "./run";
+import { CLEAR_CONTRACT_VERSION } from "./push-receipt";
+
+function gasAcknowledgement(body: Record<string, unknown>) {
+  if (body.action === "fetchMember") return { clearTarget: { contractVersion: CLEAR_CONTRACT_VERSION,
+    spreadsheetId: body.spreadsheetId ?? "synthetic_legacy_workbook", sheetId: "1", sheetName: body.memberName,
+    headerRow: 1, columns: [{ index: 0, label: "日付" }, { index: 1, label: "感想" }] } };
+  if (body.action === "clearIfExisting") return { success: true, action: body.action, contractVersion: CLEAR_CONTRACT_VERSION,
+    attemptId: body.attemptId, spreadsheetId: body.spreadsheetId, sheetId: body.expectedSheetId, sheetName: body.expectedSheetName,
+    date: body.date, outcome: "cleared", row: 2, clearedColumns: [1], unmapped: [], protectedHeaders: [] };
+  return { success: true, action: "updated" };
+}
 
 const fixtureAttempts = new Map<string, Record<string, unknown>>();
 const admin = { async rpc(name: string, args: Record<string, unknown>) {
@@ -98,7 +109,7 @@ beforeEach(() => {
   state.writes = []; state.records = []; state.profiles = []; state.clears = []; state.syncStates = []; state.selects = []; state.zeroAck = false; state.editBeforePullWrite = null; state.editBeforeRecordsRead = null;
   fixtureAttempts.clear(); vi.stubEnv("SHEET_SYNC_GAS_URL", "https://gas.example.test/synthetic/exec");
   state.flush.mockReset().mockResolvedValue([]);
-  state.gas.mockReset().mockResolvedValue({ success: true, action: "updated" });
+  state.gas.mockReset().mockImplementation(async body => gasAcknowledgement(body));
   state.replies.mockReset().mockResolvedValue({ synced: 0, failedMembers: [] });
   state.fetch.mockReset().mockImplementation(async (inputs: { name: string }[], spreadsheetId?: string) => ({
     members: inputs.map(input => ({ name: input.name, header: ["日付", "感想"], records: [
@@ -301,7 +312,7 @@ describe("period-aware scheduled synchronization", () => {
     const result = await runSheetSync(admin, { includeToday: false });
     expect(result).toMatchObject({ inserted: 2, updated: 0, pushed: 2 });
     expect(state.gas).toHaveBeenCalledWith(expect.objectContaining({ memberName: "B1 test", date: "2026-10-08", cells: { 感想: "app entry" } }));
-    expect(state.gas).toHaveBeenCalledWith(expect.objectContaining({ memberName: "B2 test", date: "2026-10-08", cells: { 感想: "" } }));
+    expect(state.gas).toHaveBeenCalledWith(expect.objectContaining({ action: "clearIfExisting", memberName: "B2 test", date: "2026-10-08", clearColumns: [{ index: 1, header: "感想" }] }));
     expect(state.replies.mock.calls.at(-1)?.[4]).toBe("2026-10-08");
     expect(state.writes.filter(write => write.table === "practice_records" && write.op === "insert").flatMap(write => write.value as Record<string, unknown>[]).map(row => row.recorded_date)).toEqual(["2026-10-07", "2026-10-07"]);
   });
@@ -405,6 +416,42 @@ describe("period-aware scheduled synchronization", () => {
     expect(result.inserted).toBe(0); expect(result.pushed).toBe(0);
     expect(state.fetch).not.toHaveBeenCalled(); expect(state.gas).not.toHaveBeenCalled();
     expect(state.replies).not.toHaveBeenCalled();
+  });
+  it.each(["empty", "failed"])("confirms queued clears from actual GAS despite %s published CSV", async csv => {
+    state.profiles = [profile("sheet")]; state.clears = [{ user_id: "regular", recorded_date: "2026-10-02" }];
+    if (csv === "failed") state.fetch.mockRejectedValue(new Error("synthetic CSV unavailable"));
+    else state.fetch.mockResolvedValue({ members: [{ name: "B1 test", header: ["日付", "感想"], records: [] }], signatures: new Map(), failedMembers: [], unchangedMembers: [] });
+    const result = await runSheetSync(admin);
+    expect(result).toMatchObject({ inserted: 0, updated: 0, pushed: 1 });
+    expect(state.gas.mock.calls.filter(([body]) => body.action === "fetchMember")).toHaveLength(1);
+    expect(state.gas.mock.calls.filter(([body]) => body.action === "clearIfExisting")).toHaveLength(1);
+    expect(state.writes.some(write => write.table === "sheet_pending_clears" && write.op === "delete")).toBe(false);
+    if (csv === "failed") expect(result.failedMembers.some(failure => failure.reason.includes("CSV unavailable"))).toBe(true);
+  });
+  it("keeps stale CSV contents excluded while clear ACK is malformed and sends no second mutation in the same run", async () => {
+    state.profiles = [profile("sheet")]; state.clears = [{ user_id: "regular", recorded_date: "2026-10-01" }];
+    state.gas.mockImplementation(async body => body.action === "clearIfExisting" ? { success: true, action: "updated" } : gasAcknowledgement(body));
+    const result = await runSheetSync(admin);
+    expect(result).toMatchObject({ pushed: 0, sheetWritesUncertain: true });
+    const inserted = state.writes.filter(write => write.table === "practice_records" && write.op === "insert").flatMap(write => write.value as Record<string, unknown>[]);
+    expect(inserted.some(row => row.recorded_date === "2026-10-01")).toBe(false);
+    expect(state.gas.mock.calls.filter(([body]) => body.action === "clearIfExisting")).toHaveLength(1);
+  });
+  it("dry-run plans a clear independent of CSV without a reservation, metadata POST, or mutation", async () => {
+    state.profiles = [profile("sheet")]; state.clears = [{ user_id: "regular", recorded_date: "2026-10-02" }];
+    state.fetch.mockRejectedValue(new Error("synthetic CSV unavailable"));
+    expect(await runSheetSync(admin, { dryRun: true })).toMatchObject({ dryRun: true, pushed: 1, inserted: 0, updated: 0 });
+    expect(state.gas).not.toHaveBeenCalled(); expect(fixtureAttempts.size).toBe(0); expect(state.writes).toHaveLength(0);
+  });
+  it("retains the global record-plus-clear limit and per-profile record priority", async () => {
+    vi.stubEnv("SHEET_SYNC_PUSH_LIMIT", "1");
+    state.profiles = [profile("sheet"), { ...profile("sheet", "second"), sheet_name: "B2 test" }];
+    state.records = [{ id: "r", user_id: "regular", recorded_date: "2026-10-02", memo: "pending", pending_sheet_push: true }];
+    state.clears = [{ user_id: "second", recorded_date: "2026-10-02" }];
+    expect(await runSheetSync(admin)).toMatchObject({ pushed: 1 });
+    expect(state.gas).toHaveBeenCalledOnce();
+    expect(state.gas).toHaveBeenCalledWith(expect.objectContaining({ action: "writeCells", memberName: "B1 test" }));
+    expect(state.gas.mock.calls.filter(([body]) => body.action === "clearIfExisting" || body.action === "fetchMember")).toHaveLength(0);
   });
   it("continues imports while holding pending sends and replies after an uncertain write", async () => {
     state.profiles = [profile("sheet")];

@@ -15,8 +15,8 @@ import { fetchAllRaw } from "./gas-client";
 import { sheetRecordsWithoutPendingPushes, computeMemberPull } from "./pull";
 import { reconcileSheetReplies } from "./replies";
 import { fetchAllPages } from "@/lib/fetch-all-pages";
-import { clearCellsFor, sheetRowHasContent, type PendingClear } from "./clear";
-import { listActivePushReceipts, pushProfileSnapshot, resolvePendingClear, writeCellsTargetSlot, writeCellsWithReceipt,
+import { type PendingClear } from "./clear";
+import { clearIfExistingWithReceipt, listActivePushReceipts, pushProfileSnapshot, resolvePendingClear, writeCellsTargetSlot, writeCellsWithReceipt,
   type ActivePushReceipt, type PushProfileSnapshot, type WriteCellsTarget } from "./push-receipt";
 import { unmappedRecordFields } from "./push";
 
@@ -142,15 +142,14 @@ async function runSheetSyncBatch(
     forceParse: period === "legacy" || profilesWithPendingPush.has(profile.id)
       || clearsByUser.has(profile.id)
       || configSignatureByProfile.get(profile.id) !== currentConfigSignatures.get(profile.id),
-  })), spreadsheetId);
+  })), spreadsheetId).catch(error => ({ members: [], signatures: new Map<string, string>(), unchangedMembers: [],
+    failedMembers: linked.map(profile => ({ member: profile.sheet_name, reason: error instanceof Error ? error.message : "CSVを取得できませんでした" })) }));
   result.failedMembers.push(...fetched.failedMembers);
   result.unchangedMembers.push(...fetched.unchangedMembers);
   const members = fetched.members;
   const memberByName = new Map(members.map((m) => [m.name.trim(), m]));
   const processedProfiles = linked.filter((profile) => memberByName.has(profile.sheet_name.trim()));
   const sheetToProfile = new Map(processedProfiles.map((profile) => [profile.sheet_name.trim(), profile]));
-
-  if (processedProfiles.length === 0) return result;
 
   // user_id -> date -> 記録の配列（複数/日を検出するため配列で持つ）
   const byUser = new Map<string, Map<string, DbRecord[]>>();
@@ -188,6 +187,23 @@ async function runSheetSyncBatch(
   const historyImportCandidates = new Set<string>();
   const historyImportFailures = new Set<string>();
   const confirmedProfileIds = new Set<string>();
+
+  // Clear requests obtain actual GAS metadata and date-row confirmation. They
+  // must remain runnable when published CSV is empty, stale, or unavailable.
+  for (const profile of linked) for (const date of clearsByUser.get(profile.id) ?? []) {
+    const queued = clearByKey.get(`${profile.id}:${date}`)!;
+    const sheetName = profile.sheet_name.trim();
+    const targetSlot = writeCellsTargetSlot(sheetName, date, spreadsheetId);
+    if (activeReceipts.some(receipt => receipt.profile_id === profile.id && receipt.recorded_date === date) || activeSlots.has(targetSlot)) {
+      result.sheetWritesUncertain = true;
+      result.failedMembers.push({ member: sheetName, reason: `${date}: 前の送信結果を確認できていないため、削除予定を保持しました` });
+    } else if (byUser.get(profile.id)!.has(date)) {
+      resolvedClears.push({ queued, expectedProfile: profile.expectedProfile, targetSlot });
+    } else {
+      pushes.push({ id: null, profileId: profile.id, memberName: sheetName, date, cells: {}, clearQueue: queued,
+        target: { sheetName, spreadsheetId, fields: profile.record_fields ?? [], columns: [] }, expectedProfile: profile.expectedProfile, unmapped: [] });
+    }
+  }
 
   for (const [sheetName, profile] of sheetToProfile) {
     const member = memberByName.get(sheetName);
@@ -252,28 +268,9 @@ async function runSheetSyncBatch(
       }
     }
 
-    // アプリで消した記録の欄を空にする（オーナー確定 2026-09-26「アプリで消したらスプシも消す」）。
+    // Queued clears protect CSV imports regardless of its current published contents.
     for (const date of clearsByUser.get(profile.id) ?? []) {
-      if (!inRange(date)) continue;
-      const queued = clearByKey.get(`${profile.id}:${date}`)!;
-      if (excludedDates.has(date) || (activeSlots.size > 0 && activeSlots.has(writeCellsTargetSlot(sheetName, date, spreadsheetId)))) {
-        excludedDates.add(date);
-        result.sheetWritesUncertain = true;
-        result.failedMembers.push({ member: sheetName, reason: `${date}: 前の送信結果を確認できていないため、削除予定を保持しました` });
-        continue;
-      }
-      if (appByDate.has(date)) {
-        // その日を作り直している。記録側の送信がその日を上書きするので、予定だけ消す。
-        resolvedClears.push({ queued, expectedProfile, targetSlot: writeCellsTargetSlot(sheetName, date, spreadsheetId) });
-        continue;
-      }
-      excludedDates.add(date);
-      if (sheetRowHasContent(map, member, date)) {
-        pushes.push({ id: null, profileId: profile.id, memberName: sheetName, date, cells: clearCellsFor(map, date), clearQueue: queued,
-          target, expectedProfile, unmapped: [] });
-      } else {
-        result.failedMembers.push({ member: sheetName, reason: `${date}: スプレッドシートの削除完了を確認できないため、削除予定を保持しました` });
-      }
+      if (!appByDate.has(date)) excludedDates.add(date);
     }
 
     // スプシ→アプリの取り込み。初回はシート開始日から全履歴を補完し、完了後は直近1か月だけを再取得する。
@@ -304,6 +301,10 @@ async function runSheetSyncBatch(
   const pushLimit = Number.isFinite(configuredPushLimit)
     ? Math.min(100, Math.max(1, configuredPushLimit))
     : 25;
+  const profileOrder = new Map(linked.map((profile, index) => [profile.id, index]));
+  // Preserve the existing per-profile record-before-clear order and shared limit.
+  pushes.sort((a, b) => profileOrder.get(a.profileId)! - profileOrder.get(b.profileId)!
+    || Number(!!a.clearQueue) - Number(!!b.clearQueue));
   const scheduledPushes = options.skipSheetWrites ? [] : pushes.slice(0, pushLimit);
 
   if (dryRun) {
@@ -430,8 +431,10 @@ async function runSheetSyncBatch(
       sheetWriteState.attempted = true;
       const expectedVersion = p.clearQueue?.created_at ?? p.updatedAt;
       if (!expectedVersion) throw new Error("送信対象の更新時刻を確認できませんでした");
-      const written = await writeCellsWithReceipt(admin, { kind: p.clearQueue ? "clear" : "record", recordId: p.id,
-        profileId: p.profileId, date: p.date, expectedVersion, expectedProfile: p.expectedProfile }, p.target, p.cells, p.unmapped);
+      const input = { kind: p.clearQueue ? "clear" as const : "record" as const, recordId: p.id,
+        profileId: p.profileId, date: p.date, expectedVersion, expectedProfile: p.expectedProfile };
+      const written = p.clearQueue ? await clearIfExistingWithReceipt(admin, input, p.target, activeReceipts)
+        : await writeCellsWithReceipt(admin, input, p.target, p.cells, p.unmapped);
       if (written.receipt.outcome !== "completed" || written.receipt.marker_status !== "applied") {
         throw new Error(written.receipt.marker_status === "superseded" ? "送信中に記録またはシート設定が変わりました。最新の内容を確認してください" : "一部の項目を書き込めませんでした。送信先を確認するまで再送を保留しました");
       }

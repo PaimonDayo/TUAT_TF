@@ -17,7 +17,7 @@ const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const sqlLiteral=value=>`'${String(value).replaceAll("'","''")}'`;
 export function assertNoExternalCredentials(env) {
   for (const [name,value] of Object.entries(env)) {
-    if (value && /^(?:PGPASSWORD|PGPASSFILE|PGSERVICE|PGSERVICEFILE|DATABASE_URL|SUPABASE_|NEXT_PUBLIC_SUPABASE_|NEXT_PUBLIC_CLOUD_AUTH_|PC_BACKEND_|CLOUD_AUTH_|PC_AUTH_SYNC_|CLOUD_AUTH_SYNC_|R2_|AWS_|GOOGLE_|SHEET_SYNC_|CRON_SECRET|NEXT_SERVER_ACTIONS_ENCRYPTION_KEY)/.test(name)) {
+    if (value && /^(?:PGPASSWORD|PGPASSFILE|PGSERVICE|PGSERVICEFILE|DATABASE_URL|SUPABASE_|NEXT_PUBLIC_SUPABASE_|NEXT_PUBLIC_CLOUD_AUTH_|PC_BACKEND_|PC_BACKUP_|PC_APP_|CLOUD_AUTH_|PC_AUTH_SYNC_|CLOUD_AUTH_SYNC_|R2_|AWS_|GOOGLE_|SHEET_SYNC_|CRON_SECRET|NEXT_SERVER_ACTIONS_ENCRYPTION_KEY)/.test(name)) {
       throw Error('Inherited application/database/provider configuration prohibited');
     }
   }
@@ -31,6 +31,33 @@ export function verifyPair(dumpEncrypted,recoveryEncrypted,key,instance) {
   const dump=decryptBackup(dumpEncrypted,key);
   if (!dump.subarray(0,5).equals(Buffer.from('PGDMP'))) throw Error('Not a PostgreSQL custom archive');
   return { dump,recovery:verifyRecovery(decryptBackup(recoveryEncrypted,key),dump,instance) };
+}
+export function reviewEvidencePath(here,generation) {
+  if (!/^[a-f0-9]{32}$/.test(generation)) throw Error('Fresh synthetic evidence generation required');
+  return resolve(here,'.private',generation,'result.json');
+}
+export function isUnknownReviewTransportFailure(error) {
+  return ['ETIMEDOUT','ENOBUFS'].includes(error?.code) || Boolean(error?.killed || error?.signal);
+}
+export function assertReviewCleanupComplete(created,names,generation,exists,commandOutcomeUnknown=false) {
+  const labels={'tuat.owner':OWNER,'tuat.generation':generation};
+  const resources=[...new Set([...created.ephemeral,...created.containers])].map(name=>['container',name]);
+  resources.push(...created.volumes.map(name=>['volume',name]));
+  if(created.network) resources.push(['network',names.network]);
+  for(const [kind,name] of resources) {
+    assertOwned(labels,name,generation,kind);
+    if(exists(kind,name)) throw Error('Owned synthetic resource remains after cleanup');
+  }
+  if(commandOutcomeUnknown) throw Error('Terminated WSL/Docker command outcome remains unknown');
+}
+export async function waitForFreshDatabase(probe,{clock=Date.now,sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms)),timeoutMs=45000}={}) {
+  const deadline=clock()+timeoutMs;
+  while(clock()<deadline) {
+    const beforeProbe=deadline-clock(); if(beforeProbe<=0) break;
+    try { if(probe(Math.min(5000,beforeProbe)) && clock()<=deadline) return true; } catch {}
+    const remaining=deadline-clock(); if(remaining>0) await sleep(Math.min(500,remaining));
+  }
+  return false;
 }
 const fingerprintSql=`SELECT json_build_object('tables',COALESCE(json_agg(row_to_json(t) ORDER BY t.name),'[]')) FROM (
  SELECT n.nspname||'.'||c.relname name,c.relrowsecurity rls,c.relforcerowsecurity force_rls,
@@ -81,15 +108,22 @@ export async function runReview() {
   if (!root.toLowerCase().startsWith('d:\\tuat_tf\\.worktrees\\') || lstatSync(here).isSymbolicLink()) throw Error('Dedicated candidate fixture required');
   const generation=randomUUID().replaceAll('-',''), prefix=`${OWNER}-${generation}`;
   const names={source:`${prefix}-source`,restore:`${prefix}-restore`,auth:`${prefix}-auth`,storage:`${prefix}-storage`,network:`${prefix}-internal`};
+  const legacyEvidence=resolve(here,'result.json'), legacyEvidenceBefore=hash(readFileSync(legacyEvidence));
+  const evidencePath=reviewEvidencePath(here,generation);
   const privateBase=resolve(here,'.private'); privateDirectory(privateBase);
   const state=resolve(privateBase,generation); privateDirectory(state);
-  const report={version:1,owner:OWNER,generation,syntheticOnly:true,productionAccess:false,providerCalls:0,r2Requests:0,
-    network:'internal',publishedPorts:[],success:false,cleanup:false,pins:PINS,migrations:[],tests:{},limits:{memory:'512m',cpus:1}};
+  const proofFiles=['run.mjs','run.test.mjs','fixture.sql','assert-restored.sql','README.md'];
+  const sourceProof=Object.fromEntries(proofFiles.map(name=>[name,hash(readFileSync(resolve(here,name)))]));
+  const report={version:2,owner:OWNER,generation,syntheticOnly:true,productionAccess:false,providerCalls:0,r2Requests:0,
+    purpose:'current-schema-encrypted-restore-with-sheet-receipts',evidencePath,sourceProof,legacyEvidenceSha256:{before:legacyEvidenceBefore},
+    network:'internal',publishedPorts:[],success:false,cleanup:false,pins:PINS,migrations:[],tests:{},limits:{memory:'512m',cpus:1,databaseReadinessMs:45000,commandMs:60000}};
+  let commandOutcomeUnknown=false;
   const created={containers:[],volumes:[],ephemeral:new Set(),network:false};
   const childEnv={}; for (const name of ['PATH','Path','SystemRoot','WINDIR','USERPROFILE','TEMP','TMP']) if(process.env[name]) childEnv[name]=process.env[name];
   function docker(args,input,timeout=60000) {
     try { return execFileSync('wsl.exe',['-d','Ubuntu','--exec','docker',...args],{input,encoding:'buffer',stdio:['pipe','pipe','pipe'],maxBuffer:32*1024*1024,timeout,windowsHide:true,env:childEnv}); }
-    catch(error) { writeFileSync(resolve(state,'failure.private.log'),Buffer.concat([error.stdout??Buffer.alloc(0),error.stderr??Buffer.alloc(0)]),{mode:0o600}); throw Error('Owned synthetic Docker command failed; protected diagnostic retained'); }
+    catch(error) { if(isUnknownReviewTransportFailure(error)) commandOutcomeUnknown=true;
+      writeFileSync(resolve(state,'failure.private.log'),Buffer.concat([error.stdout??Buffer.alloc(0),error.stderr??Buffer.alloc(0)]),{mode:0o600}); throw Error('Owned synthetic Docker command failed; protected diagnostic retained'); }
   }
   const text=args=>docker(args).toString('utf8').trim();
   const labels=['--label',`tuat.owner=${OWNER}`,'--label',`tuat.generation=${generation}`];
@@ -111,11 +145,7 @@ export async function runReview() {
     docker(['run','-d','--name',name,...labels,'--network',names.network,'--memory','512m','--cpus','1',
       '--mount',`type=volume,src=${volume},dst=/var/lib/postgresql/data`,'-e','POSTGRES_PASSWORD=synthetic-backup-local-only','-e',`POSTGRES_DB=${DB}`,
       PINS.postgres[1],'postgres','-D','/etc/postgresql','-c','listen_addresses=*','-c',`cron.database_name=${DB}`,'-c','cron.launch_active_jobs=off']);
-    let ready=false;
-    for(let i=0;i<90;i++) {
-      try { ready=text(['exec','-e','PGPASSWORD=synthetic-backup-local-only',name,'psql','-X','-qAt','-h','127.0.0.1','-U','supabase_admin','-d',DB,'-c','SELECT 1'])==='1'; } catch {}
-      if(ready) break; await new Promise(resolve=>setTimeout(resolve,500));
-    }
+    const ready=await waitForFreshDatabase(timeout=>docker(['exec','-e','PGPASSWORD=synthetic-backup-local-only',name,'psql','-X','-qAt','-h','127.0.0.1','-U','supabase_admin','-d',DB,'-c','SELECT 1'],undefined,timeout).toString('utf8').trim()==='1');
     if(!ready) throw Error('Fresh synthetic database startup exceeded 45 seconds');
     containerGuard(name);
     if(sql(name,'SHOW cron.launch_active_jobs')!=='off') throw Error('Cron must remain disabled');
@@ -238,10 +268,15 @@ export async function runReview() {
     if(restored.recovery.pushEnv!==recovery.pushEnv) throw Error('Synthetic Push configuration mismatch');
     report.tests.vaultRecreated=true; report.tests.pushEnvPreserved=true; report.tests.cronRestoredInactive=true;
     report.stage='real-restored-permission-operations';
-    if(!sql(names.restore,readFileSync(resolve(here,'assert-restored.sql'),'utf8')).includes('PASS:restored-UUID-RLS-allowlist-image-barrier')) throw Error('Restored acceptance SQL did not finish');
+    const acceptance=sql(names.restore,readFileSync(resolve(here,'assert-restored.sql'),'utf8'));
+    if(!acceptance.includes('PASS:restored-UUID-RLS-allowlist-image-barrier')
+      || !acceptance.includes('PASS:restored-sheet-receipts-ACL-unknown-dispatch0-marker-slot')) throw Error('Restored acceptance SQL did not finish');
     if(JSON.stringify(JSON.parse(sql(names.restore,rowsSql)))!==JSON.stringify(sourceRows)) throw Error('Restored acceptance transaction did not roll back');
     report.tests.permittedSaveDeniedSessionRevocationImageBarrier=true; report.tests.assertionsRolledBack=true;
+    report.tests.sheetReceipts={restored:5,reservedUnknown:2,confirmedPartial:1,completedApplied:1,completedSuperseded:1,
+      realRoleAclRls:true,unknownHeld:true,restoredBeginDispatches:0,markerVersionRetained:true,newerEditRetained:true,sameDayCrossProfileSlotHeld:true};
     for(const migration of report.migrations) if(hash(readFileSync(resolve(migrations,migration.name)))!==migration.sha256) throw Error('Migration changed during backup proof');
+    for(const name of proofFiles) if(hash(readFileSync(resolve(here,name)))!==sourceProof[name]) throw Error('Review source changed during backup proof');
     report.success=true; report.stage='complete';
   } catch(error) { report.failure=error.message; }
   finally {
@@ -266,12 +301,20 @@ export async function runReview() {
         if(!entry.Internal || Object.keys(entry.Containers??{}).length || !/^[a-f0-9]{64}$/.test(entry.Id)) throw Error('Owned network cleanup mismatch');
         docker(['network','rm',entry.Id]);
       }
+      assertReviewCleanupComplete(created,names,generation,(kind,name)=>Boolean(text(kind==='container'
+        ? ['container','ls','-a','--filter',`name=^/${name}$`,'--format','{{.ID}}']
+        : [kind,'ls','--filter',`name=^${name}$`,'--format',kind==='volume'?'{{.Name}}':'{{.ID}}'])),commandOutcomeUnknown);
       // Synthetic archives are unusable after the in-memory key is discarded.
       for(const name of ['synthetic.dump.enc','synthetic.recovery.json.enc']) if(existsSync(resolve(state,name))) rmSync(resolve(state,name));
+      report.tests.exactAttemptedResourcesAbsent=true;
       report.cleanup=true;
     } catch(error) { report.cleanupFailure=error.message; report.success=false; }
     report.finishedAt=new Date().toISOString();
-    writeFileSync(resolve(here,'result.json'),JSON.stringify(report,null,2)+'\n',{mode:0o600});
+    report.commandOutcomeUnknown=commandOutcomeUnknown;
+    report.legacyEvidenceSha256.after=hash(readFileSync(legacyEvidence));
+    report.legacyEvidenceSha256.unchanged=report.legacyEvidenceSha256.after===legacyEvidenceBefore;
+    if(!report.legacyEvidenceSha256.unchanged) { report.success=false; report.failure='Legacy evidence changed during review'; }
+    writeFileSync(evidencePath,JSON.stringify(report,null,2)+'\n',{mode:0o600,flag:'wx'});
   }
   return report;
 }
@@ -279,5 +322,5 @@ if(process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1])).
   const args=process.argv.slice(2);
   if(args.some(arg=>!['--check','--execute'].includes(arg)) || (args.includes('--check')&&args.includes('--execute'))) throw Error('Use --check or --execute');
   if(!args.includes('--execute')) console.log(JSON.stringify({execute:false,resourcePrefix:OWNER+'-',database:DB,network:'internal',publishedPorts:[],productionAccess:false,providerCalls:0,plan:'Generate synthetic current-schema source, encrypt with existing archive format, restore into a distinct fresh owned DB, verify content/RLS/recovery settings, remove exact owned resources.'},null,2));
-  else { const report=await runReview(); console.log(JSON.stringify({success:report.success,stage:report.stage,tests:report.tests,cleanup:report.cleanup,productionAccess:false,r2Requests:0},null,2)); if(!report.success) process.exitCode=1; }
+  else { const report=await runReview(); console.log(JSON.stringify({success:report.success,stage:report.stage,tests:report.tests,cleanup:report.cleanup,evidencePath:report.evidencePath,legacyEvidenceUnchanged:report.legacyEvidenceSha256.unchanged,productionAccess:false,r2Requests:0},null,2)); if(!report.success) process.exitCode=1; }
 }

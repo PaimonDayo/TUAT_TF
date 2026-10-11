@@ -5,6 +5,7 @@ import { startBackupSupervisor,backupPlan } from './run.mjs';
 import { backupStatusReady,STATUS_FILE,BACKUP_INTERVAL_MS,BACKUP_MAX_AGE_MS } from './status.mjs';
 import { decryptBackup,verifyRecovery } from '../laptop/backup-backend.mjs';
 import { encryptedPair } from './archive.mjs';
+import { planBackupRetention } from './retention.mjs';
 
 const instanceId='11111111-1111-4111-8111-111111111111',generation='22222222-2222-4222-8222-222222222222';
 const config={version:1,enabled:true,instanceId,stateDirectory:resolve('synthetic-backup-state'),environmentFile:resolve('synthetic-config/backup.env'),
@@ -15,6 +16,7 @@ const config={version:1,enabled:true,instanceId,stateDirectory:resolve('syntheti
 const env={PC_BACKUP_ENCRYPTION_KEY:'e'.repeat(64),R2_ACCOUNT_ID:'f'.repeat(32),R2_ACCESS_KEY_ID:'synthetic-key',R2_SECRET_ACCESS_KEY:'synthetic-secret',R2_BUCKET_NAME:'synthetic-only'};
 const dump=Buffer.from('PGDMPsynthetic-not-a-real-database');
 const recovery={version:1,vault:[],pushEnv:null,cron:{installed:true,jobs:[]}};
+const verifiedPair={verified:true,dumpEtag:'"synthetic-dump"',recoveryEtag:'"synthetic-recovery"'};
 const flush=async()=>{for(let i=0;i<8;i++) await new Promise(done=>setImmediate(done));};
 function fixture(overrides={}) {
   let time=Date.parse('2026-10-11T00:30:00.000Z'),callback,owns=true;
@@ -22,7 +24,7 @@ function fixture(overrides={}) {
   const adapters={
     async probe(){calls.probe++;return structuredClone(config.target);},
     async dump(){calls.dump++;return dump;},async recovery(){calls.recovery++;return structuredClone(recovery);},
-    async uploadAndVerify(){calls.upload++;return {verified:true};},close(){calls.close++;},...overrides};
+    async uploadAndVerify(){calls.upload++;return {...verifiedPair};},close(){calls.close++;},...overrides};
   const options={config,env,expectedInstanceId:instanceId,expectedDatabaseSystemIdentifier:config.target.databaseSystemIdentifier,generation,adapters,
     now:()=>time,setTimer:fn=>{callback=fn;return 1;},clearTimer:()=>{callback=null;},report:value=>events.push(value),
     save:(file,value)=>files.set(file,Buffer.isBuffer(value)?Buffer.from(value):structuredClone(value)),
@@ -61,7 +63,7 @@ test('15 minute interval and no overlap even while a dump remains in flight',asy
   complete(dump);await flush();await f.pulse();assert.equal(f.calls.dump,2);complete(dump);await flush();await life.stop();
 });
 test('uncertain upload keeps only prior same-generation pair until strict 35 minute bound, with no replay',async()=>{
-  const keys=[];const f=fixture({async uploadAndVerify(pair){f.calls.upload++;keys.push(pair.key);if(keys.length>1) throw Error('synthetic uncertain provider result');return {verified:true};}});
+  const keys=[];const f=fixture({async uploadAndVerify(pair){f.calls.upload++;keys.push(pair.key);if(keys.length>1) throw Error('synthetic uncertain provider result');return {...verifiedPair};}});
   const life=await startBackupSupervisor(f.options);await flush();const first=f.status().backup;
   f.advance(BACKUP_INTERVAL_MS);await f.pulse();assert.equal(f.ready(life.identity),true);assert.deepEqual(f.status().backup,first);
   assert.equal(keys.length,2);assert.notEqual(keys[0],keys[1]);assert.equal([...f.files.values()].filter(Buffer.isBuffer).length,4);
@@ -74,7 +76,7 @@ test('bad target probe immediately closes despite previously fresh pair',async()
   assert.equal(f.ready(life.identity),false);assert.equal(f.status().target.healthy,false);assert.equal(f.calls.upload,1);await life.stop();
 });
 test('target changes after upload cannot attest an otherwise verified pair',async()=>{
-  const f=fixture({async uploadAndVerify(){f.calls.upload++;f.adapters.probe=async()=>({...config.target,containerId:'9'.repeat(64)});return {verified:true};}});
+  const f=fixture({async uploadAndVerify(){f.calls.upload++;f.adapters.probe=async()=>({...config.target,containerId:'9'.repeat(64)});return {...verifiedPair};}});
   const life=await startBackupSupervisor(f.options);await flush();assert.equal(f.calls.upload,1);assert.equal(f.status().backup,null);assert.equal(f.ready(life.identity),false);await life.stop();
 });
 test('lost owner lock aborts work and closes a fresh generation',async()=>{
@@ -115,4 +117,58 @@ test('recoverable target and upload failures do not ask owning host to stop',asy
   let notices=0;const f=fixture();const life=await startBackupSupervisor({...f.options,onFatal:()=>{notices++;}});await flush();
   f.adapters.uploadAndVerify=async()=>{throw Error('synthetic upload failure');};f.advance(BACKUP_INTERVAL_MS);await f.pulse();assert.equal(notices,0);
   f.adapters.probe=async()=>{throw Error('synthetic target failure');};await f.pulse();assert.equal(notices,0);assert.equal(f.ready(life.identity),false);await life.stop();
+});
+
+const receipts=f=>[...f.files.entries()].filter(([file])=>file.includes('receipts')).map(([,value])=>value);
+test('intent survives a stopped dump and precedes all archive/provider bytes',async()=>{
+  let finish;const f=fixture({dump:()=>new Promise(done=>{finish=done;})});
+  const life=await startBackupSupervisor(f.options);await flush();
+  assert.equal(receipts(f).length,1);assert.equal(receipts(f)[0].state,'prepared');
+  assert.equal(receipts(f)[0].generation,generation);assert.equal(receipts(f)[0].localState,'unknown');
+  assert.equal([...f.files.values()].filter(Buffer.isBuffer).length,0);assert.equal(f.calls.upload,0);
+  const stopping=life.stop();finish(dump);await stopping;await flush();
+  assert.equal(receipts(f)[0].state,'prepared');assert.equal(f.calls.upload,0);
+});
+test('persisted complete pair is accepted by pure retention planning with explicit budgets',async()=>{
+  const f=fixture(),life=await startBackupSupervisor(f.options);await flush();
+  const [receipt]=receipts(f);assert.equal(receipt.state,'verified');assert.equal(receipt.dumpEtag,verifiedPair.dumpEtag);
+  assert.equal(receipt.recoveryEtag,verifiedPair.recoveryEtag);assert.equal(receipt.localBytes,receipt.dumpBytes+receipt.recoveryBytes);
+  assert.equal(receipt.remoteBytes,receipt.localBytes);assert.equal(receipt.dumpKey,f.status().backup.key);
+  for(const secret of Object.values(env))assert(!JSON.stringify(receipt).includes(secret));
+  const scope=Object.fromEntries(['targetFingerprint','storageScopeId','archiveKeyId'].map(key=>[key,receipt[key]]));
+  const plan=planBackupRetention({identity:{...life.identity,databaseSystemIdentifier:config.target.databaseSystemIdentifier},scope,
+    protectedPair:receipt,receipts:[receipt],inventoryLimit:512,planNonce:'33333333-3333-4333-8333-333333333333',now:Date.parse(receipt.verifiedAt),
+    budgets:{maxLocalBytes:100_000,maxRemoteBytes:100_000,freeLocalBytes:100_000,minFreeLocalBytes:1000,remoteBaselineBytes:0,
+      nextPairBytes:10_000,maxRequestCount:6,maxTransferBytes:20_000}});
+  assert.equal(plan.dryRun,true);assert.equal(plan.decision.planningAllowed,true);assert.equal(plan.decision.writeAllowed,true);
+  assert.deepEqual(plan.removalCandidates,{local:[],remote:[]});await life.stop();
+});
+test('unknown upload leaves a bounded-size prepared hold beside the prior verified receipt',async()=>{
+  const f=fixture(),life=await startBackupSupervisor(f.options);await flush();
+  const first=structuredClone(receipts(f)[0]);f.adapters.uploadAndVerify=async()=>{f.calls.upload++;throw Error('Unknown PUT');};
+  f.advance(BACKUP_INTERVAL_MS);await f.pulse();
+  const saved=receipts(f);assert.deepEqual(saved[0],first);assert.equal(saved[1].state,'prepared');
+  assert.equal(saved[1].localState,'complete');assert.equal(saved[1].remoteState,'unknown');
+  assert.equal(saved[1].remoteBytes,saved[1].dumpBytes+saved[1].recoveryBytes);
+  assert.equal(f.status().backup.key,first.dumpKey);await f.pulse();assert.equal(f.calls.upload,2);await life.stop();
+});
+test('missing remote ETags never produce a verified receipt or ready startup',async()=>{
+  const f=fixture({uploadAndVerify:async()=>({verified:true})}),life=await startBackupSupervisor(f.options);await flush();
+  assert.equal(receipts(f)[0].state,'prepared');assert.equal(f.status().backup,null);assert.equal(f.ready(life.identity),false);await life.stop();
+});
+test('intent persistence failure stops before dump/provider and keeps startup protected',async()=>{
+  const f=fixture(),save=f.options.save;
+  const life=await startBackupSupervisor({...f.options,save:(file,...args)=>{if(file.includes('receipts'))throw Error('Disk refusal');save(file,...args);}});await flush();
+  assert.equal(f.calls.dump,0);assert.equal(f.calls.upload,0);assert.equal(f.ready(life.identity),false);await life.stop();
+});
+test('verified receipt persistence failure retains prepared intent and cannot publish new attestation',async()=>{
+  const f=fixture(),save=f.options.save;
+  const life=await startBackupSupervisor({...f.options,save:(file,value,...args)=>{if(value?.state==='verified')throw Error('Receipt outcome unknown');save(file,value,...args);}});await flush();
+  assert.equal(f.calls.upload,1);assert.equal(receipts(f)[0].state,'prepared');assert.equal(f.status().backup,null);
+  assert.equal(f.ready(life.identity),false);await f.pulse();assert.equal(f.calls.upload,1);await life.stop();
+});
+test('final target mismatch holds the pair despite successful remote readback',async()=>{
+  const f=fixture({async uploadAndVerify(){f.calls.upload++;f.adapters.probe=async()=>({...config.target,containerId:'9'.repeat(64)});return {...verifiedPair};}});
+  const life=await startBackupSupervisor(f.options);await flush();assert.equal(receipts(f)[0].state,'prepared');
+  assert.equal(receipts(f)[0].remoteState,'unknown');assert.equal(f.ready(life.identity),false);await life.stop();
 });

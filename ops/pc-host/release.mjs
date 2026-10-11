@@ -3,7 +3,7 @@ import { readFileSync, readdirSync, lstatSync, writeFileSync, renameSync, mkdirS
 import { resolve, relative, isAbsolute, parse } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { parseEnv } from 'node:util';
-import { verifiedReleaseDirectory, verifyRuntimeManifest, runtimeRebuildRequired, hostGitPath, hostWindowsToolPath } from './runtime-manifest.mjs';
+import { verifiedReleaseDirectory, verifyRuntimeManifest, runtimeRebuildRequired, hostGitPath, hostGitEnvironment, hostWindowsToolPath } from './runtime-manifest.mjs';
 import { validateBackupOwnerConfig } from './backup-owner.mjs';
 
 const forbiddenEnvFiles = ['.env', '.env.local', '.env.production', '.env.production.local'];
@@ -60,7 +60,10 @@ export function sourceProof(directory, commit) {
   // An immutable release may be SYSTEM-owned. Trust only this checked path for
   // this command; never change global Git trust or allow a directory wildcard.
   const git = hostGitPath();
-  const run = args => execFileSync(git, ['-c', `safe.directory=${exactDirectory}`, '-C', exactDirectory, ...args], { encoding: 'utf8', windowsHide: true }).trim();
+  // Windows checkouts already use CRLF normalization from the Git installation.
+  // Keep that fixed behavior after excluding mutable system/global settings;
+  // the runtime manifest still binds each actual source byte independently.
+  const run = args => execFileSync(git, ['-c', `safe.directory=${exactDirectory}`, '-c', `core.autocrlf=${process.platform === 'win32'}`, '-C', exactDirectory, ...args], { encoding: 'utf8', windowsHide: true, env: hostGitEnvironment() }).trim();
   if (run(['rev-parse', 'HEAD']) !== commit || run(['status', '--porcelain', '--untracked-files=normal'])) throw Error('Release requires its exact clean commit');
   return { commit, lockfileHash: createHash('sha256').update(readFileSync(resolve(directory, 'package-lock.json'))).digest('hex'), nodeVersion: process.version };
 }

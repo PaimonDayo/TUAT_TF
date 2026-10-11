@@ -29,6 +29,17 @@ export function hostGitPath() {
   return requiredExecutable(resolve(root, 'Git/cmd/git.exe'), 'Git');
 }
 
+export function hostGitEnvironment() {
+  // Git proof must not read a developer profile, injected GIT_* overrides or
+  // a system config. Production preflight separately validates local metadata.
+  const env = { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: process.platform === 'win32' ? 'NUL' : '/dev/null', LC_ALL: 'C' };
+  if (process.platform === 'win32') {
+    env.SystemRoot = process.env.SystemRoot;
+    env.WINDIR = process.env.SystemRoot;
+  }
+  return env;
+}
+
 export function hostWindowsToolPath(name) {
   if (process.platform !== 'win32' || !['whoami', 'icacls'].includes(name)) throw Error('Unexpected Windows host tool');
   const root = process.env.SystemRoot;
@@ -67,7 +78,7 @@ function hashFile(path, digest = createHash('sha256')) {
 function releaseCodeHash(directory) {
   // This supplements Git cleanliness: runtime helpers/config must also match
   // their built bytes even if an index entry has been marked skip-worktree.
-  const names = execFileSync(hostGitPath(), ['-c', `safe.directory=${directory}`, '-C', directory, 'ls-files', '-z'], { encoding: 'utf8', windowsHide: true }).split('\0').filter(Boolean).sort();
+  const names = execFileSync(hostGitPath(), ['-c', `safe.directory=${directory}`, '-C', directory, 'ls-files', '-z'], { encoding: 'utf8', windowsHide: true, env: hostGitEnvironment() }).split('\0').filter(Boolean).sort();
   const digest = createHash('sha256');
   for (const name of names) {
     const path = resolve(directory, name);

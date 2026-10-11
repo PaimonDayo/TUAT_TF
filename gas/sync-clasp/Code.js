@@ -1,4 +1,5 @@
 const OCTOBER_SPREADSHEET_ID = '18HKZrVL-JtXbZ9zcYUFPRPGIGCpd7ltLOsmvBKdJfR8';
+const CLEAR_CONTRACT_VERSION = 'clear-if-existing-v1';
 let requestSpreadsheetId = '';
 
 /**
@@ -59,8 +60,10 @@ function doPost(e) {
     requestSpreadsheetId = target;
     if (body.action === 'listMembers') return handleListMembers();
     if (body.action === 'fetchAllRaw') return handleFetchAllRaw();
-    if (body.action === 'fetchMember') return handleFetchMember(body.memberName);
+    if (body.action === 'fetchMember') return body.clearContract !== undefined
+      ? createJsonResponse(readClearTarget(body)) : handleFetchMember(body.memberName);
     if (body.action === 'writeCells') return createJsonResponse(writeCellsRecord(body));
+    if (body.action === 'clearIfExisting') return createJsonResponse(clearIfExistingRecord(body));
     if (body.action === 'writeMiddleLongMenu') return createJsonResponse(writeMiddleLongMenuRecord(body));
     if (body.action === 'deleteReply') return createJsonResponse(deleteReplyRecord(body));
     if (body.action === 'writeReply') return createJsonResponse(writeReplyRecord(body));
@@ -192,7 +195,20 @@ function handleFetchMember(memberName) {
 }
 
 // 入力セルだけを更新する。送信側のマッピングを信頼して数式を上書きしない。
+// This lock coordinates participating handlers in this script only. Google UI
+// edits and other scripts are outside this guarantee. Flush before releasing;
+// a failed flush is an unconfirmed write, never a successful acknowledgement.
 function writeCellsRecord(data) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const result = writeCellsRecordUnlocked(data);
+    SpreadsheetApp.flush();
+    return result;
+  } finally { lock.releaseLock(); }
+}
+
+function writeCellsRecordUnlocked(data) {
   const memberName = data.memberName;
   const date = data.date;
   const cells = data.cells || {};
@@ -264,6 +280,103 @@ function writeCellsRecord(data) {
     unmapped: unmapped, // 見出しが見つからず書き込めなかった項目（タブに列が無いケースの可視化用）
     protectedHeaders: protectedHeaders,
   };
+}
+
+function clearTargetMetadata(sheet, values, hIdx) {
+  return {
+    contractVersion: CLEAR_CONTRACT_VERSION,
+    spreadsheetId: getSpreadsheet().getId(),
+    sheetId: sheet.getSheetId().toString(),
+    sheetName: sheet.getName(),
+    headerRow: hIdx + 1,
+    columns: values[hIdx].map(function (label, index) { return { index: index, label: label.toString() }; }),
+  };
+}
+
+// Metadata only: no record values or notes are returned by this opt-in read.
+function readClearTarget(data) {
+  if (data.clearContract !== CLEAR_CONTRACT_VERSION || !data.memberName) throw new Error('Clear contract unavailable');
+  const sheet = findMemberSheet(data.memberName);
+  if (!sheet) throw new Error('Clear target unavailable');
+  const values = sheet.getDataRange().getValues();
+  const hIdx = findGenericHeaderIndex(values);
+  if (hIdx === -1) throw new Error('Clear header unavailable');
+  return { clearTarget: clearTargetMetadata(sheet, values, hIdx) };
+}
+
+function validClearDate(date) {
+  if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const parsed = new Date(date + 'T00:00:00Z');
+  return !isNaN(parsed) && parsed.toISOString().slice(0, 10) === date;
+}
+
+function clearIfExistingRecord(data) {
+  if (data.contractVersion !== CLEAR_CONTRACT_VERSION || !validClearDate(data.date)
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.attemptId || '')
+    || !data.memberName || !Array.isArray(data.clearColumns) || !data.clearColumns.length) throw new Error('Invalid clear contract');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const sheet = findMemberSheet(data.memberName);
+    if (!sheet) throw new Error('Clear target unavailable');
+    const values = sheet.getDataRange().getValues();
+    const hIdx = findGenericHeaderIndex(values);
+    if (hIdx === -1) throw new Error('Clear header unavailable');
+    const metadata = clearTargetMetadata(sheet, values, hIdx);
+    if (data.spreadsheetId !== metadata.spreadsheetId || data.expectedSheetId !== metadata.sheetId
+      || data.expectedSheetName !== metadata.sheetName || data.expectedHeaderRow !== metadata.headerRow
+      || JSON.stringify(data.expectedColumns) !== JSON.stringify(metadata.columns)) throw new Error('Clear target changed');
+    const dateColumns = metadata.columns.filter(function (column) { return normalizeHeaderCell(column.label) === '日付'; });
+    if (dateColumns.length !== 1) throw new Error('Ambiguous clear date column');
+    const dateColumn = dateColumns[0].index;
+    const rows = [];
+    for (let i = hIdx + 1; i < values.length; i++) {
+      const raw = values[i][dateColumn];
+      if (raw === '' || raw === null || raw === undefined) continue;
+      const parsed = parseSheetDate(raw);
+      // A malformed date must not become an authoritative missing ACK. Only
+      // recognized summary labels can be skipped without understanding a date.
+      if (!validClearDate(parsed) && !/^(?:(?:月間|週間|週|月|日)?合計|小計|総計|平均)$/.test(raw.toString().trim()))
+        throw new Error('Unrecognized clear date');
+      if (parsed === data.date) rows.push(i);
+    }
+    if (rows.length > 1) throw new Error('Ambiguous clear date row');
+    const seen = new Set();
+    data.clearColumns.forEach(function (column) {
+      if (!column || typeof column.header !== 'string' || !column.header
+        || (column.index !== null && (!Number.isInteger(column.index) || column.index < 0
+          || !metadata.columns[column.index] || metadata.columns[column.index].label !== column.header))
+        || seen.has(column.index === null ? 'missing:' + column.header : column.index)) throw new Error('Invalid clear columns');
+      seen.add(column.index === null ? 'missing:' + column.header : column.index);
+    });
+    const result = { success: true, action: 'clearIfExisting', contractVersion: CLEAR_CONTRACT_VERSION,
+      attemptId: data.attemptId, spreadsheetId: metadata.spreadsheetId, sheetId: metadata.sheetId,
+      sheetName: metadata.sheetName, date: data.date, outcome: rows.length ? 'cleared' : 'missing',
+      row: rows.length ? rows[0] + 1 : null, clearedColumns: [], unmapped: [], protectedHeaders: [] };
+    if (rows.length) {
+      const formulas = sheet.getDataRange().getFormulas();
+      const calculated = new Set();
+      metadata.columns.forEach(function (column) {
+        if (/実際の距離|実距離|走行距離|総距離/.test(normalizeHeaderCell(column.label))
+          && formulas.some(function (row, i) {
+            return Boolean(row[column.index] && values[i] && values[i][dateColumn] != null
+              && validClearDate(parseSheetDate(values[i][dateColumn])));
+          })) calculated.add(column.index);
+      });
+      data.clearColumns.forEach(function (column) {
+        if (column.index === null) { result.unmapped.push(column.header); return; }
+        const header = normalizeHeaderCell(column.header);
+        const cell = sheet.getRange(result.row, column.index + 1);
+        if (header === '日付' || header === '曜日' || header.indexOf('週合計') !== -1
+          || calculated.has(column.index) || cell.getFormula()) { result.protectedHeaders.push(column.header); return; }
+        cell.setValue('');
+        result.clearedColumns.push(column.index);
+      });
+      if (result.unmapped.length || result.protectedHeaders.length) result.outcome = 'partial';
+    }
+    SpreadsheetApp.flush();
+    return result;
+  } finally { lock.releaseLock(); }
 }
 
 

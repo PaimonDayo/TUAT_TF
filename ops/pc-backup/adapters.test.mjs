@@ -61,12 +61,32 @@ test('actual upload adapter verifies both encrypted remote readbacks and never r
   const client={async send(command) {
     const input=command.input;calls.push(command.constructor.name);
     if(command.constructor.name==='PutObjectCommand') {assert.equal(input.IfNoneMatch,'*');objects.set(input.Key,{bytes:input.Body,metadata:input.Metadata});return {};}
-    const object=objects.get(input.Key);return {ContentLength:object.bytes.length,Metadata:object.metadata,...(command.constructor.name==='GetObjectCommand'?{Body:Readable.from([object.bytes])}:{})};
+    const object=objects.get(input.Key);return {ContentLength:object.bytes.length,Metadata:object.metadata,ETag:'"'+object.metadata.sha256+'"',...(command.constructor.name==='GetObjectCommand'?{Body:Readable.from([object.bytes])}:{})};
   },destroy(){}};
   const adapter=createAdapters(f.config,{PC_BACKUP_ENCRYPTION_KEY:key,R2_ACCOUNT_ID:'e'.repeat(32),R2_ACCESS_KEY_ID:'synthetic',R2_SECRET_ACCESS_KEY:'synthetic',R2_BUCKET_NAME:'synthetic'},
     {...f.dependencies,createStorage:()=>client});
-  assert.deepEqual(await adapter.uploadAndVerify(pair,{signal:new AbortController().signal}),{verified:true});
+  assert.deepEqual(await adapter.uploadAndVerify(pair,{signal:new AbortController().signal}),{verified:true,dumpEtag:'"'+pair.sha256+'"',recoveryEtag:'"'+pair.recoverySha256+'"'});
   assert.deepEqual(calls,['PutObjectCommand','HeadObjectCommand','GetObjectCommand','PutObjectCommand','HeadObjectCommand','GetObjectCommand']);
   client.send=async()=>{calls.push('uncertain');throw Error('synthetic unknown PUT');};
   await assert.rejects(adapter.uploadAndVerify(pair,{signal:new AbortController().signal}));assert.equal(calls.filter(value=>value==='uncertain').length,1);
+});
+
+test('unverifiable remote identity stops the pair without another PUT or silent GET-body retention',async()=>{
+  for(const mode of ['missing','invalid','changed']){
+    const f=adapterFixture(),key='d'.repeat(64),pair=encryptedPair({dump:Buffer.from('PGDMPsynthetic'),recovery:{version:1,vault:[],cron:{installed:false,jobs:[]},pushEnv:null},
+      instanceId:f.config.instanceId,key,stamp:'2026-10-11T00-30-00-000Z'});
+    const calls=[],objects=new Map();let body;
+    const client={async send(command){
+      const input=command.input;calls.push(command.constructor.name);
+      if(command.constructor.name==='PutObjectCommand'){objects.set(input.Key,{bytes:input.Body,metadata:input.Metadata});return {};}
+      const object=objects.get(input.Key),get=command.constructor.name==='GetObjectCommand';
+      if(get)body=Readable.from([object.bytes]);
+      return {ContentLength:object.bytes.length,Metadata:object.metadata,ETag:mode==='missing'?undefined:mode==='invalid'?'bad\n':get?'"changed"':'"original"',...(get?{Body:body}:{})};
+    },destroy(){}};
+    const adapter=createAdapters(f.config,{PC_BACKUP_ENCRYPTION_KEY:key,R2_ACCOUNT_ID:'e'.repeat(32),R2_ACCESS_KEY_ID:'synthetic',R2_SECRET_ACCESS_KEY:'synthetic',R2_BUCKET_NAME:'synthetic'},
+      {...f.dependencies,createStorage:()=>client});
+    await assert.rejects(adapter.uploadAndVerify(pair,{signal:new AbortController().signal}));
+    assert.equal(calls.filter(name=>name==='PutObjectCommand').length,1);assert.equal(calls.length,mode==='changed'?3:2);
+    if(body)assert.equal(body.destroyed,true);
+  }
 });

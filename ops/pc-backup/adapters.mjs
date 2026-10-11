@@ -69,19 +69,21 @@ export function createAdapters(config,env,{execute=promisify(execFile),readBinar
     },
     async uploadAndVerify(pair,{signal}) {
       const bucket=env.R2_BUCKET_NAME;
+      const etags=[];
       for(const [key,bytes,hash,recovery] of [[pair.key,pair.bytes,pair.sha256,pair.recoveryKey],[pair.recoveryKey,pair.recoveryBytes,pair.recoverySha256,null]]) {
         await request(new PutObjectCommand({Bucket:bucket,Key:key,Body:bytes,ContentType:'application/octet-stream',IfNoneMatch:'*',Metadata:{sha256:hash,...(recovery?{recovery}:{})}}),signal,30_000);
         const head=await request(new HeadObjectCommand({Bucket:bucket,Key:key}),signal,10_000);
-        if(head.ContentLength!==bytes.length||head.Metadata?.sha256!==hash) throw Error('Remote encrypted pair verification failed');
+        if(head.ContentLength!==bytes.length||head.Metadata?.sha256!==hash||typeof head.ETag!=='string'||!head.ETag||head.ETag.length>256||/[\r\n\0]/.test(head.ETag)) throw Error('Remote encrypted pair verification failed');
         const downloaded=await request(new GetObjectCommand({Bucket:bucket,Key:key}),signal,30_000);
         // Keep readback bounded by the exact uploaded ciphertext size, including streamed bodies.
-        if(downloaded.ContentLength!==bytes.length) {downloaded.Body?.destroy?.();throw Error('Remote backup size mismatch');}
+        if(downloaded.ContentLength!==bytes.length||downloaded.ETag!==head.ETag) {downloaded.Body?.destroy?.();throw Error('Remote backup size or identity mismatch');}
         const actual=await boundedReadback(downloaded.Body,{expectedBytes:bytes.length,signal});
         if(actual.length!==bytes.length||sha256(actual)!==hash||downloaded.Metadata?.sha256!==hash) throw Error('Remote backup readback mismatch');
+        etags.push(head.ETag);
       }
       const dump=decryptBackup(pair.bytes,env.PC_BACKUP_ENCRYPTION_KEY);
       verifyRecovery(decryptBackup(pair.recoveryBytes,env.PC_BACKUP_ENCRYPTION_KEY),dump,config.instanceId);
-      return {verified:true};
+      return {verified:true,dumpEtag:etags[0],recoveryEtag:etags[1]};
     },
     isDrained(){return !commandUncertain;},
     close(){client?.destroy();}

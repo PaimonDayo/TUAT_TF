@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 const gas = vi.hoisted(() => vi.fn());
 vi.mock("./gas-client", () => ({ gasPost: gas }));
 import { beginPushAttempt, listActivePushReceipts, pushFingerprint, pushProfileSnapshot, resolvePendingClear,
-  writeCellsIdentity, writeCellsTargetSlot, writeCellsWithReceipt, type ActivePushReceipt, type PushAttemptInput } from "./push-receipt";
+  CLEAR_CONTRACT_VERSION, clearIfExistingWithReceipt, writeCellsIdentity, writeCellsTargetSlot, writeCellsWithReceipt, type ActivePushReceipt, type PushAttemptInput } from "./push-receipt";
 
 const profileId = "11111111-1111-4111-8111-111111111111";
 const recordId = "22222222-2222-4222-8222-222222222222";
@@ -21,6 +21,93 @@ function client(rpc: ReturnType<typeof vi.fn>, read = vi.fn().mockResolvedValue(
 }
 beforeEach(() => { vi.stubEnv("SHEET_SYNC_GAS_URL", "https://gas.example.test/synthetic/exec"); gas.mockReset().mockResolvedValue({ success: true, action: "updated" }); });
 afterEach(() => vi.unstubAllEnvs());
+
+describe("authoritative clear-if-existing receipt", () => {
+  const clearInput = { ...input, kind: "clear" as const, recordId: null };
+  const metadata = { contractVersion: CLEAR_CONTRACT_VERSION, spreadsheetId: target.spreadsheetId, sheetId: "7", sheetName: target.sheetName,
+    headerRow: 1, columns: target.columns };
+  function acknowledge(body: Record<string, unknown>, changes: Record<string, unknown> = {}) {
+    return { success: true, action: "clearIfExisting", contractVersion: CLEAR_CONTRACT_VERSION, attemptId: body.attemptId,
+      spreadsheetId: body.spreadsheetId, sheetId: body.expectedSheetId, sheetName: body.expectedSheetName, date: body.date,
+      outcome: "cleared", row: 2, clearedColumns: [1], unmapped: [], protectedHeaders: [], ...changes };
+  }
+  function provider(changes: Record<string, unknown> = {}) {
+    gas.mockImplementation(async body => body.action === "fetchMember" ? { clearTarget: metadata } : acknowledge(body, changes));
+  }
+  function rpcFixture(finish: Record<string, unknown> = { outcome: "completed", marker_status: "applied" }) {
+    return vi.fn().mockImplementation(async (name, args) => ({ data: name === "sheet_push_begin"
+      ? { outcome: "send", attempt_id: args.p_attempt_id, marker_status: "pending" } : finish, error: null }));
+  }
+  const mutationCalls = () => gas.mock.calls.filter(([body]) => body.action === "clearIfExisting");
+  const readCalls = () => gas.mock.calls.filter(([body]) => body.action === "fetchMember");
+  const clear = (rpc: ReturnType<typeof vi.fn>, changes: Partial<typeof clearInput> = {}) => clearIfExistingWithReceipt(client(rpc).admin, { ...clearInput, ...changes }, target, []);
+
+  it.each(["cleared", "missing"])("finishes a strictly bound authoritative %s ACK with one mutation", async outcome => {
+    provider(outcome === "missing" ? { outcome, row: null, clearedColumns: [] } : {});
+    const rpc = rpcFixture();
+    expect(await clear(rpc)).toMatchObject({ outcome, receipt: { outcome: "completed", marker_status: "applied" } });
+    expect(readCalls()).toHaveLength(1); expect(mutationCalls()).toHaveLength(1);
+    const binding = rpc.mock.calls[0][1], body = mutationCalls()[0][0];
+    expect(binding.p_payload_sha256).toBe(pushFingerprint(Object.fromEntries(Object.entries(body).filter(([key]) => key !== "attemptId"))));
+    expect(binding.p_payload_sha256).not.toBe(writeCellsIdentity(target, input.date, { 感想: "" }).payloadSha256);
+    expect(rpc.mock.calls[1]).toEqual(["sheet_push_finish", { p_attempt_id: body.attemptId, p_target_fingerprint: binding.p_target_fingerprint,
+      p_payload_sha256: binding.p_payload_sha256, p_provider_complete: true }]);
+  });
+  it("rejects old metadata or a wrong actual workbook before reservation and mutation", async () => {
+    const rpc = rpcFixture();
+    for (const response of [{ data: { header: ["日付", "感想"] } }, { clearTarget: { ...metadata, spreadsheetId: "wrong_book" } },
+      { clearTarget: { ...metadata, contractVersion: "old" } }]) {
+      gas.mockResolvedValueOnce(response); await expect(clear(rpc)).rejects.toThrow();
+    }
+    expect(readCalls()).toHaveLength(3); expect(mutationCalls()).toHaveLength(0); expect(rpc).not.toHaveBeenCalled();
+  });
+  it("keeps an ambiguous begin even when its single read appears sendable", async () => {
+    provider(); const rpc = vi.fn().mockResolvedValue({ data: null, error: { message: "synthetic begin lost" } });
+    const fixture = client(rpc, vi.fn().mockResolvedValue({ data: { state: "reserved", outcome: "send" }, error: null }));
+    await expect(clearIfExistingWithReceipt(fixture.admin, clearInput, target, [])).rejects.toMatchObject({ code: "SHEET_PUSH_BEGIN_UNCONFIRMED", retryable: false });
+    expect(fixture.read).toHaveBeenCalledOnce(); expect(readCalls()).toHaveLength(1); expect(mutationCalls()).toHaveLength(0);
+  });
+  it.each([{ action: "updated" }, { attemptId: heldId }, { sheetId: "8" }, { spreadsheetId: "wrong" }, { contractVersion: "old" },
+    { clearedColumns: [] }, { outcome: "missing", row: null }, { protectedHeaders: ["感想"] }, { row: 1 }])("holds a malformed or wrong-binding ACK %j", async change => {
+    provider(change); const rpc = rpcFixture();
+    await expect(clear(rpc)).rejects.toMatchObject({ code: "SHEET_WRITE_RESULT_UNKNOWN", retryable: false, resultUnknown: true });
+    expect(mutationCalls()).toHaveLength(1); expect(rpc).toHaveBeenCalledOnce();
+  });
+  it("holds requested protected formula cells as a known partial", async () => {
+    provider({ outcome: "partial", clearedColumns: [], protectedHeaders: ["感想"] }); const rpc = rpcFixture({ outcome: "confirmed", marker_status: "partial" });
+    expect(await clear(rpc)).toMatchObject({ outcome: "partial", receipt: { outcome: "confirmed", marker_status: "partial" } });
+    expect(rpc.mock.calls[1][1].p_provider_complete).toBe(false); expect(mutationCalls()).toHaveLength(1);
+  });
+  it("preserves a newer edit when full clear finish returns superseded", async () => {
+    provider(); const rpc = rpcFixture({ outcome: "completed", marker_status: "superseded" });
+    expect(await clear(rpc)).toMatchObject({ receipt: { marker_status: "superseded" } }); expect(mutationCalls()).toHaveLength(1);
+  });
+  it("holds unknown mutation and known success with unknown finish across restart, before even metadata", async () => {
+    for (const unknownFinish of [false, true]) {
+      provider(); const rpc = rpcFixture();
+      if (unknownFinish) rpc.mockImplementation(async (name, args) => name === "sheet_push_begin"
+        ? { data: { outcome: "send", attempt_id: args.p_attempt_id, marker_status: "pending" }, error: null } : { data: null, error: { message: "synthetic lost finish" } });
+      else gas.mockImplementation(async body => { if (body.action === "clearIfExisting") throw new Error("synthetic lost mutation"); return { clearTarget: metadata }; });
+      await expect(clear(rpc)).rejects.toMatchObject({ code: unknownFinish ? "SHEET_SENT_MARKER_UNCONFIRMED" : "SHEET_WRITE_RESULT_UNKNOWN", retryable: false });
+      const active: ActivePushReceipt[] = [{ attempt_id: rpc.mock.calls[0][1].p_attempt_id, state: "reserved", profile_id: profileId,
+        recorded_date: input.date, record_id: null, target_slot: writeCellsTargetSlot(target.sheetName, input.date, target.spreadsheetId) }];
+      gas.mockClear(); rpc.mockClear();
+      await expect(clearIfExistingWithReceipt(client(rpc).admin, clearInput, target, active)).rejects.toMatchObject({ code: "SHEET_PUSH_BLOCKED" });
+      expect(gas).not.toHaveBeenCalled(); expect(rpc).not.toHaveBeenCalled();
+    }
+  });
+  it("allows only one concurrent reservation to dispatch a mutation, with separate readonly probes", async () => {
+    provider(); let occupied = false;
+    const rpc = vi.fn().mockImplementation(async (name, args) => {
+      if (name === "sheet_push_finish") return { data: { outcome: "completed", marker_status: "applied" }, error: null };
+      const outcome = occupied ? "blocked" : "send"; occupied = true;
+      return { data: { outcome, attempt_id: outcome === "send" ? args.p_attempt_id : heldId, marker_status: "pending" }, error: null };
+    });
+    const results = await Promise.allSettled([clear(rpc), clear(rpc)]);
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    expect(readCalls()).toHaveLength(2); expect(mutationCalls()).toHaveLength(1);
+  });
+});
 
 describe("durable writeCells dispatch boundary", () => {
   it("sends once then finishes with the exact reserved hashes and provider acknowledgement", async () => {

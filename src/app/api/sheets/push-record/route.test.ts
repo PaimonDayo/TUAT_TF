@@ -15,6 +15,17 @@ vi.mock("@/lib/sheet-sync/replies", () => ({ reconcileSheetReplies: async () => 
 import { POST } from "./route";
 import { runSheetSync } from "@/lib/sheet-sync/run";
 import { processPendingClears } from "@/lib/sheet-sync/clear";
+import { CLEAR_CONTRACT_VERSION } from "@/lib/sheet-sync/push-receipt";
+
+function gasAcknowledgement(body: Record<string, unknown>) {
+  if (body.action === "fetchMember") return { clearTarget: { contractVersion: CLEAR_CONTRACT_VERSION,
+    spreadsheetId: body.spreadsheetId ?? "synthetic_legacy_workbook", sheetId: "1", sheetName: body.memberName,
+    headerRow: 1, columns: [{ index: 0, label: "日付" }, { index: 1, label: "感想" }] } };
+  if (body.action === "clearIfExisting") return { success: true, action: body.action, contractVersion: CLEAR_CONTRACT_VERSION,
+    attemptId: body.attemptId, spreadsheetId: body.spreadsheetId, sheetId: body.expectedSheetId, sheetName: body.expectedSheetName,
+    date: body.date, outcome: "cleared", row: 2, clearedColumns: [1], unmapped: [], protectedHeaders: [] };
+  return { success: true, action: "updated" };
+}
 
 const profileId = "11111111-1111-4111-8111-111111111111";
 const recordId = "22222222-2222-4222-8222-222222222222";
@@ -59,7 +70,7 @@ beforeEach(() => {
     updated_at: "2026-10-10T01:00:00Z", synced_at: null, record_fields_snapshot: [] }];
   state.clears = []; state.attempts = []; state.writes = []; state.finishError = false; state.beginUnknown = false; state.receiptError = false; state.readsByAttempt = 0;
   state.memberRecords = [{ date: "2026-10-10", cells: { 感想: "stale CSV input" } }];
-  state.gas.mockReset().mockResolvedValue({ success: true, action: "updated" });
+  state.gas.mockReset().mockImplementation(async body => gasAcknowledgement(body));
   state.fetch.mockReset().mockImplementation(async (profiles: { name: string }[]) => ({ members: profiles.map(profile => ({ name: profile.name,
     header: ["日付", "感想"], records: [{ date: "2026-10-10", cells: { 感想: "stale CSV input" } }] })), signatures: new Map(), failedMembers: [], unchangedMembers: [] }));
   // This adapter models the finalized RPC outcomes, not SQL authorization or
@@ -176,28 +187,34 @@ describe("immediate writeCells followed by the durable planner", () => {
     expect(begin.p_expected_profile).toEqual({ sheet_name: state.profiles[0].sheet_name, record_fields: [], sheet_transition: state.profiles[0].sheet_transition,
       sheet_header_signature: null, record_source: "sheet" });
   });
-  it("keeps a clear queue when stale published CSV is empty, without inventing a provider success", async () => {
+  it("confirms actual clear despite empty stale CSV, and never imports that queued date first", async () => {
     state.records = []; state.memberRecords = [];
     state.clears = [{ user_id: profileId, recorded_date: "2026-10-10", created_at: "2026-10-10T03:00:00Z" }];
-    expect(await processPendingClears(state.admin, { id: profileId, sheet_name: "B1 synthetic", record_fields: [] })).toEqual({ cleared: 0, failed: 1 });
     state.fetch.mockResolvedValue({ members: [{ name: "B1 synthetic", header: ["日付", "感想"], records: [] }], signatures: new Map(), failedMembers: [], unchangedMembers: [] });
-    expect(await runSheetSync(state.admin)).toMatchObject({ inserted: 0, updated: 0, pushed: 0, failedMembers: [expect.objectContaining({ reason: expect.stringContaining("削除完了を確認") })] });
-    expect(state.clears).toHaveLength(1); expect(state.gas).not.toHaveBeenCalled(); expect(state.rpc).not.toHaveBeenCalled();
+    expect(await runSheetSync(state.admin)).toMatchObject({ inserted: 0, updated: 0, pushed: 1, failedMembers: [] });
+    expect(state.clears).toHaveLength(0);
+    expect(state.gas.mock.calls.filter(([body]) => body.action === "fetchMember")).toHaveLength(1);
+    expect(state.gas.mock.calls.filter(([body]) => body.action === "clearIfExisting")).toHaveLength(1);
+    expect(state.rpc.mock.calls.at(-1)).toEqual(["sheet_push_finish", expect.objectContaining({ p_provider_complete: true })]);
     expect(state.writes.some(write => write.operation === "delete")).toBe(false);
   });
   it("holds an unknown clear across the immediate caller and the next planner run", async () => {
     state.records = []; state.clears = [{ user_id: profileId, recorded_date: "2026-10-10", created_at: "2026-10-10T03:00:00Z" }];
-    state.gas.mockRejectedValueOnce(new Error("synthetic lost clear response"));
+    state.gas.mockImplementation(async body => { if (body.action === "clearIfExisting") throw new Error("synthetic lost clear response"); return gasAcknowledgement(body); });
     expect(await processPendingClears(state.admin, { id: profileId, sheet_name: "B1 synthetic", record_fields: [] })).toEqual({ cleared: 0, failed: 1 });
     state.admin = fixtureClient();
     expect(await runSheetSync(state.admin)).toMatchObject({ inserted: 0, updated: 0, pushed: 0, sheetWritesUncertain: true });
-    expect(state.clears).toHaveLength(1); expect(state.attempts[0]).toMatchObject({ kind: "clear", state: "reserved" }); expect(state.gas).toHaveBeenCalledOnce();
+    expect(state.clears).toHaveLength(1); expect(state.attempts[0]).toMatchObject({ kind: "clear", state: "reserved" });
+    expect(state.gas.mock.calls.filter(([body]) => body.action === "fetchMember")).toHaveLength(1);
+    expect(state.gas.mock.calls.filter(([body]) => body.action === "clearIfExisting")).toHaveLength(1);
     expect(state.writes.some(write => write.operation === "delete")).toBe(false);
   });
   it("removes a clear queue only in the acknowledged finish RPC", async () => {
     state.records = []; state.clears = [{ user_id: profileId, recorded_date: "2026-10-10", created_at: "2026-10-10T03:00:00Z" }];
     expect(await processPendingClears(state.admin, { id: profileId, sheet_name: "B1 synthetic", record_fields: [] })).toEqual({ cleared: 1, failed: 0 });
-    expect(state.clears).toHaveLength(0); expect(state.gas).toHaveBeenCalledOnce();
+    expect(state.clears).toHaveLength(0);
+    expect(state.gas.mock.calls.filter(([body]) => body.action === "fetchMember")).toHaveLength(1);
+    expect(state.gas.mock.calls.filter(([body]) => body.action === "clearIfExisting")).toHaveLength(1);
     expect(state.rpc.mock.calls.at(-1)).toEqual(["sheet_push_finish", expect.objectContaining({ p_provider_complete: true })]);
     expect(state.writes.some(write => write.operation === "delete")).toBe(false);
   });

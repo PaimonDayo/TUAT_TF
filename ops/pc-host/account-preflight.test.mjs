@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const directory = fileURLToPath(new URL('.', import.meta.url));
 const shell = resolve(process.env.ProgramFiles ?? 'C:/Program Files', 'PowerShell/7/pwsh.exe');
-test('Windows host scripts parse and private ACLs reject extra readers/writers', { skip: process.platform !== 'win32' }, () => {
+test('Windows host ACLs and standalone Git metadata enforce the account boundary', { skip: process.platform !== 'win32' }, () => {
   const result = spawnSync(shell, ['-NoProfile','-NonInteractive','-File',resolve(directory,'account-preflight.test.ps1')], { encoding:'utf8', windowsHide:true, timeout:30000 });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stdout, /refusal checks passed/);

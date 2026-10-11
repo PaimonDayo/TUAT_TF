@@ -27,8 +27,14 @@ function Assert-Access([string]$Path,[string[]]$WriteSids,[string[]]$OwnerSids,[
   if($owner -notin $OwnerSids){throw 'Deployment owner is outside the intended account boundary'}
   if($Protected -and !$acl.AreAccessRulesProtected){throw 'Deployment boundary inherits permissions'}
   foreach($rule in $acl.Access){
+    # InheritOnly templates grant no access to this object. Every descendant is
+    # checked separately, where any inherited effective writer must be refused.
+    if($rule.PropagationFlags -band [Security.AccessControl.PropagationFlags]::InheritOnly){continue}
+    # Non-writing readers (including OS capability SIDs without account names)
+    # do not affect this write boundary. Private paths check every entry below.
+    if($rule.AccessControlType -ne 'Allow' -or !([int64]$rule.FileSystemRights -band $Mask)){continue}
     $sid=$rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value
-    if($rule.AccessControlType -eq 'Allow' -and ([int64]$rule.FileSystemRights -band $Mask) -and $sid -notin $WriteSids){throw 'Deployment path is writable outside its intended boundary'}
+    if($sid -notin $WriteSids){throw 'Deployment path is writable outside its intended boundary'}
   }
 }
 function Assert-Parents([string]$Path,[string[]]$AllowedSids=$trustedSids){
@@ -56,6 +62,40 @@ function Assert-ExecutableTree([string]$Path){
   Assert-Access $directory $trustedSids $trustedSids $writeMask
   foreach($item in Get-ChildItem -LiteralPath $directory -Recurse -Force){Assert-Access $item.FullName $trustedSids $trustedSids $writeMask}
   Assert-Parents $Path
+}
+function Assert-StandaloneGit([string]$ReleaseRoot){
+  # Do not invoke Git to discover metadata: its configuration can itself load
+  # files or external helpers before that discovery has been validated.
+  $gitDirectory=Join-Path $ReleaseRoot '.git'
+  $item=Get-Item -LiteralPath $gitDirectory -Force
+  if(!$item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)){throw 'Production release requires standalone internal Git metadata'}
+  foreach($marker in @('commondir','objects/info/alternates','objects/info/http-alternates','config.worktree','worktrees')){
+    if(Test-Path -LiteralPath (Join-Path $gitDirectory $marker)){throw 'External or shared Git metadata rejected'}
+  }
+  if(@(Get-ChildItem Env: | Where-Object {$_.Name -like 'GIT_*'}).Count){throw 'Inherited Git path or configuration overrides rejected'}
+  $configPath=Join-Path $gitDirectory 'config'
+  $configItem=Get-Item -LiteralPath $configPath -Force
+  if($configItem.PSIsContainer -or ($configItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $configItem.Length -gt 65536){throw 'Protected bounded local Git configuration required'}
+  $encoding=[Text.UTF8Encoding]::new($false,$true)
+  $configText=$encoding.GetString([IO.File]::ReadAllBytes($configPath))
+  $section=$null
+  $coreKeys=@('repositoryformatversion','filemode','bare','logallrefupdates','symlinks','ignorecase','protectntfs','quotepath','safecrlf','autocrlf','longpaths')
+  foreach($raw in ($configText -split '\r?\n')){
+    $line=$raw.Trim()
+    if(!$line -or $line.StartsWith('#') -or $line.StartsWith(';')){continue}
+    if($line -match '^\[\s*core\s*\]$'){$section='core';continue}
+    if($line -match '^\[\s*(remote|branch)\s+"[A-Za-z0-9_./-]+"\s*\]$'){$section=$Matches[1].ToLowerInvariant();continue}
+    if($line.StartsWith('[')){throw 'External or unreviewed Git configuration section rejected'}
+    if(!$section -or $line.EndsWith('\') -or $line -notmatch '^([A-Za-z][A-Za-z0-9-]*)\s*=\s*(.*)$'){throw 'Unreviewed Git configuration syntax rejected'}
+    $key=$Matches[1].ToLowerInvariant();$value=$Matches[2]
+    if($section -eq 'core'){
+      if($key -notin $coreKeys){throw 'External or unreviewed Git core dependency rejected'}
+      if(($key -eq 'repositoryformatversion' -and $value -ne '0') -or ($key -eq 'bare' -and $value -ne 'false')){throw 'Ordinary Git working tree required'}
+      if($key -notin @('repositoryformatversion','bare') -and $value -notmatch '^(true|false|input|warn)$'){throw 'Unreviewed Git scalar configuration rejected'}
+    }elseif(($section -eq 'remote' -and $key -notin @('url','fetch')) -or ($section -eq 'branch' -and $key -notin @('remote','merge')) -or !$value){
+      throw 'External or unreviewed Git configuration dependency rejected'
+    }
+  }
 }
 
 # Read-only acceptance check: no account, ACL, task or service is created/changed.
@@ -137,6 +177,7 @@ try{
     if($isMutable){Assert-Access $item.FullName @($runtimeSid,$systemSid) @($runtimeSid,$systemSid) $writeMask}
     else{Assert-Access $item.FullName $trustedSids $trustedSids $writeMask}
   }
+  Assert-StandaloneGit $releaseRoot
   $result=[pscustomobject]@{version=1;accepted=$true;runtimeSid=$runtimeSid;developmentSid=$developmentSid;releaseCommit=$config.releaseCommit;releaseId=$config.releaseId;powerShellSha256=(Get-FileHash -LiteralPath $PowerShellPath -Algorithm SHA256).Hash.ToLowerInvariant();checkedAt=[DateTime]::UtcNow.ToString('O')}
   if($PassThru){return $result}
   $result | ConvertTo-Json -Compress

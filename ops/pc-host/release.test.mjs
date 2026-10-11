@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync, existsSync,
 import { tmpdir } from 'node:os';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { validateHostConfig, writeReceipt, verifyPrepared, sourceProof, environmentHash, buildHash, privateDirectory } from './release.mjs';
-import { createRuntimeManifest, verifyRuntimeManifest, hostGitPath, hostWindowsToolPath } from './runtime-manifest.mjs';
+import { createRuntimeManifest, verifyRuntimeManifest, hostGitPath, hostGitEnvironment, hostWindowsToolPath } from './runtime-manifest.mjs';
 
 const config = { version: 1, enabled: false, releaseDirectory: resolve(import.meta.dirname, '../..'), stateDirectory: resolve(import.meta.dirname, '../../../.contingency/host-test-state'), environmentFile: resolve(import.meta.dirname, '../../../.contingency/host-test.env'), backupConfigFile: resolve(import.meta.dirname, '../../../.contingency/backup-test.json'), expectedBackupInstanceId: '00000000-0000-4000-8000-000000000001', expectedBackupDatabaseSystemIdentifier: '1234567890123456789', releaseCommit: 'a'.repeat(40), releaseId: 'review-fixed', publicOrigin: 'https://pc-review.example.test', appPort: 18200, gatewayPort: 18201 };
 const env = { PC_APP_RUNTIME:'true', NEXT_PUBLIC_PC_APP_RUNTIME:'true', PC_BACKEND_ENABLED:'true', NEXT_PUBLIC_PC_BACKEND:'true', APP_PUBLIC_ORIGIN:config.publicOrigin, NEXT_PUBLIC_SUPABASE_URL:config.publicOrigin+'/api/pc-supabase', PC_BACKEND_INTERNAL_URL:'http://127.0.0.1:18180', NEXT_PUBLIC_CLOUD_AUTH_URL:'http://127.0.0.1:18181', NEXT_PUBLIC_CLOUD_AUTH_ANON_KEY:'synthetic', NEXT_PUBLIC_SUPABASE_ANON_KEY:'synthetic', SUPABASE_SERVICE_ROLE_KEY:'synthetic', VERCEL_GIT_COMMIT_SHA:config.releaseCommit, PC_APP_RELEASE_ID:config.releaseId, NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:Buffer.alloc(32,7).toString('base64'), PC_APP_SYNTHETIC_REVIEW:'true', NEXT_PUBLIC_PC_APP_SYNTHETIC_REVIEW:'true', NEXT_PUBLIC_CLOUD_AUTH_MODE:'test', IMAGE_STORAGE_READ_ONLY:'true', R2_READ_ENABLED:'false', R2_WRITE_ENABLED:'false', SHEET_SYNC_ENABLED:'false' };
@@ -92,6 +92,73 @@ test('runtime code drift cannot be hidden with a Git skip-worktree entry', t => 
   writeFileSync(join(f.config.releaseDirectory, 'runtime-entry.mjs'), 'export const fixed = false;\n');
   assert.doesNotThrow(() => sourceProof(f.config.releaseDirectory, f.config.releaseCommit));
   assert.throws(() => verifyPrepared(f.config, f.env), /Runtime artifacts changed/);
+});
+
+test('Git proof ignores ambient includes, external helpers and metadata overrides', t => {
+  const f = releaseFixture(t);
+  const root = f.config.releaseDirectory;
+  writeFileSync(join(root, '.gitattributes'), 'runtime-entry.mjs filter=reviewProbe\n');
+  f.git(['add', '--', '.gitattributes']);
+  f.git(['-c', 'user.name=Runtime fixture', '-c', 'user.email=fixture@example.test', 'commit', '--quiet', '-m', 'Fixture attribute binding']);
+  const commit = f.git(['rev-parse', 'HEAD']);
+  const baseline = createRuntimeManifest(root);
+  const sentinel = join(f.config.stateDirectory, 'external-helper-ran');
+  const probe = join(f.config.stateDirectory, 'external-helper.mjs');
+  writeFileSync(probe, `import { writeFileSync } from 'node:fs'; writeFileSync(${JSON.stringify(sentinel)}, 'SYNTHETIC_HELPER'); process.stdout.write('untrusted');\n`);
+  const command = JSON.stringify(`"${process.execPath.replaceAll('\\', '/')}" "${probe.replaceAll('\\', '/')}"`);
+  const included = join(f.config.stateDirectory, 'external.gitconfig');
+  const externalConfig = join(f.config.stateDirectory, 'ambient.gitconfig');
+  writeFileSync(included, `[core]\nfsmonitor = ${command}\nignoreStat = true\n[filter "reviewProbe"]\nclean = ${command}\nrequired = true\n`);
+  writeFileSync(externalConfig, `[include]\npath = ${JSON.stringify(included.replaceAll('\\', '/'))}\n`);
+  const overrides = {
+    GIT_CONFIG_GLOBAL: externalConfig, GIT_CONFIG_SYSTEM: externalConfig, GIT_CONFIG_NOSYSTEM: '0',
+    GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.fsmonitor', GIT_CONFIG_VALUE_0: JSON.parse(command),
+    HOME: f.config.stateDirectory, XDG_CONFIG_HOME: f.config.stateDirectory,
+    SUPABASE_SERVICE_ROLE_KEY: 'SYNTHETIC_MUST_NOT_REACH_GIT',
+  };
+  const keys = [...Object.keys(overrides), 'GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE'];
+  const original = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  try {
+    Object.assign(process.env, overrides);
+    const childEnvironment = hostGitEnvironment();
+    assert.equal(childEnvironment.GIT_CONFIG_NOSYSTEM, '1');
+    assert.equal(childEnvironment.GIT_CONFIG_GLOBAL, process.platform === 'win32' ? 'NUL' : '/dev/null');
+    assert.equal(childEnvironment.SUPABASE_SERVICE_ROLE_KEY, undefined);
+    assert.equal(childEnvironment.GIT_CONFIG_COUNT, undefined);
+    assert.equal(childEnvironment.HOME, undefined);
+    assert.equal(childEnvironment.PATH, undefined);
+    assert.equal(sourceProof(root, commit).commit, commit);
+    assert.doesNotThrow(() => verifyRuntimeManifest(baseline, root));
+    assert.equal(existsSync(sentinel), false);
+    for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE']) process.env[key] = join(f.config.stateDirectory, 'missing-external-metadata');
+    assert.equal(sourceProof(root, commit).commit, commit);
+    assert.doesNotThrow(() => verifyRuntimeManifest(baseline, root));
+    assert.throws(() => sourceProof(root, '0'.repeat(40)), /exact clean commit/);
+    writeFileSync(join(root, 'runtime-entry.mjs'), 'export const fixed = false;\n');
+    assert.throws(() => sourceProof(root, commit), /exact clean commit/);
+    assert.throws(() => verifyRuntimeManifest(baseline, root), /Runtime artifacts changed/);
+    assert.equal(existsSync(sentinel), false);
+  } finally {
+    for (const key of keys) if (original[key] === undefined) delete process.env[key]; else process.env[key] = original[key];
+  }
+});
+
+test('Windows CRLF remains Git-clean while actual source bytes stay receipt-bound', { skip: process.platform !== 'win32' }, t => {
+  const f = releaseFixture(t);
+  const root = f.config.releaseDirectory;
+  const source = join(root, 'runtime-entry.mjs');
+  writeFileSync(source, 'export const fixed = true;\r\n');
+  // Refresh the synthetic index with normal Windows checkout normalization.
+  // Its blob/commit stays LF; the working bytes and index stat become CRLF.
+  f.git(['-c', 'core.autocrlf=true', 'add', '--', 'runtime-entry.mjs']);
+  writeFileSync(source, 'export const fixed = true;\r\n');
+  assert.doesNotThrow(() => sourceProof(root, f.config.releaseCommit));
+  assert.throws(() => verifyRuntimeManifest(f.receipt.runtime, root), /Runtime artifacts changed/);
+  const rebuilt = createRuntimeManifest(root);
+  assert.doesNotThrow(() => verifyRuntimeManifest(rebuilt, root));
+  writeFileSync(source, 'export const fixed = false;\r\n');
+  assert.throws(() => sourceProof(root, f.config.releaseCommit), /exact clean commit/);
+  assert.throws(() => verifyRuntimeManifest(rebuilt, root), /Runtime artifacts changed/);
 });
 
 test('added or removed ignored dependencies also invalidate the receipt', t => {

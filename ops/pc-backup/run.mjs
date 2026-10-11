@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { loadBackup,validateBackupConfig } from './config.mjs';
 import { acquireLock,writePrivate } from './files.mjs';
-import { encryptedPair } from './archive.mjs';
+import { encryptedPair,sha256 } from './archive.mjs';
 import { createAdapters } from './adapters.mjs';
 import { STATUS_VERSION,STATUS_FILE,HEARTBEAT_INTERVAL_MS,BACKUP_INTERVAL_MS } from './status.mjs';
 
@@ -32,6 +32,11 @@ export async function startBackupSupervisor({configFile,config:providedConfig,en
   let stopped=false,clock=started,backupBusy=null,probeBusy=null,lastAttempt=null,fatal=false,timer,stopPromise,fatalNotified=false;
   const status={version:STATUS_VERSION,...identity,heartbeat:{checkedAt:identity.startedAt,healthy:true,maintenance:false},
     target:{...config.target,checkedAt:identity.startedAt,healthy:false},backup:null};
+  const scope={
+    targetFingerprint:sha256(JSON.stringify(['containerId','containerImageId','containerName','composeProject','composeService','dataMountSource','databaseName','databaseSystemIdentifier'].map(key=>[key,config.target[key]]))),
+    storageScopeId:sha256(JSON.stringify({account:env.R2_ACCOUNT_ID,bucket:env.R2_BUCKET_NAME})),
+    archiveKeyId:sha256(Buffer.from(env.PC_BACKUP_ENCRYPTION_KEY,'hex')),
+  };
   const failed=(type)=>{try {report({event:type});} catch {/* Diagnostics must not change safety state. */}};
   const notifyFatal=reason=>{
     fatal=true;status.heartbeat.healthy=false;controller.abort();
@@ -66,18 +71,37 @@ export async function startBackupSupervisor({configFile,config:providedConfig,en
       try {
         assertActive();lastAttempt=now();
         if(!await probeTarget()) return;
+        stage='attempt';const capturedAt=instant(),stamp=capturedAt.replace(/[:.]/g,'-'),receiptId=randomUUID();
+        const dumpKey=`ops/pc-backend/${config.instanceId}/backups/${stamp}.dump.enc`;
+        const attemptPath=resolve(config.stateDirectory,'receipts',`${receiptId}.json`);
+        let attempt={version:1,state:'prepared',receiptId,...identity,databaseSystemIdentifier:config.target.databaseSystemIdentifier,...scope,
+          capturedAt,dumpKey,recoveryKey:dumpKey.replace('.dump.enc','.recovery.json.enc'),localState:'unknown',remoteState:'unknown'};
+        // Persist intent before dump/archive/PUT. Incomplete or uncertain attempts
+        // remain held; this is evidence for planning, never permission to delete.
+        save(attemptPath,attempt,{exclusive:true});assertActive();
         stage='dump';const dump=await adapters.dump({signal:controller.signal});assertActive();
         stage='recovery';const recovery=await adapters.recovery({signal:controller.signal});assertActive();
         if(!await probeTarget()) return;
-        stage='archive';const stamp=instant().replace(/[:.]/g,'-');
+        stage='archive';
         const pair=encryptedPair({dump,recovery,instanceId:config.instanceId,key:env.PC_BACKUP_ENCRYPTION_KEY,stamp});
+        if(pair.key!==attempt.dumpKey||pair.recoveryKey!==attempt.recoveryKey) throw Error('Backup pair identity changed');
+        const pairBytes=pair.bytes.length+pair.recoveryBytes.length;
+        if(!Number.isSafeInteger(pairBytes)) throw Error('Backup size overflow');
+        attempt={...attempt,dumpSha256:pair.sha256,recoverySha256:pair.recoverySha256,dumpBytes:pair.bytes.length,recoveryBytes:pair.recoveryBytes.length,
+          localBytes:pairBytes,remoteBytes:pairBytes};
+        // Reserve the whole pair conservatively even if a local write or one PUT fails.
+        save(attemptPath,attempt);assertActive();
         save(resolve(config.stateDirectory,`backup-${stamp}.enc`),pair.bytes,{exclusive:true});
         save(resolve(config.stateDirectory,`recovery-${stamp}.enc`),pair.recoveryBytes,{exclusive:true});
+        attempt={...attempt,localState:'complete'};save(attemptPath,attempt);
         assertActive();stage='upload';
         const receipt=await adapters.uploadAndVerify(pair,{signal:controller.signal});assertActive();
-        if(receipt?.verified!==true) throw Error('Incomplete pair verification');
+        if(receipt?.verified!==true||![receipt.dumpEtag,receipt.recoveryEtag].every(value=>typeof value==='string'&&value.length>0&&value.length<=256&&!/[\r\n\0]/.test(value))) throw Error('Incomplete pair verification');
         stage='target';if(!await probeTarget()) return;
-        status.backup={generation,verifiedAt:instant(),key:pair.key,recoveryKey:pair.recoveryKey,sha256:pair.sha256,recoverySha256:pair.recoverySha256,
+        stage='receipt';const verifiedAt=instant();
+        save(attemptPath,{...attempt,state:'verified',verifiedAt,dumpEtag:receipt.dumpEtag,recoveryEtag:receipt.recoveryEtag,remoteState:'verified'});
+        assertActive();
+        status.backup={generation,verifiedAt,key:pair.key,recoveryKey:pair.recoveryKey,sha256:pair.sha256,recoverySha256:pair.recoverySha256,
           bytes:pair.bytes.length,recoveryBytes:pair.recoveryBytes.length,databaseSystemIdentifier:config.target.databaseSystemIdentifier};
         fatal=false;status.heartbeat={checkedAt:instant(),healthy:true,maintenance:false};publish();failed('pair-verified');
       } catch {

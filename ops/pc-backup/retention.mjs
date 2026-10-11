@@ -1,4 +1,5 @@
-// Pure dry-run decision only. No receipt persistence, inventory discovery or deletion transport.
+// Pure dry-run decision only. Supervisor receipts are produced separately;
+// no inventory discovery, capacity reservation or deletion transport is integrated.
 import { createHash } from 'node:crypto';
 
 const DAY=86_400_000,JST=9*60*60_000,FRESH_PAIR=35*60_000;
@@ -77,7 +78,7 @@ const candidate=record=>({receiptId:record.receiptId,receiptDigest:digest(record
   dumpSha256:record.dumpSha256,recoverySha256:record.recoverySha256,dumpEtag:record.dumpEtag,recoveryEtag:record.recoveryEtag,
   bytes:add(record.dumpBytes,record.recoveryBytes)});
 
-/** Input receipts are an explicit future integration contract, not existing supervisor receipts.
+/** Input receipts must be independently discovered/reverified; this module never loads supervisor files.
  * All decisions describe the supplied metadata only. This function never authorizes DELETE or PUT.
  */
 export function planBackupRetention({identity,scope,protectedPair,receipts,inventoryLimit,budgets,planNonce,now}={}) {

@@ -6,10 +6,9 @@ import { sheetForRecord } from "./period-routing";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RawMember } from "@/lib/sheet-public-csv";
 import type { RecordFieldDef } from "@/types";
-import { appToCellsFull, resolveFieldMap, sheetToAppValues, valuesEmpty } from "./field-map";
+import { appToCellsFull, sheetToAppValues, valuesEmpty } from "./field-map";
 import type { DbRecord, FieldMap } from "./field-map";
-import { fetchMemberRaw } from "./gas-client";
-import { resolvePendingClear, writeCellsTargetSlot, writeCellsWithReceipt } from "./push-receipt";
+import { clearIfExistingWithReceipt, listActivePushReceipts, resolvePendingClear, writeCellsTargetSlot } from "./push-receipt";
 
 export type PendingClear = { user_id: string; recorded_date: string; created_at: string };
 
@@ -39,7 +38,7 @@ export function clearCellsFor(map: FieldMap, date: string): Record<string, strin
 
 /**
  * スプシのその日の行に、連携している項目の中身が残っているか。
- * 行が無い日・もう空の日には書き込まない（GASは行が無いと新しく作ってしまうため）。
+ * CSV表示用の比較。公開CSVの空欄や行なしは実シートの消去完了の証明には使わない。
  */
 export function sheetRowHasContent(map: FieldMap, member: RawMember, date: string): boolean {
   return member.records.some((record) => {
@@ -77,6 +76,7 @@ export async function processPendingClears(
     .in("recorded_date", rows.map((row) => row.recorded_date));
   if (existingError) throw existingError;
   const recreated = new Set((existing ?? []).map((row) => row.recorded_date as string));
+  const active = await listActivePushReceipts(admin);
 
   let cleared = 0;
   let failed = 0;
@@ -89,19 +89,11 @@ export async function processPendingClears(
           expectedProfile: target.expectedProfile, targetSlot: writeCellsTargetSlot(target.sheetName, row.recorded_date, target.spreadsheetId) });
         continue;
       }
-      const member = await fetchMemberRaw(target.sheetName, { spreadsheetId: target.spreadsheetId });
-      const map = resolveFieldMap(member, target.fields);
-      if (sheetRowHasContent(map, member, row.recorded_date)) {
-        const written = await writeCellsWithReceipt(admin, { kind: "clear", recordId: null, profileId: row.user_id,
-          date: row.recorded_date, expectedVersion: row.created_at, expectedProfile: target.expectedProfile },
-        { ...target, columns: member.columns ?? member.header.map((label, index) => ({ index, label })) }, clearCellsFor(map, row.recorded_date));
-        if (written.receipt.outcome !== "completed" || written.receipt.marker_status !== "applied") throw new Error("削除予定の完了を確認できませんでした");
-        cleared++;
-      } else {
-        // Published CSV can lag a completed write. Empty/no-row is not proof
-        // that the actual sheet was cleared; keep the queue without creating a row.
-        failed++;
-      }
+      const written = await clearIfExistingWithReceipt(admin, { kind: "clear", recordId: null, profileId: row.user_id,
+        date: row.recorded_date, expectedVersion: row.created_at, expectedProfile: target.expectedProfile }, target, active);
+      if (written.receipt.outcome !== "completed" || written.receipt.marker_status !== "applied") throw new Error("削除予定の完了を確認できませんでした");
+      // Count confirmed clear requests; an authoritative missing ACK creates no row.
+      cleared++;
     } catch {
       failed++;
     }

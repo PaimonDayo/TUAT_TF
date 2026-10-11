@@ -1,12 +1,18 @@
 # 切替前の合成暗号化DB復元試験
 
+2026-10-11追加候補は `20261011170000_sheet_push_attempts.sql` を含む全migrationを使用する。実service-role RPCでreserved（古い未知結果）、confirmed/partial、completed/applied、completed/supersededの4記録receiptと未知clear receiptを作る。3つ目の承認済み合成profileを同日・同じ物理slotへ向け、復元後に別profileのbeginとclear解決も拒否されることを確認する。復元後の実anon/authenticated/service-role操作でRLS/ACL・RPC限定更新を検証し、未知/部分/適用済みversionのbeginは新しいattempt UUIDでもdispatch許可0、部分receiptの後付け成功化禁止、marker_versionと新しいpending編集の保持、未知receiptの削除後保持・CSV上書き拒否をassertする。実providerは呼ばない。全受入操作をrollbackして元の全table digestへ戻ることを確認する。既存の8区分metadata比較は維持する。
+
+旧 `result.json` は上書きせず、実行前後のSHA256一致を新証拠へ記録する。新結果は親ACLを保護した `.private/<fresh generation>/result.json` に `wx` で一度だけ書き、driver・fixture・受入SQL・tests・READMEと全migrationのSHA256を含める。合成暗号化pairと失敗診断も同じprivate generationに置くが、暗号鍵はメモリだけでファイルへ保存しない。最後にpairを削除し、秘密を含まない結果だけを残す。
+
+DB readinessは経過45秒、1probe最大5秒で制限する。他のDockerコマンドは最大60秒、cleanupは作成前に登録した正確な資源名を再検査して所有label/IDを照合し、削除後にも全attempt資源の不存在を確認する。WSL/Docker timeout・出力上限超過・signal/強制終了ではLinux子プロセスの完了を証明できないため、後の一覧が空でもcleanup成功とは報告しない。失敗・未知の実行を無条件で再実行せず、新generationの実行は所有者が結果と残資源を確認した後に承認する。
+
 `node ops/pc-host/backup-review/run.mjs --check` は計画だけを返し、Docker/DB/鍵/ファイルへ触れない。`--execute` だけが、cached imageの正確なIDを確認して `codex-backup-review-<new GUID>-source/restore` と専用volume/internal networkを新規作成する。既存 `supabase-db`、`tuat-review-*`、`codex-auth-dbreview-*` を読取/変更/削除しない。実env、秘密、既存backup、R2、部員データ、Surface/SSH/sudoは使用しない。外部資格情報を継承した環境を拒否する。
 
 合成sourceへcached GoTrue77/Storage67と全candidate migrationを適用し、合成UUID/許可・不許可identity/note/画像参照/退役barrier/旧queueを作る。現行backupと同じ `pg_dump --format=custom --schema=public --schema=auth --schema=storage` と既存 `TUATPC01` AES-256-GCM関数を使用する。別の新規containerではplatform roles/extensionsを用意し、初期auth/storageの重複を取り除いてからcustom archiveをtransactionで復元する。table/schemaのownerとACL、列定義/列ACL/default ACL、RLS policy/function/trigger/constraint、全対象tableの件数・全columnのdigest（UUIDを含む）、部員保存・不許可session・許可取消・退役画像復活拒否を確認する。Vaultは復号済みの合成値から新しいVaultへ登録し、cronは停止状態で復元する。SQL受入操作はrollbackする。誤鍵・改変・別instance・別dumpの組合せはDBへ送る前に拒否する。
 
 **archiveとは別のcold初期設定:** 現行allowlist migrationの `ALTER ROLE authenticator SET pgrst.db_pre_request = 'public.check_login_access'` はcluster role設定なので、このschema dumpには入らない。fresh targetに無いことを確認した後、レビュー済みのこの非秘密設定だけを明示して復旧し、他のrole設定を変えずに正しい値をassertする。また完全なschema復元のためfresh baselineのpublicを削除すると、initdb既定のPUBLIC USAGEが失われる。archiveはこの既定権限を再出力しないため、sourceのowner=`pg_database_owner`/PUBLIC USAGEをassertして、sourceと同じschema USAGEだけを復旧する（table/function権限は付与しない）。これらはplatform roles/extensionsとともに、archiveだけでは復元できない前提として扱う。ここでのSQL呼出しはPostgREST実HTTP起動の証明ではない。
 
-`.private` の親ACLをowner+SYSTEMへ保護・検査してから合成暗号化archiveを書く。鍵はメモリだけに保持し、終了時にarchiveを削除する。失敗診断も同じprivate領域へ保存し、標準出力には件数/booleanだけを返す。`result.json` は秘密/行内容/鍵を含まない合成証拠。cleanupは今回のgeneration label、正確なname/ID/path/internal networkを再照合した資源だけを対象とし、不一致なら保持して失敗とする。
+`.private` の親ACLをowner+SYSTEMへ保護・検査してから合成暗号化archiveを書く。鍵はメモリだけに保持し、終了時にarchiveを削除する。失敗診断も同じprivate領域へ保存し、標準出力には件数/booleanと非秘密の新証拠pathだけを返す。各generationの `result.json` は秘密/行内容/鍵を含まない合成証拠。cleanupは今回のgeneration label、正確なname/ID/path/internal networkを再照合した資源だけを対象とし、不一致なら保持して失敗とする。
 
 これは同じhost上の合成DB復元であり、本番backupの鮮度・完全性、実R2 download、別媒体、別端末、cloud Auth、実Push、OS再起動の証明ではない。本番を読む既存 `backup-backend.mjs` / `handoff-restore.mjs` CLIは呼ばない。新しい本番backup scheduler/復元ツールを追加するものでもない。
 

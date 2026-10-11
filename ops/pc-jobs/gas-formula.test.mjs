@@ -13,7 +13,7 @@ function setup(headers, formulas = {}) {
       setValue: value => writes.push({ row, column, value }),
     }),
   };
-  const context = vm.createContext({});
+  const context = vm.createContext({ LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) }, SpreadsheetApp: { flush() {} } });
   vm.runInContext(readFileSync(new URL('../../gas/sync-clasp/Code.js', import.meta.url), 'utf8'), context);
   context.findMemberSheet = () => sheet;
   context.findRecordRow = () => 1;
