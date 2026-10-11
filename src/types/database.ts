@@ -22,6 +22,16 @@ export type Database = {
       competition_meet_duties: MeetReadTable<{id:string;competition_id:string;participant_id:string;slot_time:string;event_name:string;assignment:string;role_ids:string[];revision:number;source:string}>
       competition_meet_party: MeetReadTable<{id:string;competition_id:string;participant_id:string|null;name:string;group_label:string;status:string;needs_review:boolean;revision:number}>
       competition_meet_requests: MeetReadTable<{id:string;competition_id:string;actor_id:string|null;actor_name:string|null;command:Json;result:Json;changed_at:string;before_data:Json;after_data:Json}>
+      google_sheet_creation_attempts: {
+        Row: {
+          attempt_id: string; profile_id: string; connection_fingerprint: string; creation_fingerprint: string; registration_spec: Json
+          schedule_sheet_id: string; state: "reserved" | "resource_known" | "registered"; spreadsheet_id: string | null; canonical_url: string | null
+          setup_confirmed: boolean; created_at: string; resource_known_at: string | null; registered_at: string | null
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
       sheet_push_attempts: {
         Row: {
           attempt_id: string; kind: "record" | "clear"; profile_id: string; recorded_date: string; record_id: string | null
@@ -2274,6 +2284,11 @@ export type Database = {
       }
       can_create_menu: { Args: never; Returns: boolean }
       can_create_notice: { Args: never; Returns: boolean }
+      google_sheet_creation_begin: { Args: { p_attempt_id: string; p_connected_at: string; p_token_sha256: string; p_creation_fingerprint: string; p_spec: Json }; Returns: Json }
+      google_sheet_creation_status: { Args: never; Returns: Json }
+      google_sheet_creation_resource: { Args: { p_attempt_id: string; p_profile_id: string; p_spreadsheet_id: string }; Returns: Json }
+      google_sheet_creation_setup: { Args: { p_attempt_id: string; p_profile_id: string; p_spreadsheet_id: string }; Returns: Json }
+      google_sheet_creation_register: { Args: { p_attempt_id: string }; Returns: Json }
       can_create_schedule: { Args: never; Returns: boolean }
       can_edit_note: { Args: { target_note_id: string }; Returns: boolean }
       can_manage_members: { Args: never; Returns: boolean }

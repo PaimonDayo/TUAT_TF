@@ -26,7 +26,7 @@ export function ScheduleSheetsManager() {
     year, setYear, month, setMonth, kind,
     setKind, block, setBlock, inputMode, setInputMode,
     existing, selectedIds, setSelectedIds, venues, weekdayDefaults,
-    googleConnected, googleEmail, issuing, issueBlocked, source, setSource,
+    googleConnected, googleEmail, issuing, issueBlocked, creationChecked, creationAttempt, repairSpreadsheet, source, setSource,
     sheetUrl, setSheetUrl, fileName, csv, setSheetId,
     preview, setPreview, loading, applying, error,
     setError, lastApplied, undoing, deletionIds, setDeletionIds,
@@ -263,7 +263,7 @@ export function ScheduleSheetsManager() {
             <Button
               type="button"
               size="lg"
-              disabled={issuing || issueBlocked || googleConnected === null}
+              disabled={issuing || issueBlocked || !creationChecked || googleConnected === null}
               onClick={issueSpreadsheet}
             >
               {issuing ? "作成中…" : issueBlocked ? "作成結果を確認してください" : "シートを作る"}
@@ -276,6 +276,11 @@ export function ScheduleSheetsManager() {
               <ExternalLink size={17} />
               作ったシートを開く
             </a>
+          </Button>
+        )}
+        {creationAttempt?.resource && creationAttempt.state !== "registered" && (
+          <Button type="button" variant="outline" size="lg" disabled={issuing} onClick={repairSpreadsheet}>
+            シートの登録を確認する
           </Button>
         )}
       </section>

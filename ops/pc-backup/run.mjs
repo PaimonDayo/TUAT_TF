@@ -2,10 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
-import { loadBackup,validateBackupConfig } from './config.mjs';
-import { acquireLock,writePrivate } from './files.mjs';
+import { loadBackup,validateBackupConfig,BACKUP_LIMITS } from './config.mjs';
+import { acquireLock,writePrivate,readBackupInventory } from './files.mjs';
 import { encryptedPair,sha256 } from './archive.mjs';
-import { createAdapters } from './adapters.mjs';
+import { createAdapters,createCycleBudget,inventoryBounds,STORAGE_LIMITS } from './adapters.mjs';
+import { classifyBackupReceipts,reconcileBackupInventory,planBackupAdmission,planBackupRetention } from './retention.mjs';
 import { STATUS_VERSION,STATUS_FILE,HEARTBEAT_INTERVAL_MS,BACKUP_INTERVAL_MS } from './status.mjs';
 
 export {loadBackup};
@@ -15,7 +16,7 @@ export function backupPlan(config) {
     intervalMinutes:15,backupMaximumAgeMinutes:35,heartbeatMaximumAgeSeconds:120,firstPairEachStartup:true};
 }
 export async function startBackupSupervisor({configFile,config:providedConfig,env:providedEnv,expectedInstanceId,expectedDatabaseSystemIdentifier,
-  adapters:providedAdapters,now=Date.now,setTimer=setInterval,clearTimer=clearInterval,save=writePrivate,lock=acquireLock,
+  adapters:providedAdapters,readInventory=readBackupInventory,now=Date.now,setTimer=setInterval,clearTimer=clearInterval,save=writePrivate,lock=acquireLock,
   generation=randomUUID(),report=()=>{},onFatal=()=>{},drainMilliseconds=10_000}={}) {
   if(configFile&&(providedConfig||providedEnv)) throw Error('Ambiguous backup configuration');
   const {config,env}=configFile?loadBackup(configFile):{config:providedConfig,env:providedEnv};
@@ -37,6 +38,22 @@ export async function startBackupSupervisor({configFile,config:providedConfig,en
     storageScopeId:sha256(JSON.stringify({account:env.R2_ACCOUNT_ID,bucket:env.R2_BUCKET_NAME})),
     archiveKeyId:sha256(Buffer.from(env.PC_BACKUP_ENCRYPTION_KEY,'hex')),
   };
+  const expected={...identity,databaseSystemIdentifier:config.target.databaseSystemIdentifier};
+  const prefix=`ops/pc-backend/${config.instanceId}/backups/`,capacity=config.capacity;
+  const inventory=async(budget)=>{
+    assertActive();const local=readInventory({stateDirectory:config.stateDirectory,inventoryLimit:capacity.inventoryLimit,maxPairBytes:capacity.maxPairBytes,signal:controller.signal});
+    const classified=classifyBackupReceipts({receipts:local.receipts,identity:expected,scope,now:now(),inventoryLimit:capacity.inventoryLimit});
+    const snapshot=await adapters.listInventory({prefix,inventoryLimit:capacity.inventoryLimit,budget,signal:controller.signal});assertActive();
+    return {local,classified,snapshot};
+  };
+  const reverify=async(discovered,budget)=>{
+    const remote=await adapters.verifyInventory({snapshot:discovered.snapshot,receipts:discovered.classified.verifiedReceipts.filter(receipt=>receipt.remoteState==='verified'),budget,signal:controller.signal});assertActive();
+    return reconcileBackupInventory({classified:discovered.classified,local:discovered.local,remote,inventoryLimit:capacity.inventoryLimit,maxPairBytes:capacity.maxPairBytes});
+  };
+  const planInput=(checked,budget,nextPairBytes=capacity.maxPairBytes)=>({identity:expected,scope,receipts:checked.receipts,
+    inventoryLimit:capacity.inventoryLimit,planNonce:randomUUID(),now:now(),budgets:{maxLocalBytes:capacity.maxLocalBytes,maxRemoteBytes:capacity.maxRemoteBytes,
+      freeLocalBytes:checked.freeLocalBytes,minFreeLocalBytes:capacity.minFreeLocalBytes,remoteBaselineBytes:0,nextPairBytes,
+      nextLocalBytes:nextPairBytes+BACKUP_LIMITS.metadataBytes,maxRequestCount:capacity.maxRequestCount,maxTransferBytes:capacity.maxTransferBytes,...budget}});
   const failed=(type)=>{try {report({event:type});} catch {/* Diagnostics must not change safety state. */}};
   const notifyFatal=reason=>{
     fatal=true;status.heartbeat.healthy=false;controller.abort();
@@ -71,11 +88,21 @@ export async function startBackupSupervisor({configFile,config:providedConfig,en
       try {
         assertActive();lastAttempt=now();
         if(!await probeTarget()) return;
+        stage='inventory';
+        const budget=createCycleBudget(capacity),discovered=await inventory(budget);
+        const bounds=inventoryBounds({inventoryLimit:capacity.inventoryLimit,receipts:discovered.classified.verifiedReceipts.filter(receipt=>receipt.remoteState==='verified'),maxPairBytes:capacity.maxPairBytes});
+        // Entire cycle allowance is checked before any ciphertext GET or dump/PUT.
+        if(bounds.requestCount>capacity.maxRequestCount||bounds.transferBytes>capacity.maxTransferBytes)throw Error('Cycle read budget insufficient');
+        budget.reserve(6,2*capacity.maxPairBytes+6*STORAGE_LIMITS.controlResponseBytes); // Prepaid new pair; never retried.
+        const checked=await reverify(discovered,budget);
+        stage='capacity';const admission=planBackupAdmission(planInput(checked,bounds));
+        if(!admission.decision.writeAllowed)throw Error('Capacity admission refused');
         stage='attempt';const capturedAt=instant(),stamp=capturedAt.replace(/[:.]/g,'-'),receiptId=randomUUID();
         const dumpKey=`ops/pc-backend/${config.instanceId}/backups/${stamp}.dump.enc`;
         const attemptPath=resolve(config.stateDirectory,'receipts',`${receiptId}.json`);
         let attempt={version:1,state:'prepared',receiptId,...identity,databaseSystemIdentifier:config.target.databaseSystemIdentifier,...scope,
-          capturedAt,dumpKey,recoveryKey:dumpKey.replace('.dump.enc','.recovery.json.enc'),localState:'unknown',remoteState:'unknown'};
+          capturedAt,dumpKey,recoveryKey:dumpKey.replace('.dump.enc','.recovery.json.enc'),localState:'unknown',remoteState:'unknown',
+          localBytes:capacity.maxPairBytes,remoteBytes:capacity.maxPairBytes};
         // Persist intent before dump/archive/PUT. Incomplete or uncertain attempts
         // remain held; this is evidence for planning, never permission to delete.
         save(attemptPath,attempt,{exclusive:true});assertActive();
@@ -83,10 +110,13 @@ export async function startBackupSupervisor({configFile,config:providedConfig,en
         stage='recovery';const recovery=await adapters.recovery({signal:controller.signal});assertActive();
         if(!await probeTarget()) return;
         stage='archive';
+        if(!Buffer.isBuffer(dump)||dump.length>BACKUP_LIMITS.dumpBytes
+          ||Buffer.byteLength(JSON.stringify({...recovery,instanceId:config.instanceId,databaseDumpSha256:sha256(dump)}))>BACKUP_LIMITS.recoveryBytes)
+          throw Error('Backup plaintext exceeds adapter bound');
         const pair=encryptedPair({dump,recovery,instanceId:config.instanceId,key:env.PC_BACKUP_ENCRYPTION_KEY,stamp});
         if(pair.key!==attempt.dumpKey||pair.recoveryKey!==attempt.recoveryKey) throw Error('Backup pair identity changed');
         const pairBytes=pair.bytes.length+pair.recoveryBytes.length;
-        if(!Number.isSafeInteger(pairBytes)) throw Error('Backup size overflow');
+        if(!Number.isSafeInteger(pairBytes)||pairBytes>capacity.maxPairBytes) throw Error('Backup size exceeds reservation');
         attempt={...attempt,dumpSha256:pair.sha256,recoverySha256:pair.recoverySha256,dumpBytes:pair.bytes.length,recoveryBytes:pair.recoveryBytes.length,
           localBytes:pairBytes,remoteBytes:pairBytes};
         // Reserve the whole pair conservatively even if a local write or one PUT fails.
@@ -99,13 +129,29 @@ export async function startBackupSupervisor({configFile,config:providedConfig,en
         if(receipt?.verified!==true||![receipt.dumpEtag,receipt.recoveryEtag].every(value=>typeof value==='string'&&value.length>0&&value.length<=256&&!/[\r\n\0]/.test(value))) throw Error('Incomplete pair verification');
         stage='target';if(!await probeTarget()) return;
         stage='receipt';const verifiedAt=instant();
-        save(attemptPath,{...attempt,state:'verified',verifiedAt,dumpEtag:receipt.dumpEtag,recoveryEtag:receipt.recoveryEtag,remoteState:'verified'});
+        const verifiedReceipt={...attempt,state:'verified',verifiedAt,dumpEtag:receipt.dumpEtag,recoveryEtag:receipt.recoveryEtag,remoteState:'verified'};
+        save(attemptPath,verifiedReceipt);
         assertActive();
+        stage='inventory';const finalInventory=await reverify(await inventory(budget),budget);
+        stage='target';if(!await probeTarget()) return;
+        stage='inventory';
+        const manifest=planBackupRetention({...planInput(finalInventory,budget.snapshot()),protectedPair:verifiedReceipt});
+        if(!manifest.decision.planningAllowed||manifest.quota.decision==='unverified')throw Error('Verified inventory unavailable');
+        stage='capacity';
+        if(manifest.quota.current.localBytes>capacity.maxLocalBytes||manifest.quota.current.remoteBytes>capacity.maxRemoteBytes
+          ||finalInventory.freeLocalBytes-capacity.minFreeLocalBytes<BACKUP_LIMITS.metadataBytes)throw Error('Final capacity unavailable');
+        const envelope={...manifest,inventoryProofDigest:finalInventory.proofDigest,scopeDescription:{local:'entire dedicated state directory',remote:prefix},cycleBudget:budget.snapshot()};
+        const persistedManifest={...envelope,manifestDigest:sha256(JSON.stringify(envelope))};
+        const manifestBytes=Buffer.byteLength(JSON.stringify(persistedManifest,null,2)+'\n');
+        if(manifestBytes>BACKUP_LIMITS.metadataBytes)throw Error('Dry-run manifest exceeds metadata reservation');
+        // Include the exact new temp/manifest even when the prior manifest is still present.
+        if(manifest.quota.current.localBytes>capacity.maxLocalBytes-manifestBytes)throw Error('Manifest capacity unavailable');
+        stage='manifest';save(resolve(config.stateDirectory,'retention-dry-run.json'),persistedManifest);assertActive();
         status.backup={generation,verifiedAt,key:pair.key,recoveryKey:pair.recoveryKey,sha256:pair.sha256,recoverySha256:pair.recoverySha256,
           bytes:pair.bytes.length,recoveryBytes:pair.recoveryBytes.length,databaseSystemIdentifier:config.target.databaseSystemIdentifier};
         fatal=false;status.heartbeat={checkedAt:instant(),healthy:true,maintenance:false};publish();failed('pair-verified');
       } catch {
-        if(stage!=='upload') {fatal=true;status.heartbeat.healthy=false;}
+        if(!['upload','capacity'].includes(stage)) {fatal=true;status.heartbeat.healthy=false;}
         if(!stopped) {try {status.heartbeat.checkedAt=instant();publish();} catch {fatal=true;}}
         failed(stage==='upload'?'pair-upload-unverified':'pair-not-verified');
       }

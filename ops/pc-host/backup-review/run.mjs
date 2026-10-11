@@ -115,7 +115,7 @@ export async function runReview() {
   const proofFiles=['run.mjs','run.test.mjs','fixture.sql','assert-restored.sql','README.md'];
   const sourceProof=Object.fromEntries(proofFiles.map(name=>[name,hash(readFileSync(resolve(here,name)))]));
   const report={version:2,owner:OWNER,generation,syntheticOnly:true,productionAccess:false,providerCalls:0,r2Requests:0,
-    purpose:'current-schema-encrypted-restore-with-sheet-receipts',evidencePath,sourceProof,legacyEvidenceSha256:{before:legacyEvidenceBefore},
+    purpose:'current-schema-encrypted-restore-with-sheet-and-creation-receipts',evidencePath,sourceProof,legacyEvidenceSha256:{before:legacyEvidenceBefore},
     network:'internal',publishedPorts:[],success:false,cleanup:false,pins:PINS,migrations:[],tests:{},limits:{memory:'512m',cpus:1,databaseReadinessMs:45000,commandMs:60000}};
   let commandOutcomeUnknown=false;
   const created={containers:[],volumes:[],ephemeral:new Set(),network:false};
@@ -270,11 +270,15 @@ export async function runReview() {
     report.stage='real-restored-permission-operations';
     const acceptance=sql(names.restore,readFileSync(resolve(here,'assert-restored.sql'),'utf8'));
     if(!acceptance.includes('PASS:restored-UUID-RLS-allowlist-image-barrier')
-      || !acceptance.includes('PASS:restored-sheet-receipts-ACL-unknown-dispatch0-marker-slot')) throw Error('Restored acceptance SQL did not finish');
+      || !acceptance.includes('PASS:restored-sheet-receipts-ACL-unknown-dispatch0-marker-slot')
+      || !acceptance.includes('PASS:restored-creation-receipts-4states-ACL-unknown-dispatch0-repair-no-revive')) throw Error('Restored acceptance SQL did not finish');
     if(JSON.stringify(JSON.parse(sql(names.restore,rowsSql)))!==JSON.stringify(sourceRows)) throw Error('Restored acceptance transaction did not roll back');
     report.tests.permittedSaveDeniedSessionRevocationImageBarrier=true; report.tests.assertionsRolledBack=true;
     report.tests.sheetReceipts={restored:5,reservedUnknown:2,confirmedPartial:1,completedApplied:1,completedSuperseded:1,
       realRoleAclRls:true,unknownHeld:true,restoredBeginDispatches:0,markerVersionRetained:true,newerEditRetained:true,sameDayCrossProfileSlotHeld:true};
+    report.tests.creationReceipts={restored:4,reservedUnknown:1,resourceKnownSetupUnknown:1,registered:1,resourceKnownSetupConfirmed:1,
+      realRoleAclRls:true,restoredBeginDispatches:0,dbOnlyRepair:true,setupUncertaintyHeld:true,duplicateRegistrationDenied:true,
+      legitimateEditsRetained:true,deletedCompletedRowNotRevived:true,currentPermissionRevocation:true,preclaimedConflictBlocked:true};
     for(const migration of report.migrations) if(hash(readFileSync(resolve(migrations,migration.name)))!==migration.sha256) throw Error('Migration changed during backup proof');
     for(const name of proofFiles) if(hash(readFileSync(resolve(here,name)))!==sourceProof[name]) throw Error('Review source changed during backup proof');
     report.success=true; report.stage='complete';

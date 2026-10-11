@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { planBackupRetention,MAX_RETENTION_INVENTORY } from './retention.mjs';
+import { planBackupRetention,planBackupAdmission,classifyBackupReceipts,reconcileBackupInventory,MAX_RETENTION_INVENTORY } from './retention.mjs';
 
 const now=Date.parse('2026-10-11T02:00:00.000Z');
 const uuid=number=>`${String(number).padStart(8,'0')}-1111-4111-8111-111111111111`;
@@ -143,4 +143,41 @@ test('numeric overflow fails closed and known-absent locations never become remo
   const result=planBackupRetention(input([current(),absent]));assert(!ids(result.removalCandidates.local).has(absent.receiptId));
   assert(ids(result.retained.remote).has(absent.receiptId));
   blocked(planBackupRetention(input([current()],{now:Number.MAX_SAFE_INTEGER})),'identity_unverified');
+});
+
+test('first-pair admission is independent of protected-pair selection and cannot produce candidates',()=>{
+  const result=planBackupAdmission(input([],{protectedPair:undefined}));assert.equal(result.decision.writeAllowed,true);
+  assert.equal(result.protectedPair,null);assert.deepEqual(result.removalCandidates,{local:[],remote:[]});
+  const request=input([{state:'prepared',localBytes:900_000,remoteBytes:900_000}],{protectedPair:undefined});
+  const held=planBackupAdmission(request);assert.equal(held.held.count,1);assert.equal(held.quota.current.localBytes,900_000);
+  const denied=planBackupAdmission({...request,budgets:{...request.budgets,maxRemoteBytes:900_000}});assert.equal(denied.decision.writeAllowed,false);
+});
+function transportFixture(records=[current()]) {
+  const classified=classifyBackupReceipts({receipts:records,identity,scope,now,inventoryLimit:512});
+  const local={complete:true,totalBytes:2000,freeLocalBytes:1_000_000,files:[{name:'state',bytes:2000}],archives:records.flatMap(record=>{
+    if(record.state!=='verified')return [];const stamp=record.capturedAt.replace(/[:.]/g,'-');return [
+      {name:`backup-${stamp}.enc`,bytes:record.dumpBytes,sha256:record.dumpSha256},{name:`recovery-${stamp}.enc`,bytes:record.recoveryBytes,sha256:record.recoverySha256}];})};
+  const remote={complete:true,objects:records.filter(record=>record.state==='verified').flatMap(record=>[
+    {key:record.dumpKey,bytes:record.dumpBytes,etag:record.dumpEtag},{key:record.recoveryKey,bytes:record.recoveryBytes,etag:record.recoveryEtag}]),verifiedReceiptIds:records.filter(record=>record.state==='verified').map(record=>record.receiptId)};
+  local.files=[...local.archives.map(({name,bytes})=>({name,bytes})),{name:'state',bytes:local.totalBytes-local.archives.reduce((sum,file)=>sum+file.bytes,0)}];
+  return {classified,local,remote,inventoryLimit:512,maxPairBytes:500};
+}
+test('complete transport inventory binds proofs, accounts metadata and holds unknown reservations on missing objects',()=>{
+  const unknown={state:'prepared',receiptId:uuid(999),instanceId:identity.instanceId,databaseSystemIdentifier:identity.databaseSystemIdentifier,...scope,
+    capturedAt:new Date(now-500).toISOString(),localBytes:500,remoteBytes:500};
+  const request=transportFixture([current(),unknown]),result=reconcileBackupInventory(request);
+  const held=result.receipts.find(record=>record.receiptId===unknown.receiptId);assert.equal(held.remoteBytes,500);
+  assert.equal(result.receipts.at(-1).localBytes,1820);assert.equal(result.receipts.at(-1).remoteBytes,0);assert.match(result.proofDigest,/^[a-f0-9]{64}$/);
+  const plan=planBackupAdmission(input(result.receipts));assert.equal(plan.quota.current.localBytes,2500);assert.equal(plan.quota.current.remoteBytes,180+500+1234);
+});
+test('missing, partial, changed or overflow inventories never become capacity/retention proof',()=>{
+  const f=transportFixture();
+  for(const change of [{remote:{...f.remote,complete:false}},{remote:{...f.remote,objects:[]}},{remote:{...f.remote,verifiedReceiptIds:[]}},
+    {local:{...f.local,totalBytes:1}},
+    {local:{...f.local,archives:f.local.archives.map((file,index)=>index?file:{...file,sha256:'f'.repeat(64)})}},
+    {remote:{...f.remote,objects:[...f.remote.objects,{key:'held',bytes:Number.MAX_SAFE_INTEGER}]}}])assert.throws(()=>reconcileBackupInventory({...f,...change}));
+  assert.throws(()=>classifyBackupReceipts({receipts:[{...current(),archiveKeyId:'f'.repeat(64)}],identity,scope,now,inventoryLimit:512}));
+  assert.throws(()=>classifyBackupReceipts({receipts:[{state:'unknown',capturedAt:new Date(now+1).toISOString()}],identity,scope,now,inventoryLimit:512}));
+  const malformed=reconcileBackupInventory(transportFixture([current(),{state:'malformed'}]));
+  assert.equal(planBackupAdmission(input(malformed.receipts)).quota.decision,'unverified');
 });

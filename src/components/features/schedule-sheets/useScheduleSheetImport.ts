@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { jstToday } from "@/lib/date";
 import { INITIAL_WEEKDAY_DEFAULTS, createExistingRows, createTemplateRows, toRpcRow } from "./schedule-sheet-data";
 import type { PracticeSchedule, ScheduleImportEditableRow, ScheduleImportPreview, ScheduleSheetBlock, ScheduleSheetKind, VenueRow } from "@/types";
+import type { CreationReceipt } from "@/lib/google-sheet-creation";
 
 /** 予定シートの取得・下書き・確認・反映。呼出元のマウントごとに1つだけ使う。 */
 export function useScheduleSheetImport() {
@@ -26,6 +27,8 @@ export function useScheduleSheetImport() {
   const [googleEmail, setGoogleEmail] = useState<string | null>(null);
   const [issuing, setIssuing] = useState(false);
   const [issueBlocked, setIssueBlocked] = useState(false);
+  const [creationChecked, setCreationChecked] = useState(false);
+  const [creationAttempt, setCreationAttempt] = useState<CreationReceipt | null>(null);
   const issueInFlight = useRef(false);
   const [source, setSource] = useState<"url" | "file">("url");
   const [sheetUrl, setSheetUrl] = useState("");
@@ -40,6 +43,35 @@ export function useScheduleSheetImport() {
   const [undoing, setUndoing] = useState(false);
   const [deletionIds, setDeletionIds] = useState<string[]>([]);
   const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/google/sheets/create", { cache: "no-store" }).then(async response => {
+      if (!response.ok) throw new Error();
+      const result = await response.json();
+      if (!result || !Object.hasOwn(result, "attempt") || (result.attempt !== null &&
+        (typeof result.attempt !== "object" || typeof result.attempt.attempt_id !== "string"
+          || !["reserved", "resource_known", "registered"].includes(result.attempt.state)
+          || typeof result.attempt.setup_confirmed !== "boolean" || !result.attempt.spec))) throw new Error();
+      return result as { attempt: CreationReceipt | null };
+    }).then(({ attempt }) => {
+      if (!active) return;
+      setCreationAttempt(attempt); setCreationChecked(true);
+      if (!attempt) return;
+      const held = !attempt.setup_confirmed || attempt.state !== "registered";
+      setIssueBlocked(held);
+      if (attempt.resource) {
+        setSheetUrl(attempt.resource.url); setSource("url"); setSheetId(attempt.sheet_id);
+        setKind(attempt.spec.kind); setBlock(attempt.spec.block);
+        if (attempt.spec.year !== null) setYear(attempt.spec.year);
+        if (attempt.spec.month !== null) setMonth(attempt.spec.month);
+      }
+      if (held) setError(attempt.resource ? "作成済みのシートがあります。作り直さず、シートの登録状態を確認してください"
+        : "作成結果を確認できませんでした。作り直さず、Google Driveで作成済みのシートを確認してください");
+      else if (attempt.record_status === "changed" || attempt.record_status === "deleted") setError("作成済みのシート情報は変更または削除されています。元に戻さず、新しい条件で作成してください");
+    }).catch(() => { if (active) { setIssueBlocked(true); setError("作成結果の保存状態を確認できませんでした。作り直さず、時間をおいて確認してください"); } });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -125,7 +157,7 @@ export function useScheduleSheetImport() {
   }
 
   async function issueSpreadsheet() {
-    if (issueInFlight.current || issueBlocked) return;
+    if (issueInFlight.current || issueBlocked || !creationChecked) return;
     if (inputMode === "edit" && selectedIds.length === 0) {
       setError("編集する予定を選択してください");
       return;
@@ -152,7 +184,12 @@ export function useScheduleSheetImport() {
     });
     const result = await response.json();
     if (!response.ok) {
-      if (result.retryable === false || result.resultUnknown === true) setIssueBlocked(true);
+      if (result.attempt) {
+        setCreationAttempt(result.attempt); setIssueBlocked(result.attempt.state !== "registered" || !result.attempt.setup_confirmed);
+      } else if (result.retryable === false || result.resultUnknown === true) setIssueBlocked(true);
+      if (!result.attempt && typeof result.attemptId === "string") setCreationAttempt({ attempt_id: result.attemptId, outcome: "held",
+        state: result.resource ? "resource_known" : "reserved", resource: result.resource ?? null, setup_confirmed: false,
+        sheet_id: null, record_status: "unregistered", spec: { kind, block: block as CreationReceipt["spec"]["block"], year: kind === "practice" ? year : null, month: kind === "practice" ? month : null } });
       if (result.outcome === "partial" && typeof result.resource?.url === "string") {
         setSheetUrl(result.resource.url); setSheetId(null); setSource("url"); setPreview(null);
         if (popup) popup.location.href = result.resource.url;
@@ -165,10 +202,30 @@ export function useScheduleSheetImport() {
     setSource("url");
     setPreview(null);
     if (popup) popup.location.href = result.url;
+    if (result.attemptId) setCreationAttempt({ attempt_id: result.attemptId, outcome: "registered", state: "registered",
+      resource: { spreadsheetId: result.spreadsheetId, url: result.url }, setup_confirmed: result.setupConfirmed === true,
+      sheet_id: result.id, record_status: "present", spec: { kind, block: block as CreationReceipt["spec"]["block"], year: kind === "practice" ? year : null, month: kind === "practice" ? month : null } });
+    router.refresh();
     } catch {
       popup?.close(); setIssueBlocked(true);
       setError("作成結果を確認できませんでした。作り直さず、Google Driveで作成済みのシートを確認してください。");
     } finally { setIssuing(false); issueInFlight.current = false; }
+  }
+
+  async function repairSpreadsheet() {
+    if (!creationAttempt?.resource || issueInFlight.current) return;
+    issueInFlight.current = true; setIssuing(true);
+    try {
+      const response = await fetch("/api/google/sheets/create", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "repair", attemptId: creationAttempt.attempt_id }) });
+      const result = await response.json();
+      if (!response.ok || !result.id) { setError(result.error ?? "シートの登録状態を確認できませんでした。作り直さず、作成済みのシートを確認してください"); return; }
+      setSheetId(result.id); setSheetUrl(result.url); setSource("url");
+      setCreationAttempt({ ...creationAttempt, state: "registered", sheet_id: result.id, record_status: "present", setup_confirmed: result.setupConfirmed === true });
+      setIssueBlocked(result.setupConfirmed !== true); setError(result.setupConfirmed === true ? null : result.error);
+      router.refresh();
+    } catch { setError("シートの登録結果を確認できませんでした。作り直さず、時間をおいて確認してください"); }
+    finally { issueInFlight.current = false; setIssuing(false); }
   }
 
   async function selectFile(file: File | undefined) {
@@ -200,6 +257,10 @@ export function useScheduleSheetImport() {
 
     let targetSheetId = sheetId;
     if (!targetSheetId) {
+      const selectedGoogleId = /^https:\/\/docs\.google\.com\/spreadsheets\/(?:u\/\d+\/)?d\/([A-Za-z0-9_-]+)(?:[/?#]|$)/.exec(sheetUrl.trim())?.[1];
+      if (source === "url" && creationAttempt?.resource?.spreadsheetId === selectedGoogleId) {
+        setError("作成済みのシートは、シートの登録を確認してから取り込んでください"); setLoading(false); return;
+      }
       const { data, error: createError } = await supabase
         .from("schedule_sheets")
         .insert({
@@ -409,7 +470,7 @@ export function useScheduleSheetImport() {
     year, setYear, month, setMonth, kind,
     setKind, block, setBlock, inputMode, setInputMode,
     existing, selectedIds, setSelectedIds, venues, weekdayDefaults,
-    googleConnected, googleEmail, issuing, issueBlocked, source, setSource,
+    googleConnected, googleEmail, issuing, issueBlocked, creationChecked, creationAttempt, repairSpreadsheet, source, setSource,
     sheetUrl, setSheetUrl, fileName, csv, setSheetId,
     preview, setPreview, loading, applying, error,
     setError, lastApplied, undoing, deletionIds, setDeletionIds,

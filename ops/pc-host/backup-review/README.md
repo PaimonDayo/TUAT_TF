@@ -1,5 +1,9 @@
 # 切替前の合成暗号化DB復元試験
 
+ID確認前に同じGoogleシートが手動登録済みだった場合も、確認済みIDを記録して保留し、DB修復・予約UUIDでの直接INSERTのどちらでも別登録を作れないことを追加検証する。元の登録は再利用・更新・削除しない。
+
+`20261011190000_google_sheet_creation_attempts.sql` も含めて復元する。作成前の予約、Google IDだけ確認済み、整形とDB登録が完了済み、整形は確認済みでDB登録のみ未完了の4状態を実RPCで作り、暗号化したarchiveから戻す。5つの合成identityのうちA/C/D/Eだけに作成権限を与え、Bは不許可を維持する。復元後も本人と現在の権限だけが記録を読め、結果不明に期限や新UUIDで再作成許可を与えず、既知IDのDB登録だけを再開できることを検証する。整形の未確認は登録後も保持する。URLの別表記による重複登録を拒否し、完了後の正当な編集・削除を再登録で戻さない。Google呼出しは0回で、全SQL受入操作をrollbackして全table digestの一致を再確認する。
+
 2026-10-11追加候補は `20261011170000_sheet_push_attempts.sql` を含む全migrationを使用する。実service-role RPCでreserved（古い未知結果）、confirmed/partial、completed/applied、completed/supersededの4記録receiptと未知clear receiptを作る。3つ目の承認済み合成profileを同日・同じ物理slotへ向け、復元後に別profileのbeginとclear解決も拒否されることを確認する。復元後の実anon/authenticated/service-role操作でRLS/ACL・RPC限定更新を検証し、未知/部分/適用済みversionのbeginは新しいattempt UUIDでもdispatch許可0、部分receiptの後付け成功化禁止、marker_versionと新しいpending編集の保持、未知receiptの削除後保持・CSV上書き拒否をassertする。実providerは呼ばない。全受入操作をrollbackして元の全table digestへ戻ることを確認する。既存の8区分metadata比較は維持する。
 
 旧 `result.json` は上書きせず、実行前後のSHA256一致を新証拠へ記録する。新結果は親ACLを保護した `.private/<fresh generation>/result.json` に `wx` で一度だけ書き、driver・fixture・受入SQL・tests・READMEと全migrationのSHA256を含める。合成暗号化pairと失敗診断も同じprivate generationに置くが、暗号鍵はメモリだけでファイルへ保存しない。最後にpairを削除し、秘密を含まない結果だけを残す。

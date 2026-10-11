@@ -10,7 +10,7 @@ DECLARE denied boolean:=false; BEGIN
 END $$;
 DO $$ BEGIN
  IF current_database()<>'tuat_rls_review'
-    OR (SELECT count(*) FROM auth.users)<>3 OR (SELECT count(*) FROM public.profiles)<>3
+    OR (SELECT count(*) FROM auth.users)<>5 OR (SELECT count(*) FROM public.profiles)<>5
     OR EXISTS(SELECT 1 FROM auth.users WHERE email !~ '@example\.invalid$')
     OR current_setting('cron.launch_active_jobs')<>'off'
     OR NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='authenticator' AND 'pgrst.db_pre_request=public.check_login_access'=ANY(rolconfig))
@@ -173,6 +173,128 @@ SELECT pg_temp.backup_assert((SELECT pending_sheet_push AND memo='Synthetic newe
  'superseded newer edit remains pending');
 RESET ROLE;
 \echo PASS:restored-sheet-receipts-ACL-unknown-dispatch0-marker-slot
+
+-- Restored creation evidence is readable only by its currently permitted owner.
+-- None of these SQL acceptance operations can dispatch to an external provider.
+DO $$ DECLARE signature text;role_name text; BEGIN
+ IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid='public.google_sheet_creation_attempts'::regclass)
+    OR (SELECT count(*) FROM public.google_sheet_creation_attempts)<>4 THEN RAISE EXCEPTION 'Restored creation evidence absent'; END IF;
+ IF has_table_privilege('anon','public.google_sheet_creation_attempts','SELECT,INSERT,UPDATE,DELETE,TRUNCATE') THEN
+  RAISE EXCEPTION 'Restored anonymous creation grant'; END IF;
+ FOREACH role_name IN ARRAY ARRAY['authenticated','service_role'] LOOP
+  IF NOT has_table_privilege(role_name,'public.google_sheet_creation_attempts','SELECT')
+     OR has_table_privilege(role_name,'public.google_sheet_creation_attempts','INSERT,UPDATE,DELETE,TRUNCATE') THEN
+   RAISE EXCEPTION 'Restored creation RPC mutation boundary'; END IF;
+ END LOOP;
+ FOREACH signature IN ARRAY ARRAY['public.google_sheet_creation_status()',
+  'public.google_sheet_creation_begin(uuid,timestamp with time zone,text,text,jsonb)',
+  'public.google_sheet_creation_register(uuid)'] LOOP
+  IF has_function_privilege('anon',signature,'EXECUTE') OR has_function_privilege('service_role',signature,'EXECUTE')
+     OR NOT has_function_privilege('authenticated',signature,'EXECUTE') THEN RAISE EXCEPTION 'Restored creation owner RPC grant'; END IF;
+ END LOOP;
+ FOREACH signature IN ARRAY ARRAY['public.google_sheet_creation_resource(uuid,uuid,text)','public.google_sheet_creation_setup(uuid,uuid,text)'] LOOP
+  IF has_function_privilege('anon',signature,'EXECUTE') OR has_function_privilege('authenticated',signature,'EXECUTE')
+     OR NOT has_function_privilege('service_role',signature,'EXECUTE') THEN RAISE EXCEPTION 'Restored creation service RPC grant'; END IF;
+ END LOOP;
+END $$;
+CREATE FUNCTION pg_temp.backup_creation_begin(n integer,attempt integer) RETURNS jsonb LANGUAGE sql AS $$
+ SELECT public.google_sheet_creation_begin(pg_temp.backup_uuid('8700',attempt),TIMESTAMPTZ '2026-10-11T00:00:00Z',
+  encode(digest('synthetic-ciphertext','sha256'),'hex'),repeat(chr(96+n),64),
+  '{"kind":"practice","block":"all","year":2026,"month":11}'::jsonb);
+$$;
+SELECT pg_temp.backup_assert(EXISTS(SELECT 1 FROM public.google_sheet_creation_attempts WHERE attempt_id=pg_temp.backup_uuid('8700',1)
+ AND state='reserved' AND spreadsheet_id IS NULL AND NOT setup_confirmed AND created_at=TIMESTAMPTZ '1900-01-01'),'creation unknown has no expiry');
+SELECT pg_temp.backup_assert(EXISTS(SELECT 1 FROM public.google_sheet_creation_attempts WHERE attempt_id=pg_temp.backup_uuid('8700',2)
+ AND state='resource_known' AND spreadsheet_id='synthetic_google_book_2' AND NOT setup_confirmed),'known unconfirmed resource preserved');
+SELECT pg_temp.backup_assert(EXISTS(SELECT 1 FROM public.google_sheet_creation_attempts WHERE attempt_id=pg_temp.backup_uuid('8700',3)
+ AND state='registered' AND setup_confirmed AND registered_at IS NOT NULL),'completed creation preserved');
+SELECT pg_temp.backup_assert(EXISTS(SELECT 1 FROM public.google_sheet_creation_attempts WHERE attempt_id=pg_temp.backup_uuid('8700',4)
+ AND state='resource_known' AND setup_confirmed AND registered_at IS NULL),'registration-only repair preserved');
+SET LOCAL ROLE anon;
+SELECT pg_temp.expect_denied('SELECT * FROM public.google_sheet_creation_attempts','42501');
+SELECT pg_temp.expect_denied('SELECT public.google_sheet_creation_status()','42501');
+RESET ROLE;
+SET LOCAL ROLE service_role;
+SELECT pg_temp.expect_denied('DELETE FROM public.google_sheet_creation_attempts','42501');
+SELECT pg_temp.expect_denied('UPDATE public.google_sheet_creation_attempts SET setup_confirmed=true','42501');
+SELECT set_config('request.jwt.claims','{"role":"authenticated"}',true);
+SELECT pg_temp.expect_denied($s$SELECT public.google_sheet_creation_resource('ba611111-0000-4000-8700-000000000001','ba611111-0000-4000-8000-000000000001','synthetic_fabricated')$s$,'42501');
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims','{"role":"authenticated","sub":"ba611111-0000-4000-8000-000000000002","email":"backup-b@example.invalid"}',true);
+SELECT pg_temp.backup_assert(NOT EXISTS(SELECT 1 FROM public.google_sheet_creation_attempts),'unapproved cannot see evidence');
+SELECT pg_temp.expect_denied('SELECT public.google_sheet_creation_status()','42501');
+SELECT set_config('request.jwt.claims','{"role":"authenticated","sub":"ba611111-0000-4000-8000-000000000001","email":"backup-a@example.invalid"}',true);
+SELECT pg_temp.backup_assert((SELECT count(*) FROM public.google_sheet_creation_attempts)=1,'own evidence only');
+SELECT pg_temp.backup_assert(public.google_sheet_creation_status() @> '{"outcome":"held","state":"reserved","resource":null}','reload unknown preserved');
+SELECT pg_temp.backup_assert(pg_temp.backup_creation_begin(1,101)->>'outcome'='held','new attempt cannot repeat unknown creation');
+SELECT pg_temp.expect_denied($s$SELECT public.google_sheet_creation_register('ba611111-0000-4000-8700-000000000001')$s$,'P0001');
+SELECT pg_temp.expect_denied('UPDATE public.google_sheet_creation_attempts SET setup_confirmed=true','42501');
+SELECT pg_temp.expect_denied($s$SELECT public.google_sheet_creation_register('ba611111-0000-4000-8700-000000000002')$s$,'P0001');
+
+SELECT set_config('request.jwt.claims','{"role":"authenticated","sub":"ba611111-0000-4000-8000-000000000003","email":"backup-c@example.invalid"}',true);
+SELECT pg_temp.backup_assert(public.google_sheet_creation_status() @> '{"outcome":"held","state":"resource_known","setup_confirmed":false}', 'reload known URL does not invent formatting success');
+SELECT pg_temp.backup_assert(public.google_sheet_creation_register(pg_temp.backup_uuid('8700',2)) @> '{"outcome":"held","state":"registered","setup_confirmed":false,"record_status":"present"}', 'DB repair cannot confirm provider');
+SELECT pg_temp.backup_assert(pg_temp.backup_creation_begin(2,102)->>'outcome'='held','DB registration does not release formatting uncertainty');
+
+SELECT set_config('request.jwt.claims','{"role":"authenticated","sub":"ba611111-0000-4000-8000-000000000004","email":"backup-d@example.invalid"}',true);
+SELECT pg_temp.backup_assert(public.google_sheet_creation_status() @> '{"outcome":"registered","record_status":"present"}', 'completed reload visible');
+SELECT pg_temp.backup_assert(pg_temp.backup_creation_begin(3,103)->>'outcome'='registered','same completed creation never sends');
+UPDATE public.schedule_sheets SET target_block='short'
+ WHERE id=(SELECT schedule_sheet_id FROM public.google_sheet_creation_attempts WHERE attempt_id=pg_temp.backup_uuid('8700',3));
+SELECT pg_temp.backup_assert(public.google_sheet_creation_register(pg_temp.backup_uuid('8700',3))->>'record_status'='changed','legitimate edits not overwritten');
+SELECT pg_temp.backup_assert(EXISTS(SELECT 1 FROM public.schedule_sheets WHERE author_id=pg_temp.backup_uuid('8000',4) AND target_block='short'),'legitimate metadata edit retained');
+DELETE FROM public.schedule_sheets
+ WHERE id=(SELECT schedule_sheet_id FROM public.google_sheet_creation_attempts WHERE attempt_id=pg_temp.backup_uuid('8700',3));
+SELECT pg_temp.backup_assert(public.google_sheet_creation_register(pg_temp.backup_uuid('8700',3))->>'record_status'='deleted','deleted completed row never revived');
+SELECT pg_temp.backup_assert(NOT EXISTS(SELECT 1 FROM public.schedule_sheets WHERE author_id=pg_temp.backup_uuid('8000',4)),'deleted completed row remains absent');
+SELECT pg_temp.backup_assert(pg_temp.backup_creation_begin(3,104)->>'outcome'='registered','deleted row does not authorize recreation');
+
+SELECT set_config('request.jwt.claims','{"role":"authenticated","sub":"ba611111-0000-4000-8000-000000000005","email":"backup-e@example.invalid"}',true);
+SELECT pg_temp.backup_assert(public.google_sheet_creation_status() @> '{"outcome":"held","state":"resource_known","setup_confirmed":true}', 'known confirmed resource awaits only DB registration');
+SELECT pg_temp.backup_assert(public.google_sheet_creation_register(pg_temp.backup_uuid('8700',4)) @> '{"outcome":"registered","record_status":"present"}','DB-only repair succeeds');
+SELECT pg_temp.backup_assert(public.google_sheet_creation_register(pg_temp.backup_uuid('8700',4)) @> '{"outcome":"registered","record_status":"present"}','repeated registration reuses exact row');
+SELECT pg_temp.backup_assert((SELECT count(*) FROM public.schedule_sheets WHERE author_id=pg_temp.backup_uuid('8000',5))=1,'repair does not duplicate row');
+SELECT pg_temp.expect_denied($s$INSERT INTO public.schedule_sheets(id,author_id,target_year,target_month,kind,target_block,sheet_url,csv_url)
+ VALUES('ba611111-0000-4000-8800-000000000099','ba611111-0000-4000-8000-000000000005',2026,11,'practice','all',
+ 'https://docs.google.com/spreadsheets/u/0/d/synthetic_google_book_4/edit?x=1','https://docs.google.com/spreadsheets/d/synthetic_google_book_4/edit')$s$,'23514');
+RESET ROLE;
+SELECT pg_temp.backup_assert((SELECT count(*) FROM public.google_sheet_creation_attempts)=4,'all restored begins dispatch zero and retain evidence');
+
+-- A manually registered resource before the provider ID was known remains owned
+-- by that original row. Discovering the ID later must not permit DB repair/raw
+-- insertion to create a second row under the preallocated attempt UUID.
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims','{"role":"authenticated","sub":"ba611111-0000-4000-8000-000000000004","email":"backup-d@example.invalid"}',true);
+INSERT INTO public.schedule_sheets(id,author_id,target_year,target_month,kind,target_block,sheet_url,csv_url)
+ VALUES(pg_temp.backup_uuid('8800',106),pg_temp.backup_uuid('8000',4),2026,11,'practice','all',
+ 'https://docs.google.com/spreadsheets/u/0/d/synthetic_preclaimed/edit?original=1','https://docs.google.com/spreadsheets/d/synthetic_preclaimed/edit');
+SELECT pg_temp.backup_assert(pg_temp.backup_creation_begin(6,106)->>'outcome'='send','different completed input can reserve once');
+RESET ROLE;
+SELECT set_config('request.jwt.claims','{"role":"service_role"}',true);
+SET LOCAL ROLE service_role;
+SELECT pg_temp.backup_assert(public.google_sheet_creation_resource(pg_temp.backup_uuid('8700',106),pg_temp.backup_uuid('8000',4),'synthetic_preclaimed')
+ @> '{"outcome":"conflict","state":"resource_known","setup_confirmed":false}','known ID persisted despite earlier manual registration');
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims','{"role":"authenticated","sub":"ba611111-0000-4000-8000-000000000004","email":"backup-d@example.invalid"}',true);
+SELECT pg_temp.expect_denied($s$SELECT public.google_sheet_creation_register('ba611111-0000-4000-8700-000000000106')$s$,'23514');
+SELECT pg_temp.expect_denied($s$INSERT INTO public.schedule_sheets(id,author_id,target_year,target_month,kind,target_block,sheet_url,csv_url)
+ SELECT schedule_sheet_id,profile_id,2026,11,'practice','all',canonical_url,canonical_url FROM public.google_sheet_creation_attempts
+ WHERE attempt_id='ba611111-0000-4000-8700-000000000106'$s$,'23514');
+SELECT pg_temp.backup_assert(pg_temp.backup_creation_begin(6,107)->>'outcome'='held','preclaimed conflict never authorizes another Google create');
+SELECT pg_temp.backup_assert((SELECT count(*) FROM public.schedule_sheets WHERE author_id=pg_temp.backup_uuid('8000',4))=1,'preclaimed row not duplicated');
+SELECT pg_temp.backup_assert(EXISTS(SELECT 1 FROM public.schedule_sheets WHERE id=pg_temp.backup_uuid('8800',106)
+ AND sheet_url='https://docs.google.com/spreadsheets/u/0/d/synthetic_preclaimed/edit?original=1'),'preclaimed row unchanged');
+RESET ROLE;
+DELETE FROM public.profile_roles WHERE profile_id=pg_temp.backup_uuid('8000',5);
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims','{"role":"authenticated","sub":"ba611111-0000-4000-8000-000000000005","email":"backup-e@example.invalid"}',true);
+SELECT pg_temp.backup_assert(NOT EXISTS(SELECT 1 FROM public.google_sheet_creation_attempts),'removed role cannot read creation evidence');
+SELECT pg_temp.expect_denied('SELECT public.google_sheet_creation_status()','42501');
+SELECT pg_temp.expect_denied($s$SELECT public.google_sheet_creation_register('ba611111-0000-4000-8700-000000000004')$s$,'42501');
+RESET ROLE;
+\echo PASS:restored-creation-receipts-4states-ACL-unknown-dispatch0-repair-no-revive
 SELECT set_config('request.headers','{"x-tuat-mirror":"1"}',true);
 DELETE FROM public.login_email_allowlist WHERE email='backup-a@example.invalid';
 SET LOCAL ROLE authenticated;

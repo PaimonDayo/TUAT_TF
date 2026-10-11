@@ -191,6 +191,29 @@ export class SpreadsheetCreationError extends Error {
   }
 }
 
+export type ScheduleSpreadsheetInput = {
+  accessToken: string; title: string; kind: ScheduleSheetKind; year: number | null; month: number | null;
+  block: ScheduleSheetBlock; venues: VenueRow[]; schedules: PracticeSchedule[]; weekdayDefaults: ScheduleSheetWeekdayDefault[];
+  /** Must persist the returned identity before the second provider mutation. */
+  onCreated: (resource: CreatedSpreadsheet) => Promise<void>;
+};
+
+function spreadsheetCreateBody(input: Omit<ScheduleSpreadsheetInput, "accessToken" | "onCreated">) {
+  const values = buildSheetValues(input);
+  return { properties: { title: input.title }, sheets: [{ properties: { title: "予定", gridProperties: {
+    rowCount: Math.max(values.length + 20, 100), columnCount: values[0].length, frozenRowCount: 1,
+  } }, data: [{ startRow: 0, startColumn: 0, rowData: values.map(toRowData) }] }] };
+}
+
+/** Hash the actual create body and formatting template, never token or raw rows. */
+export function scheduleSpreadsheetFingerprint(input: Omit<ScheduleSpreadsheetInput, "accessToken" | "onCreated">): string {
+  const create = spreadsheetCreateBody(input);
+  return crypto.createHash("sha256").update(JSON.stringify({ version: 1, endpoint: "https://sheets.googleapis.com/v4/spreadsheets",
+    spec: { kind: input.kind, block: input.block, year: input.year, month: input.month }, create,
+    setup: sheetFormattingRequests({ sheetId: 0, kind: input.kind, rowCount: create.sheets[0].properties.gridProperties.rowCount, venues: input.venues }),
+  })).digest("hex");
+}
+
 export async function createScheduleSpreadsheet({
   accessToken,
   title,
@@ -201,17 +224,8 @@ export async function createScheduleSpreadsheet({
   venues,
   schedules,
   weekdayDefaults,
-}: {
-  accessToken: string;
-  title: string;
-  kind: ScheduleSheetKind;
-  year: number | null;
-  month: number | null;
-  block: ScheduleSheetBlock;
-  venues: VenueRow[];
-  schedules: PracticeSchedule[];
-  weekdayDefaults: ScheduleSheetWeekdayDefault[];
-}): Promise<CreatedSpreadsheet> {
+  onCreated,
+}: ScheduleSpreadsheetInput): Promise<CreatedSpreadsheet> {
   const values = buildSheetValues({
     kind,
     year,
@@ -221,26 +235,12 @@ export async function createScheduleSpreadsheet({
     weekdayDefaults,
   });
   await assertPcAppWriteAllowed();
+  if (typeof onCreated !== "function") throw new Error("Creation receipt is required");
   let createResponse: Response;
   try { createResponse = await fetch("https://sheets.googleapis.com/v4/spreadsheets", {
     method: "POST",
     headers: googleJsonHeaders(accessToken),
-    body: JSON.stringify({
-      properties: { title },
-      sheets: [
-        {
-          properties: {
-            title: "予定",
-            gridProperties: {
-              rowCount: Math.max(values.length + 20, 100),
-              columnCount: values[0].length,
-              frozenRowCount: 1,
-            },
-          },
-          data: [{ startRow: 0, startColumn: 0, rowData: values.map(toRowData) }],
-        },
-      ],
-    }),
+    body: JSON.stringify(spreadsheetCreateBody({ title, kind, year, month, block, venues, schedules, weekdayDefaults })),
   }); } catch (cause) { throw new SpreadsheetCreationError("unknown", "create", null, false, { cause }); }
   if (!createResponse.ok) {
     if (createResponse.status >= 500) throw new SpreadsheetCreationError("unknown", "create", null, false);
@@ -256,6 +256,11 @@ export async function createScheduleSpreadsheet({
     if (!created || typeof created.spreadsheetId !== "string" || !/^[a-zA-Z0-9_-]{1,200}$/.test(created.spreadsheetId)) throw new Error();
   } catch (cause) { throw new SpreadsheetCreationError("unknown", "create", null, false, { cause }); }
   const resource = { spreadsheetId: created.spreadsheetId, url: `https://docs.google.com/spreadsheets/d/${created.spreadsheetId}/edit` };
+  try { await onCreated(resource); } catch (cause) {
+    throw new SpreadsheetCreationError("partial", "record", resource,
+      typeof cause === "object" && cause !== null && (("code" in cause && cause.code === "PC_BACKUP_UNAVAILABLE")
+        || ("protection" in cause && cause.protection === true)), { cause });
+  }
   try {
   const sheetId = created.sheets[0].properties.sheetId;
   if (!Number.isSafeInteger(sheetId) || sheetId < 0) throw new Error("Spreadsheet setup response missing");

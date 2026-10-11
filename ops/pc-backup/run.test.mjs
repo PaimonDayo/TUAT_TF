@@ -6,11 +6,14 @@ import { backupStatusReady,STATUS_FILE,BACKUP_INTERVAL_MS,BACKUP_MAX_AGE_MS } fr
 import { decryptBackup,verifyRecovery } from '../laptop/backup-backend.mjs';
 import { encryptedPair } from './archive.mjs';
 import { planBackupRetention } from './retention.mjs';
+import { MIN_MAX_PAIR_BYTES } from './config.mjs';
+import { sha256 } from './archive.mjs';
 
 const instanceId='11111111-1111-4111-8111-111111111111',generation='22222222-2222-4222-8222-222222222222';
 const config={version:1,enabled:true,instanceId,stateDirectory:resolve('synthetic-backup-state'),environmentFile:resolve('synthetic-config/backup.env'),
   wslExecutable:resolve('synthetic-wsl.exe'),wslSha256:'a'.repeat(64),wslDistribution:'synthetic',wslUser:'synthetic',dockerExecutable:'/usr/bin/docker',dockerSha256:'b'.repeat(64),
   psqlExecutable:'/usr/bin/psql',pgDumpExecutable:'/usr/bin/pg_dump',pushEnvironmentFile:null,
+  capacity:{inventoryLimit:512,maxLocalBytes:10**12,maxRemoteBytes:10**12,minFreeLocalBytes:1000,maxPairBytes:MIN_MAX_PAIR_BYTES,maxRequestCount:10_000,maxTransferBytes:10**12},
   target:{containerId:'c'.repeat(64),containerImageId:`sha256:${'d'.repeat(64)}`,databaseSystemIdentifier:'1234567890123456789',databaseName:'postgres',
     containerName:'synthetic-db',composeProject:'synthetic-backup',composeService:'db',dataMountSource:'/synthetic-owned/database'}};
 const env={PC_BACKUP_ENCRYPTION_KEY:'e'.repeat(64),R2_ACCOUNT_ID:'f'.repeat(32),R2_ACCESS_KEY_ID:'synthetic-key',R2_SECRET_ACCESS_KEY:'synthetic-secret',R2_BUCKET_NAME:'synthetic-only'};
@@ -20,20 +23,29 @@ const verifiedPair={verified:true,dumpEtag:'"synthetic-dump"',recoveryEtag:'"syn
 const flush=async()=>{for(let i=0;i<8;i++) await new Promise(done=>setImmediate(done));};
 function fixture(overrides={}) {
   let time=Date.parse('2026-10-11T00:30:00.000Z'),callback,owns=true;
-  const files=new Map(),calls={probe:0,dump:0,recovery:0,upload:0,release:0,close:0},events=[];
+  const files=new Map(),calls={probe:0,dump:0,recovery:0,upload:0,release:0,close:0,list:0,verify:0,localInventory:0},events=[];
   const adapters={
     async probe(){calls.probe++;return structuredClone(config.target);},
     async dump(){calls.dump++;return dump;},async recovery(){calls.recovery++;return structuredClone(recovery);},
-    async uploadAndVerify(){calls.upload++;return {...verifiedPair};},close(){calls.close++;},...overrides};
+    async uploadAndVerify(){calls.upload++;return {...verifiedPair};},
+    async listInventory({budget}) {calls.list++;budget.reserve(1,0);return {complete:true,objects:[...files.values()].filter(value=>value?.state==='verified').flatMap(value=>[
+      {key:value.dumpKey,bytes:value.dumpBytes,etag:value.dumpEtag},{key:value.recoveryKey,bytes:value.recoveryBytes,etag:value.recoveryEtag}])};},
+    async verifyInventory({snapshot,receipts,budget}) {calls.verify++;budget.reserve(4*receipts.length,receipts.reduce((sum,value)=>sum+value.remoteBytes,0));return {...snapshot,verifiedReceiptIds:receipts.map(value=>value.receiptId)};},
+    close(){calls.close++;},...overrides};
   const options={config,env,expectedInstanceId:instanceId,expectedDatabaseSystemIdentifier:config.target.databaseSystemIdentifier,generation,adapters,
     now:()=>time,setTimer:fn=>{callback=fn;return 1;},clearTimer:()=>{callback=null;},report:value=>events.push(value),
     save:(file,value)=>files.set(file,Buffer.isBuffer(value)?Buffer.from(value):structuredClone(value)),
+    readInventory:()=>{calls.localInventory++;const entries=[...files.entries()].map(([file,value])=>({name:file.slice(config.stateDirectory.length+1).replaceAll('\\','/'),
+      bytes:Buffer.isBuffer(value)?value.length:Buffer.byteLength(JSON.stringify(value))}));return {complete:true,files:entries,
+      receipts:[...files.values()].filter(value=>value?.receiptId),archives:[...files.entries()].filter(([,value])=>Buffer.isBuffer(value)).map(([file,value])=>({name:file.slice(config.stateDirectory.length+1),bytes:value.length,sha256:sha256(value)})),
+      totalBytes:entries.reduce((sum,value)=>sum+value.bytes,0),freeLocalBytes:10**12};},
     lock:()=>({assertOwned(){if(!owns) throw Error('synthetic ownership lost');},release(){if(!owns) throw Error('synthetic ownership lost');calls.release++;owns=false;}})};
   return {options,calls,files,events,adapters,advance:ms=>{time+=ms;},pulse:async()=>{callback?.();await flush();},loseLock:()=>{owns=false;},
     status:()=>files.get(resolve(config.stateDirectory,STATUS_FILE)),ready:identity=>backupStatusReady(files.get(resolve(config.stateDirectory,STATUS_FILE)),{...identity,databaseSystemIdentifier:config.target.databaseSystemIdentifier},time)};
 }
 test('plan is disabled by default and never calls any transport',()=>{
   const plan=backupPlan({...config,enabled:false});assert.equal(plan.enabled,false);for(const key of ['starts','targetReads','providerReads','providerWrites']) assert.equal(plan[key],false);
+  assert.equal(backupPlan({...config,enabled:false,capacity:undefined}).enabled,false);
 });
 test('disabled and host target mismatches reject before lock, probe or bytes',async()=>{
   for(const update of [{config:{...config,enabled:false}},{expectedInstanceId:'33333333-3333-4333-8333-333333333333'},{expectedDatabaseSystemIdentifier:'9876543210987654321'}]) {
@@ -125,15 +137,73 @@ test('intent survives a stopped dump and precedes all archive/provider bytes',as
   const life=await startBackupSupervisor(f.options);await flush();
   assert.equal(receipts(f).length,1);assert.equal(receipts(f)[0].state,'prepared');
   assert.equal(receipts(f)[0].generation,generation);assert.equal(receipts(f)[0].localState,'unknown');
+  assert.equal(receipts(f)[0].localBytes,config.capacity.maxPairBytes);assert.equal(receipts(f)[0].remoteBytes,config.capacity.maxPairBytes);
   assert.equal([...f.files.values()].filter(Buffer.isBuffer).length,0);assert.equal(f.calls.upload,0);
   const stopping=life.stop();finish(dump);await stopping;await flush();
   assert.equal(receipts(f)[0].state,'prepared');assert.equal(f.calls.upload,0);
+});
+
+test('enabled capacity omission rejects before owner, target or provider',async()=>{
+  const f=fixture();let locks=0;
+  await assert.rejects(startBackupSupervisor({...f.options,config:{...config,capacity:undefined},lock:()=>{locks++;throw Error('unexpected');}}));
+  assert.equal(locks,0);assert.equal(f.calls.probe,0);assert.equal(f.calls.list,0);assert.equal(f.files.size,0);
+});
+test('request and transfer allowance refuse before GET, intent, dump or PUT',async()=>{
+  for(const change of [{maxRequestCount:1},{maxTransferBytes:1}]) {
+    const f=fixture(),life=await startBackupSupervisor({...f.options,config:{...config,capacity:{...config.capacity,...change}}});await flush();
+    assert.equal(f.calls.list,1);assert.equal(f.calls.verify,0);assert.equal(f.calls.dump,0);assert.equal(f.calls.upload,0);
+    assert.equal(receipts(f).length,0);assert.equal(f.ready(life.identity),false);await life.stop();
+  }
+});
+test('capacity cannot count future deletion candidates as reclaimed bytes',async()=>{
+  const f=fixture(),life=await startBackupSupervisor({...f.options,config:{...config,capacity:{...config.capacity,maxLocalBytes:1}}});await flush();
+  assert.equal(f.calls.verify,1);assert.equal(f.calls.dump,0);assert.equal(f.calls.upload,0);assert.equal(receipts(f).length,0);
+  assert.equal(f.ready(life.identity),false);await life.stop();
+});
+test('inventory reads run in backup cycles only and current remote loss protects immediately',async()=>{
+  const f=fixture(),life=await startBackupSupervisor(f.options);await flush();assert.equal(f.ready(life.identity),true);
+  assert.equal(f.calls.list,2);assert.equal(f.calls.verify,2);
+  f.advance(20_000);await f.pulse();assert.equal(f.calls.list,2);assert.equal(f.calls.verify,2);
+  f.adapters.listInventory=async({budget})=>{f.calls.list++;budget.reserve(1,0);return {complete:true,objects:[]};};
+  f.advance(BACKUP_INTERVAL_MS);await f.pulse();assert.equal(f.ready(life.identity),false);assert.equal(f.calls.dump,1);
+  await f.pulse();assert.equal(f.ready(life.identity),false);assert.equal(f.calls.list,3);await life.stop();
+});
+test('failed post-upload listing cannot publish a new ready status or replay the pair',async()=>{
+  const f=fixture(),list=f.adapters.listInventory;
+  f.adapters.listInventory=async options=>{if(f.calls.list===1)throw Error('Synthetic incomplete page');return list(options);};
+  const life=await startBackupSupervisor(f.options);await flush();
+  assert.equal(f.calls.upload,1);assert.equal(receipts(f)[0].state,'verified');assert.equal(f.status().backup,null);assert.equal(f.ready(life.identity),false);
+  await f.pulse();assert.equal(f.calls.upload,1);await life.stop();
+});
+test('final free-space loss cannot publish a new ready pair after successful upload',async()=>{
+  const f=fixture(),read=f.options.readInventory;
+  const life=await startBackupSupervisor({...f.options,readInventory:options=>{const result=read(options);return f.calls.localInventory>1?{...result,freeLocalBytes:0}:result;}});await flush();
+  assert.equal(f.calls.upload,1);assert.equal(receipts(f)[0].state,'verified');assert.equal(f.status().backup,null);assert.equal(f.ready(life.identity),false);
+  assert.equal(f.files.has(resolve(config.stateDirectory,'retention-dry-run.json')),false);await life.stop();
+});
+test('target changing during the second inventory cannot publish the new attestation',async()=>{
+  const f=fixture(),list=f.adapters.listInventory;
+  f.adapters.listInventory=async options=>{const result=await list(options);if(f.calls.list===2)f.adapters.probe=async()=>({...config.target,containerId:'9'.repeat(64)});return result;};
+  const life=await startBackupSupervisor(f.options);await flush();
+  assert.equal(f.calls.upload,1);assert.equal(receipts(f)[0].state,'verified');assert.equal(f.status().backup,null);assert.equal(f.ready(life.identity),false);await life.stop();
+});
+test('held unknown intent retains reservation despite an empty remote list',async()=>{
+  const f=fixture(),life=await startBackupSupervisor(f.options);await flush();
+  f.adapters.uploadAndVerify=async()=>{f.calls.upload++;throw Error('Unknown PUT');};f.advance(BACKUP_INTERVAL_MS);await f.pulse();
+  const held=receipts(f)[1];assert.equal(held.remoteState,'unknown');
+  f.adapters.uploadAndVerify=async()=>{f.calls.upload++;return {...verifiedPair};};f.advance(BACKUP_INTERVAL_MS);await f.pulse();
+  const manifest=f.files.get(resolve(config.stateDirectory,'retention-dry-run.json'));
+  assert.equal(receipts(f)[1].state,'prepared');assert(manifest.held.count>=2); // Unknown pair plus state metadata/legacy hold.
+  assert(manifest.quota.current.remoteBytes>=held.remoteBytes+receipts(f)[0].remoteBytes+receipts(f)[2].remoteBytes);
+  assert(!manifest.removalCandidates.remote.some(value=>value.receiptId===held.receiptId));await life.stop();
 });
 test('persisted complete pair is accepted by pure retention planning with explicit budgets',async()=>{
   const f=fixture(),life=await startBackupSupervisor(f.options);await flush();
   const [receipt]=receipts(f);assert.equal(receipt.state,'verified');assert.equal(receipt.dumpEtag,verifiedPair.dumpEtag);
   assert.equal(receipt.recoveryEtag,verifiedPair.recoveryEtag);assert.equal(receipt.localBytes,receipt.dumpBytes+receipt.recoveryBytes);
   assert.equal(receipt.remoteBytes,receipt.localBytes);assert.equal(receipt.dumpKey,f.status().backup.key);
+  const manifest=f.files.get(resolve(config.stateDirectory,'retention-dry-run.json')),{manifestDigest,...bound}=manifest;
+  assert.equal(manifestDigest,sha256(JSON.stringify(bound)));assert.equal(manifest.binding.generation,generation);
   for(const secret of Object.values(env))assert(!JSON.stringify(receipt).includes(secret));
   const scope=Object.fromEntries(['targetFingerprint','storageScopeId','archiveKeyId'].map(key=>[key,receipt[key]]));
   const plan=planBackupRetention({identity:{...life.identity,databaseSystemIdentifier:config.target.databaseSystemIdentifier},scope,

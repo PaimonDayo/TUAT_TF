@@ -112,14 +112,16 @@ describe("all PC business transports fail closed once, then recover", () => {
     mocks.status = null;
     for (const req of [request("/rest/v1/profiles", "GET"), request("/rest/v1/rpc/login_access_allowed", "POST", {}),
       request("/rest/v1/rpc/get_feed_social_state", "POST", { record_ids: [id], tweet_ids: [] }),
+      request("/rest/v1/rpc/google_sheet_creation_status", "POST", {}),
       request("/storage/v1/object/sign/avatars/synthetic.webp", "POST", { expiresIn: 300 })]) expect((await pcBackendFetch(req)).status).toBe(200);
     const options = sessionClientConfig().options as { global: { fetch: typeof fetch } };
     expect((await options.global.fetch("http://127.0.0.1:18181/auth/v1/token?grant_type=refresh_token", { method: "POST", body: "{}" })).status).toBe(200);
-    expect(mocks.open).not.toHaveBeenCalled(); expect(mocks.dispatch).toHaveBeenCalledTimes(5);
+    expect(mocks.open).not.toHaveBeenCalled(); expect(mocks.dispatch).toHaveBeenCalledTimes(6);
   });
   it("does not accept extra/malformed RPC arguments, alternate schemas or unknown paths as reads", async () => {
     for (const [api, body] of [["login_access_allowed", { surprise: true }], ["get_feed_social_state", { record_ids: ["invalid"], tweet_ids: [] }],
-      ["can_edit_note", { target_note_id: id, extra: true }], ["unknown", {}]] as const) expect(await pcBackendRequestNeedsProtection(request(`/rest/v1/rpc/${api}`, "POST", body), `/rest/v1/rpc/${api}`)).toBe(true);
+      ["can_edit_note", { target_note_id: id, extra: true }], ["google_sheet_creation_status", { attempt_id: id }],
+      ["google_sheet_creation_register", { p_attempt_id: id }], ["unknown", {}]] as const) expect(await pcBackendRequestNeedsProtection(request(`/rest/v1/rpc/${api}`, "POST", body), `/rest/v1/rpc/${api}`)).toBe(true);
     const alternate = request("/rest/v1/rpc/is_member", "POST", {}); alternate.headers.set("content-profile", "other");
     expect(await pcBackendRequestNeedsProtection(alternate, "/rest/v1/rpc/is_member")).toBe(true);
   });
@@ -127,7 +129,7 @@ describe("all PC business transports fail closed once, then recover", () => {
 
 describe("direct provider mutation boundaries", () => {
   const storage = { storage: { from: () => ({ upload: vi.fn(), remove: vi.fn() }) } } as unknown as Parameters<typeof uploadImage>[0];
-  const sheet = { accessToken: "synthetic-token", title: "Synthetic", kind: "practice" as const, year: 2026, month: 10, block: "all" as const, venues: [], schedules: [], weekdayDefaults: [] };
+  const sheet = { accessToken: "synthetic-token", title: "Synthetic", kind: "practice" as const, year: 2026, month: 10, block: "all" as const, venues: [], schedules: [], weekdayDefaults: [], onCreated: async () => undefined };
   beforeEach(() => {
     for (const [name, value] of Object.entries({ R2_ACCOUNT_ID: "a".repeat(32), R2_ACCESS_KEY_ID: "synthetic", R2_SECRET_ACCESS_KEY: "synthetic", R2_BUCKET_NAME: "synthetic", R2_READ_ENABLED: "true", R2_WRITE_ENABLED: "true", IMAGE_STORAGE_READ_ONLY: "false", SHEET_SYNC_GAS_URL: "https://gas.example.test" })) vi.stubEnv(name, value);
   });
