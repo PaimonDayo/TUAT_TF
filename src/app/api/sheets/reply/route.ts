@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { writeSheetReply } from "@/lib/sheet-sync";
+import { pcAppWriteProtectionResponse, pcBackupProtectionResponse } from "@/lib/pc-backup-status";
 
 /**
  * アプリの「記録へのコメント」を、記録の作者のスプレッドシート（当日の行の右側＝列名なし列）へ
@@ -68,6 +69,8 @@ export async function POST(request: Request) {
   const replyText = name ? `${text}　${name}` : text;
 
   try {
+    const protectedResponse = await pcAppWriteProtectionResponse();
+    if (protectedResponse) return protectedResponse;
     const target = await sheetForRecord(admin, rec.user_id, rec.recorded_date);
     if (!target) return NextResponse.json({ ok: true, skipped: "sync ended" });
     const replyIndex = await writeSheetReply(
@@ -92,6 +95,8 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ ok: true, replyIndex });
   } catch (err) {
+    const protection = pcBackupProtectionResponse(err) ?? await pcAppWriteProtectionResponse();
+    if (protection) return protection;
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "返信を書き込めませんでした" },
       { status: 502 },

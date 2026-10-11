@@ -3,6 +3,7 @@
 
 import { fetchPublicMember, fetchPublicMemberSnapshot, fetchPublicSheetMembers, type RawMember, type SheetMember } from "@/lib/sheet-public-csv";
 import { fetchGasResponse } from "./gas-http";
+import { assertPcAppWriteAllowed } from "@/lib/pc-backup-status";
 
 // ── 設定 / GAS 呼び出し ──────────────────────────────────────────────────────
 export function gasConfig() {
@@ -13,8 +14,19 @@ export function gasConfig() {
 }
 
 
+export class GasWriteResultUnknownError extends Error {
+  readonly code = "SHEET_WRITE_RESULT_UNKNOWN";
+  readonly status = 502;
+  readonly resultUnknown = true;
+  readonly retryable = false;
+  constructor() { super("スプレッドシートへの書き込み完了を確認できませんでした。送信結果を確認するまで再送を保留してください。"); }
+}
+
 export async function gasPost<T>(body: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
+  const mutation = body.action !== "fetchMember";
+  if (mutation) await assertPcAppWriteAllowed();
   const { url, secret } = gasConfig();
+  try {
   const res = await fetchGasResponse(url, JSON.stringify({ ...body, secret }), signal);
   const result = await readGasJson<T>(res);
   if (["writeCells", "writeReply", "deleteReply", "writeMiddleLongMenu"].includes(String(body.action))
@@ -22,6 +34,7 @@ export async function gasPost<T>(body: Record<string, unknown>, signal?: AbortSi
     throw new Error("スプレッドシートへの書き込み完了を確認できませんでした。送信結果を確認するまで再送を保留してください。");
   }
   return result;
+  } catch (error) { if (mutation) throw new GasWriteResultUnknownError(); throw error; }
 }
 
 // 本文・認証情報をエラーへ含めず、HTTP状態と応答形式だけを知らせる。

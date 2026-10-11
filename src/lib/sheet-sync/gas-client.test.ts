@@ -27,6 +27,12 @@ describe("GAS response validation", () => {
     await expect(gasPost({ action: "writeCells", cells: {} })).rejects.toThrow("書き込み完了");
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+  it("distinguishes dispatched-but-unconfirmed writes without replay or provider details", async () => {
+    vi.stubEnv("SHEET_SYNC_GAS_URL", "https://example.test/sync"); vi.stubEnv("SHEET_SYNC_SECRET", "synthetic-only");
+    const fetch = vi.fn().mockRejectedValue(new Error("synthetic-private-provider-details")); vi.stubGlobal("fetch", fetch);
+    await expect(gasPost({ action: "writeCells" })).rejects.toMatchObject({ code: "SHEET_WRITE_RESULT_UNKNOWN", resultUnknown: true, retryable: false });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
 });
 
 describe("per-member CSV failures", () => {

@@ -4,6 +4,7 @@ import { createCoalescedFetch } from "@/lib/coalesced-fetch";
 import { createPcBrowserTransport } from "@/lib/pc-browser-transport";
 import { createPcAppDataFetch, isPcAppCloudDataRequest, pcAppCloudAuthConfig } from "@/lib/pc-app-transport";
 import { CLOUD_AUTH_COOKIE, browserCloudAuthOptIn, cloudAuthConfig, routeDataToPc, withCloudFailover } from "./cloud-auth";
+import { createCloudAuthFetch } from "./auth-fetch";
 
 const coalescedFetch = createCoalescedFetch((input, init) => {
   if (typeof window === "undefined") {
@@ -29,7 +30,7 @@ export function createClient() {
   if (cloud) {
     return createBrowserClient<Database>(cloud.url, cloud.anonKey, {
       cookieOptions: { name: CLOUD_AUTH_COOKIE },
-      global: { fetch: coalescedFetch },
+      global: { fetch: createCloudAuthFetch(coalescedFetch, cloud.url) },
     });
   }
   return createBrowserClient<Database>(

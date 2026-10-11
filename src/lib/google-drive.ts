@@ -8,6 +8,7 @@ import type {
   VenueRow,
 } from "@/types";
 import { BLOCKS } from "@/lib/constants";
+import { assertPcAppWriteAllowed } from "./pc-backup-status";
 
 type OAuthCredentials = {
   clientId: string;
@@ -180,6 +181,16 @@ export async function fetchGoogleEmail(accessToken: string): Promise<string | nu
   return data.email ?? null;
 }
 
+export type CreatedSpreadsheet = { spreadsheetId: string; url: string };
+export class SpreadsheetCreationError extends Error {
+  readonly retryable = false;
+  constructor(readonly outcome: "partial" | "unknown", readonly phase: "create" | "setup" | "record",
+    readonly resource: CreatedSpreadsheet | null, readonly protection: boolean, options?: ErrorOptions) {
+    super(resource ? "作成済みのスプレッドシートがあります。作り直さず、表示されたシートを確認してください。"
+      : "作成結果を確認できませんでした。作り直さず、Google Driveで作成済みのシートを確認してください。", options);
+  }
+}
+
 export async function createScheduleSpreadsheet({
   accessToken,
   title,
@@ -200,7 +211,7 @@ export async function createScheduleSpreadsheet({
   venues: VenueRow[];
   schedules: PracticeSchedule[];
   weekdayDefaults: ScheduleSheetWeekdayDefault[];
-}): Promise<{ spreadsheetId: string; url: string }> {
+}): Promise<CreatedSpreadsheet> {
   const values = buildSheetValues({
     kind,
     year,
@@ -209,7 +220,9 @@ export async function createScheduleSpreadsheet({
     schedules,
     weekdayDefaults,
   });
-  const createResponse = await fetch("https://sheets.googleapis.com/v4/spreadsheets", {
+  await assertPcAppWriteAllowed();
+  let createResponse: Response;
+  try { createResponse = await fetch("https://sheets.googleapis.com/v4/spreadsheets", {
     method: "POST",
     headers: googleJsonHeaders(accessToken),
     body: JSON.stringify({
@@ -228,22 +241,31 @@ export async function createScheduleSpreadsheet({
         },
       ],
     }),
-  });
+  }); } catch (cause) { throw new SpreadsheetCreationError("unknown", "create", null, false, { cause }); }
   if (!createResponse.ok) {
-    throw new Error(`Spreadsheet create failed: ${await createResponse.text()}`);
+    if (createResponse.status >= 500) throw new SpreadsheetCreationError("unknown", "create", null, false);
+    throw new Error("Spreadsheet create rejected");
   }
-  const created = (await createResponse.json()) as {
+  let created: {
     spreadsheetId: string;
     spreadsheetUrl: string;
     sheets: { properties: { sheetId: number } }[];
   };
+  try {
+    created = await createResponse.json();
+    if (!created || typeof created.spreadsheetId !== "string" || !/^[a-zA-Z0-9_-]{1,200}$/.test(created.spreadsheetId)) throw new Error();
+  } catch (cause) { throw new SpreadsheetCreationError("unknown", "create", null, false, { cause }); }
+  const resource = { spreadsheetId: created.spreadsheetId, url: `https://docs.google.com/spreadsheets/d/${created.spreadsheetId}/edit` };
+  try {
   const sheetId = created.sheets[0].properties.sheetId;
+  if (!Number.isSafeInteger(sheetId) || sheetId < 0) throw new Error("Spreadsheet setup response missing");
   const requests = sheetFormattingRequests({
     sheetId,
     kind,
     rowCount: Math.max(values.length + 20, 100),
     venues,
   });
+  await assertPcAppWriteAllowed();
   const updateResponse = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${created.spreadsheetId}:batchUpdate`,
     {
@@ -253,12 +275,13 @@ export async function createScheduleSpreadsheet({
     },
   );
   if (!updateResponse.ok) {
-    throw new Error(`Spreadsheet setup failed: ${await updateResponse.text()}`);
+    throw new Error("Spreadsheet setup rejected");
   }
-  return {
-    spreadsheetId: created.spreadsheetId,
-    url: created.spreadsheetUrl,
-  };
+  return resource;
+  } catch (cause) {
+    throw new SpreadsheetCreationError("partial", "setup", resource,
+      typeof cause === "object" && cause !== null && "code" in cause && cause.code === "PC_BACKUP_UNAVAILABLE", { cause });
+  }
 }
 
 function googleJsonHeaders(accessToken: string) {

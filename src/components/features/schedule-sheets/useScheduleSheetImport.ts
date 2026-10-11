@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Papa from "papaparse";
 import { getCurrentUserId } from "@/lib/supabase/client-auth";
@@ -25,6 +25,8 @@ export function useScheduleSheetImport() {
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
   const [googleEmail, setGoogleEmail] = useState<string | null>(null);
   const [issuing, setIssuing] = useState(false);
+  const [issueBlocked, setIssueBlocked] = useState(false);
+  const issueInFlight = useRef(false);
   const [source, setSource] = useState<"url" | "file">("url");
   const [sheetUrl, setSheetUrl] = useState("");
   const [fileName, setFileName] = useState("");
@@ -123,13 +125,16 @@ export function useScheduleSheetImport() {
   }
 
   async function issueSpreadsheet() {
+    if (issueInFlight.current || issueBlocked) return;
     if (inputMode === "edit" && selectedIds.length === 0) {
       setError("編集する予定を選択してください");
       return;
     }
     setIssuing(true);
+    issueInFlight.current = true;
     setError(null);
     const popup = window.open("", "_blank");
+    try {
     const response = await fetch("/api/google/sheets/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -147,17 +152,23 @@ export function useScheduleSheetImport() {
     });
     const result = await response.json();
     if (!response.ok) {
-      popup?.close();
+      if (result.retryable === false || result.resultUnknown === true) setIssueBlocked(true);
+      if (result.outcome === "partial" && typeof result.resource?.url === "string") {
+        setSheetUrl(result.resource.url); setSheetId(null); setSource("url"); setPreview(null);
+        if (popup) popup.location.href = result.resource.url;
+      } else popup?.close();
       setError(result.error ?? "スプレッドシートを作れませんでした");
-      setIssuing(false);
       return;
     }
     setSheetUrl(result.url);
     setSheetId(result.id);
     setSource("url");
     setPreview(null);
-    setIssuing(false);
     if (popup) popup.location.href = result.url;
+    } catch {
+      popup?.close(); setIssueBlocked(true);
+      setError("作成結果を確認できませんでした。作り直さず、Google Driveで作成済みのシートを確認してください。");
+    } finally { setIssuing(false); issueInFlight.current = false; }
   }
 
   async function selectFile(file: File | undefined) {
@@ -398,7 +409,7 @@ export function useScheduleSheetImport() {
     year, setYear, month, setMonth, kind,
     setKind, block, setBlock, inputMode, setInputMode,
     existing, selectedIds, setSelectedIds, venues, weekdayDefaults,
-    googleConnected, googleEmail, issuing, source, setSource,
+    googleConnected, googleEmail, issuing, issueBlocked, source, setSource,
     sheetUrl, setSheetUrl, fileName, csv, setSheetId,
     preview, setPreview, loading, applying, error,
     setError, lastApplied, undoing, deletionIds, setDeletionIds,

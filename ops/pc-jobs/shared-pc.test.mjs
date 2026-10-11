@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { validateConfig, run } from './run.mjs';
 import { loopbackRoot, backendReady, sharedPcReady } from './shared-pc.mjs';
 
@@ -17,10 +17,22 @@ const env = {
   R2_READ_ENABLED: 'true', R2_WRITE_ENABLED: 'true',
 };
 const config = { version: 1, enabled: false, runtime: 'shared-pc', releaseDirectory: process.cwd(), stateDirectory: process.cwd(),
-  backendDirectory: process.cwd(), environmentFile: process.cwd(), releaseCommit: 'a'.repeat(40), releaseId: 'pc-test-release',
+  hostStateDirectory: process.cwd(), backupStatusPath: resolve('backup-lifecycle.json'),
+  expectedBackupInstanceId: '00000000-0000-4000-8000-000000000001', expectedBackupDatabaseSystemIdentifier: '1234567890123456789',
+  environmentFile: process.cwd(), releaseCommit: 'a'.repeat(40), releaseId: 'pc-test-release',
   activateAt: new Date(now).toISOString(), appOrigin: 'http://127.0.0.1:3112', port: 3112 };
-const records = () => ({ 'config.json': { maintenance: false }, 'runtime-status.json': { healthy: true, maintenance: false, checkedAt: new Date(now).toISOString() },
-  'backup-status.json': { completedAt: new Date(now).toISOString() } });
+const records = (at = now, c = config) => {
+  const timestamp = new Date(at).toISOString();
+  const identity = { instanceId: c.expectedBackupInstanceId, generation: '00000000-0000-4000-8000-000000000002', startedAt: timestamp, databaseSystemIdentifier: c.expectedBackupDatabaseSystemIdentifier };
+  const key = `ops/pc-backend/${identity.instanceId}/backups/${timestamp.replaceAll(':', '-').replace('.', '-')}.dump.enc`;
+  return {
+    'runtime-status.json': { version: 1, running: true, releaseCommit: c.releaseCommit, releaseId: c.releaseId, startedAt: timestamp, checkedAt: timestamp, backup: { identity, statusPath: c.backupStatusPath } },
+    'backup-lifecycle.json': { version: 1, ...identity, heartbeat: { checkedAt: timestamp, healthy: true, maintenance: false },
+      target: { checkedAt: timestamp, healthy: true, databaseSystemIdentifier: identity.databaseSystemIdentifier, databaseName: 'postgres', containerId: 'a'.repeat(64), containerImageId: `sha256:${'b'.repeat(64)}` },
+      backup: { generation: identity.generation, verifiedAt: timestamp, databaseSystemIdentifier: identity.databaseSystemIdentifier,
+        key, recoveryKey: key.replace('.dump.enc', '.recovery.json.enc'), sha256: 'c'.repeat(64), recoverySha256: 'd'.repeat(64), bytes: 80, recoveryBytes: 90 } },
+  };
+};
 const reader = data => file => JSON.stringify(data[file.split(/[\\/]/).at(-1)]);
 
 test('shared PC mode preserves cloud Auth and private R2; dedicated remains default', () => {
@@ -41,11 +53,18 @@ test('shared origin refuses public URLs, redirect paths, credentials and ambiguo
 
 test('maintenance, stale/future heartbeat and backup prevent writes', () => {
   assert.equal(backendReady(config, { read: reader(records()), now }), true);
-  const changes = [ data => { data['config.json'].maintenance = true; }, data => { data['config.json'].returnAt = 'invalid'; },
+  const changes = [ data => { data['backup-lifecycle.json'].heartbeat.maintenance = true; }, data => { data['runtime-status.json'].running = false; },
     data => { data['runtime-status.json'].checkedAt = new Date(now + 1).toISOString(); },
     data => { data['runtime-status.json'].checkedAt = new Date(now - 120000).toISOString(); },
-    data => { data['backup-status.json'].completedAt = new Date(now - 35 * 60000).toISOString(); } ];
+    data => { data['backup-lifecycle.json'].backup.verifiedAt = new Date(now - 35 * 60000).toISOString(); },
+    data => { data['backup-lifecycle.json'].generation = '00000000-0000-4000-8000-000000000003'; },
+    data => { data['backup-lifecycle.json'].target.databaseSystemIdentifier = '9876543210987654321'; data['backup-lifecycle.json'].backup.databaseSystemIdentifier = '9876543210987654321'; },
+    data => { data['backup-lifecycle.json'].backup = null; },
+    data => { data['runtime-status.json'].releaseId = 'wrong'; },
+    data => { data['runtime-status.json'].backup.statusPath = resolve('different-private-file.json'); },
+  ];
   for (const change of changes) { const data = records(); change(data); assert.equal(backendReady(config, { read: reader(data), now }), false); }
+  assert.equal(backendReady(config, { read: () => { throw Error('Unknown status'); }, now }), false);
 });
 
 test('shared readiness pins SHA and release ID and probes schema without real rows or service keys', async () => {
@@ -54,22 +73,38 @@ test('shared readiness pins SHA and release ID and probes schema without real ro
     seen.push({ url, options });
     return { ok: true, json: async () => url.endsWith('/api/version') ? { version: config.releaseCommit, releaseId: config.releaseId } : { swagger: '2.0' } };
   };
-  assert.equal(await sharedPcReady(config, env, { read: reader(records()), now, fetchRequest }), true);
+  assert.equal(await sharedPcReady(config, env, { read: reader(records()), clock: () => now, fetchRequest }), true);
   assert.deepEqual(seen.map(value => value.url), ['http://127.0.0.1:3112/api/version', 'http://127.0.0.1:8000/rest/v1/']);
   assert(seen.every(value => value.options.redirect === 'error'));
   assert(!JSON.stringify(seen).includes(env.SUPABASE_SERVICE_ROLE_KEY));
-  assert.equal(await sharedPcReady(config, env, { read: reader(records()), now, fetchRequest: async () => ({ ok: true, json: async () => ({ version: 'b'.repeat(40), releaseId: config.releaseId }) }) }), false);
+  assert.equal(await sharedPcReady(config, env, { read: reader(records()), clock: () => now, fetchRequest: async () => ({ ok: true, json: async () => ({ version: 'b'.repeat(40), releaseId: config.releaseId }) }) }), false);
+});
+
+test('readiness resamples the clock after probes for newly written and newly expired heartbeats', async () => {
+  for (const stale of [false, true]) {
+    let at = now;
+    const data = records(stale ? now - 119_000 : now);
+    const fetchRequest = async url => {
+      at = now + 3_000;
+      if (!stale) {
+        data['runtime-status.json'].checkedAt = new Date(at).toISOString();
+        data['backup-lifecycle.json'].heartbeat.checkedAt = new Date(at).toISOString();
+        data['backup-lifecycle.json'].target.checkedAt = new Date(at).toISOString();
+      }
+      return { ok: true, json: async () => url.endsWith('/api/version') ? { version: config.releaseCommit, releaseId: config.releaseId } : { swagger: '2.0' } };
+    };
+    assert.equal(await sharedPcReady(config, env, { read: reader(data), clock: () => at, fetchRequest }), !stale);
+  }
 });
 
 test('shared runner reuses app, preserves journal, and disabling during a late probe dispatches nothing', async () => {
   const directory = mkdtempSync(join(process.cwd(), '.tmp-shared-jobs-'));
   try {
-    const c = { ...config, enabled: true, releaseDirectory: directory, stateDirectory: directory, backendDirectory: directory,
+    const c = { ...config, enabled: true, releaseDirectory: directory, stateDirectory: directory, hostStateDirectory: directory, backupStatusPath: join(directory, 'backup-lifecycle.json'),
       environmentFile: join(directory, 'synthetic.env'), activateAt: new Date(Date.now() - 86400000).toISOString() };
     mkdirSync(join(directory, '.next')); writeFileSync(join(directory, '.next', 'BUILD_ID'), 'synthetic');
     writeFileSync(c.environmentFile, Object.entries(env).map(([key, value]) => `${key}=${value}`).join('\n'));
-    for (const [name, value] of Object.entries(records())) writeFileSync(join(directory, name), JSON.stringify({ ...value,
-      ...(name === 'runtime-status.json' ? { checkedAt: new Date().toISOString() } : name === 'backup-status.json' ? { completedAt: new Date().toISOString() } : {}) }));
+    for (const [name, value] of Object.entries(records(Date.now(), c))) writeFileSync(join(directory, name), JSON.stringify(value));
     const configFile = join(directory, 'jobs.json'); writeFileSync(configFile, JSON.stringify(c));
     let spawned = 0, dispatched = 0;
     await run(configFile, true, { spawnProcess: () => { spawned++; throw Error('must reuse app'); },

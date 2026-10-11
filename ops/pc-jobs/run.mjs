@@ -8,7 +8,8 @@ import { initialState, recoverState, tick, JOBS } from './scheduler.mjs';
 import { validateSharedPc, sharedPcReady, loopbackRoot } from './shared-pc.mjs';
 
 export function validateConfig(config, env) {
-  if (config.version !== 1 || typeof config.enabled !== 'boolean' || !isAbsolute(config.releaseDirectory ?? '') || !isAbsolute(config.stateDirectory ?? '') || !isAbsolute(config.backendDirectory ?? '') || !isAbsolute(config.environmentFile ?? '')) throw Error('Explicit local configuration required');
+  if (config.version !== 1 || typeof config.enabled !== 'boolean' || !isAbsolute(config.releaseDirectory ?? '') || !isAbsolute(config.stateDirectory ?? '') || !isAbsolute(config.environmentFile ?? '')
+    || (config.runtime !== 'shared-pc' && !isAbsolute(config.backendDirectory ?? ''))) throw Error('Explicit local configuration required');
   if (!/^[a-f0-9]{40}$/.test(config.releaseCommit ?? '')) throw Error('Pinned release commit required');
   if (!Number.isFinite(Date.parse(config.activateAt)) || !Number.isInteger(config.port) || config.port < 1024 || config.port > 65535) throw Error('Invalid activation time or port');
   if (config.runtime === 'shared-pc') { validateSharedPc(config, env); return; }

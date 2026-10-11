@@ -4,7 +4,7 @@
 
 `config.shared-pc.example.json` の `runtime: "shared-pc"` は、`ops/pc-host` が起動した一つのNextを再利用する。JobsはNextを起動/停止せず、cloud Supabase Authと非公開R2を維持する。既存configでruntimeを省略した専用Next方式は従来どおり。例はdisabledで、既存タスクや設定を変更しない。
 
-共有方式の `appOrigin` は明示した `http://127.0.0.1:<port>` のrootだけ。公開URL・localhost・path・credentials・redirectは拒否する。`PC_APP_RUNTIME` / `NEXT_PUBLIC_PC_APP_RUNTIME`、固定HTTPS `APP_PUBLIC_ORIGIN`、same-originの公開Supabase URL、`PC_BACKEND_INTERNAL_URL=http://127.0.0.1:8000`、cloud Authペア、R2読書き、同期秘密を固定releaseの環境から検査する。`/api/version` のcommit SHAとreleaseIdの両方を照合し、既存PCのmaintenance/心拍/35分以内backupを確認する。RESTのOpenAPI確認はanon keyでloopbackだけへ行い、部員の行は読まない。Auth障害の監視は既存認証経路で行う。
+共有方式の `appOrigin` は明示した `http://127.0.0.1:<port>` のrootだけ。公開URL・localhost・path・credentials・redirectは拒否する。`PC_APP_RUNTIME` / `NEXT_PUBLIC_PC_APP_RUNTIME`、固定HTTPS `APP_PUBLIC_ORIGIN`、same-originの公開Supabase URL、`PC_BACKEND_INTERNAL_URL=http://127.0.0.1:8000`、cloud Authペア、R2読書き、同期秘密を固定releaseの環境から検査する。`/api/version` のcommit SHAとreleaseId、新hostのrunning/心拍とbackup identityを照合する。`hostStateDirectory`・`backupStatusPath`・既存archive UUID/実DB system IDを固定し、そのgenerationの35分以内pair・120秒未満心拍/target・maintenance解除を確認する。旧backend statusだけで新hostをreadyにしない。RESTのOpenAPI確認はanon keyでloopbackだけへ行い、部員の行は読まない。Auth障害の監視は既存認証経路で行う。
 
 `run.mjs --check <private-config>` はbuildと設定の検査のみ。共有方式のbuildは `ops/pc-host` が担当し、Jobsの `build-production.mjs` は拒否する。`preflight.mjs` は共有Nextを再利用して未認証拒否と既存APIのdryRunを実施し、終わっても共有Nextを止めない。APIのdryRunは実同期元への読取を伴うので、今回の合成試験と同一視しない。
 

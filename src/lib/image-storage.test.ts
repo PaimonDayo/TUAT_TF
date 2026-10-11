@@ -2,10 +2,10 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ImageNotFoundError, imageObjectKey, readImageUpload, signedImageUrl, uploadImage, removeImages } from "./image-storage";
 
-const mocks = vi.hoisted(() => ({ send: vi.fn(), sign: vi.fn() }));
+const mocks = vi.hoisted(() => ({ send: vi.fn(), sign: vi.fn(), config: vi.fn() }));
 vi.mock("@aws-sdk/client-s3", async (original) => {
   const actual = await original<typeof import("@aws-sdk/client-s3")>();
-  return { ...actual, S3Client: class { send = mocks.send; destroy() {} } };
+  return { ...actual, S3Client: class { constructor(config: unknown) { mocks.config(config); } send = mocks.send; destroy() {} } };
 });
 vi.mock("@aws-sdk/s3-request-presigner", () => ({ getSignedUrl: mocks.sign }));
 const legacySign = vi.fn();
@@ -30,6 +30,14 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 describe("private image storage migration", () => {
+  it("uses one SDK attempt for mutations while reads retain two", async () => {
+    vi.stubEnv("R2_BUCKET_NAME", "synthetic-attempt-proof"); mocks.config.mockClear();
+    await uploadImage(supabase, "avatars", path, Buffer.from("abc"));
+    await removeImages(supabase, "avatars", [path]);
+    expect(mocks.config.mock.calls.map(([config]) => config.maxAttempts)).toEqual([2, 1]);
+    const writes = mocks.send.mock.calls.filter(([command]) => ["PutObjectCommand", "DeleteObjectsCommand"].includes(command.constructor.name));
+    expect(writes).toHaveLength(2);
+  });
   it("never sends note photos to legacy Storage when R2 is unavailable", async()=>{
     const notePath="11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222.webp";
     mocks.send.mockRejectedValueOnce({name:"NotFound",$metadata:{httpStatusCode:404}});

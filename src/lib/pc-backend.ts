@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getPcAppRuntime } from "./pc-app-runtime";
+import { pcAppWriteProtectionResponse, pcBackendRequestNeedsProtection } from "./pc-backup-status";
 
 export type PcEndpoint = {
   version: 1;
@@ -58,6 +59,10 @@ export async function pcBackendFetch(input: RequestInfo | URL, init?: RequestIni
   const path = source.pathname.slice(base.pathname.replace(/\/$/, "").length);
   if (!/^\/(auth|rest|storage|functions)\/v1(?:\/|$)/.test(path)) throw new Error("Invalid backend API");
   const app = getPcAppRuntime();
+  if (app && await pcBackendRequestNeedsProtection(request, path)) {
+    const protectedResponse = await pcAppWriteProtectionResponse();
+    if (protectedResponse) return protectedResponse;
+  }
   const endpoint = app ? undefined : await getPcEndpoint();
   const headers = new Headers(request.headers);
   headers.delete("host");

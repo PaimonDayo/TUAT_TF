@@ -1,0 +1,1180 @@
+[
+  {
+    "name": "ready",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": true
+  },
+  {
+    "name": "startup without fresh pair",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": null
+    },
+    "ready": false
+  },
+  {
+    "name": "old instance",
+    "identity": {
+      "instanceId": "33333333-3333-4333-8333-333333333333",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "old lifecycle generation",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "33333333-3333-4333-8333-333333333333",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "different start",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:10.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "future start",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:30:00.001Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:30:00.001Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "stale heartbeat",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:28:00.000Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "future heartbeat",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:30:00.001Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "unhealthy heartbeat",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": false,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "maintenance",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "maintenance": true
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "unhealthy target",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": false,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "stale target",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:28:00.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "future target",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:30:00.001Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "prior generation backup",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "33333333-3333-4333-8333-333333333333",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "future backup",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:30:00.001Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "stale backup threshold",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-10T23:30:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-10T23:30:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-10T23:55:00.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "backup before startup",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:28:59.999Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "target mismatch",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "9999999999999999999"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "wrong database",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "other",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "wrong container",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "unknown",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "unknown image",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "unknown"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "wrong namespace",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/other/backup.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "unpaired recovery",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.encother",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "missing checksum",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "zero bytes",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 0,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "string bytes",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": "1000",
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "noncanonical UTC",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "timestamp without timezone",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "1234567890123456789"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  },
+  {
+    "name": "wrong-host-database",
+    "identity": {
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "databaseSystemIdentifier": "9876543210987654321"
+    },
+    "now": 1791678600000,
+    "status": {
+      "version": 1,
+      "instanceId": "11111111-1111-4111-8111-111111111111",
+      "generation": "22222222-2222-4222-8222-222222222222",
+      "startedAt": "2026-10-11T00:29:00.000Z",
+      "heartbeat": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "maintenance": false
+      },
+      "target": {
+        "checkedAt": "2026-10-11T00:29:59.000Z",
+        "healthy": true,
+        "databaseSystemIdentifier": "1234567890123456789",
+        "databaseName": "postgres",
+        "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "containerImageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "backup": {
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "verifiedAt": "2026-10-11T00:29:30.000Z",
+        "key": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.dump.enc",
+        "recoveryKey": "ops/pc-backend/11111111-1111-4111-8111-111111111111/backups/2026-10-11T00-29-30-000Z.recovery.json.enc",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recoverySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 1000,
+        "recoveryBytes": 500,
+        "databaseSystemIdentifier": "1234567890123456789"
+      }
+    },
+    "ready": false
+  }
+]

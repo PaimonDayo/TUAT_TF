@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { pcAppWriteProtectionResponse, pcBackupProtectionResponse } from "@/lib/pc-backup-status";
 import { fetchRolesByProfileIds } from "@/lib/supabase/auth";
 import { permissionsOf } from "@/lib/permissions";
 import { runSheetSync } from "@/lib/sheet-sync";
@@ -69,12 +70,16 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+  if (!dryRun) {
+    const protectedResponse = await pcAppWriteProtectionResponse();
+    if (protectedResponse) return protectedResponse;
+  }
 
   // "running"放置の解消: タイムアウト等で前回以前のrunがrunningのまま残っていたら
   // ここでerrorへ倒す（2026-07-02/03に発生した放置の再発防止）。
   if (!dryRun) {
     const staleThreshold = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-    await admin
+    const staleResult = await admin
       .from("sheet_sync_runs")
       .update({
         status: "error",
@@ -83,6 +88,8 @@ export async function POST(request: Request) {
       })
       .eq("status", "running")
       .lt("started_at", staleThreshold);
+    if (staleResult.error) return pcBackupProtectionResponse(staleResult.error)
+      ?? NextResponse.json({ ok: false, error: "前回の連携状態を確認できませんでした" }, { status: 500 });
   }
 
   let chunk: SyncChunk | undefined;
@@ -92,14 +99,16 @@ export async function POST(request: Request) {
         ? await previewFirstChunk(admin)
         : await claimNextChunk(admin, resetCycle && trigger === "manual");
     } catch (error) {
+      const protection = pcBackupProtectionResponse(error) ?? (!dryRun ? await pcAppWriteProtectionResponse() : null);
+      if (protection) return protection;
       const message = error instanceof Error ? error.message : "Failed to prepare sync chunk";
       return NextResponse.json({ ok: false, error: message }, { status: 500 });
     }
   }
 
   // ドライランはログを残さない
-  const { data: run } = dryRun
-    ? { data: undefined }
+  const { data: run, error: runError } = dryRun
+    ? { data: undefined, error: null }
     : await admin
         .from("sheet_sync_runs")
         .insert({
@@ -114,6 +123,8 @@ export async function POST(request: Request) {
         .select("id")
         .single();
   const runId = run?.id as string | undefined;
+  if (!dryRun && (runError || !runId)) return pcBackupProtectionResponse(runError)
+    ?? NextResponse.json({ ok: false, error: "連携の開始記録を確認できませんでした", resultUnknown: true, retryable: false }, { status: 500 });
 
   try {
     const result = await runSheetSync(admin, {
@@ -125,6 +136,11 @@ export async function POST(request: Request) {
       // can explicitly retrieve today's entries without waiting for midnight.
       includeToday: !isCron,
     });
+    if (!dryRun && (result.failedMembers.length || result.sheetWritesSkipped)) {
+      const protection = await pcAppWriteProtectionResponse();
+      if (protection) return NextResponse.json({ ...await protection.json(), ok: false, outcome: "partial", retryable: false, result, chunk },
+        { status: 503, headers: { "cache-control": "private, no-store" } });
+    }
     console.info("sheet_sync_complete", {
       trigger,
       durationMs: Date.now() - startedAt,
@@ -136,7 +152,7 @@ export async function POST(request: Request) {
       failures: result.failedMembers.length,
     });
     if (runId) {
-      await admin
+      const finished = await admin
         .from("sheet_sync_runs")
         .update({
           status: result.sheetWritesSkipped || result.failedMembers.length > 0 ? "error" : "success",
@@ -149,10 +165,19 @@ export async function POST(request: Request) {
               : result.sheetWritesSkipped ? "送信を保留し、記録の取り込みのみ実行しました" : null,
           finished_at: new Date().toISOString(),
         })
-        .eq("id", runId);
+        .eq("id", runId)
+        .select("id");
+      if (finished.error || finished.data?.length !== 1) {
+        const protection = pcBackupProtectionResponse(finished.error);
+        return NextResponse.json({ ok: false, error: "連携処理後の完了記録を確認できませんでした。再実行せず、状態を確認してください。",
+          code: protection ? "PC_BACKUP_UNAVAILABLE" : "SHEET_SYNC_RECEIPT_UNCONFIRMED", outcome: "partial", retryable: false, result, chunk, runId },
+        { status: protection ? 503 : 502, headers: { "cache-control": "private, no-store" } });
+      }
     }
     return NextResponse.json({ ok: true, ...result, chunk });
   } catch (err) {
+    const protection = pcBackupProtectionResponse(err) ?? (!dryRun ? await pcAppWriteProtectionResponse() : null);
+    if (protection) return protection;
     const message = err instanceof Error ? err.message : "連携できませんでした";
     console.error("sheet_sync_failed", {
       trigger,

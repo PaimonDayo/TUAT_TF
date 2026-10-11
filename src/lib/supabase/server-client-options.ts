@@ -3,6 +3,7 @@ import { pcServerOptions } from "./pc-server-options";
 import { getPcAppRuntime } from "../pc-app-runtime";
 import { createPcAppDataFetch } from "../pc-app-transport";
 import { CLOUD_AUTH_COOKIE, cloudAuthConfig, isCloudDataUrl, pcServerHeaders, routeDataToPc, type CloudAuth } from "./cloud-auth";
+import { createCloudAuthFetch } from "./auth-fetch";
 
 /**
  * クラウドの URL あての呼び出しのうち、データの API はPCへ（pcBackendFetch で PC の入口へ届ける）、
@@ -43,8 +44,8 @@ export function sessionClientConfig(testOptIn = false): { url: string; key: stri
       url: app.cloud.url,
       key: app.cloud.anonKey,
       options: { cookieOptions: { name: CLOUD_AUTH_COOKIE }, global: { fetch:
-        createPcAppDataFetch(transport, app.cloud, process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          pcServerHeaders(app.cloud, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)) } },
+        createCloudAuthFetch(createPcAppDataFetch(transport, app.cloud, process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          pcServerHeaders(app.cloud, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)), app.cloud.url) } },
     };
   }
   const cloud = cloudAuthConfig(testOptIn);
@@ -52,7 +53,7 @@ export function sessionClientConfig(testOptIn = false): { url: string; key: stri
     return {
       url: cloud.url,
       key: cloud.anonKey,
-      options: { cookieOptions: { name: CLOUD_AUTH_COOKIE }, global: { fetch: pcRoutedFetch(cloud) } },
+      options: { cookieOptions: { name: CLOUD_AUTH_COOKIE }, global: { fetch: createCloudAuthFetch(pcRoutedFetch(cloud), cloud.url) } },
     };
   }
   // 従来どおり（ログインもデータもPC）

@@ -4,9 +4,11 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isSafeAvatarStoragePath } from "./avatar-image";
 import { isSafeTweetImagePath } from "./tweet-image";
+import { assertPcAppWriteAllowed } from "./pc-backup-status";
 
 export type ImageBucket = "avatars" | "tweet-images" | "note-images";
 let cached: { signature: string; bucket: string; client: S3Client } | undefined;
+let cachedMutation: typeof cached;
 
 export class ImageNotFoundError extends Error {
   constructor() { super("Image object not found"); this.name = "ImageNotFoundError"; }
@@ -64,21 +66,23 @@ export function imageObjectKey(bucket: ImageBucket, path: string): string {
   return `${bucket}/${path}`;
 }
 
-function r2() {
+function r2(mutation = false) {
   const { R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME } = process.env;
   if (!R2_ACCOUNT_ID || !/^[a-f0-9]{32}$/i.test(R2_ACCOUNT_ID) || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY || !R2_BUCKET_NAME) {
     throw new Error("R2 configuration is incomplete");
   }
   const signature = JSON.stringify([R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME]);
-  if (cached?.signature === signature) return cached;
-  cached?.client.destroy();
-  cached = { signature, bucket: R2_BUCKET_NAME, client: new S3Client({
+  const previous = mutation ? cachedMutation : cached;
+  if (previous?.signature === signature) return previous;
+  previous?.client.destroy();
+  const current = { signature, bucket: R2_BUCKET_NAME, client: new S3Client({
     region: "auto", endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
     credentials: { accessKeyId: R2_ACCESS_KEY_ID, secretAccessKey: R2_SECRET_ACCESS_KEY },
     requestChecksumCalculation: "WHEN_REQUIRED", responseChecksumValidation: "WHEN_REQUIRED",
-    maxAttempts: 2,
+    maxAttempts: mutation ? 1 : 2,
   }) };
-  return cached;
+  if (mutation) cachedMutation = current; else cached = current;
+  return current;
 }
 
 function isMissing(error: unknown) {
@@ -154,6 +158,7 @@ async function assertCapacity(client: S3Client, bucket: string, incomingBytes: n
 }
 
 export async function uploadImage(supabase: SupabaseClient, bucket: ImageBucket, path: string, bytes: Buffer) {
+  await assertPcAppWriteAllowed();
   if (process.env.IMAGE_STORAGE_READ_ONLY === "true") throw new Error("画像は読み取り専用です");
   const key = imageObjectKey(bucket, path);
   if (bucket === "note-images" && process.env.R2_WRITE_ENABLED !== "true") throw new Error("R2 writes are unavailable");
@@ -162,7 +167,8 @@ export async function uploadImage(supabase: SupabaseClient, bucket: ImageBucket,
     if (process.env.R2_READ_ENABLED !== "true") throw new Error("Enable R2 reads before writes");
     const { client, bucket: r2Bucket } = r2();
     await assertCapacity(client, r2Bucket, bytes.length);
-    await client.send(new PutObjectCommand({ Bucket: r2Bucket, Key: key, Body: bytes,
+    await assertPcAppWriteAllowed();
+    await r2(true).client.send(new PutObjectCommand({ Bucket: r2Bucket, Key: key, Body: bytes,
       ContentType: "image/webp", CacheControl: bucket === "avatars" ? "private, max-age=604800" : "private, max-age=240",
       IfNoneMatch: "*",
     }));
@@ -178,10 +184,12 @@ export async function uploadImage(supabase: SupabaseClient, bucket: ImageBucket,
 export async function removeImages(supabase: SupabaseClient, bucket: ImageBucket, paths: string[]) {
   const keys = paths.map((path) => imageObjectKey(bucket, path));
   if (!keys.length) return;
+  await assertPcAppWriteAllowed();
   if (process.env.IMAGE_STORAGE_READ_ONLY === "true") throw new Error("画像は読み取り専用です");
   if (bucket === "note-images" || process.env.R2_READ_ENABLED === "true" || process.env.R2_WRITE_ENABLED === "true") {
-    const { client, bucket: r2Bucket } = r2();
+    const { client, bucket: r2Bucket } = r2(true);
     for (let offset = 0; offset < keys.length; offset += 1000) {
+      await assertPcAppWriteAllowed();
       const result = await client.send(new DeleteObjectsCommand({ Bucket: r2Bucket,
         Delete: { Objects: keys.slice(offset, offset + 1000).map((Key) => ({ Key })), Quiet: true },
       }));

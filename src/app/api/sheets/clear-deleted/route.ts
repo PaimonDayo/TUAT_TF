@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { processPendingClears } from "@/lib/sheet-sync";
+import { pcAppWriteProtectionResponse, pcBackupProtectionResponse } from "@/lib/pc-backup-status";
 import { recordFieldsFromJson } from "@/lib/profile-normalize";
 
 /**
@@ -25,13 +26,21 @@ export async function POST() {
   if (!profile?.sheet_name) return NextResponse.json({ ok: true, skipped: true });
 
   try {
+    const protectedResponse = await pcAppWriteProtectionResponse();
+    if (protectedResponse) return protectedResponse;
     const result = await processPendingClears(admin, {
       id: profile.id,
       sheet_name: profile.sheet_name,
       record_fields: recordFieldsFromJson(profile.record_fields),
     });
+    if (result.failed) {
+      const protection = await pcAppWriteProtectionResponse();
+      if (protection) return protection;
+    }
     return NextResponse.json({ ok: result.failed === 0, ...result }, { status: result.failed === 0 ? 200 : 502 });
   } catch (err) {
+    const protection = pcBackupProtectionResponse(err) ?? await pcAppWriteProtectionResponse();
+    if (protection) return protection;
     const message = err instanceof Error ? err.message : "スプレッドシートを更新できませんでした";
     return NextResponse.json({ ok: false, error: message }, { status: 502 });
   }

@@ -21,9 +21,10 @@ Node24と、WindowsではPowerShell7を使用する。独立したrelease checko
 2. `node ops/pc-host/run.mjs <private-config.json>` でreceiptの一致を確認する。`--execute` と `enabled:true` が揃うまではlistenerを起動しない。
 3. Windowsでは、選択したPowerShell7を専用accountで起動し、`account-preflight.ps1 -RuntimeAccount <専用account> -DevelopmentAccount <開発account> -NodePath <絶対path> -ConfigPath <絶対path> -PowerShellPath <現在のPowerShell7絶対path>` で配置を検査する。この検査はaccount・ACL・taskを変更しない。同じaccount、管理者所属、開発側から変更できるrelease/依存/実行ファイル、第三者が読めるenv/stateを拒否する。
 4. 検査に合格した同じaccountで `stage-task.ps1` に同じ引数（RuntimeAccountはAccount）と `-OutputPath <保護済みstate内の新XML>` を指定する。無効なS4U Task XMLを作るだけで、登録/起動や既存taskの削除は行わない。Taskも毎回同じ検査を行う。S4U実行とOS再起動は別の受入試験。
-5. 起動はNext/gatewayとも127.0.0.1限定。gateway公開前に `/api/version` のcommitとreleaseIdを照合する。Task wrapperのmutexとstate lockで競合を拒否する。以前の候補で検証したlock primitiveを再利用し、managed wrapperがOS mutexを持ち、元PIDの停止とファイル同一性を再確認できる場合だけ古いlockを回収する。直接起動・生存/再利用PID・権限不明・壊れたlockは拒否する。
+5. `backupConfigFile` と、既存PCの正確なarchive instance UUID・DB system identifierを固定する。hostは単一の[backup supervisor](../pc-backup/README.md)を先に所有し、毎起動のgeneration/startedAt/status path/DB IDをserverだけのchild envへ渡す。初回の新しい暗号pairが検証されるまでは保存を保護し、Auth/読み取りは起動できる。静的envの旧generationは受け付けない。
+6. 起動はNext/gatewayとも127.0.0.1限定。gateway公開前に `/api/version` のcommitとreleaseIdを照合する。Task wrapperのmutexとstate lockで競合を拒否する。以前の候補で検証したlock primitiveを再利用し、managed wrapperがOS mutexを持ち、元PIDの停止とファイル同一性を再確認できる場合だけ古いlockを回収する。直接起動・生存/再利用PID・権限不明・壊れたlockは拒否する。backup側の不明lockは自動回収しない。
 
-更新前に共有Jobsの新規dispatchを止めてjournalの未解決操作を確認し、host設定を無効にしてgateway経由の進行中要求をdrainする。Nextの標準終了処理をIPC経由で呼び、親死亡時も子だけを終了する。結果不明の書込みを再送しない。旧release/env/receiptを保全したまま、新releaseは別directoryとreleaseIdでbuildする。同じstate内で実行者は一つ。DB変更のrollbackはhostの旧版起動と別に評価する。
+更新前に共有Jobsの新規dispatchを止めてjournalの未解決操作を確認し、host設定を無効にする。hostはbackupを保護状態にして新規保存を止め、gateway経由の進行中要求と所有するNextをdrainする。backupの停止結果も確認し、未終了の可能性が残るbackup lockを成功扱いしない。Nextの標準終了処理をIPC経由で呼び、親死亡時も子だけを終了する。結果不明の書込みを再送しない。旧release/env/receiptを保全したまま、新releaseは別directoryとreleaseIdでbuildする。同じstate内で実行者は一つ。DB変更のrollbackはhostの旧版起動と別に評価する。
 
 receiptは実行時node_modules（`.cache`のみ除外）・public・Node実行ファイルのSHA256とOS/architectureを含む。専用 `npm ci` からbuildし、改変や別platformを起動前に拒否する。Windowsでbuildした依存をLinuxへコピーして使わず、Linux上で改めて `npm ci` / build / receiptを作る。`.next/cache`等の可変診断/cacheはbuild hashから除外する。
 
@@ -37,11 +38,11 @@ Windowsの配置は、releaseとNode/PowerShell実行directoryをSYSTEM/Administ
 
 ## 旧backendを止める前の条件
 
-現行 `ops/laptop/run-backend.mjs` は中継・接続先通知・業務mirrorに加え、起動時/15分間隔の暗号化backupを所有する。shared-pc Jobsも同backendのheartbeatと35分未満の検証済みbackupを確認する。このhost候補はbackupやWSLの起動を引き継いでいないため、旧backendの一括停止で構成の撤去を完了扱いしない。
+現行 `ops/laptop/run-backend.mjs` は中継・接続先通知・業務mirrorに加え、起動時/15分間隔の暗号化backupを所有する。新hostとshared-pc Jobsは新backup主体へ接続する候補を持つが、現行taskは変更していない。正確な実DB・archive namespace/鍵/R2設定・専用accountからのWSLアクセス・DB自動起動・保存容量/retention・復元を確認するまで、旧backendの一括停止で構成の撤去を完了扱いしない。
 
 切替計画では、DB/WSLの起動、定期暗号backupと別場所の検証済み保存、backup失敗時の保護停止を維持する主体と配置を決める。backupの間隔/単一実行/失敗/復帰を確認してから旧中継・接続先通知・業務mirrorを退役させ、Jobsのready判定をその主体へ接続する。旧heartbeatを架空の成功状態で更新したり、backup期限を外して通さない。専用accountのapp配置検査だけでWSL/DBや復旧鍵を隔離済みとは扱わない。
 
-この候補のPC専用データ経路はRESTへ直接接続し、旧中継のmaintenance/backup鮮度判定を通らない。Jobsの停止だけでは通常保存の保護停止を確認したことにならない。新しいbackup主体と、通常のREST/Server Actionの書込み保護を接続し、backup未完了/35分超過/状態取得不明のときの保存拒否と復帰を別に検証するまで本番へ切り替えない。
+PC専用REST/Server Action/service-roleの変更と、直接R2/GAS/Sheetsへ行う変更は、hostが所有する同じgenerationとDB IDの状態で保護する。POSTの読み取りRPCは既知の関数・引数・public schemaに限って区別する。backup未完了/35分超過・心拍/target120秒以上・未来時刻・別generation/DB・状態取得不明は503で保存を止め、cloud Authを維持する。Jobsも新hostのSHA/releaseId/心拍と同じbackupを照合する。直接運用SQL・Auth同期・DB cronはこのapp transportの外側なので個別の運用保護が必要であり、アプリの試験だけで継承済みとはしない。
 
 Jobsは現在動いているtaskが指定するconfigの `stateDirectory` と `activateAt` を読み、journalの同じ境界・未解決status・Sheets failure履歴を保持する。例の新stateや2099年の境界で置換しない。現在のreleaseと候補の識別も別に確認する。
 

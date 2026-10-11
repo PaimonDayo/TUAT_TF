@@ -12,7 +12,7 @@
     "check:environment": "node scripts/check-environment.mjs",
     "test:tooling": "node --test scripts/check-environment.test.mjs",
     "test:ops": "node --test ops/laptop/backup-backend.test.mjs ops/laptop/backup-retention.test.mjs ops/laptop/cloud-mirror-ob.test.mjs ops/pc-jobs/gas-member.test.mjs ops/pc-jobs/gas-period.test.mjs ops/pc-jobs/gas-reply.test.mjs ops/pc-jobs/gas-formula.test.mjs ops/glass/source.test.mjs",
-    "test:ops:integration": "node --test ops/laptop/backend-gateway.test.mjs ops/pc-jobs/scheduler.test.mjs ops/pc-jobs/shared-pc.test.mjs ops/pc-auth-sync/sync.test.mjs ops/pc-host/gateway.test.mjs ops/pc-host/release.test.mjs ops/pc-host/lifecycle.test.mjs ops/pc-host/runner-lock.test.mjs ops/pc-host/synthetic-review.test.mjs ops/pc-host/account-preflight.test.mjs ops/pc-image-cleanup/cleanup.test.mjs"
+    "test:ops:integration": "node --test ops/laptop/backend-gateway.test.mjs ops/pc-jobs/scheduler.test.mjs ops/pc-jobs/shared-pc.test.mjs ops/pc-auth-sync/sync.test.mjs ops/pc-host/gateway.test.mjs ops/pc-host/release.test.mjs ops/pc-host/lifecycle.test.mjs ops/pc-host/runner-lock.test.mjs ops/pc-host/synthetic-review.test.mjs ops/pc-host/account-preflight.test.mjs ops/pc-host/backup-owner.test.mjs ops/pc-host/backup-lifecycle.test.mjs ops/pc-backup/status.test.mjs ops/pc-backup/run.test.mjs ops/pc-backup/adapters.test.mjs ops/pc-backup/files.test.mjs ops/pc-retirement/reconcile.test.mjs ops/pc-retirement/snapshot.test.mjs ops/pc-image-cleanup/cleanup.test.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1127.0",

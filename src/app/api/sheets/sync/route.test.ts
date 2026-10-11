@@ -4,17 +4,21 @@ const state = vi.hoisted(() => ({
   user: { id: "administrator" } as { id: string } | null,
   canManage: true,
   sync: vi.fn(),
+  receiptError: null as { code: string } | null,
+  confirmReceipt: true,
 }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({
   auth: { getUser: async () => ({ data: { user: state.user } }) },
 }) }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({
   from() {
+    let selected = false;
     const query = {
-      update: () => query, insert: () => query, select: () => query,
+      update: () => query, insert: () => query, select: () => { selected = true; return query; },
       eq: () => query, lt: () => query,
       single: async () => ({ data: { id: "sync-run" }, error: null }),
-      then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(resolve),
+      then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: selected && state.confirmReceipt ? [{ id: "sync-run" }] : [],
+        error: selected ? state.receiptError : null }).then(resolve),
     };
     return query;
   },
@@ -36,6 +40,7 @@ function request(cron: boolean, dryRun = false) {
 beforeEach(() => {
   state.user = { id: "administrator" };
   state.canManage = true;
+  state.receiptError = null; state.confirmReceipt = true;
   state.sync.mockReset().mockResolvedValue({ inserted: 0, updated: 0, pushed: 0, sheetReplies: 0,
     unchangedMembers: [], failedMembers: [], conflicts: [], skippedMembers: [] });
   vi.stubEnv("SHEET_SYNC_SECRET", "synthetic-sync");
@@ -63,5 +68,14 @@ describe("sheet sync publication boundary", () => {
     state.canManage = false;
     expect((await POST(request(false, true))).status).toBe(403);
     expect(state.sync).not.toHaveBeenCalled();
+  });
+  it.each([true, false])("preserves completed work when the receipt is protected=%s or has zero confirmed rows", async protectedReceipt => {
+    state.confirmReceipt = false;
+    if (protectedReceipt) state.receiptError = { code: "PC_BACKUP_UNAVAILABLE" };
+    const response = await POST(request(false));
+    expect(response.status).toBe(protectedReceipt ? 503 : 502);
+    expect(await response.json()).toMatchObject({ ok: false, outcome: "partial", retryable: false, runId: "sync-run",
+      code: protectedReceipt ? "PC_BACKUP_UNAVAILABLE" : "SHEET_SYNC_RECEIPT_UNCONFIRMED", result: { inserted: 0, updated: 0, pushed: 0 } });
+    expect(state.sync).toHaveBeenCalledOnce();
   });
 });

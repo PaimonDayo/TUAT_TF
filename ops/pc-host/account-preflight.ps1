@@ -97,7 +97,7 @@ try{
   Assert-Parents (Split-Path -Path $ConfigPath -Parent) (@($runtimeSid)+$trustedSids)
   Assert-Private $ConfigPath $false $false
   $config=Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
-  foreach($path in @($config.releaseDirectory,$config.environmentFile,$config.stateDirectory)){if(![IO.Path]::IsPathFullyQualified($path)){throw 'Absolute configuration paths required'}}
+  foreach($path in @($config.releaseDirectory,$config.environmentFile,$config.stateDirectory,$config.backupConfigFile)){if(![IO.Path]::IsPathFullyQualified($path)){throw 'Absolute configuration paths required'}}
   $expectedHelpers=[IO.Path]::GetFullPath((Join-Path $config.releaseDirectory 'ops/pc-host'))
   if(![string]::Equals([IO.Path]::GetFullPath($PSScriptRoot),$expectedHelpers,[StringComparison]::OrdinalIgnoreCase)){throw 'Host helper scripts must belong to the verified release'}
   Assert-Private (Split-Path -Path $config.environmentFile -Parent) $true
@@ -109,6 +109,24 @@ try{
   foreach($item in Get-ChildItem -LiteralPath $config.stateDirectory -Recurse -Force){
     Assert-Private $item.FullName ([bool]$item.PSIsContainer) $false
   }
+  Assert-Private (Split-Path -Path $config.backupConfigFile -Parent) $true
+  Assert-Parents (Split-Path -Path $config.backupConfigFile -Parent) (@($runtimeSid)+$trustedSids)
+  Assert-Private $config.backupConfigFile $false $false
+  $backup=Get-Content -LiteralPath $config.backupConfigFile -Raw | ConvertFrom-Json
+  if($backup.instanceId -ne $config.expectedBackupInstanceId -or $backup.target.databaseSystemIdentifier -ne $config.expectedBackupDatabaseSystemIdentifier){throw 'Backup target differs from the app target'}
+  foreach($path in @($backup.environmentFile,$backup.stateDirectory,$backup.wslExecutable)){if(![IO.Path]::IsPathFullyQualified($path)){throw 'Absolute backup configuration paths required'}}
+  foreach($file in @($backup.environmentFile,$backup.pushEnvironmentFile) | Where-Object {$_}){
+    Assert-Private (Split-Path -Path $file -Parent) $true
+    Assert-Parents (Split-Path -Path $file -Parent) (@($runtimeSid)+$trustedSids)
+    Assert-Private $file $false $false
+    $null=[IO.File]::OpenRead($file).Dispose()
+  }
+  Assert-Private $backup.stateDirectory $true
+  Assert-Parents $backup.stateDirectory (@($runtimeSid)+$trustedSids)
+  foreach($item in Get-ChildItem -LiteralPath $backup.stateDirectory -Recurse -Force){Assert-Private $item.FullName ([bool]$item.PSIsContainer) $false}
+  Assert-Access $backup.wslExecutable $trustedSids $trustedSids $writeMask
+  Assert-Parents $backup.wslExecutable
+  if((Get-FileHash -LiteralPath $backup.wslExecutable -Algorithm SHA256).Hash.ToLowerInvariant() -ne $backup.wslSha256){throw 'Backup WSL executable has changed'}
   Assert-Access $config.releaseDirectory $trustedSids $trustedSids $writeMask $true
   Assert-Parents $config.releaseDirectory
   $releaseRoot=[IO.Path]::GetFullPath($config.releaseDirectory).TrimEnd('\')

@@ -1,5 +1,7 @@
 // Reuse the one pinned PC app. Cloud Auth and private R2 remain separate services.
 import { readFileSync } from 'node:fs';
+import { isAbsolute, resolve } from 'node:path';
+import { backupStatusReady, utcTime } from '../pc-backup/status.mjs';
 
 export function loopbackRoot(value) {
   if (typeof value !== 'string' || !/^http:\/\/127\.0\.0\.1:[1-9][0-9]{0,4}$/.test(value)) throw Error('Explicit loopback root URL required');
@@ -9,6 +11,9 @@ export function loopbackRoot(value) {
 }
 
 export function validateSharedPc(config, env) {
+  if (!isAbsolute(config.hostStateDirectory ?? '') || !isAbsolute(config.backupStatusPath ?? '')
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(config.expectedBackupInstanceId ?? '')
+    || !/^\d{10,20}$/.test(config.expectedBackupDatabaseSystemIdentifier ?? '')) throw Error('Pinned shared host and backup required');
   const app = loopbackRoot(config.appOrigin);
   if (Number(new URL(app).port) !== config.port || env.PC_APP_RUNTIME !== 'true' || env.NEXT_PUBLIC_PC_APP_RUNTIME !== 'true' ||
       env.PC_BACKEND_ENABLED !== 'true' || env.NEXT_PUBLIC_PC_BACKEND !== 'true' ||
@@ -34,21 +39,23 @@ export function validateSharedPc(config, env) {
 
 export function backendReady(config, { read = readFileSync, now = Date.now() } = {}) {
   try {
-    const backend = JSON.parse(read(`${config.backendDirectory}/config.json`, 'utf8'));
-    const heartbeat = JSON.parse(read(`${config.backendDirectory}/runtime-status.json`, 'utf8'));
-    const backup = JSON.parse(read(`${config.backendDirectory}/backup-status.json`, 'utf8'));
-    const heartbeatAge = now - Date.parse(heartbeat.checkedAt), backupAge = now - Date.parse(backup.completedAt);
-    const returnAt = backend.returnAt ? Date.parse(backend.returnAt) : undefined;
-    return backend.maintenance === false && (returnAt === undefined || (Number.isFinite(returnAt) && now < returnAt)) &&
-      heartbeat.healthy === true && heartbeat.maintenance === false && heartbeatAge >= 0 && heartbeatAge < 120000 &&
-      backupAge >= 0 && backupAge < 35 * 60000;
+    const host = JSON.parse(read(resolve(config.hostStateDirectory, 'runtime-status.json'), 'utf8'));
+    const started = utcTime(host.startedAt), checked = utcTime(host.checkedAt);
+    if (host.version !== 1 || host.running !== true || host.releaseCommit !== config.releaseCommit || host.releaseId !== config.releaseId
+      || !Number.isFinite(started) || !Number.isFinite(checked) || started > checked || checked > now || now - checked >= 120_000
+      || host.backup?.identity?.instanceId !== config.expectedBackupInstanceId
+      || host.backup?.identity?.startedAt !== host.startedAt
+      || host.backup?.identity?.databaseSystemIdentifier !== config.expectedBackupDatabaseSystemIdentifier
+      || host.backup?.statusPath !== config.backupStatusPath) return false;
+    const status = JSON.parse(read(config.backupStatusPath, 'utf8'));
+    return backupStatusReady(status, host.backup.identity, now);
   } catch { return false; }
 }
 
-export async function sharedPcReady(config, env, { fetchRequest = fetch, read = readFileSync, now = Date.now() } = {}) {
+export async function sharedPcReady(config, env, { fetchRequest = fetch, read = readFileSync, clock = Date.now } = {}) {
   try {
     validateSharedPc(config, env);
-    if (!backendReady(config, { read, now })) return false;
+    if (!backendReady(config, { read, now: clock() })) return false;
     const options = () => ({ signal: AbortSignal.timeout(3000), redirect: 'error', cache: 'no-store' });
     // OpenAPI probes REST/schema readiness without reading a member table. anon cannot SELECT profiles.
     const [app, rest] = await Promise.all([
@@ -58,7 +65,7 @@ export async function sharedPcReady(config, env, { fetchRequest = fetch, read = 
     ]);
     if (!app.ok || !rest.ok) return false;
     const [version, schema] = await Promise.all([app.json(), rest.json()]);
-    return version?.version === config.releaseCommit && version?.releaseId === config.releaseId &&
+    return backendReady(config, { read, now: clock() }) && version?.version === config.releaseCommit && version?.releaseId === config.releaseId &&
       !!schema && typeof schema === 'object' && (schema.swagger === '2.0' || typeof schema.openapi === 'string');
   } catch { return false; }
 }

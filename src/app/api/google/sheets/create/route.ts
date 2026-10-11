@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { pcAppWriteProtectionResponse, pcBackupProtectionResponse } from "@/lib/pc-backup-status";
 import {
   createScheduleSpreadsheet,
   decryptGoogleToken,
   refreshGoogleAccessToken,
+  SpreadsheetCreationError,
+  type CreatedSpreadsheet,
 } from "@/lib/google-drive";
 import { BLOCKS } from "@/lib/constants";
 import type {
@@ -52,6 +55,8 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+  const protectedResponse = await pcAppWriteProtectionResponse();
+  if (protectedResponse) return protectedResponse;
   const { data: connection } = await admin
     .from("google_drive_connections")
     .select("refresh_token_encrypted")
@@ -80,11 +85,12 @@ export async function POST(request: Request) {
     );
   }
 
+  let created: CreatedSpreadsheet | undefined;
   try {
     const refreshToken = decryptGoogleToken(connection.refresh_token_encrypted);
     const tokens = await refreshGoogleAccessToken(refreshToken);
     const title = sheetTitle(body);
-    const created = await createScheduleSpreadsheet({
+    created = await createScheduleSpreadsheet({
       accessToken: tokens.access_token,
       title,
       kind: body.kind,
@@ -115,6 +121,14 @@ export async function POST(request: Request) {
       spreadsheetId: created.spreadsheetId,
     });
   } catch (error) {
+    if (error instanceof SpreadsheetCreationError || created) {
+      const partial = error instanceof SpreadsheetCreationError ? error : new SpreadsheetCreationError("partial", "record", created!, !!pcBackupProtectionResponse(error));
+      return NextResponse.json({ error: partial.message, code: partial.protection ? "PC_BACKUP_UNAVAILABLE" : "SHEET_CREATION_INCOMPLETE",
+        outcome: partial.outcome, phase: partial.phase, retryable: false, resultUnknown: partial.outcome === "unknown", resource: partial.resource },
+      { status: partial.protection ? 503 : 502, headers: { "cache-control": "private, no-store" } });
+    }
+    const protection = pcBackupProtectionResponse(error);
+    if (protection) return protection;
     console.error("Google spreadsheet creation failed", error);
     return NextResponse.json(
       { error: "スプレッドシートを発行できませんでした。再連携を試してください" },

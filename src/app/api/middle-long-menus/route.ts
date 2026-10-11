@@ -3,6 +3,7 @@ import { getCurrentProfile } from "@/lib/supabase/auth";
 import { createClient } from "@/lib/supabase/server";
 import { permissionsOf } from "@/lib/permissions";
 import { writeMiddleLongMenuToSheet } from "@/lib/sheet-sync";
+import { pcAppWriteProtectionResponse, pcBackupProtectionResponse } from "@/lib/pc-backup-status";
 import { fetchMiddleLongMenuSnapshot } from "@/lib/middle-long-menu-sheet";
 
 export async function GET(request: Request) {
@@ -79,11 +80,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "対象の練習予定が見つかりません" }, { status: 404 });
     }
 
+    const protectedResponse = await pcAppWriteProtectionResponse();
+    if (protectedResponse) return protectedResponse;
     const result = await writeMiddleLongMenuToSheet(schedule.schedule_date, fields);
     return NextResponse.json(result, {
       headers: { "Cache-Control": "private, no-store, max-age=0" },
     });
   } catch (error) {
+    const protection = pcBackupProtectionResponse(error);
+    if (protection) return protection;
     console.error("Failed to write middle-long menu", error);
     return NextResponse.json(
       { error: "スプレッドシートへメニューを保存できませんでした" },

@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sessionClientConfig } from "./server-client-options";
 
+// This transport test starts after backup approval; the real fail-stop is tested separately.
+vi.mock("../pc-backup-status", async (original) => ({
+  ...await original<typeof import("../pc-backup-status")>(),
+  pcAppWriteProtectionResponse: async () => null,
+}));
+
 const origin = "https://pc-app.example.test";
 const issuer = "https://synthetic-issuer.supabase.co";
 beforeEach(() => {

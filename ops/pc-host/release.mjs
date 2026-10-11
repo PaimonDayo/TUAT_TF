@@ -4,11 +4,13 @@ import { resolve, relative, isAbsolute, parse } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { parseEnv } from 'node:util';
 import { verifiedReleaseDirectory, verifyRuntimeManifest, runtimeRebuildRequired, hostGitPath, hostWindowsToolPath } from './runtime-manifest.mjs';
+import { validateBackupOwnerConfig } from './backup-owner.mjs';
 
 const forbiddenEnvFiles = ['.env', '.env.local', '.env.production', '.env.production.local'];
 const reservedPorts = [8000, 3008, 3109, 3112];
 export function validateHostConfig(config, env) {
   if (config.version !== 1 || typeof config.enabled !== 'boolean') throw Error('Explicit host configuration required');
+  validateBackupOwnerConfig(config, env);
   for (const key of ['releaseDirectory', 'environmentFile', 'stateDirectory']) if (!isAbsolute(config[key] ?? '')) throw Error(`Absolute ${key} required`);
   if (!relative(config.releaseDirectory, config.stateDirectory).startsWith('..') || resolve(config.stateDirectory) === resolve(config.releaseDirectory)) throw Error('Separate state required');
   if (!/^[a-f0-9]{40}$/.test(config.releaseCommit ?? '') || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,31}$/.test(config.releaseId ?? '') || config.releaseId.startsWith('dpl_')) throw Error('Pinned release identifiers required');

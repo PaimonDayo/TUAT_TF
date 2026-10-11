@@ -26,7 +26,7 @@ export function ScheduleSheetsManager() {
     year, setYear, month, setMonth, kind,
     setKind, block, setBlock, inputMode, setInputMode,
     existing, selectedIds, setSelectedIds, venues, weekdayDefaults,
-    googleConnected, googleEmail, issuing, source, setSource,
+    googleConnected, googleEmail, issuing, issueBlocked, source, setSource,
     sheetUrl, setSheetUrl, fileName, csv, setSheetId,
     preview, setPreview, loading, applying, error,
     setError, lastApplied, undoing, deletionIds, setDeletionIds,
@@ -263,10 +263,10 @@ export function ScheduleSheetsManager() {
             <Button
               type="button"
               size="lg"
-              disabled={issuing || googleConnected === null}
+              disabled={issuing || issueBlocked || googleConnected === null}
               onClick={issueSpreadsheet}
             >
-              {issuing ? "作成中…" : "シートを作る"}
+              {issuing ? "作成中…" : issueBlocked ? "作成結果を確認してください" : "シートを作る"}
             </Button>
           </>
         )}
