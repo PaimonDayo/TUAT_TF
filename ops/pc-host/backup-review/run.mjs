@@ -10,7 +10,7 @@ import { verifyLocalAuth } from './local-auth-http.mjs';
 
 export const PINS = Object.freeze({
   postgres: ['supabase/postgres:17.6.1.136','sha256:f371b5f3f2ac0a05703f33d6e6134515fb2498cab708fb948a0aeb7481467c00'],
-  auth: ['supabase/gotrue:v2.196.0','sha256:c0c25187a6b835e65a6f6e6c6b39d090e832d40e6de5186f2c038e0411944232'],
+  auth: ['supabase/gotrue:v2.197.0','sha256:1736a63078f5922b198c4cbe50f80ab9a2d3b54fe8b7b6cfb2e9dc5dbbc12c6b'],
   storage: ['supabase/storage-api:v1.73.1','sha256:c24fb33cc2fa38d0f9582a30312907fc56da333fb9ba0646833186197e4982f3'],
 });
 const OWNER='codex-backup-review', DB='tuat_rls_review';

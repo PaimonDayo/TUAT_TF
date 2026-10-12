@@ -1,5 +1,12 @@
 # 切替前の合成暗号化DB復元試験
 
+2026-10-12の実Auth取得では、クラウドのmigration世代が旧PCのGoTrue2.196.0より
+新しいことを確認した。検証用の固定イメージは公式GoTrue2.197.0へ更新する。
+実Auth27表・74ユーザー・80identity・元のpassword hash6件は、保護された隔離コピーで
+移行・native API読取・別DBへの復元を確認した。ここでは合成fixtureの最新migrationと
+同版のログイン/refresh/権限/暗号復元を検証する。実Google、固定公開入口、端末操作、
+協調した最終snapshot、PC外の鍵保管、本番のruntime変更とは別の受入である。
+
 2026-10-12追加: `runReview({localAuth:true})` は専用DBの非公開network namespaceに
 実GoTrue/PostgRESTを起動し、新規UUID/refresh/本人保存/他人拒否/偽署名拒否を確認する。
 public/auth/storageに加えてpc_opsをdumpし、208件のcandidate migrationの復元後に
