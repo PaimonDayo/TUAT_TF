@@ -1,7 +1,10 @@
 # PC集約の切替前候補
 
 Cloudflare固定Tunnel → loopback gateway → Next一つ → 現行PC DB。
-認証はクラウドSupabase、画像は非公開R2。業務の予備/再送/lease発見は使わない。
+2026-10-12の候補は認証と画像もPCへ集約する。独立releaseには
+`environment.local.example.env` と [PCローカル構成の準備](../local-minimal/PC-PRECUTOVER.md) を使う。
+従来のクラウドSupabase認証・非公開R2画像のrelease/envは切替・復旧用に保持する。
+業務の予備/再送/lease発見は使わない。PC外には暗号化バックアップを残す。
 既存本番を切り替えるまで、旧backend/Jobs/mirrorと本番envを変更しない。
 
 公開入口と個別操作の権限は別の境界。gatewayはbody/期限/Origin/内部headerを制限するが、本人確認とRLSはアプリとDBで必須。

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync, lstatSync, writeFileSync, renameSync, mkdirSync, realpathSync, chmodSync } from 'node:fs';
-import { resolve, relative, isAbsolute, parse } from 'node:path';
+import { resolve, relative, isAbsolute, parse, sep } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { parseEnv } from 'node:util';
 import { verifiedReleaseDirectory, verifyRuntimeManifest, runtimeRebuildRequired, hostGitPath, hostGitEnvironment, hostWindowsToolPath } from './runtime-manifest.mjs';
@@ -12,7 +12,8 @@ export function validateHostConfig(config, env) {
   if (config.version !== 1 || typeof config.enabled !== 'boolean') throw Error('Explicit host configuration required');
   validateBackupOwnerConfig(config, env);
   for (const key of ['releaseDirectory', 'environmentFile', 'stateDirectory']) if (!isAbsolute(config[key] ?? '')) throw Error(`Absolute ${key} required`);
-  if (!relative(config.releaseDirectory, config.stateDirectory).startsWith('..') || resolve(config.stateDirectory) === resolve(config.releaseDirectory)) throw Error('Separate state required');
+  const outsideRelease = path => { const delta = relative(config.releaseDirectory, path); return delta === '..' || delta.startsWith(`..${sep}`) || isAbsolute(delta); };
+  if (!outsideRelease(config.stateDirectory)) throw Error('Separate state required');
   if (!/^[a-f0-9]{40}$/.test(config.releaseCommit ?? '') || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,31}$/.test(config.releaseId ?? '') || config.releaseId.startsWith('dpl_')) throw Error('Pinned release identifiers required');
   for (const key of ['appPort', 'gatewayPort']) if (!Number.isInteger(config[key]) || config[key] < 1024 || config[key] > 65535 || reservedPorts.includes(config[key])) throw Error('Dedicated host ports required');
   if (config.appPort === config.gatewayPort) throw Error('Distinct listeners required');
@@ -22,12 +23,30 @@ export function validateHostConfig(config, env) {
   if (env.APP_PUBLIC_ORIGIN !== config.publicOrigin || env.NEXT_PUBLIC_SUPABASE_URL !== `${config.publicOrigin}/api/pc-supabase`) throw Error('Single application origin required');
   if (env.VERCEL || env.VERCEL_ENV || env.NEXT_PUBLIC_PC_REST_RELAY_ORIGIN || env.NEXT_PUBLIC_PC_TRIAL === 'true') throw Error('Independent host required');
   if (env.VERCEL_GIT_COMMIT_SHA !== config.releaseCommit || env.PC_APP_RELEASE_ID !== config.releaseId) throw Error('Release environment mismatch');
-  if (!env.NEXT_PUBLIC_CLOUD_AUTH_URL || !env.NEXT_PUBLIC_CLOUD_AUTH_ANON_KEY || !env.NEXT_PUBLIC_SUPABASE_ANON_KEY || !env.SUPABASE_SERVICE_ROLE_KEY) throw Error('Cloud authentication and PC credentials required');
+  const local = env.PC_LOCAL_RUNTIME === 'true';
+  if (local !== (env.NEXT_PUBLIC_PC_LOCAL_RUNTIME === 'true')) throw Error('Local runtime flags must agree');
+  if (!env.NEXT_PUBLIC_SUPABASE_ANON_KEY || !env.SUPABASE_SERVICE_ROLE_KEY || (!local && (!env.NEXT_PUBLIC_CLOUD_AUTH_URL || !env.NEXT_PUBLIC_CLOUD_AUTH_ANON_KEY))) throw Error('Explicit authentication and PC credentials required');
   const actionKey = env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY ?? '';
   if (Buffer.from(actionKey, 'base64').length !== 32 || Buffer.from(actionKey, 'base64').toString('base64') !== actionKey) throw Error('Fixed 256-bit Server Action encryption key required');
   const synthetic = env.PC_APP_SYNTHETIC_REVIEW === 'true';
   if (synthetic !== (env.NEXT_PUBLIC_PC_APP_SYNTHETIC_REVIEW === 'true')) throw Error('Synthetic flags must agree');
-  if (synthetic) {
+  if (local) {
+    const loopback = value => {
+      try { const url = new URL(value); return value === url.origin && url.protocol === 'http:' && url.hostname === '127.0.0.1' && Number(url.port) >= 1024 && Number(url.port) <= 65535 && ![...reservedPorts, config.appPort, config.gatewayPort].includes(Number(url.port)); } catch { return false; }
+    };
+    if (!loopback(env.PC_LOCAL_AUTH_URL) || !loopback(env.PC_LOCAL_REST_URL) || env.PC_LOCAL_AUTH_URL === env.PC_LOCAL_REST_URL || env.PC_BACKEND_INTERNAL_URL) throw Error('Distinct private local Auth/REST required');
+    for (const key of ['NEXT_PUBLIC_CLOUD_AUTH_URL','NEXT_PUBLIC_CLOUD_AUTH_ANON_KEY','NEXT_PUBLIC_CLOUD_AUTH_MODE','R2_ACCOUNT_ID','R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','R2_BUCKET_NAME']) if (env[key]) throw Error('Local application may not contain cloud Auth/image settings');
+    if (env.IMAGE_STORAGE_DRIVER !== 'local' || env.R2_READ_ENABLED !== 'false' || env.R2_WRITE_ENABLED !== 'false') throw Error('Local private images required');
+    const root = env.LOCAL_IMAGE_STORAGE_ROOT, size = Number(env.LOCAL_IMAGE_MAX_STORAGE_BYTES);
+    if (!isAbsolute(root ?? '') || resolve(root) !== root || root === parse(root).root || !outsideRelease(root) ||
+        Buffer.byteLength(env.LOCAL_IMAGE_SIGNING_KEY ?? '') < 32 || !Number.isSafeInteger(size) || size <= 0) throw Error('Separate private image directory, signing key and capacity required');
+    if (synthetic && (!/(?:\.example\.test|\.localhost)$/.test(origin.hostname) || env.SHEET_SYNC_ENABLED !== 'false' || env.GOOGLE_DRIVE_CLIENT_SECRET || env.SHEET_SYNC_GAS_URL)) throw Error('Synthetic local release may not enable external providers');
+    if(!synthetic) {
+      try {const parts=env.NEXT_PUBLIC_SUPABASE_ANON_KEY.split('.'),decode=part=>JSON.parse(Buffer.from(part,'base64url').toString('utf8'));
+        if(parts.length!==3||!['HS256','ES256','RS256'].includes(decode(parts[0]).alg)||decode(parts[1]).role!=='anon')throw Error();
+      } catch {throw Error('Local public key must be an anon JWT; privileged keys remain private');}
+    }
+  } else if (synthetic) {
     const loopback = value => {
       try { const url = new URL(value); return url.protocol === 'http:' && url.hostname === '127.0.0.1' && url.origin === value && Number(url.port) >= 18180 && Number(url.port) <= 18999; } catch { return false; }
     };

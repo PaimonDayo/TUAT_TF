@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getPcAppRuntime } from "./pc-app-runtime";
+import { pcLocalApiTarget } from "./pc-local-runtime";
 import { pcAppWriteProtectionResponse, pcBackendRequestNeedsProtection } from "./pc-backup-status";
 
 export type PcEndpoint = {
@@ -59,7 +60,8 @@ export async function pcBackendFetch(input: RequestInfo | URL, init?: RequestIni
   const path = source.pathname.slice(base.pathname.replace(/\/$/, "").length);
   if (!/^\/(auth|rest|storage|functions)\/v1(?:\/|$)/.test(path)) throw new Error("Invalid backend API");
   const app = getPcAppRuntime();
-  if (app && await pcBackendRequestNeedsProtection(request, path)) {
+  // Token refresh/logout must remain possible while business writes are protected.
+  if (app && !(app.local && path.startsWith("/auth/v1/")) && await pcBackendRequestNeedsProtection(request, path)) {
     const protectedResponse = await pcAppWriteProtectionResponse();
     if (protectedResponse) return protectedResponse;
   }
@@ -73,7 +75,9 @@ export async function pcBackendFetch(input: RequestInfo | URL, init?: RequestIni
     for (const name of Array.from(headers.keys())) if (name.startsWith("x-forwarded-")) headers.delete(name);
   } else headers.set("x-pc-backend-key", process.env.PC_BACKEND_BRIDGE_KEY!);
   const body = ["GET", "HEAD"].includes(request.method) ? undefined : await request.arrayBuffer();
-  return fetch(app ? `${app.internalUrl}${path}${source.search}` : `${endpoint!.origin}/backend${path}${source.search}`, {
+  const target = app?.local ? pcLocalApiTarget(app.local, path, source.search)
+    : app ? `${app.internalUrl}${path}${source.search}` : `${endpoint!.origin}/backend${path}${source.search}`;
+  return fetch(target, {
     method: request.method, headers, body, cache: "no-store", redirect: "manual",
     signal: AbortSignal.any([request.signal, AbortSignal.timeout(25_000)]),
   });

@@ -25,6 +25,10 @@ export function backupStatusReady(status,identity,now=Date.now()) {
       ||status.target.databaseSystemIdentifier!==identity.databaseSystemIdentifier
       ||status.backup.databaseSystemIdentifier!==identity.databaseSystemIdentifier||status.target.databaseName!=='postgres'
       ||!/^[a-f0-9]{64}$/.test(status.target.containerId??'')||!/^sha256:[a-f0-9]{64}$/.test(status.target.containerImageId??'')) return false;
+    if(status.backup.localSnapshot && status.backup.key===status.backup.localSnapshot.archiveKey) {
+      return localSnapshotReady(status,identity,status.backup.localSnapshot.imageRoot,now)
+        && status.backup.sha256===status.backup.localSnapshot.archiveSha256 && status.backup.bytes===status.backup.localSnapshot.archiveBytes;
+    }
     const prefix=`ops/pc-backend/${identity.instanceId}/backups/`;
     const name=status.backup.key?.slice(prefix.length);
     if(typeof status.backup.key!=='string'||!status.backup.key.startsWith(prefix)
@@ -34,4 +38,15 @@ export function backupStatusReady(status,identity,now=Date.now()) {
       ||!['bytes','recoveryBytes'].every(field=>Number.isSafeInteger(status.backup[field])&&status.backup[field]>=36)) return false;
     return true;
   } catch { return false; }
+}
+
+export function localSnapshotReady(status,identity,imageRoot,now=Date.now()) {
+  const snapshot=status.backup?.localSnapshot;
+  if(!snapshot||!imageRoot||snapshot.format!=='tuat-local-db-images-v1'||snapshot.sourceId!==identity.instanceId||snapshot.generation!==identity.generation
+    ||snapshot.databaseSystemIdentifier!==identity.databaseSystemIdentifier||snapshot.imageRoot!==imageRoot||snapshot.independentRecoveryCopyChecked!==true
+    ||!/^[a-f0-9]{64}$/.test(snapshot.archiveSha256??'')||!Number.isSafeInteger(snapshot.archiveBytes)||snapshot.archiveBytes<36||snapshot.archiveBytes>16*1024**3)return false;
+  const prefix=`ops/pc-backend/${identity.instanceId}/backups/`;
+  if(!snapshot.archiveKey?.startsWith(prefix)||!/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.local\.tar\.enc$/.test(snapshot.archiveKey.slice(prefix.length)))return false;
+  const started=utcTime(identity.startedAt);
+  return [snapshot.restoreVerifiedAt,snapshot.offsiteVerifiedAt].every(value=>{const time=utcTime(value);return Number.isFinite(time)&&time>=started&&time<=now&&now-time<BACKUP_MAX_AGE_MS;});
 }

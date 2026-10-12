@@ -13,6 +13,15 @@ test('synthetic host cannot accidentally reach established PC or providers', () 
   validateHostConfig(config, env);
   for (const changes of [{NEXT_PUBLIC_PC_APP_SYNTHETIC_REVIEW:'false'}, {PC_BACKEND_INTERNAL_URL:'http://127.0.0.1:8000'}, {NEXT_PUBLIC_CLOUD_AUTH_URL:'https://real.supabase.co'}, {R2_SECRET_ACCESS_KEY:'fixture-external'}, {GOOGLE_DRIVE_CLIENT_SECRET:'fixture-external'}, {R2_READ_ENABLED:'true'}, {SHEET_SYNC_ENABLED:'true'}]) assert.throws(()=>validateHostConfig(config,{...env,...changes}));
 });
+test('local Auth/image release is explicit and rejects cloud, public ports and release-local image data', () => {
+  const local={...env,PC_LOCAL_RUNTIME:'true',NEXT_PUBLIC_PC_LOCAL_RUNTIME:'true',PC_LOCAL_AUTH_URL:'http://127.0.0.1:18001',PC_LOCAL_REST_URL:'http://127.0.0.1:18002',
+    PC_BACKEND_INTERNAL_URL:'',NEXT_PUBLIC_CLOUD_AUTH_URL:'',NEXT_PUBLIC_CLOUD_AUTH_ANON_KEY:'',NEXT_PUBLIC_CLOUD_AUTH_MODE:'',
+    IMAGE_STORAGE_DRIVER:'local',LOCAL_IMAGE_STORAGE_ROOT:resolve(config.stateDirectory,'images'),LOCAL_IMAGE_SIGNING_KEY:'synthetic-local-key-only'.repeat(3),LOCAL_IMAGE_MAX_STORAGE_BYTES:'8000000000'};
+  validateHostConfig(config,local);
+  for(const changes of [{NEXT_PUBLIC_PC_LOCAL_RUNTIME:'false'},{NEXT_PUBLIC_CLOUD_AUTH_URL:'https://issuer.supabase.co'},{R2_SECRET_ACCESS_KEY:'synthetic'},
+    {PC_LOCAL_AUTH_URL:'http://0.0.0.0:18001'},{PC_LOCAL_REST_URL:local.PC_LOCAL_AUTH_URL},{PC_LOCAL_REST_URL:'http://127.0.0.1:18200'},
+    {LOCAL_IMAGE_STORAGE_ROOT:resolve(config.releaseDirectory,'public/images')},{LOCAL_IMAGE_STORAGE_ROOT:resolve(config.releaseDirectory,'..private/images')},{LOCAL_IMAGE_SIGNING_KEY:'short'},{R2_READ_ENABLED:'true'}]) assert.throws(()=>validateHostConfig(config,{...local,...changes}));
+});
 test('release identity/origin/path and canonical key guards fail before writes', () => {
   for (const changes of [{publicOrigin:'http://pc-review.example.test'},{releaseId:'dpl_reserved'},{releaseCommit:'wrong'},{appPort:8000},{stateDirectory:config.releaseDirectory},{stateDirectory:resolve(config.releaseDirectory,'state')}]) assert.throws(()=>validateHostConfig({...config,...changes},env));
   assert.throws(()=>validateHostConfig(config,{...env,NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY+'!'}));

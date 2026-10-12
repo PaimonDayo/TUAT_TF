@@ -12,8 +12,9 @@ beforeAll(async () => {
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime("2026-10-11T01:00:00.000Z"); vi.spyOn(console, "error").mockImplementation(() => undefined); });
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
-async function fixture(mode: "server" | "browser", adapted = true, expired = true) {
+async function fixture(mode: "server" | "browser", adapted = true, expired = true, local = false) {
   const origin = `https://auth-rate-${++fixtureNumber}.example.invalid`, cookieName = `sb-rate-${fixtureNumber}`, kid = `test-rate-${fixtureNumber}`;
+  const prefix = local ? "/api/pc-supabase" : "", base = origin + prefix;
   async function token(exp: number, invalid = false) {
     const unsigned = `${encode({ alg: "ES256", typ: "JWT", kid })}.${encode({ sub: subject, email: "member@example.invalid", aud: "authenticated", role: "authenticated", exp })}`;
     const signature = new Uint8Array(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, keys.privateKey, new TextEncoder().encode(unsigned)));
@@ -27,18 +28,29 @@ async function fixture(mode: "server" | "browser", adapted = true, expired = tru
     const url = new URL(input instanceof Request ? input.url : String(input));
     expect(url.origin).toBe(origin);
     if (url.pathname.endsWith("/jwks.json")) return Response.json({ keys: [{ ...jwk, kid, alg: "ES256", use: "sig" }] });
-    if (url.pathname === "/auth/v1/user") return Response.json({ message: "Synthetic user rate limit", code: "over_request_rate_limit" }, { status: 429 });
-    expect(url.pathname).toBe("/auth/v1/token");
+    if (url.pathname === `${prefix}/auth/v1/user`) return Response.json({ message: "Synthetic user rate limit", code: "over_request_rate_limit" }, { status: 429 });
+    expect(url.pathname).toBe(`${prefix}/auth/v1/token`);
     if (state.status === 200) return Response.json({ ...session, access_token: await token(Math.floor(Date.now() / 1000) + 3600, state.invalidSignature), expires_at: Math.floor(Date.now() / 1000) + 3600 });
     return Response.json({ message: "Synthetic refresh failure", code: state.status === 429 ? "over_request_rate_limit" : "refresh_token_not_found" },
       { status: state.status, headers: { "retry-after": "60", "x-supabase-api-version": "2024-01-01" } });
   });
-  const options = { cookieOptions: { name: cookieName }, global: { fetch: adapted ? createCloudAuthFetch(dispatch, origin) : dispatch },
+  const options = { cookieOptions: { name: cookieName }, global: { fetch: adapted ? createCloudAuthFetch(dispatch, base) : dispatch },
     cookies: { getAll: () => [{ name: cookieName, value: `base64-${encode(session)}` }], setAll: cookieWrites }, auth: { autoRefreshToken: false } };
-  const client = mode === "server" ? createServerClient(origin, "synthetic-anon", options) : createBrowserClient(origin, "synthetic-anon", { ...options, isSingleton: false });
+  const client = mode === "server" ? createServerClient(base, "synthetic-anon", options) : createBrowserClient(base, "synthetic-anon", { ...options, isSingleton: false });
   return { client, dispatch, cookieWrites, state };
 }
 async function settle<T>(promise: Promise<T>) { await vi.runAllTimersAsync(); return promise; }
+it.each(["server", "browser"] as const)("%s local issuer preserves cookies through refresh429 and recovers with verified identity", async mode => {
+  const { client, cookieWrites, dispatch, state } = await fixture(mode, true, true, true);
+  const started = Date.now(), failed = await settle(client.auth.getClaims());
+  expect(failed.error).toMatchObject({ name: "AuthRetryableFetchError", status: 503 });
+  expect(dispatch).toHaveBeenCalledOnce(); expect(cookieWrites).not.toHaveBeenCalled();
+  vi.setSystemTime(started + 91_000); state.status = 200;
+  expect((await client.auth.getClaims()).data?.claims.sub).toBe(subject);
+  expect(dispatch.mock.calls.map(([input]) => new URL(String(input)).pathname)).toEqual([
+    "/api/pc-supabase/auth/v1/token", "/api/pc-supabase/auth/v1/token", "/api/pc-supabase/auth/v1/.well-known/jwks.json",
+  ]);
+});
 
 it("reproduces installed SDK cookie removal for an expired refresh429 without the adapter", async () => {
   const { client, cookieWrites, dispatch } = await fixture("server", false);

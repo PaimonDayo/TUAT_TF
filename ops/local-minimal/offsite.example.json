@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "enabled": false,
+  "sourceId": "replace-with-new-native-source-uuid",
+  "generation": "replace-with-current-backup-owner-generation",
+  "databaseSystemIdentifier": "replace-with-verified-source-system-identifier",
+  "imageRoot": "/var/lib/tuat-local/images",
+  "archiveFile": "/var/lib/tuat-local/backup/replace-with-verified-archive.enc",
+  "producerReceiptFile": "/var/lib/tuat-local/backup/receipt.json",
+  "stateDirectory": "/var/lib/tuat-local/offsite-private",
+  "environmentFile": "/var/lib/tuat-local/backup-private/r2.env",
+  "bucket": "replace-with-existing-private-backup-bucket",
+  "maxArchiveBytes": 268435456,
+  "maxStorageBytes": 8000000000
+}

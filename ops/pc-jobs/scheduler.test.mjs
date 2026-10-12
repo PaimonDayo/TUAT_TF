@@ -9,8 +9,18 @@ import { executeLocalJob, validateConfig } from './run.mjs';
 const at = Date.parse('2026-09-25T15:05:00Z');
 const payload = job => job.id === 'sheets' ? { ok: true, failedMembers: [] } : job.id === 'cleanup' ? { deleted: 0 } : { ok: true, results: [] };
 const success = async job => ({ ok: true, status: 200, value: payload(job) });
+
+test('local Push is opt-in, journaled before dispatch and uncertainty is never replayed',async()=>{
+  const state=initialState(at),events=[];
+  assert.equal(dueJobs(state,at).some(job=>job.id==='push'),false);
+  await tick({state,now:at,localPushEnabled:true,ready:async()=>true,save:async value=>events.push(['save',value.jobs.push?.status]),execute:async job=>{
+    if(job.id!=='push')return success(job);events.push(['dispatch']);throw Error('Synthetic lost response');
+  }});
+  assert.equal(state.jobs.push.status,'uncertain');assert(events.findIndex(value=>value[0]==='save'&&value[1]==='running')<events.findIndex(value=>value[0]==='dispatch'));
+  assert.equal(dueJobs(state,at+60000,true).some(job=>job.id==='push'),false);
+});
 test('approved schedules keep JST midnight, five-minute program and daily cleanup', () => {
-  assert.deepEqual(JOBS.map(j=>j.id), ['sheets','program','cleanup']);
+  assert.deepEqual(JOBS.map(j=>j.id), ['sheets','program','cleanup','push']);
   assert.equal(new Date(slotAt(JOBS[0],at)).toISOString(),'2026-09-25T15:00:00.000Z');
   assert.equal(new Date(slotAt(JOBS[1],at)).toISOString(),'2026-09-25T15:05:00.000Z');
   assert.equal(new Date(slotAt(JOBS[2],at)).toISOString(),'2026-09-25T03:17:00.000Z');

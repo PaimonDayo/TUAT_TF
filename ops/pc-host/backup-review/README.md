@@ -1,5 +1,13 @@
 # 切替前の合成暗号化DB復元試験
 
+2026-10-12追加: `runReview({localAuth:true})` は専用DBの非公開network namespaceに
+実GoTrue/PostgRESTを起動し、新規UUID/refresh/本人保存/他人拒否/偽署名拒否を確認する。
+public/auth/storageに加えてpc_opsをdumpし、208件のcandidate migrationの復元後に
+local Pushの明示opt-in・本人端末・claim一回・mirror拒否・backup read-only・opt-outを
+rollback付きで検証する。ACLはNULL（既定権限）と同じ明示ACLをacldefaultで正規化して
+実効権限を比較する。実Google、実Push、実画像、実R2コピーの証明にはしない。
+Windowsアカウントの新設は保留し、Linux側の専用実行主体を切替前条件として整理する。
+
 ID確認前に同じGoogleシートが手動登録済みだった場合も、確認済みIDを記録して保留し、DB修復・予約UUIDでの直接INSERTのどちらでも別登録を作れないことを追加検証する。元の登録は再利用・更新・削除しない。
 
 `20261011190000_google_sheet_creation_attempts.sql` も含めて復元する。作成前の予約、Google IDだけ確認済み、整形とDB登録が完了済み、整形は確認済みでDB登録のみ未完了の4状態を実RPCで作り、暗号化したarchiveから戻す。5つの合成identityのうちA/C/D/Eだけに作成権限を与え、Bは不許可を維持する。復元後も本人と現在の権限だけが記録を読め、結果不明に期限や新UUIDで再作成許可を与えず、既知IDのDB登録だけを再開できることを検証する。整形の未確認は登録後も保持する。URLの別表記による重複登録を拒否し、完了後の正当な編集・削除を再登録で戻さない。Google呼出しは0回で、全SQL受入操作をrollbackして全table digestの一致を再確認する。

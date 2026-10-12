@@ -10,7 +10,8 @@ DECLARE denied boolean:=false; BEGIN
 END $$;
 DO $$ BEGIN
  IF current_database()<>'tuat_rls_review'
-    OR (SELECT count(*) FROM auth.users)<>5 OR (SELECT count(*) FROM public.profiles)<>5
+    OR (SELECT count(*) FROM auth.users)<>(CASE WHEN current_setting('tuat.review.native_auth',true)='true' THEN 6 ELSE 5 END)
+    OR (SELECT count(*) FROM public.profiles)<>(CASE WHEN current_setting('tuat.review.native_auth',true)='true' THEN 6 ELSE 5 END)
     OR EXISTS(SELECT 1 FROM auth.users WHERE email !~ '@example\.invalid$')
     OR current_setting('cron.launch_active_jobs')<>'off'
     OR NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='authenticator' AND 'pgrst.db_pre_request=public.check_login_access'=ANY(rolconfig))

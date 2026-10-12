@@ -1,8 +1,10 @@
 import { configuredAppPublicOrigin } from "./app-public-origin";
 import { pcAppCloudAuthConfig, syntheticLoopbackOrigin } from "./pc-app-transport";
 import type { CloudAuth } from "./supabase/cloud-auth";
+import { getPcLocalRuntime, type PcLocalRuntime } from "./pc-local-runtime";
 
-export type PcAppRuntime = { publicOrigin: string; internalUrl: string; cloud: CloudAuth; synthetic: boolean };
+export type PcAppRuntime = { publicOrigin: string; internalUrl: string; synthetic: boolean } &
+  ({ cloud: CloudAuth; local?: undefined } | { cloud: null; local: PcLocalRuntime });
 
 /** Explicit server deployment only. Existing production routing stays unchanged when disabled. */
 export function getPcAppRuntime(): PcAppRuntime | undefined {
@@ -22,6 +24,14 @@ export function getPcAppRuntime(): PcAppRuntime | undefined {
   const synthetic = process.env.PC_APP_SYNTHETIC_REVIEW === "true";
   if (synthetic !== (process.env.NEXT_PUBLIC_PC_APP_SYNTHETIC_REVIEW === "true")) {
     throw new Error("Synthetic PC app flags must match");
+  }
+  const local = getPcLocalRuntime();
+  if (local) {
+    if (synthetic && (!/(?:\.example\.test|\.localhost)$/.test(new URL(publicOrigin).hostname) || process.env.SHEET_SYNC_ENABLED !== "false" ||
+        process.env.GOOGLE_DRIVE_CLIENT_SECRET || process.env.SHEET_SYNC_GAS_URL)) {
+      throw new Error("Synthetic local runtime requires disabled external providers");
+    }
+    return { publicOrigin, internalUrl: local.restUrl, cloud: null, local, synthetic };
   }
   const internalUrl = process.env.PC_BACKEND_INTERNAL_URL;
   const cloud = pcAppCloudAuthConfig();

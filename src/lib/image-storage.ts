@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { isSafeAvatarStoragePath } from "./avatar-image";
 import { isSafeTweetImagePath } from "./tweet-image";
 import { assertPcAppWriteAllowed } from "./pc-backup-status";
+import { LocalImageStorageError, localImageStorageEnabled, localImageInventory, signedLocalImageUrl, uploadLocalImage, removeLocalImages } from "./local-image-storage";
 
 export type ImageBucket = "avatars" | "tweet-images" | "note-images";
 let cached: { signature: string; bucket: string; client: S3Client } | undefined;
@@ -98,6 +99,7 @@ function isMissing(error: unknown) {
 
 /** Admin-only inventory. Bound duration and page count so monitoring stays cheap. */
 export async function getR2Inventory() {
+  if (localImageStorageEnabled()) return localImageInventory();
   const { client, bucket } = r2();
   const signal = AbortSignal.timeout(8000);
   let bytes = 0;
@@ -119,6 +121,10 @@ export async function getR2Inventory() {
 /** Call only after authenticating and checking the resource's existing RLS. */
 export async function signedImageUrl(supabase: SupabaseClient, bucket: ImageBucket, path: string, ttl: number) {
   const key = imageObjectKey(bucket, path);
+  if (localImageStorageEnabled()) {
+    try { return await signedLocalImageUrl(key, ttl); }
+    catch (error) { if (error instanceof LocalImageStorageError && error.code === "MISSING") throw new ImageNotFoundError(); throw error; }
+  }
   if (bucket === "note-images" && process.env.R2_READ_ENABLED !== "true") throw new Error("R2 reads are unavailable");
   if (process.env.R2_READ_ENABLED === "true") {
     const { client, bucket: r2Bucket } = r2();
@@ -161,6 +167,7 @@ export async function uploadImage(supabase: SupabaseClient, bucket: ImageBucket,
   await assertPcAppWriteAllowed();
   if (process.env.IMAGE_STORAGE_READ_ONLY === "true") throw new Error("画像は読み取り専用です");
   const key = imageObjectKey(bucket, path);
+  if (localImageStorageEnabled()) return uploadLocalImage(key, bytes);
   if (bucket === "note-images" && process.env.R2_WRITE_ENABLED !== "true") throw new Error("R2 writes are unavailable");
   if (process.env.R2_WRITE_ENABLED === "true") {
     // New R2-only files must remain readable immediately after saving.
@@ -186,6 +193,7 @@ export async function removeImages(supabase: SupabaseClient, bucket: ImageBucket
   if (!keys.length) return;
   await assertPcAppWriteAllowed();
   if (process.env.IMAGE_STORAGE_READ_ONLY === "true") throw new Error("画像は読み取り専用です");
+  if (localImageStorageEnabled()) return removeLocalImages(keys);
   if (bucket === "note-images" || process.env.R2_READ_ENABLED === "true" || process.env.R2_WRITE_ENABLED === "true") {
     const { client, bucket: r2Bucket } = r2(true);
     for (let offset = 0; offset < keys.length; offset += 1000) {

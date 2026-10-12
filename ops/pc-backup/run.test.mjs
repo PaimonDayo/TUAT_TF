@@ -60,6 +60,17 @@ test('first same-generation pair is mandatory; old status never unlocks startup'
   assert.equal(f.status().backup,null);assert.equal(f.ready(life.identity),false);
   complete(dump);await flush();assert.equal(f.ready(life.identity),true);assert.equal(f.calls.upload,1);assert.equal((await life.stop()).drained,true);
 });
+test('local snapshot mode consumes one verified combined off-PC archive without another dump/upload pipeline',async()=>{
+  const f=fixture();const imageRoot=resolve('synthetic-private-images');
+  const localConfig={...config,localSnapshotReceiptFile:resolve('synthetic-offsite/local-snapshot.json'),localImageRoot:imageRoot};
+  let snapshot={format:'tuat-local-db-images-v1',sourceId:instanceId,generation,databaseSystemIdentifier:config.target.databaseSystemIdentifier,imageRoot,
+    archiveKey:`ops/pc-backend/${instanceId}/backups/2026-10-11T00-30-00-000Z.local.tar.enc`,archiveSha256:'a'.repeat(64),archiveBytes:128,
+    restoreVerifiedAt:'2026-10-11T00:30:00.000Z',offsiteVerifiedAt:'2026-10-11T00:30:00.000Z',independentRecoveryCopyChecked:true};
+  const life=await startBackupSupervisor({...f.options,config:localConfig,readSnapshot:()=>snapshot});await flush();
+  assert.equal(f.ready(life.identity),true);assert.equal(f.calls.dump,0);assert.equal(f.calls.upload,0);assert.equal(f.calls.list,0);assert.equal(f.calls.recovery,0);
+  snapshot={...snapshot,generation:'33333333-3333-4333-8333-333333333333'};await f.pulse();assert.equal(f.ready(life.identity),false);assert.equal(f.status().backup,null);
+  assert.equal((await life.stop()).drained,true);
+});
 test('existing crypto format and paired recovery authenticated after local encrypted writes',async()=>{
   const f=fixture();const life=await startBackupSupervisor(f.options);await flush();
   const files=[...f.files.entries()].filter(([,value])=>Buffer.isBuffer(value));assert.equal(files.length,2);

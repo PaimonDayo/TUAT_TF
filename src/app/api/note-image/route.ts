@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getAppPublicOrigin } from "@/lib/app-public-origin";
 import sharp from "sharp";
 import { createClient } from "@/lib/supabase/server";
 import { ImageNotFoundError,ImageUploadError,logImageFailure,readImageUpload,signedImageUrl,uploadImage } from "@/lib/image-storage";
@@ -33,7 +34,7 @@ export async function GET(request: Request) {
       );
     try {
       const url=await signedImageUrl(sb,"note-images",data.path,300);
-      const response=NextResponse.redirect(url,307);
+      const response=NextResponse.redirect(new URL(url,getAppPublicOrigin(request.url)),307);
       response.headers.set("Cache-Control","private, max-age=240");
       response.headers.set("Vary","Cookie");
       return response;

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getAppPublicOrigin } from "@/lib/app-public-origin";
 import { createClient } from "@/lib/supabase/server";
 import { isSafeTweetImagePath,TWEET_IMAGE_BUCKET } from "@/lib/tweet-image";
 import { ImageNotFoundError,logImageFailure,signedImageUrl } from "@/lib/image-storage";
@@ -24,7 +25,7 @@ export async function GET(request: Request) {
       if(error instanceof ImageNotFoundError) return NextResponse.json({ error: "Image not found" },{ status: 404,headers: { "Cache-Control": "private, no-store" } });
       throw error;
     }
-    const response=NextResponse.redirect(url,307);
+    const response=NextResponse.redirect(new URL(url,getAppPublicOrigin(request.url)),307);
     response.headers.set("Cache-Control",`private, max-age=${Math.min(240,Math.max(0,ttl-30))}`);
     response.headers.set("Vary","Cookie");
     return response;

@@ -1,11 +1,13 @@
 /** Per-client, confirmed refresh-rate-limit protection. Never shares successful POSTs. */
 export function createCloudAuthFetch(fetcher: typeof fetch, cloudUrl: string): typeof fetch {
-  const origin = new URL(cloudUrl).origin;
+  const base = new URL(cloudUrl);
+  const tokenPath = `${base.pathname.replace(/\/$/, "")}/auth/v1/token`;
+  const origin = base.origin;
   let failure: { key: string; until: number; response: Response } | undefined;
   return async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
     const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
-    if (url.origin !== origin || url.pathname !== "/auth/v1/token" || url.searchParams.get("grant_type") !== "refresh_token" || method !== "POST") {
+    if (url.origin !== origin || url.pathname !== tokenPath || url.searchParams.get("grant_type") !== "refresh_token" || method !== "POST") {
       return fetcher(input, init);
     }
     const body = typeof init?.body === "string" ? init.body : input instanceof Request ? await input.clone().text() : "";

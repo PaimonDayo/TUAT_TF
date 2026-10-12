@@ -6,6 +6,7 @@ import { resolve, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { privateDirectory } from '../release.mjs';
 import { encryptBackup, decryptBackup, verifyRecovery } from '../../laptop/backup-backend.mjs';
+import { verifyLocalAuth } from './local-auth-http.mjs';
 
 export const PINS = Object.freeze({
   postgres: ['supabase/postgres:17.6.1.136','sha256:f371b5f3f2ac0a05703f33d6e6134515fb2498cab708fb948a0aeb7481467c00'],
@@ -61,47 +62,48 @@ export async function waitForFreshDatabase(probe,{clock=Date.now,sleep=ms=>new P
 }
 const fingerprintSql=`SELECT json_build_object('tables',COALESCE(json_agg(row_to_json(t) ORDER BY t.name),'[]')) FROM (
  SELECT n.nspname||'.'||c.relname name,c.relrowsecurity rls,c.relforcerowsecurity force_rls,
-  pg_get_userbyid(c.relowner) owner,(SELECT string_agg(a::text,',' ORDER BY a::text COLLATE "C") FROM unnest(c.relacl) a) acl
+  pg_get_userbyid(c.relowner) owner,(SELECT string_agg(a::text,',' ORDER BY a::text COLLATE "C") FROM unnest(COALESCE(c.relacl,acldefault('r',c.relowner))) a) acl
  FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
- WHERE n.nspname IN ('public','auth','storage') AND c.relkind IN ('r','p')) t;
-SELECT json_build_object('policies',COALESCE(json_agg(row_to_json(p) ORDER BY p.schemaname,p.tablename,p.policyname),'[]')) FROM pg_policies p WHERE schemaname IN ('public','auth','storage');
+ WHERE n.nspname IN ('public','auth','storage','pc_ops') AND c.relkind IN ('r','p')) t;
+SELECT json_build_object('policies',COALESCE(json_agg(row_to_json(p) ORDER BY p.schemaname,p.tablename,p.policyname),'[]')) FROM pg_policies p WHERE schemaname IN ('public','auth','storage','pc_ops');
 SELECT json_build_object('functions',COALESCE(json_agg(row_to_json(f) ORDER BY f.name,f.arguments),'[]')) FROM (
  SELECT n.nspname||'.'||p.proname name,pg_get_function_identity_arguments(p.oid) arguments,
   pg_get_userbyid(p.proowner) owner,p.prosecdef security_definer,p.proconfig config,
-  (SELECT string_agg(a::text,',' ORDER BY a::text COLLATE "C") FROM unnest(p.proacl) a) acl,pg_get_functiondef(p.oid) definition
- FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN ('public','auth','storage') AND p.prokind IN ('f','p')) f;
+  (SELECT string_agg(a::text,',' ORDER BY a::text COLLATE "C") FROM unnest(COALESCE(p.proacl,acldefault('f',p.proowner))) a) acl,pg_get_functiondef(p.oid) definition
+ FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN ('public','auth','storage','pc_ops') AND p.prokind IN ('f','p')) f;
 SELECT json_build_object('triggers',COALESCE(json_agg(row_to_json(t) ORDER BY t.name),'[]')) FROM (
  SELECT n.nspname||'.'||c.relname||'.'||t.tgname name,pg_get_triggerdef(t.oid) definition,t.tgenabled enabled
  FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
- WHERE n.nspname IN ('public','auth','storage') AND NOT t.tgisinternal) t;
+ WHERE n.nspname IN ('public','auth','storage','pc_ops') AND NOT t.tgisinternal) t;
 SELECT json_build_object('schemas',COALESCE(json_agg(row_to_json(s) ORDER BY s.name),'[]')) FROM (
  SELECT n.nspname name,pg_get_userbyid(n.nspowner) owner,
- (SELECT string_agg(a::text,',' ORDER BY a::text COLLATE "C") FROM unnest(n.nspacl) a) acl
- FROM pg_namespace n WHERE n.nspname IN ('public','auth','storage')) s;
+ (SELECT string_agg(a::text,',' ORDER BY a::text COLLATE "C") FROM unnest(COALESCE(n.nspacl,acldefault('n',n.nspowner))) a) acl
+ FROM pg_namespace n WHERE n.nspname IN ('public','auth','storage','pc_ops')) s;
 SELECT json_build_object('columns',COALESCE(json_agg(row_to_json(a) ORDER BY a.name),'[]')) FROM (
  SELECT n.nspname||'.'||c.relname||'.'||a.attname name,format_type(a.atttypid,a.atttypmod) type,
  a.attnotnull not_null,a.attidentity identity,a.attgenerated generated,pg_get_expr(d.adbin,d.adrelid) default_expression,
  (SELECT string_agg(acl::text,',' ORDER BY acl::text COLLATE "C") FROM unnest(a.attacl) acl) acl
  FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid JOIN pg_namespace n ON n.oid=c.relnamespace
  LEFT JOIN pg_attrdef d ON d.adrelid=c.oid AND d.adnum=a.attnum
- WHERE n.nspname IN ('public','auth','storage') AND c.relkind IN ('r','p') AND a.attnum>0 AND NOT a.attisdropped) a;
+ WHERE n.nspname IN ('public','auth','storage','pc_ops') AND c.relkind IN ('r','p') AND a.attnum>0 AND NOT a.attisdropped) a;
 SELECT json_build_object('default_acls',COALESCE(json_agg(row_to_json(d) ORDER BY d.owner,d.schema,d.type),'[]')) FROM (
  SELECT pg_get_userbyid(d.defaclrole) owner,COALESCE(n.nspname,'') schema,d.defaclobjtype type,
  (SELECT string_agg(a::text,',' ORDER BY a::text COLLATE "C") FROM unnest(d.defaclacl) a) acl
  FROM pg_default_acl d LEFT JOIN pg_namespace n ON n.oid=d.defaclnamespace
- WHERE d.defaclnamespace=0 OR n.nspname IN ('public','auth','storage')) d;
+ WHERE d.defaclnamespace=0 OR n.nspname IN ('public','auth','storage','pc_ops')) d;
 SELECT json_build_object('constraints',COALESCE(json_agg(row_to_json(c) ORDER BY c.name),'[]')) FROM (
  SELECT n.nspname||'.'||r.relname||'.'||c.conname name,pg_get_constraintdef(c.oid) definition,c.convalidated validated
  FROM pg_constraint c JOIN pg_class r ON r.oid=c.conrelid JOIN pg_namespace n ON n.oid=r.relnamespace
- WHERE n.nspname IN ('public','auth','storage')) c;`;
+ WHERE n.nspname IN ('public','auth','storage','pc_ops')) c;`;
 const rowsSql=`CREATE TEMP TABLE backup_rows(name text,rows bigint,digest text);
 DO $$ DECLARE t record; BEGIN FOR t IN
  SELECT n.nspname,c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
- WHERE n.nspname IN ('public','auth','storage') AND c.relkind='r' ORDER BY n.nspname,c.relname
+ WHERE n.nspname IN ('public','auth','storage','pc_ops') AND c.relkind='r' ORDER BY n.nspname,c.relname
  LOOP EXECUTE format('INSERT INTO backup_rows SELECT %L,count(*),md5(coalesce(string_agg(to_jsonb(r)::text,E''\\n'' ORDER BY to_jsonb(r)::text COLLATE "C"),'''')) FROM %I.%I r',t.nspname||'.'||t.relname,t.nspname,t.relname); END LOOP; END $$;
 SELECT json_agg(row_to_json(r) ORDER BY name) FROM backup_rows r;`;
 
-export async function runReview() {
+export async function runReview({localAuth=false}={}) {
+  if(typeof localAuth!=='boolean') throw Error('Explicit local Auth review selection required');
   assertNoExternalCredentials(process.env);
   if (process.platform!=='win32') throw Error('This owned cached WSL fixture requires Windows');
   const here=dirname(realpathSync(new URL(import.meta.url))), root=resolve(here,'../../..');
@@ -112,7 +114,7 @@ export async function runReview() {
   const evidencePath=reviewEvidencePath(here,generation);
   const privateBase=resolve(here,'.private'); privateDirectory(privateBase);
   const state=resolve(privateBase,generation); privateDirectory(state);
-  const proofFiles=['run.mjs','run.test.mjs','fixture.sql','assert-restored.sql','README.md'];
+  const proofFiles=['run.mjs','run.test.mjs','fixture.sql','assert-restored.sql','README.md','local-auth-http.mjs','../../local-minimal/verify-local-web-push.sql'];
   const sourceProof=Object.fromEntries(proofFiles.map(name=>[name,hash(readFileSync(resolve(here,name)))]));
   const report={version:2,owner:OWNER,generation,syntheticOnly:true,productionAccess:false,providerCalls:0,r2Requests:0,
     purpose:'current-schema-encrypted-restore-with-sheet-and-creation-receipts',evidencePath,sourceProof,legacyEvidenceSha256:{before:legacyEvidenceBefore},
@@ -187,10 +189,20 @@ export async function runReview() {
     if(report.migrations.some(migration=>!applied.includes(`MIGRATED:${migration.name}`))) throw Error('Full migration completion evidence missing');
     report.stage='synthetic-fixture';
     sql(names.source,readFileSync(resolve(here,'fixture.sql'),'utf8'));
+    if(localAuth) {
+      report.stage='native-local-auth-http';
+      const start=(name,args)=>{created.ephemeral.delete(name);created.containers.push(name);docker(['run','-d','--name',name,...labels,...args]);};
+      report.tests.localAuth=await verifyLocalAuth({docker,sql,names,start,pins:PINS});
+      // These exact new API writers must be stopped before dump/fingerprint capture.
+      for(const name of [names.auth,names.storage]) {
+        docker(['stop','--time','5',name]);
+        if(text(['inspect','--format','{{.State.Running}}',name])!=='false') throw Error('Owned local API writer not stopped');
+      }
+    }
     sql(names.source,"CREATE EXTENSION IF NOT EXISTS pg_cron; SELECT cron.schedule('codex-backup-synthetic','0 0 * * *','SELECT 1'); UPDATE cron.job SET active=false; SELECT vault.create_secret('synthetic-backup-vault-only','codex-backup-test','synthetic fixture');");
     const sourceFingerprint=sql(names.source,fingerprintSql), sourceRows=JSON.parse(sql(names.source,rowsSql));
     const instance=randomUUID(), backupKey=randomBytes(32).toString('hex');
-    const dump=docker(['exec',names.source,'pg_dump','-U','supabase_admin','-d',DB,'--format=custom','--schema=public','--schema=auth','--schema=storage']);
+    const dump=docker(['exec',names.source,'pg_dump','-U','supabase_admin','-d',DB,'--format=custom','--schema=public','--schema=auth','--schema=storage','--schema=pc_ops']);
     const recovery={version:1,instanceId:instance,capturedAt:new Date().toISOString(),databaseDumpSha256:hash(dump),
       vault:JSON.parse(sql(names.source,"SELECT coalesce(json_agg(json_build_object('name',name,'description',description,'secret',decrypted_secret) ORDER BY name),'[]') FROM vault.decrypted_secrets")),
       pushEnv:'SYNTHETIC_BACKUP_PUSH=local-fixture-only\n',cron:{installed:true,jobs:JSON.parse(sql(names.source,'SELECT coalesce(json_agg(to_jsonb(j) ORDER BY jobid),\'[]\') FROM cron.job j'))}};
@@ -268,12 +280,19 @@ export async function runReview() {
     if(restored.recovery.pushEnv!==recovery.pushEnv) throw Error('Synthetic Push configuration mismatch');
     report.tests.vaultRecreated=true; report.tests.pushEnvPreserved=true; report.tests.cronRestoredInactive=true;
     report.stage='real-restored-permission-operations';
-    const acceptance=sql(names.restore,readFileSync(resolve(here,'assert-restored.sql'),'utf8'));
+    const acceptance=sql(names.restore,(localAuth?"SELECT set_config('tuat.review.native_auth','true',false);\n":"")+readFileSync(resolve(here,'assert-restored.sql'),'utf8'));
     if(!acceptance.includes('PASS:restored-UUID-RLS-allowlist-image-barrier')
       || !acceptance.includes('PASS:restored-sheet-receipts-ACL-unknown-dispatch0-marker-slot')
       || !acceptance.includes('PASS:restored-creation-receipts-4states-ACL-unknown-dispatch0-repair-no-revive')) throw Error('Restored acceptance SQL did not finish');
     if(JSON.stringify(JSON.parse(sql(names.restore,rowsSql)))!==JSON.stringify(sourceRows)) throw Error('Restored acceptance transaction did not roll back');
     report.tests.permittedSaveDeniedSessionRevocationImageBarrier=true; report.tests.assertionsRolledBack=true;
+    if(localAuth) {
+      report.stage='restored-local-push-and-write-protection';
+      const pushAcceptance=sql(names.restore,"SELECT set_config('tuat.review.native_auth','true',false);\n"+readFileSync(resolve(here,'../../local-minimal/verify-local-web-push.sql'),'utf8'));
+      if(!pushAcceptance.includes('local Push: opt-in, owner scope, claim once, mirror, backup read-only, restore: PASS')) throw Error('Restored local Push acceptance did not finish');
+      if(sql(names.restore,fingerprintSql)!==targetFingerprint || JSON.stringify(JSON.parse(sql(names.restore,rowsSql)))!==JSON.stringify(sourceRows)) throw Error('Local Push acceptance did not roll back');
+      report.tests.localPushOptInOwnerNoReplayAndBackupReadOnly=true;
+    }
     report.tests.sheetReceipts={restored:5,reservedUnknown:2,confirmedPartial:1,completedApplied:1,completedSuperseded:1,
       realRoleAclRls:true,unknownHeld:true,restoredBeginDispatches:0,markerVersionRetained:true,newerEditRetained:true,sameDayCrossProfileSlotHeld:true};
     report.tests.creationReceipts={restored:4,reservedUnknown:1,resourceKnownSetupUnknown:1,registered:1,resourceKnownSetupConfirmed:1,
@@ -293,7 +312,16 @@ export async function runReview() {
           || (name===names.auth ? entry.Image!==PINS.auth[1] || entry.HostConfig.NetworkMode!==names.network || Object.keys(entry.NetworkSettings.Networks).some(network=>network!==names.network) : entry.Image!==PINS.storage[1] || entry.HostConfig.NetworkMode!=='none')) throw Error('Owned transient isolation mismatch');
         docker(['rm','-f',entry.Id]);
       }
-      for(const name of [...created.containers].reverse()) if(text(['container','ls','-a','--filter',`name=^/${name}$`,'--format','{{.ID}}'])) { const entry=containerGuard(name,false); docker(['rm','-f',entry.Id]); }
+      for(const name of [...created.containers].reverse()) if(text(['container','ls','-a','--filter',`name=^/${name}$`,'--format','{{.ID}}'])) {
+        let entry;
+        if(localAuth && [names.auth,names.storage].includes(name)) {
+          entry=JSON.parse(text(['inspect',name]))[0];assertOwned(entry.Config.Labels,name,generation);
+          const sourceId=text(['inspect','--format','{{.Id}}',names.source]);
+          const expectedImage=name===names.auth?PINS.auth[1]:'sha256:54000f24847d01a2c2302e0041cf0618b875c57fb48507d743cfa9aaa50bf43c';
+          if(entry.Name!==`/${name}` || !/^[a-f0-9]{64}$/.test(entry.Id) || entry.Image!==expectedImage || entry.HostConfig.NetworkMode!==`container:${sourceId}` || Object.keys(entry.HostConfig.PortBindings??{}).length) throw Error('Owned local API cleanup mismatch');
+        } else entry=containerGuard(name,false);
+        docker(['rm','-f',entry.Id]);
+      }
       for(const name of [...created.volumes].reverse()) {
         if(!text(['volume','ls','--filter',`name=^${name}$`,'--format','{{.Name}}'])) continue;
         const entry=JSON.parse(text(['volume','inspect',name]))[0]; assertOwned(entry.Labels,name,generation,'volume');

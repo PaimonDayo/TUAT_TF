@@ -2,6 +2,7 @@ const authMethods: Record<string, string[]> = {
   "/auth/v1/authorize": ["GET"], "/auth/v1/callback": ["GET", "POST"],
   "/auth/v1/token": ["POST"], "/auth/v1/user": ["GET"],
   "/auth/v1/logout": ["POST"], "/auth/v1/settings": ["GET"],
+  "/auth/v1/.well-known/jwks.json": ["GET"],
 };
 
 export function allowedPcBrowserApi(path: string, method: string, search: URLSearchParams) {

@@ -15,6 +15,12 @@ export const CLOUD_AUTH_TEST_COOKIE = "tuat-cloud-auth-test";
  * NEXT_PUBLIC_CLOUD_AUTH_MODE が "test" のときは、目印のcookieを持つブラウザ（testOptIn）だけ有効。
  */
 export function cloudAuthConfig(testOptIn = false): CloudAuth | null {
+  if (process.env.NEXT_PUBLIC_PC_LOCAL_RUNTIME === "true") {
+    if (process.env.NEXT_PUBLIC_CLOUD_AUTH_URL || process.env.NEXT_PUBLIC_CLOUD_AUTH_ANON_KEY || process.env.NEXT_PUBLIC_CLOUD_AUTH_MODE) {
+      throw new Error("Local Auth may not mix cloud issuer settings");
+    }
+    return null;
+  }
   const url = process.env.NEXT_PUBLIC_CLOUD_AUTH_URL;
   const anonKey = process.env.NEXT_PUBLIC_CLOUD_AUTH_ANON_KEY;
   if (process.env.NEXT_PUBLIC_PC_BACKEND !== "true" || !url || !anonKey) return null;

@@ -1,0 +1,555 @@
+"""Behaviour/fault tests; no service or database commands execute."""
+import importlib.util
+import copy
+import io
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tarfile
+import tempfile
+import unittest
+from unittest.mock import patch
+
+spec = importlib.util.spec_from_file_location('backup', Path(__file__).with_name('backup.py'))
+backup = importlib.util.module_from_spec(spec); spec.loader.exec_module(backup)
+
+
+class FixtureCommands:
+    def __init__(self, config):
+        self.config, self.events, self.states = config, [], {}
+        self.fail_pause, self.fail_resume, self.extra = None, None, None
+        for role, name in config['containers'].items():
+            self.states[name] = {'Id': name, 'RestartCount': 0,
+                'State': {'Running': True, 'Paused': role == 'auth', 'Restarting': False,
+                          'Dead': False, 'Status': 'running', 'StartedAt': 'fixed'},
+                'Config': {'Image': backup.DB_IMAGE if role == 'db' else 'node:24.19.0-bookworm-slim',
+                           'Labels': {backup.SOURCE_LABEL: config['sourceId'], backup.ROLE_LABEL: role}},
+                'HostConfig': {'Privileged': False, 'NetworkMode': 'none'}, 'Mounts': []}
+
+    def inspect(self, name):
+        return self.states[name]
+
+    def docker(self, *args, **_kwargs):
+        assert args == ('ps', '-aq')
+        return ' '.join(self.states).encode()
+
+    def transition(self, kind, name, freeze):
+        assert kind == 'container'
+        self.events.append((name, freeze))
+        self.states[name]['State']['Paused'] = freeze
+        if (freeze and self.fail_pause == name) or (not freeze and self.fail_resume == name):
+            raise backup.BackupFailure('transition timeout after it happened')
+
+    def verify_jobs_lock(self,config,jobs_info):
+        backup.LocalCommands.verify_jobs_lock(self,config,jobs_info)
+
+    def run(self, args, **_kwargs):
+        assert all(not info['State']['Paused'] for name, info in self.states.items()
+                   if name != self.config['containers']['auth'])
+        self.events.append(('verification', args[2]))
+        if args[2] == 'encrypt':
+            Path(args[4]).write_bytes(b'fixture encrypted archive')
+        else:
+            Path(args[4]).write_bytes(Path(args[3]).read_bytes())
+        return b''
+
+
+class HostFixtureCommands(FixtureCommands):
+    """Exercise the actual surface-systemd inventory/freeze path with fixed observations."""
+    def __init__(self, config):
+        super().__init__(config)
+        self.units = {}
+        for index, name in enumerate(backup.UNITS):
+            active = index < 2
+            self.units[name] = {'LoadState': 'loaded', 'ActiveState': 'active' if active else 'inactive',
+                'SubState': 'running' if active else 'dead', 'FreezerState': 'running',
+                'MainPID': str(101 + index) if active else '0', 'ControlPID': '0',
+                'ControlGroup': '/system.slice/' + name if active else '',
+                'InvocationID': str(index + 1).zfill(32) if active else '',
+                'ExecMainStartTimestampMonotonic': '100000000' if active else '0'}
+
+    def unit(self, name):
+        return self.units[name].copy()
+
+    def run(self, args, **kwargs):
+        if args == ['systemctl', 'list-units', '--all', '--plain', '--no-legend', 'tuat-*.service']:
+            return '\n'.join(' '.join([name, value['LoadState'], value['ActiveState'], value['SubState'], 'fixture'])
+                for name, value in self.units.items() if value['LoadState'] != 'not-found').encode()
+        return super().run(args, **kwargs)
+
+    def transition(self, kind, name, freeze):
+        if kind == 'unit':
+            self.events.append((name, freeze))
+            self.units[name]['FreezerState'] = 'frozen' if freeze else 'running'
+            if (freeze and self.fail_pause == name) or (not freeze and self.fail_resume == name):
+                raise backup.BackupFailure('transition timeout after it happened')
+        else:
+            super().transition(kind, name, freeze)
+
+
+class BackupBehaviour(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name); self.root.chmod(0o700)
+        self.config = {'version': 1, 'sourceId': 'unit-synthetic', 'writerMode': 'docker-fixture',
+            'containers': {role: 'fixture-' + role for role in ('db', 'app', 'auth', 'rest', 'jobs')},
+            'database': 'fixture', 'dbImage': backup.DB_IMAGE, 'mirrorDisabled': True}
+        for field in ('imageRoot', 'jobsStateRoot', 'backupRoot', 'stageRoot'):
+            path = self.root / field; path.mkdir(mode=0o700); self.config[field] = str(path)
+        for field in ('runtimeKey', 'recoveryKeyCopy'):
+            path = self.root / field; path.write_bytes(b'k' * 32); path.chmod(0o600); self.config[field] = str(path)
+        self.config['receiptFile'] = str(Path(self.config['backupRoot']) / 'receipt.json')
+        self.commands = FixtureCommands(self.config)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def window(self):
+        return backup.CaptureWindow(self.config, self.commands, Path(self.config['backupRoot']) / 'capture-state.json')
+
+    def host(self):
+        self.config['writerMode'] = 'surface-systemd'
+        self.config['containers'] = {role: self.config['containers'][role] for role in ('db', 'auth', 'rest')}
+        self.commands = HostFixtureCommands(self.config)
+
+    def test_host_preserves_exact_inactive_trial_units_and_original_freeze_order(self):
+        self.host()
+        stopped = self.commands.units[backup.UNITS[2]]
+        for name in backup.PRESERVED_TRIAL_UNITS:
+            self.commands.units[name] = stopped.copy()
+        before = {name: self.commands.unit(name) for name in backup.PRESERVED_TRIAL_UNITS}
+        window = self.window(); window.enter(); window.verify_frozen(); window.restore()
+        self.assertEqual(self.commands.events, [(backup.UNITS[0], True), (backup.UNITS[1], True),
+            ('fixture-rest', True), ('fixture-rest', False), (backup.UNITS[1], False), (backup.UNITS[0], False)])
+        self.assertTrue(self.commands.states['fixture-auth']['State']['Paused'])
+        self.assertEqual(before, {name: self.commands.unit(name) for name in backup.PRESERVED_TRIAL_UNITS})
+
+    def test_host_missing_mirror_requires_explicit_not_found_and_no_process(self):
+        self.host()
+        self.commands.units[backup.UNITS[2]]['LoadState'] = 'not-found'
+        window = self.window(); window.enter(); window.verify_frozen(); window.restore()
+        self.assertNotIn((backup.UNITS[2], True), self.commands.events)
+        for key, value in (('LoadState', 'error'), ('LoadState', 'masked'), ('ActiveState', 'active'),
+                           ('ActiveState', 'failed'), ('ActiveState', 'activating'), ('ActiveState', 'unknown'),
+                           ('SubState', 'failed'), ('FreezerState', 'frozen'), ('MainPID', '99'),
+                           ('ControlPID', '98'), ('ControlGroup', '/system.slice/unproven')):
+            with self.subTest(key=key, value=value):
+                baseline = self.commands.units[backup.UNITS[2]].copy()
+                self.commands.units[backup.UNITS[2]][key] = value
+                self.commands.events.clear()
+                with self.assertRaises(backup.BackupFailure): self.window().enter()
+                self.assertEqual(self.commands.events, [])
+                self.commands.units[backup.UNITS[2]] = baseline
+
+    def test_host_trial_unknown_active_failed_pid_and_cgroup_fail_before_freeze(self):
+        self.host()
+        name = backup.PRESERVED_TRIAL_UNITS[0]
+        baseline = self.commands.units[backup.UNITS[2]].copy()
+        for key, value in (('LoadState', 'masked'), ('ActiveState', 'active'), ('ActiveState', 'failed'),
+                           ('ActiveState', 'activating'), ('ActiveState', 'unknown'), ('SubState', 'running'),
+                           ('MainPID', '99'), ('ControlPID', '98'), ('ControlGroup', '/system.slice/unproven')):
+            with self.subTest(key=key, value=value):
+                self.commands.units[name] = {**baseline, key: value}
+                with self.assertRaises(backup.BackupFailure): self.window().enter()
+                self.assertEqual(self.commands.events, [])
+        del self.commands.units[name]
+        self.commands.units['tuat-unreviewed.service'] = baseline
+        with self.assertRaisesRegex(backup.BackupFailure, 'Unaccounted'): self.window().enter()
+        self.assertEqual(self.commands.events, [])
+
+    def test_host_preserved_unit_activation_and_mirror_installation_during_capture_refused(self):
+        self.host()
+        name = backup.PRESERVED_TRIAL_UNITS[0]
+        self.commands.units[name] = self.commands.units[backup.UNITS[2]].copy()
+        self.commands.units[backup.UNITS[2]]['LoadState'] = 'not-found'
+        window = self.window(); window.enter()
+        self.commands.units[name]['MainPID'] = '99'
+        with self.assertRaisesRegex(backup.BackupFailure, 'inactive'): window.verify_frozen()
+        self.commands.units[name]['MainPID'] = '0'
+        self.commands.units[backup.UNITS[2]]['LoadState'] = 'loaded'
+        with self.assertRaisesRegex(backup.BackupFailure, 'inventory changed'): window.verify_frozen()
+        with self.assertRaisesRegex(backup.BackupFailure, 'not restored'): window.restore()
+        self.assertEqual(json.loads(window.checkpoint.read_text())['phase'], 'resume-unverified')
+        self.assertFalse(self.commands.states['fixture-rest']['State']['Paused'])
+
+    def test_host_inventory_change_during_resume_holds_without_operating_old_units(self):
+        self.host()
+        window = self.window(); window.enter()
+        name = backup.PRESERVED_TRIAL_UNITS[-1]
+        original = self.commands.transition
+        def changed_transition(kind, unit_name, freeze):
+            original(kind, unit_name, freeze)
+            if not freeze:
+                self.commands.units[name] = self.commands.units[backup.UNITS[0]].copy()
+        self.commands.transition = changed_transition
+        with self.assertRaisesRegex(backup.BackupFailure, 'not restored'): window.restore()
+        self.assertEqual(json.loads(window.checkpoint.read_text())['phase'], 'resume-unverified')
+        self.assertNotIn((name, True), self.commands.events)
+        self.assertNotIn((name, False), self.commands.events)
+        self.assertEqual(self.commands.units[backup.UNITS[0]]['FreezerState'], 'running')
+        self.assertEqual(self.commands.units[backup.UNITS[1]]['FreezerState'], 'running')
+        self.assertFalse(self.commands.states['fixture-rest']['State']['Paused'])
+
+    def test_host_new_trial_or_unknown_unit_during_capture_refused(self):
+        self.host()
+        window = self.window(); window.enter()
+        active = self.commands.units[backup.UNITS[0]].copy()
+        name = backup.PRESERVED_TRIAL_UNITS[0]
+        self.commands.units[name] = active
+        with self.assertRaisesRegex(backup.BackupFailure, 'inventory changed'): window.verify_frozen()
+        del self.commands.units[name]
+        self.commands.units['tuat-unreviewed.service'] = active
+        with self.assertRaisesRegex(backup.BackupFailure, 'Unaccounted'): window.verify_frozen()
+        del self.commands.units['tuat-unreviewed.service']
+        window.verify_frozen(); window.restore()
+
+    def test_host_failed_inactive_current_writer_and_pid_change_do_not_pass_capture(self):
+        self.host()
+        self.commands.units[backup.UNITS[0]].update(ActiveState='inactive', SubState='dead', MainPID='101')
+        with self.assertRaisesRegex(backup.BackupFailure, 'inactive'): self.window().enter()
+        self.assertEqual(self.commands.events, [])
+        self.commands.units[backup.UNITS[0]].update(ActiveState='active', SubState='running')
+        window = self.window(); window.enter()
+        self.commands.units[backup.UNITS[1]]['MainPID'] = '999'
+        with self.assertRaisesRegex(backup.BackupFailure, 'identity changed'): window.verify_frozen()
+        with self.assertRaisesRegex(backup.BackupFailure, 'not restored'): window.restore()
+        self.assertEqual(json.loads(window.checkpoint.read_text())['phase'], 'resume-unverified')
+
+    def test_systemctl_missing_unit_exit_only_accepts_exact_observation(self):
+        props = b'LoadState=not-found\nActiveState=inactive\nSubState=dead\nFreezerState=running\nControlGroup=\nMainPID=0\nControlPID=0\n'
+        actual_popen = subprocess.Popen
+        def observe(code, data):
+            def popen(_args, **kwargs):
+                script = 'import sys;sys.stdout.buffer.write(' + repr(data) + ');sys.stderr.write("FAKE_CANARY");sys.exit(' + str(code) + ')'
+                return actual_popen([sys.executable, '-I', '-c', script], **kwargs)
+            return patch.object(backup.subprocess, 'Popen', popen)
+        for code in (0, 1, 4):
+            with self.subTest(code=code), observe(code, props):
+                info = backup.LocalCommands().unit(backup.UNITS[2])
+                self.assertEqual(backup.inactive_unit_state(info, missing_allowed=True)['LoadState'], 'not-found')
+        for code, output in ((2, props), (1, props.replace(b'not-found', b'loaded'))):
+            with self.subTest(code=code), observe(code, output):
+                with self.assertRaises(backup.BackupFailure): backup.LocalCommands().unit(backup.UNITS[2])
+
+    def test_originally_paused_auth_remains_paused_and_order_is_reversed(self):
+        window = self.window(); window.enter(); window.restore()
+        self.assertEqual(self.commands.events, [
+            ('fixture-jobs', True), ('fixture-app', True), ('fixture-rest', True),
+            ('fixture-rest', False), ('fixture-app', False), ('fixture-jobs', False)])
+        self.assertTrue(self.commands.states['fixture-auth']['State']['Paused'])
+
+    def test_pause_timeout_after_success_is_recovered_from_durable_intent(self):
+        window = self.window(); self.commands.fail_pause = 'fixture-app'
+        with self.assertRaises(backup.BackupFailure): window.enter()
+        saved = json.loads(window.checkpoint.read_text())
+        self.assertIn({'kind': 'container', 'name': 'fixture-app'}, saved['changed'])
+        window.restore()
+        self.assertFalse(self.commands.states['fixture-app']['State']['Paused'])
+        self.assertFalse(self.commands.states['fixture-jobs']['State']['Paused'])
+
+    def test_unknown_container_and_restarted_identity_fail_closed(self):
+        self.commands.states['foreign'] = {**self.commands.states['fixture-app'], 'Id': 'foreign'}
+        with self.assertRaisesRegex(backup.BackupFailure, 'Unaccounted'): self.window().enter()
+        self.assertEqual(self.commands.events, [])
+        del self.commands.states['foreign']
+        window = self.window(); window.enter()
+        self.commands.states['fixture-app']['RestartCount'] += 1
+        with self.assertRaisesRegex(backup.BackupFailure, 'not restored'): window.restore()
+        self.assertEqual(json.loads(window.checkpoint.read_text())['phase'], 'resume-unverified')
+
+    def journal(self, status):
+        path = Path(self.config['jobsStateRoot']) / 'journal.json'
+        data = json.dumps({'version': 1, 'activateAt': 1735689600000,
+            'jobs': {'sheets': {'status': status, 'slot': 1735776000000,
+                               'startedAt': 1735776001000, 'finishedAt': 1735776002000}},
+            'sheetWritesBlocked': True}).encode()
+        path.write_bytes(data); path.chmod(0o600)
+        return path, data
+
+    def scheduler_state(self, status='failed'):
+        journal = {'version': 1, 'activateAt': 1735689600000, 'jobs': {
+            'sheets': {'slot': 1735776000000, 'status': status, 'startedAt': 1735776001000,
+                'finishedAt': 1735776002000, 'httpStatus': 500, 'sheetWritesUncertain': True}},
+            'sheetWritesBlocked': True,
+            'sheetFailures': [{'slot': 1735689600000, 'status': 'uncertain', 'evidence': 'synthetic old fault'}],
+            'sheetRecoveryHistory': [{'confirmedAt': '2025-01-02T00:00:03.000Z', 'evidence': 'synthetic retained review'}]}
+        status_value = {'checkedAt': '2025-01-02T00:00:05.000Z', 'jobs': copy.deepcopy(journal['jobs'])}
+        directory = Path(self.config['jobsStateRoot'])
+        for name, value in (('journal.json', journal), ('status.json', status_value)):
+            path = directory / name
+            path.write_bytes(json.dumps(value, separators=(',', ':')).encode()); path.chmod(0o600)
+        return journal, status_value
+
+    def test_status_preserves_historical_failure_uncertain_partial_and_recovery_verbatim(self):
+        for outcome in ('success', 'partial', 'failed', 'uncertain'):
+            with self.subTest(outcome=outcome):
+                self.scheduler_state(outcome)
+                root = Path(self.config['jobsStateRoot'])
+                before = {name: (root/name).read_bytes() for name in ('journal.json', 'status.json')}
+                rows = backup.journal_snapshot(root)
+                self.assertEqual({row['name']: row['bytes'] for row in rows}, before)
+                self.assertEqual(before, {name: (root/name).read_bytes() for name in before})
+
+    def test_status_running_unknown_malformed_or_contradictory_refuses_without_repair(self):
+        journal, baseline = self.scheduler_state()
+        root = Path(self.config['jobsStateRoot']); path = root/'status.json'
+        variants = []
+        for change in ('running', 'unknown', 'bad_slot', 'bad_finished', 'bad_http', 'bad_hold',
+                       'later_slot', 'other_terminal', 'unknown_job', 'invalid_time', 'future_time', 'extra_fault'):
+            value = copy.deepcopy(baseline); job = value['jobs']['sheets']
+            if change in ('running', 'unknown'): job['status'] = change
+            elif change == 'bad_slot': job['slot'] = True
+            elif change == 'bad_finished': job['finishedAt'] = job['startedAt']-1
+            elif change == 'bad_http': job['httpStatus'] = True
+            elif change == 'bad_hold': job['sheetWritesUncertain'] = 'unknown'
+            elif change == 'later_slot': job['slot'] += 86400000
+            elif change == 'other_terminal': job['status'] = 'success'
+            elif change == 'unknown_job': value['jobs']['unknown-writer'] = value['jobs'].pop('sheets')
+            elif change == 'invalid_time': value['checkedAt'] = '2025-99-02T00:00:05.000Z'
+            elif change == 'future_time': value['checkedAt'] = '2099-01-02T00:00:05.000Z'
+            elif change == 'extra_fault': value['fault'] = 'synthetic current unrecognized fault'
+            variants.append((change, json.dumps(value).encode()))
+        variants += [('oversize', b'x'*(backup.MAX_JOB_STATE+1)), ('malformed', b'not-json')]
+        for change, value in variants:
+            with self.subTest(change=change):
+                path.write_bytes(value)
+                with self.assertRaises((backup.BackupFailure, ValueError)): backup.journal_snapshot(root)
+                self.assertEqual(path.read_bytes(), value)
+                self.assertEqual(self.commands.events, [])
+        self.scheduler_state()
+        (root/'journal.json').unlink()
+        with self.assertRaisesRegex(backup.BackupFailure, 'format'): backup.journal_snapshot(root)
+
+    def test_status_may_lag_terminal_journal_but_current_dispatch_and_temp_file_hold(self):
+        journal, status = self.scheduler_state()
+        root = Path(self.config['jobsStateRoot']); path = root/'journal.json'
+        journal['jobs']['sheets']['slot'] += 86400000
+        journal['jobs']['sheets']['sheetWritesUncertain'] = False
+        path.write_bytes(json.dumps(journal).encode())
+        self.assertEqual(len(backup.journal_snapshot(root)), 2)
+        journal['jobs']['sheets']['status'] = 'running'
+        path.write_bytes(json.dumps(journal).encode())
+        with self.assertRaisesRegex(backup.BackupFailure, 'dispatch'): backup.journal_snapshot(root)
+        self.scheduler_state()
+        (root/'status.json.tmp').write_bytes(b'current interrupted rename')
+        with self.assertRaisesRegex(backup.BackupFailure, 'interrupted'): backup.journal_snapshot(root)
+
+    def test_journal_numeric_contract_always_checked_without_status(self):
+        journal, _status = self.scheduler_state()
+        root = Path(self.config['jobsStateRoot']); path = root/'journal.json'
+        (root/'status.json').unlink()
+        for change in ('activation_string', 'activation_boolean', 'slot_string', 'slot_nan', 'unknown_job'):
+            value = copy.deepcopy(journal)
+            if change == 'activation_string': value['activateAt'] = '2025-01-01T00:00:00Z'
+            elif change == 'activation_boolean': value['activateAt'] = True
+            elif change == 'slot_string': value['jobs']['sheets']['slot'] = 'historical-fixture'
+            elif change == 'slot_nan': value['jobs']['sheets']['slot'] = float('nan')
+            else: value['jobs']['unknown-writer'] = value['jobs'].pop('sheets')
+            raw = json.dumps(value).encode(); path.write_bytes(raw)
+            with self.subTest(change=change), self.assertRaises(backup.BackupFailure): backup.journal_snapshot(root)
+            self.assertEqual(path.read_bytes(), raw)
+
+    def test_interrupted_current_uncertain_with_or_without_status_holds_prior_receipt(self):
+        root = Path(self.config['jobsStateRoot'])
+        receipt = Path(self.config['receiptFile']); original = b'{"verifiedAt":"old-retained-proof"}'
+        receipt.write_bytes(original); receipt.chmod(0o600)
+        for has_status in (False, True):
+            with self.subTest(has_status=has_status):
+                journal, status = self.scheduler_state('uncertain')
+                del journal['jobs']['sheets']['finishedAt']
+                (root/'journal.json').write_bytes(json.dumps(journal).encode())
+                if has_status:
+                    del status['jobs']['sheets']['finishedAt']
+                    (root/'status.json').write_bytes(json.dumps(status).encode())
+                else:
+                    (root/'status.json').unlink()
+                before = {name: (root/name).read_bytes() for name in ('journal.json','status.json') if (root/name).exists()}
+                def captured(*_args):
+                    backup.journal_snapshot(root)
+                    raise AssertionError('Interrupted current request passed validation')
+                with patch.object(backup, 'capture_bundle', captured):
+                    with self.assertRaisesRegex(backup.BackupFailure, 'terminal dispatch evidence'):
+                        backup.produce(self.config, self.commands)
+                self.assertEqual(receipt.read_bytes(), original)
+                self.assertEqual(before, {name: (root/name).read_bytes() for name in before})
+                self.assertEqual(json.loads((receipt.parent/'capture-state.json').read_bytes())['phase'], 'resumed')
+        self.assertFalse(any(event[0] == 'verification' for event in self.commands.events))
+
+    def test_confirmed_retired_image_is_preserved_but_untracked_orphan_refuses_capture(self):
+        self.journal('failed')
+        root = Path(self.config['imageRoot'])
+        directory = root/'avatars'/'member-1'
+        directory.mkdir(parents=True, mode=0o700)
+        (root/'avatars').chmod(0o700)
+        image = directory/'retired.webp'
+        image.write_bytes(b'synthetic retired WebP bytes'); image.chmod(0o600)
+        class CaptureCommands:
+            def __init__(self, recorded): self.recorded = recorded
+            def sql(self, _config, statement):
+                return b'avatars/member-1/retired.webp\n' if self.recorded and 'confirmed_image_retirements' in statement else b''
+            def docker(self, *args, output=None):
+                output.write(b'PGDMP synthetic dump' if args[2] == 'pg_dump' else b'-- synthetic role SQL')
+        with patch.object(backup, 'assert_database_quiet'), patch.object(backup, 'image_references', return_value=[]), \
+             patch.object(backup, 'database_fingerprint', return_value={'synthetic': 'stable'}):
+            bundle, manifest = backup.capture_bundle(self.config, CaptureCommands(True), Path(self.config['stageRoot']))
+            restored = self.root/'retired-restored'; restored.mkdir(mode=0o700)
+            backup.verified_extract(bundle, restored, self.config['sourceId'])
+            self.assertEqual((restored/'images'/'avatars'/'member-1'/'retired.webp').read_bytes(), image.read_bytes())
+            self.assertEqual(len(manifest['images']), 1)
+            unknown = self.root/'unknown-capture'; unknown.mkdir(mode=0o700)
+            with self.assertRaisesRegex(backup.BackupFailure, 'Unreferenced image'):
+                backup.capture_bundle(self.config, CaptureCommands(False), unknown)
+
+    def test_captured_status_is_manifest_hashed_restored_and_capture_change_refused(self):
+        self.scheduler_state()
+        root = Path(self.config['jobsStateRoot'])
+        before = {name: (root/name).read_bytes() for name in ('journal.json', 'status.json')}
+        class CaptureCommands:
+            def __init__(self, mutate=False): self.mutate = mutate
+            def sql(self, *_args): return b''
+            def docker(self, *args, output=None):
+                output.write(b'PGDMP synthetic dump' if args[2] == 'pg_dump' else b'-- synthetic role SQL')
+                if self.mutate:
+                    path = root/'status.json'
+                    value = json.loads(path.read_bytes()); value['checkedAt'] = '2025-01-02T00:00:06.000Z'
+                    path.write_bytes(json.dumps(value).encode())
+        with patch.object(backup, 'assert_database_quiet'), patch.object(backup, 'image_references', return_value=[]), \
+             patch.object(backup, 'database_fingerprint', return_value={'synthetic': 'stable'}):
+            bundle, manifest = backup.capture_bundle(self.config, CaptureCommands(), Path(self.config['stageRoot']))
+            self.assertEqual({row['name'] for row in manifest['jobs']}, set(before))
+            restored = self.root/'restored-status'; restored.mkdir(mode=0o700)
+            result = backup.verified_extract(bundle, restored, self.config['sourceId'])
+            self.assertEqual(result, manifest)
+            self.assertEqual(before, {name: (restored/'jobs'/name).read_bytes() for name in before})
+            self.assertEqual(before, {name: (root/name).read_bytes() for name in before})
+            second = self.root/'changed-capture'; second.mkdir(mode=0o700)
+            with self.assertRaisesRegex(backup.BackupFailure, 'Capture changed'):
+                backup.capture_bundle(self.config, CaptureCommands(mutate=True), second)
+        self.assertFalse(Path(self.config['receiptFile']).exists())
+
+    def test_running_dispatch_rejected_uncertain_history_preserved_verbatim(self):
+        path, value = self.journal('running')
+        with self.assertRaisesRegex(backup.BackupFailure, 'dispatch'): backup.journal_snapshot(path.parent)
+        self.assertEqual(path.read_bytes(), value)
+        path, value = self.journal('uncertain')
+        rows = backup.journal_snapshot(path.parent)
+        self.assertEqual(rows[0]['bytes'], value)
+        self.assertEqual(path.read_bytes(), value)
+        (path.parent / 'journal.json.tmp').write_bytes(value)
+        with self.assertRaisesRegex(backup.BackupFailure, 'interrupted'): backup.journal_snapshot(path.parent)
+
+    def test_private_images_reject_partial_upload_symlink_and_hardlink(self):
+        root = Path(self.config['imageRoot'])
+        path = root / '.upload-partial'; path.write_bytes(b'temporary'); path.chmod(0o600)
+        with self.assertRaises(backup.BackupFailure): backup.image_inventory(root)
+        path.unlink(); (root / 'alias').symlink_to(self.config['runtimeKey'])
+        with self.assertRaises(backup.BackupFailure): backup.image_inventory(root)
+        (root / 'alias').unlink(); os.link(self.config['runtimeKey'], root / 'alias')
+        with self.assertRaises(backup.BackupFailure): backup.image_inventory(root)
+
+    def test_active_transaction_and_claimed_push_do_not_advance_receipt(self):
+        class Sql:
+            def __init__(self, answers): self.answers = iter(answers)
+            def sql(self, *_args): return next(self.answers)
+        with self.assertRaisesRegex(backup.BackupFailure, 'DB writer'):
+            backup.assert_database_quiet(self.config, Sql([b'1\n0\n0\n0\n0\n0\n']))
+        with self.assertRaisesRegex(backup.BackupFailure, 'Push dispatch'):
+            backup.assert_database_quiet(self.config, Sql([b'0\n0\n0\n0\n0\n0\n', b't\n', b'1\n']))
+
+    def test_archive_path_escape_and_symlink_never_publish(self):
+        for name, symbolic in (('../escaped', False), ('/absolute', False), ('images/alias', True)):
+            archive = self.root / 'bad.tar'
+            with tarfile.open(archive, 'w') as out:
+                item = tarfile.TarInfo(name); item.size = 1
+                if symbolic: item.type = tarfile.SYMTYPE; item.linkname = '/etc/passwd'; item.size = 0
+                out.addfile(item, None if symbolic else io.BytesIO(b'x'))
+            dest = self.root / ('restore' + str(symbolic) + str(len(name))); dest.mkdir(mode=0o700)
+            with self.assertRaises(backup.BackupFailure): backup.verified_extract(archive, dest, 'unit-synthetic')
+            self.assertFalse((self.root.parent / 'escaped').exists())
+
+    def test_slow_verification_runs_only_after_resume_and_failure_preserves_prior_receipt(self):
+        receipt = Path(self.config['receiptFile'])
+        original = b'{"version":1,"verifiedAt":"old-proof-must-stay"}'
+        receipt.write_bytes(original); receipt.chmod(0o600)
+        captured_at = backup.stamp()
+        manifest = {'fixture': True, 'capturedAt': captured_at,
+                    'recoveryKeyFingerprint': backup.hashlib.sha256(b'k'*32).hexdigest()}
+        def capture(_config, _commands, stage):
+            path = stage / 'bundle.tar'; path.write_bytes(b'fixture encrypted archive'); path.chmod(0o600)
+            return path, manifest
+        with patch.object(backup, 'capture_bundle', capture), \
+             patch.object(backup, 'verified_extract', return_value=manifest), \
+             patch.object(backup, 'verify_restore', side_effect=backup.BackupFailure('independent restore mismatch')):
+            with self.assertRaisesRegex(backup.BackupFailure, 'restore mismatch'): backup.produce(self.config, self.commands)
+        self.assertEqual(receipt.read_bytes(), original)
+        self.assertEqual(self.commands.events[6], ('verification', 'encrypt'))
+        self.assertEqual(json.loads((receipt.parent / 'capture-state.json').read_text())['phase'], 'resumed')
+        self.assertEqual(list(Path(self.config['stageRoot']).iterdir()), [])
+
+    def test_interrupted_checkpoint_blocks_automatic_restart_and_receipt_replay(self):
+        backup.atomic_json(Path(self.config['backupRoot']) / 'capture-state.json', {'phase': 'capturing'})
+        with self.assertRaisesRegex(backup.BackupFailure, 'operator recovery'): backup.produce(self.config, self.commands)
+        self.assertEqual(self.commands.events, [])
+        self.assertFalse(Path(self.config['receiptFile']).exists())
+
+    def test_second_producer_cannot_own_same_capture_window(self):
+        root = Path(self.config['backupRoot'])
+        fd = os.open(root / 'backup.lock', os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            backup.fcntl.flock(fd, backup.fcntl.LOCK_EX | backup.fcntl.LOCK_NB)
+            with self.assertRaisesRegex(backup.BackupFailure, 'already owns'): backup.produce(self.config, self.commands)
+        finally: os.close(fd)
+        self.assertEqual(self.commands.events, [])
+
+    def test_directory_sync_failure_keeps_prior_receipt_and_stops_acknowledgement(self):
+        path = Path(self.config['receiptFile']); path.write_bytes(b'{"verifiedAt":"old"}'); path.chmod(0o600)
+        calls = 0
+        original = backup.sync_directory
+        def sync(directory):
+            nonlocal calls
+            calls += 1
+            if calls == 2: raise OSError('directory fsync failure after rename')
+            original(directory)
+        with patch.object(backup, 'sync_directory', sync):
+            with self.assertRaises(OSError): backup.atomic_json(path, {'verifiedAt': 'new'})
+        self.assertEqual(path.read_bytes(), b'{"verifiedAt":"old"}')
+
+    def test_external_thaw_during_capture_cannot_pass_unchanged_fingerprint(self):
+        window = self.window(); window.enter()
+        self.commands.states['fixture-app']['State']['Paused'] = False
+        with self.assertRaisesRegex(backup.BackupFailure, 'no longer frozen'): window.verify_frozen()
+        window.restore()
+
+    def test_periodic_runtime_does_not_require_cold_copy_and_old_snapshot_cannot_be_refreshed(self):
+        del self.config['recoveryKeyCopy']
+        captured_at = (backup.dt.datetime.now(backup.dt.timezone.utc)-backup.dt.timedelta(hours=1)).isoformat()
+        manifest = {'capturedAt': captured_at, 'recoveryKeyFingerprint': backup.hashlib.sha256(b'k'*32).hexdigest()}
+        def capture(_config, _commands, stage):
+            path=stage/'bundle.tar'; path.write_bytes(b'fixture encrypted archive'); path.chmod(0o600)
+            return path, manifest
+        with patch.object(backup,'capture_bundle',capture), patch.object(backup,'verified_extract',return_value=manifest), \
+             patch.object(backup,'verify_restore',return_value={'databaseTables':1,'images':0}):
+            with self.assertRaisesRegex(backup.BackupFailure,'became stale'): backup.produce(self.config,self.commands)
+        self.assertFalse(Path(self.config['receiptFile']).exists())
+        self.assertIn(('verification','decrypt'),self.commands.events)
+
+    def test_changed_recovery_copy_fails_before_freeze(self):
+        Path(self.config['recoveryKeyCopy']).write_bytes(b'x'*32)
+        with self.assertRaisesRegex(backup.BackupFailure,'copy differ'): backup.produce(self.config,self.commands)
+        self.assertEqual(self.commands.events,[])
+
+    def test_unknown_schema_cannot_escape_full_dump_comparison(self):
+        class Sql:
+            def sql(self,*_args): return b'0\n0\n0\n0\n1\n0\n'
+        with self.assertRaisesRegex(backup.BackupFailure,'unsupported schema'): backup.assert_database_quiet(self.config,Sql())
+
+    def test_unknown_held_jobs_lock_refuses_before_any_freeze(self):
+        path=Path(self.config['jobsStateRoot'])/'runner.lock'
+        path.write_text(json.dumps({'version':1,'pid':922,'startedAt':backup.stamp()}));path.chmod(0o600)
+        with self.assertRaisesRegex(backup.BackupFailure,'outside the verified'): self.window().enter()
+        self.assertEqual(self.commands.events,[])
+
+
+if __name__ == '__main__': unittest.main()

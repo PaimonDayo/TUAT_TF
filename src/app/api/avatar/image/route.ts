@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getAppPublicOrigin } from "@/lib/app-public-origin";
 import { createClient } from "@/lib/supabase/server";
 import { loginAccessResponse } from "@/lib/supabase/login-access";
 import { ImageNotFoundError,logImageFailure,signedImageUrl } from "@/lib/image-storage";
@@ -61,7 +62,7 @@ export async function GET(request: Request) {
     // The object path changes whenever an avatar is replaced. Cache this private
     // redirect for less than the signed URL lifetime and let Supabase Storage/CDN
     // serve the image bytes directly instead of buffering them in Vercel.
-    const response=NextResponse.redirect(url,307);
+    const response=NextResponse.redirect(new URL(url,getAppPublicOrigin(request.url)),307);
     response.headers.set("Cache-Control",`private, max-age=${REDIRECT_CACHE_SECONDS}, immutable`);
     response.headers.set("Vary","Cookie");
     return response;

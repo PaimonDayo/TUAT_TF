@@ -28,7 +28,7 @@ export async function executeLocalJob(base, env, job) {
   if (!JOBS.some(allowed => allowed.id === job.id && allowed.path === job.path && allowed.method === job.method && allowed.timeout === job.timeout)) throw Error('Known local job required');
   const response = await fetch(base + job.path, {
     method: job.method, redirect: 'error', signal: AbortSignal.timeout(job.timeout),
-    headers: { authorization: `Bearer ${job.id === 'cleanup' ? env.CRON_SECRET : env.SHEET_SYNC_SECRET}`, 'content-type': 'application/json' },
+    headers: { authorization: `Bearer ${['cleanup','push'].includes(job.id) ? env.CRON_SECRET : env.SHEET_SYNC_SECRET}`, 'content-type': 'application/json' },
     ...(job.method === 'POST' ? { body: job.skipSheetWrites ? JSON.stringify({ skipSheetWrites: true }) : '{}' } : {}),
   });
   return { ok: response.ok, status: response.status, value: await response.json() };
@@ -101,7 +101,7 @@ export async function run(configFile, execute = false, {
     };
     const ready = probeReady;
     while (!stopping) {
-      await tick({ state, now: Date.now(), ready, save: value => saveFile(journal, value), execute: job => executeLocalJob(base, env, job) });
+      await tick({ state, now: Date.now(), ready, save: value => saveFile(journal, value), execute: job => executeLocalJob(base, env, job), localPushEnabled: env.LOCAL_WEB_PUSH_ENABLED === 'true' });
       saveFile(resolve(config.stateDirectory, 'status.json'), { checkedAt: new Date().toISOString(), jobs: state.jobs });
       if (!stopping) await pause(10000);
     }

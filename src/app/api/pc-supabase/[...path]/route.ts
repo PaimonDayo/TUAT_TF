@@ -13,8 +13,8 @@ async function handle(request: Request) {
   const url = new URL(request.url);
   const path = url.pathname.slice("/api/pc-supabase".length);
   const app = getPcAppRuntime();
-  // Local Auth is private admin infrastructure; cloud remains the only member issuer.
-  if (app && !path.startsWith("/rest/v1/")) return Response.json({ error: "Operation denied" }, { status: 403 });
+  // Only the explicit local deployment exposes member Auth; admin endpoints stay private.
+  if (app && !app.local && !path.startsWith("/rest/v1/")) return Response.json({ error: "Operation denied" }, { status: 403 });
   if (!allowedPcBrowserApi(path, request.method, url.searchParams)) return Response.json({ error: "Operation denied" }, { status: 403 });
   const read = ["GET", "HEAD"].includes(request.method);
   // Google uses GET for this callback. All client POSTs must originate from this app.

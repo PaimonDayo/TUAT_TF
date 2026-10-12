@@ -22,8 +22,18 @@ beforeEach(() => {
   mocks.signed.mockResolvedValue("https://images.example/signed");
   mocks.remove.mockResolvedValue(undefined);
 });
-afterEach(() => vi.useRealTimers());
+afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
 describe("private image routes", () => {
+  it("resolves local image redirects against the fixed public HTTPS entry rather than the private Next listener", async () => {
+    vi.stubEnv("APP_PUBLIC_ORIGIN", "https://public.example.test");
+    mocks.signed.mockResolvedValue("/api/local-image?synthetic=1");
+    mocks.access.mockImplementation(async (name: string) => ({ data: name !== "avatar_image_is_retired", error: null }));
+    maybeSingle.mockResolvedValue({ data: { id: uid, approved: true }, error: null });
+    for (const [handler,imagePath] of [[story,path],[avatar,`${uid}/avatar.webp`]] as const) {
+      const response = await handler(new Request(`http://127.0.0.1:18200/api/image?path=${imagePath}`));
+      expect(response.status).toBe(307); expect(response.headers.get("location")).toBe("https://public.example.test/api/local-image?synthetic=1");
+    }
+  });
   it("rejects revoked accounts before signing, uploading or deleting R2 images", async () => {
     mocks.access.mockResolvedValue({data:null,error:{code:"PT403"}});
     for (const handler of [avatar, upload, remove]) {

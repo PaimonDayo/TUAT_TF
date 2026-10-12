@@ -34,6 +34,12 @@ function pcRoutedFetch(cloud: CloudAuth): typeof fetch {
  */
 export function sessionClientConfig(testOptIn = false): { url: string; key: string; options: Record<string, unknown> } {
   const app = getPcAppRuntime();
+  if (app?.local) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    return { url, key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, options: {
+      cookieOptions: { name: "sb-pc-backend-auth" }, global: { fetch: createCloudAuthFetch(pcBackendFetch, url) },
+    } };
+  }
   if (app) {
     const pcOrigin = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).origin;
     const transport: typeof fetch = (input, init) => {

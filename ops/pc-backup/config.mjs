@@ -32,6 +32,8 @@ export function validateBackupConfig(config,env) {
     ||!/^\/[A-Za-z0-9_./-]+$/.test(target.dataMountSource??'')) throw Error('Exact owned PC database target required');
   if(config.pushEnvironmentFile!==null&&!isAbsolute(config.pushEnvironmentFile??'')) throw Error('Explicit Push recovery path or null required');
   validateCapacity(config.capacity,{required:config.enabled});
+  if(config.localSnapshotReceiptFile!==undefined && (!isAbsolute(config.localSnapshotReceiptFile)||resolve(config.localSnapshotReceiptFile)!==config.localSnapshotReceiptFile||
+      !isAbsolute(config.localImageRoot??'')||resolve(config.localImageRoot)!==config.localImageRoot)) throw Error('Explicit private local snapshot receipt and image root required');
   if(env!==undefined) {
     const allowed=['PC_BACKUP_ENCRYPTION_KEY','R2_ACCOUNT_ID','R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','R2_BUCKET_NAME'];
     if(Object.keys(env).some(name=>!allowed.includes(name))||!hash(env.PC_BACKUP_ENCRYPTION_KEY)) throw Error('Dedicated backup environment required');

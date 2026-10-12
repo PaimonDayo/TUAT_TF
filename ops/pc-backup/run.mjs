@@ -2,22 +2,23 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
-import { loadBackup,validateBackupConfig,BACKUP_LIMITS } from './config.mjs';
+import { loadBackup,validateBackupConfig,readPrivateFile,BACKUP_LIMITS } from './config.mjs';
 import { acquireLock,writePrivate,readBackupInventory } from './files.mjs';
 import { encryptedPair,sha256 } from './archive.mjs';
 import { createAdapters,createCycleBudget,inventoryBounds,STORAGE_LIMITS } from './adapters.mjs';
 import { classifyBackupReceipts,reconcileBackupInventory,planBackupAdmission,planBackupRetention } from './retention.mjs';
-import { STATUS_VERSION,STATUS_FILE,HEARTBEAT_INTERVAL_MS,BACKUP_INTERVAL_MS } from './status.mjs';
+import { STATUS_VERSION,STATUS_FILE,HEARTBEAT_INTERVAL_MS,BACKUP_INTERVAL_MS,localSnapshotReady } from './status.mjs';
 
 export {loadBackup};
 export function backupPlan(config) {
   validateBackupConfig(config);
   return {version:1,enabled:config.enabled,starts:false,targetReads:false,providerReads:false,providerWrites:false,
-    intervalMinutes:15,backupMaximumAgeMinutes:35,heartbeatMaximumAgeSeconds:120,firstPairEachStartup:true};
+    intervalMinutes:15,backupMaximumAgeMinutes:35,heartbeatMaximumAgeSeconds:120,firstPairEachStartup:!config.localSnapshotReceiptFile,
+    combinedLocalSnapshot:!!config.localSnapshotReceiptFile};
 }
 export async function startBackupSupervisor({configFile,config:providedConfig,env:providedEnv,expectedInstanceId,expectedDatabaseSystemIdentifier,
   adapters:providedAdapters,readInventory=readBackupInventory,now=Date.now,setTimer=setInterval,clearTimer=clearInterval,save=writePrivate,lock=acquireLock,
-  generation=randomUUID(),report=()=>{},onFatal=()=>{},drainMilliseconds=10_000}={}) {
+  generation=randomUUID(),report=()=>{},onFatal=()=>{},drainMilliseconds=10_000,readSnapshot=path=>JSON.parse(readPrivateFile(path,16384).toString('utf8'))}={}) {
   if(configFile&&(providedConfig||providedEnv)) throw Error('Ambiguous backup configuration');
   const {config,env}=configFile?loadBackup(configFile):{config:providedConfig,env:providedEnv};
   if(!env) throw Error('Explicit dedicated backup environment required');
@@ -60,7 +61,17 @@ export async function startBackupSupervisor({configFile,config:providedConfig,en
     if(!fatalNotified) {fatalNotified=true;try {Promise.resolve(onFatal({reason})).catch(()=>failed('fatal-owner-callback-failed'));} catch {failed('fatal-owner-callback-failed');}}
   };
   const instant=()=>{const value=now();if(!Number.isFinite(value)||value<clock) {notifyFatal('clock-unverified');throw Error('Lifecycle clock moved backwards');}clock=value;return new Date(value).toISOString();};
-  const publish=()=>{try {save(statusPath,status);} catch(error) {notifyFatal('status-publish-unverified');throw error;}};
+  const publish=()=>{try {
+    if(config.localSnapshotReceiptFile) {
+      let snapshot;
+      try {snapshot=readSnapshot(config.localSnapshotReceiptFile);}catch{}
+      if(localSnapshotReady({backup:{localSnapshot:snapshot}},expected,config.localImageRoot,now())) {
+        status.backup={generation,verifiedAt:snapshot.offsiteVerifiedAt,key:snapshot.archiveKey,sha256:snapshot.archiveSha256,bytes:snapshot.archiveBytes,
+          databaseSystemIdentifier:config.target.databaseSystemIdentifier,localSnapshot:snapshot};
+      } else status.backup=null;
+    }
+    save(statusPath,status);
+  } catch(error) {notifyFatal('status-publish-unverified');throw error;}};
   const assertActive=()=>{if(stopped||fatalNotified) throw Error('Backup lifecycle stopped');try {owner.assertOwned();} catch(error) {notifyFatal('ownership-unverified');throw error;}instant();};
   const probeTarget=()=>{
     if(probeBusy) return probeBusy;
@@ -88,6 +99,9 @@ export async function startBackupSupervisor({configFile,config:providedConfig,en
       try {
         assertActive();lastAttempt=now();
         if(!await probeTarget()) return;
+        // The local producer/offsite CLI owns the single combined archive. This
+        // owner only checks DB identity/heartbeat and consumes its private receipt.
+        if(config.localSnapshotReceiptFile) {publish();return;}
         stage='inventory';
         const budget=createCycleBudget(capacity),discovered=await inventory(budget);
         const bounds=inventoryBounds({inventoryLimit:capacity.inventoryLimit,receipts:discovered.classified.verifiedReceipts.filter(receipt=>receipt.remoteState==='verified'),maxPairBytes:capacity.maxPairBytes});

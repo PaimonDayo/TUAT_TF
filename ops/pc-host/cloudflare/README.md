@@ -6,8 +6,10 @@ resource and does not establish public or production readiness.
 The proposed path is a fixed HTTPS
 `<worker>.<account-subdomain>.workers.dev` address, one Worker `PC_APP` VPC Service
 binding, a persistent named Cloudflare Tunnel, and this PC's loopback app gateway.
-The Next app remains on the PC. Cloud Supabase Auth and private R2 remain in their
-existing roles. No Quick Tunnel, endpoint lease/discovery, fallback, retry, or
+The 2026-10-12 candidate keeps Next, Auth, REST and private images on the PC;
+R2 is an optional encrypted-backup destination under a separate owner. Existing
+cloud Auth/images remain until actual migration is accepted. No Quick Tunnel,
+endpoint lease/discovery, fallback, retry, or
 second data path is involved.
 
 ## Acceptance contract

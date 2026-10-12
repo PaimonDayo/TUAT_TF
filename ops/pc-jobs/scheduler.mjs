@@ -3,6 +3,7 @@ export const JOBS = [
   { id: 'sheets', path: '/api/sheets/sync', method: 'POST', period: 86400000, offset: 15 * 3600000, timeout: 300000 },
   { id: 'program', path: '/api/competition-program/sync', method: 'POST', period: 300000, offset: 0, timeout: 60000 },
   { id: 'cleanup', path: '/api/cron/cleanup-stories', method: 'GET', period: 86400000, offset: 3 * 3600000 + 17 * 60000, timeout: 60000 },
+  { id: 'push', path: '/api/push/deliver', method: 'POST', period: 60000, offset: 0, timeout: 300000 },
 ];
 export const slotAt = (job, now) => Math.floor((now - job.offset) / job.period) * job.period + job.offset;
 
@@ -26,9 +27,10 @@ export function recoverState(state) {
   return state;
 }
 
-export function dueJobs(state, now) {
+export function dueJobs(state, now, localPushEnabled = false) {
   validateState(state);
   return JOBS.filter(job => {
+    if (job.id === 'push' && !localPushEnabled) return false;
     const slot = slotAt(job, now), last = state.jobs[job.id];
     const pullCanContinue = job.id === 'sheets' && last && ['partial', 'failed', 'uncertain'].includes(last.status);
     if (slot < state.activateAt || (last && last.status !== 'success' && !pullCanContinue)) return false;
@@ -42,14 +44,16 @@ export function successfulPayload(job, value) {
   if (value.ok !== true) return false;
   if (job.id === 'sheets') return Array.isArray(value.failedMembers) && value.failedMembers.length === 0
     && (!job.skipSheetWrites || value.sheetWritesSkipped === true);
+  if (job.id === 'push') return ['sent','dropped','failed','uncertain'].every(key => Number.isInteger(value[key]) && value[key] >= 0)
+    && value.failed === 0 && value.uncertain === 0;
   if (!Array.isArray(value.results)) return false;
   return value.results.every(result => !result.error && result.ok !== false);
 }
 
 /** Persist BEFORE dispatch. Serialize jobs; persist failures and require review. */
-export async function tick({ state, now, save, execute, ready }) {
+export async function tick({ state, now, save, execute, ready, localPushEnabled = false }) {
   if (!await ready()) return { skipped: 'backend-not-ready' };
-  for (const job of dueJobs(state, now)) {
+  for (const job of dueJobs(state, now, localPushEnabled)) {
     if (!await ready()) break;
     const previous = state.jobs[job.id];
     if (job.id === 'sheets' && previous && previous.status !== 'success' && previous.sheetWritesUncertain !== false) {

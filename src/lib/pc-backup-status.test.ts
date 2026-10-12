@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resolve } from "node:path";
 import vectors from "../../ops/pc-backup/status-vectors.json";
 import { backupStatusReady as opsReady } from "../../ops/pc-backup/status.mjs";
-import { backupStatusReady, assertPcAppWriteAllowed, pcBackendRequestNeedsProtection, PcBackupProtectionError } from "./pc-backup-status";
+import { backupStatusReady, assertPcAppWriteAllowed, pcBackendRequestNeedsProtection, PcBackupProtectionError, type PcBackupStatus } from "./pc-backup-status";
 import { pcBackendFetch } from "./pc-backend";
 import { sessionClientConfig } from "./supabase/server-client-options";
 import { createAdminClient } from "./supabase/admin";
@@ -10,11 +10,12 @@ import { uploadImage, removeImages } from "./image-storage";
 import { gasPost } from "./sheet-sync/gas-client";
 import { createScheduleSpreadsheet } from "./google-drive";
 
-const mocks = vi.hoisted(() => ({ runtime: true, synthetic: false, status: null as unknown,
+const mocks = vi.hoisted(() => ({ runtime: true, synthetic: false, local: false, status: null as unknown,
   lstat: vi.fn(), realpath: vi.fn(), open: vi.fn(), dispatch: vi.fn(), r2: vi.fn() }));
 vi.mock("./pc-app-runtime", () => ({ getPcAppRuntime: () => mocks.runtime ? {
   publicOrigin: "https://pc-app.example.test", internalUrl: "http://127.0.0.1:18180", synthetic: mocks.synthetic,
   cloud: { url: "http://127.0.0.1:18181", anonKey: "synthetic-cloud-key" },
+  ...(mocks.local ? { local: { authUrl: "http://127.0.0.1:18001", restUrl: "http://127.0.0.1:18002" } } : {}),
 } : undefined }));
 vi.mock("node:fs/promises", () => ({ lstat: mocks.lstat, realpath: mocks.realpath, open: mocks.open }));
 vi.mock("@aws-sdk/client-s3", async original => {
@@ -29,7 +30,7 @@ const request = (api: string, method = "POST", body?: unknown) => new Request(`$
 const snapshot = () => structuredClone(golden.status);
 beforeEach(() => {
   vi.useFakeTimers(); vi.setSystemTime(golden.now);
-  mocks.runtime = true; mocks.synthetic = false; mocks.status = snapshot();
+  mocks.runtime = true; mocks.synthetic = false; mocks.local = false; mocks.status = snapshot();
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", base); vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "synthetic-service-key");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "synthetic-data-key"); vi.stubEnv("PC_BACKEND_ENABLED", "true");
   vi.stubEnv("PC_APP_BACKUP_STATUS_PATH", path);
@@ -46,6 +47,29 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 
 describe("operational status conformance", () => {
+  it("holds local writes for DB-only receipts and requires fresh, same-source image restore and off-PC evidence", async () => {
+    mocks.local = true;
+    const imageRoot = resolve("..", "synthetic-private-images"); vi.stubEnv("LOCAL_IMAGE_STORAGE_ROOT", imageRoot);
+    await expect(assertPcAppWriteAllowed()).rejects.toBeInstanceOf(PcBackupProtectionError);
+    const status = snapshot() as PcBackupStatus;
+    status.backup!.localSnapshot = { format: "tuat-local-db-images-v1", sourceId: golden.identity.instanceId,
+      generation: golden.identity.generation, databaseSystemIdentifier: golden.identity.databaseSystemIdentifier, imageRoot,
+      archiveKey: `ops/pc-backend/${golden.identity.instanceId}/backups/${golden.identity.startedAt.replace(/[:.]/g,"-")}.local.tar.enc`,
+      archiveSha256: "a".repeat(64), archiveBytes: 128, restoreVerifiedAt: status.heartbeat.checkedAt, offsiteVerifiedAt: status.heartbeat.checkedAt,
+      independentRecoveryCopyChecked: true };
+    mocks.status = status; await expect(assertPcAppWriteAllowed()).resolves.toBeUndefined();
+    status.backup!.key = status.backup!.localSnapshot.archiveKey;
+    status.backup!.sha256 = status.backup!.localSnapshot.archiveSha256;
+    status.backup!.bytes = status.backup!.localSnapshot.archiveBytes;
+    delete status.backup!.recoveryKey; delete status.backup!.recoverySha256; delete status.backup!.recoveryBytes;
+    expect(opsReady(status, golden.identity, golden.now)).toBe(true); expect(backupStatusReady(status, golden.identity, golden.now)).toBe(true);
+    await expect(assertPcAppWriteAllowed()).resolves.toBeUndefined();
+    for (const changes of [{ generation: "33333333-3333-4333-8333-333333333333" },{ imageRoot: resolve("..","wrong-images") },
+      { offsiteVerifiedAt: "2026-10-10T00:00:00.000Z" },{ independentRecoveryCopyChecked: false },{ archiveKey: "https://other.example.invalid/image.enc" }]) {
+      mocks.status = { ...status, backup: { ...status.backup, localSnapshot: { ...status.backup!.localSnapshot, ...changes } } };
+      await expect(assertPcAppWriteAllowed()).rejects.toBeInstanceOf(PcBackupProtectionError);
+    }
+  });
   it.each(vectors)("agrees with ops for $name", vector => {
     expect(opsReady(vector.status, vector.identity, vector.now)).toBe(vector.ready);
     expect(backupStatusReady(vector.status, vector.identity, vector.now)).toBe(vector.ready);

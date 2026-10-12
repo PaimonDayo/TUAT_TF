@@ -35,6 +35,23 @@ const records = (at = now, c = config) => {
 };
 const reader = data => file => JSON.stringify(data[file.split(/[\\/]/).at(-1)]);
 
+test('native local shared Jobs require one local issuer, private images and the same combined snapshot root',async()=>{
+  const local={...env,PC_LOCAL_RUNTIME:'true',NEXT_PUBLIC_PC_LOCAL_RUNTIME:'true',PC_BACKEND_INTERNAL_URL:'',NEXT_PUBLIC_CLOUD_AUTH_URL:'',NEXT_PUBLIC_CLOUD_AUTH_ANON_KEY:'',
+    IMAGE_STORAGE_DRIVER:'local',LOCAL_IMAGE_STORAGE_ROOT:resolve('..','private-images'),LOCAL_IMAGE_SIGNING_KEY:'synthetic-local-signing'.repeat(3),PC_LOCAL_AUTH_URL:'http://127.0.0.1:18001',PC_LOCAL_REST_URL:'http://127.0.0.1:18002',
+    R2_READ_ENABLED:'false',R2_WRITE_ENABLED:'false',R2_ACCOUNT_ID:'',R2_ACCESS_KEY_ID:'',R2_SECRET_ACCESS_KEY:'',R2_BUCKET_NAME:''};
+  assert.doesNotThrow(()=>validateConfig(config,local));
+  const data=records(),status=data['backup-lifecycle.json'],stamp=new Date(now).toISOString();
+  const snapshot={format:'tuat-local-db-images-v1',sourceId:config.expectedBackupInstanceId,generation:status.generation,databaseSystemIdentifier:config.expectedBackupDatabaseSystemIdentifier,
+    imageRoot:local.LOCAL_IMAGE_STORAGE_ROOT,archiveKey:`ops/pc-backend/${config.expectedBackupInstanceId}/backups/${stamp.replace(/[:.]/g,'-')}.local.tar.enc`,archiveSha256:'a'.repeat(64),archiveBytes:128,
+    restoreVerifiedAt:stamp,offsiteVerifiedAt:stamp,independentRecoveryCopyChecked:true};
+  status.backup={generation:status.generation,verifiedAt:stamp,key:snapshot.archiveKey,sha256:snapshot.archiveSha256,bytes:128,databaseSystemIdentifier:config.expectedBackupDatabaseSystemIdentifier,localSnapshot:snapshot};
+  const fetchRequest=async url=>({ok:true,json:async()=>url.endsWith('/api/version')?{version:config.releaseCommit,releaseId:config.releaseId}:{swagger:'2.0'}});
+  assert.equal(await sharedPcReady(config,local,{fetchRequest,read:reader(data),clock:()=>now}),true);
+  status.backup.localSnapshot.imageRoot=resolve('..','wrong-images');
+  assert.equal(await sharedPcReady(config,local,{fetchRequest,read:reader(data),clock:()=>now}),false);
+  assert.throws(()=>validateConfig(config,{...local,NEXT_PUBLIC_CLOUD_AUTH_URL:env.NEXT_PUBLIC_CLOUD_AUTH_URL}));
+});
+
 test('shared PC mode preserves cloud Auth and private R2; dedicated remains default', () => {
   assert.doesNotThrow(() => validateConfig(config, env));
   for (const altered of [ { ...env, PC_BACKEND_INTERNAL_URL: 'https://public.example' }, { ...env, IMAGE_STORAGE_DRIVER: 'local' },

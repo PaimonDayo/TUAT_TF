@@ -2,11 +2,17 @@ import { createBrowserClient } from "@supabase/ssr";
 import type { Database } from "@/types/database";
 import { createCoalescedFetch } from "@/lib/coalesced-fetch";
 import { createPcBrowserTransport } from "@/lib/pc-browser-transport";
-import { createPcAppDataFetch, isPcAppCloudDataRequest, pcAppCloudAuthConfig } from "@/lib/pc-app-transport";
+import { createPcAppDataFetch, isPcAppCloudDataRequest, pcAppCloudAuthConfig, pcAppLocalAuthEnabled } from "@/lib/pc-app-transport";
 import { CLOUD_AUTH_COOKIE, browserCloudAuthOptIn, cloudAuthConfig, routeDataToPc, withCloudFailover } from "./cloud-auth";
 import { createCloudAuthFetch } from "./auth-fetch";
 
 const coalescedFetch = createCoalescedFetch((input, init) => {
+  if (pcAppLocalAuthEnabled()) {
+    if (typeof window === "undefined") throw new Error("PC app server requests must use the server Supabase client");
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    if (url.origin !== window.location.origin || !url.pathname.startsWith("/api/pc-supabase/")) throw new Error("Local Auth and data require the same application origin");
+    return fetch(input, init);
+  }
   if (typeof window === "undefined") {
     if (process.env.NEXT_PUBLIC_PC_APP_RUNTIME === "true" && isPcAppCloudDataRequest(input, pcAppCloudAuthConfig())) {
       throw new Error("PC app server data must use the server Supabase client");
@@ -26,6 +32,12 @@ const coalescedFetch = createCoalescedFetch((input, init) => {
 
 /** ブラウザ（Client Component）用 Supabase クライアント */
 export function createClient() {
+  if (pcAppLocalAuthEnabled()) {
+    const url = typeof window === "undefined" ? process.env.NEXT_PUBLIC_SUPABASE_URL! : `${window.location.origin}/api/pc-supabase`;
+    return createBrowserClient<Database>(url, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+      cookieOptions: { name: "sb-pc-backend-auth" }, global: { fetch: createCloudAuthFetch(coalescedFetch, url) },
+    });
+  }
   const cloud = process.env.NEXT_PUBLIC_PC_APP_RUNTIME === "true" ? pcAppCloudAuthConfig() : cloudAuthConfig(browserCloudAuthOptIn());
   if (cloud) {
     return createBrowserClient<Database>(cloud.url, cloud.anonKey, {
