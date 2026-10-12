@@ -1,4 +1,4 @@
-# Local Auth and images: preparation only
+# Local Auth and images: migration acceptance
 
 This candidate uses the current app, one private GoTrue issuer, PostgREST and
 PostgreSQL. Select `ops/pc-host/environment.local.example.env` for a separate
@@ -92,7 +92,9 @@ acceptance conditions; a placeholder or local test cannot satisfy them.
 
 Keep one writer, one image root and one Jobs journal. Reconcile old pending
 business writes before retiring replay/mirror. Take coordinated snapshots and
-dryRun before actual migration; cutover itself remains unapproved in this task.
+dryRun before actual migration. On 2026-10-12 the owner expanded this task to
+production cutover. This authorizes proceeding when the acceptance gates pass;
+it does not establish that the current candidate has passed those gates.
 Final dedicated account/ACLs, full backup admission, OAuth/phone/PWA/Push,
 restart/cold restore and rollback must pass before switching the public entry.
 
@@ -114,3 +116,26 @@ drop vendor schemas or deactivate production jobs merely to pass its gate.
 Use the same image-root path for app, capture and receipt; Windows and Linux
 paths are not interchangeable. Build Linux dependencies and its release on
 Linux when placing the full app in WSL/the future notebook.
+
+## Actual-source rehearsal on 2026-10-12
+
+The existing R2 PC database archive failed cold restoration because its three
+schema filters omitted `pc_ops`, which the archived public functions require.
+The legacy backup candidate now includes `pc_ops` and `extensions`; this code
+change has not been installed in the running legacy owner. A new read-only
+five-schema snapshot of the identified production PC was restored and dumped
+again into separate network-none, tmpfs review databases. All 103 tables and
+51,171 rows, Auth IDs/password bytes, five sections of core security definitions
+and the two Vault recovery values survived that roundtrip. The corrected
+encrypted snapshot/recovery pair was additionally saved to a separate immutable
+R2 namespace and completely read back. No production pointer or old backup was
+changed. This proof covers the captured PC copy, not authoritative cloud Auth,
+global cluster role recovery, a coordinated image/Jobs capture or another PC.
+
+Actual R2 images (68 objects) plus two external avatars normalized to private
+WebP (70 total, 65 referenced) passed isolated Linux import/hash/resume checks.
+The five unreferenced tweet images remain preserved. The DB avatar rewrite plan
+is private and unapplied. These copies are rehearsals, not a frozen cutover
+snapshot. Full cloud Auth preservation, independent recovery-key custody,
+regular combined backup/retention and the live-entry/operation gates above remain
+required. Do not use these partial receipts to admit production local writes.

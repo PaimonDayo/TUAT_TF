@@ -36,7 +36,7 @@ export function decryptBackup(bytes, key) {
 export async function backupBackend() {
   const config = readConfig();
   const { stdout: dump } = await promisify(execFile)('wsl', [...wslArgs(), 'docker', 'exec', 'supabase-db',
-    'pg_dump', '-U', 'supabase_admin', '-d', 'postgres', '--format=custom', '--schema=public', '--schema=auth', '--schema=storage'],
+    'pg_dump', '-U', 'supabase_admin', '-d', 'postgres', '--format=custom', '--schema=public', '--schema=auth', '--schema=storage', '--schema=pc_ops', '--schema=extensions'],
     { maxBuffer: 128 * 1024 * 1024, timeout: 120_000, encoding: 'buffer', windowsHide: true });
   if (dump.subarray(0, 5).toString() !== 'PGDMP') throw new Error('Database backup is incomplete');
   const { stdout: recoveryBytes } = await promisify(execFile)('wsl', [...wslArgs(), 'python3', wslRepoRoot() + '/ops/laptop/export-backend-recovery.py'],
