@@ -104,11 +104,15 @@ function treeHash(directory, { dependencyTree = false } = {}) {
         continue;
       }
       if (stat.isSymbolicLink()) {
-        // npm's Linux .bin links are relative files inside this same installation.
+        // npm creates .bin links at the root and inside nested installations.
+        // Bind each link to its own node_modules directory, not merely the tree.
         const link = readlinkSync(path);
         const target = realpathSync(path);
         const targetName = relative(root, target).replaceAll('\\', '/');
-        if (!dependencyTree || !name.startsWith('.bin/') || isAbsolute(link) || !targetName || targetName.startsWith('../') || isAbsolute(targetName) || targetName === '.cache' || targetName.startsWith('.cache/') || !lstatSync(target).isFile()) throw Error('Runtime artifact link escaped its installation');
+        const nested = name.match(/^(.+\/node_modules)\/\.bin\/[^/]+$/);
+        const installation = /^\.bin\/[^/]+$/.test(name) ? root : nested ? resolve(root, nested[1]) : undefined;
+        const localTarget = installation ? relative(installation,target).replaceAll('\\','/') : '';
+        if (!dependencyTree || !installation || isAbsolute(link) || !localTarget || localTarget.startsWith('../') || isAbsolute(localTarget) || localTarget === '.cache' || localTarget.startsWith('.cache/') || !lstatSync(target).isFile()) throw Error('Runtime artifact link escaped its installation');
         field('link'); field(name); field(link.replaceAll('\\', '/')); field(targetName);
         field(hashFile(target).digest('hex'));
       } else if (stat.isDirectory()) {

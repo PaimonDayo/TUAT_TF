@@ -264,8 +264,18 @@ test('internal npm executable links are bound and external links rejected', { sk
   const root = f.config.releaseDirectory;
   mkdirSync(join(root, 'node_modules/.bin'));
   symlinkSync('../transitive/index.js', join(root, 'node_modules/.bin/fixture'));
+  mkdirSync(join(root,'node_modules/parent/node_modules/.bin'),{recursive:true});
+  mkdirSync(join(root,'node_modules/parent/node_modules/tool'));
+  writeFileSync(join(root,'node_modules/parent/node_modules/tool/cli.js'),'nested executable bytes');
+  symlinkSync('../tool/cli.js',join(root,'node_modules/parent/node_modules/.bin/tool'));
   const manifest = createRuntimeManifest(root);
   assert.doesNotThrow(() => verifyRuntimeManifest(manifest, root));
+  writeFileSync(join(root,'node_modules/parent/node_modules/tool/cli.js'),'changed nested bytes');
+  assert.throws(()=>verifyRuntimeManifest(manifest,root),/changed/);
+  rmSync(join(root,'node_modules/parent/node_modules/.bin/tool'));
+  symlinkSync('../../../transitive/index.js',join(root,'node_modules/parent/node_modules/.bin/tool'));
+  assert.throws(()=>createRuntimeManifest(root),/escaped/);
+  rmSync(join(root,'node_modules/parent/node_modules/.bin/tool'));
   rmSync(join(root, 'node_modules/.bin/fixture'));
   writeFileSync(join(f.config.stateDirectory, 'external.js'), 'external bytes');
   symlinkSync('../../../state/external.js', join(root, 'node_modules/.bin/fixture'));
