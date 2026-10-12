@@ -14,7 +14,7 @@ export function obSheetPersonKey(id: string, secret: string) {
   return "P" + createHmac("sha256", secret).update("ob-person-v1:" + id).digest("hex").slice(0, 16);
 }
 export function obSheetEditSource(entries: ObEntry[], operations: ObEventOperation[], secret: string) {
-  const context: Context = { entries: entries.flatMap(e => [1, 2].map(occurrence => ({ key: obSheetPersonKey(obAppearanceId(e.id, occurrence), secret), id: obAppearanceId(e.id, occurrence), revision: e.revision, events: e.events }))).sort((a, b) => a.id.localeCompare(b.id)),
+  const context: Context = { entries: entries.flatMap(e => (e.canonical_appearance ? [1] : [1, 2]).map(occurrence => ({ key: obSheetPersonKey(obAppearanceId(e.id, occurrence), secret), id: obAppearanceId(e.id, occurrence), revision: e.revision, events: e.events }))).sort((a, b) => a.id.localeCompare(b.id)),
     operations: OB_EDIT_EVENTS.flatMap(family => ["男子", "女子"].map(division => ({ event: division + family, revision: operations.find(o => o.event_name === division + family)?.revision ?? null }))) };
   if (new Set(context.entries.map(e => e.key)).size !== context.entries.length) throw Error("Participant key collision");
   const body = Buffer.from(JSON.stringify(context)).toString("base64url");

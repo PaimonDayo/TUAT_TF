@@ -4,6 +4,7 @@ import { obAppearanceEntryId, obAppearanceNumber, isAlumniEntry, matchEntryMembe
 import { OB_MEET, type ObPartyResponse } from "@/lib/ob-meet";
 import { combineObDuties, dutyRoleText, hasDuty } from "@/lib/ob-duty";
 import { obFamilyRows, obFamilyPlacement } from "@/lib/ob-mixed-operations";
+import { getCompetitionMeet } from "./competition-meet";
 
 export async function getObEntries() {
   const client = entryClient(await createClient());
@@ -22,6 +23,8 @@ export async function getObEntries() {
 
 /** ホーム用: 自分に紐付いたOB戦のエントリーだけを取る（RLSでも本人の分だけ）。 */
 export async function getMyObEntry(profileId: string) {
+  const normalized=await getCompetitionMeet(OB_MEET.competitionId);
+  if(normalized){const person=normalized.participants.find(p=>p.profile_id===profileId);if(!person)return null;const appearances=normalized.appearances.filter(a=>a.participant_id===person.id&&a.state==="registered");return {id:person.id,events:appearances.map(a=>a.event_name),qualification_marks:Object.fromEntries(appearances.map(a=>[a.event_name,a.qualification_mark])),absent:person.absent};}
   const client = entryClient(await createClient());
   const { data, error } = await client.from("ob_meet_entries")
     .select("id,events,qualification_marks,absent").eq("meet_key", OB_MEET.meetKey).eq("profile_id", profileId).limit(1).maybeSingle();

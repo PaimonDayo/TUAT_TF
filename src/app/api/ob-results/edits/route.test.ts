@@ -15,7 +15,7 @@ beforeEach(() => { vi.stubEnv("SHEET_SYNC_SECRET", secret); state.rpc.mockReset(
 afterEach(() => vi.unstubAllEnvs());
 it("allows a signed participant's new event/position and passes only fixed-meet revisions", async () => {
   expect((await POST(request())).status).toBe(200);
-  const args = state.rpc.mock.calls[0]; expect(args[0]).toBe("apply_ob_sheet_edits");
+  const args = state.rpc.mock.calls[0]; expect(args[0]).toBe("apply_competition_sheet_edits");
   expect(args[1].p_changes[0]).toMatchObject({ entryId: entry.id, entryRevision: 3, event: "男子300m", operationRevision: null, group: 2, order: 3, heatScope: "混合", name: null });
 });
 it("creates an unlinked new person without requesting contacts or a member profile", async () => {

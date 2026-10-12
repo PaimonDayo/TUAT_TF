@@ -69,6 +69,7 @@ export default async function CompetitionPage({
         </p>
 
         <Card className="divide-y divide-separator">
+          <Link data-ui-row href={`/competitions/${competition.id}/manage`} className="flex items-center gap-3 p-4 pressable"><ListOrdered size={20} className="text-accent"/><span className="flex-1 text-headline">参加者・大会の運営</span><ChevronRight size={16} className="text-muted"/></Link>
           {(competition.program_source_url || isObCompetition(competition.id)) && (
             <Link
               data-ui-row

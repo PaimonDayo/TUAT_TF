@@ -19,6 +19,7 @@ import { readFileSync, writeFileSync, renameSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { OB_TABLES, changesPath, obReplayProtection, replayObChanges } from './cloud-mirror-ob.mjs';
+import { MEET_TABLES, meetMirrorRows, meetReplayConfirmed, replayMeetChanges } from './cloud-mirror-meet.mjs';
 
 const WINDOW_DAYS = 3;
 const FULL_CHECK_MS = 24 * 3600_000;
@@ -118,6 +119,7 @@ const TABLES = [
   { table: "competitions", pk: ["id"] },
   { table: "competition_events", pk: ["name"] },
   ...OB_TABLES,
+  ...MEET_TABLES,
   { table: "sheet_reply_deletions", pk: ["id"] },
   { table: "schedule_sheets", pk: ["id"] },
   { table: "practice_schedules", pk: ["id"] },
@@ -300,7 +302,24 @@ async function writeBack(apply, authDue) {
   const newMembers = changes.some((c) => c.table_name === "profiles" && c.op === "INSERT");
   const result = { authUsersCreated: authDue || newMembers ? await syncAuthUsersBack(apply) : 0, pending: changes.length, applied: 0, failed: 0 };
   if (!apply) return result;
-  const replay = await replayObChanges(changes, {
+  const acknowledge = async (members, outcome) => {
+    const filter = members.length === 1 ? `eq.${members[0].id}` : `in.(${members.map(change => change.id).join(',')})`;
+    if (outcome === true) await request(cloud, `/rest/v1/failover_changes?id=${filter}`, { method: 'DELETE' });
+    else await request(cloud, `/rest/v1/failover_changes?id=${filter}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ attempts: Math.max(...members.map(change => change.attempts ?? 0)) + 1, last_error: String(outcome).slice(0, 500) }),
+    });
+  };
+  // Profile/auth changes must precede meet rows that reference their IDs.
+  const profileReplay = await replayObChanges(changes.filter(change => change.table_name === 'profiles'), {maxAttempts:MAX_ATTEMPTS,applyChange,acknowledge,applyOperations:async()=>true});
+  const canonical = await replayMeetChanges(changes.filter(change => change.table_name !== 'profiles'), {
+    maxAttempts: MAX_ATTEMPTS, acknowledge,
+    applyBatch: async rows => {
+      const response = await pcWrite('/rest/v1/rpc/replay_competition_meet_changes', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({p_rows:rows}) });
+      return meetReplayConfirmed(response,rows.length);
+    },
+  });
+  const replay = await replayObChanges(canonical.rest, {
     maxAttempts: MAX_ATTEMPTS,
     applyChange,
     applyOperations: async rows => {
@@ -309,16 +328,9 @@ async function writeBack(apply, authDue) {
       });
       return response.ok || `${response.status} ${response.text.slice(0, 200)}`;
     },
-    acknowledge: async (members, outcome) => {
-      const filter = members.length === 1 ? `eq.${members[0].id}` : `in.(${members.map(change => change.id).join(',')})`;
-      if (outcome === true) await request(cloud, `/rest/v1/failover_changes?id=${filter}`, { method: 'DELETE' });
-      else await request(cloud, `/rest/v1/failover_changes?id=${filter}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ attempts: Math.max(...members.map(change => change.attempts ?? 0)) + 1, last_error: String(outcome).slice(0, 500) }),
-      });
-    },
+    acknowledge,
   });
-  result.applied = replay.applied; result.failed = replay.failed;
+  result.applied = replay.applied + canonical.applied + profileReplay.applied; result.failed = replay.failed + canonical.failed + profileReplay.failed;
   return result;
 }
 
@@ -335,10 +347,14 @@ async function main() {
   const nextTables = {};
   const ctx = { ids: {}, recentScheduleIds: [] };
   const plans = [];
+  // One SQL statement captures a complete meet; table-by-table reads can straddle a registration.
+  const meetTables=new Set(MEET_TABLES.map(spec=>spec.table));
+  const meetSnapshot=await (await request(pc,'/rest/v1/rpc/get_competition_meet_mirror',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).json();
+  if(!meetSnapshot||MEET_TABLES.some(spec=>!Array.isArray(meetSnapshot[spec.table])))throw new Error('Meet snapshot could not be confirmed');
 
   for (const spec of TABLES) {
     const filter = typeof spec.filter === "function" ? spec.filter(ctx) : undefined;
-    const pcRows = await readFiltered(pc, spec, filter);
+    const pcRows = meetTables.has(spec.table)?meetSnapshot[spec.table]:await readFiltered(pc, spec, filter);
     const key = keyOf(spec.pk);
     // クラウドの今の中身: 1日1回は実際に読み、それ以外は前回書いた内容の要約（{key: [pk, digest]}）を使う
     let known = !full ? state?.tables?.[spec.table] : undefined;
@@ -377,7 +393,7 @@ async function main() {
 
   if (apply) {
     // 子から先に消す（参照している行が残っていると親を消せない）。
-    for (const { spec, deletes } of [...plans].reverse()) {
+    for (const { spec, deletes } of [...plans].reverse().filter(plan=>!meetTables.has(plan.spec.table))) {
       for (let i = 0; i < deletes.length; i += 100) {
         const chunk = deletes.slice(i, i + 100);
         if (spec.pk.length === 1) {
@@ -390,7 +406,7 @@ async function main() {
       }
     }
     // 親から先に書く。
-    for (const { spec, upserts } of plans) {
+    for (const { spec, upserts } of plans.filter(plan=>!meetTables.has(plan.spec.table))) {
       for (let i = 0; i < upserts.length; i += BATCH) {
         await request(cloud, `/rest/v1/${spec.table}?on_conflict=${spec.pk.join(",")}`, {
           method: "POST",
@@ -398,6 +414,11 @@ async function main() {
           body: JSON.stringify(upserts.slice(i, i + BATCH)),
         });
       }
+    }
+    const meetRows=meetMirrorRows(plans);
+    if(meetRows.length){
+      const result=await (await request(cloud,'/rest/v1/rpc/replay_competition_meet_changes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_rows:meetRows})})).json();
+      if(result?.count!==meetRows.length)throw new Error('Meet mirror could not be confirmed');
     }
   }
   if (apply) {

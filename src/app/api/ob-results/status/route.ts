@@ -6,7 +6,6 @@ import { obResultsStatusToken } from "@/lib/ob-results-feed-auth";
 import { OB_SHEET_STATUSES, obSheetStatusLabel, readObSheetTarget } from "@/lib/ob-sheet-status";
 import { OB_PROGRAM_PATH } from "@/lib/ob-meet";
 import type { Json } from "@/types/database";
-import { operationClient } from "@/lib/ob-operations-db";
 
 export const maxDuration = 60;
 const headers = { "Cache-Control": "private, no-store", Vary: "Authorization" };
@@ -33,8 +32,9 @@ export async function POST(request: Request) {
       return { ...target, status: OB_SHEET_STATUSES[change.status as keyof typeof OB_SHEET_STATUSES] };
     });
     if (new Set(changes.map((row: { entryId: string; event: string }) => `${row.entryId}:${row.event}`)).size !== changes.length) throw new Error("invalid");
-    const { data, error } = await operationClient(createAdminClient()).rpc("apply_ob_sheet_statuses", {
-      p_request_id: input.requestId, p_changes: changes as Json, p_dry_run: input.dryRun,
+    const admin=createAdminClient();
+    const { data, error } = await admin.rpc("apply_competition_sheet_edits", {
+      p_request_id: input.requestId, p_context:null, p_changes: changes as Json, p_dry_run: input.dryRun,
     });
     if (error) return NextResponse.json({ error: "アプリ側の変更と競合したか、保存を確認できませんでした。スプシの入力を保持します" }, { status: ["40001", "P0001"].includes(error.code) ? 409 : 503, headers });
     if (!data || typeof data !== "object" || Array.isArray(data) || data.requestId !== input.requestId || data.count !== changes.length) throw new Error("uncertain");

@@ -23,6 +23,9 @@ export function ActionMenu({
   deleteLabel = "削除する",
   deleteTitle = "削除しますか？",
   deleteDescription = "削除した内容は元に戻せません。",
+  deleteConfirmLabel,
+  deleteStatus,
+  disabled = false,
   triggerLabel = "操作メニュー",
   className,
 }: {
@@ -40,6 +43,9 @@ export function ActionMenu({
   deleteLabel?: string;
   deleteTitle?: string;
   deleteDescription?: string;
+  deleteConfirmLabel?: string;
+  deleteStatus?: string;
+  disabled?: boolean;
   triggerLabel?: string;
   className?: string;
 }) {
@@ -78,6 +84,7 @@ export function ActionMenu({
 
   const trigger = <button
         type="button"
+        disabled={disabled}
         onClick={systemGlass ? undefined : () => setMenuOpen(true)}
         data-glass-control={systemGlass || undefined}
         aria-label={triggerLabel}
@@ -168,8 +175,8 @@ export function ActionMenu({
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title={deleteTitle}
-        description={deleteDescription}
-        confirmLabel={deleteLabel}
+        description={deleteStatus ? `${deleteDescription}\n${deleteStatus}` : deleteDescription}
+        confirmLabel={deleteConfirmLabel ?? deleteLabel}
         busy={deleting}
         onConfirm={remove}
       />

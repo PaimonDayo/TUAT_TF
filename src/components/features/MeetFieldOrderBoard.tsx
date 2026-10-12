@@ -10,8 +10,8 @@ import type { MeetEventData, MeetOperationLimits, MeetPerformance } from "@/lib/
 type FieldEntrant = { id: string; name: string; grade: string; mark: string; alumni: boolean; eligible: boolean; absent?: boolean; division?: "男子" | "女子" };
 type FieldRow = { id: string; person: MeetPerformance; number: number | null; locked: boolean };
 
-export function MeetFieldOrderBoard({ data, entrants, disabled, onChange, modelLimits, statusActions = true }: {
-  statusActions?: boolean; data: MeetEventData; entrants: FieldEntrant[]; disabled: boolean; onChange: (data: MeetEventData) => void; modelLimits?: MeetOperationLimits;
+export function MeetFieldOrderBoard({ data, entrants, disabled, onChange, modelLimits, statusActions = true, countUnit = "人" }: {
+  statusActions?: boolean; countUnit?: "人" | "件"; data: MeetEventData; entrants: FieldEntrant[]; disabled: boolean; onChange: (data: MeetEventData) => void; modelLimits?: MeetOperationLimits;
 }) {
   const [past, setPast] = useState<MeetEventData[]>([]);
   const [message, setMessage] = useState("");
@@ -47,13 +47,13 @@ export function MeetFieldOrderBoard({ data, entrants, disabled, onChange, modelL
     </div>;
   }
   return <div className="space-y-4">
-    <div className="flex flex-wrap items-start justify-between gap-2"><p className="text-caption">左のつまみを上下に動かして試技順を決めてください。</p><div className="flex flex-wrap gap-1">{rows.some(item => item.number === null && !item.locked) && <Button size="sm" variant="outline" disabled={disabled} onClick={() => change(() => model.assignOrder(), "試技順を決めました")}>この順番で決める</Button>}<Button size="sm" variant="ghost" disabled={disabled || !past.length} onClick={() => { onChange(past.at(-1)!); setPast(past.slice(0, -1)); setMessage(""); setFailed(false); }}>元に戻す</Button></div></div>
+    <div className="flex flex-wrap items-start justify-between gap-2"><p className="text-caption">左のつまみを上下に動かして試技順を決めてください。</p><div className="flex flex-wrap gap-1">{rows.some(item => item.number === null && !item.locked) && <Button size="sm" className="min-h-11" variant="outline" disabled={disabled} onClick={() => change(() => model.assignOrder(), "試技順を決めました")}>この順番で決める</Button>}<Button size="sm" className="min-h-11" variant="ghost" disabled={disabled || !past.length} onClick={() => { onChange(past.at(-1)!); setPast(past.slice(0, -1)); setMessage(""); setFailed(false); }}>元に戻す</Button></div></div>
     {message && <p role={failed ? "alert" : "status"} aria-live="polite" className={`rounded-lg bg-bg p-3 text-body ${failed ? "text-danger" : ""}`}>{message}</p>}
     <section aria-label="試技順の出場者" className="overflow-hidden rounded-xl border border-separator bg-card">
-      <h3 className="bg-bg p-3 text-headline">試技順 <span className="text-caption">{rows.length}人</span></h3>
+      <h3 className="bg-bg p-3 text-headline">試技順 <span className="text-caption">{rows.length}{countUnit}</span></h3>
       <div role="list"><ReorderList items={rows} enabled={!disabled} isItemDisabled={item => item.locked} getDragLabel={item => `${item.number === null ? "順番未定" : `試技順${item.number}番`}の${labelledName(item.id)}をスライドして並べ替え`} onReorder={next => change(() => model.reorder(next.filter(item => !item.locked).map(item => item.id)), "試技順を変更しました")} renderItem={item => row(item.person, item.number)}/></div>
       {!rows.length && <p className="p-6 text-center text-body">出場予定の人はいません</p>}
     </section>
-    {!!unplacedInactive.length && <section aria-label="順番未定のDNS" className="overflow-hidden rounded-xl border border-separator"><h3 className="bg-bg p-3 text-headline">DNS <span className="text-caption">{unplacedInactive.length}人</span></h3><div role="list">{unplacedInactive.map(item => <div key={item.person.entryId}>{row(item.person, null)}</div>)}</div></section>}
+    {!!unplacedInactive.length && <section aria-label="順番未定のDNS" className="overflow-hidden rounded-xl border border-separator"><h3 className="bg-bg p-3 text-headline">DNS <span className="text-caption">{unplacedInactive.length}{countUnit}</span></h3><div role="list">{unplacedInactive.map(item => <div key={item.person.entryId}>{row(item.person, null)}</div>)}</div></section>}
   </div>;
 }

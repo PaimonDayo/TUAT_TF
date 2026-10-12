@@ -10,6 +10,9 @@ import { OB_PROGRAM_PATH, OB_MY_ENTRY_PATH, canManageObMeet, obEventTime } from 
 import { obEventRule } from "@/lib/ob-operations";
 import { ObHomeSchedule } from "@/components/features/ObHomeSchedule";
 import { ObHomeIdentity } from "@/components/features/ObHomeIdentity";
+import { CompetitionMeetHomeCard } from "@/components/features/CompetitionMeetHomeCard";
+import { getCompetitionMeet } from "@/lib/queries/competition-meet";
+import { OB_MEET } from "@/lib/ob-meet";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/card";
 import { HomeSkeleton } from "@/components/ui/page-skeletons";
@@ -86,6 +89,9 @@ async function HomeContent({ nowJst }: { nowJst: Date }) {
 /** OB戦の自分のエントリー。全員に出し、未登録ならここからエントリーできる。 */
 async function ObEntrySection() {
   const profile = await getCurrentProfile();
+  const normalized = await getCompetitionMeet(OB_MEET.competitionId).catch(()=>undefined);
+  if(normalized===undefined)return <section className="space-y-2"><p className="section-label">OB戦</p><Card className="space-y-3 p-4"><p className="text-caption">出場・補助担当を取得できませんでした。画面を開き直してください。</p><Link data-ui-row className="flex min-h-11 items-center text-body text-accent" href={`${OB_PROGRAM_PATH}?section=mine&edit=mine`}>自分の登録を確認 →</Link></Card></section>;
+  if (normalized) return <CompetitionMeetHomeCard meet={normalized} profileId={profile.id} />;
   const staff = canManageObMeet(profile.roles);
   const entry = await getMyObEntry(profile.id).catch(() => undefined);
   // 本人照合は係だけ（一般部員は未紐付けの回答を読めない）。

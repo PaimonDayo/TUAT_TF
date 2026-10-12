@@ -5,6 +5,8 @@ export type ObEntry = {
   competition_division?: "男子" | "女子" | null;
   /** Whole-meet absence is separate from an individual event's DNS. */
   absent?: boolean;
+  /** Only for the existing workbook format; registration now belongs to one appearance. */
+  canonical_appearance?: boolean;
 };
 import { compareObEvents } from "./ob-entry-edit";
 export { entryGrade, matchEntryMember, normalizeEntryName, type EntryMember } from "./entry-identity";

@@ -16,6 +16,8 @@ import { permissionsOf } from "@/lib/permissions";
 import { ObDayWorkspace } from "@/components/features/ObDayWorkspace";
 import { ObMeetParticipants } from "@/components/features/ObMeetParticipants";
 import { getObEventOperations } from "@/lib/queries/ob-operations";
+import { getCompetitionMeet } from "@/lib/queries/competition-meet";
+import { CompetitionMeetWorkspace } from "@/components/features/CompetitionMeetWorkspace";
 
 export default async function CompetitionProgramPage({
   params,
@@ -41,6 +43,11 @@ export default async function CompetitionProgramPage({
 
   // OB戦のプログラムは出場登録そのもの。本人とOB戦担当者が編集する。
   if (isObCompetition(competition.id)) {
+    const normalized = await getCompetitionMeet(competition.id);
+    if (normalized) {
+      const meet = preview ? {...normalized,permissions:{manage:false,groups:false,record:false,register:false,configure:false},members:[],party:[]} : normalized;
+      return <>{header}<CompetitionMeetWorkspace meet={meet} me={{id:profile.id,display_name:profile.display_name,grade:profile.grade}} initialSection={requested.section === "participants" || edit === "identity" ? "participants" : requested.section === "duties" ? "duties" : "events"} initialEdit={edit === "mine" || requested.section === "mine"} /></>;
+    }
     const staff = canManageObMeet(profile.roles);
     const canOperate = canRecordObMeet(profile) && !preview;
     const { view, section } = obWorkspaceDestination(requested, canOperate, staff);

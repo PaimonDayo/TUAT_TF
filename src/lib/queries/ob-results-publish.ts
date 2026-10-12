@@ -4,9 +4,19 @@ import { entryClient } from "@/lib/ob-entries-db";
 import { operationClient } from "@/lib/ob-operations-db";
 import { OB_MEET } from "@/lib/ob-meet";
 import type { ObEntry } from "@/lib/ob-entries";
+import { competitionMeetObExport } from "@/lib/competition-meet-export";
+import type { CompetitionMeet } from "@/lib/competition-meet";
 
 /** Read only the fields needed for the shared results; never query contact or party answers. */
 export async function getObPublishedResults(admin: SupabaseClient<Database>) {
+  const normalized=await admin.rpc("get_competition_meet_export",{p_competition_id:OB_MEET.competitionId});
+  if(normalized.error)throw new Error("共有用の大会情報を取得できませんでした");
+  const snapshot=normalized.data;
+  if(snapshot!==null){
+    if(typeof snapshot!=="object"||Array.isArray(snapshot))throw new Error("共有用の大会情報を照合できませんでした");
+    if(["participants","appearances","events"].some(key=>!Array.isArray(snapshot[key])))throw new Error("共有用の大会情報を照合できませんでした");
+  }
+  if(normalized.data)return competitionMeetObExport(normalized.data as unknown as CompetitionMeet);
   const [entries, operations] = await Promise.all([readEntries(admin), readOperations(admin)]);
   return { entries, operations };
 }

@@ -1,0 +1,17 @@
+import {createElement,type ReactNode} from "react";
+import {renderToStaticMarkup} from "react-dom/server";
+import {beforeEach,expect,it,vi} from "vitest";
+const mocks=vi.hoisted(()=>({competition:vi.fn(),profile:vi.fn(),preview:vi.fn(),meet:vi.fn(),backend:vi.fn(),workspace:vi.fn()}));
+vi.mock("@/lib/queries",()=>({getCompetitionById:mocks.competition}));
+vi.mock("@/lib/queries/competition-meet",()=>({getCompetitionMeet:mocks.meet,getCompetitionMeetBackend:mocks.backend}));
+vi.mock("@/lib/supabase/auth",()=>({getCurrentProfile:mocks.profile,isMemberPreviewActive:mocks.preview}));
+vi.mock("@/components/layout/SubHeader",()=>({SubHeader:({title}:{title:string})=>createElement("h1",null,title)}));
+vi.mock("@/components/features/CompetitionMeetWorkspace",()=>({CompetitionMeetWorkspace:(props:unknown)=>{mocks.workspace(props);return null;}}));
+vi.mock("next/navigation",()=>({notFound:()=>{throw Error("not found");}}));
+import Page from "./page";
+const call=async()=>{renderToStaticMarkup(await Page({params:Promise.resolve({id:"another-meet"}),searchParams:Promise.resolve({section:"mine",edit:"mine"})}) as ReactNode);return mocks.workspace.mock.lastCall![0];};
+beforeEach(()=>{vi.clearAllMocks();mocks.competition.mockResolvedValue({id:"another-meet",name:"別大会"});mocks.profile.mockResolvedValue({id:"me",display_name:"合成本人",grade:"B1",roles:[{can_manage_system:true}]});mocks.preview.mockResolvedValue(false);mocks.backend.mockResolvedValue("pc");mocks.meet.mockResolvedValue(null);});
+it("sets up another competition through the same workspace with recording disabled until events exist",async()=>{const props=await call();expect(props.meet).toMatchObject({competitionId:"another-meet",backend:"pc",events:[],permissions:{configure:true,record:false}});expect(props.initialEdit).toBe(true);});
+it("passes every independent appearance unchanged to the shared workspace",async()=>{const snapshot={competitionId:"another-meet",backend:"pc",participants:[{id:"person"}],appearances:[{id:"one"},{id:"two"},{id:"three"}],party:[{id:"reply"}],members:[{id:"account"}],permissions:{manage:true,record:true,groups:true,configure:true,history:true}};mocks.meet.mockResolvedValue(snapshot);expect((await call()).meet).toBe(snapshot);expect(mocks.backend).not.toHaveBeenCalled();});
+it("clears private party data and management/recording permissions in member preview",async()=>{mocks.preview.mockResolvedValue(true);mocks.meet.mockResolvedValue({participants:[],appearances:[],events:[],party:[{id:"private reply"}],members:[{id:"account"}],permissions:{manage:true,record:true,groups:true,configure:true,history:true}});expect((await call()).meet).toMatchObject({party:[],members:[],permissions:{manage:false,record:false,groups:false,configure:false}});});
+it("propagates failed acquisition instead of showing a blank setup screen",async()=>{mocks.meet.mockRejectedValue(new Error("read failed"));await expect(call()).rejects.toThrow("read failed");expect(mocks.workspace).not.toHaveBeenCalled();expect(mocks.backend).not.toHaveBeenCalled();});

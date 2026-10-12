@@ -30,7 +30,7 @@ it("rejects the read token, raw key, tampered identity, arbitrary events and non
 });
 it("passes only signed target revisions and canonical status to the atomic fixed-meet RPC", async () => {
   expect((await POST(request())).status).toBe(200);
-  expect(state.rpc).toHaveBeenCalledWith("apply_ob_sheet_statuses", { p_request_id: requestId, p_dry_run: false, p_changes: [{ ...target, status: "DNS" }] });
+  expect(state.rpc).toHaveBeenCalledWith("apply_competition_sheet_edits", { p_context: null, p_request_id: requestId, p_dry_run: false, p_changes: [{ ...target, status: "DNS" }] });
   expect(state.revalidate).toHaveBeenCalled();
 });
 it("supports dryRun without invalidation and rejects duplicated targets", async () => {

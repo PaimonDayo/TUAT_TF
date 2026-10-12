@@ -6,7 +6,7 @@ import { getObPublishedResults } from "./ob-results-publish";
 type Result = { data: unknown[] | null; error: unknown; count: number | null };
 function setup(results: Record<string, Result | Result[]>) {
   const calls: { table: string; selection: string; filters: string[]; range?: number[] }[] = [];
-  const client = { from(table: string) {
+  const client = { rpc: async () => ({data:null,error:null}), from(table: string) {
     const call = { table, selection: "", filters: [] as string[], range: undefined as number[] | undefined };
     calls.push(call);
     const query = { select: (selection: string) => { call.selection = selection; return query; },

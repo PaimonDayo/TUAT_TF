@@ -1,3 +1,4 @@
+vi.mock("@/lib/queries/competition-meet", () => ({ getCompetitionMeet: vi.fn().mockResolvedValue(null) }));
 import { beforeEach, expect, it, vi } from "vitest";
 import { isValidElement, type ReactNode } from "react";
 

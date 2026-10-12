@@ -6,7 +6,6 @@ import { obResultsStatusToken } from "@/lib/ob-results-feed-auth";
 import { OB_SHEET_STATUSES, obSheetStatusLabel, readObSheetTarget } from "@/lib/ob-sheet-status";
 import { readObEditContext, OB_EDIT_EVENTS, OB_EDIT_GRADES } from "@/lib/ob-sheet-edits";
 import { OB_PROGRAM_PATH } from "@/lib/ob-meet";
-import { operationClient } from "@/lib/ob-operations-db";
 import type { Json } from "@/types/database";
 export const maxDuration = 60;
 const headers = { "Cache-Control": "private, no-store", Vary: "Authorization" };
@@ -43,7 +42,8 @@ export async function POST(request: Request) {
     if (new Set(changes.map((c: { entryId: string | null; newKey: string | null; event: string }) => `${c.entryId ?? c.newKey}:${c.event}`)).size !== changes.length) throw Error();
   } catch { return NextResponse.json({ error: "入力途中か、参加者番号・種目・組が不正です。入力を保持します" }, { status: 400, headers }); }
   try {
-    const { data, error } = await operationClient(createAdminClient()).rpc("apply_ob_sheet_edits", { p_request_id: input.requestId, p_context: context as Json, p_changes: changes as Json, p_dry_run: input.dryRun });
+    const admin=createAdminClient();
+    const { data, error } = await admin.rpc("apply_competition_sheet_edits", { p_request_id: input.requestId, p_context: context as Json, p_changes: changes as Json, p_dry_run: input.dryRun });
     if (error) return NextResponse.json({ error: "重複・組の競合、またはアプリ側の変更があるため保存できません。入力を保持します" }, { status: ["40001", "P0001", "23505"].includes(error.code) ? 409 : 503, headers });
     if (!data || typeof data !== "object" || Array.isArray(data) || data.requestId !== input.requestId || data.count !== changes.length || data.dryRun !== input.dryRun) throw Error();
     if (!input.dryRun) revalidatePath(OB_PROGRAM_PATH);
