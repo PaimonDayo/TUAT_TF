@@ -102,7 +102,8 @@ DO $$ DECLARE t record; BEGIN FOR t IN
  LOOP EXECUTE format('INSERT INTO backup_rows SELECT %L,count(*),md5(coalesce(string_agg(to_jsonb(r)::text,E''\\n'' ORDER BY to_jsonb(r)::text COLLATE "C"),'''')) FROM %I.%I r',t.nspname||'.'||t.relname,t.nspname,t.relname); END LOOP; END $$;
 SELECT json_agg(row_to_json(r) ORDER BY name) FROM backup_rows r;`;
 
-export async function runReview({localAuth=false}={}) {
+export async function runReview({localAuth=false,minimalClone=false}={}) {
+  if(minimalClone&&!localAuth) throw Error('Minimal clone proof requires native local Auth acceptance');
   if(typeof localAuth!=='boolean') throw Error('Explicit local Auth review selection required');
   assertNoExternalCredentials(process.env);
   if (process.platform!=='win32') throw Error('This owned cached WSL fixture requires Windows');
@@ -114,13 +115,14 @@ export async function runReview({localAuth=false}={}) {
   const evidencePath=reviewEvidencePath(here,generation);
   const privateBase=resolve(here,'.private'); privateDirectory(privateBase);
   const state=resolve(privateBase,generation); privateDirectory(state);
-  const proofFiles=['run.mjs','run.test.mjs','fixture.sql','assert-restored.sql','README.md','local-auth-http.mjs','../../local-minimal/verify-local-web-push.sql'];
+  const proofFiles=['run.mjs','run.test.mjs','fixture.sql','assert-restored.sql','README.md','local-auth-http.mjs','minimal-clone.sql','../../local-minimal/verify-local-web-push.sql'];
   const sourceProof=Object.fromEntries(proofFiles.map(name=>[name,hash(readFileSync(resolve(here,name)))]));
   const report={version:2,owner:OWNER,generation,syntheticOnly:true,productionAccess:false,providerCalls:0,r2Requests:0,
     purpose:'current-schema-encrypted-restore-with-sheet-and-creation-receipts',evidencePath,sourceProof,legacyEvidenceSha256:{before:legacyEvidenceBefore},
     network:'internal',publishedPorts:[],success:false,cleanup:false,pins:PINS,migrations:[],tests:{},limits:{memory:'512m',cpus:1,databaseReadinessMs:45000,commandMs:60000}};
   let commandOutcomeUnknown=false;
   const created={containers:[],volumes:[],ephemeral:new Set(),network:false};
+  let localApiOwner=names.source;
   const childEnv={}; for (const name of ['PATH','Path','SystemRoot','WINDIR','USERPROFILE','TEMP','TMP']) if(process.env[name]) childEnv[name]=process.env[name];
   function docker(args,input,timeout=60000) {
     try { return execFileSync('wsl.exe',['-d','Ubuntu','--exec','docker',...args],{input,encoding:'buffer',stdio:['pipe','pipe','pipe'],maxBuffer:32*1024*1024,timeout,windowsHide:true,env:childEnv}); }
@@ -298,6 +300,31 @@ export async function runReview({localAuth=false}={}) {
     report.tests.creationReceipts={restored:4,reservedUnknown:1,resourceKnownSetupUnknown:1,registered:1,resourceKnownSetupConfirmed:1,
       realRoleAclRls:true,restoredBeginDispatches:0,dbOnlyRepair:true,setupUncertaintyHeld:true,duplicateRegistrationDenied:true,
       legitimateEditsRetained:true,deletedCompletedRowNotRevived:true,currentPermissionRevocation:true,preclaimedConflictBlocked:true};
+    if(minimalClone) {
+      report.stage='minimal-restored-clone';containerGuard(names.restore);
+      const before=sql(names.restore,fingerprintSql),beforeRows=sql(names.restore,rowsSql);
+      sql(names.restore,"SELECT set_config('tuat.review.minimal_clone','on',false);\n"+readFileSync(resolve(here,'minimal-clone.sql'),'utf8'));
+      if(sql(names.restore,fingerprintSql)!==before||sql(names.restore,rowsSql)!==beforeRows) throw Error('Minimal curation lost core data or security objects');
+      sql(names.restore,"BEGIN; SET LOCAL pc_ops.local_runtime='on'; SELECT pc_ops.set_local_push_enabled(true); COMMIT;");
+      for(const name of [names.auth,names.storage]) {
+        const entry=JSON.parse(text(['inspect',name]))[0];assertOwned(entry.Config.Labels,name,generation);
+        const image=name===names.auth?PINS.auth[1]:'sha256:54000f24847d01a2c2302e0041cf0618b875c57fb48507d743cfa9aaa50bf43c';
+        if(entry.State.Running||entry.Name!==`/${name}`||entry.Image!==image||entry.HostConfig.NetworkMode!==`container:${text(['inspect','--format','{{.Id}}',names.source])}`)throw Error('Stopped original review API identity changed');
+        docker(['rm',entry.Id]);created.containers=created.containers.filter(value=>value!==name);
+      }
+      localApiOwner=names.restore;
+      sql(names.restore,"ALTER ROLE supabase_auth_admin WITH PASSWORD 'synthetic-backup-local-only';");
+      const start=(name,args)=>{created.containers.push(name);docker(['run','-d','--name',name,...labels,...args]);};
+      const localAfterCuration=await verifyLocalAuth({docker,sql,names:{...names,source:names.restore},start,pins:PINS});
+      for(const name of [names.auth,names.storage]) {docker(['stop','--time','5',name]);if(text(['inspect','--format','{{.State.Running}}',name])!=='false')throw Error('Curated review API still writing');}
+      const once=sql(names.restore,fingerprintSql),onceRows=sql(names.restore,rowsSql);
+      sql(names.restore,"SELECT set_config('tuat.review.minimal_clone','on',false);\n"+readFileSync(resolve(here,'minimal-clone.sql'),'utf8'));
+      if(sql(names.restore,fingerprintSql)!==once||sql(names.restore,rowsSql)!==onceRows)throw Error('Repeated minimal curation changed the clone');
+      const python="import importlib.util,tempfile,json,sys; spec=importlib.util.spec_from_file_location('backup',sys.argv[1]); b=importlib.util.module_from_spec(spec);spec.loader.exec_module(b); c=b.LocalCommands(); root=tempfile.TemporaryDirectory(prefix='codex-minimal-schema-'); cfg={'containers':{'db':sys.argv[2]},'database':'tuat_rls_review','stageRoot':root.name}; b.assert_database_quiet(cfg,c); f=b.database_fingerprint(cfg,c); print(json.dumps({'producerSchemaAccepted':True,'tablesCompared':len(f['tables']),'securityComponents':sorted(f['securityComponents'])})); root.cleanup()";
+      const producer=JSON.parse(execFileSync('wsl.exe',['-d','Ubuntu','--exec','python3','-B','-c',python,root.replaceAll('\\','/').replace(/^D:/,'/mnt/d')+'/ops/local-minimal/backup.py',names.restore],{encoding:'utf8',windowsHide:true,timeout:60000,env:childEnv}));
+      report.tests.minimalClone={coreRowsAndSecurityRetained:true,idempotentWithoutCron:true,nativeAuthAndRestAfterCuration:localAfterCuration,rollbackSourceUnchanged:sql(names.source,fingerprintSql)===sourceFingerprint,legacyPushDisabled:sql(names.restore,"SELECT tgenabled='D' FROM pg_trigger WHERE tgrelid='public.notifications'::regclass AND tgname='on_notification_created_send_push'")==='t',...producer};
+      if(!report.tests.minimalClone.rollbackSourceUnchanged||!report.tests.minimalClone.legacyPushDisabled)throw Error('Minimal clone source or local delivery boundary changed');
+    }
     for(const migration of report.migrations) if(hash(readFileSync(resolve(migrations,migration.name)))!==migration.sha256) throw Error('Migration changed during backup proof');
     for(const name of proofFiles) if(hash(readFileSync(resolve(here,name)))!==sourceProof[name]) throw Error('Review source changed during backup proof');
     report.success=true; report.stage='complete';
@@ -316,7 +343,7 @@ export async function runReview({localAuth=false}={}) {
         let entry;
         if(localAuth && [names.auth,names.storage].includes(name)) {
           entry=JSON.parse(text(['inspect',name]))[0];assertOwned(entry.Config.Labels,name,generation);
-          const sourceId=text(['inspect','--format','{{.Id}}',names.source]);
+          const sourceId=text(['inspect','--format','{{.Id}}',localApiOwner]);
           const expectedImage=name===names.auth?PINS.auth[1]:'sha256:54000f24847d01a2c2302e0041cf0618b875c57fb48507d743cfa9aaa50bf43c';
           if(entry.Name!==`/${name}` || !/^[a-f0-9]{64}$/.test(entry.Id) || entry.Image!==expectedImage || entry.HostConfig.NetworkMode!==`container:${sourceId}` || Object.keys(entry.HostConfig.PortBindings??{}).length) throw Error('Owned local API cleanup mismatch');
         } else entry=containerGuard(name,false);
