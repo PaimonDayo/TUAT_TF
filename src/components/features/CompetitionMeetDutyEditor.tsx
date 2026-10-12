@@ -4,11 +4,12 @@ import {Button} from "@/components/ui/button";
 import {Input} from "@/components/ui/input";
 import {Select} from "@/components/ui/select";
 import {FormModal,FormModalFooter,FormDraftGuard} from "@/components/ui/form-modal";
+import type { MeetDutySlot } from "@/lib/competition-meet-duties";
 import {availableAppearance,meetDutyEvents,type CompetitionMeet} from "@/lib/competition-meet";
 import type {MeetMutation} from "./CompetitionMeetWorkspace";
 
-export function CompetitionMeetDutyEditor({meet,mutation,onClose,roleId}:{meet:CompetitionMeet;mutation:MeetMutation;onClose:()=>void;roleId?:string}) {
- const role=meet.roles.find(r=>r.id===roleId),[event,setEvent]=useState(role?.event_name??""),[time,setTime]=useState(role?.slot_time??""),[person,setPerson]=useState(""),[selected,setSelected]=useState(roleId?[roleId]:[]),[assignment,setAssignment]=useState("");
+export function CompetitionMeetDutyEditor({meet,mutation,onClose,roleId,initialSlot,initialPersonId}:{meet:CompetitionMeet;mutation:MeetMutation;onClose:()=>void;roleId?:string;initialSlot?:MeetDutySlot;initialPersonId?:string}) {
+ const role=meet.roles.find(r=>r.id===roleId),[event,setEvent]=useState(role?.event_name??initialSlot?.event??""),[time,setTime]=useState(role?.slot_time??initialSlot?.time??""),[person,setPerson]=useState(initialPersonId??""),[selected,setSelected]=useState(roleId?[roleId]:[]),[assignment,setAssignment]=useState("");
  const dirty=!!event||!!time||!!person||selected.length>0||!!assignment;
  const availableRoles=meet.roles.filter(r=>r.slot_time===time&&r.event_name===event);
  const conflict=(id:string)=>meet.appearances.some(a=>a.participant_id===id&&meet.events.find(e=>e.name===a.event_name)?.starts_at===time&&(availableAppearance(meet.participants.find(p=>p.id===id),a)&&a.performance.status!=="DNS"||a.performance.status==="DNF"||a.performance.status==="DQ"||a.performance.trials.some(t=>t.status!=="pending"||!!t.mark||!!t.wind)))||meet.duties.some(d=>d.participant_id===id&&d.slot_time===time&&(d.assignment||d.role_ids.length));
@@ -22,8 +23,8 @@ export function CompetitionMeetDutyEditor({meet,mutation,onClose,roleId}:{meet:C
  </fieldset>{mutation.message&&<p role="status" className="text-caption">{mutation.message}</p>}<FormModalFooter><Button className="w-full" disabled={mutation.locked||!person||!event||!time||!selected.length&&!assignment.trim()} onClick={()=>void save()}>保存する</Button>{mutation.uncertain&&<Button onClick={()=>void mutation.check()}>保存結果を確認</Button>}{mutation.notSaved&&<Button onClick={()=>void mutation.retry()}>同じ操作を再送</Button>}</FormModalFooter></FormModal>;
 }
 
-export function CompetitionMeetRoleEditor({meet,mutation,onClose,roleId}:{meet:CompetitionMeet;mutation:MeetMutation;onClose:()=>void;roleId?:string}) {
- const [original]=useState(meet.roles.find(r=>r.id===roleId)),[name,setName]=useState(original?.name??""),[event,setEvent]=useState(original?.event_name??""),[time,setTime]=useState(original?.slot_time??""),[count,setCount]=useState(String(original?.required_count??1));
+export function CompetitionMeetRoleEditor({meet,mutation,onClose,roleId,initialSlot}:{meet:CompetitionMeet;mutation:MeetMutation;onClose:()=>void;roleId?:string;initialSlot?:MeetDutySlot}) {
+ const [original]=useState(meet.roles.find(r=>r.id===roleId)),[name,setName]=useState(original?.name??""),[event,setEvent]=useState(original?.event_name??initialSlot?.event??""),[time,setTime]=useState(original?.slot_time??initialSlot?.time??""),[count,setCount]=useState(String(original?.required_count??1));
  const dirty=name!==(original?.name??"")||event!==(original?.event_name??"")||time!==(original?.slot_time??"")||count!==String(original?.required_count??1);
  async function save(){if(await mutation.run({action:"role.save",id:original?.id,revision:original?.revision,name,event,time,requiredCount:Number(count)}))onClose();}
  return <FormModal open title={original?"補助の役割を編集":"補助の役割を追加"} autoFocus={false} onOpenChange={open=>!open&&onClose()}><FormDraftGuard dirty={dirty} busy={mutation.locked} onSave={save}/><fieldset disabled={mutation.locked} className="space-y-4">

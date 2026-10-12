@@ -90,7 +90,7 @@ async function HomeContent({ nowJst }: { nowJst: Date }) {
 async function ObEntrySection() {
   const profile = await getCurrentProfile();
   const normalized = await getCompetitionMeet(OB_MEET.competitionId).catch(()=>undefined);
-  if(normalized===undefined)return <section className="space-y-2"><p className="section-label">OB戦</p><Card className="space-y-3 p-4"><p className="text-caption">出場・補助担当を取得できませんでした。画面を開き直してください。</p><Link data-ui-row className="flex min-h-11 items-center text-body text-accent" href={`${OB_PROGRAM_PATH}?section=mine&edit=mine`}>自分の登録を確認 →</Link></Card></section>;
+  if(normalized===undefined)return <section className="space-y-2"><p className="section-label">OB戦</p><Card className="space-y-3 p-4"><p className="text-caption">大会情報を取得できませんでした。画面を開き直してください。</p><Link data-ui-row className="flex min-h-11 items-center text-body text-accent" href={OB_PROGRAM_PATH}>結果を確認 →</Link></Card></section>;
   if (normalized) return <CompetitionMeetHomeCard meet={normalized} profileId={profile.id} />;
   const staff = canManageObMeet(profile.roles);
   const entry = await getMyObEntry(profile.id).catch(() => undefined);

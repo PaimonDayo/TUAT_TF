@@ -1,12 +1,13 @@
 import {createElement,type ReactNode} from "react";
 import {renderToStaticMarkup} from "react-dom/server";
 import {beforeEach,expect,it,vi} from "vitest";
-const mocks=vi.hoisted(()=>({competition:vi.fn(),profile:vi.fn(),preview:vi.fn(),meet:vi.fn(),backend:vi.fn(),workspace:vi.fn()}));
+const mocks=vi.hoisted(()=>({competition:vi.fn(),profile:vi.fn(),preview:vi.fn(),meet:vi.fn(),backend:vi.fn(),workspace:vi.fn(),results:vi.fn()}));
 vi.mock("@/lib/queries",()=>({getCompetitionById:mocks.competition}));
 vi.mock("@/lib/queries/competition-meet",()=>({getCompetitionMeet:mocks.meet,getCompetitionMeetBackend:mocks.backend}));
 vi.mock("@/lib/supabase/auth",()=>({getCurrentProfile:mocks.profile,isMemberPreviewActive:mocks.preview}));
 vi.mock("@/components/layout/SubHeader",()=>({SubHeader:({title}:{title:string})=>createElement("h1",null,title)}));
 vi.mock("@/components/features/CompetitionMeetWorkspace",()=>({CompetitionMeetWorkspace:(props:unknown)=>{mocks.workspace(props);return null;}}));
+vi.mock("@/components/features/CompetitionMeetResults",()=>({CompetitionMeetResults:(props:unknown)=>{mocks.results(props);return null;}}));
 vi.mock("next/navigation",()=>({notFound:()=>{throw Error("not found");}}));
 import Page from "./page";
 const call=async()=>{renderToStaticMarkup(await Page({params:Promise.resolve({id:"another-meet"}),searchParams:Promise.resolve({section:"mine",edit:"mine"})}) as ReactNode);return mocks.workspace.mock.lastCall![0];};
@@ -15,3 +16,10 @@ it("sets up another competition through the same workspace with recording disabl
 it("passes every independent appearance unchanged to the shared workspace",async()=>{const snapshot={competitionId:"another-meet",backend:"pc",participants:[{id:"person"}],appearances:[{id:"one"},{id:"two"},{id:"three"}],party:[{id:"reply"}],members:[{id:"account"}],permissions:{manage:true,record:true,groups:true,configure:true,history:true}};mocks.meet.mockResolvedValue(snapshot);expect((await call()).meet).toBe(snapshot);expect(mocks.backend).not.toHaveBeenCalled();});
 it("clears private party data and management/recording permissions in member preview",async()=>{mocks.preview.mockResolvedValue(true);mocks.meet.mockResolvedValue({participants:[],appearances:[],events:[],party:[{id:"private reply"}],members:[{id:"account"}],permissions:{manage:true,record:true,groups:true,configure:true,history:true}});expect((await call()).meet).toMatchObject({party:[],members:[],permissions:{manage:false,record:false,groups:false,configure:false}});});
 it("propagates failed acquisition instead of showing a blank setup screen",async()=>{mocks.meet.mockRejectedValue(new Error("read failed"));await expect(call()).rejects.toThrow("read failed");expect(mocks.workspace).not.toHaveBeenCalled();expect(mocks.backend).not.toHaveBeenCalled();});
+it("routes a nonstaff OB member, including a system operator, to results on a direct edit URL",async()=>{
+ const id="3e2a2b1e-21d1-49b0-a1e8-40bf595fb7e5";
+ mocks.competition.mockResolvedValue({id,name:"OB戦",starts_on:"2026-11-03"});
+ mocks.meet.mockResolvedValue({competitionId:id,permissions:{manage:false,record:true,register:true,configure:true}});
+ renderToStaticMarkup(await Page({params:Promise.resolve({id}),searchParams:Promise.resolve({section:"duties",edit:"mine"})}));
+ expect(mocks.results).toHaveBeenCalledWith(expect.objectContaining({date:"2026-11-03"}));expect(mocks.workspace).not.toHaveBeenCalled();
+});

@@ -117,16 +117,17 @@ export async function getUnregisteredEventNames() {
 /** 大会プログラム（速報サイトから取り込んだ、農工大の出場種目・出場選手）。プログラム順。 */
 export async function getCompetitionProgramEntries(competitionId: string) {
   const supabase = await createClient();
-  return readCompetitionProgramEntries(supabase, competitionId).catch(() => []);
+  return readCompetitionProgramEntries(supabase, competitionId);
 }
 
 export async function getCompetitionById(id: string) {
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("competitions")
     .select(COMPETITION_SELECT)
     .eq("id", id)
     .maybeSingle();
+  if (error) throw new Error("大会を取得できませんでした");
   return (data as CompetitionRow | null) ?? null;
 }
 

@@ -3,7 +3,11 @@ import { notFound } from "next/navigation";
 import { ChevronRight, ListOrdered, Target } from "lucide-react";
 import { SubHeader } from "@/components/layout/SubHeader";
 import { Card } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
+import { CompetitionResults } from "@/components/features/CompetitionResults";
+import { getCompetitionMeet } from "@/lib/queries/competition-meet";
+import { getCurrentProfile, isMemberPreviewActive } from "@/lib/supabase/auth";
+import { permissionsOf } from "@/lib/permissions";
+import type { ParsedProgramRow } from "@/lib/competition-program";
 import {
   getCompetitionById,
   getCompetitionEvents,
@@ -33,7 +37,9 @@ export default async function CompetitionPage({
   const competition = await getCompetitionById(id);
   if (!competition) notFound();
 
-  const hasProgram = Boolean(competition.program_source_url);
+  const [meet, profile, preview] = await Promise.all([getCompetitionMeet(id), getCurrentProfile(), isMemberPreviewActive()]);
+  const canOperate = !preview && (meet ? meet.permissions.manage : !isObCompetition(id) && permissionsOf(profile.roles).manageSystem);
+  const hasProgram = Boolean(competition.program_source_url) || !!meet || isObCompetition(id);
   const [results, events] = hasProgram
     ? [[], []]
     : await Promise.all([getCompetitionResults(competition), getCompetitionEvents()]);
@@ -69,15 +75,15 @@ export default async function CompetitionPage({
         </p>
 
         <Card className="divide-y divide-separator">
-          <Link data-ui-row href={`/competitions/${competition.id}/manage`} className="flex items-center gap-3 p-4 pressable"><ListOrdered size={20} className="text-accent"/><span className="flex-1 text-headline">参加者・大会の運営</span><ChevronRight size={16} className="text-muted"/></Link>
-          {(competition.program_source_url || isObCompetition(competition.id)) && (
+          {canOperate && <Link data-ui-row href={`/competitions/${competition.id}/manage`} className="flex items-center gap-3 p-4 pressable"><ListOrdered size={20} className="text-accent"/><span className="flex-1 text-headline">参加者・大会の運営</span><ChevronRight size={16} className="text-muted"/></Link>}
+          {hasProgram && (
             <Link
               data-ui-row
               href={`/competitions/${competition.id}/program`}
               className="flex items-center gap-3 p-4 pressable"
             >
               <ListOrdered size={20} className="text-accent" />
-              <span className="flex-1 text-headline">{hasProgram ? "プログラム・結果" : "プログラム"}</span>
+              <span className="flex-1 text-headline">結果</span>
               <ChevronRight size={16} className="text-muted" />
             </Link>
           )}
@@ -94,41 +100,15 @@ export default async function CompetitionPage({
 
         {hasProgram ? (
           <p className="text-caption">
-            結果は公式の速報からプログラムにまとめています。
+            {competition.program_source_url ? "結果は公式の速報から取得しています。" : "結果は大会の記録から表示しています。"}
           </p>
         ) : (
           <>
           <p className="section-label">結果（{results.length}件）</p>
-          {groups.length === 0 ? (
-            <Card>
-              <EmptyState title="まだこの大会の結果はありません" />
-            </Card>
-          ) : (
-            groups.map((group) => (
-              <section key={group.name} className="space-y-1.5">
-                <p className="section-label">{group.name}</p>
-                <Card className="divide-y divide-separator">
-                  {group.rows.map((row) => (
-                    <div key={row.id} className="flex items-center gap-3 p-3.5">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-headline break-words">
-                          {row.author?.display_name ?? "部員"}
-                        </p>
-                        {row.wind !== null && (
-                          <p className="text-caption">
-                            風速 {formatWind(row.wind)}
-                          </p>
-                        )}
-                      </div>
-                      <span className="text-title tabular-nums">
-                        {formatRecord(row, measureTypeOf(events, row.event_name), timeFormatOf(events, row.event_name))}
-                      </span>
-                    </div>
-                  ))}
-                </Card>
-              </section>
-            ))
-          )}
+          <CompetitionResults rows={groups.flatMap((group, index) => [...new Set(group.rows.map(r => r.recorded_on ?? competition.starts_on))].map(date => ({
+            eventDate: date, eventLabel: group.name, block: measureTypeOf(events, group.name) === "time" ? "track" : "field", sortOrder: index, timeLabel: null, roundKey: group.name + "/" + date, status: null,
+            tuatEntries: group.rows.filter(r => (r.recorded_on ?? competition.starts_on) === date).map(r => ({ id: r.id, name: r.author?.display_name ?? "部員", grade: "", heat: null, lane: null, bib: null, separateResult: true, result: { place: null, record: formatRecord(r, measureTypeOf(events, r.event_name), timeFormatOf(events, r.event_name)), ...(r.wind !== null ? { wind: formatWind(r.wind) } : {}) } })),
+          } satisfies ParsedProgramRow)))} />
           </>
         )}
       </div>

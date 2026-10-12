@@ -5,6 +5,10 @@
 export type ProgramBlock = "track" | "field";
 
 export interface ProgramAthlete {
+  id?: string;
+  details?: string[];
+  positionLabel?: string;
+  separateResult?: boolean;
   heat: number | null;
   lane: number | null;
   bib: string | null;
@@ -323,6 +327,7 @@ export function formatTuatHeats(entries: ProgramAthlete[]): string | null {
 
 /** 「B2山田」のように学年+苗字だけの短い表示にする。 */
 export function formatAthleteLabel(entry: ProgramAthlete): string {
+  if (entry.id) return `${entry.name} ${entry.grade}`.trim();
   const surname = entry.name.trim().split(/\s+/)[0] ?? entry.name;
   return `${entry.grade}${surname}`;
 }
@@ -333,6 +338,7 @@ export function formatAthleteList(entries: ProgramAthlete[]): string {
 
 /** 「2組3番」のような出走位置だけ。無ければ空文字。 */
 export function formatPosition(entry: ProgramAthlete): string {
+  if (entry.positionLabel) return entry.positionLabel;
   return `${entry.heat ? `${entry.heat}組` : ""}${entry.lane !== null ? `${entry.lane}番` : ""}`;
 }
 

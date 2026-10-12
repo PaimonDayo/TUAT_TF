@@ -10,14 +10,14 @@ import { ObMyEntry } from "@/components/features/ObMyEntry";
 import { getCurrentProfile, isMemberPreviewActive } from "@/lib/supabase/auth";
 import { getCompetitionById, getCompetitionProgramEntries } from "@/lib/queries";
 import { getMyObEntryFull, getObEntries } from "@/lib/queries/ob-entries";
-import { canManageObMeet, canRecordObMeet, canViewObHistory, isObCompetition, OB_PROGRAM_PATH } from "@/lib/ob-meet";
+import { canManageObMeet, canViewObHistory, isObCompetition, OB_PROGRAM_PATH } from "@/lib/ob-meet";
 import { obWorkspaceDestination } from "@/lib/ob-meet-navigation";
 import { permissionsOf } from "@/lib/permissions";
 import { ObDayWorkspace } from "@/components/features/ObDayWorkspace";
 import { ObMeetParticipants } from "@/components/features/ObMeetParticipants";
 import { getObEventOperations } from "@/lib/queries/ob-operations";
 import { getCompetitionMeet } from "@/lib/queries/competition-meet";
-import { CompetitionMeetWorkspace } from "@/components/features/CompetitionMeetWorkspace";
+import { CompetitionMeetResults } from "@/components/features/CompetitionMeetResults";
 
 export default async function CompetitionProgramPage({
   params,
@@ -39,17 +39,20 @@ export default async function CompetitionProgramPage({
   // 開いた元へ戻る。直接URLを開いた場合だけホームを使う。
   const header = isObCompetition(competition.id)
     ? <SubHeader title={competition.name} backHref="/home" />
-    : <SubHeader title={`${competition.name}プログラム`} backHref={`/competitions/${competition.id}`} />;
+    : <SubHeader title={competition.name} backHref={`/competitions/${competition.id}`} />;
 
-  // OB戦のプログラムは出場登録そのもの。本人とOB戦担当者が編集する。
+  // OB戦は共通の結果画面を入口にし、担当者だけ別の運営画面を開く。
   if (isObCompetition(competition.id)) {
     const normalized = await getCompetitionMeet(competition.id);
     if (normalized) {
-      const meet = preview ? {...normalized,permissions:{manage:false,groups:false,record:false,register:false,configure:false},members:[],party:[]} : normalized;
-      return <>{header}<CompetitionMeetWorkspace meet={meet} me={{id:profile.id,display_name:profile.display_name,grade:profile.grade}} initialSection={requested.section === "participants" || edit === "identity" ? "participants" : requested.section === "duties" ? "duties" : "events"} initialEdit={edit === "mine" || requested.section === "mine"} /></>;
+      return <>{header}<CompetitionMeetResults meet={normalized} date={competition.starts_on} canOperate={normalized.permissions.manage && !preview} /></>;
     }
     const staff = canManageObMeet(profile.roles);
-    const canOperate = canRecordObMeet(profile) && !preview;
+    if (!staff || preview) {
+      const program = await getObProgram();
+      return <>{header}<div className="space-y-4 px-4 pb-8 pt-2"><h2 className="text-headline">結果</h2><ObPublicProgram {...program} /></div></>;
+    }
+    const canOperate = staff && !preview;
     const { view, section } = obWorkspaceDestination(requested, canOperate, staff);
     const managementView = view === "operations" && section === "participants" && staff;
     const [mine, publicProgram, roster, operations] = await Promise.all([
@@ -82,6 +85,10 @@ export default async function CompetitionProgramPage({
     </ObMeetWorkspace></>;
   }
 
+  if (!competition.program_source_url) {
+    const managed = await getCompetitionMeet(id);
+    if (managed) return <>{header}<CompetitionMeetResults meet={managed} date={competition.starts_on} canOperate={managed.permissions.manage && !preview} /></>;
+  }
   const entries = await getCompetitionProgramEntries(id);
 
   return (

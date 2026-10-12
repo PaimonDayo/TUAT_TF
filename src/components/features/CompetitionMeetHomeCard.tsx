@@ -5,6 +5,7 @@ import { fieldOrderRows } from "@/lib/meet-field-order";
 
 /** Server-only summary: no other participant's identity is sent to a client component. */
 export function CompetitionMeetHomeCard({ meet, profileId }: { meet: CompetitionMeet; profileId: string }) {
+  if (!meet.permissions.manage) return <section className="space-y-2"><p className="section-label">{meet.name}</p><Card><Link data-ui-row className="flex min-h-14 items-center justify-between p-4 text-body text-accent" href={`/competitions/${meet.competitionId}/program`}>結果を見る<span>→</span></Link></Card></section>;
   const person=meet.participants.find(p=>p.profile_id===profileId);
   const appearances=meet.appearances.filter(a=>a.participant_id===person?.id&&a.state!=="deleted").sort((a,b)=>(meet.events.find(e=>e.name===a.event_name)?.starts_at??"").localeCompare(meet.events.find(e=>e.name===b.event_name)?.starts_at??"")||a.ordinal-b.ordinal);
   const duties=meet.duties.filter(d=>d.participant_id===person?.id&&(d.assignment||d.role_ids.length));

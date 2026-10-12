@@ -8,7 +8,7 @@ function subscribe(listener:()=>void) {
   window.addEventListener("online",listener);window.addEventListener("offline",listener);
   return ()=>{window.removeEventListener("online",listener);window.removeEventListener("offline",listener);};
 }
-export function ObLiveRefresh() {
+export function ObLiveRefresh({readOnly=false}:{readOnly?:boolean}) {
   const online=useSyncExternalStore(subscribe,()=>navigator.onLine,()=>true);
   const router=useRouter(),[pending,startTransition]=useTransition();
   useEffect(()=>{
@@ -18,5 +18,5 @@ export function ObLiveRefresh() {
     window.addEventListener("online",refresh);document.addEventListener("visibilitychange",refresh);
     return ()=>{clearInterval(interval);window.removeEventListener("online",refresh);document.removeEventListener("visibilitychange",refresh);};
   },[router]);
-  return <div className="flex items-center justify-end gap-3">{!online&&<p role="status" className="text-caption text-amber-700">通信が切れています。編集中の内容は保存まで残ります。</p>}<button type="button" aria-label="大会情報を最新に更新" disabled={!online||pending} onClick={()=>startTransition(()=>router.refresh())} className="flex min-h-11 shrink-0 items-center gap-2 px-2 text-sm text-muted disabled:opacity-50"><RefreshCw size={15} className={pending?"animate-spin":""}/>{pending?"更新中":"最新に更新"}</button></div>;
+  return <div className="flex items-center justify-end gap-3">{!online&&<p role="status" className="text-caption text-amber-700">{readOnly ? "通信が切れています。最後に取得した結果を表示しています。" : "通信が切れています。編集中の内容は保存まで残ります。"}</p>}<button type="button" aria-label="大会情報を最新に更新" disabled={!online||pending} onClick={()=>startTransition(()=>router.refresh())} className="flex min-h-11 shrink-0 items-center gap-2 px-2 text-sm text-muted disabled:opacity-50"><RefreshCw size={15} className={pending?"animate-spin":""}/>{pending?"更新中":"最新に更新"}</button></div>;
 }

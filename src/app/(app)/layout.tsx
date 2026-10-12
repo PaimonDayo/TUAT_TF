@@ -17,6 +17,7 @@ import { getCurrentProfile } from "@/lib/supabase/auth";
 import { permissionsOf } from "@/lib/permissions";
 import { ObEntryPrompt } from "@/components/features/ObEntryPrompt";
 import { getMyObEntry } from "@/lib/queries/ob-entries";
+import { canManageObMeet } from "@/lib/ob-meet";
 import { jstToday } from "@/lib/date";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -104,7 +105,7 @@ async function AuthenticatedSheetHeaderGuard() {
 /** OB戦のエントリー確認。まずはシステムロールだけに出して様子を見る（オーナー指示 2026-09-26）。 */
 async function AuthenticatedObEntryPrompt() {
   const profile = await getCurrentProfile();
-  if (!permissionsOf(profile.roles).manageSystem) return null;
+  if (!permissionsOf(profile.roles).manageSystem || !canManageObMeet(profile.roles)) return null;
   if (needsSheetSetupConfirmation(profile.sheet_transition)) return null;
   const entry = await getMyObEntry(profile.id);
   return <ObEntryPrompt hasEntry={!!entry} today={jstToday()} />;
