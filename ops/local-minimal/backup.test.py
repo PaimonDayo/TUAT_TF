@@ -540,6 +540,65 @@ class BackupBehaviour(unittest.TestCase):
         with self.assertRaisesRegex(backup.BackupFailure,'copy differ'): backup.produce(self.config,self.commands)
         self.assertEqual(self.commands.events,[])
 
+    def test_root_metadata_publication_uses_actual_sealed_reader_group_and_preserves_legacy(self):
+        for gid in (1000, 65530):
+            parent = self.root / ('reader-' + str(gid)); parent.mkdir(mode=0o750)
+            os.chown(parent, 0, gid); parent.chmod(0o750)
+            path = parent / 'verified.json'
+            backup.atomic_jobs_json(path, {'version': 1}, reader_gid=gid)
+            self.assertEqual((path.stat().st_uid, path.stat().st_gid, path.stat().st_mode & 0o777), (0, gid, 0o640))
+            original = path.read_bytes()
+            with self.assertRaisesRegex(backup.BackupFailure, 'directory contract'): backup.atomic_jobs_json(path, {'version': 2}, reader_gid=65530 if gid == 1000 else 1000)
+            self.assertEqual(path.read_bytes(), original)
+            os.chown(path, 0, 1000 if gid == 65530 else 65530)
+            with self.assertRaisesRegex(backup.BackupFailure, 'file contract'): backup.atomic_jobs_json(path, {'version': 2}, reader_gid=gid)
+            self.assertEqual(path.read_bytes(), original)
+
+    def test_private_command_transport_and_split_journal_owner_do_not_use_default_daemon(self):
+        config = {**self.config, 'profile': 'pc-private', 'sourceOwnerUid': 65530}
+        self.assertEqual(backup.jobs_owner(config), 0)
+        self.assertEqual(backup.jobs_owner({**self.config, 'sourceOwnerUid': 65530}), 65530)
+        commands = backup.LocalCommands({'profile': 'pc-private'})
+        events = []
+        commands.run = lambda args, **_kwargs: events.append(args) or b''
+        commands.sql({**config, 'containers': {'db': 'tuat-local-db'}}, 'SELECT 1;')
+        self.assertEqual(events[0][:5], ['docker', '--host', 'unix:///run/tuat-local/docker.sock', '--config', '/nonexistent'])
+        self.assertIn('--host=/tmp', events[0]); self.assertIn('--port=18304', events[0])
+        events.clear(); commands.sql({**config, 'containers': {'db': 'tuat-backup-verify-synthetic'}}, 'SELECT 1;')
+        self.assertNotIn('--port=18304', events[0])
+
+    def test_private_capture_refuses_different_database_before_any_sql_dump_or_stage_bytes(self):
+        config = {**self.config,'profile':'pc-private','database':'other_valid_database'}
+        runtime = {'profile':'pc-private','sourceId':config['sourceId'],**{key:str(backup.periodic.MOUNT/key) for key in
+            ('dbEnvironmentFile','authEnvironmentFile','restEnvironmentFile')}}
+        envs = {'dbEnvironmentFile':b'PGDATA=/var/lib/postgresql/data\nPOSTGRES_USER=postgres\nPOSTGRES_PASSWORD=synthetic\nPOSTGRES_DB=fixture\n',
+            'authEnvironmentFile':b'GOTRUE_DB_DATABASE_URL=postgres://supabase_auth_admin:synthetic@127.0.0.1:18304/fixture?search_path=auth\n',
+            'restEnvironmentFile':b'PGRST_DB_URI=postgres://authenticator:synthetic@127.0.0.1:18304/fixture\n'}
+        def protected(path, _private):
+            data = envs[Path(path).name]
+            from types import SimpleNamespace
+            return SimpleNamespace(stat=lambda:SimpleNamespace(st_dev=2,st_size=len(data)),read_bytes=lambda:data)
+        class NeverCommands:
+            def sql(self,*_args): raise AssertionError('Wrong database reached SQL')
+            def docker(self,*_args,**_kwargs): raise AssertionError('Wrong database reached dump')
+        from types import SimpleNamespace
+        with patch.object(backup.periodic,'seal',return_value={'runtimeConfigPath':'/synthetic/runtime'}), \
+             patch.object(backup.periodic,'read_json',return_value=runtime), patch.object(backup.periodic,'immutable',side_effect=protected), \
+             patch.object(Path,'stat',return_value=SimpleNamespace(st_dev=2)):
+            with self.assertRaisesRegex(backup.periodic.Hold,'database-binding'):
+                backup.capture_bundle(config,NeverCommands(),Path(self.config['stageRoot']))
+        self.assertEqual(list(Path(self.config['stageRoot']).iterdir()),[])
+
+    def test_private_daemon_identity_is_preserved_and_never_frozen_or_thawed(self):
+        self.host(); self.config['profile'] = 'pc-private'
+        for index, name in enumerate(backup.periodic.PC_DAEMONS):
+            self.commands.units[name] = {**self.commands.units[backup.UNITS[0]], 'MainPID': str(900+index),
+                'InvocationID': ('a' if index == 0 else 'b')*32, 'ControlGroup': '/system.slice/'+name}
+        window = self.window(); window.enter(); window.verify_frozen(); window.restore()
+        self.assertFalse(any(name in backup.periodic.PC_DAEMONS for name, _ in self.commands.events))
+        self.commands.units[backup.periodic.PC_DAEMONS[0]]['MainPID'] = '999'
+        with self.assertRaisesRegex(backup.BackupFailure, 'daemon identity'): window.verify_preserved_units()
+
     def test_unknown_schema_cannot_escape_full_dump_comparison(self):
         class Sql:
             def sql(self,*_args): return b'0\n0\n0\n0\n1\n0\n'

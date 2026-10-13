@@ -1,0 +1,11 @@
+version = 4
+root = "/var/lib/tuat-local/containerd"
+state = "/run/tuat-local/containerd"
+imports = []
+disabled_plugins = ["io.containerd.cri.v1.images", "io.containerd.cri.v1.runtime", "io.containerd.grpc.v1.cri", "io.containerd.nri.v1.nri", "io.containerd.internal.v1.opt"]
+
+[plugins."io.containerd.server.v1.grpc"]
+  address = "/run/tuat-local/containerd/containerd.sock"
+
+[plugins."io.containerd.server.v1.ttrpc"]
+  address = "/run/tuat-local/containerd/containerd.sock.ttrpc"

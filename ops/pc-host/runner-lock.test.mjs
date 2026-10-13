@@ -4,13 +4,22 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, exists
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { acquireRunnerLock } from './runner-lock.mjs';
+import { acquireRunnerLock, acquireManagedRunnerLock } from './runner-lock.mjs';
 
 const stoppedPid = 0x7ffffffe;
 const startedAt = '2026-10-08T10:00:00.000Z';
 const guarded = { environment: { TUAT_PC_APP_MUTEX_HELD: '1' } };
 const direct = { environment: {} };
 const stopped = () => { throw Object.assign(new Error('Synthetic stopped owner'), { code: 'ESRCH' }); };
+
+test('Windows Jobs recovery cannot borrow the app service mutex', { skip: process.platform !== 'win32' }, t => {
+  const { directory, path } = fixture(t), bytes = legacy(path);
+  assert.throws(() => acquireManagedRunnerLock(directory, { ...guarded, probePid: stopped, recoveryMarker: 'TUAT_PC_JOBS_MUTEX_HELD' }),
+    expectCode('ERR_PC_APP_LOCK_RECOVERY_GUARD_REQUIRED'));
+  assert.equal(readFileSync(path,'utf8'),bytes);
+  const lock = acquireManagedRunnerLock(directory, { environment: { TUAT_PC_JOBS_MUTEX_HELD: '1' }, probePid: stopped, recoveryMarker: 'TUAT_PC_JOBS_MUTEX_HELD' });
+  assert.equal(lock.recovered,true); assert.equal(lock.release(),true);
+});
 
 function fixture(t) {
   const directory = mkdtempSync(join(tmpdir(), 'tuat-pc-app-lock-'));

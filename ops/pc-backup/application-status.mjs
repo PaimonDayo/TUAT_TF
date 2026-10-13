@@ -26,16 +26,23 @@ export function applicationStatusMetadata(status) {
   return result;
 }
 
+export function verifyApplicationStatusDirectory(directory,gid,{lstat=lstatSync,realpath=realpathSync}={}) {
+  for(let path=directory;;path=dirname(path)) {
+    const info=lstat(path);
+    if(!info.isDirectory()||info.isSymbolicLink()||realpath(path)!==path||info.uid!==0||(info.mode&0o022))throw Error('Application status path is writable or redirected');
+    // The nonroot app uses this primary group with supplementary groups cleared.
+    // POSIX selects the matching group class even when the other class has execute.
+    if(!(info.mode&(info.gid===gid?0o010:0o001)))throw Error('Application status path cannot be traversed by its reader');
+    if(path===directory&&(info.gid!==gid||(info.mode&0o777)!==0o750))throw Error('Application status reader permissions differ');
+    if(dirname(path)===path)break;
+  }
+}
+
 export function writeApplicationStatus(config,status) {
   validateApplicationStatus(config);
   if(process.platform!=='linux'||process.getuid()!==0)throw Error('Root Linux status publisher required');
   const directory=config.applicationStatusDirectory,gid=config.applicationStatusGid;
-  for(let path=directory;;path=dirname(path)) {
-    const info=lstatSync(path);
-    if(!info.isDirectory()||info.isSymbolicLink()||realpathSync(path)!==path||info.uid!==0||(info.mode&0o022))throw Error('Application status path is writable or redirected');
-    if(path===directory&&(info.gid!==gid||(info.mode&0o777)!==0o750))throw Error('Application status reader permissions differ');
-    if(dirname(path)===path)break;
-  }
+  verifyApplicationStatusDirectory(directory,gid);
   const file=resolve(directory,STATUS_FILE);
   const existing=lstatSync(file,{throwIfNoEntry:false});
   if(existing) {

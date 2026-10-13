@@ -1,0 +1,16 @@
+[Unit]
+Description=TUAT private containerd
+ConditionPathIsMountPoint=/var/lib/tuat-local
+
+[Service]
+Type=notify
+ExecStartPre=/usr/bin/findmnt --noheadings --mountpoint /var/lib/tuat-local --source /dev/mapper/tuat-local-data --types ext4
+ExecStart=/usr/bin/containerd --config /etc/tuat-local/containerd.toml
+Delegate=yes
+KillMode=process
+Restart=no
+RuntimeDirectory=tuat-local
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
+LimitCORE=0
+UMask=0022

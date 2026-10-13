@@ -14,6 +14,7 @@ export function validateSharedPc(config, env) {
   if (!isAbsolute(config.hostStateDirectory ?? '') || !isAbsolute(config.backupStatusPath ?? '')
     || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(config.expectedBackupInstanceId ?? '')
     || !/^\d{10,20}$/.test(config.expectedBackupDatabaseSystemIdentifier ?? '')) throw Error('Pinned shared host and backup required');
+  if (!/^[a-z_][a-z0-9_]{0,62}$/.test(config.expectedBackupDatabaseName ?? 'postgres')) throw Error('Pinned shared backup database name required');
   const app = loopbackRoot(config.appOrigin);
   const local=env.PC_LOCAL_RUNTIME==='true';
   if(local!==(env.NEXT_PUBLIC_PC_LOCAL_RUNTIME==='true'))throw Error('Local runtime flags must agree');
@@ -48,6 +49,8 @@ export function validateSharedPc(config, env) {
 
 export function backendReady(config, { read = readFileSync, now = Date.now(), imageRoot } = {}) {
   try {
+    const databaseName = config.expectedBackupDatabaseName ?? 'postgres';
+    if (!/^[a-z_][a-z0-9_]{0,62}$/.test(databaseName)) return false;
     const host = JSON.parse(read(resolve(config.hostStateDirectory, 'runtime-status.json'), 'utf8'));
     const started = utcTime(host.startedAt), checked = utcTime(host.checkedAt);
     if (host.version !== 1 || host.running !== true || host.releaseCommit !== config.releaseCommit || host.releaseId !== config.releaseId
@@ -55,6 +58,7 @@ export function backendReady(config, { read = readFileSync, now = Date.now(), im
       || host.backup?.identity?.instanceId !== config.expectedBackupInstanceId
       || host.backup?.identity?.startedAt !== host.startedAt
       || host.backup?.identity?.databaseSystemIdentifier !== config.expectedBackupDatabaseSystemIdentifier
+      || (host.backup?.identity?.databaseName ?? 'postgres') !== databaseName
       || host.backup?.statusPath !== config.backupStatusPath) return false;
     const status = JSON.parse(read(config.backupStatusPath, 'utf8'));
     if(imageRoot&&status.backup?.localSnapshot?.imageRoot!==imageRoot)return false;

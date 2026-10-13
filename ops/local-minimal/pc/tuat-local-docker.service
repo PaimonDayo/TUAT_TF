@@ -1,0 +1,19 @@
+[Unit]
+Description=TUAT private Docker
+Requires=tuat-local-containerd.service
+After=tuat-local-containerd.service
+ConditionPathIsMountPoint=/var/lib/tuat-local
+
+[Service]
+Type=notify
+ExecStartPre=/usr/bin/findmnt --noheadings --mountpoint /var/lib/tuat-local --source /dev/mapper/tuat-local-data --types ext4
+ExecStartPre=/usr/bin/test -S /run/tuat-local/containerd/containerd.sock
+ExecStart=/usr/bin/dockerd --config-file=/etc/tuat-local/docker.json
+Delegate=yes
+KillMode=process
+Restart=no
+RuntimeDirectory=tuat-local
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
+LimitCORE=0
+UMask=0022

@@ -68,6 +68,66 @@ test('native Linux probe verifies its owned DB without WSL or ambient Docker con
   f.wrong();await assert.rejects(adapter.probe({signal:new AbortController().signal}),/ownership mismatch/);
 });
 
+test('private daemon pins every inspect, probe, dump and recovery command to the selected socket',async()=>{
+  const f=nativeAdapterFixture(),socket='unix:///run/tuat-local/docker.sock';f.config.dockerSocket=socket;f.config.pushEnvironmentFile=null;
+  f.dependencies.execute=async(executable,args,options)=>{
+    f.calls.push({executable,args,options});const t=f.config.target,statement=args.at(-1);
+    const stdout=args.includes('inspect')?[t.containerId,t.containerImageId,'/'+t.containerName,'true',t.ownerLabel,t.generationLabel,t.dataMountSource].join('|'):
+      args.includes(f.config.pgDumpExecutable)?'PGDMPsynthetic':statement.includes('vault.decrypted_secrets')?'[]':
+        statement.includes("to_regclass('cron.job')")?'t':statement.includes('FROM cron.job')?'[]':t.databaseName+'|'+t.databaseSystemIdentifier;
+    return {stdout:Buffer.from(stdout)};
+  };
+  const adapter=createAdapters(f.config,{},f.dependencies);
+  f.config.dockerSocket='tcp://remote.example.test:2375'; // A later mutation must not change this adapter's selected transport.
+  assert.deepEqual(await adapter.probe({signal:signal()}),f.config.target);
+  assert.equal(String(await adapter.dump({signal:signal()})),'PGDMPsynthetic');
+  const {capturedAt,...recovery}=await adapter.recovery({signal:signal()});
+  assert.equal(new Date(capturedAt).toISOString(),capturedAt);
+  assert.deepEqual(recovery,{version:1,vault:[],pushEnv:null,cron:{installed:true,jobs:[]}});
+  assert.equal(f.calls.length,6);
+  for(const call of f.calls){
+    assert.equal(call.executable,f.config.dockerExecutable);assert.deepEqual(call.args.slice(0,2),['--host',socket]);
+    assert.deepEqual(call.options.env,{LANG:'C.UTF-8',DOCKER_CONFIG:'/nonexistent'});
+    assert(call.args.includes(f.config.target.containerId));assert(!call.args.includes('--context'));
+    if(call.args.includes('exec'))assert.equal(call.args[call.args.indexOf('-d')+1],f.config.target.databaseName);
+  }
+});
+
+test('invalid socket or explicit WSL socket dispatches nothing; default transport remains supported',()=>{
+  for(const mode of ['native','wsl'])for(const dockerSocket of ['tcp://127.0.0.1:2375','unix:///other/docker.sock',
+    ...(mode==='wsl'?['unix:///run/tuat-local/docker.sock','unix:///var/run/docker.sock']:[])]){
+    const f=mode==='native'?nativeAdapterFixture():adapterFixture();f.config.dockerSocket=dockerSocket;
+    assert.throws(()=>createAdapters(f.config,{},f.dependencies));assert.equal(f.calls.length,0);
+  }
+});
+
+test('private socket retains command uncertainty poisoning across all later database operations',async()=>{
+  const f=nativeAdapterFixture();f.config.dockerSocket='unix:///run/tuat-local/docker.sock';
+  const adapter=createAdapters(f.config,{},f.dependencies);f.fail();
+  await assert.rejects(adapter.probe({signal:signal()}),/outcome unverified/);assert.equal(f.calls.length,1);
+  for(const method of ['probe','dump','recovery'])await assert.rejects(adapter[method]({signal:signal()}),/reconciliation/);
+  assert.equal(f.calls.length,1);assert.equal(adapter.isDrained(),false);
+  assert.deepEqual(f.calls[0].args.slice(0,2),['--host','unix:///run/tuat-local/docker.sock']);
+});
+
+test('private daemon still rejects every wrong container field and database identity',async()=>{
+  for(const changed of ['id','image','name','running','owner','generation','mount','database','system']){
+    const f=nativeAdapterFixture();f.config.dockerSocket='unix:///run/tuat-local/docker.sock';
+    const execute=f.dependencies.execute;
+    f.dependencies.execute=async(executable,args,options)=>{
+      const result=await execute(executable,args,options),fields=String(result.stdout).split('|');
+      if(args.includes('inspect')){
+        const index=['id','image','name','running','owner','generation','mount'].indexOf(changed);
+        if(index>=0)fields[index]='different';
+      }else if(changed==='database')fields[0]='postgres';else if(changed==='system')fields[1]='9876543210987654321';
+      return {stdout:Buffer.from(fields.join('|'))};
+    };
+    await assert.rejects(createAdapters(f.config,{},f.dependencies).probe({signal:signal()}),/ownership mismatch|system identity mismatch/);
+    assert.equal(f.calls.length,['database','system'].includes(changed)?2:1);
+    assert(f.calls.every(call=>call.args[1]==='unix:///run/tuat-local/docker.sock'));
+  }
+});
+
 test('native pin change and unknown command outcome prevent later dispatch',async()=>{
   const changed=nativeAdapterFixture();changed.dependencies.readBinary=()=>Buffer.from('changed native binary');
   await assert.rejects(createAdapters(changed.config,{},changed.dependencies).probe({signal:new AbortController().signal}),/pin changed/);

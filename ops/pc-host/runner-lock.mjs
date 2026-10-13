@@ -1,6 +1,6 @@
 import {
   openSync, closeSync, writeFileSync, fsyncSync, lstatSync, fstatSync,
-  readSync, realpathSync, unlinkSync, constants,
+  readSync, realpathSync, unlinkSync, constants, readFileSync,
 } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { isAbsolute, resolve, parse } from 'node:path';
@@ -100,6 +100,45 @@ function requireDeadOwner(pid, probePid) {
   throw fail('ERR_PC_APP_LOCK_BUSY', 'An app runner lock has a living owner.');
 }
 
+/** The environment names locate evidence; they never prove that a Linux lock is held. */
+export function verifyLinuxLifetime(stateDirectory, service, environment = process.env) {
+  try {
+    if (process.platform !== 'linux' || process.getuid() !== 0 || !['app','jobs'].includes(service)
+      || environment.TUAT_PC_LINUX_LOCK_SERVICE !== service || !/^[0-9]{1,9}$/.test(environment.TUAT_PC_LINUX_LOCK_FD ?? '')) throw Error('Invalid lifetime claim');
+    const directory = resolve(stateDirectory), path = resolve(directory, 'lifetime.lock'), fd = Number(environment.TUAT_PC_LINUX_LOCK_FD);
+    if (fd < 3 || environment.TUAT_PC_LINUX_LOCK_PATH !== path) throw Error('Wrong lifetime path');
+    let current = directory;
+    while (true) {
+      const s = lstatSync(current);
+      if (!s.isDirectory() || s.isSymbolicLink() || s.uid !== 0 || (s.mode & 0o022) || realpathSync(current) !== current
+        || (current === directory && (s.mode & 0o777) !== 0o700)) throw Error('Unprotected lifetime ancestor');
+      const parent = resolve(current, '..'); if (parent === current) break; current = parent;
+    }
+    const before = lstatSync(path, { bigint: true }), opened = fstatSync(fd, { bigint: true });
+    if (!before.isFile() || before.isSymbolicLink() || before.uid !== 0n || before.nlink !== 1n || (before.mode & 0o777n) !== 0o600n
+      || !sameIdentity(before, opened) || realpathSync(`/proc/self/fd/${fd}`) !== path) throw Error('Wrong lifetime inode');
+    const value = snapshot(path);
+    if (value.owner.pid !== process.pid || value.owner.service !== service) throw Error('Wrong lifetime owner');
+    const major = ((opened.dev >> 8n) & 0xfffn) | ((opened.dev >> 32n) & 0xfffff000n);
+    const minor = (opened.dev & 0xffn) | ((opened.dev >> 12n) & 0xffffff00n);
+    const owns = text => {
+      if (Buffer.byteLength(text) > 2*1024*1024) throw Error('Unbounded kernel lock inventory');
+      return text.split('\n').some(line => {
+        const fields = line.trim().replace(/^lock:\s*/, '').split(/\s+/);
+        const device = fields[5]?.match(/^([a-f0-9]+):([a-f0-9]+):([0-9]+)$/i);
+        return fields[1] === 'FLOCK' && fields[2] === 'ADVISORY' && fields[3] === 'WRITE' && fields[4] === String(process.pid)
+          && fields[6] === '0' && fields[7] === 'EOF' && device && BigInt(`0x${device[1]}`) === major
+          && BigInt(`0x${device[2]}`) === minor && BigInt(device[3]) === opened.ino;
+      });
+    };
+    if (!owns(readFileSync('/proc/locks','utf8')) || !owns(readFileSync(`/proc/self/fdinfo/${fd}`,'utf8'))
+      || !sameIdentity(opened, fstatSync(fd, { bigint: true })) || !sameIdentity(opened, lstatSync(path, { bigint: true }))) throw Error('Lifetime FLOCK unverified');
+    return true;
+  } catch {
+    throw fail('ERR_PC_APP_LOCK_RECOVERY_GUARD_REQUIRED', 'Linux recovery requires the service root lifetime FLOCK.');
+  }
+}
+
 function create(path, recovered) {
   let descriptor;
   try {
@@ -174,7 +213,8 @@ export function acquireManagedRunnerLock(stateDirectory, {
   }
   const original = snapshot(path);
   requireDeadOwner(original.owner.pid, probePid);
-  if (environment[recoveryMarker] !== '1') {
+  if (process.platform === 'linux') verifyLinuxLifetime(stateDirectory, recoveryMarker === 'TUAT_PC_APP_MUTEX_HELD' ? 'app' : 'jobs', environment);
+  else if (environment[recoveryMarker] !== '1') {
     throw fail('ERR_PC_APP_LOCK_RECOVERY_GUARD_REQUIRED', 'Stale app lock recovery requires the dedicated task mutex.');
   }
   if (!sameSnapshot(original, snapshot(path))) {
@@ -184,6 +224,7 @@ export function acquireManagedRunnerLock(stateDirectory, {
   if (!sameSnapshot(original, snapshot(path))) {
     throw fail('ERR_PC_APP_LOCK_CHANGED', 'The app runner lock changed before recovery.');
   }
+  if (process.platform === 'linux') verifyLinuxLifetime(stateDirectory, recoveryMarker === 'TUAT_PC_APP_MUTEX_HELD' ? 'app' : 'jobs', environment);
   try { unlinkSync(path); } catch {
     throw fail('ERR_PC_APP_LOCK_CHANGED', 'The app runner lock could not be reclaimed safely.');
   }

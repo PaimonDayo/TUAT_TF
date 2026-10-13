@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { initialState, recoverState, tick, JOBS } from './scheduler.mjs';
 import { validateSharedPc, sharedPcReady, loopbackRoot } from './shared-pc.mjs';
+import { acquireManagedRunnerLock } from '../pc-host/runner-lock.mjs';
 
 export function validateConfig(config, env) {
   if (config.version !== 1 || typeof config.enabled !== 'boolean' || !isAbsolute(config.releaseDirectory ?? '') || !isAbsolute(config.stateDirectory ?? '') || !isAbsolute(config.environmentFile ?? '')
@@ -56,10 +57,12 @@ export async function run(configFile, execute = false, {
   if (!execute) { console.log(JSON.stringify({ valid: true, jobs: JOBS.map(j => j.id), enabled: false })); return; }
   if (!config.enabled) throw Error('Scheduler is disabled');
   const journal = resolve(config.stateDirectory, 'journal.json');
-  // Exclusive, fail-closed lock. A stale lock is NOT automatically stolen after a crash.
+  // Exclusive owner record. Linux recovery requires the root service's kernel lock;
+  // Windows keeps crash recovery under operator review.
   const lockPath = resolve(config.stateDirectory, 'runner.lock');
-  const lock = openSync(lockPath, 'wx', 0o600);
-  writeFileSync(lock, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
+  const managed = process.platform === 'linux' ? acquireManagedRunnerLock(config.stateDirectory, { recoveryMarker: 'TUAT_PC_JOBS_MUTEX_HELD' }) : null;
+  const lock = managed ? null : openSync(lockPath, 'wx', 0o600);
+  if (lock !== null) writeFileSync(lock, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
   let child, stopping = false;
   // Finish the in-flight request before stopping the local server.
   const shutdown = () => { stopping = true; };
@@ -110,9 +113,8 @@ export async function run(configFile, execute = false, {
       const exited = new Promise(resolve => child.once('exit', resolve));
       child.kill(); await exited;
     }
-    closeSync(lock);
-    // On an unclean process termination the lock remains for operator review.
-    unlinkSync(lockPath);
+    if (managed) managed.release();
+    else { closeSync(lock); unlinkSync(lockPath); }
     process.off('SIGINT', shutdown); process.off('SIGTERM', shutdown);
   }
 }

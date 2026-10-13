@@ -11,10 +11,31 @@ import secrets
 import signal
 import stat
 import time
+import urllib.parse
 
 UNIT = 'tuat-local-backup.service'
 TIMER = 'tuat-local-backup.timer'
 SOCKET = 'unix:///var/run/docker.sock'
+PC_PROFILE = 'pc-private'
+PC_DAEMONS = ('tuat-local-docker.service', 'tuat-local-containerd.service')
+
+def installation_profile(config):
+    name = config.get('profile', 'surface')
+    need(name in ('surface', PC_PROFILE), 'placement-profile')
+    if name == 'surface':
+        return {'name': name, 'socket': SOCKET, 'dockerUnit': 'docker.service', 'containerdUnit': 'containerd.service',
+                'dockerConfig': '/etc/docker/daemon.json', 'containerdConfig': '/etc/containerd/config.toml',
+                'containerdSocket': '/run/containerd/containerd.sock', 'appPort': 18103, 'authPort': 18001, 'restPort': 18002, 'dbPort': 18004,
+                'composeSource': 'ops/local-minimal/surface/compose.yaml', 'composeInstalled': '/opt/tuat-local-runtime/compose.yaml'}
+    return {'name': name, 'socket': 'unix:///run/tuat-local/docker.sock', 'dockerUnit': PC_DAEMONS[0], 'containerdUnit': PC_DAEMONS[1],
+            'dockerConfig': '/etc/tuat-local/docker.json', 'containerdConfig': '/etc/tuat-local/containerd.toml',
+            'containerdSocket': '/run/tuat-local/containerd/containerd.sock', 'appPort': 18200, 'authPort': 18301, 'restPort': 18302, 'dbPort': 18304,
+            'composeSource': 'ops/local-minimal/pc/compose.yaml', 'composeInstalled': '/opt/tuat-local-runtime/compose.pc.yaml'}
+
+def daemon_argv(profile, kind):
+    if kind == 'docker':
+        return ['/usr/bin/dockerd', '--config-file=' + profile['dockerConfig']]
+    return ['/usr/bin/containerd', '--config', profile['containerdConfig']]
 MOUNT = Path('/var/lib/tuat-local')
 FIELDS = 'LoadState,Type,ActiveState,SubState,FreezerState,MainPID,ControlPID,ControlGroup,InvocationID,ExecMainStartTimestampMonotonic,FragmentPath,DropInPaths,ExecStart'
 LIMITS = {'maxArchiveBytes': (1048576, 16*1024**3), 'maxTotalArchiveBytes': (1048576, 64*1024**3),
@@ -102,11 +123,69 @@ def seal(config):
     for prefix in ('fragment', 'timer', 'nodePath', 'runtimeConfigPath'):
         hash_key = {'nodePath': 'nodeSha256', 'runtimeConfigPath': 'runtimeConfigSha256'}.get(prefix, prefix + 'Sha256')
         need(digest(immutable(value[prefix], prefix == 'runtimeConfigPath')) == value[hash_key], 'periodic-install-pin')
+    runtime = read_json(value['runtimeConfigPath'])
+    need(installation_profile(config)['name'] == installation_profile(runtime)['name'], 'periodic-profile-binding')
     need(Path(value['fragment']).name == UNIT and Path(value['timer']).name == TIMER and
          value['nodePath'] == '/opt/node-v24.19.0-linux-x64/bin/node', 'periodic-fixed-install')
     expected = '/usr/bin/python3 -I ' + str(actual['backup.py']) + ' --config ' + p['configPath'] + ' --execute'
     need(value['execStart'] == expected, 'periodic-exec-pin')
     return value
+
+
+def actor(config):
+    """Reader identity comes only from the protected runtime config bound by the seal."""
+    installed = seal(config)
+    runtime = read_json(installed['runtimeConfigPath'])
+    need(runtime.get('sourceId') == config['sourceId'] and
+         all(type(runtime.get(key)) is int and 1000 <= runtime[key] < 2**32-1 for key in ('appUid', 'appGid')),
+         'periodic-actor-identity')
+    need(type(config.get('sourceOwnerUid')) is int and config['sourceOwnerUid'] == runtime['appUid'], 'periodic-source-owner')
+    return runtime['appUid'], runtime['appGid']
+
+
+def placement(config):
+    selected = installation_profile(config)
+    if selected['name'] == PC_PROFILE:
+        installed = seal(config)
+        runtime = read_json(installed['runtimeConfigPath'])
+        need(runtime.get('sourceId') == config['sourceId'] and installation_profile(runtime) == selected, 'periodic-profile-binding')
+        pc_database(config, runtime)
+    return selected
+
+
+def pc_database(config, runtime=None):
+    """Bind the producer's selected database before any source SQL or dump."""
+    if installation_profile(config)['name'] != PC_PROFILE:
+        return
+    if runtime is None:
+        installed = seal(config)
+        runtime = read_json(installed['runtimeConfigPath'])
+    need(runtime.get('sourceId') == config['sourceId'] and installation_profile(runtime)['name'] == PC_PROFILE,
+         'periodic-database-runtime')
+    environments = []
+    for key in ('dbEnvironmentFile', 'authEnvironmentFile', 'restEnvironmentFile'):
+        name = runtime.get(key)
+        need(isinstance(name, str) and MOUNT in Path(name).parents, 'periodic-database-env-path')
+        path = immutable(name, True)
+        need(path.stat().st_dev == MOUNT.stat().st_dev and path.stat().st_size <= 1048576, 'periodic-database-env-bound')
+        values = {}
+        for line in path.read_bytes().decode('utf8').splitlines():
+            if not line or line.startswith('#'): continue
+            match = re.fullmatch(r'([A-Z][A-Z0-9_]*)=([^\s\x00\x01-\x1f\x7f\'`#]*)', line)
+            need(match is not None and match[1] not in values and not match[2].startswith('"'), 'periodic-database-env-encoding')
+            values[match[1]] = match[2]
+        environments.append(values)
+    db, auth, rest = environments
+    need(isinstance(config.get('database'), str) and re.fullmatch('[a-z][a-z0-9_]{0,62}', config['database']) and
+         db.get('POSTGRES_DB') == config['database'] and db.get('PGDATA') == '/var/lib/postgresql/data' and
+         db.get('POSTGRES_USER') == 'postgres' and db.get('POSTGRES_PASSWORD') and 'POSTGRES_HOST_AUTH_METHOD' not in db,
+         'periodic-database-binding')
+    for key, role, env in (('GOTRUE_DB_DATABASE_URL', 'supabase_auth_admin', auth), ('PGRST_DB_URI', 'authenticator', rest)):
+        uri = urllib.parse.urlsplit(env.get(key, ''))
+        need(uri.scheme in ('postgres', 'postgresql') and uri.hostname == '127.0.0.1' and uri.port == 18304 and
+             uri.username == role and uri.password and uri.path == '/'+config['database'] and
+             (uri.query == 'search_path=auth' if role == 'supabase_auth_admin' else not uri.query) and not uri.fragment,
+             'periodic-database-uri')
 
 def inactive(config, commands):
     """Runtime admits a known installed but idle controller, never an active one."""
@@ -157,6 +236,7 @@ def bind_storage(config):
     Called after the actual storage-only gate and during capacity/output checks. Recovery copy
     and the immutable /etc runtime bootstrap are intentionally outside this data contract.
     """
+    _, actor_gid = actor(config)
     m = MOUNT.lstat()
     need(stat.S_ISDIR(m.st_mode) and m.st_uid == 0 and not m.st_mode & 0o022 and
          MOUNT.resolve() == MOUNT and m.st_dev != Path('/').stat().st_dev, 'periodic-encrypted-mount')
@@ -178,7 +258,7 @@ def bind_storage(config):
     need(meta!=Path(config['backupRoot']) and MOUNT in meta.parents and meta.resolve()==meta,
          'periodic-jobs-metadata-path')
     ms=meta.lstat()
-    need(stat.S_ISDIR(ms.st_mode) and ms.st_uid==0 and ms.st_gid==1000 and
+    need(stat.S_ISDIR(ms.st_mode) and ms.st_uid==0 and ms.st_gid==actor_gid and
          stat.S_IMODE(ms.st_mode)==0o750 and ms.st_dev==m.st_dev, 'periodic-jobs-metadata-owner')
     paths += [(str(jobs),False)]
     for text,is_dir in paths:
@@ -198,7 +278,7 @@ def bind_storage(config):
         if text not in (config['imageRoot'],config['jobsStateRoot']):
             need(s.st_uid==0 and stat.S_IMODE(s.st_mode)==(0o700 if is_dir else 0o640 if text==config['jobsReceiptFile'] else 0o600) and
                  (is_dir or s.st_nlink==1), 'periodic-private-mount-owner')
-            if text==config['jobsReceiptFile']:need(s.st_gid==1000, 'periodic-jobs-receipt-group')
+            if text==config['jobsReceiptFile']:need(s.st_gid==actor_gid, 'periodic-jobs-receipt-group')
             # Root-private config/key/receipt cannot be swapped by an app-writable ancestor.
             for ancestor in path.parents:
                 if ancestor==MOUNT:break

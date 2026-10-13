@@ -32,6 +32,15 @@ REPO_DIGESTS = {
     'auth': 'supabase/gotrue@sha256:c0c25187a6b835e65a6f6e6c6b39d090e832d40e6de5186f2c038e0411944232',
     'rest': 'postgrest/postgrest@sha256:54000f24847d01a2c2302e0041cf0618b875c57fb48507d743cfa9aaa50bf43c',
 }
+PC_IMAGES = {**IMAGES, 'auth': ('supabase/gotrue:v2.197.0', 'sha256:1736a63078f5922b198c4cbe50f80ab9a2d3b54fe8b7b6cfb2e9dc5dbbc12c6b')}
+PC_REPO_DIGESTS = {**REPO_DIGESTS, 'auth': 'supabase/gotrue@sha256:1736a63078f5922b198c4cbe50f80ab9a2d3b54fe8b7b6cfb2e9dc5dbbc12c6b'}
+PC_HBA_SOURCE = 'ops/local-minimal/pc/pg_hba.conf'
+PC_HBA_RULES = [('local', 'all', 'all', 'trust'), ('host', 'all', 'all', '127.0.0.1/32', 'scram-sha-256'),
+                ('host', 'all', 'all', '::1/128', 'scram-sha-256'), ('host', 'all', 'all', '0.0.0.0/0', 'reject'),
+                ('host', 'all', 'all', '::/0', 'reject')]
+PC_PG_COMMAND = ['-D', '/var/lib/postgresql/data', '-c', 'listen_addresses=127.0.0.1', '-c', 'port=18304',
+                 '-c', 'shared_preload_libraries=', '-c', 'shared_buffers=64MB', '-c', 'max_connections=30',
+                 '-c', 'unix_socket_directories=/tmp', '-c', 'hba_file=/private/pg_hba.conf']
 PG_COMMAND = ['-D', '/var/lib/postgresql/data', '-c', 'listen_addresses=127.0.0.1', '-c', 'port=18004',
               '-c', 'shared_preload_libraries=', '-c', 'shared_buffers=64MB', '-c', 'max_connections=30']
 CONTAINER_EXEC = {'db': (['postgres'], PG_COMMAND), 'auth': (None, ['auth']),
@@ -94,14 +103,24 @@ def private_bytes(path, owner=0, bound=1048576):
     return p.read_bytes()
 
 
-def app_access(path, directory=False, executable=False):
-    """Effective UID/GID1000 access, without granting write access to installed code."""
+def actor_ids(c):
+    require(all(type(c.get(key)) is int and 1000 <= c[key] < 2**32-1 for key in ('appUid', 'appGid')), 'config-uid')
+    return c['appUid'], c['appGid']
+
+
+def image_contract(c):
+    return (PC_IMAGES, PC_REPO_DIGESTS) if periodic.installation_profile(c)['name'] == periodic.PC_PROFILE else (IMAGES, REPO_DIGESTS)
+
+
+def app_access(path, directory=False, executable=False, uid=1000, gid=1000):
+    """Effective sealed actor access, without granting write access to installed code."""
+    actor_ids({'appUid': uid, 'appGid': gid})
     p = Path(path)
     for parent in (p.parents if not directory else (p, *p.parents)):
-        s = parent.stat(); bits = (s.st_mode >> (6 if s.st_uid == 1000 else 3 if s.st_gid == 1000 else 0)) & 7
+        s = parent.stat(); bits = (s.st_mode >> (6 if s.st_uid == uid else 3 if s.st_gid == gid else 0)) & 7
         require(bits & 1, 'app-traverse')
     if not directory:
-        s = p.stat(); bits = (s.st_mode >> (6 if s.st_uid == 1000 else 3 if s.st_gid == 1000 else 0)) & 7
+        s = p.stat(); bits = (s.st_mode >> (6 if s.st_uid == uid else 3 if s.st_gid == gid else 0)) & 7
         require(bits & (1 if executable else 4), 'app-read-execute')
 
 
@@ -110,14 +129,23 @@ def json_private(path, owner=0, bound=1048576):
 
 
 def config_shape(c):
-    require(isinstance(c, dict) and set(c) in (CONFIG_KEYS, CONFIG_KEYS | {'backupConfigPath'}) and c['version'] == 1, 'config-contract')
+    require(isinstance(c, dict), 'config-contract')
+    p = periodic.installation_profile(c)
+    keys = CONFIG_KEYS | ({'profile', 'hostConfigPath', 'daemonSeal', 'dbHba'} if p['name'] == periodic.PC_PROFILE else ({'profile'} if 'profile' in c else set()))
+    require(set(c) in (keys, keys | {'backupConfigPath'}) and c['version'] == 1, 'config-contract')
     if 'backupConfigPath' in c:
         require(Path(MOUNT) in Path(c['backupConfigPath']).parents, 'backup-config-path')
     require(type(c['installEnabled']) is bool, 'config-enabled')
     require(c['mountPoint'] == MOUNT and c['mapperName'] == 'tuat-local-data', 'config-mount')
     for key in ('luksUuid', 'filesystemUuid'):
         require(bool(re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', c[key])), 'config-uuid')
-    require(c['appUid'] == 1000 and c['appGid'] == 1000, 'config-uid')
+    actor_ids(c)
+    if p['name'] == periodic.PC_PROFILE:
+        require(c['appUid'] == 65530 and c['appGid'] == 65530 and 'backupConfigPath' in c, 'pc-actor-backup')
+        require(c['dbHba'] == MOUNT + '/db-private/pg_hba.conf', 'pc-db-hba-path')
+        require(Path(MOUNT) in Path(c['hostConfigPath']).parents and isinstance(c['daemonSeal'], dict) and
+                set(c['daemonSeal']) == {'dockerConfig', 'containerdConfig', 'dockerUnit', 'containerdUnit'} and
+                all(isinstance(v, str) and re.fullmatch('[a-f0-9]{64}', v) for v in c['daemonSeal'].values()), 'pc-daemon-seal')
     require(c['nodePath'] == '/opt/node-v24.19.0-linux-x64/bin/node', 'config-node')
     require(bool(re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}', c['sourceId'])) and
             not c['sourceId'].startswith('REPLACE'), 'config-source')
@@ -144,15 +172,16 @@ def env_private(path, owner=0):
 
 
 class Commands:
-    def __init__(self, private_log):
+    def __init__(self, private_log, profile=None):
         self.log = private_log
+        self.profile = periodic.installation_profile(profile or {})
 
     def run(self, args, env=None, allowed=(0,), timeout=20):
         # Child output is private in-memory, bounded after collection; no command/exception interpolation.
         # Fixed metadata commands are bounded. App/Jobs streams later go directly to private encrypted log.
         if args[0] == 'docker':
             # Ignore implicit root CLI contexts and remote daemon selection.
-            args = ['docker', '--host', 'unix:///var/run/docker.sock', *args[1:]]
+            args = ['docker', '--host', self.profile['socket'], '--config', '/nonexistent', *args[1:]]
         try:
             result = subprocess.run(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                     env=env or {'PATH': '/usr/sbin:/usr/bin:/sbin:/bin'}, timeout=timeout, check=False)
@@ -179,12 +208,16 @@ class Commands:
         return json.loads(self.run(args))
 
     def containerd_storage(self, config):
-        pid = self.run(['systemctl', 'show', 'containerd.service', '--property=MainPID', '--value']).strip()
+        profile = periodic.installation_profile(config)
+        pid = self.run(['systemctl', 'show', profile['containerdUnit'], '--property=MainPID', '--value']).strip()
         require(re.fullmatch(r'[1-9][0-9]*', pid), 'containerd-process-absent')
         process = Path('/proc') / pid
         argv = (process / 'cmdline').read_bytes().split(b'\0')
-        require(argv and argv[0] == b'/usr/bin/containerd' and
-                not any(arg.startswith((b'--config', b'--root', b'-c', b'-r')) for arg in argv[1:]), 'containerd-runtime-override')
+        if profile['name'] == periodic.PC_PROFILE:
+            require([a.decode() for a in argv if a] == periodic.daemon_argv(profile, 'containerd'), 'containerd-runtime-override')
+        else:
+            require(argv and argv[0] == b'/usr/bin/containerd' and
+                    not any(arg.startswith((b'--config', b'--root', b'-c', b'-r')) for arg in argv[1:]), 'containerd-runtime-override')
         descriptors = list((process / 'fd').iterdir())
         require(len(descriptors) <= 4096, 'containerd-fd-bound')
         expected = str(Path(config['containerdRoot']) / 'io.containerd.metadata.v1.bolt/meta.db')
@@ -198,6 +231,7 @@ class Commands:
 
 def storage_gate(c, cmd):
     config_shape(c)
+    profile = periodic.installation_profile(c)
     require(c['installEnabled'], 'installation-disabled')
     mount = cmd.obj(['findmnt', '--json', '--mountpoint', MOUNT, '-o', 'TARGET,SOURCE,FSTYPE,UUID,OPTIONS'])
     rows = mount.get('filesystems', [])
@@ -218,20 +252,37 @@ def storage_gate(c, cmd):
         existing(c['backingFile'], owner=0, mode=0o600)
     require(existing(MOUNT, True).stat().st_dev != Path('/').stat().st_dev, 'mount-plaintext')
     for key in ('dockerRoot', 'containerdRoot'):
-        p = existing(c[key], True, mode=0o700)
+        mode = 0o710 if key == 'dockerRoot' and profile['name'] == periodic.PC_PROFILE else 0o700
+        p = existing(c[key], True, mode=mode)
+        if mode == 0o710: require(p.stat().st_gid == 0, 'pc-docker-root-group')
         require(p.stat().st_dev == Path(MOUNT).stat().st_dev, 'storage-mount')
-    daemon = json.loads(existing('/etc/docker/daemon.json').read_bytes())
-    containerd = tomllib.loads(existing('/etc/containerd/config.toml').read_text())
+    daemon = json.loads(existing(profile['dockerConfig'], mode=0o600 if profile['name'] == periodic.PC_PROFILE else None).read_bytes())
+    containerd = tomllib.loads(existing(profile['containerdConfig'], mode=0o600 if profile['name'] == periodic.PC_PROFILE else None).read_text())
     require(daemon.get('data-root') == c['dockerRoot'] and containerd.get('root') == c['containerdRoot'], 'daemon-storage-config')
     require(not containerd.get('imports') and not containerd.get('proxy_plugins'), 'containerd-external-storage')
     def no_plugin_roots(value):
         return all((key not in ('root', 'root_path') and no_plugin_roots(item)) for key, item in value.items()) if isinstance(value, dict) else True
     require(no_plugin_roots(containerd.get('plugins', {})), 'containerd-plugin-storage-override')
-    require(not daemon.get('hosts') or daemon['hosts'] == ['unix:///var/run/docker.sock'], 'docker-external-listener')
+    if profile['name'] == periodic.PC_PROFILE:
+        require(daemon.get('hosts') == [profile['socket']] and daemon.get('exec-root') == '/run/tuat-local/docker' and
+                daemon.get('pidfile') == '/run/tuat-local/dockerd.pid' and daemon.get('bridge') == 'none' and
+                all(daemon.get(k) is False for k in ('iptables', 'ip6tables', 'ip-forward', 'ip-masq', 'userland-proxy')) and
+                daemon.get('containerd') == profile['containerdSocket'] and daemon.get('containerd-namespace') == 'tuat-local-moby' and
+                daemon.get('containerd-plugins-namespace') == 'tuat-local-plugins' and daemon.get('live-restore') is True and
+                daemon.get('features', {}).get('containerd-snapshotter') is True and
+                containerd.get('version') == 4 and containerd.get('state') == '/run/tuat-local/containerd' and
+                containerd.get('plugins', {}).get('io.containerd.server.v1.grpc', {}).get('address') == profile['containerdSocket'] and
+                containerd.get('plugins', {}).get('io.containerd.server.v1.ttrpc', {}).get('address') == profile['containerdSocket'] + '.ttrpc' and
+                set(containerd.get('disabled_plugins', [])) == {'io.containerd.cri.v1.images', 'io.containerd.cri.v1.runtime',
+                    'io.containerd.grpc.v1.cri', 'io.containerd.nri.v1.nri', 'io.containerd.internal.v1.opt'}, 'pc-daemon-contract')
+        private_daemon_units(c, cmd)
+    else:
+        require(not daemon.get('hosts') or daemon['hosts'] == [profile['socket']], 'docker-external-listener')
     # Reject command-line storage/config overrides in the actual daemon unit, including on boot
     # before there is a Docker socket. Default package fd:// + containerd socket options are allowed.
-    for unit, forbidden in (('docker.service', ('--data-root', '--config-file', ' -g ', ' -c ')),
-                            ('containerd.service', ('--root', '--config', ' -r ', ' -c '))):
+    for unit, forbidden in (() if profile['name'] == periodic.PC_PROFILE else
+                          (('docker.service', ('--data-root', '--config-file', ' -g ', ' -c ')),
+                           ('containerd.service', ('--root', '--config', ' -r ', ' -c ')))):
         start = cmd.run(['systemctl', 'show', unit, '--property=ExecStart', '--value'])
         require(bool(start.strip()) and '$' not in start and not any(option in start for option in forbidden) and
                 not re.search(r'(?:^|\s)-(?:c|r|g)(?:=|\s|;|$)', start), 'daemon-storage-override')
@@ -246,23 +297,56 @@ def storage_gate(c, cmd):
         require(Path('/sys/block/' + Path(columns[0]).name + '/backing_dev').read_text().strip() in ('none', ''), 'zram-writeback')
     require(not any(len(line.split()) >= 3 and line.split()[2] == 'swap' for line in
                     Path('/etc/fstab').read_text().splitlines() if line.strip() and not line.lstrip().startswith('#')), 'disk-swap-boot-config')
+    daemon_storage_gate(c, cmd)
+
+
+def daemon_storage_gate(c, cmd):
+    """On-disk configuration alone does not identify the running daemon's storage."""
+    if hasattr(cmd, 'profile'): require(cmd.profile == periodic.installation_profile(c), 'daemon-profile-binding')
+    require(cmd.run(['docker', 'info', '--format', '{{.DockerRootDir}}']).strip() == c['dockerRoot'], 'docker-runtime-root')
+    cmd.containerd_storage(c)
+
+
+def private_daemon_units(c, cmd):
+    profile = periodic.installation_profile(c)
+    manifest = json_private(c['releaseManifest'], bound=64*1024**2)
+    for key in ('dockerConfig', 'containerdConfig', 'dockerUnit', 'containerdUnit'):
+        path = profile[key] if key.endswith('Config') else '/etc/systemd/system/' + profile[key]
+        source = 'ops/local-minimal/pc/' + Path(path).name
+        require(manifest.get('files', {}).get(source) == c['daemonSeal'][key] and
+                file_digest(existing(Path(c['releaseDirectory'])/source)) == c['daemonSeal'][key] and
+                file_digest(existing(path, mode=0o600 if key.endswith('Config') else 0o644)) == c['daemonSeal'][key], 'pc-daemon-file-seal')
+    for kind in ('docker', 'containerd'):
+        unit = profile[kind + 'Unit']
+        props = dict(line.split('=', 1) for line in cmd.run(['systemctl', 'show', unit,
+            '--property=LoadState,ActiveState,SubState,MainPID,ControlPID,ControlGroup,InvocationID,FragmentPath,DropInPaths,User,ExecStart']).splitlines() if '=' in line)
+        pid = props.get('MainPID', '')
+        require(props.get('LoadState') == 'loaded' and props.get('ActiveState') == 'active' and props.get('SubState') == 'running' and
+                re.fullmatch('[1-9][0-9]*', pid) and props.get('ControlPID') == '0' and props.get('User') in ('', 'root', '0') and
+                props.get('FragmentPath') == '/etc/systemd/system/' + unit and props.get('DropInPaths') == '' and
+                re.fullmatch('[a-f0-9]{32}', props.get('InvocationID', '')) and props.get('ControlGroup') == '/system.slice/' + unit, 'pc-daemon-unit')
+        process = Path('/proc') / pid
+        require([a.decode() for a in (process/'cmdline').read_bytes().split(b'\0') if a] == periodic.daemon_argv(profile, kind) and
+                (process/'cgroup').read_text().strip() == '0::' + props['ControlGroup'] and process.stat().st_uid == 0,
+                'pc-daemon-process')
 
 
 def decode64(value):
     return base64.urlsafe_b64decode(value + '=' * (-len(value) % 4))
 
 
-def jwt_valid(token, secret, role):
+def jwt_valid(token, secret, role, allow_absent_audience=False):
     parts = token.split('.')
     require(len(parts) == 3 and all(re.fullmatch(r'[A-Za-z0-9_-]+', p) for p in parts), 'jwt-shape')
     header, claims = (json.loads(decode64(p)) for p in parts[:2])
     require(header.get('alg') == 'HS256' and claims.get('iss') == 'supabase' and claims.get('role') == role and
-            claims.get('aud') == 'authenticated' and type(claims.get('exp')) is int and claims['exp'] > time.time(), 'jwt-claims')
+            (claims.get('aud') == 'authenticated' or allow_absent_audience and 'aud' not in claims) and
+            type(claims.get('exp')) is int and claims['exp'] > time.time(), 'jwt-claims')
     expected = hmac.new(secret.encode(), (parts[0] + '.' + parts[1]).encode(), hashlib.sha256).digest()
     require(hmac.compare_digest(expected, decode64(parts[2])), 'jwt-key')
 
 
-def release_inventory(release):
+def release_inventory(release, uid=1000, gid=1000):
     """Full installed artifact, including Next routes/chunks, all Jobs modules and dependencies."""
     root = existing(release, True)
     device = Path(MOUNT).stat().st_dev
@@ -278,18 +362,20 @@ def release_inventory(release):
                 links[relative] = os.readlink(p)
             elif p.is_dir():
                 require(not s.st_mode & 0o022, 'release-directory-writable')
-                app_access(p, directory=True)
+                app_access(p, directory=True, uid=uid, gid=gid)
             else:
                 require(stat.S_ISREG(s.st_mode) and s.st_nlink == 1 and not s.st_mode & 0o022, 'release-file-owner-type')
                 total += s.st_size
                 require(total <= 4 * 1024 ** 3, 'release-byte-bound')
-                app_access(p)
+                app_access(p, uid=uid, gid=gid)
                 files[relative] = file_digest(p)
     return {'files': files, 'links': links}
 
 
 def configuration_gate(c):
-    uid = c['appUid']
+    if periodic.installation_profile(c)['name'] == periodic.PC_PROFILE:
+        return pc_configuration_gate(c)
+    uid, gid = actor_ids(c)
     # Every private input and release root must actually live on the verified encrypted device;
     # a lexical prefix does not exclude nested plaintext bind mounts.
     device = Path(MOUNT).stat().st_dev
@@ -360,7 +446,7 @@ def configuration_gate(c):
             manifest.get('cloudAuthPublicKeySha256') == digest(env['NEXT_PUBLIC_CLOUD_AUTH_ANON_KEY'].encode()) and
             manifest.get('actionKeySha256') == digest(env['NEXT_SERVER_ACTIONS_ENCRYPTION_KEY'].encode()), 'release-env')
     release = existing(c['releaseDirectory'], True)
-    app_access(release, directory=True)
+    app_access(release, directory=True, uid=uid, gid=gid)
     required = ('.next/BUILD_ID', '.next/required-server-files.json', 'node_modules/next/dist/bin/next',
                 'ops/pc-jobs/run.mjs', 'src/lib/supabase/cloud-auth-config.mjs', '.surface-source-commit', COMPOSE_SOURCE)
     require(isinstance(manifest.get('files'), dict) and set(required).issubset(manifest['files']) and
@@ -370,7 +456,7 @@ def configuration_gate(c):
         require(digest(p.read_bytes()) == manifest['files'][name], 'release-file-hash')
     require(not any((release / name).exists() for name in ('.env', '.env.local', '.env.production', '.env.production.local',
                 '.env.development', '.env.development.local')), 'release-embedded-env')
-    actual_inventory = release_inventory(release)
+    actual_inventory = release_inventory(release, uid=uid, gid=gid)
     require(manifest['files'] == actual_inventory['files'] and manifest['links'] == actual_inventory['links'], 'release-inventory')
     require((release / '.surface-source-commit').read_text().strip() == manifest['sourceCommit'] and
             (release / '.next/BUILD_ID').read_text().strip() == manifest.get('buildId') and
@@ -388,10 +474,131 @@ def configuration_gate(c):
         p = existing(c[key], True, owner, 0o700)
         require(p.stat().st_dev == Path(MOUNT).stat().st_dev, 'data-mount')
     for key in ('imageRoot', 'jobsStateRoot'):
-        app_access(c[key], directory=True)
+        app_access(c[key], directory=True, uid=uid, gid=gid)
     for key in ('appEnvironmentFile', 'jobsConfig'):
-        app_access(c[key])
+        app_access(c[key], uid=uid, gid=gid)
     require(existing(Path(c['dbData']) / 'PG_VERSION', owner=100).read_text().strip() == '17', 'db-uninitialized')
+    compose_gate(c, manifest)
+    return env, jobs, manifest
+
+
+def pc_rest_jwks(c, auth):
+    path = Path(c['mixedJwks']); parent = path.parent
+    for p, directory, mode in ((parent, True, 0o750), (path, False, 0o640)):
+        existing(p, directory, 0, mode)
+        require(p.stat().st_gid == 65528, 'pc-rest-jwk-reader')
+    require(path.stat().st_size <= 1048576, 'private-size')
+    jwks = json.loads(path.read_bytes())
+    require(isinstance(jwks, dict) and set(jwks) == {'keys'} and isinstance(jwks['keys'], list) and len(jwks['keys']) == 1, 'pc-jwks-local-only')
+    key = jwks['keys'][0]
+    require(isinstance(key, dict) and key.get('kty') == 'oct' and key.get('alg') == 'HS256' and
+            not any(k in key for k in ('d', 'p', 'q', 'x', 'y')) and
+            decode64(key.get('k', '')).decode() == auth.get('GOTRUE_JWT_SECRET') and len(auth.get('GOTRUE_JWT_SECRET', '')) >= 32, 'pc-jwks-local-only')
+
+
+def pc_hba_bytes(c):
+    path = Path(c['dbHba'])
+    require(str(path) == MOUNT + '/db-private/pg_hba.conf', 'pc-db-hba-path')
+    device = Path(MOUNT).stat().st_dev
+    # PG's 100:101 actor may read the root-owned file, but cannot replace it;
+    # the app's sealed 65530:65530 actor cannot traverse this dedicated parent.
+    for p, directory, mode in ((path.parent, True, 0o750), (path, False, 0o640)):
+        existing(p, directory, 0, mode)
+        require(p.stat().st_gid == 101 and p.stat().st_dev == device, 'pc-db-hba-reader-mount')
+    require(path.stat().st_size <= 16384, 'pc-db-hba-size')
+    return path.read_bytes()
+
+
+def pc_db_hba(c, manifest):
+    expected = manifest.get('files', {}).get(PC_HBA_SOURCE)
+    require(isinstance(expected, str) and re.fullmatch('[a-f0-9]{64}', expected), 'pc-db-hba-source-seal')
+    source = existing(Path(c['releaseDirectory'])/PC_HBA_SOURCE, mode=0o644)
+    data = pc_hba_bytes(c)
+    require(file_digest(source) == expected and digest(data) == expected, 'pc-db-hba-installed-seal')
+    # No includes, host trust, extra matching rule or optional auth parameters.
+    rows = [tuple(line.split('#', 1)[0].split()) for line in data.decode('ascii').splitlines() if line.split('#', 1)[0].strip()]
+    require(rows == PC_HBA_RULES, 'pc-db-hba-rules')
+
+
+def pc_service_configuration(c, env, db, auth, rest):
+    p = periodic.installation_profile(c)
+    require(all(env.get(key) == 'true' for key in ('PC_APP_RUNTIME', 'NEXT_PUBLIC_PC_APP_RUNTIME', 'PC_LOCAL_RUNTIME',
+            'NEXT_PUBLIC_PC_LOCAL_RUNTIME', 'PC_BACKEND_ENABLED', 'NEXT_PUBLIC_PC_BACKEND')), 'pc-local-runtime')
+    require(not any(key.startswith('NEXT_PUBLIC_CLOUD_AUTH') for key in env) and
+            not any(env.get(key) for key in ('PC_BACKEND_INTERNAL_URL', 'NEXT_PUBLIC_PC_REST_RELAY_ORIGIN', 'VERCEL', 'VERCEL_ENV',
+                    'R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET_NAME')), 'pc-cloud-settings')
+    origin = urllib.parse.urlsplit(env.get('APP_PUBLIC_ORIGIN', ''))
+    require(origin.scheme == 'https' and origin.netloc and not origin.username and not origin.password and not origin.port and
+            not origin.path and not origin.query and not origin.fragment and env.get('NEXT_PUBLIC_SUPABASE_URL') == origin.geturl() + '/api/pc-supabase', 'app-origin')
+    require(env.get('PC_LOCAL_AUTH_URL') == 'http://127.0.0.1:18301' and env.get('PC_LOCAL_REST_URL') == 'http://127.0.0.1:18302' and
+            env.get('IMAGE_STORAGE_DRIVER') == 'local' and env.get('LOCAL_IMAGE_STORAGE_ROOT') == c['imageRoot'] and
+            env.get('R2_READ_ENABLED') == 'false' and env.get('R2_WRITE_ENABLED') == 'false', 'pc-local-targets')
+    require(db.get('PGDATA') == '/var/lib/postgresql/data' and db.get('POSTGRES_USER') == 'postgres' and
+            re.fullmatch('[a-z][a-z0-9_]{0,62}', db.get('POSTGRES_DB', '')) and db.get('POSTGRES_PASSWORD') and
+            'POSTGRES_HOST_AUTH_METHOD' not in db, 'db-config')
+    for name, role, value in (('GOTRUE_DB_DATABASE_URL', 'supabase_auth_admin', auth), ('PGRST_DB_URI', 'authenticator', rest)):
+        u = urllib.parse.urlsplit(value.get(name, ''))
+        require(u.scheme in ('postgres', 'postgresql') and u.hostname == '127.0.0.1' and u.port == p['dbPort'] and
+                u.username == role and u.password and u.path == '/' + db['POSTGRES_DB'] and
+                (u.query == 'search_path=auth' if role == 'supabase_auth_admin' else not u.query) and not u.fragment, 'db-uri')
+    expected_auth = {'GOTRUE_API_HOST': '127.0.0.1', 'GOTRUE_API_PORT': '18301', 'GOTRUE_DB_DRIVER': 'postgres', 'GOTRUE_DB_NAMESPACE': 'auth',
+        'GOTRUE_JWT_ADMIN_ROLES': 'service_role', 'GOTRUE_JWT_AUD': 'authenticated', 'GOTRUE_JWT_DEFAULT_GROUP_NAME': 'authenticated',
+        'GOTRUE_DISABLE_SIGNUP': 'true', 'GOTRUE_EXTERNAL_GOOGLE_ENABLED': 'true', 'GOTRUE_EXTERNAL_EMAIL_ENABLED': 'false',
+        'GOTRUE_EXTERNAL_PHONE_ENABLED': 'false', 'GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED': 'false', 'GOTRUE_SITE_URL': origin.geturl(),
+        'API_EXTERNAL_URL': origin.geturl() + '/api/pc-supabase/auth/v1', 'GOTRUE_URI_ALLOW_LIST': origin.geturl() + '/auth/callback',
+        'GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI': origin.geturl() + '/api/pc-supabase/auth/v1/callback',
+        'GOTRUE_HOOK_BEFORE_USER_CREATED_ENABLED': 'true', 'GOTRUE_HOOK_BEFORE_USER_CREATED_URI': 'pg-functions://postgres/public/hook_restrict_signup_by_email_domain'}
+    require(all(auth.get(k) == v for k, v in expected_auth.items()) and auth.get('GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID') and
+            auth.get('GOTRUE_EXTERNAL_GOOGLE_SECRET'), 'pc-google-preparation')
+    require(rest.get('PGRST_SERVER_HOST') == '127.0.0.1' and rest.get('PGRST_SERVER_PORT') == '18302' and
+            rest.get('PGRST_DB_SCHEMAS') == 'public' and rest.get('PGRST_DB_ANON_ROLE') == 'anon' and
+            rest.get('PGRST_JWT_SECRET') == '@/private/local-jwks.json' and
+            not any(k in rest for k in ('PGRST_JWT_AUD', 'PGRST_DB_PRE_REQUEST', 'PGRST_APP_SETTINGS_LOCAL_ISSUER')) and
+            not any('CLOUD' in k for k in rest), 'pc-rest-local-only')
+    jwt_valid(env.get('NEXT_PUBLIC_SUPABASE_ANON_KEY', ''), auth.get('GOTRUE_JWT_SECRET', ''), 'anon', allow_absent_audience=True)
+    jwt_valid(env.get('SUPABASE_SERVICE_ROLE_KEY', ''), auth.get('GOTRUE_JWT_SECRET', ''), 'service_role', allow_absent_audience=True)
+    return origin.geturl()
+
+
+def pc_configuration_gate(c):
+    uid, gid = actor_ids(c); device = Path(MOUNT).stat().st_dev
+    require(all(Path(c[k]).stat().st_dev == device for k in (*PATH_KEYS, 'hostConfigPath', 'backupConfigPath', 'dbHba')), 'private-input-mount')
+    env = env_private(c['appEnvironmentFile'])
+    require(not any(k in env for k in ('NODE_OPTIONS', 'NODE_PATH', 'NODE_EXTRA_CA_CERTS', 'LD_PRELOAD', 'LD_LIBRARY_PATH',
+        'PYTHONPATH', 'PYTHONHOME', 'PATH', 'HOME', 'TMPDIR')), 'env-process-override')
+    db, auth, rest = [env_private(c[k]) for k in ('dbEnvironmentFile', 'authEnvironmentFile', 'restEnvironmentFile')]
+    origin = pc_service_configuration(c, env, db, auth, rest); pc_rest_jwks(c, auth)
+    manifest = json_private(c['releaseManifest'], bound=64*1024**2)
+    require(manifest.get('version') == 1 and manifest.get('nodeVersion') == 'v24.19.0' and
+            re.fullmatch('[a-f0-9]{40}', manifest.get('sourceCommit', '')) and manifest.get('publicOrigin') == origin and
+            manifest.get('appEnvironmentSha256') == digest(private_bytes(c['appEnvironmentFile'])) and
+            manifest.get('releaseId') == env.get('PC_APP_RELEASE_ID'), 'pc-release-env')
+    required = ('.next/BUILD_ID', '.next/required-server-files.json', 'ops/pc-host/run.mjs', 'ops/pc-host/linux-launch.py', 'ops/pc-host/runner-lock.mjs',
+        'ops/pc-host/release.mjs', 'ops/pc-jobs/run.mjs', 'ops/pc-jobs/shared-pc.mjs', 'src/lib/supabase/cloud-auth.ts', periodic.installation_profile(c)['composeSource'], PC_HBA_SOURCE)
+    require(isinstance(manifest.get('files'), dict) and set(required).issubset(manifest['files']) and isinstance(manifest.get('links'), dict), 'pc-release-files')
+    require(release_inventory(c['releaseDirectory'], uid, gid) == {'files': manifest['files'], 'links': manifest['links']}, 'release-inventory')
+    pc_db_hba(c, manifest)
+    host, jobs, backup = [json_private(c[k]) for k in ('hostConfigPath', 'jobsConfig', 'backupConfigPath')]
+    require(all(manifest.get(k+'Sha256') == digest(private_bytes(c[k])) for k in ('hostConfigPath', 'jobsConfig', 'backupConfigPath')), 'pc-private-config-seal')
+    require(host.get('releaseDirectory') == c['releaseDirectory'] and host.get('environmentFile') == c['appEnvironmentFile'] and
+            host.get('releaseCommit') == manifest['sourceCommit'] and host.get('releaseId') == manifest['releaseId'] and
+            host.get('publicOrigin') == origin and host.get('appPort') == 18200 and host.get('applicationUid') == uid and
+            host.get('applicationGid') == gid and type(host.get('enabled')) is bool, 'pc-host-contract')
+    for path in (host.get('stateDirectory'), jobs.get('stateDirectory')):
+        require(isinstance(path, str) and Path(MOUNT) in Path(path).parents and Path(path).stat().st_dev == device, 'pc-supervisor-state-mount')
+        existing(path, True, 0, 0o700)
+    require(jobs.get('runtime') == 'shared-pc' and jobs.get('enabled') is False and jobs.get('releaseDirectory') == c['releaseDirectory'] and
+            jobs.get('environmentFile') == c['appEnvironmentFile'] and jobs.get('stateDirectory') == c['jobsStateRoot'] and
+            jobs.get('appOrigin') == 'http://127.0.0.1:18200' and jobs.get('port') == 18200 and
+            jobs.get('releaseCommit') == manifest['sourceCommit'] and jobs.get('releaseId') == manifest['releaseId'] and
+            jobs.get('hostStateDirectory') == host.get('stateDirectory'), 'pc-jobs-preparation')
+    require(backup.get('profile') == periodic.PC_PROFILE and backup.get('sourceId') == c['sourceId'] and backup.get('sourceOwnerUid') == uid and
+            backup.get('database') == db['POSTGRES_DB'] and
+            backup.get('imageRoot') == c['imageRoot'] and backup.get('jobsStateRoot') == c['jobsStateRoot'] and
+            (backup.get('periodic') or {}).get('configPath') == c['backupConfigPath'], 'pc-backup-contract')
+    for key, owner in (('imageRoot', uid), ('jobsStateRoot', 0), ('dbData', 100), ('privateLogDirectory', 0)):
+        existing(c[key], True, owner, 0o700)
+    app_access(c['imageRoot'], directory=True, uid=uid, gid=gid)
     compose_gate(c, manifest)
     return env, jobs, manifest
 
@@ -399,11 +606,12 @@ def configuration_gate(c):
 def compose_gate(c, manifest):
     """Bind the installed Docker input to the already validated current app inventory."""
     require(isinstance(manifest, dict) and isinstance(manifest.get('files'), dict), 'compose-source-seal')
-    expected = manifest['files'].get(COMPOSE_SOURCE)
+    profile = periodic.installation_profile(c)
+    expected = manifest['files'].get(profile['composeSource'])
     require(isinstance(expected, str) and re.fullmatch(r'[a-f0-9]{64}', expected), 'compose-source-seal')
-    source = existing(Path(c['releaseDirectory']) / COMPOSE_SOURCE, mode=0o644)
+    source = existing(Path(c['releaseDirectory']) / profile['composeSource'], mode=0o644)
     require(file_digest(source) == expected, 'compose-source-seal')
-    installed = existing(CODE_ROOT / 'compose.yaml', mode=0o644)
+    installed = existing(profile['composeInstalled'], mode=0o644)
     require(file_digest(installed) == expected, 'compose-installed-seal')
 
 
@@ -411,6 +619,7 @@ def jobs_backup_gate(c, jobs):
     if not c.get('backupConfigPath'): return  # Existing non-periodic placement is unchanged.
     backup=json_private(c['backupConfigPath'])
     require(backup.get('sourceId')==c['sourceId'] and backup.get('writerMode')=='surface-systemd' and
+            type(backup.get('sourceOwnerUid')) is int and backup['sourceOwnerUid']==c['appUid'] and
             backup.get('imageRoot')==c['imageRoot'] and backup.get('jobsStateRoot')==c['jobsStateRoot'] and
             backup.get('jobsReceiptFile')==jobs.get('backupStatusFile') and
             (backup.get('periodic') or {}).get('configPath')==c['backupConfigPath'], 'jobs-backup-contract')
@@ -418,13 +627,38 @@ def jobs_backup_gate(c, jobs):
     path=Path(backup['jobsReceiptFile'])
     if jobs.get('enabled'):
         require(path.exists(), 'jobs-backup-first-cycle-required')
-    if path.exists(): app_access(path)  # Actual UID1000 traverse/read; metadata owner stays root.
+    if path.exists(): app_access(path, uid=c['appUid'], gid=c['appGid'])  # Metadata owner stays root.
+
+
+def pc_container_mounts(info, role, expected):
+    # Compose's tmpfs declaration is reported separately from bind/volume mounts.
+    # Some API representations also include a native tmpfs entry in Mounts.
+    tmpfs = info.get('tmpfs')
+    require(isinstance(tmpfs, dict) and set(tmpfs) == {'/tmp'} and isinstance(tmpfs['/tmp'], str), 'pc-container-tmpfs')
+    options = tmpfs['/tmp'].split(',')
+    required = {'rw', 'noexec', 'nosuid', 'nodev', 'mode=1777', 'size=64m' if role == 'db' else 'size=32m'}
+    require(len(options) == len(required) and set(options) == required, 'pc-container-tmpfs')
+    require(isinstance(info.get('mounts'), list), 'pc-container-mounts')
+    binds, native_tmpfs = [], 0
+    for mount in info['mounts']:
+        require(isinstance(mount, dict), 'pc-container-mounts')
+        if mount.get('Type') == 'bind':
+            require(type(mount.get('RW')) is bool and isinstance(mount.get('Source'), str) and
+                    isinstance(mount.get('Destination'), str), 'pc-container-mounts')
+            binds.append((mount.get('Source'), mount.get('Destination'), mount['RW']))
+        else:
+            require(mount.get('Type') == 'tmpfs' and mount.get('Source') == '' and
+                    mount.get('Destination') == '/tmp' and mount.get('RW') is True, 'pc-container-mounts')
+            native_tmpfs += 1
+    require(native_tmpfs <= 1 and sorted(binds) == sorted(expected), 'pc-container-mounts')
 
 
 def host_gate(c, cmd):
     lines = cmd.run(['systemctl', 'list-units', '--all', '--plain', '--no-legend', 'tuat-*.service'])
     names = [line.split()[0] for line in lines.splitlines() if line.strip()]
-    allowed = UNITS + ((periodic.UNIT,) if c.get('backupConfigPath') else ())
+    profile = periodic.installation_profile(c)
+    images, repo_digests = image_contract(c)
+    allowed = UNITS + ((periodic.UNIT,) if c.get('backupConfigPath') else ()) + (periodic.PC_DAEMONS if profile['name'] == periodic.PC_PROFILE else ())
     require(len(set(names)) == len(names) and all(name in allowed for name in names), 'unknown-host-unit')
     if periodic.UNIT in names:
         p = existing(c['backupConfigPath'], mode=0o600)
@@ -438,37 +672,47 @@ def host_gate(c, cmd):
         require(s.get('LoadState') in ('loaded', 'not-found') and s.get('ActiveState') == 'inactive' and
                 s.get('SubState') == 'dead' and s.get('FreezerState') == 'running' and s.get('MainPID') == '0' and
                 s.get('ControlPID') == '0' and s.get('ControlGroup') == '', 'legacy-or-mirror-active')
-    require(cmd.run(['docker', 'info', '--format', '{{.DockerRootDir}}']).strip() == c['dockerRoot'], 'docker-runtime-root')
-    for role, (tag, pin) in IMAGES.items():
+    daemon_storage_gate(c, cmd)
+    if profile['name'] == periodic.PC_PROFILE:
+        pc_db_hba(c, json_private(c['releaseManifest'], bound=64*1024**2))
+    for role, (tag, pin) in images.items():
         info = cmd.obj(['docker', 'image', 'inspect', tag, '--format', '{{json .Id}}'])
         digests = cmd.obj(['docker', 'image', 'inspect', tag, '--format', '{{json .RepoDigests}}'])
-        require(info == pin and REPO_DIGESTS[role] in digests, 'image-pin')
-    # Config file alone cannot prove a previously started daemon loaded the new root.
-    # The running existing containerd must have its metadata database open on that device.
-    cmd.containerd_storage(c)
-    # Only selected metadata: never Docker Config.Env, full inspect or full compose config output.
+        require(info == pin and repo_digests[role] in digests, 'image-pin')
+    # Only selected metadata and two literal PG socket settings; never full Env,
+    # full inspect or full compose configuration output.
     owned = {}
     hashes = compose_env(c)
     for ident in cmd.run(['docker', 'ps', '-aq']).split():
         info = cmd.obj(['docker', 'inspect', ident, '--format',
-            '{"id":{{json .Id}},"name":{{json .Name}},"image":{{json .Config.Image}},"imageId":{{json .Image}},"labels":{{json .Config.Labels}},"network":{{json .HostConfig.NetworkMode}},"running":{{json .State.Running}},"paused":{{json .State.Paused}},"privileged":{{json .HostConfig.Privileged}},"readonly":{{json .HostConfig.ReadonlyRootfs}},"user":{{json .Config.User}},"entrypoint":{{json .Config.Entrypoint}},"command":{{json .Config.Cmd}},"securityOpt":{{json .HostConfig.SecurityOpt}},"capDrop":{{json .HostConfig.CapDrop}},"capAdd":{{json .HostConfig.CapAdd}},"mounts":{{json .Mounts}}}'])
-        own = info['name'] in ['/tuat-local-' + r for r in IMAGES]
+            '{"id":{{json .Id}},"name":{{json .Name}},"image":{{json .Config.Image}},"imageId":{{json .Image}},"labels":{{json .Config.Labels}},"network":{{json .HostConfig.NetworkMode}},"running":{{json .State.Running}},"paused":{{json .State.Paused}},"privileged":{{json .HostConfig.Privileged}},"readonly":{{json .HostConfig.ReadonlyRootfs}},"user":{{json .Config.User}},"entrypoint":{{json .Config.Entrypoint}},"command":{{json .Config.Cmd}},"securityOpt":{{json .HostConfig.SecurityOpt}},"capDrop":{{json .HostConfig.CapDrop}},"capAdd":{{json .HostConfig.CapAdd}},"tmpfs":{{json .HostConfig.Tmpfs}},"mounts":{{json .Mounts}},"pgSocketEnv":"{{range .Config.Env}}{{if or (eq . "PGHOST=/tmp") (eq . "PGPORT=18304")}}{{.}};{{end}}{{end}}"}'])
+        own = info['name'] in ['/tuat-local-' + r for r in images]
         if own:
             role = info['name'].removeprefix('/tuat-local-')
-            require(info['image'] == IMAGES[role][0] and info['labels'].get('tuat.local.source') == c['sourceId'] and
+            user = {'db': '100:101', 'auth': '65529:65529', 'rest': '65528:65528'}[role] if profile['name'] == periodic.PC_PROFILE else ('100:101' if role == 'db' else '1000:1000')
+            expected_command = PC_PG_COMMAND if role == 'db' and profile['name'] == periodic.PC_PROFILE else CONTAINER_EXEC[role][1]
+            require(info['image'] == images[role][0] and info['labels'].get('tuat.local.source') == c['sourceId'] and
                     info['labels'].get('tuat.local.role') == role and info['network'] == 'host' and
-                    info['imageId'] == IMAGES[role][1] and not info['paused'] and not info['privileged'] and info['readonly'] and
-                    info['user'] == ('100:101' if role == 'db' else '1000:1000') and
+                    info['imageId'] == images[role][1] and not info['paused'] and not info['privileged'] and info['readonly'] and
+                    info['user'] == user and
                     info['labels'].get('tuat.local.config-sha256') == hashes['TUAT_' + role.upper() + '_HASH'], 'container-identity')
             entrypoint, command = CONTAINER_EXEC[role]
-            require(info.get('entrypoint') == entrypoint and info.get('command') == command and
+            require(info.get('entrypoint') == entrypoint and info.get('command') == expected_command and
                     info.get('securityOpt') == ['no-new-privileges:true'] and info.get('capDrop') == ['ALL'] and
                     info.get('capAdd') in (None, []),
                     'container-execution-contract')
-            mounts = [(m.get('Source'), m.get('Destination'), m.get('RW')) for m in info['mounts'] if m.get('Type') == 'bind']
+            if role == 'db' and profile['name'] == periodic.PC_PROFILE:
+                require(sorted(info.get('pgSocketEnv', '').split(';')) == ['', 'PGHOST=/tmp', 'PGPORT=18304'], 'pc-db-socket-env')
             expected = {'db': [(c['dbData'], '/var/lib/postgresql/data', True)], 'auth': [],
-                        'rest': [(c['mixedJwks'], '/private/mixed-jwks.json', False)]}[role]
-            require(sorted(mounts) == sorted(expected) and role not in owned, 'container-mounts')
+                        'rest': [(c['mixedJwks'], '/private/local-jwks.json' if profile['name'] == periodic.PC_PROFILE else '/private/mixed-jwks.json', False)]}[role]
+            if role == 'db' and profile['name'] == periodic.PC_PROFILE:
+                expected.append((c['dbHba'], '/private/pg_hba.conf', False))
+            if profile['name'] == periodic.PC_PROFILE:
+                pc_container_mounts(info, role, expected)
+            else:
+                mounts = [(m.get('Source'), m.get('Destination'), m.get('RW')) for m in info['mounts'] if m.get('Type') == 'bind']
+                require(sorted(mounts) == sorted(expected), 'container-mounts')
+            require(role not in owned, 'container-mounts')
             if info['running']:
                 owned[role] = info['id']
         else:
@@ -480,21 +724,25 @@ def host_gate(c, cmd):
 
 
 def compose_env(c):
+    pc = periodic.installation_profile(c)['name'] == periodic.PC_PROFILE
     return {'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'TUAT_SOURCE_ID': c['sourceId'], 'TUAT_DB_ENV': c['dbEnvironmentFile'],
             'TUAT_AUTH_ENV': c['authEnvironmentFile'], 'TUAT_REST_ENV': c['restEnvironmentFile'],
             'TUAT_DB_DATA': c['dbData'], 'TUAT_MIXED_JWKS': c['mixedJwks'],
-            'TUAT_DB_HASH': digest(private_bytes(c['dbEnvironmentFile'])),
+            **({'TUAT_DB_HBA': c['dbHba']} if pc else {}),
+            'TUAT_DB_HASH': digest(private_bytes(c['dbEnvironmentFile']) + (pc_hba_bytes(c) if pc else b'')),
             'TUAT_AUTH_HASH': digest(private_bytes(c['authEnvironmentFile'])),
-            'TUAT_REST_HASH': digest(private_bytes(c['restEnvironmentFile']) + private_bytes(c['mixedJwks'], c['appUid']))}
+            'TUAT_REST_HASH': digest(private_bytes(c['restEnvironmentFile']) + (existing(c['mixedJwks'], owner=0, mode=0o640).read_bytes()
+                if periodic.installation_profile(c)['name'] == periodic.PC_PROFILE else private_bytes(c['mixedJwks'], c['appUid'])))}
 
 
-def ports_gate(owned, cmd):
-    text = cmd.run(['ss', '-H', '-ltnp', 'sport = :18103 or sport = :18001 or sport = :18002 or sport = :18004'])
+def ports_gate(owned, cmd, profile=None):
+    p = periodic.installation_profile(profile or {})
+    text = cmd.run(['ss', '-H', '-ltnp', f"sport = :{p['appPort']} or sport = :{p['authPort']} or sport = :{p['restPort']} or sport = :{p['dbPort']}"])
     for line in text.splitlines():
         columns = line.split()
         require(len(columns) >= 5 and columns[3].startswith('127.0.0.1:'), 'port-listener-boundary')
         port = columns[3].split(':')[-1]
-        role = {'18004': 'db', '18001': 'auth', '18002': 'rest'}.get(port)
+        role = {str(p['dbPort']): 'db', str(p['authPort']): 'auth', str(p['restPort']): 'rest'}.get(port)
         pids = re.findall(r'pid=([0-9]+)', line)
         require(role in owned and pids, 'runtime-port-busy')
         require(all(owned[role] in Path('/proc/' + pid + '/cgroup').read_text() for pid in pids), 'port-container-owner')
@@ -502,9 +750,15 @@ def ports_gate(owned, cmd):
 
 def node_gate(c, env, manifest, cmd):
     node = existing(c['nodePath'])
-    app_access(node, executable=True)
+    app_access(node, executable=True, uid=c['appUid'], gid=c['appGid'])
     require(re.fullmatch(r'[a-f0-9]{64}', manifest.get('nodeSha256', '')) and
             file_digest(node) == manifest['nodeSha256'] and cmd.run([str(node), '--version']).strip() == 'v24.19.0', 'node-version-pin')
+    if periodic.installation_profile(c)['name'] == periodic.PC_PROFILE:
+        host = json.loads(cmd.run([str(node), str(Path(c['releaseDirectory'])/'ops/pc-host/run.mjs'), c['hostConfigPath']]))
+        jobs = json.loads(cmd.run([str(node), str(Path(c['releaseDirectory'])/'ops/pc-jobs/run.mjs'), '--check', c['jobsConfig']]))
+        require(host.get('prepared') is True and host.get('releaseCommit') == manifest['sourceCommit'] and
+                host.get('releaseId') == manifest['releaseId'] and jobs.get('valid') is True and jobs.get('enabled') is False, 'pc-lifecycle-validation')
+        return
     validate = "import {validateLocalCloudAuthPair as v} from './src/lib/supabase/cloud-auth-config.mjs';v(process.env.NEXT_PUBLIC_CLOUD_AUTH_URL,process.env.NEXT_PUBLIC_CLOUD_AUTH_ANON_KEY,process.env.NEXT_PUBLIC_CLOUD_AUTH_MODE);"
     previous = Path.cwd(); os.chdir(c['releaseDirectory'])
     try:
@@ -540,6 +794,14 @@ def wait_primary(env, pause=time.sleep, connection_factory=http.client.HTTPConne
 
 
 def exec_runtime(c, mode, env, jobs, cmd, owned, manifest=None):
+    if periodic.installation_profile(c)['name'] == periodic.PC_PROFILE:
+        require(mode == '--app', 'pc-jobs-disabled-preparation')
+        require(manifest is not None and re.fullmatch('[a-f0-9]{64}', manifest.get('nodeSha256', '')), 'node-version-pin')
+        argv = ['/usr/bin/python3', '-I', str(Path(c['releaseDirectory'])/'ops/pc-host/linux-launch.py'), '--service', 'app',
+                '--config', c['hostConfigPath'], '--node-sha256', manifest['nodeSha256']]
+        resource.setrlimit(resource.RLIMIT_CORE, (0, 0)); os.umask(0o077)
+        os.execve(argv[0], argv, {'PATH': '/usr/bin:/bin', 'HOME': '/nonexistent', 'LANG': 'C.UTF-8'})
+        return
     require(mode != '--jobs' or jobs['enabled'], 'jobs-disabled')
     node = existing(c['nodePath'])
     release = Path(c['releaseDirectory'])
@@ -581,7 +843,7 @@ def exec_runtime(c, mode, env, jobs, cmd, owned, manifest=None):
     os.dup2(fd, 1); os.dup2(fd, 2); os.close(fd)
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0)); os.umask(0o077)
     os.setgroups([]); os.setgid(c['appGid']); os.setuid(c['appUid']); os.chdir(release)
-    require(os.getuid() == 1000 and os.getgid() == 1000 and not os.getgroups(), 'drop-privileges')
+    require(os.getuid() == c['appUid'] and os.getgid() == c['appGid'] and not os.getgroups(), 'drop-privileges')
     child_env = {**env, 'NODE_ENV': 'production', 'PATH': '/opt/node-v24.19.0-linux-x64/bin:/usr/bin:/bin',
                  'HOME': c['jobsStateRoot'], 'TMPDIR': '/tmp', 'NEXT_TELEMETRY_DISABLED': '1'}
     os.execve(str(node), args, child_env)
@@ -610,7 +872,8 @@ def main(argv=None):
         require(os.fstat(descriptor).st_uid == 0 and stat.S_IMODE(os.fstat(descriptor).st_mode) == 0o600 and
                 os.fstat(descriptor).st_nlink == 1, 'preflight-log')
         os.close(descriptor)
-        cmd = Commands(log)
+        config_shape(c)
+        cmd = Commands(log, c)
         storage_gate(c, cmd)
         if args.mode == '--storage-only':
             print('{"valid":true,"scope":"encrypted-storage-only"}')
@@ -618,6 +881,8 @@ def main(argv=None):
         env, jobs, manifest = configuration_gate(c)
         node_gate(c, env, manifest, cmd)
         owned = host_gate(c, cmd)
+        if periodic.installation_profile(c)['name'] == periodic.PC_PROFILE:
+            require(set(owned) == set(IMAGES), 'pc-containers-not-running')
         if args.mode == '--check':
             print(json.dumps({'valid': True, 'scope': 'placement', 'jobsEnabled': jobs['enabled']}))
             return 0

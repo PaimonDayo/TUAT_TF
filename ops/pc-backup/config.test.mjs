@@ -15,15 +15,31 @@ test('pair reservation derives bounded dump plus conservatively escaped recovery
   assert(BACKUP_LIMITS.recoveryBytes>=6*(2*BACKUP_LIMITS.sqlBytes+BACKUP_LIMITS.pushBytes));
 });
 
-test('native Linux configuration requires exact labels and rejects ambiguous WSL dispatch',()=>{
-  const config={version:1,enabled:false,executionMode:'linux',instanceId:'11111111-1111-4111-8111-111111111111',
+const nativeConfig=()=>({version:1,enabled:false,executionMode:'linux',instanceId:'11111111-1111-4111-8111-111111111111',
     stateDirectory:'/private/backup-state',environmentFile:'/private/config/backup.env',dockerExecutable:'/usr/bin/docker',dockerSha256:'a'.repeat(64),
     psqlExecutable:'/usr/bin/psql',pgDumpExecutable:'/usr/bin/pg_dump',pushEnvironmentFile:null,
     target:{containerId:'b'.repeat(64),containerImageId:'sha256:'+ 'c'.repeat(64),containerName:'owned-db',
       databaseName:'tuat_pc_candidate',databaseSystemIdentifier:'1234567890123456789',dataMountSource:'/var/lib/docker/volumes/owned/_data',
-      ownerLabel:'owned-runtime',generationLabel:'d'.repeat(32)}};
+      ownerLabel:'owned-runtime',generationLabel:'d'.repeat(32)}});
+test('native Linux configuration requires exact labels and rejects ambiguous WSL dispatch',()=>{
+  const config=nativeConfig();
   assert.doesNotThrow(()=>validateBackupConfig(config));
   for(const changed of [{...config,executionMode:'automatic'},{...config,wslExecutable:'/usr/bin/wsl'},
     {...config,target:{...config.target,ownerLabel:''}},{...config,target:{...config.target,generationLabel:''}},
     {...config,target:{...config.target,databaseName:'postgres;DROP DATABASE postgres'}}])assert.throws(()=>validateBackupConfig(changed));
+});
+
+test('only native Linux may select one of the two exact local Docker sockets',()=>{
+  const native=nativeConfig();
+  for(const dockerSocket of [undefined,'unix:///var/run/docker.sock','unix:///run/tuat-local/docker.sock'])
+    assert.doesNotThrow(()=>validateBackupConfig(dockerSocket===undefined?native:{...native,dockerSocket}));
+  for(const dockerSocket of ['tcp://127.0.0.1:2375','tcp://remote.example.test:2376','unix:///tmp/docker.sock',
+    'unix:///run/tuat-local/../docker.sock','unix:///run/tuat-local/docker.sock/','unix://run/tuat-local/docker.sock',
+    'npipe:////./pipe/docker_engine','',null])assert.throws(()=>validateBackupConfig({...native,dockerSocket}));
+  const wsl={...native,executionMode:'wsl',wslExecutable:process.cwd(),wslSha256:'a'.repeat(64),wslDistribution:'synthetic',wslUser:'synthetic',
+    target:{...native.target,databaseName:'postgres',composeProject:'synthetic',composeService:'db'}};
+  assert.doesNotThrow(()=>validateBackupConfig(wsl));
+  assert.doesNotThrow(()=>validateBackupConfig({...wsl,executionMode:undefined}));
+  for(const executionMode of ['wsl',undefined])for(const dockerSocket of ['unix:///run/tuat-local/docker.sock','unix:///var/run/docker.sock'])
+    assert.throws(()=>validateBackupConfig({...wsl,executionMode,dockerSocket}));
 });

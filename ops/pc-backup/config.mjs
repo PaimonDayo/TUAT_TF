@@ -10,6 +10,12 @@ const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 export const BACKUP_LIMITS=Object.freeze({dumpBytes:128*1024*1024,sqlBytes:16*1024*1024,pushBytes:64*1024,
   recoveryBytes:6*(2*16*1024*1024+64*1024)+64*1024,metadataBytes:16*1024*1024,inventory:4096});
 export const MIN_MAX_PAIR_BYTES=BACKUP_LIMITS.dumpBytes+BACKUP_LIMITS.recoveryBytes+72;
+export function backupDockerSocket(config) {
+  if(config.executionMode!=='linux'&&Object.hasOwn(config,'dockerSocket'))throw Error('Explicit Docker socket requires native Linux');
+  const socket=config.dockerSocket===undefined?'unix:///var/run/docker.sock':config.dockerSocket;
+  if(!['unix:///var/run/docker.sock','unix:///run/tuat-local/docker.sock'].includes(socket))throw Error('Pinned local Docker socket required');
+  return socket;
+}
 export function validateCapacity(capacity,{required=true}={}) {
   if(capacity===undefined&&!required)return;
   const fields=['inventoryLimit','maxLocalBytes','maxRemoteBytes','minFreeLocalBytes','maxPairBytes','maxRequestCount','maxTransferBytes'];
@@ -23,6 +29,7 @@ export function validateBackupConfig(config,env) {
   if(config?.version!==1||typeof config.enabled!=='boolean'||!uuid(config.instanceId)) throw Error('Explicit backup configuration required');
   if(![undefined,'wsl','linux'].includes(config.executionMode)) throw Error('Explicit supported backup execution mode required');
   const native=config.executionMode==='linux';
+  backupDockerSocket(config);
   for(const key of ['stateDirectory','environmentFile',...(native?[]:['wslExecutable'])]) if(!isAbsolute(config[key]??'')) throw Error('Absolute backup paths required');
   for(const key of ['psqlExecutable','pgDumpExecutable']) if(!/^\/[A-Za-z0-9_./-]+$/.test(config[key]??'')) throw Error('Absolute database commands required');
   if(resolve(config.stateDirectory)===dirname(resolve(config.environmentFile))) throw Error('Separate private backup state required');

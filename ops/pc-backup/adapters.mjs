@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { Readable } from 'node:stream';
 import { S3Client,PutObjectCommand,HeadObjectCommand,GetObjectCommand,ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { NodeHttpHandler } from '@smithy/node-http-handler';
-import { readPrivateFile,BACKUP_LIMITS } from './config.mjs';
+import { readPrivateFile,BACKUP_LIMITS,backupDockerSocket } from './config.mjs';
 import { sha256 } from './archive.mjs';
 import { decryptBackup,verifyRecovery } from '../laptop/backup-backend.mjs';
 
@@ -117,6 +117,7 @@ function flatReceipt(value) {
 export function createAdapters(config,env,{execute=promisify(execFile),readBinary=readFileSync,createStorage=options=>new S3Client(options),createHttpHandler=()=>new NodeHttpHandler()}={}) {
   let commandUncertain=false;
   const native=config.executionMode==='linux';
+  const dockerSocket=backupDockerSocket(config);
   const commandEnvironment=native?{LANG:'C.UTF-8',DOCKER_CONFIG:'/nonexistent'}:Object.fromEntries(['SystemRoot','WINDIR','SystemDrive','USERPROFILE','LOCALAPPDATA','APPDATA','TEMP','TMP','PROGRAMDATA']
     .filter(name=>typeof process.env[name]==='string').map(name=>[name,process.env[name]]));
   const run=async(args,{signal,timeout=10_000,maxBuffer=BACKUP_LIMITS.pushBytes}={})=>{
@@ -130,7 +131,7 @@ export function createAdapters(config,env,{execute=promisify(execFile),readBinar
       return stdout;
     } catch {commandUncertain=true;throw Error('Backup command outcome unverified');}
   };
-  const docker=(args,options)=>run([config.dockerExecutable,'--host','unix:///var/run/docker.sock',...args],options);
+  const docker=(args,options)=>run([config.dockerExecutable,'--host',dockerSocket,...args],options);
   const sql=async(statement,signal)=>String(await docker(['exec',config.target.containerId,config.psqlExecutable,'-X','-qAt','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',config.target.databaseName,'-c',statement],{signal,maxBuffer:BACKUP_LIMITS.sqlBytes,timeout:30_000})).trim();
   let client;
   const storage=()=>client??=createStorage({region:'auto',endpoint:`https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,

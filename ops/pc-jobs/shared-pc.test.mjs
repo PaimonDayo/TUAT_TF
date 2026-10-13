@@ -23,17 +23,54 @@ const config = { version: 1, enabled: false, runtime: 'shared-pc', releaseDirect
   activateAt: new Date(now).toISOString(), appOrigin: 'http://127.0.0.1:3112', port: 3112 };
 const records = (at = now, c = config) => {
   const timestamp = new Date(at).toISOString();
-  const identity = { instanceId: c.expectedBackupInstanceId, generation: '00000000-0000-4000-8000-000000000002', startedAt: timestamp, databaseSystemIdentifier: c.expectedBackupDatabaseSystemIdentifier };
+  const identity = { instanceId: c.expectedBackupInstanceId, generation: '00000000-0000-4000-8000-000000000002', startedAt: timestamp,
+    databaseSystemIdentifier: c.expectedBackupDatabaseSystemIdentifier, databaseName: c.expectedBackupDatabaseName ?? 'postgres' };
   const key = `ops/pc-backend/${identity.instanceId}/backups/${timestamp.replaceAll(':', '-').replace('.', '-')}.dump.enc`;
   return {
     'runtime-status.json': { version: 1, running: true, releaseCommit: c.releaseCommit, releaseId: c.releaseId, startedAt: timestamp, checkedAt: timestamp, backup: { identity, statusPath: c.backupStatusPath } },
     'backup-lifecycle.json': { version: 1, ...identity, heartbeat: { checkedAt: timestamp, healthy: true, maintenance: false },
-      target: { checkedAt: timestamp, healthy: true, databaseSystemIdentifier: identity.databaseSystemIdentifier, databaseName: 'postgres', containerId: 'a'.repeat(64), containerImageId: `sha256:${'b'.repeat(64)}` },
+      target: { checkedAt: timestamp, healthy: true, databaseSystemIdentifier: identity.databaseSystemIdentifier, databaseName: identity.databaseName, containerId: 'a'.repeat(64), containerImageId: `sha256:${'b'.repeat(64)}` },
       backup: { generation: identity.generation, verifiedAt: timestamp, databaseSystemIdentifier: identity.databaseSystemIdentifier,
         key, recoveryKey: key.replace('.dump.enc', '.recovery.json.enc'), sha256: 'c'.repeat(64), recoverySha256: 'd'.repeat(64), bytes: 80, recoveryBytes: 90 } },
   };
 };
 const reader = data => file => JSON.stringify(data[file.split(/[\\/]/).at(-1)]);
+
+test('shared Jobs bind the native database name as well as its system identifier before probes', async () => {
+  const native = { ...config, expectedBackupDatabaseName: 'tuat_pc_candidate' };
+  assert.doesNotThrow(() => validateConfig(native, env));
+  let probes = 0;
+  const fetchRequest = async url => { probes++; return { ok: true, json: async () => url.endsWith('/api/version')
+    ? { version: native.releaseCommit, releaseId: native.releaseId } : { swagger: '2.0' } }; };
+  assert.equal(await sharedPcReady(native, env, { read: reader(records(now, native)), clock: () => now, fetchRequest }), true);
+  assert.equal(probes, 2);
+  for (const change of [
+    data => { data['runtime-status.json'].backup.identity.databaseName = 'postgres'; },
+    data => { data['runtime-status.json'].backup.identity.databaseName = 'postgres'; data['backup-lifecycle.json'].target.databaseName = 'postgres'; },
+    data => { delete data['runtime-status.json'].backup.identity.databaseName; },
+    data => { data['backup-lifecycle.json'].target.databaseName = 'postgres'; },
+  ]) {
+    const data = records(now, native); change(data); probes = 0;
+    assert.equal(backendReady(native, { read: reader(data), now }), false);
+    assert.equal(await sharedPcReady(native, env, { read: reader(data), clock: () => now, fetchRequest }), false);
+    assert.equal(probes, 0); // No schema/version request and no Jobs dispatch for a different database.
+  }
+});
+
+test('omitted database name preserves postgres and refuses a coherently different host database', () => {
+  assert.doesNotThrow(() => validateConfig(config, env));
+  const data = records();
+  assert.equal(backendReady(config, { read: reader(data), now }), true);
+  assert.equal(backendReady({ ...config, expectedBackupDatabaseName: 'postgres' }, { read: reader(data), now }), true);
+  delete data['runtime-status.json'].backup.identity.databaseName;
+  assert.equal(backendReady(config, { read: reader(data), now }), true);
+  data['runtime-status.json'].backup.identity.databaseName = 'tuat_pc_candidate';
+  data['backup-lifecycle.json'].target.databaseName = 'tuat_pc_candidate';
+  assert.equal(backendReady(config, { read: reader(data), now }), false);
+  for (const databaseName of ['', 'tuat-pc-candidate', 'POSTGRES', 'a'.repeat(64)]) {
+    assert.throws(() => validateConfig({ ...config, expectedBackupDatabaseName: databaseName }, env));
+  }
+});
 
 test('native local shared Jobs require one local issuer, private images and the same combined snapshot root',async()=>{
   const local={...env,PC_LOCAL_RUNTIME:'true',NEXT_PUBLIC_PC_LOCAL_RUNTIME:'true',PC_BACKEND_INTERNAL_URL:'',NEXT_PUBLIC_CLOUD_AUTH_URL:'',NEXT_PUBLIC_CLOUD_AUTH_ANON_KEY:'',

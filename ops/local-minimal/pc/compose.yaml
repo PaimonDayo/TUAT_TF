@@ -1,0 +1,70 @@
+# Installed only after its exact source hash and private PC daemon are accepted.
+services:
+  db:
+    image: supabase/postgres:17.6.1.136
+    container_name: tuat-local-db
+    network_mode: host
+    user: "100:101"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+    entrypoint: [postgres]
+    command: [-D, /var/lib/postgresql/data, -c, listen_addresses=127.0.0.1, -c, port=18304, -c, shared_preload_libraries=, -c, shared_buffers=64MB, -c, max_connections=30, -c, unix_socket_directories=/tmp, -c, hba_file=/private/pg_hba.conf]
+    environment:
+      PGHOST: /tmp
+      PGPORT: "18304"
+    env_file: ["${TUAT_DB_ENV:?private DB environment required}"]
+    volumes:
+      - type: bind
+        source: "${TUAT_DB_DATA:?owned DB data required}"
+        target: /var/lib/postgresql/data
+      - type: bind
+        source: "${TUAT_DB_HBA:?root DB-reader HBA required}"
+        target: /private/pg_hba.conf
+        read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777
+    labels:
+      tuat.local.source: "${TUAT_SOURCE_ID:?source identity required}"
+      tuat.local.role: db
+      tuat.local.config-sha256: "${TUAT_DB_HASH:?private DB config hash required}"
+  auth:
+    image: supabase/gotrue:v2.197.0
+    container_name: tuat-local-auth
+    network_mode: host
+    user: "65529:65529"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+    command: [auth]
+    env_file: ["${TUAT_AUTH_ENV:?private Auth environment required}"]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777
+    labels:
+      tuat.local.source: "${TUAT_SOURCE_ID:?source identity required}"
+      tuat.local.role: auth
+      tuat.local.config-sha256: "${TUAT_AUTH_HASH:?private Auth config hash required}"
+  rest:
+    image: postgrest/postgrest:v14.12
+    container_name: tuat-local-rest
+    network_mode: host
+    user: "65528:65528"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+    command: [/bin/postgrest]
+    env_file: ["${TUAT_REST_ENV:?private REST environment required}"]
+    volumes:
+      - type: bind
+        source: "${TUAT_MIXED_JWKS:?root REST-reader local JWK required}"
+        target: /private/local-jwks.json
+        read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777
+    labels:
+      tuat.local.source: "${TUAT_SOURCE_ID:?source identity required}"
+      tuat.local.role: rest
+      tuat.local.config-sha256: "${TUAT_REST_HASH:?private REST config hash required}"

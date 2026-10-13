@@ -1,0 +1,17 @@
+{
+  "data-root": "/var/lib/tuat-local/docker",
+  "exec-root": "/run/tuat-local/docker",
+  "pidfile": "/run/tuat-local/dockerd.pid",
+  "hosts": ["unix:///run/tuat-local/docker.sock"],
+  "containerd": "/run/tuat-local/containerd/containerd.sock",
+  "containerd-namespace": "tuat-local-moby",
+  "containerd-plugins-namespace": "tuat-local-plugins",
+  "bridge": "none",
+  "iptables": false,
+  "ip6tables": false,
+  "ip-forward": false,
+  "ip-masq": false,
+  "userland-proxy": false,
+  "live-restore": true,
+  "features": { "containerd-snapshotter": true }
+}

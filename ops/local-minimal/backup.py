@@ -126,15 +126,17 @@ def atomic_json(path, value):
         temp.unlink(missing_ok=True)
 
 
-def atomic_jobs_json(path, value):
-    """Only verified metadata, root:1000/0640 in root:1000/0750. No archives or keys."""
+def atomic_jobs_json(path, value, reader_gid=1000):
+    """Only verified metadata, root:sealed-reader/0640 in root:sealed-reader/0750."""
+    if type(reader_gid) is not int or not 1000 <= reader_gid < 2**32-1:
+        fail('Explicit Jobs receipt reader group required')
     path=Path(path);parent=path.parent
     s=parent.lstat()
-    if not stat.S_ISDIR(s.st_mode) or s.st_uid!=0 or s.st_gid!=1000 or stat.S_IMODE(s.st_mode)!=0o750:
+    if not stat.S_ISDIR(s.st_mode) or s.st_uid!=0 or s.st_gid!=reader_gid or stat.S_IMODE(s.st_mode)!=0o750:
         fail('Jobs receipt metadata directory contract refused')
     def checked_read(p):
         q=p.lstat()
-        if not stat.S_ISREG(q.st_mode) or q.st_uid!=0 or q.st_gid!=1000 or q.st_nlink!=1 or stat.S_IMODE(q.st_mode)!=0o640 or q.st_size>1048576:
+        if not stat.S_ISREG(q.st_mode) or q.st_uid!=0 or q.st_gid!=reader_gid or q.st_nlink!=1 or stat.S_IMODE(q.st_mode)!=0o640 or q.st_size>1048576:
             fail('Jobs receipt metadata file contract refused')
         return p.read_bytes()
     old=checked_read(path) if path.exists() else None
@@ -143,7 +145,7 @@ def atomic_jobs_json(path, value):
         fd=os.open(p,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
         try:
             with os.fdopen(fd,'wb') as stream:
-                os.fchown(stream.fileno(),0,1000);os.fchmod(stream.fileno(),0o640)
+                os.fchown(stream.fileno(),0,reader_gid);os.fchmod(stream.fileno(),0o640)
                 stream.write(data);stream.flush();os.fsync(stream.fileno())
         except BaseException:
             p.unlink(missing_ok=True)
@@ -304,6 +306,12 @@ def validate_config(config):
         fail('Pinned source identity required')
     if config.get('writerMode') not in ('docker-fixture', 'surface-systemd'):
         fail('Concrete writer mode required')
+    profile = periodic.installation_profile(config)
+    if profile['name'] == periodic.PC_PROFILE:
+        if config.get('writerMode') != 'surface-systemd' or pp is None or config.get('sourceOwnerUid') != 65530:
+            fail('PC capture requires sealed controller and actor')
+        if config.get('containers') != {role: 'tuat-local-'+role for role in ('db','auth','rest')}:
+            fail('PC capture requires exact private source containers')
     if not isinstance(config.get('sourceOwnerUid', os.getuid()), int) or isinstance(config.get('sourceOwnerUid'), bool) or \
        config.get('sourceOwnerUid', os.getuid()) < 0:
         fail('Pinned source filesystem owner UID required')
@@ -332,13 +340,19 @@ def validate_config(config):
         fail('Receipt must belong to private backup root')
 
 
+def jobs_owner(config):
+    return 0 if periodic.installation_profile(config)['name'] == periodic.PC_PROFILE else config.get('sourceOwnerUid', os.getuid())
+
+
 class LocalCommands:
     """Fixed local Docker/systemd operations; config contains no executables/hooks."""
+    def __init__(self, profile=None):
+        self.profile = periodic.installation_profile(profile or {})
     def run(self, args, data=None, output=None, timeout=120, input_file=None, allowed=(0,)):
         # Drain both pipes with finite storage; even unexpected diagnostics are discarded,
         # never formatted into an exception, log or result. No inherited Docker context/TLS/env.
         env = {'PATH': '/opt/node-v24.19.0-linux-x64/bin:/usr/bin:/bin', 'HOME': '/nonexistent',
-               'DOCKER_CONFIG': '/nonexistent', 'DOCKER_HOST': periodic.SOCKET, 'LANG': 'C.UTF-8'}
+               'DOCKER_CONFIG': '/nonexistent', 'DOCKER_HOST': self.profile['socket'], 'LANG': 'C.UTF-8'}
         start = time.monotonic(); total = {'out': 0, 'err': 0}; captured = bytearray()
         maximum = 8*1024**2
         attempt = getattr(self, 'periodic_attempt', None)
@@ -382,7 +396,7 @@ class LocalCommands:
                 proc.stdout.close(); proc.stderr.close()
 
     def docker(self, *args, **kwargs):
-        return self.run(['docker', '--host', periodic.SOCKET, '--config', '/nonexistent', *map(str, args)], **kwargs)
+        return self.run(['docker', '--host', self.profile['socket'], '--config', '/nonexistent', *map(str, args)], **kwargs)
 
     def storage_gate(self, config):
         installed = periodic.seal(config)
@@ -399,7 +413,8 @@ class LocalCommands:
         return json.loads(self.docker('inspect', name))[0]
 
     def unit(self, name):
-        if name not in UNITS + PRESERVED_TRIAL_UNITS + (periodic.UNIT,):
+        allowed = UNITS + PRESERVED_TRIAL_UNITS + (periodic.UNIT,) + (periodic.PC_DAEMONS if self.profile['name'] == periodic.PC_PROFILE else ())
+        if name not in allowed:
             fail('Unaccounted host writer/unit')
         raw = self.run(['systemctl', 'show', name,
             '--property=LoadState,ActiveState,SubState,FreezerState,ControlGroup,MainPID,ControlPID,InvocationID,ExecMainStartTimestampMonotonic'],
@@ -419,7 +434,7 @@ class LocalCommands:
         path = Path(config['jobsStateRoot']) / 'runner.lock'
         if not path.exists():
             return
-        owner = json.loads(read_private(path,4096,config.get('sourceOwnerUid',os.getuid())))
+        owner = json.loads(read_private(path,4096,jobs_owner(config)))
         pid = owner.get('pid')
         if not isinstance(pid,int) or isinstance(pid,bool) or pid<=0:
             fail('Unknown Jobs lock owner')
@@ -449,7 +464,8 @@ class LocalCommands:
             self.run(['systemctl', 'freeze' if freeze else 'thaw', name])
 
     def sql(self, config, text, output=None):
-        return self.docker('exec', '-i', config['containers']['db'], 'psql', '-U', 'postgres',
+        socket_args = ['--host=/tmp', '--port=18304'] if self.profile['name'] == periodic.PC_PROFILE and config['containers']['db'] == 'tuat-local-db' else []
+        return self.docker('exec', '-i', config['containers']['db'], 'psql', *socket_args, '-U', 'postgres',
                            '-d', config['database'], '-X', '-qAt', '-v', 'ON_ERROR_STOP=1',
                            data=text.encode(), output=output)
 
@@ -498,6 +514,7 @@ class CaptureWindow:
         self.config, self.commands, self.checkpoint = config, commands, Path(checkpoint)
         self.before, self.changed, self.preserved_units = [], [], {}
         self.host_units = None
+        self.daemons = {}
 
     def observe(self, kind, name):
         return container_state(self.commands.inspect(name)) if kind == 'container' else unit_state(self.commands.unit(name))
@@ -508,7 +525,8 @@ class CaptureWindow:
         for line in lines.splitlines():
             columns = line.split()
             controller = columns[0] == periodic.UNIT if columns else False
-            allowed = UNITS + PRESERVED_TRIAL_UNITS + ((periodic.UNIT,) if self.config.get('periodic') else ())
+            p = periodic.installation_profile(self.config)
+            allowed = UNITS + PRESERVED_TRIAL_UNITS + ((periodic.UNIT,) if self.config.get('periodic') else ()) + (periodic.PC_DAEMONS if p['name'] == periodic.PC_PROFILE else ())
             if len(columns) < 4 or columns[0] not in allowed or columns[0] in names or columns[1] != 'loaded':
                 fail('Unaccounted host writer/unit')
             if controller:
@@ -556,6 +574,14 @@ class CaptureWindow:
             # Preserve only the five exact old trial names, with no live process.
             # An absent mirror is disabled; it does not require a new stub unit.
             self.host_units = self.host_inventory()
+            if periodic.installation_profile(config)['name'] == periodic.PC_PROFILE:
+                if not set(periodic.PC_DAEMONS).issubset(self.host_units): fail('Private source daemon inventory missing')
+                for name in periodic.PC_DAEMONS:
+                    state = unit_state(commands.unit(name))
+                    if state['ActiveState'] != 'active' or state['FreezerState'] != 'running' or state['ControlPID'] != '0' or \
+                            state['MainPID'] == '0' or state['ControlGroup'] != '/system.slice/' + name:
+                        fail('Private source daemon state unverified')
+                    self.daemons[name] = state
             for name in self.host_units & set(PRESERVED_TRIAL_UNITS):
                 self.preserved_units[name] = inactive_unit_state(commands.unit(name))
             self.preserved_units[UNITS[2]] = inactive_unit_state(commands.unit(UNITS[2]), missing_allowed=True)
@@ -601,6 +627,8 @@ class CaptureWindow:
         for name, state in self.preserved_units.items():
             if inactive_unit_state(self.commands.unit(name), missing_allowed=name == UNITS[2]) != state:
                 fail('Preserved host unit state changed during capture')
+        for name, state in self.daemons.items():
+            if unit_state(self.commands.unit(name)) != state: fail('Private daemon identity changed during capture')
 
     def restore(self):
         # systemctl stop changes only controller lifecycle. Preserve self PID/birth/cgroup/pins,
@@ -720,9 +748,10 @@ class BoundedBundle:
 
 
 def capture_bundle(config, commands, stage):
+    periodic.pc_database(config)
     assert_database_quiet(config, commands)
     owner = config.get('sourceOwnerUid', os.getuid())
-    journal = journal_snapshot(config['jobsStateRoot'], owner)
+    journal = journal_snapshot(config['jobsStateRoot'], jobs_owner(config))
     images = image_inventory(config['imageRoot'], owner)
     refs = image_references(config, commands)
     keys = {row['key'] for row in images}
@@ -742,6 +771,8 @@ def capture_bundle(config, commands, stage):
         ('database.dump', ['pg_dump', '-U', 'postgres', '-d', config['database'], '--format=custom']),
         ('roles.sql', ['pg_dumpall', '-U', 'postgres', '--roles-only', '--no-role-passwords']),
     ):
+        if periodic.installation_profile(config)['name'] == periodic.PC_PROFILE:
+            argv += ['--host=/tmp', '--port=18304']
         with (stage / name).open('xb') as output:
             os.chmod(stage / name, 0o600)
             commands.docker('exec', config['containers']['db'], *argv, output=output)
@@ -772,7 +803,7 @@ def capture_bundle(config, commands, stage):
         os.fsync(stream.fileno())
     sync_directory(stage)
     if bundle.stat().st_size > MAX_BYTES or before != database_fingerprint(config, commands) or \
-       images != image_inventory(config['imageRoot'], owner) or journal != journal_snapshot(config['jobsStateRoot'], owner):
+       images != image_inventory(config['imageRoot'], owner) or journal != journal_snapshot(config['jobsStateRoot'], jobs_owner(config)):
         fail('Capture changed or exceeded bound')
     assert_database_quiet(config, commands)
     return bundle, manifest
@@ -903,7 +934,7 @@ def verify_restore(config, commands, restored, manifest):
 def produce_locked(config, commands):
     validate_config(config)
     for name in ('imageRoot', 'jobsStateRoot'):
-        private(config[name], True, config.get('sourceOwnerUid', os.getuid()))
+        private(config[name], True, jobs_owner(config) if name == 'jobsStateRoot' else config.get('sourceOwnerUid', os.getuid()))
     for name in ('backupRoot', 'stageRoot'):
         private(config[name], True)
     key = read_private(config['runtimeKey'], 32)
@@ -990,11 +1021,14 @@ def produce(config, commands=None):
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             fail('One backup producer already owns the capture window')
-        commands = commands or LocalCommands()
+        selected = periodic.placement(config)
+        commands = commands or LocalCommands({'profile': selected['name']})
         attempt = None
         try:
             if config.get('periodic') is not None:
-                attempt = periodic.Attempt(config, commands, atomic_json, file_hash, atomic_jobs_json)
+                def publish_jobs(path, value):
+                    atomic_jobs_json(path, value, periodic.actor(config)[1])
+                attempt = periodic.Attempt(config, commands, atomic_json, file_hash, publish_jobs)
             result = produce_locked(config, commands)
             if attempt: attempt.finish(result)
             return result
