@@ -15,7 +15,14 @@ test('host injects the newly owned generation and pins the independently configu
   assert.deepEqual(Object.keys(env), BACKUP_CHILD_ENV);
   assert.equal(env.PC_APP_BACKUP_GENERATION, supervisor.identity.generation);
   assert.equal(env.PC_APP_BACKUP_DATABASE_SYSTEM_IDENTIFIER, config.expectedBackupDatabaseSystemIdentifier);
-  assert.deepEqual(backupRuntimeRecord(config, supervisor, now).identity, { ...supervisor.identity, databaseSystemIdentifier: config.expectedBackupDatabaseSystemIdentifier });
+  assert.deepEqual(backupRuntimeRecord(config, supervisor, now).identity, { ...supervisor.identity, databaseSystemIdentifier: config.expectedBackupDatabaseSystemIdentifier, databaseName:'postgres' });
+});
+test('native database name is pinned by the owning host rather than the app environment',()=>{
+  const native={...config,expectedBackupDatabaseName:'tuat_pc_candidate'};
+  assert.throws(()=>backupChildEnvironment(native,supervisor,now));
+  const env=backupChildEnvironment(native,{...supervisor,databaseName:'tuat_pc_candidate'},now);
+  assert.equal(env.PC_APP_BACKUP_DATABASE_NAME,'tuat_pc_candidate');
+  assert.throws(()=>validateBackupOwnerConfig(native,{PC_APP_BACKUP_DATABASE_NAME:'other'}));
 });
 
 test('static environment cannot supply a previous generation, timestamp, or status path', () => {

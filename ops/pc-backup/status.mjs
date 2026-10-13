@@ -23,7 +23,7 @@ export function backupStatusReady(status,identity,now=Date.now()) {
     if(status.heartbeat.healthy!==true||status.heartbeat.maintenance!==false||status.target.healthy!==true
       ||status.backup.generation!==identity.generation||!/^\d{10,20}$/.test(status.target.databaseSystemIdentifier??'')
       ||status.target.databaseSystemIdentifier!==identity.databaseSystemIdentifier
-      ||status.backup.databaseSystemIdentifier!==identity.databaseSystemIdentifier||status.target.databaseName!=='postgres'
+      ||status.backup.databaseSystemIdentifier!==identity.databaseSystemIdentifier||!/^[a-z_][a-z0-9_]{0,62}$/.test(identity.databaseName??'postgres')||status.target.databaseName!==(identity.databaseName??'postgres')
       ||!/^[a-f0-9]{64}$/.test(status.target.containerId??'')||!/^sha256:[a-f0-9]{64}$/.test(status.target.containerImageId??'')) return false;
     if(status.backup.localSnapshot && status.backup.key===status.backup.localSnapshot.archiveKey) {
       return localSnapshotReady(status,identity,status.backup.localSnapshot.imageRoot,now)

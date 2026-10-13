@@ -2,6 +2,7 @@ import { lstatSync, realpathSync, openSync, closeSync, fstatSync, readSync } fro
 import { isAbsolute, resolve, dirname } from 'node:path';
 import { parseEnv } from 'node:util';
 import { execFileSync } from 'node:child_process';
+import { validateApplicationStatus } from './application-status.mjs';
 
 const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
@@ -25,6 +26,7 @@ export function validateBackupConfig(config,env) {
   for(const key of ['stateDirectory','environmentFile',...(native?[]:['wslExecutable'])]) if(!isAbsolute(config[key]??'')) throw Error('Absolute backup paths required');
   for(const key of ['psqlExecutable','pgDumpExecutable']) if(!/^\/[A-Za-z0-9_./-]+$/.test(config[key]??'')) throw Error('Absolute database commands required');
   if(resolve(config.stateDirectory)===dirname(resolve(config.environmentFile))) throw Error('Separate private backup state required');
+  validateApplicationStatus(config);
   if(!hash(config.dockerSha256)||!/^\/[A-Za-z0-9_./-]+$/.test(config.dockerExecutable??'')) throw Error('Pinned backup commands required');
   if(native) {
     if(['wslExecutable','wslSha256','wslDistribution','wslUser'].some(key=>Object.hasOwn(config,key))) throw Error('Native backup may not dispatch through WSL');

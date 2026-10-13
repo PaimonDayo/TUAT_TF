@@ -8,6 +8,7 @@ import { encryptedPair,sha256 } from './archive.mjs';
 import { createAdapters,createCycleBudget,inventoryBounds,STORAGE_LIMITS } from './adapters.mjs';
 import { classifyBackupReceipts,reconcileBackupInventory,planBackupAdmission,planBackupRetention } from './retention.mjs';
 import { STATUS_VERSION,STATUS_FILE,HEARTBEAT_INTERVAL_MS,BACKUP_INTERVAL_MS,localSnapshotReady } from './status.mjs';
+import { writeApplicationStatus } from './application-status.mjs';
 
 export {loadBackup};
 export function backupPlan(config) {
@@ -16,7 +17,7 @@ export function backupPlan(config) {
     intervalMinutes:15,backupMaximumAgeMinutes:35,heartbeatMaximumAgeSeconds:120,firstPairEachStartup:!config.localSnapshotReceiptFile,
     combinedLocalSnapshot:!!config.localSnapshotReceiptFile};
 }
-export async function startBackupSupervisor({configFile,config:providedConfig,env:providedEnv,expectedInstanceId,expectedDatabaseSystemIdentifier,
+export async function startBackupSupervisor({configFile,config:providedConfig,env:providedEnv,expectedInstanceId,expectedDatabaseSystemIdentifier,expectedDatabaseName='postgres',
   adapters:providedAdapters,readInventory=readBackupInventory,now=Date.now,setTimer=setInterval,clearTimer=clearInterval,save=writePrivate,lock=acquireLock,
   generation=randomUUID(),report=()=>{},onFatal=()=>{},drainMilliseconds=10_000,readSnapshot=path=>JSON.parse(readPrivateFile(path,16384).toString('utf8'))}={}) {
   if(configFile&&(providedConfig||providedEnv)) throw Error('Ambiguous backup configuration');
@@ -24,12 +25,13 @@ export async function startBackupSupervisor({configFile,config:providedConfig,en
   if(!env) throw Error('Explicit dedicated backup environment required');
   validateBackupConfig(config,env);
   if(!config.enabled) throw Error('Backup lifecycle is disabled');
-  if(config.instanceId!==expectedInstanceId||config.target.databaseSystemIdentifier!==expectedDatabaseSystemIdentifier) throw Error('Backup host target mismatch');
+  if(config.instanceId!==expectedInstanceId||config.target.databaseSystemIdentifier!==expectedDatabaseSystemIdentifier||config.target.databaseName!==expectedDatabaseName) throw Error('Backup host target mismatch');
   if(!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(generation)||!Number.isInteger(drainMilliseconds)||drainMilliseconds<1||drainMilliseconds>10_000) throw Error('Invalid lifecycle identity or drain bound');
   const started=now();
   if(!Number.isFinite(started)) throw Error('Invalid lifecycle clock');
   const identity={instanceId:config.instanceId,generation,startedAt:new Date(started).toISOString()};
-  const statusPath=resolve(config.stateDirectory,STATUS_FILE),owner=lock(config.stateDirectory,identity);
+  const privateStatusPath=resolve(config.stateDirectory,STATUS_FILE),
+    statusPath=resolve(config.applicationStatusDirectory??config.stateDirectory,STATUS_FILE),owner=lock(config.stateDirectory,identity);
   const adapters=providedAdapters??createAdapters(config,env),controller=new AbortController();
   let stopped=false,clock=started,backupBusy=null,probeBusy=null,lastAttempt=null,fatal=false,timer,stopPromise,fatalNotified=false;
   const status={version:STATUS_VERSION,...identity,heartbeat:{checkedAt:identity.startedAt,healthy:true,maintenance:false},
@@ -70,7 +72,8 @@ export async function startBackupSupervisor({configFile,config:providedConfig,en
           databaseSystemIdentifier:config.target.databaseSystemIdentifier,localSnapshot:snapshot};
       } else status.backup=null;
     }
-    save(statusPath,status);
+    save(privateStatusPath,status);
+    if(config.applicationStatusDirectory)writeApplicationStatus(config,status);
   } catch(error) {notifyFatal('status-publish-unverified');throw error;}};
   const assertActive=()=>{if(stopped||fatalNotified) throw Error('Backup lifecycle stopped');try {owner.assertOwned();} catch(error) {notifyFatal('ownership-unverified');throw error;}instant();};
   const probeTarget=()=>{
@@ -182,7 +185,7 @@ export async function startBackupSupervisor({configFile,config:providedConfig,en
   };
   try {publish();timer=setTimer(()=>{void tick();},HEARTBEAT_INTERVAL_MS);void backup();}
   catch(error) {controller.abort();adapters.close?.();owner.release();throw error;}
-  return {identity,statusPath,
+  return {identity,statusPath,databaseName:config.target.databaseName,
     stop() {
       if(stopPromise) return stopPromise;
       stopPromise=(async()=>{
@@ -209,7 +212,7 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
     if(mode==='--check') console.log(JSON.stringify(backupPlan(JSON.parse(readFileSync(resolve(file),'utf8')))));
     else {
       const {config}=loadBackup(resolve(file));
-      const lifecycle=await startBackupSupervisor({configFile:resolve(file),expectedInstanceId:config.instanceId,expectedDatabaseSystemIdentifier:config.target.databaseSystemIdentifier});
+      const lifecycle=await startBackupSupervisor({configFile:resolve(file),expectedInstanceId:config.instanceId,expectedDatabaseSystemIdentifier:config.target.databaseSystemIdentifier,expectedDatabaseName:config.target.databaseName});
       const stop=async()=>{const result=await lifecycle.stop();process.exitCode=result.drained?0:1;};
       process.once('SIGINT',stop);process.once('SIGTERM',stop);
       console.log(JSON.stringify({started:true,identity:lifecycle.identity,statusPath:lifecycle.statusPath}));

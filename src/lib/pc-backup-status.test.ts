@@ -47,6 +47,18 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 
 describe("operational status conformance", () => {
+  it("admits only the native database name pinned by the owning host", async () => {
+    const status=snapshot() as PcBackupStatus;
+    status.target.databaseName="tuat_pc_candidate";
+    const identity={...golden.identity,databaseName:"tuat_pc_candidate"};
+    expect(opsReady(status,identity,golden.now)).toBe(true);
+    expect(backupStatusReady(status,identity,golden.now)).toBe(true);
+    expect(backupStatusReady(status,golden.identity,golden.now)).toBe(false);
+    mocks.status=status;
+    await expect(assertPcAppWriteAllowed()).rejects.toBeInstanceOf(PcBackupProtectionError);
+    vi.stubEnv("PC_APP_BACKUP_DATABASE_NAME","tuat_pc_candidate");
+    await expect(assertPcAppWriteAllowed()).resolves.toBeUndefined();
+  });
   it("holds local writes for DB-only receipts and requires fresh, same-source image restore and off-PC evidence", async () => {
     mocks.local = true;
     const imageRoot = resolve("..", "synthetic-private-images"); vi.stubEnv("LOCAL_IMAGE_STORAGE_ROOT", imageRoot);

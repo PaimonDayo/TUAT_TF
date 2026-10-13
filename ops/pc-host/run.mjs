@@ -52,7 +52,7 @@ export async function run(configFile, execute = false, { startBackup = startBack
   process.once('SIGINT', stop); process.once('SIGTERM', stop);
   let poll, exited;
   try {
-    backup = await startBackup({ configFile: config.backupConfigFile, expectedInstanceId: config.expectedBackupInstanceId, expectedDatabaseSystemIdentifier: config.expectedBackupDatabaseSystemIdentifier,
+    backup = await startBackup({ configFile: config.backupConfigFile, expectedInstanceId: config.expectedBackupInstanceId, expectedDatabaseSystemIdentifier: config.expectedBackupDatabaseSystemIdentifier, expectedDatabaseName: config.expectedBackupDatabaseName ?? 'postgres',
       onFatal: () => { unexpectedExit = true; stop(); } });
     const boundBackupEnv = backupChildEnvironment(config, backup);
     backupRecord = backupRuntimeRecord(config, backup);

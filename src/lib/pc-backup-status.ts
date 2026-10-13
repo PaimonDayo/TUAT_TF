@@ -4,7 +4,7 @@ import { isAbsolute, resolve } from "node:path";
 import { getPcAppRuntime } from "./pc-app-runtime";
 import { isSafeAvatarStoragePath } from "./avatar-image";
 
-export type PcBackupIdentity = { instanceId: string; generation: string; startedAt: string; databaseSystemIdentifier: string };
+export type PcBackupIdentity = { instanceId: string; generation: string; startedAt: string; databaseSystemIdentifier: string; databaseName?: string };
 export type PcBackupStatus = {
   version: 1; instanceId: string; generation: string; startedAt: string;
   heartbeat: { checkedAt: string; healthy: boolean; maintenance: boolean };
@@ -36,7 +36,7 @@ export function backupStatusReady(value: unknown, expected: unknown, now = Date.
       || verified < started || verified > now || now - verified >= 35 * 60_000) return false;
     if (heartbeat.healthy !== true || heartbeat.maintenance !== false || target.healthy !== true
       || backup.generation !== identity.generation || target.databaseSystemIdentifier !== identity.databaseSystemIdentifier
-      || backup.databaseSystemIdentifier !== identity.databaseSystemIdentifier || target.databaseName !== "postgres"
+      || backup.databaseSystemIdentifier !== identity.databaseSystemIdentifier || !/^[a-z_][a-z0-9_]{0,62}$/.test(identity.databaseName ?? "postgres") || target.databaseName !== (identity.databaseName ?? "postgres")
       || !/^[a-f0-9]{64}$/.test(target.containerId ?? "") || !/^sha256:[a-f0-9]{64}$/.test(target.containerImageId ?? "")) return false;
     if (backup.localSnapshot && backup.key === backup.localSnapshot.archiveKey) {
       return localSnapshotReady(status, identity, backup.localSnapshot.imageRoot, now) && backup.sha256 === backup.localSnapshot.archiveSha256 && backup.bytes === backup.localSnapshot.archiveBytes;
@@ -91,7 +91,7 @@ export async function assertPcAppWriteAllowed(): Promise<void> {
       status = JSON.parse(bytes.subarray(0, read.bytesRead).toString("utf8"));
     } finally { await file.close(); }
     const identity = { instanceId: process.env.PC_APP_BACKUP_INSTANCE_ID, generation: process.env.PC_APP_BACKUP_GENERATION,
-      startedAt: process.env.PC_APP_BACKUP_STARTED_AT, databaseSystemIdentifier: process.env.PC_APP_BACKUP_DATABASE_SYSTEM_IDENTIFIER };
+      startedAt: process.env.PC_APP_BACKUP_STARTED_AT, databaseSystemIdentifier: process.env.PC_APP_BACKUP_DATABASE_SYSTEM_IDENTIFIER, databaseName: process.env.PC_APP_BACKUP_DATABASE_NAME };
     if (!backupStatusReady(status, identity) || (app.local && !localSnapshotReady(status as PcBackupStatus, identity as PcBackupIdentity, process.env.LOCAL_IMAGE_STORAGE_ROOT))) throw new PcBackupProtectionError();
   } catch { throw new PcBackupProtectionError(); }
 }

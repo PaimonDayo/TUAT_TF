@@ -47,6 +47,15 @@ test('plan is disabled by default and never calls any transport',()=>{
   const plan=backupPlan({...config,enabled:false});assert.equal(plan.enabled,false);for(const key of ['starts','targetReads','providerReads','providerWrites']) assert.equal(plan[key],false);
   assert.equal(backupPlan({...config,enabled:false,capacity:undefined}).enabled,false);
 });
+test('unreadable application status publication stops the owner before any backup transport',async()=>{
+  const f=fixture();
+  const native={...config,executionMode:'linux',applicationStatusDirectory:resolve('synthetic-missing-reader'),applicationStatusGid:65530,
+    target:{...config.target,ownerLabel:'synthetic-owner',generationLabel:'synthetic-generation'}};
+  for(const key of ['wslExecutable','wslSha256','wslDistribution','wslUser'])delete native[key];
+  let fatal=0;
+  await assert.rejects(startBackupSupervisor({...f.options,config:native,onFatal:()=>{fatal++;}}));
+  assert.equal(fatal,1);assert.equal(f.calls.release,1);assert.equal(f.calls.probe??0,0);
+});
 test('disabled and host target mismatches reject before lock, probe or bytes',async()=>{
   for(const update of [{config:{...config,enabled:false}},{expectedInstanceId:'33333333-3333-4333-8333-333333333333'},{expectedDatabaseSystemIdentifier:'9876543210987654321'}]) {
     const f=fixture();let locks=0;await assert.rejects(startBackupSupervisor({...f.options,...update,lock:()=>{locks++;throw Error('unexpected');}}));
