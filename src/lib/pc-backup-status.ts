@@ -116,6 +116,8 @@ const uuidArg = (value: unknown) => typeof value === "string" && uuid(value.toLo
 const uuidArray = (value: unknown) => Array.isArray(value) && value.every(uuidArg);
 const rpcReads: Record<string, Record<string, (value: unknown) => boolean>> = {
   login_access_allowed: {}, is_member: {}, can_create_schedule: {}, google_sheet_creation_status: {},
+  get_competition_meet: { p_competition_id: value => typeof value === "string" },
+  get_competition_meet_backend: {},
   can_edit_note: { target_note_id: uuidArg },
   avatar_image_is_retired: { p_path: value => typeof value === "string" && isSafeAvatarStoragePath(value) },
   get_ob_registration_details_snapshot: { p_entry_id: uuidArg },

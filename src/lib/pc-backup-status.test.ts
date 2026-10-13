@@ -149,6 +149,20 @@ describe("all PC business transports fail closed once, then recover", () => {
     const alternate = request("/rest/v1/rpc/is_member", "POST", {}); alternate.headers.set("content-profile", "other");
     expect(await pcBackendRequestNeedsProtection(alternate, "/rest/v1/rpc/is_member")).toBe(true);
   });
+  it("keeps competition viewing available while its mutations remain protected", async () => {
+    mocks.status = null;
+    for (const [api, body] of [["get_competition_meet", { p_competition_id: "ob-2026" }], ["get_competition_meet_backend", {}]] as const) {
+      expect((await pcBackendFetch(request(`/rest/v1/rpc/${api}`, "POST", body))).status).toBe(200);
+    }
+    expect(mocks.open).not.toHaveBeenCalled();
+    mocks.dispatch.mockClear();
+    for (const [api, body] of [["get_competition_meet", { p_competition_id: 2026 }],
+      ["get_competition_meet", { p_competition_id: "ob-2026", extra: true }],
+      ["get_competition_meet_backend", { extra: true }], ["competition_meet_apply", {}]] as const) {
+      expect((await pcBackendFetch(request(`/rest/v1/rpc/${api}`, "POST", body))).status).toBe(503);
+    }
+    expect(mocks.dispatch).not.toHaveBeenCalled();
+  });
 });
 
 describe("direct provider mutation boundaries", () => {
