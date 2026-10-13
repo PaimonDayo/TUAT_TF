@@ -72,11 +72,13 @@ export async function sharedPcReady(config, env, { fetchRequest = fetch, read = 
     const imageRoot=env.PC_LOCAL_RUNTIME==='true'?env.LOCAL_IMAGE_STORAGE_ROOT:undefined;
     if (!backendReady(config, { read, now: clock(), imageRoot })) return false;
     const options = () => ({ signal: AbortSignal.timeout(3000), redirect: 'error', cache: 'no-store' });
-    // OpenAPI probes REST/schema readiness without reading a member table. anon cannot SELECT profiles.
+    // Local REST denies anonymous schema inspection. Probe only its OpenAPI with
+    // the existing server credential; no member table or public response is fetched.
+    const restKey=env.PC_LOCAL_RUNTIME==='true'?env.SUPABASE_SERVICE_ROLE_KEY:env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     const [app, rest] = await Promise.all([
       fetchRequest(`${config.appOrigin}/api/version`, options()),
       fetchRequest(env.PC_LOCAL_RUNTIME==='true'?`${env.PC_LOCAL_REST_URL}/`:`${env.PC_BACKEND_INTERNAL_URL}/rest/v1/`, { ...options(),
-        headers: { apikey: env.NEXT_PUBLIC_SUPABASE_ANON_KEY, authorization: `Bearer ${env.NEXT_PUBLIC_SUPABASE_ANON_KEY}` } }),
+        headers: { apikey: restKey, authorization: `Bearer ${restKey}` } }),
     ]);
     if (!app.ok || !rest.ok) return false;
     const [version, schema] = await Promise.all([app.json(), rest.json()]);

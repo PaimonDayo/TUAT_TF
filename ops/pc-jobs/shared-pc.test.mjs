@@ -80,9 +80,18 @@ test('native local shared Jobs require one local issuer, private images and the 
   const data=records(),status=data['backup-lifecycle.json'],stamp=new Date(now).toISOString();
   const snapshot={format:'tuat-local-db-images-v1',sourceId:config.expectedBackupInstanceId,generation:status.generation,databaseSystemIdentifier:config.expectedBackupDatabaseSystemIdentifier,
     imageRoot:local.LOCAL_IMAGE_STORAGE_ROOT,archiveKey:`ops/pc-backend/${config.expectedBackupInstanceId}/backups/${stamp.replace(/[:.]/g,'-')}.local.tar.enc`,archiveSha256:'a'.repeat(64),archiveBytes:128,
-    restoreVerifiedAt:stamp,offsiteVerifiedAt:stamp,independentRecoveryCopyChecked:true};
+    capturedAt:stamp,restoreVerifiedAt:stamp,offsiteVerifiedAt:stamp,independentRecoveryCopyChecked:true};
   status.backup={generation:status.generation,verifiedAt:stamp,key:snapshot.archiveKey,sha256:snapshot.archiveSha256,bytes:128,databaseSystemIdentifier:config.expectedBackupDatabaseSystemIdentifier,localSnapshot:snapshot};
-  const fetchRequest=async url=>({ok:true,json:async()=>url.endsWith('/api/version')?{version:config.releaseCommit,releaseId:config.releaseId}:{swagger:'2.0'}});
+  const fetchRequest=async (url,options)=>{
+    if(url.endsWith('/api/version')){
+      assert.equal(options.headers,undefined);
+      return {ok:true,json:async()=>({version:config.releaseCommit,releaseId:config.releaseId})};
+    }
+    assert.equal(url,local.PC_LOCAL_REST_URL+'/');
+    // The real local schema endpoint returned 401 for the anon credential.
+    return {ok:options.headers.authorization===`Bearer ${local.SUPABASE_SERVICE_ROLE_KEY}`,
+      json:async()=>({swagger:'2.0'})};
+  };
   assert.equal(await sharedPcReady(config,local,{fetchRequest,read:reader(data),clock:()=>now}),true);
   status.backup.localSnapshot.imageRoot=resolve('..','wrong-images');
   assert.equal(await sharedPcReady(config,local,{fetchRequest,read:reader(data),clock:()=>now}),false);
