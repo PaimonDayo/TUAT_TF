@@ -4,7 +4,25 @@ import { resolve, join, relative, isAbsolute } from 'node:path';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync, existsSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { validateHostConfig, writeReceipt, verifyPrepared, sourceProof, environmentHash, buildHash, privateDirectory } from './release.mjs';
+import { validateHostConfig, writeReceipt, verifyPrepared, sourceProof, environmentHash, buildHash, privateDirectory,applicationLaunch } from './release.mjs';
+import { createHash } from 'node:crypto';
+
+test('Linux controller drops compiler/application privileges with a pinned command',()=>{
+  const binary=Buffer.from('synthetic sandbox binary'),pin=createHash('sha256').update(binary).digest('hex');
+  const config={applicationUid:65530,applicationGid:65530,applicationHome:resolve(tmpdir(),'private-app-home'),setprivSha256:pin,unshareSha256:pin,mountSha256:pin,sandboxScript:resolve(tmpdir(),'root-sandbox.sh'),sandboxScriptSha256:pin};
+  const options={platform:'linux',ownerUid:0,readBinary:()=>binary,readMetadata:path=>path===config.applicationHome?{isDirectory:()=>true,isSymbolicLink:()=>false,uid:65530,mode:0o700}:{isFile:()=>true,isSymbolicLink:()=>false,uid:0,mode:0o500}};
+  assert.deepEqual(applicationLaunch(config,['candidate-next','start'],options),{command:'/usr/bin/unshare',args:['--mount','--propagation','private','/bin/sh',config.sandboxScript,'65530','65530',process.execPath,'candidate-next','start']});
+  for(const change of [{applicationUid:0},{applicationGid:0},{applicationUid:NaN},{applicationGid:3.5},{setprivSha256:'0'.repeat(64)}])
+    assert.throws(()=>applicationLaunch({...config,...change},[],options));
+  assert.throws(()=>applicationLaunch({},[],options));
+  assert.throws(()=>applicationLaunch(config,[],{...options,ownerUid:65530}));
+  assert.throws(()=>applicationLaunch(config,[],{...options,platform:'win32'}));
+  for(const metadata of [{isDirectory:()=>false},{isSymbolicLink:()=>true},{uid:0},{mode:0o777}])
+    assert.throws(()=>applicationLaunch(config,[],{...options,readMetadata:path=>path===config.applicationHome?{...options.readMetadata(path),...metadata}:options.readMetadata(path)}));
+  for(const changed of [{sandboxScriptSha256:'0'.repeat(64)},{unshareSha256:'0'.repeat(64)},{mountSha256:'0'.repeat(64)}])assert.throws(()=>applicationLaunch({...config,...changed},[],options));
+  assert.throws(()=>applicationLaunch(config,[],{...options,readMetadata:path=>path===config.sandboxScript?{...options.readMetadata(path),uid:65530}:options.readMetadata(path)}));
+  assert.deepEqual(applicationLaunch({},['next'],{platform:'win32'}),{command:process.execPath,args:['next']});
+});
 import { createRuntimeManifest, verifyRuntimeManifest, hostGitPath, hostGitEnvironment, hostWindowsToolPath } from './runtime-manifest.mjs';
 
 const config = { version: 1, enabled: false, releaseDirectory: resolve(import.meta.dirname, '../..'), stateDirectory: resolve(import.meta.dirname, '../../../.contingency/host-test-state'), environmentFile: resolve(import.meta.dirname, '../../../.contingency/host-test.env'), backupConfigFile: resolve(import.meta.dirname, '../../../.contingency/backup-test.json'), expectedBackupInstanceId: '00000000-0000-4000-8000-000000000001', expectedBackupDatabaseSystemIdentifier: '1234567890123456789', releaseCommit: 'a'.repeat(40), releaseId: 'review-fixed', publicOrigin: 'https://pc-review.example.test', appPort: 18200, gatewayPort: 18201 };

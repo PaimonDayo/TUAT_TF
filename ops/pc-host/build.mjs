@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { existsSync, rmSync, openSync, closeSync } from 'node:fs';
-import { loadHost, privateDirectory, writeReceipt, buildHash, environmentHash, sourceProof } from './release.mjs';
+import { loadHost, privateDirectory, writeReceipt, buildHash, environmentHash, sourceProof,applicationLaunch } from './release.mjs';
 import { createRuntimeManifest, verifyRuntimeManifest } from './runtime-manifest.mjs';
 
 export async function build(configFile) {
@@ -14,12 +14,14 @@ export async function build(configFile) {
   rmSync(resolve(config.stateDirectory, 'prepared.json'), { force: true });
   const runtime = createRuntimeManifest(config.releaseDirectory);
   const childEnv = { ...env, NODE_ENV: 'production', NEXT_TELEMETRY_DISABLED: '1' };
+  if(process.platform==='linux'&&config.applicationHome)childEnv.HOME=config.applicationHome;
   for (const key of ['PATH','Path','SystemRoot','WINDIR','TEMP','TMP','USERPROFILE']) if (process.env[key]) childEnv[key] = process.env[key];
   const log = openSync(resolve(config.stateDirectory, `build-${Date.now()}.log`), 'wx', 0o600);
   let exitCode;
   try {
     exitCode = await new Promise((resolveExit, reject) => {
-      const child = spawn(process.execPath, [resolve(config.releaseDirectory, 'node_modules/next/dist/bin/next'), 'build', '--webpack'], { cwd: config.releaseDirectory, env: childEnv, windowsHide: true, stdio: ['ignore',log,log] });
+      const launch=applicationLaunch(config,[resolve(config.releaseDirectory, 'node_modules/next/dist/bin/next'), 'build', '--webpack']);
+      const child = spawn(launch.command,launch.args, { cwd: config.releaseDirectory, env: childEnv, windowsHide: true, stdio: ['ignore',log,log] });
       child.once('error', reject); child.once('exit', resolveExit);
     });
   } finally { closeSync(log); }

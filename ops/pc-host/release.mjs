@@ -8,6 +8,26 @@ import { validateBackupOwnerConfig } from './backup-owner.mjs';
 
 const forbiddenEnvFiles = ['.env', '.env.local', '.env.production', '.env.production.local'];
 const reservedPorts = [8000, 3008, 3109, 3112];
+export function applicationLaunch(config,args,{platform=process.platform,ownerUid=process.getuid?.(),readBinary=readFileSync,readMetadata=lstatSync}={}) {
+  const fields=['applicationUid','applicationGid','applicationHome','setprivSha256','unshareSha256','mountSha256','sandboxScript','sandboxScriptSha256'];
+  if(platform!=='linux') {
+    if(fields.some(key=>Object.hasOwn(config,key))) throw Error('Linux application identity on another platform');
+    return {command:process.execPath,args};
+  }
+  if(!fields.some(key=>Object.hasOwn(config,key))&&ownerUid!==0) return {command:process.execPath,args};
+  if(ownerUid!==0||!Number.isInteger(config.applicationUid)||config.applicationUid<1000||config.applicationUid>2147483647||
+    !Number.isInteger(config.applicationGid)||config.applicationGid<1000||config.applicationGid>2147483647||
+    !/^[a-f0-9]{64}$/.test(config.setprivSha256??'')||!isAbsolute(config.applicationHome??'')||resolve(config.applicationHome)===parse(resolve(config.applicationHome)).root) throw Error('Pinned unprivileged Linux application identity required');
+  const home=readMetadata(config.applicationHome);
+  if(!home.isDirectory()||home.isSymbolicLink()||home.uid!==config.applicationUid||(home.mode&0o077)!==0) throw Error('Private application home required');
+  if(!isAbsolute(config.sandboxScript??''))throw Error('Root-owned application sandbox script required');
+  const script=readMetadata(config.sandboxScript);
+  if(!script.isFile()||script.isSymbolicLink()||script.uid!==0||(script.mode&0o022)!==0)throw Error('Root-owned application sandbox script required');
+  for(const [file,pin] of [['/usr/bin/setpriv',config.setprivSha256],['/usr/bin/unshare',config.unshareSha256],['/usr/bin/mount',config.mountSha256],[config.sandboxScript,config.sandboxScriptSha256]]) {
+    if(!/^[a-f0-9]{64}$/.test(pin??'')||createHash('sha256').update(readBinary(file)).digest('hex')!==pin) throw Error('Application sandbox command changed');
+  }
+  return {command:'/usr/bin/unshare',args:['--mount','--propagation','private','/bin/sh',config.sandboxScript,String(config.applicationUid),String(config.applicationGid),process.execPath,...args]};
+}
 export function validateHostConfig(config, env) {
   if (config.version !== 1 || typeof config.enabled !== 'boolean') throw Error('Explicit host configuration required');
   validateBackupOwnerConfig(config, env);

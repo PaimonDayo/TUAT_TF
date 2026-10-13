@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createGateway } from './gateway.mjs';
-import { loadHost, privateDirectory, verifyPrepared, writeReceipt } from './release.mjs';
+import { loadHost, privateDirectory, verifyPrepared, writeReceipt,applicationLaunch } from './release.mjs';
 import { acquireRunnerLock } from './runner-lock.mjs';
 import { backupChildEnvironment, backupRuntimeRecord } from './backup-owner.mjs';
 import { loadBackup } from '../pc-backup/config.mjs';
@@ -29,6 +29,7 @@ export async function stopChild(child, exited, timeoutMs = 35_000) {
 export async function run(configFile, execute = false, { startBackup = startBackupSupervisor } = {}) {
   const { config, env } = loadHost(configFile);
   verifyPrepared(config, env);
+  const launch=applicationLaunch(config,['--require', resolve(import.meta.dirname, 'graceful-control.cjs'), resolve(config.releaseDirectory, 'node_modules/next/dist/bin/next'), 'start', '--hostname', '127.0.0.1', '--port', String(config.appPort)]);
   const backupPlan = loadBackup(config.backupConfigFile);
   if (backupPlan.config.instanceId !== config.expectedBackupInstanceId || backupPlan.config.target.databaseSystemIdentifier !== config.expectedBackupDatabaseSystemIdentifier) throw Error('Backup target does not match the pinned host');
   if (!execute) return { prepared: true, enabled: config.enabled, releaseCommit: config.releaseCommit, releaseId: config.releaseId };
@@ -57,8 +58,9 @@ export async function run(configFile, execute = false, { startBackup = startBack
     backupRecord = backupRuntimeRecord(config, backup);
     if (stopped) { stop(); throw Error('Host stopped before application start'); }
     const childEnv = { ...env, ...boundBackupEnv, NODE_ENV: 'production', NEXT_TELEMETRY_DISABLED: '1' };
+    if(process.platform==='linux'&&config.applicationHome)childEnv.HOME=config.applicationHome;
     for (const key of ['PATH','Path','SystemRoot','WINDIR','TEMP','TMP','USERPROFILE']) if (process.env[key]) childEnv[key] = process.env[key];
-    child = spawn(process.execPath, ['--require', resolve(import.meta.dirname, 'graceful-control.cjs'), resolve(config.releaseDirectory, 'node_modules/next/dist/bin/next'), 'start', '--hostname', '127.0.0.1', '--port', String(config.appPort)], { cwd: config.releaseDirectory, env: childEnv, windowsHide: true, stdio: ['ignore','ignore','ignore','ipc'] });
+    child = spawn(launch.command,launch.args, { cwd: config.releaseDirectory, env: childEnv, windowsHide: true, stdio: ['ignore','ignore','ignore','ipc'] });
     exited = new Promise(done => { child.once('exit', code => { if (!stopped) unexpectedExit = true; stop(); done(code); }); child.once('error', () => { unexpectedExit = true; stop(); done(-1); }); });
     const deadline = Date.now() + 60_000;
     while (!stopped && Date.now() < deadline) {

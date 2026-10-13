@@ -16,6 +16,22 @@ Googleログイン/Drive callback、Push購読、PWA/旧タブのorigin変更は
 
 ## 準備と起動
 
+Linuxで管理主体をrootとして起動する場合は、`applicationUid`、`applicationGid`
+（ともに非特権のnumeric ID）と`setprivSha256`を具体的に設定する。buildとNextは
+固定`/usr/bin/setpriv`で別UID/GIDへ落とし、補助group/capabilityを除去し、
+no-new-privilegesを設定する。rootのままNextを起動する設定は拒否する。
+アプリのUIDにはrelease/Nodeの読取りとNextの可変cacheだけを与え、backupと
+Auth/connectorの秘密directoryへアクセスさせない。管理主体のrootは信頼対象である。
+numeric IDの指定自体はOS account作成・サービス登録を行わない。
+`applicationHome`はそのUID所有のprivate directoryへ固定する。build/NextのHOMEは
+このdirectoryだけに設定し、管理主体のhomeや資格情報を引き継がない。
+WSLのWindows共有領域はUIDだけでは秘密を隔離できないため、Linuxの管理主体は
+private mount namespaceを作り、`/mnt`と存在する旧PC backend directoryを隠してから
+権限を落とす。`unshareSha256`、`mountSha256`、root所有の`sandboxScript`の絶対pathと
+`sandboxScriptSha256`を固定する。scriptは`linux-application-sandbox.sh`の検証済みcopyを
+rootのprivate directoryへ配置する。Node/release/画像/homeは隠す領域の外へ置く。
+隔離は子processのmount namespaceに限定し、既存本番のmountを保持する。
+
 Node24と、WindowsではPowerShell7を使用する。独立したrelease checkoutに `npm ci` で依存を用意する。開発checkoutのnode_modules・.envを共用しない。releaseは正確なcommitへ固定し、未コミット/未追跡ファイルがある場合はbuildを拒否する。
 
 `config.example.json` と `environment.example.env` は置換前の例であり、起動設定ではない。実env・stateはGit外の専用directoryへ置く。Windowsでは新規directoryのACLを本人/SYSTEMだけにしてから書き、既存directoryの明示的な他者権限やjunctionを拒否する。これは現在の実行者との境界であり、開発/AIから本番秘密を隔離する専用OSアカウントの配置確認は別途必要。
