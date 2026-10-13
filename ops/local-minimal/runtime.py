@@ -39,8 +39,9 @@ PC_HBA_RULES = [('local', 'all', 'all', 'trust'), ('host', 'all', 'all', '127.0.
                 ('host', 'all', 'all', '::1/128', 'scram-sha-256'), ('host', 'all', 'all', '0.0.0.0/0', 'reject'),
                 ('host', 'all', 'all', '::/0', 'reject')]
 PC_PG_COMMAND = ['-D', '/var/lib/postgresql/data', '-c', 'listen_addresses=127.0.0.1', '-c', 'port=18304',
-                 '-c', 'shared_preload_libraries=', '-c', 'shared_buffers=64MB', '-c', 'max_connections=30',
-                 '-c', 'unix_socket_directories=/tmp', '-c', 'hba_file=/private/pg_hba.conf']
+                 '-c', 'shared_preload_libraries=supabase_vault', '-c', 'shared_buffers=64MB', '-c', 'max_connections=30',
+                 '-c', 'unix_socket_directories=/tmp', '-c', 'hba_file=/private/pg_hba.conf',
+                 '-c', 'vault.getkey_script=/usr/share/postgresql/extension/pgsodium_getkey']
 PG_COMMAND = ['-D', '/var/lib/postgresql/data', '-c', 'listen_addresses=127.0.0.1', '-c', 'port=18004',
               '-c', 'shared_preload_libraries=', '-c', 'shared_buffers=64MB', '-c', 'max_connections=30']
 CONTAINER_EXEC = {'db': (['postgres'], PG_COMMAND), 'auth': (None, ['auth']),
@@ -523,6 +524,23 @@ def pc_db_hba(c, manifest):
     require(rows == PC_HBA_RULES, 'pc-db-hba-rules')
 
 
+def pc_vault_key_bytes(c):
+    path = Path(c['dbHba']).parent/'pgsodium_root.key'
+    existing(path.parent, True, 0, 0o750)
+    existing(path, False, 0, 0o640)
+    device = Path(MOUNT).stat().st_dev
+    require(path.stat().st_gid == 101 and path.parent.stat().st_gid == 101 and
+            path.stat().st_dev == device and path.parent.stat().st_dev == device, 'pc-vault-key-reader-mount')
+    require(path.stat().st_size == 65, 'pc-vault-key-size')
+    value = path.read_bytes()
+    require(re.fullmatch(b'[a-f0-9]{64}\n', value) is not None, 'pc-vault-key-format')
+    return value
+
+
+def pc_db_vault(c, manifest):
+    require(manifest.get('dbVaultKeySha256') == digest(pc_vault_key_bytes(c)), 'pc-vault-key-seal')
+
+
 def pc_service_configuration(c, env, db, auth, rest):
     p = periodic.installation_profile(c)
     require(all(env.get(key) == 'true' for key in ('PC_APP_RUNTIME', 'NEXT_PUBLIC_PC_APP_RUNTIME', 'PC_LOCAL_RUNTIME',
@@ -636,7 +654,7 @@ def pc_configuration_gate(c):
         'ops/pc-host/release.mjs', 'ops/pc-jobs/run.mjs', 'ops/pc-jobs/shared-pc.mjs', 'src/lib/supabase/cloud-auth.ts', periodic.installation_profile(c)['composeSource'], PC_HBA_SOURCE)
     require(isinstance(manifest.get('files'), dict) and set(required).issubset(manifest['files']) and isinstance(manifest.get('links'), dict), 'pc-release-files')
     require(release_inventory(c['releaseDirectory'], uid, gid) == {'files': manifest['files'], 'links': manifest['links']}, 'release-inventory')
-    pc_db_hba(c, manifest)
+    pc_db_hba(c, manifest); pc_db_vault(c, manifest)
     host, jobs, backup = [json_private(c[k]) for k in ('hostConfigPath', 'jobsConfig', 'backupConfigPath')]
     require(all(manifest.get(k+'Sha256') == digest(private_bytes(c[k])) for k in ('hostConfigPath', 'jobsConfig', 'backupConfigPath')), 'pc-private-config-seal')
     require(host.get('releaseDirectory') == c['releaseDirectory'] and host.get('environmentFile') == c['appEnvironmentFile'] and
@@ -735,7 +753,7 @@ def host_gate(c, cmd):
     daemon_storage_gate(c, cmd)
     if profile['name'] == periodic.PC_PROFILE:
         manifest = json_private(c['releaseManifest'], bound=64*1024**2)
-        pc_db_hba(c, manifest)
+        pc_db_hba(c, manifest); pc_db_vault(c, manifest)
         node_target = pc_node_backup(c, manifest)['target']
     for role, (tag, pin) in images.items():
         info = cmd.obj(['docker', 'image', 'inspect', tag, '--format', '{{json .Id}}'])
@@ -771,6 +789,7 @@ def host_gate(c, cmd):
                         'rest': [(c['mixedJwks'], '/private/local-jwks.json' if profile['name'] == periodic.PC_PROFILE else '/private/mixed-jwks.json', False)]}[role]
             if role == 'db' and profile['name'] == periodic.PC_PROFILE:
                 expected.append((c['dbHba'], '/private/pg_hba.conf', False))
+                expected.append((str(Path(c['dbHba']).parent/'pgsodium_root.key'), '/etc/postgresql-custom/pgsodium_root.key', False))
             if profile['name'] == periodic.PC_PROFILE:
                 pc_container_mounts(info, role, expected)
             else:
@@ -792,8 +811,8 @@ def compose_env(c):
     return {'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'TUAT_SOURCE_ID': c['sourceId'], 'TUAT_DB_ENV': c['dbEnvironmentFile'],
             'TUAT_AUTH_ENV': c['authEnvironmentFile'], 'TUAT_REST_ENV': c['restEnvironmentFile'],
             'TUAT_DB_DATA': c['dbData'], 'TUAT_MIXED_JWKS': c['mixedJwks'],
-            **({'TUAT_DB_HBA': c['dbHba']} if pc else {}),
-            'TUAT_DB_HASH': digest(private_bytes(c['dbEnvironmentFile']) + (pc_hba_bytes(c) if pc else b'')),
+            **({'TUAT_DB_HBA': c['dbHba'], 'TUAT_DB_VAULT_KEY': str(Path(c['dbHba']).parent/'pgsodium_root.key')} if pc else {}),
+            'TUAT_DB_HASH': digest(private_bytes(c['dbEnvironmentFile']) + (pc_hba_bytes(c) + pc_vault_key_bytes(c) if pc else b'')),
             'TUAT_AUTH_HASH': digest(private_bytes(c['authEnvironmentFile'])),
             'TUAT_REST_HASH': digest(private_bytes(c['restEnvironmentFile']) + (existing(c['mixedJwks'], owner=0, mode=0o640).read_bytes()
                 if periodic.installation_profile(c)['name'] == periodic.PC_PROFILE else private_bytes(c['mixedJwks'], c['appUid'])))}

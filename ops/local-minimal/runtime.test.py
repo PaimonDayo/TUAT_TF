@@ -68,7 +68,10 @@ class FakeCommands:
             mounts = {'db': [(c['dbData'], '/var/lib/postgresql/data', True)], 'auth': [],
                       'rest': [(c['mixedJwks'], '/private/mixed-jwks.json', False)]}[role]
             if pc:
-                if role == 'db': mounts.append((c['dbHba'], '/private/pg_hba.conf', False)); args = runtime.PC_PG_COMMAND[:]
+                if role == 'db':
+                    mounts.append((c['dbHba'], '/private/pg_hba.conf', False))
+                    mounts.append((str(Path(c['dbHba']).parent/'pgsodium_root.key'), '/etc/postgresql-custom/pgsodium_root.key', False))
+                    args = runtime.PC_PG_COMMAND[:]
                 if role == 'rest': mounts = [(c['mixedJwks'], '/private/local-jwks.json', False)]
             self.containers[role] = dict(id=role, name='/tuat-local-' + role, image=tag, imageId=pin,
                 labels={'tuat.local.source': c['sourceId'], 'tuat.local.role': role, 'tuat.local.config-sha256': 'synthetic'},
@@ -108,6 +111,18 @@ class FakeCommands:
 
 
 class RuntimeBehaviour(unittest.TestCase):
+    def test_changed_vault_key_blocks_startup_even_with_same_database_identity(self):
+        c=pc_config(); original=b'c'*64+b'\n'
+        manifest={'dbVaultKeySha256':runtime.digest(original)}
+        with patch.object(runtime,'pc_vault_key_bytes',return_value=original):
+            runtime.pc_db_vault(c,manifest)
+        with patch.object(runtime,'pc_vault_key_bytes',return_value=b'd'*64+b'\n'):
+            with self.assertRaisesRegex(runtime.Hold,'vault-key-seal'):
+                runtime.pc_db_vault(c,manifest)
+        with patch.object(runtime,'pc_vault_key_bytes',return_value=original):
+            with self.assertRaisesRegex(runtime.Hold,'vault-key-seal'):
+                runtime.pc_db_vault(c,{})
+
     def test_bound_config_files_require_canonical_encrypted_root_private_metadata(self):
         name=runtime.MOUNT+'/private/config.json'; fault=[{}]
         def observed(path):
@@ -129,7 +144,7 @@ class RuntimeBehaviour(unittest.TestCase):
 
     def test_actual_pc_db_id_and_config_label_must_match_sealed_node_target(self):
         c=pc_config(); target={'containerId':'db','configSha256':'synthetic'}
-        with patch.object(runtime,'pc_db_hba'), patch.object(runtime,'json_private',return_value={}), \
+        with patch.object(runtime,'pc_db_hba'), patch.object(runtime,'pc_db_vault'), patch.object(runtime,'json_private',return_value={}), \
              patch.object(runtime,'pc_node_backup',side_effect=lambda *_args:{'target':target}), \
              patch.object(runtime,'compose_env',return_value={f'TUAT_{role.upper()}_HASH':'synthetic' for role in runtime.IMAGES}):
             runtime.host_gate(c,FakeCommands(c))
@@ -178,7 +193,7 @@ class RuntimeBehaviour(unittest.TestCase):
 
     def test_pc_db_actual_command_and_readonly_hba_mount_are_required_without_changing_surface(self):
         c = pc_config()
-        with patch.object(runtime, 'pc_db_hba'), patch.object(runtime, 'json_private', return_value={}), patch.object(runtime,'pc_node_backup',return_value={'target':{'containerId':'db','configSha256':'synthetic'}}), \
+        with patch.object(runtime, 'pc_db_hba'), patch.object(runtime,'pc_db_vault'), patch.object(runtime, 'json_private', return_value={}), patch.object(runtime,'pc_node_backup',return_value={'target':{'containerId':'db','configSha256':'synthetic'}}), \
              patch.object(runtime, 'compose_env', return_value={f'TUAT_{role.upper()}_HASH': 'synthetic' for role in runtime.IMAGES}):
             self.assertEqual(runtime.host_gate(c, FakeCommands(c)), dict(db='db', auth='auth', rest='rest'))
             for fault in ('missing-command', 'writable-hba', 'pg-owned-hba'):
@@ -192,7 +207,7 @@ class RuntimeBehaviour(unittest.TestCase):
 
     def test_pc_tmpfs_is_private_bounded_and_all_actual_mounts_are_checked(self):
         c = pc_config()
-        with patch.object(runtime, 'pc_db_hba'), patch.object(runtime, 'json_private', return_value={}), patch.object(runtime,'pc_node_backup',return_value={'target':{'containerId':'db','configSha256':'synthetic'}}), \
+        with patch.object(runtime, 'pc_db_hba'), patch.object(runtime,'pc_db_vault'), patch.object(runtime, 'json_private', return_value={}), patch.object(runtime,'pc_node_backup',return_value={'target':{'containerId':'db','configSha256':'synthetic'}}), \
              patch.object(runtime, 'compose_env', return_value={f'TUAT_{role.upper()}_HASH':'synthetic' for role in runtime.IMAGES}):
             for role in ('db','auth','rest'):
                 cmd = FakeCommands(c)
@@ -362,7 +377,7 @@ class RuntimeBehaviour(unittest.TestCase):
         with patch.object(Path, 'stat', return_value=SimpleNamespace(st_dev=2)), patch.object(runtime, 'env_private', side_effect=lambda path:environments[path]), \
              patch.object(runtime, 'private_bytes', return_value=b'synthetic'), patch.object(runtime, 'json_private', side_effect=lambda path, **_kw:configurations[str(path)]), \
              patch.object(runtime, 'release_inventory', return_value={'files':manifest['files'], 'links':{}}), patch.object(runtime, 'existing',side_effect=lambda path,*_a,**_kw:Path(path)) as existing, \
-             patch.object(runtime, 'app_access'), patch.object(runtime, 'compose_gate'), patch.object(runtime, 'pc_rest_jwks'), patch.object(runtime, 'pc_db_hba'), \
+             patch.object(runtime, 'app_access'), patch.object(runtime, 'compose_gate'), patch.object(runtime, 'pc_rest_jwks'), patch.object(runtime, 'pc_db_hba'), patch.object(runtime,'pc_db_vault'), \
              patch.object(runtime,'compose_env',return_value={'TUAT_DB_HASH':'e'*64}):
             self.assertEqual(runtime.pc_configuration_gate(c)[1], jobs)
             self.assertIn(unittest.mock.call(c['jobsStateRoot'], True, 0, 0o700), existing.call_args_list)
@@ -428,7 +443,7 @@ class RuntimeBehaviour(unittest.TestCase):
         c = pc_config(); cmd = FakeCommands(c)
         self.assertEqual(runtime.PC_IMAGES['auth'], ('supabase/gotrue:v2.197.0', 'sha256:1736a63078f5922b198c4cbe50f80ab9a2d3b54fe8b7b6cfb2e9dc5dbbc12c6b'))
         self.assertEqual(runtime.image_contract(config())[0]['auth'][0], 'supabase/gotrue:v2.196.0')
-        with patch.object(runtime, 'pc_db_hba'), patch.object(runtime, 'json_private', return_value={}), patch.object(runtime,'pc_node_backup',return_value={'target':{'containerId':'db','configSha256':'synthetic'}}), \
+        with patch.object(runtime, 'pc_db_hba'), patch.object(runtime,'pc_db_vault'), patch.object(runtime, 'json_private', return_value={}), patch.object(runtime,'pc_node_backup',return_value={'target':{'containerId':'db','configSha256':'synthetic'}}), \
              patch.object(runtime, 'compose_env', return_value={f'TUAT_{role.upper()}_HASH': 'synthetic' for role in runtime.PC_IMAGES}):
             self.assertEqual(runtime.host_gate(c, cmd), dict(db='db', auth='auth', rest='rest'))
             for fault in ('old-tag', 'config-id', 'repo-digest', 'wrong-role'):

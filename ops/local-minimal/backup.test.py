@@ -455,6 +455,8 @@ class BackupBehaviour(unittest.TestCase):
         with patch.object(backup.periodic,'pc_database'), patch.object(backup,'assert_database_quiet'), \
              patch.object(backup,'image_references',return_value=['avatars/member-1/live.webp']), \
              patch.object(backup,'database_fingerprint',return_value={'synthetic':'stable'}), \
+             patch.object(backup,'pc_vault_key',return_value=b'c'*64+b'\n'), \
+             patch.object(backup,'vault_fingerprint',return_value={'rows':2,'sha256':'d'*64}), \
              patch.object(backup.periodic,'bind_storage'), patch.object(backup.periodic.os,'statvfs',return_value=SimpleNamespace(f_bavail=1048576,f_frsize=4096,f_favail=10000)), \
              patch.object(Path,'read_text',autospec=True,side_effect=lambda path: 'MemAvailable: 65536 kB\n' if str(path)=='/proc/meminfo' else self.fail('Unexpected memory observation')):
             bundle,manifest = backup.capture_bundle(config,CaptureCommands(),Path(config['stageRoot']))
@@ -462,6 +464,18 @@ class BackupBehaviour(unittest.TestCase):
         self.assertEqual(backup.verified_extract(bundle,restored,config['sourceId']),manifest)
         self.assertEqual(manifest['retainedUnreferencedImages'],config['retainedUnreferencedImages'])
         self.assertEqual(backup.image_inventory(restored/'images'),manifest['images'])
+        self.assertEqual((restored/'vault-root.key').read_bytes(), b'c'*64+b'\n')
+        self.assertEqual(manifest['files']['vault-root.key'], backup.file_hash(restored/'vault-root.key'))
+        # A valid-looking replacement key must not be accepted as the authenticated original.
+        tampered=self.root/'wrong-vault-key.tar'
+        with tarfile.open(bundle,'r:') as incoming, tarfile.open(tampered,'w:') as outgoing:
+            for item in incoming:
+                content=incoming.extractfile(item).read()
+                if item.name=='vault-root.key': content=b'd'*64+b'\n'
+                item.size=len(content);outgoing.addfile(item,io.BytesIO(content))
+        rejected=self.root/'wrong-vault-key-restored';rejected.mkdir(mode=0o700)
+        with self.assertRaisesRegex(backup.BackupFailure,'Vault key hash/format'):
+            backup.verified_extract(tampered,rejected,config['sourceId'])
         for key,(path,data) in images.items():
             self.assertEqual((restored/'images'/key).read_bytes(),data); self.assertEqual(path.read_bytes(),data)
         for directory in (restored,restored/'images',restored/'images/avatars',restored/'images/avatars/member-1'):
@@ -527,6 +541,8 @@ class BackupBehaviour(unittest.TestCase):
         with patch.object(backup.periodic,'pc_database'), patch.object(backup,'assert_database_quiet'), \
              patch.object(backup,'image_references',return_value=['avatars/member-1/live.webp']), \
              patch.object(backup,'database_fingerprint',return_value={'synthetic':'stable'}), \
+             patch.object(backup,'pc_vault_key',return_value=b'c'*64+b'\n'), \
+             patch.object(backup,'vault_fingerprint',return_value={'rows':2,'sha256':'d'*64}), \
              patch.object(backup.periodic,'bind_storage'), patch.object(backup.periodic.os,'statvfs',return_value=SimpleNamespace(f_bavail=1048576,f_frsize=4096,f_favail=10000)), \
              patch.object(Path,'read_text',autospec=True,side_effect=lambda path: 'MemAvailable: 65536 kB\n' if str(path)=='/proc/meminfo' else self.fail('Unexpected memory observation')):
             with self.assertRaisesRegex(backup.BackupFailure,'Capture changed'):

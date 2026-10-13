@@ -366,6 +366,31 @@ def jobs_owner(config):
     return 0 if periodic.installation_profile(config)['name'] == periodic.PC_PROFILE else config.get('sourceOwnerUid', os.getuid())
 
 
+def database_admin(config):
+    return 'supabase_admin' if periodic.installation_profile(config)['name'] == periodic.PC_PROFILE else 'postgres'
+
+
+def pc_vault_key():
+    path = periodic.MOUNT/'db-private/pgsodium_root.key'
+    for parent in (path, *path.parents):
+        if parent.is_symlink(): fail('Vault key path must be canonical')
+    item, parent = path.stat(), path.parent.stat()
+    device = periodic.MOUNT.stat().st_dev
+    if not stat.S_ISREG(item.st_mode) or item.st_uid != 0 or item.st_gid != 101 or item.st_nlink != 1 or \
+       stat.S_IMODE(item.st_mode) != 0o640 or item.st_size != 65 or item.st_dev != device or \
+       parent.st_uid != 0 or parent.st_gid != 101 or stat.S_IMODE(parent.st_mode) != 0o750 or parent.st_dev != device:
+        fail('Vault key placement changed')
+    data = path.read_bytes()
+    if re.fullmatch(b'[a-f0-9]{64}\n', data) is None: fail('Vault key format changed')
+    return data
+
+
+def vault_fingerprint(config, commands):
+    raw = commands.sql(config, "SELECT coalesce(jsonb_agg(to_jsonb(v) ORDER BY v.id),'[]'::jsonb)::text FROM vault.decrypted_secrets v;")
+    rows = json.loads(raw)
+    return {'rows': len(rows), 'sha256': hashlib.sha256(raw.strip()).hexdigest()}
+
+
 class LocalCommands:
     """Fixed local Docker/systemd operations; config contains no executables/hooks."""
     def __init__(self, profile=None):
@@ -487,7 +512,7 @@ class LocalCommands:
 
     def sql(self, config, text, output=None):
         socket_args = ['--host=/tmp', '--port=18304'] if self.profile['name'] == periodic.PC_PROFILE and config['containers']['db'] == 'tuat-local-db' else []
-        return self.docker('exec', '-i', config['containers']['db'], 'psql', *socket_args, '-U', 'postgres',
+        return self.docker('exec', '-i', config['containers']['db'], 'psql', *socket_args, '-U', database_admin(config),
                            '-d', config['database'], '-X', '-qAt', '-v', 'ON_ERROR_STOP=1',
                            data=text.encode(), output=output)
 
@@ -722,6 +747,7 @@ UNION SELECT 'note-images/'||path FROM public.note_article_images ORDER BY 1;"""
 
 
 def database_fingerprint(config, commands):
+    order = 'to_jsonb(t)::text' + (' COLLATE "C"' if periodic.installation_profile(config)['name'] == periodic.PC_PROFILE else '')
     tables = commands.sql(config, """SELECT n.nspname||'.'||c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
 WHERE c.relkind IN ('r','p') AND n.nspname IN ('auth','public','storage','pc_ops','extensions') ORDER BY 1;""").decode().splitlines()
     result = {}
@@ -731,7 +757,7 @@ WHERE c.relkind IN ('r','p') AND n.nspname IN ('auth','public','storage','pc_ops
         if len(parts) != 2 or not all(IDENT.fullmatch(part) for part in parts):
             fail('Unexpected source table name')
         with tempfile.TemporaryFile(dir=config['stageRoot']) as output:
-            commands.sql(config, f"COPY (SELECT to_jsonb(t)::text FROM {table} t ORDER BY to_jsonb(t)::text) TO STDOUT;", output)
+            commands.sql(config, f'COPY (SELECT to_jsonb(t)::text FROM {table} t ORDER BY {order}) TO STDOUT;', output)
             output.seek(0)
             digest, size = hash_stream(output)
             output.seek(0)
@@ -795,8 +821,8 @@ def capture_bundle(config, commands, stage):
         fail('Retained unreferenced image bytes changed; no success receipt')
     before = database_fingerprint(config, commands)
     for name, argv in (
-        ('database.dump', ['pg_dump', '-U', 'postgres', '-d', config['database'], '--format=custom']),
-        ('roles.sql', ['pg_dumpall', '-U', 'postgres', '--roles-only', '--no-role-passwords']),
+        ('database.dump', ['pg_dump', '-U', database_admin(config), '-d', config['database'], '--format=custom']),
+        ('roles.sql', ['pg_dumpall', '-U', database_admin(config), '--roles-only', '--no-role-passwords']),
     ):
         if periodic.installation_profile(config)['name'] == periodic.PC_PROFILE:
             argv += ['--host=/tmp', '--port=18304']
@@ -814,6 +840,13 @@ def capture_bundle(config, commands, stage):
                 'credentials': 'PostgreSQL login passwords and app/Auth/JWT configuration require independent private recovery storage'}
     if retained:
         manifest['retainedUnreferencedImages'] = retained
+    files = ['database.dump', 'roles.sql']
+    pc = periodic.installation_profile(config)['name'] == periodic.PC_PROFILE
+    if pc:
+        write_new(stage/'vault-root.key', pc_vault_key())
+        files.append('vault-root.key')
+        manifest['files']['vault-root.key'] = file_hash(stage/'vault-root.key')
+        manifest['vault'] = vault_fingerprint(config, commands)
     write_new(stage / 'manifest.json', json.dumps(manifest, sort_keys=True).encode())
     for row in journal:
         write_new(stage / ('jobs-' + row['name']), row['bytes'])
@@ -821,7 +854,7 @@ def capture_bundle(config, commands, stage):
     with bundle.open('xb') as output:
         os.chmod(bundle, 0o600)
         with tarfile.open(fileobj=BoundedBundle(output, config, getattr(commands, 'periodic_attempt', None)), mode='w', format=tarfile.PAX_FORMAT) as archive:
-            for name in ('manifest.json', 'database.dump', 'roles.sql'):
+            for name in ('manifest.json', *files):
                 archive.add(stage / name, arcname=name, recursive=False)
             for row in journal:
                 archive.add(stage / ('jobs-' + row['name']), arcname='jobs/' + row['name'], recursive=False)
@@ -834,6 +867,8 @@ def capture_bundle(config, commands, stage):
     if bundle.stat().st_size > MAX_BYTES or before != database_fingerprint(config, commands) or \
        images != image_inventory(config['imageRoot'], owner) or journal != journal_snapshot(config['jobsStateRoot'], jobs_owner(config)):
         fail('Capture changed or exceeded bound')
+    if pc and (read_private(stage/'vault-root.key', 65) != pc_vault_key() or manifest['vault'] != vault_fingerprint(config, commands)):
+        fail('Vault recovery changed while frozen')
     assert_database_quiet(config, commands)
     return bundle, manifest
 
@@ -852,7 +887,7 @@ def verified_extract(bundle, destination, source_id):
                item.size < 0 or item.size > MAX_BYTES or item.name.startswith('/') or '..' in PurePosixPath(item.name).parts:
                 fail('Unsafe archive entry')
             name = item.name
-            allowed = name in ('manifest.json', 'database.dump', 'roles.sql') or \
+            allowed = name in ('manifest.json', 'database.dump', 'roles.sql', 'vault-root.key') or \
                       name in ('jobs/' + state_name for state_name in JOB_STATE_FILES)
             if not allowed:
                 if not name.startswith('images/'):
@@ -862,6 +897,8 @@ def verified_extract(bundle, destination, source_id):
                     fail('Image archive bound exceeded')
             if name == 'manifest.json' and item.size > 8 * 1024 ** 2:
                 fail('Manifest bound exceeded')
+            if name == 'vault-root.key' and item.size != 65:
+                fail('Vault key archive bound exceeded')
             if name.startswith('jobs/') and item.size > MAX_JOB_STATE:
                 fail('Jobs archive metadata bound exceeded')
             path = destination / name
@@ -893,6 +930,11 @@ def verified_extract(bundle, destination, source_id):
     for name in ('database.dump', 'roles.sql'):
         if file_hash(destination / name) != manifest['files'][name]:
             fail('Restored DB/roles hash mismatch')
+    if 'vault' in manifest:
+        expected.add('vault-root.key')
+        key = read_private(destination/'vault-root.key', 65)
+        if re.fullmatch(b'[a-f0-9]{64}\n', key) is None or file_hash(destination/'vault-root.key') != manifest['files'].get('vault-root.key'):
+            fail('Restored Vault key hash/format mismatch')
     with (destination / 'database.dump').open('rb') as stream:
         if stream.read(5) != b'PGDMP':
             fail('Invalid custom-format database dump')
@@ -921,16 +963,29 @@ def verify_restore(config, commands, restored, manifest):
     name = 'tuat-backup-verify-' + nonce
     empty = restored / 'empty-init'; empty.mkdir(mode=0o755); empty.chmod(0o755)
     created = False
+    pc = periodic.installation_profile(config)['name'] == periodic.PC_PROFILE
+    admin = database_admin(config)
+    vault_mount = []
+    preload = []
+    if pc:
+        if 'vault' not in manifest: fail('PC restore requires authenticated Vault recovery')
+        key_copy = restored/'verifier-vault-root.key'
+        write_new(key_copy, read_private(restored/'vault-root.key', 65))
+        os.chown(key_copy, 0, 101); os.chmod(key_copy, 0o640)
+        vault_mount = ['--mount', 'type=bind,source='+str(key_copy)+',target=/etc/postgresql-custom/pgsodium_root.key,readonly']
+        preload = ['-c', 'vault.getkey_script=/usr/share/postgresql/extension/pgsodium_getkey']
     try:
         # Reserve name before run so a create-then-timeout is still cleaned by identity/label.
         commands.docker('create', '--name', name, '--label', VERIFY_LABEL + '=' + nonce,
             '--pull', 'never',
             '--network', 'none', '--memory', '768m', '--cpus', '1',
             '--mount', 'type=bind,source=' + str(empty) + ',target=/docker-entrypoint-initdb.d,readonly',
-            '--tmpfs', '/var/lib/postgresql/data:rw,size=512m', '-e', 'POSTGRES_USER=postgres',
+            *vault_mount, '--tmpfs', '/var/lib/postgresql/data:rw,size=512m', '-e', 'POSTGRES_USER='+admin,
             '-e', 'POSTGRES_PASSWORD=' + secrets.token_hex(32), '-e', 'POSTGRES_DB=fixture',
-            '-e', 'PGDATA=/var/lib/postgresql/data', DB_IMAGE, 'postgres', '-D', '/var/lib/postgresql/data',
-            '-c', 'listen_addresses=', '-c', 'shared_preload_libraries=', '-c', 'shared_buffers=64MB')
+            '-e', 'PGDATA=/var/lib/postgresql/data',
+            *(['-e', 'POSTGRES_INITDB_ARGS=--encoding=UTF8 --locale=C.UTF-8'] if pc else []),
+            DB_IMAGE, 'postgres', '-D', '/var/lib/postgresql/data',
+            '-c', 'listen_addresses=', '-c', 'shared_preload_libraries='+('supabase_vault' if pc else ''), '-c', 'shared_buffers=64MB', *preload)
         created = True
         commands.docker('start', name)
         fixture = {**config, 'containers': {'db': name}, 'database': 'fixture'}
@@ -943,10 +998,10 @@ def verify_restore(config, commands, restored, manifest):
                     raise
                 time.sleep(1)
         roles = read_private(restored / 'roles.sql', 8 * 1024 ** 2).decode()
-        # Standard pg_dumpall creates postgres too; the disposable cluster already owns it.
-        roles = re.sub(r'^CREATE ROLE postgres;\r?\n', '', roles, flags=re.M)
+        # Keep the source bootstrap admin identity; postgres has restricted flags on this PC.
+        roles = re.sub(r'^CREATE ROLE '+re.escape(admin)+r';\r?\n', '', roles, flags=re.M)
         commands.sql(fixture, roles)
-        commands.docker('exec', '-i', name, 'pg_restore', '-U', 'postgres', '-d', 'fixture',
+        commands.docker('exec', '-i', name, 'pg_restore', '-U', admin, '-d', 'fixture',
                         '--exit-on-error', '--single-transaction', input_file=restored / 'database.dump', timeout=300)
         actual = database_fingerprint(fixture, commands)
         expected = manifest['database']
@@ -957,6 +1012,8 @@ def verify_restore(config, commands, restored, manifest):
             sections = sorted(name for name in set(actual['securityComponents']) | set(expected['securityComponents'])
                               if actual['securityComponents'].get(name) != expected['securityComponents'].get(name))
             fail('Independent restore differs; tables=' + ','.join(tables) + '; security=' + ','.join(sections))
+        if pc and vault_fingerprint(fixture, commands) != manifest['vault']:
+            fail('Independent restored Vault values differ')
         if image_inventory(restored / 'images') != manifest['images']:
             fail('Independent image bytes/paths/mtime differ')
         return {'databaseTables': len(manifest['database']['tables']), 'images': len(manifest['images'])}
