@@ -131,7 +131,7 @@ def json_private(path, owner=0, bound=1048576):
 def config_shape(c):
     require(isinstance(c, dict), 'config-contract')
     p = periodic.installation_profile(c)
-    keys = CONFIG_KEYS | ({'profile', 'hostConfigPath', 'daemonSeal', 'dbHba'} if p['name'] == periodic.PC_PROFILE else ({'profile'} if 'profile' in c else set()))
+    keys = CONFIG_KEYS | ({'profile', 'hostConfigPath', 'offsiteConfigPath', 'daemonSeal', 'dbHba'} if p['name'] == periodic.PC_PROFILE else ({'profile'} if 'profile' in c else set()))
     require(set(c) in (keys, keys | {'backupConfigPath'}) and c['version'] == 1, 'config-contract')
     if 'backupConfigPath' in c:
         require(Path(MOUNT) in Path(c['backupConfigPath']).parents, 'backup-config-path')
@@ -143,6 +143,9 @@ def config_shape(c):
     if p['name'] == periodic.PC_PROFILE:
         require(c['appUid'] == 65530 and c['appGid'] == 65530 and 'backupConfigPath' in c, 'pc-actor-backup')
         require(c['dbHba'] == MOUNT + '/db-private/pg_hba.conf', 'pc-db-hba-path')
+        require(isinstance(c['offsiteConfigPath'], str) and Path(c['offsiteConfigPath']).is_absolute() and
+                str(Path(c['offsiteConfigPath'])) == c['offsiteConfigPath'] and Path(MOUNT) in Path(c['offsiteConfigPath']).parents and
+                '..' not in Path(c['offsiteConfigPath']).parts, 'pc-offsite-config-path')
         require(Path(MOUNT) in Path(c['hostConfigPath']).parents and isinstance(c['daemonSeal'], dict) and
                 set(c['daemonSeal']) == {'dockerConfig', 'containerdConfig', 'dockerUnit', 'containerdUnit'} and
                 all(isinstance(v, str) and re.fullmatch('[a-f0-9]{64}', v) for v in c['daemonSeal'].values()), 'pc-daemon-seal')
@@ -560,9 +563,65 @@ def pc_service_configuration(c, env, db, auth, rest):
     return origin.geturl()
 
 
+def pc_private_binding_file(path, device):
+    require(isinstance(path, str) and Path(path).is_absolute() and str(Path(path)) == path and
+            '..' not in Path(path).parts and Path(MOUNT) in Path(path).parents, 'pc-backup-private-path')
+    value = existing(path, False, 0, 0o600)
+    existing(value.parent, True, 0, 0o700)
+    require(value.stat().st_dev == device and value.parent.stat().st_dev == device, 'pc-backup-private-mount')
+    return value
+
+
+def pc_node_backup(c, manifest, host=None):
+    host = json_private(c['hostConfigPath']) if host is None else host
+    path = pc_private_binding_file(host.get('backupConfigFile'), Path(MOUNT).stat().st_dev)
+    require(manifest.get('nodeBackupConfigSha256') == digest(private_bytes(path)), 'pc-node-backup-seal')
+    return json_private(path)
+
+
+def pc_backup_bindings(c, host, backup, db, manifest):
+    device = Path(MOUNT).stat().st_dev
+    node = pc_node_backup(c, manifest, host)
+    offsite_path = pc_private_binding_file(c['offsiteConfigPath'], device)
+    require(manifest.get('offsiteConfigPathSha256') == digest(private_bytes(offsite_path)), 'pc-offsite-config-seal')
+    offsite = json_private(offsite_path)
+    target = node.get('target')
+    require(isinstance(target, dict), 'pc-node-backup-target')
+    system = host.get('expectedBackupDatabaseSystemIdentifier')
+    require(isinstance(system, str) and re.fullmatch('[0-9]{10,20}', system) and
+            isinstance(c['sourceId'], str) and re.fullmatch('[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', c['sourceId']) and
+            host.get('expectedBackupInstanceId') == c['sourceId'] and host.get('expectedBackupDatabaseName') == db['POSTGRES_DB'], 'pc-backup-host-identity')
+    require(node.get('profile') == periodic.PC_PROFILE and node.get('executionMode') == 'linux' and
+            node.get('dockerSocket') == periodic.installation_profile(c)['socket'] and node.get('instanceId') == c['sourceId'] and
+            node.get('localImageRoot') == c['imageRoot'] == MOUNT+'/images', 'pc-node-backup-contract')
+    require(set(target) == {'containerId','containerImageId','containerName','sourceLabel','roleLabel','configSha256','dataMountSource','databaseName','databaseSystemIdentifier'} and
+            isinstance(target.get('containerId'), str) and re.fullmatch('[a-f0-9]{64}', target['containerId']) and
+            target.get('containerImageId') == PC_IMAGES['db'][1] and target.get('containerName') == 'tuat-local-db' and
+            target.get('sourceLabel') == c['sourceId'] and target.get('roleLabel') == 'db' and
+            target.get('configSha256') == compose_env(c)['TUAT_DB_HASH'] and target.get('dataMountSource') == c['dbData'] == MOUNT+'/db' and
+            target.get('databaseName') == db['POSTGRES_DB'] and target.get('databaseSystemIdentifier') == system, 'pc-node-backup-target')
+    require(offsite.get('profile') == periodic.PC_PROFILE and offsite.get('sourceId') == c['sourceId'] and
+            offsite.get('databaseSystemIdentifier') == system and offsite.get('imageRoot') == c['imageRoot'] and
+            offsite.get('hostConfigFile') == c['hostConfigPath'] and offsite.get('producerReceiptFile') == backup.get('receiptFile'), 'pc-offsite-contract')
+    for path in (node.get('stateDirectory'), offsite.get('stateDirectory'), backup.get('backupRoot')):
+        require(isinstance(path, str) and Path(path).is_absolute() and str(Path(path)) == path and
+                '..' not in Path(path).parts and Path(MOUNT) in Path(path).parents, 'pc-backup-state-path')
+        value = existing(path, True, 0, 0o700)
+        require(value.stat().st_dev == device, 'pc-backup-state-mount')
+    producer_receipt = backup.get('receiptFile')
+    require(isinstance(producer_receipt, str) and str(Path(producer_receipt)) == producer_receipt and
+            Path(producer_receipt).parent == Path(backup['backupRoot']) and
+            node.get('localSnapshotReceiptFile') == str(Path(offsite['stateDirectory'])/'local-snapshot.json'), 'pc-backup-receipt-paths')
+    require(node.get('environmentFile') == offsite.get('environmentFile'), 'pc-offsite-environment-binding')
+    environment = pc_private_binding_file(node.get('environmentFile'), device)
+    require(manifest.get('offsiteEnvironmentSha256') == digest(private_bytes(environment)), 'pc-offsite-environment-seal')
+    # config.generation is deliberately unused: the active root host lifecycle
+    # binds generation/start time in offsite.activePcSnapshotHost at transfer.
+
+
 def pc_configuration_gate(c):
     uid, gid = actor_ids(c); device = Path(MOUNT).stat().st_dev
-    require(all(Path(c[k]).stat().st_dev == device for k in (*PATH_KEYS, 'hostConfigPath', 'backupConfigPath', 'dbHba')), 'private-input-mount')
+    require(all(Path(c[k]).stat().st_dev == device for k in (*PATH_KEYS, 'hostConfigPath', 'backupConfigPath', 'offsiteConfigPath', 'dbHba')), 'private-input-mount')
     env = env_private(c['appEnvironmentFile'])
     require(not any(k in env for k in ('NODE_OPTIONS', 'NODE_PATH', 'NODE_EXTRA_CA_CERTS', 'LD_PRELOAD', 'LD_LIBRARY_PATH',
         'PYTHONPATH', 'PYTHONHOME', 'PATH', 'HOME', 'TMPDIR')), 'env-process-override')
@@ -592,10 +651,11 @@ def pc_configuration_gate(c):
             jobs.get('appOrigin') == 'http://127.0.0.1:18200' and jobs.get('port') == 18200 and
             jobs.get('releaseCommit') == manifest['sourceCommit'] and jobs.get('releaseId') == manifest['releaseId'] and
             jobs.get('hostStateDirectory') == host.get('stateDirectory'), 'pc-jobs-preparation')
-    require(backup.get('profile') == periodic.PC_PROFILE and backup.get('sourceId') == c['sourceId'] and backup.get('sourceOwnerUid') == uid and
+    require(backup.get('profile') == periodic.PC_PROFILE and backup.get('sourceId') == c['sourceId'] and type(backup.get('sourceOwnerUid')) is int and backup['sourceOwnerUid'] == uid and
             backup.get('database') == db['POSTGRES_DB'] and
             backup.get('imageRoot') == c['imageRoot'] and backup.get('jobsStateRoot') == c['jobsStateRoot'] and
             (backup.get('periodic') or {}).get('configPath') == c['backupConfigPath'], 'pc-backup-contract')
+    pc_backup_bindings(c, host, backup, db, manifest)
     for key, owner in (('imageRoot', uid), ('jobsStateRoot', 0), ('dbData', 100), ('privateLogDirectory', 0)):
         existing(c[key], True, owner, 0o700)
     app_access(c['imageRoot'], directory=True, uid=uid, gid=gid)
@@ -674,7 +734,9 @@ def host_gate(c, cmd):
                 s.get('ControlPID') == '0' and s.get('ControlGroup') == '', 'legacy-or-mirror-active')
     daemon_storage_gate(c, cmd)
     if profile['name'] == periodic.PC_PROFILE:
-        pc_db_hba(c, json_private(c['releaseManifest'], bound=64*1024**2))
+        manifest = json_private(c['releaseManifest'], bound=64*1024**2)
+        pc_db_hba(c, manifest)
+        node_target = pc_node_backup(c, manifest)['target']
     for role, (tag, pin) in images.items():
         info = cmd.obj(['docker', 'image', 'inspect', tag, '--format', '{{json .Id}}'])
         digests = cmd.obj(['docker', 'image', 'inspect', tag, '--format', '{{json .RepoDigests}}'])
@@ -703,6 +765,8 @@ def host_gate(c, cmd):
                     'container-execution-contract')
             if role == 'db' and profile['name'] == periodic.PC_PROFILE:
                 require(sorted(info.get('pgSocketEnv', '').split(';')) == ['', 'PGHOST=/tmp', 'PGPORT=18304'], 'pc-db-socket-env')
+                require(info['id'] == node_target.get('containerId') and
+                        info['labels'].get('tuat.local.config-sha256') == node_target.get('configSha256'), 'pc-db-backup-target')
             expected = {'db': [(c['dbData'], '/var/lib/postgresql/data', True)], 'auth': [],
                         'rest': [(c['mixedJwks'], '/private/local-jwks.json' if profile['name'] == periodic.PC_PROFILE else '/private/mixed-jwks.json', False)]}[role]
             if role == 'db' and profile['name'] == periodic.PC_PROFILE:

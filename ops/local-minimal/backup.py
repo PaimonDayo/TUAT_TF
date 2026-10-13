@@ -1072,7 +1072,10 @@ def produce(config, commands=None):
                     atomic_jobs_json(path, value, periodic.actor(config)[1])
                 attempt = periodic.Attempt(config, commands, atomic_json, file_hash, publish_jobs)
             result = produce_locked(config, commands)
-            if attempt: attempt.finish(result)
+            if attempt:
+                attempt.finish(result)
+                if selected['name'] == periodic.PC_PROFILE:
+                    attempt.transfer_offsite(result)
             return result
         except BaseException:
             if attempt:
@@ -1101,7 +1104,7 @@ def main():
             print(json.dumps({'valid': True, 'executed': False, 'periodicEnabled': bool((config.get('periodic') or {}).get('enabled'))}))
     except Exception as error:
         # Never surface private psql rows, secrets, child output or config to logs.
-        reason = str(error) if isinstance(error, BackupFailure) else 'Backup failed; prior receipt retained'
+        reason = str(error) if isinstance(error, BackupFailure) else 'Backup failed; publication requires inspection'
         if isinstance(error, periodic.Hold) and re.fullmatch(r'periodic-[a-z-]{1,64}', str(error)):
             reason = str(error)  # Code-owned finite enums; no config/child diagnostics.
         print(json.dumps({'ok': False, 'reason': reason}))

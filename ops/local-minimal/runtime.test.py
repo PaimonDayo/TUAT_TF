@@ -26,6 +26,8 @@ def config(uid=65530, gid=65530):
 
 def pc_config():
     c = config(); c.update(profile='pc-private', hostConfigPath=runtime.MOUNT+'/host.json', backupConfigPath=runtime.MOUNT+'/backup.json',
+        offsiteConfigPath=runtime.MOUNT+'/private/offsite.json', sourceId='11111111-1111-4111-8111-111111111111',
+        dbData=runtime.MOUNT+'/db', imageRoot=runtime.MOUNT+'/images',
         dbHba=runtime.MOUNT+'/db-private/pg_hba.conf',
         daemonSeal={key: 'a'*64 for key in ('dockerConfig', 'containerdConfig', 'dockerUnit', 'containerdUnit')})
     return c
@@ -106,6 +108,36 @@ class FakeCommands:
 
 
 class RuntimeBehaviour(unittest.TestCase):
+    def test_bound_config_files_require_canonical_encrypted_root_private_metadata(self):
+        name=runtime.MOUNT+'/private/config.json'; fault=[{}]
+        def observed(path):
+            file=str(path)==name
+            fields=dict(st_mode=(stat.S_IFREG|0o600) if file else (stat.S_IFDIR|0o700),st_uid=0,st_gid=0,st_nlink=1,st_dev=2)
+            if str(path)==fault[0].get('path'): fields.update(fault[0].get('stat',{}))
+            return SimpleNamespace(**fields)
+        with patch.object(Path,'stat',autospec=True,side_effect=observed), \
+             patch.object(Path,'is_symlink',autospec=True,side_effect=lambda path:str(path)==fault[0].get('symlink')):
+            self.assertEqual(runtime.pc_private_binding_file(name,2),Path(name))
+            for bad in ({'path':name,'stat':{'st_uid':65530}}, {'path':name,'stat':{'st_mode':stat.S_IFREG|0o640}},
+                {'path':name,'stat':{'st_nlink':2}}, {'path':name,'stat':{'st_dev':3}},
+                {'path':str(Path(name).parent),'stat':{'st_mode':stat.S_IFDIR|0o750}}, {'symlink':name}):
+                fault[0]=bad
+                with self.assertRaises(runtime.Hold): runtime.pc_private_binding_file(name,2)
+            fault[0]={}
+            for path in ('/outside/config.json',runtime.MOUNT+'/private/../config.json',runtime.MOUNT+'/private/./config.json',None):
+                with self.assertRaisesRegex(runtime.Hold,'private-path'): runtime.pc_private_binding_file(path,2)
+
+    def test_actual_pc_db_id_and_config_label_must_match_sealed_node_target(self):
+        c=pc_config(); target={'containerId':'db','configSha256':'synthetic'}
+        with patch.object(runtime,'pc_db_hba'), patch.object(runtime,'json_private',return_value={}), \
+             patch.object(runtime,'pc_node_backup',side_effect=lambda *_args:{'target':target}), \
+             patch.object(runtime,'compose_env',return_value={f'TUAT_{role.upper()}_HASH':'synthetic' for role in runtime.IMAGES}):
+            runtime.host_gate(c,FakeCommands(c))
+            for key,value in (('containerId','other-physical-db'),('configSha256','different-env-hash')):
+                prior=target[key]; target[key]=value
+                with self.assertRaisesRegex(runtime.Hold,'pc-db-backup-target'): runtime.host_gate(c,FakeCommands(c))
+                target[key]=prior
+
     def test_pc_hba_binds_canonical_scram_source_and_root_db_reader_while_app_cannot_read(self):
         c = pc_config(); source = Path(c['releaseDirectory'])/runtime.PC_HBA_SOURCE
         canonical = (Path(__file__).parent/'pc/pg_hba.conf').read_bytes()
@@ -146,7 +178,7 @@ class RuntimeBehaviour(unittest.TestCase):
 
     def test_pc_db_actual_command_and_readonly_hba_mount_are_required_without_changing_surface(self):
         c = pc_config()
-        with patch.object(runtime, 'pc_db_hba'), patch.object(runtime, 'json_private', return_value={}), \
+        with patch.object(runtime, 'pc_db_hba'), patch.object(runtime, 'json_private', return_value={}), patch.object(runtime,'pc_node_backup',return_value={'target':{'containerId':'db','configSha256':'synthetic'}}), \
              patch.object(runtime, 'compose_env', return_value={f'TUAT_{role.upper()}_HASH': 'synthetic' for role in runtime.IMAGES}):
             self.assertEqual(runtime.host_gate(c, FakeCommands(c)), dict(db='db', auth='auth', rest='rest'))
             for fault in ('missing-command', 'writable-hba', 'pg-owned-hba'):
@@ -160,7 +192,7 @@ class RuntimeBehaviour(unittest.TestCase):
 
     def test_pc_tmpfs_is_private_bounded_and_all_actual_mounts_are_checked(self):
         c = pc_config()
-        with patch.object(runtime, 'pc_db_hba'), patch.object(runtime, 'json_private', return_value={}), \
+        with patch.object(runtime, 'pc_db_hba'), patch.object(runtime, 'json_private', return_value={}), patch.object(runtime,'pc_node_backup',return_value={'target':{'containerId':'db','configSha256':'synthetic'}}), \
              patch.object(runtime, 'compose_env', return_value={f'TUAT_{role.upper()}_HASH':'synthetic' for role in runtime.IMAGES}):
             for role in ('db','auth','rest'):
                 cmd = FakeCommands(c)
@@ -195,7 +227,7 @@ class RuntimeBehaviour(unittest.TestCase):
         self.assertEqual(runtime.periodic.installation_profile(pc_config())['socket'], 'unix:///run/tuat-local/docker.sock')
         for value in ('other', None, True):
             with self.assertRaises(runtime.periodic.Hold): runtime.periodic.installation_profile({'profile': value})
-        for field, value in (('appUid', 1000), ('appGid', 1000), ('daemonSeal', {})):
+        for field, value in (('appUid', 1000), ('appGid', 1000), ('daemonSeal', {}), ('offsiteConfigPath','/outside/offsite.json')):
             c = pc_config(); c[field] = value
             with self.assertRaises(runtime.Hold): runtime.config_shape(c)
 
@@ -309,23 +341,55 @@ class RuntimeBehaviour(unittest.TestCase):
         for key in ('hostConfigPath','jobsConfig','backupConfigPath'): manifest[key+'Sha256'] = runtime.digest(b'synthetic')
         host = dict(releaseDirectory=c['releaseDirectory'], environmentFile=c['appEnvironmentFile'], releaseCommit=manifest['sourceCommit'],
             releaseId=manifest['releaseId'], publicOrigin=env['APP_PUBLIC_ORIGIN'], appPort=18200, applicationUid=65530, applicationGid=65530, enabled=False,
-            stateDirectory=runtime.MOUNT+'/host-state')
+            stateDirectory=runtime.MOUNT+'/host-state', backupConfigFile=runtime.MOUNT+'/private/node-backup.json',
+            expectedBackupInstanceId=c['sourceId'], expectedBackupDatabaseSystemIdentifier='1234567890123456789', expectedBackupDatabaseName=db['POSTGRES_DB'])
         jobs = dict(runtime='shared-pc', enabled=False, releaseDirectory=c['releaseDirectory'], environmentFile=c['appEnvironmentFile'], stateDirectory=c['jobsStateRoot'],
             appOrigin='http://127.0.0.1:18200', port=18200, releaseCommit=manifest['sourceCommit'], releaseId=manifest['releaseId'], hostStateDirectory=host['stateDirectory'])
         backup = dict(profile='pc-private', sourceId=c['sourceId'], sourceOwnerUid=65530, imageRoot=c['imageRoot'], jobsStateRoot=c['jobsStateRoot'], database=db['POSTGRES_DB'],
-            periodic={'configPath': c['backupConfigPath']})
-        configurations = {c['releaseManifest']:manifest, c['hostConfigPath']:host, c['jobsConfig']:jobs, c['backupConfigPath']:backup}
+            periodic={'configPath': c['backupConfigPath']}, backupRoot=runtime.MOUNT+'/python-backup',receiptFile=runtime.MOUNT+'/python-backup/receipt.json')
+        node = dict(profile='pc-private',executionMode='linux',dockerSocket='unix:///run/tuat-local/docker.sock',instanceId=c['sourceId'],
+            localImageRoot=c['imageRoot'],stateDirectory=runtime.MOUNT+'/node-backup-state',environmentFile=runtime.MOUNT+'/private/provider.env',
+            localSnapshotReceiptFile=runtime.MOUNT+'/offsite-state/local-snapshot.json',target=dict(containerId='d'*64,containerImageId=runtime.PC_IMAGES['db'][1],
+                containerName='tuat-local-db',sourceLabel=c['sourceId'],roleLabel='db',configSha256='e'*64,dataMountSource=c['dbData'],
+                databaseName=db['POSTGRES_DB'],databaseSystemIdentifier=host['expectedBackupDatabaseSystemIdentifier']))
+        offsite = dict(profile='pc-private',sourceId=c['sourceId'],databaseSystemIdentifier=host['expectedBackupDatabaseSystemIdentifier'],imageRoot=c['imageRoot'],
+            hostConfigFile=c['hostConfigPath'],producerReceiptFile=backup['receiptFile'],stateDirectory=runtime.MOUNT+'/offsite-state',environmentFile=node['environmentFile'],
+            generation='this-static-value-is-not-an-active-host-generation')
+        for key in ('nodeBackupConfigSha256','offsiteConfigPathSha256','offsiteEnvironmentSha256'): manifest[key]=runtime.digest(b'synthetic')
+        configurations = {c['releaseManifest']:manifest, c['hostConfigPath']:host, c['jobsConfig']:jobs, c['backupConfigPath']:backup,
+            host['backupConfigFile']:node,c['offsiteConfigPath']:offsite}
         environments = {c['appEnvironmentFile']:env, c['dbEnvironmentFile']:db, c['authEnvironmentFile']:auth, c['restEnvironmentFile']:rest}
         with patch.object(Path, 'stat', return_value=SimpleNamespace(st_dev=2)), patch.object(runtime, 'env_private', side_effect=lambda path:environments[path]), \
-             patch.object(runtime, 'private_bytes', return_value=b'synthetic'), patch.object(runtime, 'json_private', side_effect=lambda path, **_kw:configurations[path]), \
-             patch.object(runtime, 'release_inventory', return_value={'files':manifest['files'], 'links':{}}), patch.object(runtime, 'existing') as existing, \
-             patch.object(runtime, 'app_access'), patch.object(runtime, 'compose_gate'), patch.object(runtime, 'pc_rest_jwks'), patch.object(runtime, 'pc_db_hba'):
+             patch.object(runtime, 'private_bytes', return_value=b'synthetic'), patch.object(runtime, 'json_private', side_effect=lambda path, **_kw:configurations[str(path)]), \
+             patch.object(runtime, 'release_inventory', return_value={'files':manifest['files'], 'links':{}}), patch.object(runtime, 'existing',side_effect=lambda path,*_a,**_kw:Path(path)) as existing, \
+             patch.object(runtime, 'app_access'), patch.object(runtime, 'compose_gate'), patch.object(runtime, 'pc_rest_jwks'), patch.object(runtime, 'pc_db_hba'), \
+             patch.object(runtime,'compose_env',return_value={'TUAT_DB_HASH':'e'*64}):
             self.assertEqual(runtime.pc_configuration_gate(c)[1], jobs)
             self.assertIn(unittest.mock.call(c['jobsStateRoot'], True, 0, 0o700), existing.call_args_list)
             self.assertIn(unittest.mock.call(c['imageRoot'], True, 65530, 0o700), existing.call_args_list)
+            for obj,key,value,code in ((host,'expectedBackupDatabaseName','other_valid','host-identity'),(host,'expectedBackupInstanceId','22222222-2222-4222-8222-222222222222','host-identity'),
+                (node,'profile','surface','node-backup-contract'),(node,'executionMode','wsl','node-backup-contract'),(node,'dockerSocket','unix:///var/run/docker.sock','node-backup-contract'),
+                (node,'instanceId','22222222-2222-4222-8222-222222222222','node-backup-contract'),(node,'localImageRoot',runtime.MOUNT+'/other-images','node-backup-contract'),
+                (node['target'],'containerId','not-a-physical-id','node-backup-target'),(node['target'],'databaseName','other_valid','node-backup-target'),(node['target'],'databaseSystemIdentifier','9876543210987654321','node-backup-target'),
+                (node['target'],'sourceLabel','22222222-2222-4222-8222-222222222222','node-backup-target'),(node['target'],'roleLabel','rest','node-backup-target'),
+                (node['target'],'configSha256','f'*64,'node-backup-target'),(node['target'],'dataMountSource',runtime.MOUNT+'/other-db','node-backup-target'),
+                (offsite,'profile','surface','offsite-contract'),(offsite,'sourceId','22222222-2222-4222-8222-222222222222','offsite-contract'),
+                (offsite,'databaseSystemIdentifier','9876543210987654321','offsite-contract'),(offsite,'hostConfigFile',runtime.MOUNT+'/other-host.json','offsite-contract'),
+                (offsite,'producerReceiptFile',runtime.MOUNT+'/other-receipt.json','offsite-contract'),(offsite,'imageRoot',runtime.MOUNT+'/other-images','offsite-contract'),
+                (offsite,'stateDirectory','/outside-state','state-path'),
+                (node,'localSnapshotReceiptFile',runtime.MOUNT+'/other-state/local-snapshot.json','receipt-paths'),
+                (offsite,'environmentFile',runtime.MOUNT+'/other-provider.env','environment-binding'),
+                (manifest,'nodeBackupConfigSha256','a'*64,'node-backup-seal'),(manifest,'offsiteConfigPathSha256','a'*64,'offsite-config-seal'),
+                (manifest,'offsiteEnvironmentSha256','a'*64,'environment-seal')):
+                prior=obj[key];obj[key]=value
+                with self.assertRaisesRegex(runtime.Hold,code,msg=key): runtime.pc_configuration_gate(c)
+                obj[key]=prior
             backup['database'] = 'different_valid_database'
             with self.assertRaisesRegex(runtime.Hold, 'backup-contract'): runtime.pc_configuration_gate(c)
             backup['database'] = db['POSTGRES_DB']
+            backup['sourceOwnerUid']=65530.0
+            with self.assertRaisesRegex(runtime.Hold,'backup-contract'): runtime.pc_configuration_gate(c)
+            backup['sourceOwnerUid']=65530
             jobs['enabled'] = True
             with self.assertRaisesRegex(runtime.Hold, 'jobs-preparation'): runtime.pc_configuration_gate(c)
             jobs['enabled'] = False; host['applicationUid'] = 0
@@ -364,7 +428,7 @@ class RuntimeBehaviour(unittest.TestCase):
         c = pc_config(); cmd = FakeCommands(c)
         self.assertEqual(runtime.PC_IMAGES['auth'], ('supabase/gotrue:v2.197.0', 'sha256:1736a63078f5922b198c4cbe50f80ab9a2d3b54fe8b7b6cfb2e9dc5dbbc12c6b'))
         self.assertEqual(runtime.image_contract(config())[0]['auth'][0], 'supabase/gotrue:v2.196.0')
-        with patch.object(runtime, 'pc_db_hba'), patch.object(runtime, 'json_private', return_value={}), \
+        with patch.object(runtime, 'pc_db_hba'), patch.object(runtime, 'json_private', return_value={}), patch.object(runtime,'pc_node_backup',return_value={'target':{'containerId':'db','configSha256':'synthetic'}}), \
              patch.object(runtime, 'compose_env', return_value={f'TUAT_{role.upper()}_HASH': 'synthetic' for role in runtime.PC_IMAGES}):
             self.assertEqual(runtime.host_gate(c, cmd), dict(db='db', auth='auth', rest='rest'))
             for fault in ('old-tag', 'config-id', 'repo-digest', 'wrong-role'):

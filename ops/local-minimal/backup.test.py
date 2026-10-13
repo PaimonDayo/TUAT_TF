@@ -635,6 +635,56 @@ class BackupBehaviour(unittest.TestCase):
         finally: os.close(fd)
         self.assertEqual(self.commands.events, [])
 
+    def periodic_producer_fixture(self, pc=True):
+        config = {**self.config, 'jobsReceiptFile':str(self.root/'reader/verified.json')}
+        config['periodic'] = {key:bounds[0] for key,bounds in backup.periodic.LIMITS.items()}
+        config['periodic'].update(enabled=True, controlSeal=str(self.root/'seal.json'),
+            configPath=str(self.root/'backup.json'), allowUntil='2099-01-01T00:00:00+00:00')
+        config['periodic']['maxTotalArchiveBytes'] += 36
+        if pc:
+            config.update(profile='pc-private', writerMode='surface-systemd', sourceOwnerUid=65530,
+                containers={role:'tuat-local-'+role for role in ('db','auth','rest')})
+        return config
+
+    def test_pc_producer_completes_local_publication_before_one_offsite_call(self):
+        for pc in (True, False):
+            config = self.periodic_producer_fixture(pc)
+            events = []; result = {'ok':True, 'archive':'synthetic.enc'}
+            class Attempt:
+                def __init__(self,*_args): events.append('admitted')
+                def finish(self,value):
+                    self_test.assertIs(value,result); events.append('local-publication')
+                def transfer_offsite(self,value):
+                    self_test.assertIs(value,result)
+                    self_test.assertEqual(events,['admitted','capture-cleaned','local-publication'])
+                    events.append('offsite')
+                def hold(self): events.append('held')
+            self_test = self
+            def captured(*_args): events.append('capture-cleaned'); return result
+            with patch.object(backup.periodic,'placement',return_value=backup.periodic.installation_profile(config)), \
+                 patch.object(backup.periodic,'Attempt',Attempt), patch.object(backup,'produce_locked',captured):
+                self.assertIs(backup.produce(config,self.commands),result)
+            self.assertEqual(events,['admitted','capture-cleaned','local-publication']+(['offsite'] if pc else []))
+
+    def test_pc_offsite_ack_lost_after_publication_holds_without_rollback_or_resend(self):
+        config = self.periodic_producer_fixture()
+        canonical = self.root/'node-receipt.json'; canonical.write_bytes(b'prior')
+        events = []; result = {'ok':True, 'archive':'synthetic.enc'}
+        class Attempt:
+            def __init__(self,*_args): pass
+            def finish(self,_value): events.append('local-publication')
+            def transfer_offsite(self,_value):
+                events.append('offsite')
+                canonical.write_bytes(b'committed-before-ack-loss')
+                raise backup.periodic.Hold('periodic-offsite-ack')
+            def hold(self): events.append('held')
+        with patch.object(backup.periodic,'placement',return_value=backup.periodic.installation_profile(config)), \
+             patch.object(backup.periodic,'Attempt',Attempt), patch.object(backup,'produce_locked',return_value=result):
+            with self.assertRaisesRegex(backup.periodic.Hold,'periodic-offsite-ack'):
+                backup.produce(config,self.commands)
+        self.assertEqual(events,['local-publication','offsite','held'])
+        self.assertEqual(canonical.read_bytes(),b'committed-before-ack-loss')
+
     def test_directory_sync_failure_keeps_prior_receipt_and_stops_acknowledgement(self):
         path = Path(self.config['receiptFile']); path.write_bytes(b'{"verifiedAt":"old"}'); path.chmod(0o600)
         calls = 0

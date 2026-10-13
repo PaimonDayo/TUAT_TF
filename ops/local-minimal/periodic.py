@@ -2,6 +2,7 @@
 from contextlib import contextmanager
 import datetime as dt
 import hashlib
+import importlib.util
 import json
 import math
 import os
@@ -71,9 +72,9 @@ def immutable(path, private=False):
          (stat.S_IMODE(s.st_mode) == 0o600 if private else not s.st_mode & 0o022), 'periodic-immutable-file')
     return p
 
-def read_json(path, private=True):
+def read_json(path, private=True, bound=1048576):
     p = immutable(path, private)
-    need(p.stat().st_size <= 1048576, 'periodic-metadata-bound')
+    need(p.stat().st_size <= bound, 'periodic-metadata-bound')
     value = json.loads(p.read_bytes())
     need(isinstance(value, dict), 'periodic-metadata-shape')
     return value
@@ -105,18 +106,22 @@ def seal(config):
     p = policy(config)
     need(p is not None, 'periodic-policy-required')
     value = read_json(p['controlSeal'])
+    pc = installation_profile(config)['name'] == PC_PROFILE
     need(set(value) == {'version', 'sourceId', 'sourceCommit', 'configSha256', 'sources', 'fragment',
                         'fragmentSha256', 'timer', 'timerSha256', 'execStart', 'nodePath', 'nodeSha256',
-                        'runtimeConfigPath', 'runtimeConfigSha256'}, 'periodic-seal-keys')
+                        'runtimeConfigPath', 'runtimeConfigSha256', *({'offsiteInputs'} if pc else set())}, 'periodic-seal-keys')
     need(value['version'] == 1 and value['sourceId'] == config['sourceId'] and
          bool(re.fullmatch('[a-f0-9]{40}', value['sourceCommit'])), 'periodic-source-pin')
     need(digest(immutable(p['configPath'], True)) == value['configSha256'] and
          read_json(p['configPath']) == config, 'periodic-config-pin')
     required = {'backup.py', 'backup-codec.mjs', 'runtime.py', 'periodic.py'}
+    if pc: required |= {'offsite.mjs', 'pc-backup/config.mjs', 'pc-backup/status.mjs', 'pc-backup/application-status.mjs'}
     need(isinstance(value['sources'], dict) and set(value['sources']) == required, 'periodic-source-set')
     base = Path(__file__).resolve().parent
     actual = {'backup.py': base / 'backup.py', 'backup-codec.mjs': base / 'backup-codec.mjs',
               'runtime.py': base / 'runtime.py', 'periodic.py': base / 'periodic.py'}
+    if pc:
+        actual.update({'offsite.mjs': base/'offsite.mjs', **{name:base.parent/name for name in required if name.startswith('pc-backup/')}})
     for name, record in value['sources'].items():
         need(isinstance(record, dict) and set(record) == {'path', 'sha256'} and
              Path(record['path']) == actual[name] and digest(immutable(record['path'])) == record['sha256'], 'periodic-code-pin')
@@ -129,7 +134,59 @@ def seal(config):
          value['nodePath'] == '/opt/node-v24.19.0-linux-x64/bin/node', 'periodic-fixed-install')
     expected = '/usr/bin/python3 -I ' + str(actual['backup.py']) + ' --config ' + p['configPath'] + ' --execute'
     need(value['execStart'] == expected, 'periodic-exec-pin')
+    if pc: pc_offsite_inputs(config, value, runtime)
     return value
+
+
+def pc_offsite_inputs(config, installed, runtime=None):
+    """Private inputs and sender bytes have one existing seal, never an ambient endpoint."""
+    runtime = runtime or read_json(installed['runtimeConfigPath'])
+    need(installation_profile(runtime)['name'] == PC_PROFILE and runtime.get('sourceId') == config['sourceId'], 'periodic-offsite-runtime')
+    paths = {'offsiteConfigPath': runtime.get('offsiteConfigPath'), 'hostConfigPath': runtime.get('hostConfigPath'),
+             'releaseManifest': runtime.get('releaseManifest')}
+    inputs = installed.get('offsiteInputs')
+    need(isinstance(inputs, dict) and set(inputs) == {*paths, 'nodeBackupConfigPath', 'offsiteEnvironmentPath'}, 'periodic-offsite-inputs')
+    def pinned(key, path):
+        record = inputs[key]
+        need(isinstance(record, dict) and set(record) == {'path', 'sha256'} and record['path'] == path and
+             isinstance(path, str) and MOUNT in Path(path).parents and
+             re.fullmatch('[a-f0-9]{64}', record['sha256'] or '') is not None, 'periodic-offsite-input-pin')
+        file = immutable(path, True)
+        need(file.stat().st_dev == MOUNT.stat().st_dev and digest(file) == record['sha256'], 'periodic-offsite-input-bytes')
+        return file
+    for key, path in paths.items(): pinned(key, path)
+    host, offsite = read_json(paths['hostConfigPath']), read_json(paths['offsiteConfigPath'])
+    paths['nodeBackupConfigPath'] = host.get('backupConfigFile')
+    pinned('nodeBackupConfigPath', paths['nodeBackupConfigPath'])
+    backup = read_json(paths['nodeBackupConfigPath'])
+    paths['offsiteEnvironmentPath'] = backup.get('environmentFile')
+    pinned('offsiteEnvironmentPath', paths['offsiteEnvironmentPath'])
+    need(backup.get('profile') == PC_PROFILE and backup.get('instanceId') == config['sourceId'] and
+         backup.get('executionMode') == 'linux' and backup.get('dockerSocket') == installation_profile(config)['socket'] and
+         backup.get('localImageRoot') == config['imageRoot'] == '/var/lib/tuat-local/images' and
+         offsite.get('profile') == PC_PROFILE and offsite.get('sourceId') == config['sourceId'] and
+         offsite.get('hostConfigFile') == paths['hostConfigPath'] and offsite.get('producerReceiptFile') == config['receiptFile'] and
+         offsite.get('environmentFile') == paths['offsiteEnvironmentPath'] and offsite.get('imageRoot') == config['imageRoot'] and
+         isinstance(offsite.get('stateDirectory'), str) and MOUNT in Path(offsite['stateDirectory']).parents and
+         backup.get('localSnapshotReceiptFile') == str(Path(offsite['stateDirectory'])/'local-snapshot.json') and
+         offsite.get('databaseSystemIdentifier') == (backup.get('target') or {}).get('databaseSystemIdentifier') == host.get('expectedBackupDatabaseSystemIdentifier') and
+         host.get('expectedBackupInstanceId') == config['sourceId'] and
+         host.get('expectedBackupDatabaseName') == (backup.get('target') or {}).get('databaseName') == config['database'], 'periodic-offsite-binding')
+    manifest = read_json(paths['releaseManifest'], bound=64*1024**2)
+    need(runtime.get('releaseDirectory') == str(Path(__file__).resolve().parents[2]) and
+         manifest.get('sourceCommit') == installed['sourceCommit'] and
+         manifest.get('nodeBackupConfigSha256') == inputs['nodeBackupConfigPath']['sha256'] and
+         manifest.get('offsiteConfigPathSha256') == inputs['offsiteConfigPath']['sha256'] and
+         manifest.get('offsiteEnvironmentSha256') == inputs['offsiteEnvironmentPath']['sha256'], 'periodic-offsite-manifest')
+    return runtime, offsite, manifest
+
+
+def sender_inventory(runtime, installed, manifest):
+    """Reuse the complete installed release inventory, including SDK dependency bytes."""
+    spec = importlib.util.spec_from_file_location('tuat_offsite_runtime', installed['sources']['runtime.py']['path'])
+    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    need(module.release_inventory(runtime['releaseDirectory'], runtime['appUid'], runtime['appGid']) ==
+         {'files': manifest['files'], 'links': manifest['links']}, 'periodic-offsite-sender-inventory')
 
 
 def actor(config):
@@ -335,6 +392,12 @@ class Attempt:
                 need(receipt.exists() and prior.get('receiptHash') == self.hash(receipt), 'periodic-prior-publication-unknown')
                 jobs=Path(config['jobsReceiptFile'])
                 need(jobs.exists() and prior.get('jobsReceiptHash')==self.hash(jobs), 'periodic-prior-jobs-publication-unknown')
+                if installation_profile(config)['name'] == PC_PROFILE:
+                    installed = seal(config)
+                    _, offsite, _ = pc_offsite_inputs(config, installed)
+                    node_receipt = str(Path(offsite['stateDirectory'])/'local-snapshot.json')
+                    need(prior.get('offsiteReceiptPath') == node_receipt and
+                         prior.get('offsiteReceiptHash') == self.hash(immutable(node_receipt, True)), 'periodic-prior-offsite-publication-unknown')
         self.resources = capacity(config)
         self.began = time.monotonic()
         self.published = False
@@ -370,7 +433,8 @@ class Attempt:
             need(callable(self.jobs_write), 'periodic-jobs-publication-required')
             old=read_json(self.config['receiptFile']) if Path(self.config['receiptFile']).exists() else None
             expected_hash=hashlib.sha256(receipt_bytes).hexdigest()
-            self.value.update(phase='verified', finishedAt=time.time(), receiptHash=expected_hash,jobsReceiptHash=expected_hash)
+            pc = installation_profile(self.config)['name'] == PC_PROFILE
+            self.value.update(phase='local-verified' if pc else 'verified', finishedAt=time.time(), receiptHash=expected_hash,jobsReceiptHash=expected_hash)
             self.write(self.path, self.value)
             self.write(self.config['receiptFile'], receipt)
             try:
@@ -385,7 +449,63 @@ class Attempt:
                     try:os.fsync(fd)
                     finally:os.close(fd)
                 raise
+            # PC local publication is not admission. A crash before the one sender
+            # invocation stays held; only its final canonical Node receipt admits writes.
+            self.published = not pc
+
+    def transfer_offsite(self, result):
+        """One PC sender call after local receipt commit; unknown results never replay."""
+        need(installation_profile(self.config)['name'] == PC_PROFILE and
+             self.value.get('phase') == 'local-verified' and not getattr(self, '_offsite_attempted', False), 'periodic-offsite-not-sendable')
+        self._offsite_attempted = True
+        self.check()
+        installed = seal(self.config)
+        runtime, offsite, manifest = pc_offsite_inputs(self.config, installed)
+        sender_inventory(runtime, installed, manifest)
+        receipt = read_json(self.config['receiptFile'])
+        need(receipt == result.get('receipt') and self.hash(self.config['receiptFile']) == self.value['receiptHash'], 'periodic-offsite-local-receipt')
+        archive = result.get('archive')
+        need(isinstance(archive, str) and Path(archive).name == archive and archive not in ('', '.', '..'), 'periodic-offsite-archive-path')
+        archive = immutable(Path(self.config['backupRoot'])/archive, True)
+        need(self.hash(archive) == receipt['archiveSha256'], 'periodic-offsite-archive-bytes')
+        state = Path(offsite['stateDirectory'])
+        info = state.lstat()
+        need(state.is_absolute() and state.resolve() == state and stat.S_ISDIR(info.st_mode) and
+             info.st_uid == 0 and stat.S_IMODE(info.st_mode) == 0o700 and info.st_dev == MOUNT.stat().st_dev, 'periodic-offsite-state')
+        invocation = state/('producer-'+self.value['attemptId']+'.json')
+        need(not invocation.exists(), 'periodic-offsite-invocation-held')
+        self.write(invocation, {**offsite, 'archiveFile': str(archive)})
+        immutable(invocation, True)
+        self.value.update(phase='offsite-started', offsiteInvocationPath=str(invocation))
+        self.write(self.path, self.value)
+        self.check()
+        # LocalCommands supplies a fixed clean environment, finite pipes/deadline,
+        # no retry. A lost ACK may follow committed Node publication; never roll it back.
+        raw = self.commands.run([installed['nodePath'], installed['sources']['offsite.mjs']['path'], str(invocation), '--apply'], timeout=120)
+        need(isinstance(raw, (bytes, str)) and len(raw) <= 16384, 'periodic-offsite-ack-bound')
+        ack = json.loads(raw)
+        target = str(state/'local-snapshot.json')
+        need(isinstance(ack, dict) and set(ack) == {'verified', 'sourceId', 'receipt'} and ack['verified'] is True and
+             ack['sourceId'] == self.config['sourceId'] and ack['receipt'] == target, 'periodic-offsite-ack')
+        snapshot = read_json(target)
+        normalize = lambda value: dt.datetime.fromisoformat(value.replace('Z', '+00:00')).astimezone(dt.timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+        captured, restored = normalize(receipt['verifiedAt']), normalize(receipt['restoreVerifiedAt'])
+        stamp = captured.replace(':', '-').replace('.', '-')
+        need(snapshot.get('format') == 'tuat-local-db-images-v1' and snapshot.get('sourceId') == self.config['sourceId'] and
+             bool(re.fullmatch('[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', snapshot.get('generation', ''))) and
+             snapshot.get('databaseSystemIdentifier') == receipt['databaseSystemIdentifier'] and snapshot.get('imageRoot') == receipt['imageRoot'] and
+             snapshot.get('archiveSha256') == receipt['archiveSha256'] and snapshot.get('archiveBytes') == archive.stat().st_size and
+             snapshot.get('archiveKey') == 'ops/pc-backend/'+self.config['sourceId']+'/backups/'+stamp+'.local.tar.enc' and
+             snapshot.get('capturedAt') == captured and snapshot.get('restoreVerifiedAt') == restored and snapshot.get('independentRecoveryCopyChecked') is True,
+             'periodic-offsite-receipt')
+        completed = dt.datetime.fromisoformat(snapshot['offsiteVerifiedAt'].replace('Z', '+00:00'))
+        need(dt.datetime.fromisoformat(restored.replace('Z', '+00:00')) <= completed <= dt.datetime.now(dt.timezone.utc), 'periodic-offsite-time')
+        self.check()
+        with defer_signals():
+            self.value.update(phase='verified', finishedAt=time.time(), offsiteReceiptPath=target, offsiteReceiptHash=self.hash(immutable(target, True)))
+            self.write(self.path, self.value)
             self.published = True
+        return ack
 
     def hold(self):
         if self.published: return  # Pending SIGTERM after durable publication does not uncommit it.

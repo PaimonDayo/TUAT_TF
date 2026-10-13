@@ -72,6 +72,16 @@ disabled until source inventory, credentials, key recovery, capacity/duration
 and physical off-PC restoration are accepted. Capture a fresh archive after
 each backup-owner generation starts; an older boot's receipt cannot unlock it.
 
+For `pc-private`, the sealed periodic producer completes local restore verification,
+writer resume and receipt publication before invoking this sender once. The runtime
+pins `offsiteConfigPath`; the Node backup path comes from `host.backupConfigFile`.
+The release manifest pins `nodeBackupConfigSha256`, `offsiteConfigPathSha256` and
+`offsiteEnvironmentSha256`. The existing controller seal also pins these private
+inputs and sender bytes. Only the archive path changes in a private invocation file.
+Do not add a second sender schedule. A crash before sending or an unknown outcome
+holds the next producer admission. A lost acknowledgement after Node receipt
+publication can leave that new receipt committed; inspect it without rollback or resend.
+
 ```
 node ops/local-minimal/offsite.mjs /private/offsite.json
 # After the verified source/destination and explicit configuration are ready:

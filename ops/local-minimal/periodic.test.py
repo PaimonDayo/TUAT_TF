@@ -1,11 +1,15 @@
 """Pure sealed actor tests; observations are injected and no controller runs."""
 import importlib.util
+import datetime as dt
+import hashlib
+import json
 import os
 from pathlib import Path
 from types import SimpleNamespace
 import tempfile
 import unittest
 from unittest.mock import patch
+from contextlib import ExitStack
 
 spec = importlib.util.spec_from_file_location('periodic', Path(__file__).with_name('periodic.py'))
 periodic = importlib.util.module_from_spec(spec); spec.loader.exec_module(periodic)
@@ -71,6 +75,7 @@ class PeriodicActor(unittest.TestCase):
             with self.assertRaisesRegex(periodic.Hold, 'periodic-install-pin'): periodic.actor(config)
             read.assert_not_called()
 
+    @unittest.skipUnless(hasattr(os, 'chown'), 'Unix ownership fixture requires chown')
     def test_storage_binding_metadata_reader_matches_actual_actor_not_fixed_1000(self):
         # Only this fresh temporary tree is created/chowned. Device/mount and seal
         # observations are synthetic; no actual encrypted storage is inspected.
@@ -102,6 +107,101 @@ class PeriodicActor(unittest.TestCase):
                 with self.assertRaisesRegex(periodic.Hold, 'receipt-group'): periodic.bind_storage(config)
                 os.chown(receipt, 0, 65530); os.chown(meta, 0, 1000)
                 with self.assertRaisesRegex(periodic.Hold, 'metadata-owner'): periodic.bind_storage(config)
+
+
+class PeriodicOffsite(unittest.TestCase):
+    def fixture(self, directory, unknown=False):
+        root = Path(directory); backup = root/'backup'; state = root/'offsite'; backup.mkdir(); state.mkdir()
+        cfg = {'profile': 'pc-private', 'sourceId': '11111111-1111-4111-8111-111111111111', 'database': 'fixture',
+               'backupRoot': str(backup), 'receiptFile': str(backup/'receipt.json'), 'jobsReceiptFile': str(root/'jobs.json'),
+               'imageRoot': '/var/lib/tuat-local/images', 'periodic': {'enabled': True, 'maxCycleSeconds': 600}}
+        cfg['periodic'].update({key:bounds[0] for key, bounds in periodic.LIMITS.items() if key != 'maxCycleSeconds'})
+        cfg['periodic'].update(controlSeal=str(root/'seal.json'), configPath=str(root/'config.json'), allowUntil='2099-01-01T00:00:00+00:00')
+        cfg['periodic']['maxTotalArchiveBytes'] += 36
+        archive = backup/'one.enc'; archive.write_bytes(b'TUATPC01'+b'synthetic-encrypted-only'*2)
+        hashed = lambda path: hashlib.sha256(Path(path).read_bytes()).hexdigest()
+        now = dt.datetime.now(dt.timezone.utc)
+        capture = now-dt.timedelta(seconds=2); restore = now-dt.timedelta(seconds=1)
+        receipt = {'version': 1, 'sourceId': cfg['sourceId'], 'databaseSystemIdentifier': '1234567890123456789',
+                   'imageRoot': cfg['imageRoot'], 'verifiedAt': capture.isoformat(), 'restoreVerifiedAt': restore.isoformat(),
+                   'archiveSha256': hashed(archive), 'independentRecoveryCopyChecked': True}
+        result = {'ok': True, 'archive': archive.name, 'receipt': receipt}
+        template = {'profile': 'pc-private', 'sourceId': cfg['sourceId'], 'stateDirectory': str(state), 'archiveFile': '/unused/template.enc',
+                    'producerReceiptFile': cfg['receiptFile'], 'imageRoot': cfg['imageRoot']}
+        installed = {'nodePath': '/opt/node-v24.19.0-linux-x64/bin/node', 'sources': {'offsite.mjs': {'path': '/sealed/offsite.mjs'}}}
+        writes = []
+        def write(path, value):
+            writes.append((str(path), dict(value))); Path(path).write_text(json.dumps(value, sort_keys=True))
+        write(backup/'capture-state.json', {'phase': 'resumed'})
+        normalize = lambda value: value.isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+        stamp = normalize(capture).replace(':', '-').replace('.', '-')
+        target = state/'local-snapshot.json'; dispatch = []
+        def run(args, **kwargs):
+            dispatch.append((args, kwargs))
+            snapshot = {'format': 'tuat-local-db-images-v1', 'sourceId': cfg['sourceId'],
+                        'generation': '22222222-2222-4222-8222-222222222222', 'databaseSystemIdentifier': receipt['databaseSystemIdentifier'],
+                        'imageRoot': cfg['imageRoot'], 'archiveSha256': receipt['archiveSha256'], 'archiveBytes': archive.stat().st_size,
+                        'archiveKey': 'ops/pc-backend/'+cfg['sourceId']+'/backups/'+stamp+'.local.tar.enc',
+                        'capturedAt': normalize(capture), 'restoreVerifiedAt': normalize(restore),
+                        'offsiteVerifiedAt': normalize(now), 'independentRecoveryCopyChecked': True}
+            write(target, snapshot)
+            if unknown: raise TimeoutError('Synthetic ACK lost after canonical publication')
+            return json.dumps({'verified': True, 'sourceId': cfg['sourceId'], 'receipt': str(target)}).encode()
+        commands = SimpleNamespace(storage_gate=lambda config: None, run=run)
+        stack = ExitStack(); self.addCleanup(stack.close)
+        stack.enter_context(patch.object(periodic, 'verify_self', return_value={'synthetic': True}))
+        stack.enter_context(patch.object(periodic, 'capacity', return_value={}))
+        stack.enter_context(patch.object(periodic, 'seal', return_value=installed))
+        stack.enter_context(patch.object(periodic, 'pc_offsite_inputs', return_value=({'synthetic': True}, template, {})))
+        stack.enter_context(patch.object(periodic, 'sender_inventory'))
+        stack.enter_context(patch.object(periodic, 'immutable', side_effect=lambda path, private=False: Path(path)))
+        stack.enter_context(patch.object(periodic, 'read_json', side_effect=lambda path, **kwargs: json.loads(Path(path).read_text())))
+        stack.enter_context(patch.object(periodic, 'defer_signals', side_effect=ExitStack))
+        real_stat, real_lstat = Path.stat, Path.lstat
+        stack.enter_context(patch.object(Path, 'stat', lambda path, *args, **kwargs: SimpleNamespace(st_dev=2) if path == periodic.MOUNT else real_stat(path, *args, **kwargs)))
+        stack.enter_context(patch.object(Path, 'lstat', lambda path, *args, **kwargs: SimpleNamespace(st_uid=0, st_mode=0o40700, st_dev=2) if path == state else real_lstat(path, *args, **kwargs)))
+        attempt = periodic.Attempt(cfg, commands, write, hashed, write)
+        return SimpleNamespace(attempt=attempt, config=cfg, commands=commands, write=write, hashed=hashed,
+                               result=result, template=template, dispatch=dispatch, writes=writes, target=target)
+
+    def test_local_verified_crash_is_held_before_any_sender_dispatch(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
+            f = self.fixture(directory); f.attempt.finish(f.result)
+            self.assertEqual(f.attempt.value['phase'], 'local-verified'); self.assertFalse(f.attempt.published)
+            with self.assertRaisesRegex(periodic.Hold, 'prior-unknown-hold'):
+                periodic.Attempt(f.config, f.commands, f.write, f.hashed, f.write)
+            self.assertEqual(f.dispatch, [])
+
+    def test_one_sender_call_uses_fixed_node_and_overrides_only_verified_archive(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
+            f = self.fixture(directory); f.attempt.finish(f.result); ack = f.attempt.transfer_offsite(f.result)
+            self.assertTrue(ack['verified']); self.assertTrue(f.attempt.published); self.assertEqual(f.attempt.value['phase'], 'verified')
+            self.assertEqual(len(f.dispatch), 1)
+            args, kwargs = f.dispatch[0]
+            self.assertEqual(args[:2], ['/opt/node-v24.19.0-linux-x64/bin/node', '/sealed/offsite.mjs'])
+            self.assertEqual(args[-1], '--apply'); self.assertEqual(kwargs, {'timeout': 120})
+            invocation = json.loads(Path(args[2]).read_text())
+            self.assertEqual(invocation, {**f.template, 'archiveFile': str(Path(f.config['backupRoot'])/'one.enc')})
+            with self.assertRaisesRegex(periodic.Hold, 'not-sendable'): f.attempt.transfer_offsite(f.result)
+            self.assertEqual(len(f.dispatch), 1)
+
+    def test_lost_ack_never_rolls_back_node_publication_or_replays_after_restart(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
+            f = self.fixture(directory, unknown=True); f.attempt.finish(f.result)
+            with self.assertRaises(TimeoutError): f.attempt.transfer_offsite(f.result)
+            committed = f.target.read_bytes(); f.attempt.hold()
+            self.assertEqual(f.target.read_bytes(), committed); self.assertEqual(f.attempt.value['phase'], 'unknown-hold')
+            with self.assertRaisesRegex(periodic.Hold, 'not-sendable'): f.attempt.transfer_offsite(f.result)
+            with self.assertRaisesRegex(periodic.Hold, 'prior-unknown-hold'):
+                periodic.Attempt(f.config, f.commands, f.write, f.hashed, f.write)
+            self.assertEqual(len(f.dispatch), 1)
+
+    def test_changed_sender_inventory_refuses_without_dispatch(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
+            f = self.fixture(directory); f.attempt.finish(f.result)
+            with patch.object(periodic, 'sender_inventory', side_effect=periodic.Hold('periodic-offsite-sender-inventory')):
+                with self.assertRaisesRegex(periodic.Hold, 'sender-inventory'): f.attempt.transfer_offsite(f.result)
+            f.attempt.hold(); self.assertEqual(f.dispatch, [])
 
 
 if __name__ == '__main__': unittest.main()
