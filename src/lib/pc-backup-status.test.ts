@@ -67,7 +67,7 @@ describe("operational status conformance", () => {
     status.backup!.localSnapshot = { format: "tuat-local-db-images-v1", sourceId: golden.identity.instanceId,
       generation: golden.identity.generation, databaseSystemIdentifier: golden.identity.databaseSystemIdentifier, imageRoot,
       archiveKey: `ops/pc-backend/${golden.identity.instanceId}/backups/${golden.identity.startedAt.replace(/[:.]/g,"-")}.local.tar.enc`,
-      archiveSha256: "a".repeat(64), archiveBytes: 128, restoreVerifiedAt: status.heartbeat.checkedAt, offsiteVerifiedAt: status.heartbeat.checkedAt,
+      archiveSha256: "a".repeat(64), archiveBytes: 128, capturedAt: golden.identity.startedAt, restoreVerifiedAt: status.heartbeat.checkedAt, offsiteVerifiedAt: status.heartbeat.checkedAt,
       independentRecoveryCopyChecked: true };
     mocks.status = status; await expect(assertPcAppWriteAllowed()).resolves.toBeUndefined();
     status.backup!.key = status.backup!.localSnapshot.archiveKey;
@@ -79,6 +79,27 @@ describe("operational status conformance", () => {
     for (const changes of [{ generation: "33333333-3333-4333-8333-333333333333" },{ imageRoot: resolve("..","wrong-images") },
       { offsiteVerifiedAt: "2026-10-10T00:00:00.000Z" },{ independentRecoveryCopyChecked: false },{ archiveKey: "https://other.example.invalid/image.enc" }]) {
       mocks.status = { ...status, backup: { ...status.backup, localSnapshot: { ...status.backup!.localSnapshot, ...changes } } };
+      await expect(assertPcAppWriteAllowed()).rejects.toBeInstanceOf(PcBackupProtectionError);
+    }
+  });
+  it("mirrors the ordered capture/restore/offsite contract and holds old captures under a fresh host", async () => {
+    mocks.local = true;
+    const imageRoot=resolve("..","synthetic-private-images");vi.stubEnv("LOCAL_IMAGE_STORAGE_ROOT",imageRoot);
+    const status=snapshot() as PcBackupStatus;
+    const local={format:"tuat-local-db-images-v1",sourceId:golden.identity.instanceId,generation:golden.identity.generation,
+      databaseSystemIdentifier:golden.identity.databaseSystemIdentifier,imageRoot,
+      archiveKey:`ops/pc-backend/${golden.identity.instanceId}/backups/${golden.identity.startedAt.replace(/[:.]/g,"-")}.local.tar.enc`,
+      archiveSha256:"a".repeat(64),archiveBytes:128,capturedAt:golden.identity.startedAt,restoreVerifiedAt:"2026-10-11T00:29:30.000Z",
+      offsiteVerifiedAt:"2026-10-11T00:29:59.000Z",independentRecoveryCopyChecked:true};
+    Object.assign(status.backup!,{localSnapshot:local,key:local.archiveKey,sha256:local.archiveSha256,bytes:local.archiveBytes});
+    mocks.status=status;expect(opsReady(status,golden.identity,golden.now)).toBe(true);expect(backupStatusReady(status,golden.identity,golden.now)).toBe(true);
+    await expect(assertPcAppWriteAllowed()).resolves.toBeUndefined();
+    for(const change of [{capturedAt:undefined},{capturedAt:"2026-10-11T00:28:59.999Z"},{capturedAt:"2026-10-11T00:29:31.000Z"},
+      {restoreVerifiedAt:"2026-10-11T00:29:59.001Z"},{offsiteVerifiedAt:"2026-10-11T00:30:00.001Z"},{capturedAt:"invalid"}]) {
+      const changed={...status,backup:{...status.backup!,localSnapshot:{...local,...change}}};mocks.status=changed;
+      expect(opsReady(changed,golden.identity,golden.now)).toBe(false);expect(backupStatusReady(changed,golden.identity,golden.now)).toBe(false);
+      const legacyPair={...snapshot(),backup:{...snapshot().backup,localSnapshot:changed.backup.localSnapshot}};
+      expect(opsReady(legacyPair,golden.identity,golden.now)).toBe(false);expect(backupStatusReady(legacyPair,golden.identity,golden.now)).toBe(false);
       await expect(assertPcAppWriteAllowed()).rejects.toBeInstanceOf(PcBackupProtectionError);
     }
   });

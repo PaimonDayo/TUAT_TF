@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { Readable } from 'node:stream';
 import { S3Client,PutObjectCommand,HeadObjectCommand,GetObjectCommand,ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { NodeHttpHandler } from '@smithy/node-http-handler';
-import { readPrivateFile,BACKUP_LIMITS,backupDockerSocket } from './config.mjs';
+import { readPrivateFile,BACKUP_LIMITS,backupDockerSocket,validateBackupProfile,backupTargetFingerprint } from './config.mjs';
 import { sha256 } from './archive.mjs';
 import { decryptBackup,verifyRecovery } from '../laptop/backup-backend.mjs';
 
@@ -117,10 +117,12 @@ function flatReceipt(value) {
 export function createAdapters(config,env,{execute=promisify(execFile),readBinary=readFileSync,createStorage=options=>new S3Client(options),createHttpHandler=()=>new NodeHttpHandler()}={}) {
   let commandUncertain=false;
   const native=config.executionMode==='linux';
+  const pc=validateBackupProfile(config);
   const dockerSocket=backupDockerSocket(config);
   const commandEnvironment=native?{LANG:'C.UTF-8',DOCKER_CONFIG:'/nonexistent'}:Object.fromEntries(['SystemRoot','WINDIR','SystemDrive','USERPROFILE','LOCALAPPDATA','APPDATA','TEMP','TMP','PROGRAMDATA']
     .filter(name=>typeof process.env[name]==='string').map(name=>[name,process.env[name]]));
   const run=async(args,{signal,timeout=10_000,maxBuffer=BACKUP_LIMITS.pushBytes}={})=>{
+    if(pc&&config.enabled!==true)throw Error('PC backup execution is disabled');
     if(commandUncertain) throw Error('Previous command outcome requires reconciliation');
     if(native) {
       if(args[0]!==config.dockerExecutable||sha256(readBinary(config.dockerExecutable))!==config.dockerSha256) throw Error('Native Docker command pin changed');
@@ -132,7 +134,8 @@ export function createAdapters(config,env,{execute=promisify(execFile),readBinar
     } catch {commandUncertain=true;throw Error('Backup command outcome unverified');}
   };
   const docker=(args,options)=>run([config.dockerExecutable,'--host',dockerSocket,...args],options);
-  const sql=async(statement,signal)=>String(await docker(['exec',config.target.containerId,config.psqlExecutable,'-X','-qAt','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',config.target.databaseName,'-c',statement],{signal,maxBuffer:BACKUP_LIMITS.sqlBytes,timeout:30_000})).trim();
+  const databaseArgs=pc?['--host=/tmp','--port=18304','-U','postgres']:['-U','supabase_admin'];
+  const sql=async(statement,signal)=>String(await docker(['exec',config.target.containerId,config.psqlExecutable,'-X','-qAt','-v','ON_ERROR_STOP=1',...databaseArgs,'-d',config.target.databaseName,'-c',statement],{signal,maxBuffer:BACKUP_LIMITS.sqlBytes,timeout:30_000})).trim();
   let client;
   const storage=()=>client??=createStorage({region:'auto',endpoint:`https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
     credentials:{accessKeyId:env.R2_ACCESS_KEY_ID,secretAccessKey:env.R2_SECRET_ACCESS_KEY},maxAttempts:1,
@@ -154,7 +157,7 @@ export function createAdapters(config,env,{execute=promisify(execFile),readBinar
     if(!iso||!Number.isFinite(Date.parse(iso))||new Date(iso).toISOString()!==iso||capturedAt!==undefined&&capturedAt!==iso)throw Error('Remote backup keys unverified');
   }
   const scope=()=>({
-    targetFingerprint:sha256(JSON.stringify(['containerId','containerImageId','containerName',...(native?['ownerLabel','generationLabel']:['composeProject','composeService']),'dataMountSource','databaseName','databaseSystemIdentifier'].map(key=>[key,config.target[key]]))),
+    targetFingerprint:backupTargetFingerprint(config),
     storageScopeId:sha256(JSON.stringify({account:env.R2_ACCOUNT_ID,bucket:env.R2_BUCKET_NAME})),archiveKeyId:sha256(Buffer.from(env.PC_BACKUP_ENCRYPTION_KEY,'hex'))
   });
   function objectMetadata(object) {
@@ -177,16 +180,16 @@ export function createAdapters(config,env,{execute=promisify(execFile),readBinar
     async probe({signal}) {
       const digest=native?sha256(readBinary(config.dockerExecutable)):String(await run(['/usr/bin/sha256sum',config.dockerExecutable],{signal})).trim().split(/\s+/)[0];
       if(digest!==config.dockerSha256) throw Error('Docker command pin changed');
-      const format='{{.Id}}|{{.Image}}|{{.Name}}|{{.State.Running}}|'+(native?'{{index .Config.Labels "tuat.owner"}}|{{index .Config.Labels "tuat.generation"}}':'{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.service"}}')+'|{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Source}}{{end}}{{end}}';
+      const format='{{.Id}}|{{.Image}}|{{.Name}}|{{.State.Running}}|'+(pc?'{{index .Config.Labels "tuat.local.source"}}|{{index .Config.Labels "tuat.local.role"}}|{{index .Config.Labels "tuat.local.config-sha256"}}':native?'{{index .Config.Labels "tuat.owner"}}|{{index .Config.Labels "tuat.generation"}}':'{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.service"}}')+'|{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Source}}{{end}}{{end}}';
       const fields=String(await docker(['inspect','--format',format,config.target.containerId],{signal})).trim().split('|');
-      const expected=[config.target.containerId,config.target.containerImageId,`/${config.target.containerName}`,'true',...(native?[config.target.ownerLabel,config.target.generationLabel]:[config.target.composeProject,'db']),config.target.dataMountSource];
+      const expected=[config.target.containerId,config.target.containerImageId,`/${config.target.containerName}`,'true',...(pc?[config.target.sourceLabel,config.target.roleLabel,config.target.configSha256]:native?[config.target.ownerLabel,config.target.generationLabel]:[config.target.composeProject,'db']),config.target.dataMountSource];
       if(fields.length!==expected.length||fields.some((value,index)=>value!==expected[index])) throw Error('Database container ownership mismatch');
       const identity=await sql("SELECT current_database() || '|' || system_identifier::text FROM pg_control_system();",signal);
       if(identity!==`${config.target.databaseName}|${config.target.databaseSystemIdentifier}`) throw Error('Database system identity mismatch');
       return {...config.target};
     },
     async dump({signal}) {
-      return docker(['exec',config.target.containerId,config.pgDumpExecutable,'-U','supabase_admin','-d',config.target.databaseName,'--format=custom','--schema=public','--schema=auth','--schema=storage','--schema=pc_ops','--schema=extensions'],{signal,maxBuffer:BACKUP_LIMITS.dumpBytes,timeout:120_000});
+      return docker(['exec',config.target.containerId,config.pgDumpExecutable,...databaseArgs,'-d',config.target.databaseName,'--format=custom','--schema=public','--schema=auth','--schema=storage','--schema=pc_ops','--schema=extensions'],{signal,maxBuffer:BACKUP_LIMITS.dumpBytes,timeout:120_000});
     },
     async recovery({signal}) {
       const vault=JSON.parse(await sql("SELECT COALESCE(json_agg(json_build_object('name',name,'description',description,'secret',decrypted_secret) ORDER BY name),'[]') FROM vault.decrypted_secrets;",signal));

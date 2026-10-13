@@ -7,11 +7,12 @@ test('application receives health metadata without private producer or credentia
   const status={version:1,instanceId:'synthetic',generation:'synthetic',startedAt:'synthetic',secret:'private',
     heartbeat:{checkedAt:'synthetic',healthy:false,maintenance:true,secret:'private'},
     target:{databaseName:'synthetic',containerId:'synthetic',secret:'private'},
-    backup:{generation:'synthetic',key:'synthetic',secret:'private',localSnapshot:{format:'synthetic',imageRoot:'synthetic',secret:'private'}}};
+    backup:{generation:'synthetic',key:'synthetic',secret:'private',localSnapshot:{format:'synthetic',imageRoot:'synthetic',capturedAt:'synthetic-capture',secret:'private'}}};
   const visible=applicationStatusMetadata(status);
   assert.equal(JSON.stringify(visible).includes('private'),false);
   assert.equal(visible.heartbeat.healthy,false);assert.equal(visible.heartbeat.maintenance,true);
   assert.equal(visible.backup.localSnapshot.imageRoot,'synthetic');
+  assert.equal(visible.backup.localSnapshot.capturedAt,'synthetic-capture');
   assert.equal(applicationStatusMetadata({...status,backup:null}).backup,null);
 });
 

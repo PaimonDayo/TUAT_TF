@@ -2,6 +2,7 @@ import { lstatSync, realpathSync, openSync, closeSync, fstatSync, readSync } fro
 import { isAbsolute, resolve, dirname } from 'node:path';
 import { parseEnv } from 'node:util';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { validateApplicationStatus } from './application-status.mjs';
 
 const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
@@ -10,6 +11,33 @@ const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 export const BACKUP_LIMITS=Object.freeze({dumpBytes:128*1024*1024,sqlBytes:16*1024*1024,pushBytes:64*1024,
   recoveryBytes:6*(2*16*1024*1024+64*1024)+64*1024,metadataBytes:16*1024*1024,inventory:4096});
 export const MIN_MAX_PAIR_BYTES=BACKUP_LIMITS.dumpBytes+BACKUP_LIMITS.recoveryBytes+72;
+const PC_TARGET_FIELDS=['containerId','containerImageId','containerName','sourceLabel','roleLabel','configSha256','dataMountSource','databaseName','databaseSystemIdentifier'];
+export function validateBackupProfile(config) {
+  if(config.profile===undefined){
+    if(config.executionMode==='linux'&&(config.target?.containerName==='tuat-local-db'||config.target?.dataMountSource==='/var/lib/tuat-local/db'))
+      throw Error('Private PC namespace requires its explicit profile');
+    return false;
+  }
+  const t=config.target;
+  if(config.profile!=='pc-private'||config.executionMode!=='linux'||config.dockerSocket!=='unix:///run/tuat-local/docker.sock'
+    ||!isAbsolute(config.localSnapshotReceiptFile??'')||resolve(config.localSnapshotReceiptFile)!==config.localSnapshotReceiptFile
+    ||config.localImageRoot!=='/var/lib/tuat-local/images'
+    ||!uuid(config.instanceId)||!t||Object.keys(t).length!==PC_TARGET_FIELDS.length||!PC_TARGET_FIELDS.every(key=>Object.hasOwn(t,key))
+    ||!hash(t.containerId)||!/^sha256:[a-f0-9]{64}$/.test(t.containerImageId??'')||!/^\d{10,20}$/.test(t.databaseSystemIdentifier??'')
+    ||!/^[a-z_][a-z0-9_]{0,62}$/.test(t.databaseName??'')||t.containerName!=='tuat-local-db'||t.dataMountSource!=='/var/lib/tuat-local/db'
+    ||t.sourceLabel!==config.instanceId||t.roleLabel!=='db'||!hash(t.configSha256))throw Error('Exact private PC combined-snapshot profile required');
+  return true;
+}
+export function backupTargetFields(config) {
+  if(validateBackupProfile(config))return [...PC_TARGET_FIELDS];
+  return ['containerId','containerImageId','containerName',...(config.executionMode==='linux'?['ownerLabel','generationLabel']:['composeProject','composeService']),
+    'dataMountSource','databaseName','databaseSystemIdentifier'];
+}
+export function backupTargetFingerprint(config) {
+  const fields=backupTargetFields(config).map(key=>[key,config.target[key]]);
+  if(config.profile==='pc-private')fields.unshift(['profile','pc-private']);
+  return createHash('sha256').update(JSON.stringify(fields)).digest('hex');
+}
 export function backupDockerSocket(config) {
   if(config.executionMode!=='linux'&&Object.hasOwn(config,'dockerSocket'))throw Error('Explicit Docker socket requires native Linux');
   const socket=config.dockerSocket===undefined?'unix:///var/run/docker.sock':config.dockerSocket;
@@ -29,6 +57,7 @@ export function validateBackupConfig(config,env) {
   if(config?.version!==1||typeof config.enabled!=='boolean'||!uuid(config.instanceId)) throw Error('Explicit backup configuration required');
   if(![undefined,'wsl','linux'].includes(config.executionMode)) throw Error('Explicit supported backup execution mode required');
   const native=config.executionMode==='linux';
+  const pc=validateBackupProfile(config);
   backupDockerSocket(config);
   for(const key of ['stateDirectory','environmentFile',...(native?[]:['wslExecutable'])]) if(!isAbsolute(config[key]??'')) throw Error('Absolute backup paths required');
   for(const key of ['psqlExecutable','pgDumpExecutable']) if(!/^\/[A-Za-z0-9_./-]+$/.test(config[key]??'')) throw Error('Absolute database commands required');
@@ -41,13 +70,13 @@ export function validateBackupConfig(config,env) {
   const target=config.target;
   if(!target||!hash(target.containerId)||!/^sha256:[a-f0-9]{64}$/.test(target.containerImageId??'')||!/^\d{10,20}$/.test(target.databaseSystemIdentifier??'')
     ||!(native?/^[a-z_][a-z0-9_]{0,62}$/.test(target.databaseName??''):target.databaseName==='postgres')||!/^[-A-Za-z0-9_.]{1,64}$/.test(target.containerName??'')
-    ||(native?(!/^[-A-Za-z0-9_.]{1,64}$/.test(target.ownerLabel??'')||!/^[-A-Za-z0-9_.]{1,64}$/.test(target.generationLabel??'')):
-      (!/^[-A-Za-z0-9_.]{1,64}$/.test(target.composeProject??'')||target.composeService!=='db'))
+    ||(!pc&&(native?(!/^[-A-Za-z0-9_.]{1,64}$/.test(target.ownerLabel??'')||!/^[-A-Za-z0-9_.]{1,64}$/.test(target.generationLabel??'')):
+      (!/^[-A-Za-z0-9_.]{1,64}$/.test(target.composeProject??'')||target.composeService!=='db')))
     ||!/^\/[A-Za-z0-9_./-]+$/.test(target.dataMountSource??'')) throw Error('Exact owned PC database target required');
   if(config.pushEnvironmentFile!==null&&!isAbsolute(config.pushEnvironmentFile??'')) throw Error('Explicit Push recovery path or null required');
   validateCapacity(config.capacity,{required:config.enabled});
   if(config.localSnapshotReceiptFile!==undefined && (!isAbsolute(config.localSnapshotReceiptFile)||resolve(config.localSnapshotReceiptFile)!==config.localSnapshotReceiptFile||
-      !isAbsolute(config.localImageRoot??'')||resolve(config.localImageRoot)!==config.localImageRoot)) throw Error('Explicit private local snapshot receipt and image root required');
+      (!pc&&(!isAbsolute(config.localImageRoot??'')||resolve(config.localImageRoot)!==config.localImageRoot)))) throw Error('Explicit private local snapshot receipt and image root required');
   if(env!==undefined) {
     const allowed=['PC_BACKUP_ENCRYPTION_KEY','R2_ACCOUNT_ID','R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','R2_BUCKET_NAME'];
     if(Object.keys(env).some(name=>!allowed.includes(name))||!hash(env.PC_BACKUP_ENCRYPTION_KEY)) throw Error('Dedicated backup environment required');

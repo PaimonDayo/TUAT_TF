@@ -56,6 +56,12 @@ import procedure. A referenced image missing after unlink but before DB deletion
 is refused. A valid-looking file with no live reference or recorded note cleanup
 entry is also refused, including an upload interrupted before its DB save. The
 producer leaves such files and rows intact for the existing operation/operator.
+The PC profile alone can preserve an explicitly reviewed pre-existing orphan
+baseline through optional `retainedUnreferencedImages` in its root-owned private
+backup configuration. Its path set must equal the actual unreferenced set after
+live references and recorded cleanup/retirement entries are accounted for; every
+size and SHA256 must match. Missing, changed, newly unreferenced or now-referenced
+baseline files hold capture. No file is deleted or newly approved automatically.
 
 The capture includes a full custom-format `pg_dump`, standard role/membership
 SQL without role passwords, all private image bytes, raw Jobs journal/lock and
@@ -67,6 +73,11 @@ dump keeps all schemas and standard ownership/privileges. Database login
 passwords and service configuration (retained cloud issuer/JWKS, private JWT,
 GoTrue, Google/GAS, VAPID and image/action signing keys) require separate private
 recovery storage; the archive does not claim to recreate those configurations.
+Approved baseline image bytes remain in the full image manifest, archive and
+restored inventory. They do not weaken either before/after fingerprint check.
+Restore creates every nested image/Jobs directory as private 700, checking each
+level separately. Existing symlinks or mismatched owners/modes refuse extraction;
+the extractor never repairs those paths or overwrites existing files.
 
 The CLI records the exact previous running/paused/frozen state and the intent
 **before** issuing a freeze. It checks actual states, captures to private staging,
@@ -145,6 +156,28 @@ password or public privileged API. A private configuration file has this shape:
   "receiptFile":"/var/lib/tuat-local/encrypted-backups/verified.json"
 }
 ```
+
+For `profile: "pc-private"`, a nonempty baseline additionally requires the existing
+sealed controller. Root owns the 700 configuration directory and 600 config file;
+the runtime manifest pins that backup configuration's SHA256 and the controller
+seal rechecks it. An actor-writable image directory or image-side metadata never
+authorizes retention. The optional object defaults to `{}` (the previous orphan
+refusal). Each exact safe image path maps to **only** `sha256` (64 lowercase hex)
+and `bytes` (an integer from 1 through 12 MiB); entry count and total bytes retain
+the existing archive bounds. For example, using synthetic metadata only:
+
+```json
+"retainedUnreferencedImages": {
+  "avatars/example/retained.webp": {
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "bytes": 128
+  }
+}
+```
+
+The operator must measure and approve the existing source baseline privately;
+this example is not a valid source approval. A refusal preserves source files,
+Jobs state and the previous receipt for reconciliation without replay.
 
 Source containers carry `tuat.local.source=<sourceId>` and
 `tuat.local.role=db|auth|rest`. Host mode accepts only fixed

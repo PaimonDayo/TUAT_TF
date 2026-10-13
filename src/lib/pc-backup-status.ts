@@ -11,7 +11,7 @@ export type PcBackupStatus = {
   target: { checkedAt: string; healthy: boolean; databaseSystemIdentifier: string; databaseName: string; containerId: string; containerImageId: string };
   backup: null | { generation: string; verifiedAt: string; key: string; recoveryKey?: string; sha256: string; recoverySha256?: string; bytes: number; recoveryBytes?: number; databaseSystemIdentifier: string;
     localSnapshot?: { format: string; sourceId: string; generation: string; databaseSystemIdentifier: string; imageRoot: string;
-      archiveKey: string; archiveSha256: string; archiveBytes: number; restoreVerifiedAt: string; offsiteVerifiedAt: string; independentRecoveryCopyChecked: boolean } };
+      archiveKey: string; archiveSha256: string; archiveBytes: number; capturedAt: string; restoreVerifiedAt: string; offsiteVerifiedAt: string; independentRecoveryCopyChecked: boolean } };
 };
 const uuid = (value: unknown): value is string => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value);
 const utcTime = (value: unknown) => {
@@ -38,8 +38,10 @@ export function backupStatusReady(value: unknown, expected: unknown, now = Date.
       || backup.generation !== identity.generation || target.databaseSystemIdentifier !== identity.databaseSystemIdentifier
       || backup.databaseSystemIdentifier !== identity.databaseSystemIdentifier || !/^[a-z_][a-z0-9_]{0,62}$/.test(identity.databaseName ?? "postgres") || target.databaseName !== (identity.databaseName ?? "postgres")
       || !/^[a-f0-9]{64}$/.test(target.containerId ?? "") || !/^sha256:[a-f0-9]{64}$/.test(target.containerImageId ?? "")) return false;
-    if (backup.localSnapshot && backup.key === backup.localSnapshot.archiveKey) {
-      return localSnapshotReady(status, identity, backup.localSnapshot.imageRoot, now) && backup.sha256 === backup.localSnapshot.archiveSha256 && backup.bytes === backup.localSnapshot.archiveBytes;
+    if (backup.localSnapshot) {
+      if (!localSnapshotReady(status, identity, backup.localSnapshot.imageRoot, now)) return false;
+      if (backup.key === backup.localSnapshot.archiveKey)
+        return backup.sha256 === backup.localSnapshot.archiveSha256 && backup.bytes === backup.localSnapshot.archiveBytes;
     }
     const prefix = `ops/pc-backend/${identity.instanceId}/backups/`, name = backup.key?.slice(prefix.length);
     if (typeof backup.key !== "string" || !backup.key.startsWith(prefix)
@@ -67,9 +69,9 @@ export function localSnapshotReady(status: PcBackupStatus, identity: PcBackupIde
   const prefix = `ops/pc-backend/${identity.instanceId}/backups/`;
   if (!snapshot.archiveKey?.startsWith(prefix) || !/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.local\.tar\.enc$/.test(snapshot.archiveKey.slice(prefix.length))) return false;
   const started = utcTime(identity.startedAt);
-  return [snapshot.restoreVerifiedAt, snapshot.offsiteVerifiedAt].every(value => {
-    const time = utcTime(value); return Number.isFinite(time) && time >= started && time <= now && now - time < 35 * 60_000;
-  });
+  const captured = utcTime(snapshot.capturedAt), restored = utcTime(snapshot.restoreVerifiedAt), offsite = utcTime(snapshot.offsiteVerifiedAt);
+  return Number.isFinite(now) && Number.isFinite(started) && captured <= restored && restored <= offsite &&
+    [captured, restored, offsite].every(time => Number.isFinite(time) && time >= started && time <= now && now - time < 35 * 60_000);
 }
 
 /** No cached approval: each dispatch observes this host generation's latest state. */

@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
+import { resolve } from 'node:path';
 import { S3Client } from '@aws-sdk/client-s3';
 import { boundedReadback,createAdapters,createCycleBudget,inventoryBounds,STORAGE_LIMITS,BACKUP_LIMITS } from './adapters.mjs';
 import { sha256,encryptedPair } from './archive.mjs';
+import { backupTargetFingerprint } from './config.mjs';
 test('readback accepts only exactly bounded bytes',async()=>{
   const bytes=Buffer.alloc(40,1);assert.deepEqual(await boundedReadback(Readable.from([bytes]),{expectedBytes:40}),bytes);
   for(const size of [39,41]) await assert.rejects(boundedReadback(Readable.from([Buffer.alloc(size)]),{expectedBytes:40}));
@@ -55,6 +57,70 @@ function nativeAdapterFixture() {
   };
   return {...f,wrong:()=>{wrongOwner=true;},fail:()=>{failed=true;}};
 }
+
+function pcAdapterFixture() {
+  const f=nativeAdapterFixture();
+  Object.assign(f.config,{profile:'pc-private',enabled:true,dockerSocket:'unix:///run/tuat-local/docker.sock',
+    localSnapshotReceiptFile:'/private/offsite/local-snapshot.json',localImageRoot:'/var/lib/tuat-local/images'});
+  // Keep Windows pure fixtures canonical on the current test platform.
+  f.config.localSnapshotReceiptFile=resolve(f.config.localSnapshotReceiptFile);
+  for(const key of ['ownerLabel','generationLabel','composeProject','composeService'])delete f.config.target[key];
+  Object.assign(f.config.target,{containerName:'tuat-local-db',dataMountSource:'/var/lib/tuat-local/db',sourceLabel:f.config.instanceId,roleLabel:'db',configSha256:'e'.repeat(64)});
+  f.dependencies.execute=async(executable,args,options)=>{
+    f.calls.push({executable,args,options});const t=f.config.target,statement=args.at(-1);
+    return {stdout:Buffer.from(args.includes('inspect')?[t.containerId,t.containerImageId,'/'+t.containerName,'true',t.sourceLabel,t.roleLabel,t.configSha256,t.dataMountSource].join('|'):
+      args.includes(f.config.pgDumpExecutable)?'PGDMPsynthetic':statement.includes('vault.decrypted_secrets')?'[]':
+        statement.includes("to_regclass('cron.job')")?'f':t.databaseName+'|'+t.databaseSystemIdentifier)};
+  };
+  return f;
+}
+
+test('actual PC label-shaped metadata uses one private socket and explicit postgres /tmp:18304',async()=>{
+  const f=pcAdapterFixture(),adapter=createAdapters(f.config,{},f.dependencies);
+  assert.deepEqual(await adapter.probe({signal:signal()}),f.config.target);
+  assert.equal(String(await adapter.dump({signal:signal()})),'PGDMPsynthetic');f.config.pushEnvironmentFile=null;
+  const recovery=await adapter.recovery({signal:signal()});assert.deepEqual(recovery.vault,[]);assert.equal(recovery.cron.installed,false);
+  assert.equal(f.calls.length,5);
+  for(const call of f.calls){
+    assert.deepEqual(call.args.slice(0,2),['--host','unix:///run/tuat-local/docker.sock']);
+    if(call.args.includes('inspect')){
+      const format=call.args[call.args.indexOf('--format')+1];assert(format.includes('tuat.local.source'));assert(format.includes('tuat.local.role'));assert(format.includes('tuat.local.config-sha256'));
+      assert(!format.includes('tuat.owner'));assert(!format.includes('tuat.generation'));
+    }else{
+      assert(call.args.includes('--host=/tmp'));assert(call.args.includes('--port=18304'));
+      assert.equal(call.args[call.args.indexOf('-U')+1],'postgres');assert.equal(call.args[call.args.indexOf('-d')+1],f.config.target.databaseName);
+    }
+  }
+});
+
+test('PC wrong source/hash/name/database metadata and disabled execution remain closed',async()=>{
+  for(const kind of ['source','hash','name','database','system','disabled']){
+    const f=pcAdapterFixture(),execute=f.dependencies.execute;
+    if(kind==='disabled')f.config.enabled=false;
+    f.dependencies.execute=async(executable,args,options)=>{
+      const result=await execute(executable,args,options),fields=String(result.stdout).split('|');
+      if(args.includes('inspect')){const index={source:4,hash:6,name:2}[kind];if(index!==undefined)fields[index]=kind==='hash'?'f'.repeat(64):kind==='source'?'33333333-3333-4333-8333-333333333333':'/another-db';}
+      else if(kind==='database')fields[0]='postgres';else if(kind==='system')fields[1]='9876543210987654321';
+      return {stdout:Buffer.from(fields.join('|'))};
+    };
+    await assert.rejects(createAdapters(f.config,{},f.dependencies).probe({signal:signal()}));
+    assert.equal(f.calls.length,kind==='disabled'?0:['database','system'].includes(kind)?2:1);
+  }
+  for(const change of [{dockerSocket:'unix:///var/run/docker.sock'},{localSnapshotReceiptFile:undefined},{target:'fake'}]){
+    const f=pcAdapterFixture();Object.assign(f.config,change);assert.throws(()=>createAdapters(f.config,{},f.dependencies));assert.equal(f.calls.length,0);
+  }
+  const disabled=pcAdapterFixture();disabled.config.enabled=false;const adapter=createAdapters(disabled.config,{},disabled.dependencies);
+  for(const operation of ['dump','recovery'])await assert.rejects(adapter[operation]({signal:signal()}));assert.equal(disabled.calls.length,0);
+});
+
+test('PC scope cannot reuse a legacy receipt by inventing the old ownership labels',async()=>{
+  const old=remoteFixture(),pc=pcAdapterFixture();let remoteCalls=0;
+  const adapter=createAdapters(pc.config,old.env,{...pc.dependencies,createStorage:()=>({send(){remoteCalls++;throw Error('Must not dispatch');}})});
+  await assert.rejects(adapter.verifyInventory({snapshot:old.snapshot(),receipts:old.receipts,budget:budget(),signal:signal()}));
+  assert.equal(remoteCalls,0);assert.equal(pc.calls.length,0);assert.notEqual(backupTargetFingerprint(pc.config),old.receipts[0].targetFingerprint);
+  pc.config.profile=undefined;pc.config.target.ownerLabel='fake-owner';pc.config.target.generationLabel='fake-generation';
+  assert.throws(()=>createAdapters(pc.config,old.env,pc.dependencies));assert.equal(pc.calls.length,0);
+});
 
 test('native Linux probe verifies its owned DB without WSL or ambient Docker context',async()=>{
   const f=nativeAdapterFixture(),adapter=createAdapters(f.config,{},f.dependencies);

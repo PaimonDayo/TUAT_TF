@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateBackupConfig,validateCapacity,MIN_MAX_PAIR_BYTES,BACKUP_LIMITS } from './config.mjs';
+import { resolve } from 'node:path';
 
 const valid=()=>({inventoryLimit:512,maxLocalBytes:10**12,maxRemoteBytes:10**12,minFreeLocalBytes:1024,
   maxPairBytes:MIN_MAX_PAIR_BYTES,maxRequestCount:10_000,maxTransferBytes:10**12});
@@ -21,6 +22,25 @@ const nativeConfig=()=>({version:1,enabled:false,executionMode:'linux',instanceI
     target:{containerId:'b'.repeat(64),containerImageId:'sha256:'+ 'c'.repeat(64),containerName:'owned-db',
       databaseName:'tuat_pc_candidate',databaseSystemIdentifier:'1234567890123456789',dataMountSource:'/var/lib/docker/volumes/owned/_data',
       ownerLabel:'owned-runtime',generationLabel:'d'.repeat(32)}});
+const pcConfig=()=>{
+  const c=nativeConfig();c.profile='pc-private';c.dockerSocket='unix:///run/tuat-local/docker.sock';
+  c.localSnapshotReceiptFile=resolve('private-offsite/local-snapshot.json');c.localImageRoot='/var/lib/tuat-local/images';
+  delete c.target.ownerLabel;delete c.target.generationLabel;
+  Object.assign(c.target,{containerName:'tuat-local-db',dataMountSource:'/var/lib/tuat-local/db',sourceLabel:c.instanceId,roleLabel:'db',configSha256:'e'.repeat(64)});
+  return c;
+};
+
+test('pc-private binds actual source labels and admits combined snapshots only',()=>{
+  const c=pcConfig();assert.doesNotThrow(()=>validateBackupConfig(c));
+  const changes=[{...c,profile:'automatic'},{...c,profile:null},{...c,executionMode:'wsl'},{...c,dockerSocket:undefined},
+    {...c,dockerSocket:'unix:///var/run/docker.sock'},{...c,localSnapshotReceiptFile:undefined},{...c,localImageRoot:undefined},
+    {...c,localImageRoot:'/var/lib/tuat-local/other-images'},{...c,localImageRoot:'/var/lib/tuat-local/images/'},
+    {...c,localImageRoot:'/var/lib/tuat-local/../tuat-local/images'}];
+  for(const field of ['sourceLabel','roleLabel','configSha256','containerName','dataMountSource'])changes.push({...c,target:{...c.target,[field]:'different'}});
+  for(const field of ['ownerLabel','generationLabel','composeProject','composeService'])changes.push({...c,target:{...c.target,[field]:'fake-legacy-label'}});
+  changes.push({...c,profile:undefined,target:{...c.target,ownerLabel:'fake',generationLabel:'fake'}});
+  for(const changed of changes)assert.throws(()=>validateBackupConfig(changed));
+});
 test('native Linux configuration requires exact labels and rejects ambiguous WSL dispatch',()=>{
   const config=nativeConfig();
   assert.doesNotThrow(()=>validateBackupConfig(config));

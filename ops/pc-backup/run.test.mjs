@@ -6,7 +6,7 @@ import { backupStatusReady,STATUS_FILE,BACKUP_INTERVAL_MS,BACKUP_MAX_AGE_MS } fr
 import { decryptBackup,verifyRecovery } from '../laptop/backup-backend.mjs';
 import { encryptedPair } from './archive.mjs';
 import { planBackupRetention } from './retention.mjs';
-import { MIN_MAX_PAIR_BYTES } from './config.mjs';
+import { MIN_MAX_PAIR_BYTES,backupTargetFingerprint } from './config.mjs';
 import { sha256 } from './archive.mjs';
 
 const instanceId='11111111-1111-4111-8111-111111111111',generation='22222222-2222-4222-8222-222222222222';
@@ -74,11 +74,58 @@ test('local snapshot mode consumes one verified combined off-PC archive without 
   const localConfig={...config,localSnapshotReceiptFile:resolve('synthetic-offsite/local-snapshot.json'),localImageRoot:imageRoot};
   let snapshot={format:'tuat-local-db-images-v1',sourceId:instanceId,generation,databaseSystemIdentifier:config.target.databaseSystemIdentifier,imageRoot,
     archiveKey:`ops/pc-backend/${instanceId}/backups/2026-10-11T00-30-00-000Z.local.tar.enc`,archiveSha256:'a'.repeat(64),archiveBytes:128,
-    restoreVerifiedAt:'2026-10-11T00:30:00.000Z',offsiteVerifiedAt:'2026-10-11T00:30:00.000Z',independentRecoveryCopyChecked:true};
+    capturedAt:'2026-10-11T00:30:00.000Z',restoreVerifiedAt:'2026-10-11T00:30:00.000Z',offsiteVerifiedAt:'2026-10-11T00:30:00.000Z',independentRecoveryCopyChecked:true};
   const life=await startBackupSupervisor({...f.options,config:localConfig,readSnapshot:()=>snapshot});await flush();
   assert.equal(f.ready(life.identity),true);assert.equal(f.calls.dump,0);assert.equal(f.calls.upload,0);assert.equal(f.calls.list,0);assert.equal(f.calls.recovery,0);
   snapshot={...snapshot,generation:'33333333-3333-4333-8333-333333333333'};await f.pulse();assert.equal(f.ready(life.identity),false);assert.equal(f.status().backup,null);
   assert.equal((await life.stop()).drained,true);
+});
+
+function pcConfiguration(){
+  const c=structuredClone(config);
+  for(const key of ['wslExecutable','wslSha256','wslDistribution','wslUser'])delete c[key];
+  Object.assign(c,{executionMode:'linux',profile:'pc-private',dockerSocket:'unix:///run/tuat-local/docker.sock',
+    localSnapshotReceiptFile:resolve('synthetic-offsite/local-snapshot.json'),localImageRoot:'/var/lib/tuat-local/images'});
+  for(const key of ['composeProject','composeService'])delete c.target[key];
+  Object.assign(c.target,{containerName:'tuat-local-db',dataMountSource:'/var/lib/tuat-local/db',databaseName:'tuat_pc_candidate',
+    sourceLabel:c.instanceId,roleLabel:'db',configSha256:'f'.repeat(64)});
+  return c;
+}
+const pcSnapshot=c=>({format:'tuat-local-db-images-v1',sourceId:instanceId,generation,databaseSystemIdentifier:c.target.databaseSystemIdentifier,
+  imageRoot:c.localImageRoot,archiveKey:`ops/pc-backend/${instanceId}/backups/2026-10-11T00-30-00-000Z.local.tar.enc`,archiveSha256:'a'.repeat(64),archiveBytes:128,
+  capturedAt:'2026-10-11T00:30:00.000Z',restoreVerifiedAt:'2026-10-11T00:30:00.000Z',offsiteVerifiedAt:'2026-10-11T00:30:00.000Z',independentRecoveryCopyChecked:true});
+
+test('PC supervisor admits only the combined receipt and rechecks every source label without another backup writer',async()=>{
+  const c=pcConfiguration(),f=fixture();let target={...c.target};
+  f.adapters.probe=async()=>{f.calls.probe++;return {...target};};
+  const life=await startBackupSupervisor({...f.options,config:c,expectedDatabaseName:c.target.databaseName,readSnapshot:()=>pcSnapshot(c)});await flush();
+  const ready=()=>backupStatusReady(f.status(),{...life.identity,databaseSystemIdentifier:c.target.databaseSystemIdentifier,databaseName:c.target.databaseName},Date.parse('2026-10-11T00:30:00.000Z'));
+  assert.equal(ready(),true);assert.equal(f.calls.probe,1);
+  for(const key of ['sourceLabel','roleLabel','configSha256','databaseName','dataMountSource']){
+    target={...c.target,[key]:key==='configSha256'?'e'.repeat(64):key==='sourceLabel'?'33333333-3333-4333-8333-333333333333':'different'};await f.pulse();assert.equal(ready(),false);assert.equal(f.status().target.healthy,false);
+    target={...c.target};await f.pulse();assert.equal(ready(),true);
+  }
+  for(const key of ['dump','recovery','upload','list','verify','localInventory'])assert.equal(f.calls[key],0);
+  assert.equal((await life.stop()).drained,true);
+});
+
+test('PC DB-only mode, disabled execution and wrong host DB name reject before any owner or probe',async()=>{
+  const c=pcConfiguration();
+  for(const change of [{config:{...c,localSnapshotReceiptFile:undefined}},{config:{...c,enabled:false}},{expectedDatabaseName:'postgres'}]){
+    const f=fixture();let locks=0;
+    await assert.rejects(startBackupSupervisor({...f.options,config:c,expectedDatabaseName:c.target.databaseName,...change,lock:()=>{locks++;throw Error('Unexpected');}}));
+    assert.equal(locks,0);assert.equal(f.calls.probe,0);assert.equal(f.calls.dump,0);assert.equal(f.files.size,0);
+  }
+});
+
+test('native legacy supervisor and adapter fingerprint use the same ownership fields',async()=>{
+  const c=structuredClone(config);for(const key of ['wslExecutable','wslSha256','wslDistribution','wslUser'])delete c[key];
+  c.executionMode='linux';Object.assign(c.target,{ownerLabel:'synthetic-owner',generationLabel:'synthetic-generation'});
+  const f=fixture({probe:async()=>({...c.target})});const life=await startBackupSupervisor({...f.options,config:c});await flush();
+  const receipt=[...f.files.values()].find(value=>value?.state==='verified');assert(receipt);
+  const expected=sha256(JSON.stringify(['containerId','containerImageId','containerName','ownerLabel','generationLabel','dataMountSource','databaseName','databaseSystemIdentifier'].map(key=>[key,c.target[key]])));
+  assert.equal(receipt.targetFingerprint,expected);assert.equal(receipt.targetFingerprint,backupTargetFingerprint(c));
+  assert.notEqual(receipt.targetFingerprint,backupTargetFingerprint(pcConfiguration()));await life.stop();
 });
 test('existing crypto format and paired recovery authenticated after local encrypted writes',async()=>{
   const f=fixture();const life=await startBackupSupervisor(f.options);await flush();

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
-import { loadBackup,validateBackupConfig,readPrivateFile,BACKUP_LIMITS } from './config.mjs';
+import { loadBackup,validateBackupConfig,readPrivateFile,BACKUP_LIMITS,backupTargetFields,backupTargetFingerprint } from './config.mjs';
 import { acquireLock,writePrivate,readBackupInventory } from './files.mjs';
 import { encryptedPair,sha256 } from './archive.mjs';
 import { createAdapters,createCycleBudget,inventoryBounds,STORAGE_LIMITS } from './adapters.mjs';
@@ -37,7 +37,7 @@ export async function startBackupSupervisor({configFile,config:providedConfig,en
   const status={version:STATUS_VERSION,...identity,heartbeat:{checkedAt:identity.startedAt,healthy:true,maintenance:false},
     target:{...config.target,checkedAt:identity.startedAt,healthy:false},backup:null};
   const scope={
-    targetFingerprint:sha256(JSON.stringify(['containerId','containerImageId','containerName','composeProject','composeService','dataMountSource','databaseName','databaseSystemIdentifier'].map(key=>[key,config.target[key]]))),
+    targetFingerprint:backupTargetFingerprint(config),
     storageScopeId:sha256(JSON.stringify({account:env.R2_ACCOUNT_ID,bucket:env.R2_BUCKET_NAME})),
     archiveKeyId:sha256(Buffer.from(env.PC_BACKUP_ENCRYPTION_KEY,'hex')),
   };
@@ -83,7 +83,7 @@ export async function startBackupSupervisor({configFile,config:providedConfig,en
         assertActive();
         const target=await adapters.probe({signal:controller.signal});
         assertActive();
-        for(const key of ['containerId','containerImageId','databaseSystemIdentifier','databaseName','containerName','composeProject','composeService','dataMountSource']) if(target?.[key]!==config.target[key]) throw Error('Probe target mismatch');
+        for(const key of backupTargetFields(config)) if(target?.[key]!==config.target[key]) throw Error('Probe target mismatch');
         status.target={...config.target,checkedAt:instant(),healthy:true};
         status.heartbeat={checkedAt:instant(),healthy:!fatal,maintenance:false};
         publish();return true;

@@ -193,6 +193,27 @@ def safe_image(key):
     return key
 
 
+def retained_unreferenced_images(config):
+    """Only an explicit sealed PC config can approve existing orphan bytes."""
+    value = config.get('retainedUnreferencedImages', {})
+    if not isinstance(value, dict) or len(value) > MAX_ENTRIES:
+        fail('Invalid retained image baseline')
+    if value and (periodic.installation_profile(config)['name'] != periodic.PC_PROFILE or periodic.policy(config) is None):
+        fail('Retained image baseline requires sealed PC configuration')
+    total, result = 0, {}
+    for key, row in value.items():
+        safe_image(key)
+        if not isinstance(row, dict) or set(row) != {'sha256', 'bytes'} or \
+           not isinstance(row['sha256'], str) or re.fullmatch('[a-f0-9]{64}', row['sha256']) is None or \
+           type(row['bytes']) is not int or not 0 < row['bytes'] <= MAX_IMAGE:
+            fail('Invalid retained image baseline entry')
+        total += row['bytes']
+        if total > MAX_BYTES:
+            fail('Retained image baseline byte bound exceeded')
+        result[key] = {'sha256': row['sha256'], 'bytes': row['bytes']}
+    return result
+
+
 def image_inventory(root, owner=None):
     root = private(root, True, owner)
     rows = []
@@ -325,6 +346,7 @@ def validate_config(config):
         fail('Explicit local database required')
     if config.get('dbImage') != DB_IMAGE or config.get('mirrorDisabled') is not True:
         fail('Pinned DB image and disabled legacy mirror required')
+    retained_unreferenced_images(config)
     for name in ('imageRoot', 'jobsStateRoot', 'backupRoot', 'stageRoot', 'runtimeKey', 'receiptFile'):
         if not isinstance(config.get(name), str) or not Path(config[name]).is_absolute():
             fail('Explicit private backup paths required')
@@ -748,6 +770,7 @@ class BoundedBundle:
 
 
 def capture_bundle(config, commands, stage):
+    retained = retained_unreferenced_images(config)
     periodic.pc_database(config)
     assert_database_quiet(config, commands)
     owner = config.get('sourceOwnerUid', os.getuid())
@@ -764,8 +787,12 @@ def capture_bundle(config, commands, stage):
     cleanup.update(safe_image(row) for row in retired)
     if not set(refs).issubset(keys):
         fail('Image unlink-before-DB-delete gap or missing referenced image')
-    if not keys.issubset(set(refs) | cleanup):
+    unreferenced = keys - (set(refs) | cleanup)
+    if unreferenced != set(retained):
         fail('Unreferenced image/upload interrupted before DB save; no success receipt')
+    by_key = {row['key']: row for row in images}
+    if any(by_key[key]['sha256'] != row['sha256'] or by_key[key]['bytes'] != row['bytes'] for key, row in retained.items()):
+        fail('Retained unreferenced image bytes changed; no success receipt')
     before = database_fingerprint(config, commands)
     for name, argv in (
         ('database.dump', ['pg_dump', '-U', 'postgres', '-d', config['database'], '--format=custom']),
@@ -785,6 +812,8 @@ def capture_bundle(config, commands, stage):
                 'jobs': [{'name': row['name'], 'sha256': row['sha256']} for row in journal],
                 'files': {name: file_hash(stage / name) for name in ('database.dump', 'roles.sql')},
                 'credentials': 'PostgreSQL login passwords and app/Auth/JWT configuration require independent private recovery storage'}
+    if retained:
+        manifest['retainedUnreferencedImages'] = retained
     write_new(stage / 'manifest.json', json.dumps(manifest, sort_keys=True).encode())
     for row in journal:
         write_new(stage / ('jobs-' + row['name']), row['bytes'])
@@ -811,6 +840,9 @@ def capture_bundle(config, commands, stage):
 
 def verified_extract(bundle, destination, source_id):
     """Authenticated input only. Whitelist topology, no extractall or overwrite."""
+    private(destination, True)
+    if stat.S_IMODE(destination.stat().st_mode) != 0o700:
+        fail('Private restored directory mode required')
     names, manifest, total = set(), None, 0
     (destination / 'images').mkdir(mode=0o700)
     with tarfile.open(bundle, 'r:') as archive:
@@ -833,8 +865,18 @@ def verified_extract(bundle, destination, source_id):
             if name.startswith('jobs/') and item.size > MAX_JOB_STATE:
                 fail('Jobs archive metadata bound exceeded')
             path = destination / name
-            path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-            private(path.parent, True)
+            # parents=True applies mode only to the last directory; intermediate
+            # avatar/image directories would otherwise inherit 755 from umask.
+            parent = destination
+            for component in PurePosixPath(name).parts[:-1]:
+                parent = parent / component
+                try:
+                    parent.mkdir(mode=0o700)
+                except FileExistsError:
+                    pass
+                private(parent, True)
+                if stat.S_IMODE(parent.stat().st_mode) != 0o700:
+                    fail('Private restored directory mode required')
             with archive.extractfile(item) as source, path.open('xb') as output:
                 os.chmod(path, 0o600)
                 _, size = hash_stream(source, output)

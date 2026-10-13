@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -401,6 +402,137 @@ class BackupBehaviour(unittest.TestCase):
             unknown = self.root/'unknown-capture'; unknown.mkdir(mode=0o700)
             with self.assertRaisesRegex(backup.BackupFailure, 'Unreferenced image'):
                 backup.capture_bundle(self.config, CaptureCommands(False), unknown)
+
+    def retained_images_fixture(self):
+        """New synthetic bytes only; root runs this temp fixture, never real R2 files."""
+        config = {**self.config, 'profile':'pc-private', 'writerMode':'surface-systemd', 'sourceOwnerUid':65530,
+            'containers':{role:'tuat-local-'+role for role in ('db','auth','rest')},
+            'jobsReceiptFile':str(self.root/'synthetic-reader/verified.json')}
+        config['periodic'] = {name:bounds[0] for name,bounds in backup.periodic.LIMITS.items()}
+        config['periodic'].update(enabled=True, controlSeal=str(self.root/'synthetic-seal.json'),
+            configPath=str(self.root/'synthetic-backup.json'), allowUntil='2099-01-01T00:00:00+00:00')
+        config['periodic']['maxTotalArchiveBytes'] += 36
+        image_root = Path(config['imageRoot']); directory = image_root/'avatars/member-1'
+        directory.mkdir(parents=True,mode=0o700)
+        for path in (image_root,image_root/'avatars',directory): path.chmod(0o700); os.chown(path,65530,65530)
+        images = {}
+        for name in ('retained-1.webp','retained-2.webp','live.webp'):
+            path = directory/name; data = ('synthetic preserved image '+name).encode()
+            path.write_bytes(data); path.chmod(0o600); os.chown(path,65530,65530)
+            images[path.relative_to(image_root).as_posix()] = (path,data)
+        config['retainedUnreferencedImages'] = {key:{'sha256':backup.hashlib.sha256(data).hexdigest(),'bytes':len(data)}
+            for key,(_path,data) in images.items() if not key.endswith('/live.webp')}
+        return config,images
+
+    def test_retained_image_baseline_is_strict_bounded_and_requires_sealed_pc_config(self):
+        config,images = self.retained_images_fixture()
+        backup.validate_config(config)
+        baseline = config['retainedUnreferencedImages']; key = next(iter(baseline)); good = baseline[key]
+        for value in (None,[],True,{'/outside.webp':good},{'avatars/member-1/../outside.webp':good},
+            {key:{**good,'unexpected':True}},{key:{'bytes':good['bytes']}},{key:{**good,'sha256':'A'*64}},
+            {key:{**good,'sha256':'a'*63}},{key:{**good,'bytes':True}},{key:{**good,'bytes':1.0}},
+            {key:{**good,'bytes':0}},{key:{**good,'bytes':backup.MAX_IMAGE+1}}):
+            with self.subTest(value=value), self.assertRaises(backup.BackupFailure):
+                backup.retained_unreferenced_images({**config,'retainedUnreferencedImages':value})
+        for changed in ({**config,'profile':'surface'}, {**config,'periodic':None}):
+            with self.assertRaisesRegex(backup.BackupFailure,'sealed PC'): backup.retained_unreferenced_images(changed)
+        with patch.object(backup,'MAX_ENTRIES',1):
+            with self.assertRaisesRegex(backup.BackupFailure,'baseline'): backup.retained_unreferenced_images(config)
+        with patch.object(backup,'MAX_BYTES',sum(row['bytes'] for row in baseline.values())-1):
+            with self.assertRaisesRegex(backup.BackupFailure,'byte bound'): backup.retained_unreferenced_images(config)
+        self.assertEqual(backup.retained_unreferenced_images({}),{})
+        self.assertEqual(backup.retained_unreferenced_images({'retainedUnreferencedImages':{}}),{})
+
+    def test_retained_baseline_bytes_are_in_full_archive_and_restored_inventory(self):
+        config,images = self.retained_images_fixture()
+        class CaptureCommands:
+            def sql(self,_config,_statement): return b''
+            def docker(self,*args,output=None): output.write(b'PGDMP synthetic dump' if args[2]=='pg_dump' else b'-- synthetic roles')
+        # Only the already covered runtime/seal/DB observations are injected;
+        # image scan, exact baseline, tar and authenticated-extract checks are real.
+        # Exercise the real capacity policy with a synthetic admitted mount,
+        # filesystem and memory observation; no live encrypted storage is read.
+        with patch.object(backup.periodic,'pc_database'), patch.object(backup,'assert_database_quiet'), \
+             patch.object(backup,'image_references',return_value=['avatars/member-1/live.webp']), \
+             patch.object(backup,'database_fingerprint',return_value={'synthetic':'stable'}), \
+             patch.object(backup.periodic,'bind_storage'), patch.object(backup.periodic.os,'statvfs',return_value=SimpleNamespace(f_bavail=1048576,f_frsize=4096,f_favail=10000)), \
+             patch.object(Path,'read_text',autospec=True,side_effect=lambda path: 'MemAvailable: 65536 kB\n' if str(path)=='/proc/meminfo' else self.fail('Unexpected memory observation')):
+            bundle,manifest = backup.capture_bundle(config,CaptureCommands(),Path(config['stageRoot']))
+        restored = self.root/'restored-baseline'; restored.mkdir(mode=0o700)
+        self.assertEqual(backup.verified_extract(bundle,restored,config['sourceId']),manifest)
+        self.assertEqual(manifest['retainedUnreferencedImages'],config['retainedUnreferencedImages'])
+        self.assertEqual(backup.image_inventory(restored/'images'),manifest['images'])
+        for key,(path,data) in images.items():
+            self.assertEqual((restored/'images'/key).read_bytes(),data); self.assertEqual(path.read_bytes(),data)
+        for directory in (restored,restored/'images',restored/'images/avatars',restored/'images/avatars/member-1'):
+            self.assertEqual((directory.stat().st_uid,directory.stat().st_mode & 0o777),(0,0o700))
+        # Insert pre-existing bad nested metadata after the extractor creates its
+        # image root. Only these fresh temp targets are changed; never chmod a
+        # successful restore to conceal an intermediate-directory bug.
+        original_open = backup.tarfile.open
+        for fault in ('symlink','owner','mode'):
+            target = self.root/('bad-parent-'+fault); target.mkdir(mode=0o700)
+            escaped = self.root/('escape-'+fault); escaped.mkdir(mode=0o700)
+            marker = escaped/'untouched'; marker.write_bytes(b'outside restore'); marker.chmod(0o600)
+            def injected_open(*args,**kwargs):
+                parent = target/'images/avatars'
+                if fault=='symlink': parent.symlink_to(escaped,target_is_directory=True)
+                else:
+                    parent.mkdir(mode=0o700)
+                    if fault=='owner': os.chown(parent,65530,65530)
+                    if fault=='mode': parent.chmod(0o500)
+                return original_open(*args,**kwargs)
+            with patch.object(backup.tarfile,'open',side_effect=injected_open), self.assertRaises(backup.BackupFailure):
+                backup.verified_extract(bundle,target,config['sourceId'])
+            self.assertEqual(marker.read_bytes(),b'outside restore')
+            if fault=='owner': self.assertEqual((target/'images/avatars').stat().st_uid,65530)
+            if fault=='mode': self.assertEqual((target/'images/avatars').stat().st_mode & 0o777,0o500)
+
+    def test_retained_baseline_missing_changed_extra_or_default_holds_files_and_old_receipt(self):
+        config,images = self.retained_images_fixture(); key = next(iter(config['retainedUnreferencedImages'])); path,data = images[key]
+        extra = path.parent/'unapproved-new-upload.webp'
+        receipt = Path(config['receiptFile']); receipt.write_bytes(b'old verified receipt'); receipt.chmod(0o600)
+        class NoDump:
+            def sql(self,_config,_statement): return b''
+            def docker(self,*_args,**_kwargs): raise AssertionError('Rejected image baseline reached dump')
+        with patch.object(backup.periodic,'pc_database'), patch.object(backup,'assert_database_quiet'), \
+             patch.object(backup,'image_references',return_value=['avatars/member-1/live.webp']), \
+             patch.object(backup,'database_fingerprint',return_value={'synthetic':'stable'}):
+            for fault in ('missing','hash-changed','size-changed','extra-upload','default-empty','now-referenced'):
+                with self.subTest(fault=fault):
+                    current = copy.deepcopy(config)
+                    if fault=='missing': path.unlink()
+                    if fault=='hash-changed': path.write_bytes(b'X'*len(data))
+                    if fault=='size-changed': path.write_bytes(data+b'new bytes')
+                    if fault=='extra-upload': extra.write_bytes(b'new unsaved upload'); extra.chmod(0o600); os.chown(extra,65530,65530)
+                    if fault=='default-empty': current.pop('retainedUnreferencedImages')
+                    before = {p.name:p.read_bytes() for p in path.parent.iterdir()}
+                    stage = Path(config['stageRoot'])/fault; stage.mkdir(mode=0o700)
+                    refs = ['avatars/member-1/live.webp'] + ([key] if fault=='now-referenced' else [])
+                    with patch.object(backup,'image_references',return_value=refs), self.assertRaises(backup.BackupFailure):
+                        backup.capture_bundle(current,NoDump(),stage)
+                    self.assertEqual({p.name:p.read_bytes() for p in path.parent.iterdir()},before)
+                    self.assertEqual(receipt.read_bytes(),b'old verified receipt'); self.assertEqual(list(stage.iterdir()),[])
+                    if extra.exists(): extra.unlink()
+                    path.write_bytes(data); path.chmod(0o600); os.chown(path,65530,65530)
+
+    def test_retained_baseline_cannot_bypass_before_after_image_change_check(self):
+        config,images = self.retained_images_fixture(); path,data = next(iter(images.values()))
+        receipt = Path(config['receiptFile']); receipt.write_bytes(b'old verified receipt'); receipt.chmod(0o600)
+        class ChangingDump:
+            def sql(self,_config,_statement): return b''
+            def docker(self,*args,output=None):
+                output.write(b'PGDMP synthetic dump' if args[2]=='pg_dump' else b'-- synthetic roles')
+                if args[2]=='pg_dump': path.write_bytes(data+b'interrupted actor edit')
+        with patch.object(backup.periodic,'pc_database'), patch.object(backup,'assert_database_quiet'), \
+             patch.object(backup,'image_references',return_value=['avatars/member-1/live.webp']), \
+             patch.object(backup,'database_fingerprint',return_value={'synthetic':'stable'}), \
+             patch.object(backup.periodic,'bind_storage'), patch.object(backup.periodic.os,'statvfs',return_value=SimpleNamespace(f_bavail=1048576,f_frsize=4096,f_favail=10000)), \
+             patch.object(Path,'read_text',autospec=True,side_effect=lambda path: 'MemAvailable: 65536 kB\n' if str(path)=='/proc/meminfo' else self.fail('Unexpected memory observation')):
+            with self.assertRaisesRegex(backup.BackupFailure,'Capture changed'):
+                backup.capture_bundle(config,ChangingDump(),Path(config['stageRoot']))
+        self.assertEqual(path.read_bytes(),data+b'interrupted actor edit')
+        self.assertEqual(receipt.read_bytes(),b'old verified receipt')
 
     def test_captured_status_is_manifest_hashed_restored_and_capture_change_refused(self):
         self.scheduler_state()

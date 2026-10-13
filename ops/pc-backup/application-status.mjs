@@ -22,7 +22,7 @@ export function applicationStatusMetadata(status) {
   result.heartbeat=pick(status.heartbeat,['checkedAt','healthy','maintenance']);
   result.target=pick(status.target,['checkedAt','healthy','databaseSystemIdentifier','databaseName','containerId','containerImageId']);
   result.backup=status.backup===null?null:pick(status.backup,['generation','verifiedAt','key','recoveryKey','sha256','recoverySha256','bytes','recoveryBytes','databaseSystemIdentifier']);
-  if(status.backup?.localSnapshot)result.backup.localSnapshot=pick(status.backup.localSnapshot,['format','sourceId','generation','databaseSystemIdentifier','imageRoot','archiveKey','archiveSha256','archiveBytes','restoreVerifiedAt','offsiteVerifiedAt','independentRecoveryCopyChecked']);
+  if(status.backup?.localSnapshot)result.backup.localSnapshot=pick(status.backup.localSnapshot,['format','sourceId','generation','databaseSystemIdentifier','imageRoot','archiveKey','archiveSha256','archiveBytes','capturedAt','restoreVerifiedAt','offsiteVerifiedAt','independentRecoveryCopyChecked']);
   return result;
 }
 
