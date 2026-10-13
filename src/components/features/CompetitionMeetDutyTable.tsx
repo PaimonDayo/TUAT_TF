@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { FormModal } from "@/components/ui/form-modal";
 import { ActionMenu } from "@/components/ui/action-menu";
-import { meetDutyText, type CompetitionMeet } from "@/lib/competition-meet";
+import { meetAppearancePositionLabel, meetDutyText, type CompetitionMeet } from "@/lib/competition-meet";
 import { meetDutySlots, meetDutyCell, validRolePeople, type MeetDutySlot } from "@/lib/competition-meet-duties";
 import { GRADE_OPTIONS, gradeShort } from "@/lib/constants";
 import { normalizeEntryName } from "@/lib/entry-identity";
@@ -34,10 +34,10 @@ export function CompetitionMeetDutyTable({ meet, locked, onDuty, onAdd, onRole, 
         })}</tr></thead>
         <tbody>{people.map(person => <tr key={person.id} className="border-t border-separator">
           <th scope="row" className="sticky left-0 z-10 bg-card p-2 font-normal"><span className="block text-micro text-muted2">{gradeShort(person.grade)}{person.absent ? "・欠席" : person.deleted ? "・削除済み" : ""}</span><span className="block break-words">{person.name}</span></th>
-          {slots.map(s => { const cell = meetDutyCell(meet, person, s), text = cell.competing.length ? `${cell.concurrent ? "別種目出場" : "出場"}: ${cell.competing.map(a => `${a.event_name}${a.ordinal > 1 ? `（${a.ordinal}件目）` : ""}`).join("・")}` : person.absent ? "欠席" : person.deleted ? "削除済み" : cell.appearances.length ? "DNS" : cell.onDay ? "当日確認" : "出場なし";
+          {slots.map(s => { const cell = meetDutyCell(meet, person, s), text = cell.competing.length ? `${cell.concurrent ? "別種目出場" : "出場"}: ${cell.competing.map(a => `${a.event_name} ${meetAppearancePositionLabel(meet,a)}`).join("・")}` : person.absent ? "欠席" : person.deleted ? "削除済み" : cell.appearances.length ? "DNS" : cell.onDay ? "当日確認" : "出場なし";
             const inactive = person.absent || person.deleted;
             return <td key={JSON.stringify(s)} className={`border-l border-separator align-top ${cell.needsReplacement ? "bg-danger/10" : cell.competing.length ? "bg-accent/5" : ""}`}><div className="space-y-1 p-1">
-              {cell.competing.length ? cell.competing.map(a => <button key={a.id} data-ui-cell className="min-h-11 w-full px-1 text-left text-micro text-accent pressable" onClick={() => onEvent(a.event_name, a.id)} aria-label={`${person.name} ${s.time} ${a.event_name} ${a.ordinal}件目の出場を確認`}>{meet.events.find(e=>e.name===a.event_name)?.family!==s.event ? "別種目出場" : "出場"}: {a.event_name}{a.ordinal>1 ? `（${a.ordinal}件目）` : ""}</button>) : <span className="block px-1 py-2 text-micro text-muted2">{text}</span>}
+              {cell.competing.length ? cell.competing.map(a => <button key={a.id} data-ui-cell className="min-h-11 w-full px-1 text-left text-micro text-accent pressable" onClick={() => onEvent(a.event_name, a.id)} aria-label={`${person.name} ${s.time} ${a.event_name} ${meetAppearancePositionLabel(meet,a)}の出場を確認`}>{meet.events.find(e=>e.name===a.event_name)?.family!==s.event ? "別種目出場" : "出場"}: {a.event_name}<span className="block">{meetAppearancePositionLabel(meet,a)}</span></button>) : <span className="block px-1 py-2 text-micro text-muted2">{text}</span>}
               {cell.duties.map(d => <button data-ui-cell key={d.id} disabled={locked} className="min-h-11 w-full rounded-lg px-1 text-left text-micro pressable" onClick={() => onDuty(d.id)} aria-label={`${person.name} ${s.time} ${s.event}の担当を変更`}><span className="font-medium">補助: {meetDutyText(d, meet.roles)}</span>{cell.needsReplacement && <span className="block text-danger">交代が必要</span>}</button>)}
               {!cell.duties.length && !inactive && !cell.busy && person.grade !== "OB・OG" && <button data-ui-cell disabled={locked} className="min-h-11 w-full px-1 text-micro text-accent pressable" onClick={() => onAdd(s, person.id)}>担当を追加</button>}
             </div></td>;

@@ -1,4 +1,5 @@
 import { emptyPerformance, withoutMeetPlacement, type MeetEventData, type MeetEventRule, type MeetPerformance } from "./meet-operations";
+import { fieldOrderRows } from "./meet-field-order";
 
 export type MeetParticipant = { id: string; competition_id: string; profile_id: string | null; name: string; grade: string; absent: boolean; deleted: boolean; revision: number };
 export type MeetAppearance = { id: string; competition_id: string; participant_id: string; event_name: string; ordinal: number; operation_key: string; qualification_mark: string | null; state: "registered" | "cancelled" | "deleted"; performance: MeetPerformance; revision: number };
@@ -43,6 +44,16 @@ export function competitionFamilyData(meet: Pick<CompetitionMeet,"participants"|
   })};
 }
 export function storedMeetPerformance(value: MeetPerformance): MeetPerformance { return value.group===null?value:{...value,...meetBoardPlacement(value.group)}; }
+
+/** Identify an independent appearance by its actual placement, never its internal ordinal. */
+export function meetAppearancePositionLabel(meet: Pick<CompetitionMeet,"participants"|"appearances"|"events">, appearance: MeetAppearance) {
+  const event=meet.events.find(e=>e.name===appearance.event_name);
+  if(!event)return "種目確認中";
+  const person=meet.participants.find(p=>p.id===appearance.participant_id),performance=appearancePerformance(person,appearance);
+  if(event.discipline==="track")return performance.group===null?"組未定":`${performance.heatScope??event.division}${performance.group}組 ${performance.order??"未定"}${event.capacity?"レーン":"番"}`;
+  const number=fieldOrderRows(competitionFamilyData(meet,event)).find(row=>row.person.entryId===appearance.id)?.number;
+  return number==null?"試技順未定":`試技順 ${number}番`;
+}
 export function meetDutyConflict(meet:Pick<CompetitionMeet,"participants"|"appearances"|"events">, participantId:string,time:string) {
   const person=meet.participants.find(p=>p.id===participantId);
   return meet.appearances.some(a=>a.participant_id===participantId&&meet.events.find(e=>e.name===a.event_name)?.starts_at===time&&((availableAppearance(person,a)&&a.performance.status!=="DNS")||a.performance.status==="DNF"||a.performance.status==="DQ"||a.performance.trials.some(t=>t.status!=="pending"||!!t.mark||!!t.wind)));

@@ -130,17 +130,19 @@ it("keeps official school/open rounds and mixed heats under their event's gender
 
 it("opens results with distinct appearances, official ranks, positions, wind and DNS intact", () => {
   const input = row("男子100m", 1, { tuatEntries: [
-    { id: "first", name: "同じ選手（1件目）", grade: "M2", heat: 2, lane: 3, bib: null, positionLabel: "混合2組 3番", separateResult: true, details: ["試技1: 12.34（風 +1.0）"], result: { place: "2", record: "12.34", wind: "+1.0" } },
-    { id: "second", name: "同じ選手（2件目）", grade: "M2", heat: 2, lane: 4, bib: null, positionLabel: "混合2組 4番", separateResult: true, result: { place: "1", record: "12.34", wind: "+1.0" } },
+    { id: "first", name: "同じ選手", grade: "M2", heat: 2, lane: 3, bib: null, positionLabel: "混合2組 3番", separateResult: true, details: ["試技1: 12.34（風 +1.0）"], result: { place: "1", record: "12.34", wind: "+1.0" } },
+    { id: "second", name: "同じ選手", grade: "M2", heat: 2, lane: 4, bib: null, positionLabel: "混合2組 4番", separateResult: true, result: { place: "1", record: "12.34", wind: "+1.0" } },
     { id: "dns", name: "欠場した選手", grade: "B3", heat: null, lane: null, bib: null, positionLabel: "組未定", details: ["出場取消済み"], result: { place: null, record: "DNS" } },
   ] });
   const before = structuredClone(input);
   state.cursor = 0; const element = CompetitionResultRow({ row: input });
   const collapsed = renderToStaticMarkup(element);
-  expect(collapsed).toContain("2位 12.34 風 +1.0"); expect(collapsed).toContain("1位 12.34 風 +1.0");
+  expect((collapsed.match(/1位 12.34 風 \+1.0/g)??[])).toHaveLength(2);
+  expect(collapsed).not.toContain("件目");
   findElement<{ onClick: () => void }>(element, "button")!.props.onClick();
   state.cursor = 0; const opened = renderToStaticMarkup(CompetitionResultRow({ row: input }));
-  for (const text of ["同じ選手（1件目）", "同じ選手（2件目）", "混合2組 3番", "混合2組 4番", "2位 12.34 風 +1.0", "1位 12.34 風 +1.0", "試技1: 12.34（風 +1.0）", "組未定", "DNS", "出場取消済み"]) expect(opened).toContain(text);
+  for (const text of ["同じ選手 M2", "混合2組 3番", "混合2組 4番", "1位 12.34 風 +1.0", "試技1: 12.34（風 +1.0）", "組未定", "DNS", "出場取消済み"]) expect(opened).toContain(text);
+  expect((opened.match(/1位 12.34 風 \+1.0/g)??[])).toHaveLength(2);expect(opened).not.toContain("件目");
   expect(input).toEqual(before);
 });
 

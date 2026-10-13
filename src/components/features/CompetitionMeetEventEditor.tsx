@@ -38,7 +38,7 @@ export function CompetitionMeetEventEditor({event,meet,mutation,onClose,onAdd,in
   const rule=meetRule(event),model=new MeetEvent(rule,{...data,confirmed:false},limits);
   const entrants=appearances.map(a=>{
     const person=people.get(a.participant_id),source=familyEvents.find(e=>e.name===a.event_name)!;
-    return {id:a.id,name:`${person?.name??"参加者確認中"}（${a.ordinal}件目）`,grade:person?.grade??"",mark:a.qualification_mark??"",alumni:person?.grade==="OB・OG",eligible:availableAppearance(person,a),absent:person?.absent,division:source.division==="混合"?undefined:source.division};
+    return {id:a.id,name:person?.name??"参加者確認中",grade:person?.grade??"",mark:a.qualification_mark??"",alumni:person?.grade==="OB・OG",eligible:availableAppearance(person,a),absent:person?.absent,division:source.division==="混合"?undefined:source.division};
   });
   const currentIds=new Set(appearances.filter(a=>a.event_name===event.name).map(a=>a.id));
   const ordered=event.discipline==="track"?[...data.participants].sort((a,b)=>(a.group??999)-(b.group??999)||(a.order??999)-(b.order??999)):fieldOrderRows(data).map(row=>row.person);
@@ -49,6 +49,9 @@ export function CompetitionMeetEventEditor({event,meet,mutation,onClose,onAdd,in
     const a=appearances.find(a=>a.id===p.entryId)!;return availableAppearance(people.get(a.participant_id),a);
   }));
   const numbers=new Map(fieldOrderRows(data).map(row=>[row.person.entryId,row.number]));
+  function placementText(performance:MeetPerformance) {
+    return event.discipline==="track"?(performance.group===null?"組未定":`${meetBoardGroupLabel(performance.group)} ${performance.order??"未定"}${event.capacity?"レーン":"番"}`):(numbers.get(performance.entryId)==null?"試技順未定":`試技順 ${numbers.get(performance.entryId)}番`);
+  }
   const disabled=mutation.locked||!meet.permissions.record||event.confirmed;
   const groupsDisabled=mutation.locked||!meet.permissions.groups||familyEvents.some(e=>e.confirmed);
   const nextRaw=Math.max(0,...data.participants.flatMap(p=>p.group!==null&&Math.floor((p.group-1)/99)===Math.floor((meetBoardGroup(1,newScope)-1)/99)?[(p.group-1)%99+1]:[]))+1;
@@ -94,16 +97,16 @@ export function CompetitionMeetEventEditor({event,meet,mutation,onClose,onAdd,in
       </>:<>
         {event.discipline==="track"&&groups.length>0&&<Select ariaLabel="記録する組" value={group} onValueChange={setGroup} options={[{value:"all",label:"全員"},...groups.map(value=>({value:String(value),label:meetBoardGroupLabel(value)}))]}/ >}
         {event.discipline!=="track"&&<>
-          <Select ariaLabel="記録する出場" value={personId||own[0]?.entryId||""} onValueChange={setPersonId} options={own.map(p=>({value:p.entryId,label:entrants.find(e=>e.id===p.entryId)!.name}))}/>
+          <Select ariaLabel="記録する出場" value={personId||own[0]?.entryId||""} onValueChange={setPersonId} options={own.map(p=>({value:p.entryId,label:`${entrants.find(e=>e.id===p.entryId)!.name}・${placementText(p)}・${model.best(p)}`}))}/>
           <div className="flex gap-2">{([-1,1] as const).map(direction=>{const index=own.findIndex(p=>p.entryId===visible[0]?.entryId),next=own[index+direction];return <Button key={direction} variant="outline" size="sm" disabled={!next} onClick={()=>next&&setPersonId(next.entryId)}>{direction<0?"前の出場":"次の出場"}</Button>;})}</div>
         </>}
         {visible.map(performance=>{
           const a=appearances.find(a=>a.id===performance.entryId)!,person=people.get(a.participant_id),locked=disabled||!availableAppearance(person,a)||performance.status==="DNS";
           const count=event.discipline==="track"?1:event.discipline==="height"?Math.max(1,performance.trials.length):6;
-          const placement=event.discipline==="track"?(performance.group===null?"組未定":`${meetBoardGroupLabel(performance.group)} ${performance.order??"未定"}番`):(numbers.get(performance.entryId)==null?"順番未定":`試技順 ${numbers.get(performance.entryId)}番`);
+          const placement=placementText(performance);
           return <Card key={a.id} className="space-y-3 p-3.5">
-            <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-body font-semibold">{person?.name}・{a.ordinal}件目</h3><p className="text-caption">{placement}・{model.best(performance)}{ranks.has(a.id)?`・${ranks.get(a.id)}位`:""}</p></div>
-              <Select ariaLabel={`${person?.name} ${a.ordinal}件目の出場状況`} className="w-40" disabled={disabled||!availableAppearance(person,a)} value={performance.status} onValueChange={status=>update(a.id,status==="DNS"?{status:"DNS",group:null,order:null,heatScope:undefined}:{status:status as MeetPerformance["status"]})} options={[{value:"entered",label:"出場"},{value:"DNS",label:"DNS（欠場）"},{value:"DNF",label:"DNF（途中棄権）"},{value:"DQ",label:"DQ（失格）"}]}/>
+            <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-body font-semibold">{person?.name}<span className="ml-2 text-caption font-normal">{person?.grade}</span></h3><p className="text-caption">{placement}・{model.best(performance)}{ranks.has(a.id)?`・${ranks.get(a.id)}位`:""}</p></div>
+              <Select ariaLabel={`${person?.name} ${event.name} ${placement}の出場状況`} className="w-40" disabled={disabled||!availableAppearance(person,a)} value={performance.status} onValueChange={status=>update(a.id,status==="DNS"?{status:"DNS",group:null,order:null,heatScope:undefined}:{status:status as MeetPerformance["status"]})} options={[{value:"entered",label:"出場"},{value:"DNS",label:"DNS（欠場）"},{value:"DNF",label:"DNF（途中棄権）"},{value:"DQ",label:"DQ（失格）"}]}/>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">{Array.from({length:count},(_,index)=>{
               const t=performance.trials[index]??emptyTrial();
@@ -130,8 +133,8 @@ export function CompetitionMeetEventEditor({event,meet,mutation,onClose,onAdd,in
     <FormModalFooter><Button className="w-full" disabled={mutation.locked||!dirty} onClick={()=>void save()}>{mutation.busy?"保存中…":"保存する"}</Button></FormModalFooter>
     <Sheet open={reviewing} onOpenChange={setReviewing}><SheetContent title="変更の確認"><div className="space-y-4">
       <p className="text-caption">配置・出場状況・試技を分けて確認します。重ならない変更は両方を保持します。</p>
-      {blocked.map(a=><div key={a.id} className="space-y-2"><p className="text-body">{people.get(a.participant_id)?.name}・{a.ordinal}件目は取消・削除・欠席中です。入力を使うには先に参加者の画面で復帰してください。</p><p className="text-caption">入力: {operationFieldLabel(data.participants.find(p=>p.entryId===a.id)!,"trials")}</p><label className="flex min-h-11 items-center gap-2 text-body"><input type="checkbox" checked={choices[`${a.id}:unavailable`]==="current"} onChange={e=>setChoices({...choices,[`${a.id}:unavailable`]:e.target.checked?"current":"own"})}/>この出場の入力を破棄し、最新の情報を使う</label></div>)}
-      {conflicts.map(conflict=>{const a=appearances.find(a=>a.id===conflict.entryId)!,person=people.get(a.participant_id);return <div key={conflict.key} className="space-y-2"><p className="text-body">{person?.name}・{a.ordinal}件目（{{position:"配置",status:"出場状況",trials:"試技"}[conflict.field]}）</p><Select ariaLabel={`${person?.name} ${a.ordinal}件目の${conflict.field}で使う情報`} value={choices[conflict.key]??""} onValueChange={value=>setChoices({...choices,[conflict.key]:value as "own"|"current"})} options={[{value:"current",label:`最新: ${operationFieldLabel(conflict.current,conflict.field)}`},{value:"own",label:`入力: ${operationFieldLabel(conflict.own,conflict.field)}`,disabled:!availableAppearance(person,a)}]}/></div>;})}
+      {blocked.map(a=><div key={a.id} className="space-y-2"><p className="text-body">{people.get(a.participant_id)?.name}（{a.event_name}・{placementText(data.participants.find(p=>p.entryId===a.id)!)}）は取消・削除・欠席中です。入力を使うには先に参加者の画面で復帰してください。</p><p className="text-caption">入力: {operationFieldLabel(data.participants.find(p=>p.entryId===a.id)!,"trials")}</p><label className="flex min-h-11 items-center gap-2 text-body"><input type="checkbox" checked={choices[`${a.id}:unavailable`]==="current"} onChange={e=>setChoices({...choices,[`${a.id}:unavailable`]:e.target.checked?"current":"own"})}/>この出場の入力を破棄し、最新の情報を使う</label></div>)}
+      {conflicts.map(conflict=>{const a=appearances.find(a=>a.id===conflict.entryId)!,person=people.get(a.participant_id);return <div key={conflict.key} className="space-y-2"><p className="text-body">{person?.name}・{a.event_name}・{placementText(conflict.current)}（{{position:"配置",status:"出場状況",trials:"試技"}[conflict.field]}）</p><Select ariaLabel={`${person?.name} ${a.event_name} ${placementText(conflict.current)}の${conflict.field}で使う情報`} value={choices[conflict.key]??""} onValueChange={value=>setChoices({...choices,[conflict.key]:value as "own"|"current"})} options={[{value:"current",label:`最新: ${operationFieldLabel(conflict.current,conflict.field)}`},{value:"own",label:`入力: ${operationFieldLabel(conflict.own,conflict.field)}`,disabled:!availableAppearance(person,a)}]}/></div>;})}
       <Button className="w-full" disabled={conflicts.some(p=>!choices[p.key])||blocked.some(a=>choices[`${a.id}:unavailable`]!=="current")} onClick={applyReview}>確認した内容を使う</Button>
     </div></SheetContent></Sheet>
   </FormModal>;
