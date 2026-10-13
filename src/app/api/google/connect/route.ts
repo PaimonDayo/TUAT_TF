@@ -1,23 +1,10 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { googleAuthorizationUrl } from "@/lib/google-drive";
-import { getAppPublicOrigin } from "@/lib/app-public-origin";
 
-export async function GET(request: Request) {
-  return NextResponse.redirect(
-    new URL("/schedule?compose=1&sheets=1", getAppPublicOrigin(request.url)),
+export async function GET() {
+  return NextResponse.json(
+    { error: "Google Drive連携による予定表の発行機能は終了しました。CSVまたは共有URLから予定を読み込んでください。" },
+    { status: 410, headers: { "Cache-Control": "no-store" } },
   );
 }
 
-export async function POST(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    const loginUrl = new URL("/login", getAppPublicOrigin(request.url));
-    loginUrl.searchParams.set("next", "/schedule?compose=1&sheets=1");
-    return NextResponse.redirect(loginUrl, 303);
-  }
-  return NextResponse.redirect(googleAuthorizationUrl(user.id), 303);
-}
+export const POST = GET;

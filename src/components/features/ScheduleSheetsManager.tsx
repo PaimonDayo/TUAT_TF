@@ -1,10 +1,9 @@
 "use client";
 
-import { Check, Download, ExternalLink, Link2, RefreshCw, Upload } from "lucide-react";
+import { Check, Download, Link2, RefreshCw, Upload } from "lucide-react";
 import { Step, SummaryCount } from "@/components/features/sheet-import/ImportFeedback";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Disclosure } from "@/components/ui/disclosure";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented";
@@ -12,7 +11,6 @@ import { Select } from "@/components/ui/select";
 import { SCHEDULE_TYPE_OPTIONS } from "@/lib/constants";
 import type { ScheduleSheetBlock, ScheduleSheetKind } from "@/types";
 import { useScheduleSheetImport } from "./schedule-sheets/useScheduleSheetImport";
-import { WEEKDAYS } from "./schedule-sheets/schedule-sheet-data";
 import { EditablePreviewTable, DeletionCandidates } from "./schedule-sheets/SchedulePreviewTables";
 
 const BLOCK_OPTIONS: { value: ScheduleSheetBlock; label: string }[] = [
@@ -25,14 +23,13 @@ export function ScheduleSheetsManager() {
   const {
     year, setYear, month, setMonth, kind,
     setKind, block, setBlock, inputMode, setInputMode,
-    existing, selectedIds, setSelectedIds, venues, weekdayDefaults,
-    googleConnected, googleEmail, issuing, issueBlocked, creationChecked, creationAttempt, repairSpreadsheet, source, setSource,
+    existing, selectedIds, setSelectedIds, source, setSource,
     sheetUrl, setSheetUrl, fileName, csv, setSheetId,
     preview, setPreview, loading, applying, error,
     setError, lastApplied, undoing, deletionIds, setDeletionIds,
-    deleting, downloadTemplate, issueSpreadsheet, selectFile, previewImport,
+    deleting, downloadTemplate, selectFile, previewImport,
     apply, undoLastApply, deleteSelectedCandidates, validateEditedRows, updatePreviewCell,
-    applicable, errorCount, dirtyCount, updateWeekdayDefault,
+    applicable, errorCount, dirtyCount,
   } = useScheduleSheetImport();
 
   return (
@@ -185,110 +182,9 @@ export function ScheduleSheetsManager() {
       </section>
 
       <section className="space-y-3">
-        <div>
-          <p className="text-headline">Googleスプレッドシートを作る</p>
-          <p className="mt-1 text-caption">
-            あなたのGoogleドライブに、入力用のシートを作ります。場所と対象ブロックの選択欄もあらかじめ用意します。
-          </p>
-        </div>
-        {googleConnected === false ? (
-          <form action="/api/google/connect" method="post">
-            <Button type="submit" size="lg">
-              Google Driveと連携
-            </Button>
-          </form>
-        ) : (
-          <>
-            {googleEmail && (
-              <p className="text-micro">連携中: {googleEmail}</p>
-            )}
-            {kind === "practice" && inputMode === "new" && (
-              <Disclosure
-                title="曜日ごとの時間・場所"
-                className="border-b border-separator/70"
-              >
-                <div className="space-y-2 pt-1">
-                  <div className="grid grid-cols-[2rem_minmax(0,1fr)_minmax(0,1.25fr)] gap-2 px-1">
-                    <span />
-                    <span className="text-micro">時間</span>
-                    <span className="text-micro">場所</span>
-                  </div>
-                  {weekdayDefaults.map((item) => (
-                    <div
-                      key={item.weekday}
-                      className="grid grid-cols-[2rem_minmax(0,1fr)_minmax(0,1.25fr)] items-center gap-2"
-                    >
-                      <span className="text-center text-[14px] font-semibold">
-                        {WEEKDAYS[item.weekday]}
-                      </span>
-                      <Input
-                        type="time"
-                        value={item.time}
-                        aria-label={`${WEEKDAYS[item.weekday]}曜日の時間`}
-                        onChange={(event) =>
-                          updateWeekdayDefault(
-                            item.weekday,
-                            "time",
-                            event.target.value,
-                          )
-                        }
-                      />
-                      <Select
-                        value={item.venueName}
-                        ariaLabel={`${WEEKDAYS[item.weekday]}曜日の場所`}
-                        onValueChange={(value) =>
-                          updateWeekdayDefault(
-                            item.weekday,
-                            "venueName",
-                            value,
-                          )
-                        }
-                        className="px-2 text-[14px]"
-                        options={[
-                          { value: "", label: "未設定" },
-                          ...venues.map((venue) => ({
-                            value: venue.name,
-                            label: venue.short || venue.name,
-                          })),
-                        ]}
-                      />
-                    </div>
-                  ))}
-                  <p className="px-1 text-micro">
-                    空欄の項目はシートでも空欄になります。
-                  </p>
-                </div>
-              </Disclosure>
-            )}
-            <Button
-              type="button"
-              size="lg"
-              disabled={issuing || issueBlocked || !creationChecked || googleConnected === null}
-              onClick={issueSpreadsheet}
-            >
-              {issuing ? "作成中…" : issueBlocked ? "作成結果を確認してください" : "シートを作る"}
-            </Button>
-          </>
-        )}
-        {sheetUrl && (
-          <Button type="button" variant="outline" size="lg" asChild>
-            <a href={sheetUrl} target="_blank" rel="noreferrer">
-              <ExternalLink size={17} />
-              作ったシートを開く
-            </a>
-          </Button>
-        )}
-        {creationAttempt?.resource && creationAttempt.state !== "registered" && (
-          <Button type="button" variant="outline" size="lg" disabled={issuing} onClick={repairSpreadsheet}>
-            シートの登録を確認する
-          </Button>
-        )}
-      </section>
-
-      <section className="space-y-3">
         <div className="flex items-center gap-2">
           <Step number={2} />
-          <p className="text-headline">CSVで作る場合</p>
+          <p className="text-headline">入力用のCSVを用意する</p>
         </div>
         <p className="text-caption">
           {kind === "practice"

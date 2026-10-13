@@ -10,6 +10,8 @@ private namespaces/data directories. Do not attach a review database to a
 production host or replace the current WSL/DB/Jobs installation. This is also
 the portable shape for the future Linux notebook. Do not restart Surface.
 
+Google Drive接続と予定表の新規発行は2026-10-14の所有者指示で廃止する。既存CSV/共有URLからの予定読込みとGAS記録・大会同期は維持する。旧Drive資格情報・接続データ・発行journalは復旧用に保持し、Drive callbackや新secretの準備は切替条件に含めない。
+
 ## Identity and Google login
 
 GoTrue listens on private loopback 18001; PostgREST on 18002; DB stays private.
@@ -105,7 +107,7 @@ business writes before retiring replay/mirror. Take coordinated snapshots and
 dryRun before actual migration. On 2026-10-12 the owner expanded this task to
 production cutover. This authorizes proceeding when the acceptance gates pass;
 it does not establish that the current candidate has passed those gates.
-Final dedicated account/ACLs, full backup admission, OAuth/phone/PWA/Push,
+Final dedicated account/ACLs, full backup admission, Google OAuth/phone/PWA/Push,
 restart/cold restore and rollback must pass before switching the public entry.
 
 The new `20261012180000_local_backup_write_guard.sql` and

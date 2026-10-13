@@ -1,40 +1,10 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 
 export async function GET() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ connected: false }, { status: 401 });
-  }
-  const { data } = await supabase
-    .from("google_drive_connections")
-    .select("google_email, connected_at")
-    .eq("profile_id", user.id)
-    .maybeSingle();
-  return NextResponse.json({
-    connected: !!data,
-    email: data?.google_email ?? null,
-    connectedAt: data?.connected_at ?? null,
-  });
+  return NextResponse.json(
+    { error: "Google Drive連携による予定表の発行機能は終了しました。CSVまたは共有URLから予定を読み込んでください。" },
+    { status: 410, headers: { "Cache-Control": "no-store" } },
+  );
 }
 
-export async function DELETE() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "ログインが必要です" }, { status: 401 });
-  }
-  const { error } = await supabase
-    .from("google_drive_connections")
-    .delete()
-    .eq("profile_id", user.id);
-  if (error) {
-    return NextResponse.json({ error: "連携を解除できませんでした" }, { status: 500 });
-  }
-  return NextResponse.json({ connected: false });
-}
+export const DELETE = GET;

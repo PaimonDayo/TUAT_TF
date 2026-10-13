@@ -1,15 +1,5 @@
 import { BLOCKS } from "@/lib/constants";
-import type { PracticeSchedule, ScheduleImportRow, ScheduleSheetBlock, ScheduleSheetKind, ScheduleSheetWeekdayDefault } from "@/types";
-
-export const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
-
-export const INITIAL_WEEKDAY_DEFAULTS: ScheduleSheetWeekdayDefault[] = WEEKDAYS.map(
-  (_, weekday) => ({
-    weekday,
-    time: weekday === 1 || weekday === 3 ? "17:00" : weekday === 6 ? "09:00" : "",
-    venueName: "",
-  }),
-);
+import type { PracticeSchedule, ScheduleImportRow, ScheduleSheetBlock, ScheduleSheetKind } from "@/types";
 
 export function createTemplateRows(
   year: number,

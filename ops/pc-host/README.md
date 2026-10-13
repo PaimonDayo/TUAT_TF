@@ -12,7 +12,7 @@ Cloudflare固定Tunnel → loopback gateway → Next一つ → 現行PC DB。
 
 切替時はAuthユーザー/許可リスト連携を先に分離し、旧業務予備の未解決書込みを照合してから停止する。
 Jobsは同じNextへ接続するshared-pcモードを使用し、旧journalの履歴を保持する。
-Googleログイン/Drive callback、Push購読、PWA/旧タブのorigin変更は切替前に確認する。
+Googleログイン、Push購読、PWA/旧タブのorigin変更は切替前に確認する。
 
 ## 準備と起動
 
@@ -53,7 +53,7 @@ Windowsの配置は、releaseとNode/PowerShell実行directoryをSYSTEM/Administ
 
 `synthetic-review.mjs --check` は外部接続やlistener/key生成を行わない。既存のowner-named private stateを指定した `--serve --state-dir <path>` だけが、独立のfake PC API18180/cloud Auth18181を起動する。実サービスの資格情報を引き継がず、画像/Sheetsを無効にする。これはbuilt NextのHTTP/cookie/経路/障害の試験用で、実DBのRLS・Google・Drive・R2・Push・PWAの証拠ではない。
 
-本番前には固定無料入口/hostname、新originのOAuth callback、Drive正規source、R2実効フラグ、Push鍵/購読、専用accountと秘密隔離、実写真/通常保存/旧タブ/実端末PWA、OS再起動と別媒体復元を確認する。現在の候補はこれらの未確認が残るため切替可能とは報告しない。
+本番前には固定無料入口/hostname、新originのOAuth callback、R2実効フラグ、Push鍵/購読、専用accountと秘密隔離、実写真/通常保存/旧タブ/実端末PWA、OS再起動と別媒体復元を確認する。現在の候補はこれらの未確認が残るため切替可能とは報告しない。
 
 ## 旧backendを止める前の条件
 

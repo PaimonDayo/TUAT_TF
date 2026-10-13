@@ -8,7 +8,6 @@ import { sessionClientConfig } from "./supabase/server-client-options";
 import { createAdminClient } from "./supabase/admin";
 import { uploadImage, removeImages } from "./image-storage";
 import { gasPost } from "./sheet-sync/gas-client";
-import { createScheduleSpreadsheet } from "./google-drive";
 
 const mocks = vi.hoisted(() => ({ runtime: true, synthetic: false, local: false, status: null as unknown,
   lstat: vi.fn(), realpath: vi.fn(), open: vi.fn(), dispatch: vi.fn(), r2: vi.fn() }));
@@ -200,43 +199,29 @@ describe("all PC business transports fail closed once, then recover", () => {
 
 describe("direct provider mutation boundaries", () => {
   const storage = { storage: { from: () => ({ upload: vi.fn(), remove: vi.fn() }) } } as unknown as Parameters<typeof uploadImage>[0];
-  const sheet = { accessToken: "synthetic-token", title: "Synthetic", kind: "practice" as const, year: 2026, month: 10, block: "all" as const, venues: [], schedules: [], weekdayDefaults: [], onCreated: async () => undefined };
   beforeEach(() => {
     for (const [name, value] of Object.entries({ R2_ACCOUNT_ID: "a".repeat(32), R2_ACCESS_KEY_ID: "synthetic", R2_SECRET_ACCESS_KEY: "synthetic", R2_BUCKET_NAME: "synthetic", R2_READ_ENABLED: "true", R2_WRITE_ENABLED: "true", IMAGE_STORAGE_READ_ONLY: "false", SHEET_SYNC_GAS_URL: "https://gas.example.test" })) vi.stubEnv(name, value);
   });
-  it("dispatches no R2/GAS/Sheets request while protected", async () => {
+  it("dispatches no R2/GAS request while protected", async () => {
     mocks.status = null;
     for (const operation of [() => uploadImage(storage, "avatars", "synthetic/avatar.webp", Buffer.from("synthetic")),
-      () => removeImages(storage, "avatars", ["synthetic/avatar.webp"]), () => gasPost({ action: "writeCells" }),
-      () => createScheduleSpreadsheet(sheet)]) await expect(operation()).rejects.toMatchObject({ status: 503, code: "PC_BACKUP_UNAVAILABLE" });
+      () => removeImages(storage, "avatars", ["synthetic/avatar.webp"]), () => gasPost({ action: "writeCells" })]) await expect(operation()).rejects.toMatchObject({ status: 503, code: "PC_BACKUP_UNAVAILABLE" });
     expect(mocks.r2).not.toHaveBeenCalled(); expect(mocks.dispatch).not.toHaveBeenCalled();
   });
   it("permits provider writes with a fresh pair and recovery after a protection interval", async () => {
-    mocks.dispatch.mockImplementation(async (target: string) => target.includes("/v4/spreadsheets") && !target.includes(":batchUpdate")
-      ? Response.json({ spreadsheetId: "synthetic", spreadsheetUrl: "https://sheets.example.test/synthetic", sheets: [{ properties: { sheetId: 1 } }] }) : Response.json({ success: true }));
+    mocks.dispatch.mockImplementation(async () => Response.json({ success: true }));
     await uploadImage(storage, "avatars", "synthetic/avatar.webp", Buffer.from("synthetic"));
     await removeImages(storage, "note-images", [`${id}/22222222-2222-4222-8222-222222222222.webp`]);
-    await gasPost({ action: "writeCells" }); await createScheduleSpreadsheet(sheet);
+    await gasPost({ action: "writeCells" });
     expect(mocks.r2.mock.calls.map(([command]) => command.constructor.name)).toEqual(["ListObjectsV2Command", "PutObjectCommand", "DeleteObjectsCommand"]);
-    expect(mocks.dispatch).toHaveBeenCalledTimes(3);
+    expect(mocks.dispatch).toHaveBeenCalledTimes(1);
     mocks.status = null; await expect(gasPost({ action: "writeCells" })).rejects.toMatchObject({ status: 503 });
-    mocks.status = snapshot(); await gasPost({ action: "writeCells" }); expect(mocks.dispatch).toHaveBeenCalledTimes(4);
+    mocks.status = snapshot(); await gasPost({ action: "writeCells" }); expect(mocks.dispatch).toHaveBeenCalledTimes(2);
   });
   it("rechecks immediately before R2 PUT after capacity/auth work changes protection", async () => {
     mocks.r2.mockImplementation(async () => { mocks.status = null; return { Contents: [] }; });
     await expect(uploadImage(storage, "avatars", "synthetic/avatar.webp", Buffer.from("synthetic"))).rejects.toMatchObject({ status: 503 });
     expect(mocks.r2.mock.calls.map(([command]) => command.constructor.name)).toEqual(["ListObjectsV2Command"]);
-  });
-  it("does not send a second Sheets mutation after protection changes during creation", async () => {
-    mocks.dispatch.mockImplementation(async () => { mocks.status = null; return Response.json({ spreadsheetId: "synthetic", spreadsheetUrl: "https://sheets.example.test", sheets: [{ properties: { sheetId: 1 } }] }); });
-    await expect(createScheduleSpreadsheet(sheet)).rejects.toMatchObject({ outcome: "partial", phase: "setup", protection: true,
-      resource: { spreadsheetId: "synthetic", url: "https://docs.google.com/spreadsheets/d/synthetic/edit" }, retryable: false });
-    expect(mocks.dispatch).toHaveBeenCalledOnce();
-  });
-  it("reports unknown first Sheets create results without another dispatch", async () => {
-    mocks.dispatch.mockRejectedValue(new Error("synthetic response lost"));
-    await expect(createScheduleSpreadsheet(sheet)).rejects.toMatchObject({ outcome: "unknown", phase: "create", resource: null, retryable: false });
-    expect(mocks.dispatch).toHaveBeenCalledOnce();
   });
   it("keeps the pure GAS fetch read available and never retries a failed mutation", async () => {
     mocks.status = null; mocks.dispatch.mockResolvedValueOnce(Response.json({ data: {} })); await gasPost({ action: "fetchMember" });
