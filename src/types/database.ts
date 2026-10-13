@@ -15,7 +15,7 @@ export type Database = {
   public: {
     Tables: {
       competition_meets: MeetReadTable<{competition_id:string;meet_key:string;staff_role_id:string|null;legacy_source:string|null;ready:boolean;source_frozen:boolean;program:Json;party_info:Json;created_at:string}>
-      competition_meet_events: MeetReadTable<{competition_id:string;name:string;family:string;division:string;starts_at:string|null;sort_order:number;discipline:string;wind:boolean;capacity:number|null;confirmed:boolean;revision:number}>
+      competition_meet_events: MeetReadTable<{competition_id:string;name:string;family:string;division:string;starts_at:string|null;sort_order:number;discipline:string;wind:boolean;capacity:number|null;confirmed:boolean;revision:number;relay_results:Json}>
       competition_participants: MeetReadTable<{id:string;competition_id:string;profile_id:string|null;name:string;grade:string;absent:boolean;deleted:boolean;revision:number;legacy_data:Json}>
       competition_appearances: MeetReadTable<{id:string;competition_id:string;participant_id:string;event_name:string;ordinal:number;operation_key:string;qualification_mark:string|null;state:string;performance:Json;revision:number}>
       competition_meet_duty_roles: MeetReadTable<{id:string;competition_id:string;slot_time:string;event_name:string;name:string;required_count:number;revision:number;abbreviation:string}>
@@ -2187,6 +2187,7 @@ export type Database = {
       get_competition_meet_backend: {Args:Record<PropertyKey,never>;Returns:string}
       get_competition_meet_export: {Args:{p_competition_id:string};Returns:Json}
       get_competition_meet_mirror: {Args:Record<string,never>;Returns:Json}
+      save_competition_relay_checked: {Args:{p_competition_id:string;p_request_id:string;p_command:Json};Returns:Json}
       mutate_competition_meet: {Args:{p_competition_id:string;p_request_id:string;p_command:Json};Returns:Json}
       check_competition_meet_mutation: {Args:{p_competition_id:string;p_request_id:string;p_command:Json};Returns:Json}
       apply_competition_sheet_edits: {Args:{p_request_id:string;p_context:Json;p_changes:Json;p_dry_run:boolean};Returns:Json}

@@ -4,6 +4,8 @@ import vm from "node:vm";
 import { gzipSync, gunzipSync } from "node:zlib";
 import { expect, it } from "vitest";
 import { obPublishedResultSheets, obResultSheet } from "./ob-results-sheet";
+import {emptyRelayResults,relayResultSheet} from "./competition-meet-relay";
+import {fixtureMeet} from "./__fixtures__/competition-meet";
 import { OB_PROGRAM } from "./ob-meet";
 import { OB_RESULTS_SPREADSHEET_ID } from "./ob-results-feed-auth";
 import type { ObEntry } from "./ob-entries";
@@ -43,6 +45,8 @@ function snapshot(entries = roster, operations: ObEventOperation[] = []) {
   return { schemaVersion: 2, meetKey: "ob-2026", spreadsheetId: OB_RESULTS_SPREADSHEET_ID, generatedAt: "2026-10-09T18:00:00Z", entryCount: entries.length,
     revision: createHash("sha256").update(JSON.stringify([sheets, statusTargets])).digest("hex"), sheets, statusTargets };
 }
+
+function relaySheet(){const teams=emptyRelayResults();teams[5]={...emptyRelayResults()[5],lane:6,name:"=合成チーム",time:"2:45.67"};return relayResultSheet({...fixtureMeet().events[0],name:"4×300mリレー",relay_results:teams});}
 
 function setup(advanced = false) {
   const source = Object.assign(snapshot(), advanced ? obSheetEditSource(roster, [], "synthetic") : {});
@@ -255,4 +259,23 @@ it("replaces a legacy timer once and keeps the hourly timer on repeated setup",(
  api.installObResultsTrigger(); api.installObResultsTrigger();
  expect(state.triggers).toEqual(["publishObResults"]);
  expect(state.properties.OB_RESULTS_TRIGGER_PERIOD).toBe("hourly-v1");
+});
+it("adds only a new six-lane relay tab atomically and preserves unrelated notes and old-source compatibility",()=>{
+ const {state,api}=setup();api.publishObResults();const sheet=relaySheet();state.source.sheets.push(sheet);
+ state.source.revision=createHash("sha256").update(JSON.stringify(state.source.sheets)).digest("hex");
+ expect(api.dryRunObResultsPublish().changed).toBe(true);expect(state.workbook.sheets.some(s=>s.properties.title===sheet.name)).toBe(false);
+ expect(api.publishObResults().changed).toBe(true);
+ const relay=state.workbook.sheets.find(s=>s.properties.title===sheet.name)!;expect(relay.cells.slice(0,7).map(row=>row.slice(0,8).map(c=>c.userEnteredValue?.stringValue??c.userEnteredValue?.numberValue??""))).toEqual(sheet.rows);
+ expect(relay.cells[6][1].userEnteredValue).toEqual({stringValue:"=合成チーム"});
+ expect(state.workbook.sheets.find(s=>s.properties.title==="独自タブ")!.cells[0][0].userEnteredValue?.stringValue).toBe("保持");
+ expect(api.publishObResults().changed).toBe(false);expect(state.workbook.sheets.filter(s=>s.properties.title===sheet.name)).toHaveLength(1);
+ state.source.sheets.pop();state.source.revision=createHash("sha256").update(JSON.stringify(state.source.sheets)).digest("hex");api.publishObResults();
+ state.source.sheets.push(sheet);state.source.revision=createHash("sha256").update(JSON.stringify(state.source.sheets)).digest("hex");expect(api.publishObResults().changed).toBe(true);
+ expect(state.workbook.sheets.filter(s=>s.properties.title===sheet.name)).toHaveLength(1);
+});
+it("rejects an existing unreviewed relay tab and leaves its independent contents intact",()=>{
+ const {state,api}=setup();api.publishObResults();const sheet=relaySheet();state.source.sheets.push(sheet);state.source.revision=createHash("sha256").update(JSON.stringify(state.source.sheets)).digest("hex");
+ state.workbook.sheets.push({properties:{sheetId:100,title:sheet.name,gridProperties:{rowCount:7,columnCount:4}},cells:[[{userEnteredValue:{stringValue:"個別の追記"}}]]});
+ const before=structuredClone(state.workbook),writes=state.writes.length;
+ expect(()=>api.publishObResults()).toThrow("generated range");expect(state.workbook).toEqual(before);expect(state.writes).toHaveLength(writes);
 });

@@ -13,6 +13,13 @@ it("sends one atomic request with the unchanged ID and backend and schedules ver
  expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith("mutate_competition_meet",{p_competition_id:OB_MEET.competitionId,p_request_id:request,p_command:command});expect(command).toEqual(before);expect(mocks.publish).toHaveBeenCalledOnce();
 });
 it("reuses the actions for another competition without invoking the OB publisher",async()=>{expect((await mutateCompetitionMeet("another-meet",request,command)).ok).toBe(true);expect(mocks.publish).not.toHaveBeenCalled();});
+it("saves relay teams through the checked team RPC and verifies the same immutable request",async()=>{
+ const relay={action:"relay.save" as const,event:"4×300mリレー",revision:0,relayResults:Array.from({length:6},(_,index)=>({lane:index+1,name:"",time:"",members:["","","",""] as [string,string,string,string]})),confirmed:false,backend:"pc" as const};
+ expect((await mutateCompetitionMeet(OB_MEET.competitionId,request,relay)).ok).toBe(true);
+ expect(mocks.rpc).toHaveBeenLastCalledWith("save_competition_relay_checked",{p_competition_id:OB_MEET.competitionId,p_request_id:request,p_command:relay});
+ await checkCompetitionMeetMutation(OB_MEET.competitionId,request,relay);
+ expect(mocks.rpc).toHaveBeenLastCalledWith("check_competition_meet_mutation",expect.objectContaining({p_request_id:request,p_command:relay}));
+});
 it("uses the same immutable request and verification path for a division correction",async()=>{
  const correction={action:"appearance.moveDivision" as const,id:request,revision:3,event:"女子100m",mark:"12.34",confirmDuties:true,backend:"pc" as const};
  expect(await mutateCompetitionMeet(OB_MEET.competitionId,request,correction)).toEqual({ok:true,requestId:request,id:request});

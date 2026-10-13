@@ -7,6 +7,7 @@ var OB_EDIT_METADATA_KEY = 'TUAT_OB_EDIT_MANAGED_V1';
 var OB_RESULTS_STATUS_OPTIONS = ['出場', 'DNS（欠場）', 'DNF（途中棄権）', 'DQ（失格）'];
 var OB_RESULTS_METADATA_KEY = 'TUAT_OB_RESULTS_MANAGED_V1';
 var OB_RESULTS_TABS = ['プログラム', '1500m', 'ジャベリックスロー', '立ち五段跳び', '100m', '砲丸投げ', '300mH', '走り高跳び', '300m', 'やり投げ', '走り幅跳び', '3000m'];
+var OB_RESULTS_RELAY_TAB = '4×300mリレー';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Public entrypoint in the Apps Script editor.
 function dryRunObResultsPublish() { return runObResultsPublish_(true); }
@@ -53,7 +54,7 @@ function runObResultsPublish_(dryRun) {
     var properties = PropertiesService.getScriptProperties();
     var token = properties.getProperty('OB_RESULTS_READ_TOKEN');
     if (!token || !/^[a-f0-9]{64}$/.test(token)) throw new Error('OB read-only token is not configured');
-    var response = UrlFetchApp.fetch(OB_RESULTS_FEED_URL, { headers: { Authorization: 'Bearer ' + token }, muteHttpExceptions: true, followRedirects: false });
+    var response = UrlFetchApp.fetch(OB_RESULTS_FEED_URL, { headers: { Authorization: 'Bearer ' + token, 'X-OB-Relay-Results': '1' }, muteHttpExceptions: true, followRedirects: false });
     if (response.getResponseCode() !== 200) throw new Error('OB source unavailable; previous sheet preserved');
     var snapshot = JSON.parse(response.getContentText());
     validateObResultsSnapshot_(snapshot);
@@ -88,9 +89,10 @@ function validateObResultsSnapshot_(snapshot) {
   if (!snapshot || snapshot.schemaVersion !== 2 || snapshot.meetKey !== 'ob-2026' || snapshot.spreadsheetId !== OB_RESULTS_TARGET
       || !/^[a-f0-9]{64}$/.test(snapshot.revision || '') || !Number.isSafeInteger(snapshot.entryCount) || snapshot.entryCount < 0
       || typeof snapshot.generatedAt !== 'string' || !Number.isFinite(Date.parse(snapshot.generatedAt))
-      || !Array.isArray(snapshot.sheets) || snapshot.sheets.length !== OB_RESULTS_TABS.length) throw new Error('Invalid OB source; previous sheet preserved');
+      || !Array.isArray(snapshot.sheets) || (snapshot.sheets.length !== OB_RESULTS_TABS.length && snapshot.sheets.length !== OB_RESULTS_TABS.length + 1)) throw new Error('Invalid OB source; previous sheet preserved');
+  var expectedTabs = OB_RESULTS_TABS.concat(snapshot.sheets.length > OB_RESULTS_TABS.length ? [OB_RESULTS_RELAY_TAB] : []);
   snapshot.sheets.forEach(function(sheet, index) {
-    if (!sheet || sheet.name !== OB_RESULTS_TABS[index] || !Array.isArray(sheet.widths) || !sheet.widths.length
+    if (!sheet || sheet.name !== expectedTabs[index] || !Array.isArray(sheet.widths) || !sheet.widths.length
         || !sheet.widths.every(function(width) { return Number.isFinite(width) && width > 0; })
         || !Array.isArray(sheet.rows) || !sheet.rows.length || sheet.rows[0].length !== sheet.widths.length) throw new Error('Invalid OB tab');
     sheet.rows.forEach(function(row) {
@@ -99,7 +101,10 @@ function validateObResultsSnapshot_(snapshot) {
       })) throw new Error('Invalid OB cells');
     });
     if (index === 0 && JSON.stringify(sheet.rows[0]) !== JSON.stringify(['時刻', '内容', '備考'])) throw new Error('Invalid OB program');
-    if (index > 0 && ['区分', '氏名', '学年', '出場状況', '記録'].some(function(header) { return sheet.rows[0].indexOf(header) < 0; })) throw new Error('Missing OB headers');
+    if (sheet.name === OB_RESULTS_RELAY_TAB) {
+      if (JSON.stringify(sheet.rows[0]) !== JSON.stringify(['レーン', 'チーム名', 'タイム', '順位', '1走', '2走', '3走', '4走']) || sheet.rows.length !== 7
+          || sheet.rows.slice(1).some(function(row, lane) { return row.length !== 8 || row[0] !== lane + 1 || typeof row[1] !== 'string' || typeof row[2] !== 'string' || row.slice(4).some(function(member) { return typeof member !== 'string'; }); })) throw new Error('Invalid relay lanes');
+    } else if (index > 0 && ['区分', '氏名', '学年', '出場状況', '記録'].some(function(header) { return sheet.rows[0].indexOf(header) < 0; })) throw new Error('Missing OB headers');
   });
   if (!Array.isArray(snapshot.statusTargets) || snapshot.statusTargets.length !== 11) throw new Error('Missing OB private row mapping');
   snapshot.statusTargets.forEach(function(tab, index) {
@@ -121,9 +126,16 @@ function buildObResultsPlan_(snapshot, workbook, initialRanges) {
   var previous = metadata.length ? JSON.parse(metadata[0].metadataValue) : null;
   if (previous && (previous.version !== 1 || previous.meetKey !== 'ob-2026')) throw new Error('Invalid OB output marker');
   var managed = previous ? previous.managed : initialRanges;
-  if (!Array.isArray(managed) || managed.length !== OB_RESULTS_TABS.length) throw new Error('Initial generated ranges must be reviewed before the first write');
+  if (!Array.isArray(managed) || (managed.length !== OB_RESULTS_TABS.length && managed.length !== OB_RESULTS_TABS.length + 1)) throw new Error('Initial generated ranges must be reviewed before the first write');
+  var requests = [], changes = [];
   var mapped = snapshot.sheets.map(function(source) {
     var matches = (workbook.sheets || []).filter(function(sheet) { return sheet.properties.title === source.name; });
+    if (source.name === OB_RESULTS_RELAY_TAB && !matches.length && previous && managed.length === OB_RESULTS_TABS.length) {
+      var relayId = Math.max.apply(null, workbook.sheets.map(function(sheet) { return sheet.properties.sheetId; }).concat([0])) + 1;
+      var relayProperties = { sheetId: relayId, title: OB_RESULTS_RELAY_TAB, gridProperties: { rowCount: 7, columnCount: 8 } };
+      requests.push({ addSheet: { properties: relayProperties } });
+      return { source: source, target: relayProperties, bounds: { sheetId: relayId, rows: 7, columns: 8 } };
+    }
     if (matches.length !== 1) throw new Error('An OB output tab is missing or renamed');
     var target = matches[0].properties;
     var bounds = managed.filter(function(item) { return item.sheetId === target.sheetId; });
@@ -133,9 +145,9 @@ function buildObResultsPlan_(snapshot, workbook, initialRanges) {
     var boundsNow = Object.assign({}, bounds[0]);
     return { source: source, target: target, bounds: boundsNow };
   });
-  if (snapshot.entryCount === 0 && mapped.some(function(item, index) { return index > 0 && item.bounds.rows > 1; })) throw new Error('Refusing to replace an existing roster with zero entries');
-  if (previous && previous.revision === snapshot.revision) return { requests: [], changes: [] };
-  var requests = [], changes = [], nextManaged = [];
+  if (snapshot.entryCount === 0 && mapped.some(function(item, index) { return index > 0 && item.source.name !== OB_RESULTS_RELAY_TAB && item.bounds.rows > 1; })) throw new Error('Refusing to replace an existing roster with zero entries');
+  if (previous && previous.revision === snapshot.revision && !requests.length) return { requests: [], changes: [] };
+  var nextManaged = managed.filter(function(bounds) { return !mapped.some(function(item) { return item.target.sheetId === bounds.sheetId; }); });
   mapped.forEach(function(item) {
     var source = item.source, target = item.target, before = item.bounds;
     var rows = source.rows.length, columns = source.widths.length;

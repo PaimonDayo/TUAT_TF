@@ -16,6 +16,7 @@ import { MeetEvent } from "@/lib/meet-operations";
 import { meetAppearancePositionLabel, meetDutyText, meetDutyConflict, meetEventCounts, meetRule, type CompetitionMeet, type ManagedMeetEvent, type MeetAppearance, type MeetCommand, type MeetParticipant } from "@/lib/competition-meet";
 import { mutateCompetitionMeet, checkCompetitionMeetMutation } from "@/app/(app)/competitions/meet-actions";
 import { CompetitionMeetEventEditor } from "./CompetitionMeetEventEditor";
+import { CompetitionMeetRelayEditor } from "./CompetitionMeetRelayEditor";
 import { ObLiveRefresh } from "./ObLiveRefresh";
 import {CompetitionMeetDutyEditor,CompetitionMeetRoleEditor} from "./CompetitionMeetDutyEditor";
 import {CompetitionMeetStaffEditor} from "./CompetitionMeetStaffEditor";
@@ -97,7 +98,7 @@ export function CompetitionMeetWorkspace({ meet, me, initialSection = "events", 
       <div className="space-y-2">{meet.events.map(event => {
         const counts = meetEventCounts(meet, event);
         return <Card key={event.name}><button data-ui-row className="flex min-h-16 w-full items-center gap-3 p-3.5 text-left pressable" onClick={() => setEditor({ kind: "event", name: event.name })}>
-          <span className="w-12 shrink-0 text-caption tabular-nums">{event.starts_at ?? "未定"}</span><span className="min-w-0 flex-1"><span className="block text-body font-semibold">{event.name}</span><span className="block text-caption">出場 {counts.people}人・{counts.appearances}件{counts.dns > 0 ? ` / DNS ${counts.dns}件` : ""}{counts.dnf > 0 ? ` / DNF ${counts.dnf}件` : ""}{counts.dq > 0 ? ` / DQ ${counts.dq}件` : ""}</span></span><span className="text-caption">{event.confirmed ? "確定" : "組・記録"} →</span>
+          <span className="w-12 shrink-0 text-caption tabular-nums">{event.starts_at ?? "未定"}</span><span className="min-w-0 flex-1"><span className="block text-body font-semibold">{event.name}</span><span className="block text-caption">{event.relay_results?`チーム ${event.relay_results.filter(team=>team.name.trim()).length} / 6レーン` : <>出場 {counts.people}人・{counts.appearances}件{counts.dns > 0 ? ` / DNS ${counts.dns}件` : ""}{counts.dnf > 0 ? ` / DNF ${counts.dnf}件` : ""}{counts.dq > 0 ? ` / DQ ${counts.dq}件` : ""}</>}</span></span><span className="text-caption">{event.confirmed ? "確定" : event.relay_results?"チーム・タイム":"組・記録"} →</span>
         </button></Card>;
       })}</div>
       {!meet.events.length && <EmptyState title="種目はまだありません" description="大会の管理者が種目を追加すると、出場登録と記録入力を始められます。" />}
@@ -129,7 +130,7 @@ export function CompetitionMeetWorkspace({ meet, me, initialSection = "events", 
     </FormModal>}
     {editor?.kind === "participant" && <ParticipantEditor key={editor.id ?? "new"} self={editor.self} person={meet.participants.find(p=>p.id===editor.id)} meet={meet} me={me} mutation={mutation} onClose={close} onSaved={()=>{setEditor(null);setDetailId(mutation.getSavedId()??null);}} />}
     {editor?.kind === "appearance" && <AppearanceEditor key={editor.id ?? `${editor.participantId}:${editor.event}`} appearance={meet.appearances.find(a=>a.id===editor.id)} participantId={editor.participantId} event={editor.event} meet={meet} me={me.id} mutation={mutation} onClose={close} onSaved={()=>editor.returnEvent?setEditor({kind:"event",name:editor.returnEvent,appearanceId:mutation.getSavedId()}):editor.participantId?(setEditor(null),setDetailId(editor.participantId)):close()} />}
-    {editor?.kind === "event" && <CompetitionMeetEventEditor key={editor.name} initialAppearanceId={editor.appearanceId} event={meet.events.find(e=>e.name===editor.name)!} meet={meet} mutation={mutation} onClose={close} onAdd={() => setEditor({kind:"appearance",event:editor.name,returnEvent:editor.name})} />}
+    {editor?.kind === "event" && (meet.events.find(e=>e.name===editor.name)!.relay_results?<CompetitionMeetRelayEditor key={editor.name} event={meet.events.find(e=>e.name===editor.name)!} meet={meet} mutation={mutation} onClose={close}/>:<CompetitionMeetEventEditor key={editor.name} initialAppearanceId={editor.appearanceId} event={meet.events.find(e=>e.name===editor.name)!} meet={meet} mutation={mutation} onClose={close} onAdd={() => setEditor({kind:"appearance",event:editor.name,returnEvent:editor.name})} />)}
     {editor?.kind === "role"&&<CompetitionMeetRoleEditor key={editor.id??"new"} roleId={editor.id} initialSlot={editor.slot} meet={meet} mutation={mutation} onClose={close}/>}
     {editor?.kind === "staff"&&<CompetitionMeetStaffEditor meet={meet} mutation={mutation} onClose={close}/>}
     {editor?.kind === "newDuty"&&<CompetitionMeetDutyEditor key={editor.roleId??"new"} roleId={editor.roleId} initialSlot={editor.slot} initialPersonId={editor.personId} meet={meet} mutation={mutation} onClose={close}/>}
@@ -156,7 +157,7 @@ function AppearanceEditor({appearance,participantId,event,meet,me,mutation,onClo
   const [eventName,setEvent]=useState(appearance?.event_name??event??""); const [mark,setMark]=useState(appearance?.qualification_mark??"");
   const sourceEvent=meet.events.find(e=>e.name===original?.event_name);
   const moving=!!original&&eventName!==original.event_name;
-  const eventOptions=original?meet.events.filter(e=>e.name===original.event_name||sourceEvent&&e.family===sourceEvent.family&&e.discipline===sourceEvent.discipline&&e.wind===sourceEvent.wind&&e.capacity===sourceEvent.capacity&&e.division!==sourceEvent.division&&["男子","女子"].includes(e.division)&&["男子","女子"].includes(sourceEvent.division)):meet.events;
+  const eventOptions=original?meet.events.filter(e=>e.name===original.event_name||sourceEvent&&e.family===sourceEvent.family&&e.discipline===sourceEvent.discipline&&e.wind===sourceEvent.wind&&e.capacity===sourceEvent.capacity&&e.division!==sourceEvent.division&&["男子","女子"].includes(e.division)&&["男子","女子"].includes(sourceEvent.division)):meet.events.filter(e=>!e.relay_results);
   const conflicts=(!original||moving)?meet.duties.filter(d=>d.participant_id===person&&d.slot_time===meet.events.find(e=>e.name===eventName)?.starts_at&&(d.assignment||d.role_ids.length)):[];
   async function save(confirmed=false){
     if((moving||conflicts.length)&&!confirmed){setConfirmDuties(true);return;}

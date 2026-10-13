@@ -20,3 +20,9 @@
 独自タブ・右/下の追記・過去の記録は保持する。旧エントリー編集タブは管理印と私有baselineが一致した場合だけ生成結果と同じbatchで撤去する。公開出場状況はDNS/DNF/DQを表示し、取消はDNS扱い。順位は男女・種目別に自動計算し、DNS等は順位対象外。停止はこのGASのstopObResultsTriggerのみを使用する。
 
 仕様: [Webアプリ](https://developers.google.com/apps-script/guides/web)、[Sheets batchUpdate](https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/batchUpdate)。
+
+## 6レーンリレーへの対応
+
+リレー対応GASは `X-OB-Relay-Results: 1` を送り、従来12タブに6レーンのチーム名・タイム・順位・1走〜4走を加えた13タブを取得する。ヘッダーのない既存GASは12タブを維持する。対応版の初回だけ、生成範囲metadataが12タブで同名タブが存在しない場合にリレータブを同じatomic batchで追加する。既存の同名タブは勝手に管理対象にしない。
+
+配信元の所有アカウント・プロジェクト・既存deploymentとソースを確認し、シートsnapshotとdryRun後に、そのdeploymentだけを対応版へ更新する。別アカウントに残る旧プロジェクトを更新しても現行配信が更新された証拠にはしない。

@@ -10,7 +10,7 @@ import { obSheetStatusTargets } from "@/lib/ob-sheet-status";
 import { obSheetEditSource } from "@/lib/ob-sheet-edits";
 
 export const maxDuration = 60;
-const headers = { "Cache-Control": "private, no-store", "Vary": "Authorization" };
+const headers = { "Cache-Control": "private, no-store", "Vary": "Authorization, X-OB-Relay-Results" };
 
 /** Fixed OB2026 export only. This key cannot call any update or general-purpose sync API. */
 export async function GET(request: Request) {
@@ -20,8 +20,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "認証が必要です" }, { status: 401, headers });
   }
   try {
-    const { entries, operations } = await getObPublishedResults(createAdminClient());
-    const sheets = obPublishedResultSheets(entries, operations);
+    const { entries, operations, relaySheets=[] } = await getObPublishedResults(createAdminClient());
+    // Older deployed GAS accepts exactly twelve tabs. Include relay only for a compatible publisher.
+    const sheets = [...obPublishedResultSheets(entries, operations),...(request.headers.get("x-ob-relay-results")==="1"?relaySheets:[])];
     const statusTargets = obSheetStatusTargets(entries, operations, sheets, secret);
     const editSource = obSheetEditSource(entries, operations, secret);
     const revision = createHash("sha256").update(JSON.stringify([sheets, statusTargets, editSource])).digest("hex");

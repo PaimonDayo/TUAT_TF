@@ -23,6 +23,13 @@ it("fails closed when the key is unavailable", async () => {
   expect((await GET(request())).status).toBe(503);
   expect(state.admin).not.toHaveBeenCalled();
 });
+it("includes six relay lanes as public team cells without adding individual edit targets",async()=>{
+ const relay={name:"4×300mリレー",widths:[8,24,14,8,20,20,20,20],rows:[["レーン","チーム名","タイム","順位","1走","2走","3走","4走"],...Array.from({length:6},(_,index)=>[index+1,index===5?"合成チーム":"",index===5?"2:45.67":"",index===5?1:"","","","",""])]};
+ state.read.mockResolvedValueOnce({entries:[],operations:[],relaySheets:[relay]});
+ const compatible=request();compatible.headers.set("X-OB-Relay-Results","1");
+ const response=await GET(compatible),body=await response.json();expect(response.status).toBe(200);expect(body.sheets).toHaveLength(13);expect(body.sheets.at(-1)).toEqual(relay);expect(body.entryCount).toBe(0);expect(body.statusTargets.some((target:{name:string})=>target.name===relay.name)).toBe(false);expect(body.statusTargets.every((target:{rows:unknown[]})=>!target.rows.length)).toBe(true);
+ state.read.mockResolvedValueOnce({entries:[],operations:[],relaySheets:[relay]});expect((await (await GET(request())).json()).sheets).toHaveLength(12);
+});
 it("fixes the target, publishes only cells, and prevents HTTP caching", async () => {
   const response = await GET(request());
   const body = await response.json();

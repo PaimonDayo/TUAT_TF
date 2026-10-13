@@ -1,3 +1,4 @@
+import {relayResultRow} from "./competition-meet-relay";
 import {gradeShort} from "./constants";
 import { appearancePerformance, availableAppearance, competitionEventData, meetAppearancePositionLabel, meetRule, type CompetitionMeet } from "./competition-meet";
 import { MeetEvent } from "./meet-operations";
@@ -8,6 +9,7 @@ import type { ParsedProgramRow } from "./competition-program";
 export function meetResultRows(meet: CompetitionMeet, date: string): ParsedProgramRow[] {
   const people = new Map(meet.participants.map(p => [p.id, p]));
   return meet.events.map(event => {
+    if(event.relay_results)return relayResultRow(event,date);
     const data = competitionEventData(meet, event), aggregate = new MeetEvent(meetRule(event), data);
     const ranks = obResultRanks(meetRule(event), data.participants);
     return {

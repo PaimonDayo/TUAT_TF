@@ -18,7 +18,7 @@ export async function getObPublishedResults(admin: SupabaseClient<Database>) {
   }
   if(normalized.data)return competitionMeetObExport(normalized.data as unknown as CompetitionMeet);
   const [entries, operations] = await Promise.all([readEntries(admin), readOperations(admin)]);
-  return { entries, operations };
+  return { entries, operations, relaySheets: [] };
 }
 
 async function readEntries(admin: SupabaseClient<Database>): Promise<ObEntry[]> {

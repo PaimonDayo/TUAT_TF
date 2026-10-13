@@ -16,7 +16,7 @@ function refresh(competitionId:string) {
   revalidatePath("/home");
   if(isObCompetition(competitionId))scheduleObResultsPublish();
 }
-async function call(name: "mutate_competition_meet" | "check_competition_meet_mutation", args: {p_competition_id:string;p_request_id:string;p_command:Json}) {
+async function call(name: "mutate_competition_meet" | "check_competition_meet_mutation" | "save_competition_relay_checked", args: {p_competition_id:string;p_request_id:string;p_command:Json}) {
   const client = await createClient();
   const { data, error } = await client.auth.getUser();
   if(error)return {data:null,error:{message:"meet_auth_unavailable"}};
@@ -32,6 +32,8 @@ function message(error: string) {
   if (error.includes("meet_forbidden")) return "この操作の権限がありません";
   if (error.includes("meet_confirmed")) return "結果が確定しています。確定を解除してから変更してください";
   if (error.includes("meet_division")) return "同じ種目の男子・女子を選んでください。別の種目には変更できません";
+  if (error.includes("meet_relay_team")) return "リレーは種目の画面からチーム名とタイムを入力してください";
+  if (error.includes("meet_relay_invalid")) return "各レーンのチーム名とタイムを確認してください";
   if (error.includes("meet_position")) return "その組・番号は使用中です。空いている番号を選んでください";
   if (error.includes("meet_duties")) return "出場や担当と重複するか、役割が使用中です。補助担当を確認してください";
   if (error.includes("meet_profile")) return "このアカウントの参加者は登録済みです。既存の参加者を選んでください";
@@ -41,7 +43,7 @@ function message(error: string) {
 export async function mutateCompetitionMeet(competitionId: string, requestId: string, command: MeetCommand): Promise<MeetMutationResult> {
   if (!competitionKey.test(competitionId) || !uuid.test(requestId) || !command || JSON.stringify(command).length > 250000) return { ok: false, message: "入力を確認してください" };
   try {
-    const result = await call("mutate_competition_meet", { p_competition_id: competitionId, p_request_id: requestId, p_command: command as unknown as Json });
+    const result = await call(command.action==="relay.save"?"save_competition_relay_checked":"mutate_competition_meet", { p_competition_id: competitionId, p_request_id: requestId, p_command: command as unknown as Json });
     if (result.error) return (/^meet_|^duplicate|^invalid/.test(result.error.message)||("code" in result.error&&["42501","P0001","23505","23514","23503","22P02"].includes(String(result.error.code)))) ? { ok: false, stale: result.error.message.includes("meet_conflict"), message: message(result.error.message) } : {ok:false,uncertain:true,message:"保存結果を確認できませんでした。入力は残っています。結果を確認してください"};
     if(!result.data||typeof result.data!=="object"||Array.isArray(result.data)||result.data.requestId!==requestId)return {ok:false,uncertain:true,message:"保存結果を確認できませんでした。入力は残っています。結果を確認してください"};
     refresh(competitionId);
