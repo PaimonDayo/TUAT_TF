@@ -31,6 +31,7 @@ function message(error: string) {
   if (error.includes("meet_conflict")) return "ほかの操作で更新されています。最新の情報を読み込み、変更を確認してください";
   if (error.includes("meet_forbidden")) return "この操作の権限がありません";
   if (error.includes("meet_confirmed")) return "結果が確定しています。確定を解除してから変更してください";
+  if (error.includes("meet_division")) return "同じ種目の男子・女子を選んでください。別の種目には変更できません";
   if (error.includes("meet_position")) return "その組・番号は使用中です。空いている番号を選んでください";
   if (error.includes("meet_duties")) return "出場や担当と重複するか、役割が使用中です。補助担当を確認してください";
   if (error.includes("meet_profile")) return "このアカウントの参加者は登録済みです。既存の参加者を選んでください";

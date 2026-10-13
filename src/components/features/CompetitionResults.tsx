@@ -6,6 +6,7 @@ import { ChevronDown } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
+import { SegmentedControl } from "@/components/ui/segmented";
 import { normalizeEntryName } from "@/lib/entry-identity";
 import { describeResult, formatAthleteLabel, groupEntriesByPosition, groupProgramByDate, type ParsedProgramRow, type ProgramAthlete } from "@/lib/competition-program";
 import { ProgramEventSummary } from "./ProgramEventSummary";
@@ -86,24 +87,59 @@ export function CompetitionResultRow({ row }: { row: ParsedProgramRow }) {
   );
 }
 
+const RESULT_DIVISIONS = ["男子", "女子", "混合", "区分なし"] as const;
+type ResultDivision = typeof RESULT_DIVISIONS[number];
+type ResultFilter = "all" | Exclude<ResultDivision, "区分なし">;
+
+/** 種目自体の区分で分け、男女混合の組でも男女別の結果・順位は維持する。 */
+function resultDivision(eventLabel: string): ResultDivision {
+  const label = normalizeEntryName(eventLabel);
+  if ((label.includes("男子") && label.includes("女子")) || label.startsWith("男女")) return "混合";
+  if (label.startsWith("男子")) return "男子";
+  if (label.startsWith("女子")) return "女子";
+  if (label.startsWith("混合")) return "混合";
+  return "区分なし";
+}
 
 /** The same dated event/result list for official feeds, managed meets and member records. */
 export function CompetitionResults({ rows }: { rows: ParsedProgramRow[] }) {
   const [search, setSearch] = useState("");
+  const [division, setDivision] = useState<ResultFilter>("all");
+  const divisions = RESULT_DIVISIONS.filter(value => rows.some(row => resultDivision(row.eventLabel) === value));
+  const selectedDivision = division === "all" || divisions.includes(division) ? division : "all";
+  const filterItems: { key: ResultFilter; label: string }[] = [
+    { key: "all", label: "全て" },
+    ...divisions.filter((value): value is Exclude<ResultDivision, "区分なし"> => value !== "区分なし").map(value => ({ key: value, label: value })),
+  ];
   const query = normalizeEntryName(search).toLowerCase();
   const groups = groupProgramByDate(rows.flatMap(row => {
+    if (selectedDivision !== "all" && resultDivision(row.eventLabel) !== selectedDivision) return [];
     if (!query || normalizeEntryName(row.eventLabel).toLowerCase().includes(query)) return [row];
     const tuatEntries = row.tuatEntries.filter(entry => normalizeEntryName(entry.name + entry.grade).toLowerCase().includes(query));
     return tuatEntries.length ? [{...row,tuatEntries}] : [];
   }));
   if (!rows.length) return <Card><EmptyState title="まだこの大会の結果はありません" /></Card>;
-  return <div className="space-y-4"><Input aria-label="大会結果を検索" placeholder="種目・氏名・学年で検索" value={search} onChange={e=>setSearch(e.target.value)} />
+  return <div className="space-y-4">
+    {filterItems.length > 1 && <SegmentedControl items={filterItems} value={selectedDivision} onChange={setDivision} />}
+    <Input aria-label="大会結果を検索" placeholder="種目・氏名・学年で検索" value={search} onChange={e=>setSearch(e.target.value)} />
     {!groups.length && <Card><EmptyState title="条件に合う結果はありません" /></Card>}
     {groups.map(group => <section key={group.date} className="space-y-3">
-    <p className="section-label">{format(new Date(group.date + "T00:00:00"), "M月d日(E)", { locale: ja })}</p>
-    {(["track", "field"] as const).map(block => !group[block].length ? null : <div key={block} className="space-y-1.5">
-      <p className="text-caption text-muted">{block === "track" ? "トラック" : "フィールド"}</p>
-      <Card className="divide-y divide-separator">{group[block].map(row => <CompetitionResultRow key={row.roundKey} row={row} />)}</Card>
-    </div>)}
+      <p className="section-label">{format(new Date(group.date + "T00:00:00"), "M月d日(E)", { locale: ja })}</p>
+      {RESULT_DIVISIONS.map(value => {
+        const track = group.track.filter(row => resultDivision(row.eventLabel) === value);
+        const field = group.field.filter(row => resultDivision(row.eventLabel) === value);
+        if (!track.length && !field.length) return null;
+        return <div key={value} className="space-y-2">
+          {filterItems.length > 1 && <h3 className="text-caption font-semibold text-ink">{value}</h3>}
+          {(["track", "field"] as const).map(block => {
+            const blockRows = block === "track" ? track : field;
+            if (!blockRows.length) return null;
+            return <div key={block} className="space-y-1.5">
+              <p className="text-caption text-muted">{block === "track" ? "トラック" : "フィールド"}</p>
+              <Card className="divide-y divide-separator">{blockRows.map(row => <CompetitionResultRow key={row.roundKey} row={row} />)}</Card>
+            </div>;
+          })}
+        </div>;
+      })}
   </section>)}</div>;
 }

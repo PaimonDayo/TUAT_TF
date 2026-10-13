@@ -13,6 +13,15 @@ it("sends one atomic request with the unchanged ID and backend and schedules ver
  expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith("mutate_competition_meet",{p_competition_id:OB_MEET.competitionId,p_request_id:request,p_command:command});expect(command).toEqual(before);expect(mocks.publish).toHaveBeenCalledOnce();
 });
 it("reuses the actions for another competition without invoking the OB publisher",async()=>{expect((await mutateCompetitionMeet("another-meet",request,command)).ok).toBe(true);expect(mocks.publish).not.toHaveBeenCalled();});
+it("uses the same immutable request and verification path for a division correction",async()=>{
+ const correction={action:"appearance.moveDivision" as const,id:request,revision:3,event:"女子100m",mark:"12.34",confirmDuties:true,backend:"pc" as const};
+ expect(await mutateCompetitionMeet(OB_MEET.competitionId,request,correction)).toEqual({ok:true,requestId:request,id:request});
+ expect(mocks.rpc).toHaveBeenLastCalledWith("mutate_competition_meet",{p_competition_id:OB_MEET.competitionId,p_request_id:request,p_command:correction});
+ expect(await checkCompetitionMeetMutation(OB_MEET.competitionId,request,correction)).toEqual({ok:true,requestId:request,id:request});
+ expect(mocks.rpc).toHaveBeenLastCalledWith("check_competition_meet_mutation",{p_competition_id:OB_MEET.competitionId,p_request_id:request,p_command:correction});
+ mocks.rpc.mockResolvedValueOnce({data:null,error:{message:"meet_division",code:"P0001"}});
+ expect(await mutateCompetitionMeet(OB_MEET.competitionId,request,correction)).toMatchObject({ok:false,message:expect.stringContaining("同じ種目の男子・女子")});
+});
 it.each(["unauthenticated","preview"])("rejects %s operations before the RPC",async scenario=>{if(scenario==="preview")mocks.preview.mockResolvedValue(true);else mocks.user.mockResolvedValue({data:{user:null},error:null});expect((await mutateCompetitionMeet("another-meet",request,command)).ok).toBe(false);expect(mocks.rpc).not.toHaveBeenCalled();});
 it("keeps transport failures uncertain and never resends automatically",async()=>{
  mocks.rpc.mockResolvedValue({data:null,error:{message:"gateway timeout",code:"504"}});expect(await mutateCompetitionMeet("another-meet",request,command)).toMatchObject({ok:false,uncertain:true});expect(mocks.rpc).toHaveBeenCalledOnce();expect(mocks.refresh).not.toHaveBeenCalled();
