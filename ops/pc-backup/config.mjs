@@ -20,15 +20,20 @@ export function validateCapacity(capacity,{required=true}={}) {
 }
 export function validateBackupConfig(config,env) {
   if(config?.version!==1||typeof config.enabled!=='boolean'||!uuid(config.instanceId)) throw Error('Explicit backup configuration required');
-  for(const key of ['stateDirectory','environmentFile','wslExecutable']) if(!isAbsolute(config[key]??'')) throw Error('Absolute backup paths required');
+  if(![undefined,'wsl','linux'].includes(config.executionMode)) throw Error('Explicit supported backup execution mode required');
+  const native=config.executionMode==='linux';
+  for(const key of ['stateDirectory','environmentFile',...(native?[]:['wslExecutable'])]) if(!isAbsolute(config[key]??'')) throw Error('Absolute backup paths required');
   for(const key of ['psqlExecutable','pgDumpExecutable']) if(!/^\/[A-Za-z0-9_./-]+$/.test(config[key]??'')) throw Error('Absolute database commands required');
   if(resolve(config.stateDirectory)===dirname(resolve(config.environmentFile))) throw Error('Separate private backup state required');
-  if(!hash(config.wslSha256)||!hash(config.dockerSha256)||!/^\/[A-Za-z0-9_./-]+$/.test(config.dockerExecutable??'')
-    ||!/^[-A-Za-z0-9_.]{1,64}$/.test(config.wslDistribution??'')||!/^[-A-Za-z0-9_]{1,32}$/.test(config.wslUser??'')) throw Error('Pinned backup commands required');
+  if(!hash(config.dockerSha256)||!/^\/[A-Za-z0-9_./-]+$/.test(config.dockerExecutable??'')) throw Error('Pinned backup commands required');
+  if(native) {
+    if(['wslExecutable','wslSha256','wslDistribution','wslUser'].some(key=>Object.hasOwn(config,key))) throw Error('Native backup may not dispatch through WSL');
+  } else if(!hash(config.wslSha256)||!/^[-A-Za-z0-9_.]{1,64}$/.test(config.wslDistribution??'')||!/^[-A-Za-z0-9_]{1,32}$/.test(config.wslUser??'')) throw Error('Pinned backup commands required');
   const target=config.target;
   if(!target||!hash(target.containerId)||!/^sha256:[a-f0-9]{64}$/.test(target.containerImageId??'')||!/^\d{10,20}$/.test(target.databaseSystemIdentifier??'')
-    ||target.databaseName!=='postgres'||!/^[-A-Za-z0-9_.]{1,64}$/.test(target.containerName??'')
-    ||!/^[-A-Za-z0-9_.]{1,64}$/.test(target.composeProject??'')||target.composeService!=='db'
+    ||!(native?/^[a-z_][a-z0-9_]{0,62}$/.test(target.databaseName??''):target.databaseName==='postgres')||!/^[-A-Za-z0-9_.]{1,64}$/.test(target.containerName??'')
+    ||(native?(!/^[-A-Za-z0-9_.]{1,64}$/.test(target.ownerLabel??'')||!/^[-A-Za-z0-9_.]{1,64}$/.test(target.generationLabel??'')):
+      (!/^[-A-Za-z0-9_.]{1,64}$/.test(target.composeProject??'')||target.composeService!=='db'))
     ||!/^\/[A-Za-z0-9_./-]+$/.test(target.dataMountSource??'')) throw Error('Exact owned PC database target required');
   if(config.pushEnvironmentFile!==null&&!isAbsolute(config.pushEnvironmentFile??'')) throw Error('Explicit Push recovery path or null required');
   validateCapacity(config.capacity,{required:config.enabled});

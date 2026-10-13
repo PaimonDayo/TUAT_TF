@@ -1,5 +1,16 @@
 # PC backup lifecycle candidate
 
+For a Linux host, use `executionMode: "linux"` and the pinned absolute Docker
+path/hash, without the four WSL settings. The adapter executes only that binary
+against the explicit local Unix socket and checks the binary before each command.
+The native target binds `ownerLabel`/`generationLabel` to `tuat.owner` and
+`tuat.generation`, together with the exact container ID, image, mount, database
+name and PostgreSQL system identifier. Windows plans retain the existing WSL and
+Compose ownership checks. Both routes preserve the hold after an unknown command
+outcome. The database-only archive includes public/auth/storage/pc_ops/extensions;
+local Auth/image runtime admission still requires the combined snapshot receipt.
+Native target probing does not enable a supervisor or attest off-PC recovery.
+
 This is an independent, default-disabled candidate. It does not start the old tunnel, mirror, endpoint publisher, task scheduler or remote retention. No production configuration or credentials were used to validate it. `node ops/pc-backup/run.mjs --check <absolute-plan.json>` (also the default mode) reads only the specified plan, without loading credentials, creating directories, probing a database or calling storage. The placeholder example intentionally cannot activate. `--execute` additionally requires `enabled:true`; normal operation is owned in-process by the PC host rather than a second task.
 
 The host calls `startBackupSupervisor({configFile,expectedInstanceId,expectedDatabaseSystemIdentifier})`; both expected values must match `config.instanceId` and `config.target.databaseSystemIdentifier` before any lock, target read, backup or upload. `loadBackup(configFile)` returns `{config,env}` and validates existing private config/environment parents and files without modifying their ACL/modes. The dedicated environment accepts only `PC_BACKUP_ENCRYPTION_KEY`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`. Reuse the verified archive key and namespace; do not generate a replacement key or copy existing credentials into Git. Explicit Push recovery path is private and optional; a null path excludes it rather than discovering an old source.

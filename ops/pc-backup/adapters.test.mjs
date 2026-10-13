@@ -40,6 +40,44 @@ function adapterFixture() {
   }};
   return {config,calls,dependencies,wrong:()=>{wrongTarget=true;},fail:()=>{failCommand=true;}};
 }
+
+function nativeAdapterFixture() {
+  const f=adapterFixture();
+  for(const key of ['wslExecutable','wslSha256','wslDistribution','wslUser'])delete f.config[key];
+  f.config.executionMode='linux';f.config.dockerSha256=sha256(f.dependencies.readBinary());
+  Object.assign(f.config.target,{ownerLabel:'synthetic-runtime',generationLabel:'1'.repeat(32),databaseName:'tuat_pc_candidate'});
+  let wrongOwner=false,failed=false;
+  f.dependencies.execute=async(executable,args,options)=>{
+    f.calls.push({executable,args,options});if(failed)throw Error('Synthetic native timeout');
+    const t=f.config.target;
+    return {stdout:Buffer.from(args.includes('inspect')?[t.containerId,t.containerImageId,'/'+t.containerName,'true',wrongOwner?'different-owner':t.ownerLabel,t.generationLabel,t.dataMountSource].join('|'):
+      t.databaseName+'|'+t.databaseSystemIdentifier)};
+  };
+  return {...f,wrong:()=>{wrongOwner=true;},fail:()=>{failed=true;}};
+}
+
+test('native Linux probe verifies its owned DB without WSL or ambient Docker context',async()=>{
+  const f=nativeAdapterFixture(),adapter=createAdapters(f.config,{},f.dependencies);
+  assert.deepEqual(await adapter.probe({signal:new AbortController().signal}),f.config.target);
+  assert.equal(f.calls.length,2);
+  for(const call of f.calls){
+    assert.equal(call.executable,'/usr/bin/docker');assert.deepEqual(call.args.slice(0,2),['--host','unix:///var/run/docker.sock']);
+    assert(!call.args.includes('--exec'));assert.deepEqual(call.options.env,{LANG:'C.UTF-8',DOCKER_CONFIG:'/nonexistent'});
+  }
+  assert(f.calls[1].args.includes('tuat_pc_candidate'));
+  f.wrong();await assert.rejects(adapter.probe({signal:new AbortController().signal}),/ownership mismatch/);
+});
+
+test('native pin change and unknown command outcome prevent later dispatch',async()=>{
+  const changed=nativeAdapterFixture();changed.dependencies.readBinary=()=>Buffer.from('changed native binary');
+  await assert.rejects(createAdapters(changed.config,{},changed.dependencies).probe({signal:new AbortController().signal}),/pin changed/);
+  assert.equal(changed.calls.length,0);
+  const unknown=nativeAdapterFixture(),adapter=createAdapters(unknown.config,{},unknown.dependencies);unknown.fail();
+  await assert.rejects(adapter.probe({signal:new AbortController().signal}),/outcome unverified/);
+  const count=unknown.calls.length;
+  await assert.rejects(adapter.probe({signal:new AbortController().signal}),/reconciliation/);
+  assert.equal(unknown.calls.length,count);
+});
 test('actual probe adapter uses pinned explicit WSL exec/local Docker socket, no ambient credentials/context or rows',async()=>{
   const f=adapterFixture(),adapter=createAdapters(f.config,{},f.dependencies);const actual=await adapter.probe({signal:new AbortController().signal});
   assert.deepEqual(actual,f.config.target);assert.equal(f.calls.length,3);
