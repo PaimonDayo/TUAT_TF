@@ -11,6 +11,7 @@ const definitions={
   failover_changes:definition(['id'],['id','table_name','op','pk','row_data','changed','created_at','attempts','last_error']),
   profiles:definition(['id'],['id','name','count']),
   practice_records:definition(['id'],['id','user_id','recorded_date','count']),
+  push_subscriptions:definition(['id'],['id','user_id','endpoint','p256dh','auth','created_at','last_seen_at']),
   ob_event_operations:definition(['meet_key','event_name'],['meet_key','event_name','revision','updated_at','data']),
 };
 const docs={cloud:{definitions},pc:{definitions}};
@@ -19,6 +20,17 @@ const change=(id,extra={})=>({id,table_name:'profiles',op:'UPDATE',pk:{id:'p'},r
 function outcome(changes,evidence,schemas=docs) {
   const group=groupChanges(changes)[0]; return classify(group,finalExpectation(group,schemas),evidence);
 }
+
+test('queued push subscriptions compare by UUID and preserve endpoint replacement and missing-delete uncertainty',()=>{
+  const row={id:'subscription-a',user_id:'user-a',endpoint:'https://push.example.invalid/subscription-a',p256dh:'synthetic-public-key',auth:'synthetic-auth',created_at:'2026-10-01T00:00:00Z',last_seen_at:'2026-10-11T00:00:00Z'};
+  const queued=change(1,{table_name:'push_subscriptions',pk:{id:row.id},row_data:row,changed:['last_seen_at']});
+  const matched=outcome([queued],{kind:'rows',rows:[row]});
+  assert.equal(matched.classification,'pc_matches_final_change');assert.equal(matched.acknowledgementAllowed,false);assert.equal(matched.retryHeld,true);
+  const alternative=outcome([queued],{kind:'rows',rows:[],natural:{kind:'rows',rows:[{...row,id:'replacement-subscription'}]}});
+  assert.equal(alternative.classification,'divergence');assert.equal(alternative.reason,'natural_key_alternative_requires_review');
+  const deleted=outcome([change(2,{table_name:'push_subscriptions',pk:{id:row.id},op:'DELETE',row_data:null,changed:null})],{kind:'rows',rows:[]});
+  assert.equal(deleted.classification,'unknown');assert.equal(deleted.reason,'natural_key_identity_unproved');
+});
 
 test('composes queued updates in ID order and compares only queued final fields',()=>{
   const result=outcome([change(2,{row_data:{id:'p',name:'A',count:2},changed:['count']}),change(1)],

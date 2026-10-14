@@ -13,12 +13,12 @@ const basicTables = [
   ['competition_entries',['id']], ['competition_program_entries',['id']], ['favorites',['user_id','favorite_user_id']],
   ['notice_reactions',['notice_id','user_id','reaction']], ['notice_dismissals',['notice_id','user_id']],
   ['menu_target_presets',['id']], ['notifications',['id']], ['attendances',['id']], ['practice_records',['id']],
-  ['tweets',['id']], ['tweet_poll_options',['id']], ['tweet_poll_votes',['option_id','user_id']],
+  ['tweets',['id']], ['tweet_poll_options',['id']], ['tweet_poll_votes',['option_id','user_id']], ['push_subscriptions',['id']],
   ['tweet_mentions',['tweet_id','profile_id']], ['comments',['id']], ['likes',['id']],
 ];
 const tables = new Map([...basicTables, ...OB_TABLES.map(({ table,pk }) => [table,pk])]);
 const naturalKeys = { practice_records:['user_id','recorded_date'], attendances:['schedule_id','user_id','attend_date'],
-  likes:['user_id','target_type','target_id'], competition_goals:['competition_id','user_id','event'] };
+  likes:['user_id','target_type','target_id'], competition_goals:['competition_id','user_id','event'],push_subscriptions:['endpoint'] };
 const identifier = /^[a-z_][a-z0-9_]*$/;
 const queueColumns = 'id,table_name,op,pk,row_data,changed,created_at,attempts,last_error';
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof JsonNumber);
