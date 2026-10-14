@@ -127,6 +127,36 @@ are never deleted. A completed archive without a receipt is not proof of a
 verified current backup. Retention/removal of older archives is deliberately not
 automatic in this CLI.
 
+## Verified PC history and retention preparation
+
+For `pc-private`, the offsite sender now preserves one immutable
+`<capture-time>.offsite-verified.json` after exact remote ciphertext readback and
+before replacing `local-snapshot.json`. It records the source/database/generation,
+account-and-bucket scope digest, archive-key identifier, object ETag/hash/size,
+and local archive path. The archive-key identifier must match the producer's
+independent recovery-key fingerprint before any provider request.
+The credential environment is checked again before publication; raw credentials
+are never recorded. An unknown PUT intent or a matching filename alone cannot
+become verified history. A history write failure preserves the prior current
+receipt and does not authorize resending the PUT.
+
+`snapshot-retention.mjs` only selects candidates from supplied verified metadata.
+It reuses the existing policy: latest 24 local / 96 remote, one newest snapshot
+per represented JST day for 30 days, and the protected current snapshot. A fresh
+same-generation protected snapshot must appear unchanged in the input. Foreign
+scope or archive key, stale/future evidence, duplicate identities, unexpected paths, unknown
+records and metadata accessors refuse the entire plan. Outputs are always dry
+runs with `deletionAuthorized:false`; they neither discover actual storage nor
+prove quota or authorize removal.
+
+No deletion transport or periodic cleanup is connected by this preparation.
+The existing legacy retention recognizes paired `.dump.enc` / `.recovery.json.enc`
+objects and deliberately leaves `.local.tar.enc` objects alone. Combined-snapshot
+local/remote revalidation, bounded reclaim and partial-delete reconciliation
+remain required before long-running production activation. Current source size,
+all bucket usage, growth and archive count bounds must be checked; keeping only
+the existing byte/count refusal would eventually stop new backups.
+
 ## Explicit configuration
 
 All paths are absolute, canonical, owned by the CLI user and private (directories

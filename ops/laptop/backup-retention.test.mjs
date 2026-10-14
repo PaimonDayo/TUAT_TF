@@ -39,3 +39,9 @@ test('unknown keys, images, orphan recovery and future dates are never deleted',
  assert.equal(plan.remove.length,0);
  assert.equal(plan.untouched.length,4);
 });
+
+test('legacy retention leaves combined local snapshots untouched', () => {
+ const combined=object(now-40*day,a,'local.tar');
+ const plan=planRetention([combined],now);
+ assert.deepEqual(plan.untouched,[combined]);assert.deepEqual(plan.remove,[]);assert.deepEqual(plan.newest,[]);
+});

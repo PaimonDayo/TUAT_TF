@@ -5,6 +5,7 @@ import {readFileSync} from 'node:fs';
 import {transferSnapshot} from './offsite.mjs';import {encryptBackup,decryptBackup} from '../laptop/backup-backend.mjs';
 
 const sourceId='11111111-1111-4111-8111-111111111111',generation='22222222-2222-4222-8222-222222222222',now=Date.parse('2026-10-12T02:00:00.000Z');
+const pcEnvironment=(bucket,account='a'.repeat(32),key='a'.repeat(64))=>`R2_ACCOUNT_ID=${account}\nR2_BUCKET_NAME=${bucket}\nPC_BACKUP_ENCRYPTION_KEY=${key}\n`;
 async function fixture(t){
   const root=await mkdtemp(join(tmpdir(),'tuat-offsite-'));t.after(()=>rm(root,{recursive:true,force:true}));
   const stateDirectory=join(root,'state');await mkdir(stateDirectory,{mode:0o700});
@@ -60,8 +61,10 @@ test('capacity includes old image objects and refuses transfer before PUT or int
 
 async function pcFixture(t) {
   const f=await fixture(t),hostState=join(f.root,'host-state');await mkdir(hostState,{mode:0o700});
-  Object.assign(f.config,{profile:'pc-private',hostConfigFile:join(f.root,'host.json'),imageRoot:'/var/lib/tuat-local/images',generation:'manual-value-is-not-authority'});
-  f.receipt.imageRoot=f.config.imageRoot;await writeFile(f.config.producerReceiptFile,JSON.stringify(f.receipt),{mode:0o600});
+  Object.assign(f.config,{profile:'pc-private',hostConfigFile:join(f.root,'host.json'),environmentFile:join(f.root,'offsite.env'),imageRoot:'/var/lib/tuat-local/images',generation:'manual-value-is-not-authority'});
+  await writeFile(f.config.environmentFile,pcEnvironment(f.config.bucket),{mode:0o600});
+  f.receipt.imageRoot=f.config.imageRoot;f.receipt.recoveryKeyFingerprint=createHash('sha256').update(Buffer.from('a'.repeat(64),'hex')).digest('hex');
+  await writeFile(f.config.producerReceiptFile,JSON.stringify(f.receipt),{mode:0o600});
   const backup={version:1,enabled:true,profile:'pc-private',executionMode:'linux',dockerSocket:'unix:///run/tuat-local/docker.sock',instanceId:sourceId,
     localImageRoot:f.config.imageRoot,localSnapshotReceiptFile:join(f.config.stateDirectory,'local-snapshot.json'),stateDirectory:join(f.root,'backup-state'),
     target:{containerId:'a'.repeat(64),containerImageId:'sha256:'+'b'.repeat(64),containerName:'tuat-local-db',sourceLabel:sourceId,roleLabel:'db',
@@ -81,6 +84,54 @@ test('PC transfer derives active host generation and preserves fully ordered cap
   assert.equal(snapshot.generation,generation);assert.notEqual(snapshot.generation,f.config.generation);
   assert.equal(snapshot.capturedAt,new Date(Date.parse(f.receipt.verifiedAt)).toISOString());
   assert(Date.parse(f.runtime.startedAt)<=Date.parse(snapshot.capturedAt)&&Date.parse(snapshot.capturedAt)<=Date.parse(snapshot.restoreVerifiedAt)&&Date.parse(snapshot.restoreVerifiedAt)<=Date.parse(snapshot.offsiteVerifiedAt));
+  const historyNames=(await readdir(f.config.stateDirectory)).filter(name=>name.endsWith('.offsite-verified.json'));
+  assert.equal(historyNames.length,1);
+  const history=JSON.parse(await readFile(join(f.config.stateDirectory,historyNames[0]),'utf8'));
+  assert.equal(history.state,'verified');assert.equal(history.archiveSha256,snapshot.archiveSha256);
+  assert.equal(history.localArchiveFile,f.config.archiveFile);assert.equal(history.objectEtag,'"synthetic"');
+  assert.equal(history.storageScopeId,createHash('sha256').update(JSON.stringify({account:'a'.repeat(32),bucket:f.config.bucket})).digest('hex'));
+  assert.equal(history.archiveKeyId,f.receipt.recoveryKeyFingerprint);
+});
+
+test('PC transfer preserves prior verified history when a later capture becomes current',async t=>{
+  const f=await pcFixture(t);await transferSnapshot(f.config,f.options);
+  const original=(await readdir(f.config.stateDirectory)).find(name=>name.endsWith('.offsite-verified.json'));
+  const bytes=await readFile(join(f.config.stateDirectory,original));
+  f.receipt.verifiedAt='2026-10-12T01:59:01.123456+00:00';
+  await writeFile(f.config.producerReceiptFile,JSON.stringify(f.receipt),{mode:0o600});
+  const next=await transferSnapshot(f.config,f.options);
+  assert.deepEqual(await readFile(join(f.config.stateDirectory,original)),bytes);
+  assert.equal((await readdir(f.config.stateDirectory)).filter(name=>name.endsWith('.offsite-verified.json')).length,2);
+  assert.equal(JSON.parse(await readFile(next.receipt,'utf8')).capturedAt,'2026-10-12T01:59:01.123Z');
+});
+
+test('PC history publication failure preserves the prior current receipt and never resends',async t=>{
+  const f=await pcFixture(t),target=join(f.config.stateDirectory,'local-snapshot.json');
+  await writeFile(target,'prior receipt',{mode:0o600});
+  await mkdir(join(f.config.stateDirectory,'2026-10-12T01-59-00-123Z.offsite-verified.json'));
+  await assert.rejects(transferSnapshot(f.config,f.options));
+  assert.equal(await readFile(target,'utf8'),'prior receipt');
+  await assert.rejects(transferSnapshot(f.config,f.options));
+  assert.equal(f.calls.filter(name=>name==='PutObjectCommand').length,1);
+});
+
+test('PC storage scope mismatch or environment rotation cannot publish a new receipt',async t=>{
+  const f=await pcFixture(t);
+  await writeFile(f.config.environmentFile,pcEnvironment('foreign-bucket'),{mode:0o600});
+  await assert.rejects(transferSnapshot(f.config,f.options));assert.equal(f.calls.length,0);
+  await writeFile(f.config.environmentFile,pcEnvironment(f.config.bucket),{mode:0o600});
+  const send=f.client.send;
+  f.client.send=async command=>{const result=await send(command);if(command.constructor.name==='GetObjectCommand')await writeFile(f.config.environmentFile,pcEnvironment(f.config.bucket,'b'.repeat(32)),{mode:0o600});return result;};
+  await assert.rejects(transferSnapshot(f.config,f.options));
+  assert.equal((await readdir(f.config.stateDirectory)).filter(name=>name.endsWith('.offsite-verified.json')).length,0);
+  assert.equal((await readdir(f.config.stateDirectory)).includes('local-snapshot.json'),false);
+});
+
+test('PC archive key scope must match the producer independent recovery proof before provider access',async t=>{
+  const f=await pcFixture(t);
+  await writeFile(f.config.environmentFile,pcEnvironment(f.config.bucket,'a'.repeat(32),'b'.repeat(64)),{mode:0o600});
+  await assert.rejects(transferSnapshot(f.config,f.options));assert.equal(f.calls.length,0);
+  assert.deepEqual(await readdir(f.config.stateDirectory),[]);
 });
 
 test('fresh host cannot relabel an old capture even with a new restore and offsite clock',async t=>{

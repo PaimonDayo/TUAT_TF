@@ -48,9 +48,22 @@ export async function transferSnapshot(config,{client,now=Date.now,apply=false,r
   need(Number.isSafeInteger(config.maxArchiveBytes)&&config.maxArchiveBytes>=36&&config.maxArchiveBytes<=16*1024**3);
   need(Number.isSafeInteger(config.maxStorageBytes)&&config.maxStorageBytes>=config.maxArchiveBytes && typeof config.bucket==='string'&&/^[a-z0-9][a-z0-9-]{1,62}$/.test(config.bucket));
   const binding=config.profile==='pc-private'?activePcSnapshotHost(config,{read,assertRoot,now}):null;
-  const recheck=()=>{if(binding)need(JSON.stringify(activePcSnapshotHost(config,{read,assertRoot,now}))===JSON.stringify(binding));};
+  let storageEnvironment,storageScopeId,archiveKeyId;
+  if(binding) {
+    need(absolute(config.environmentFile));
+    storageEnvironment=read(config.environmentFile,16384);
+    const environment=parseEnv(storageEnvironment.toString('utf8'));
+    need(/^[a-f0-9]{32}$/.test(environment.R2_ACCOUNT_ID??'')&&environment.R2_BUCKET_NAME===config.bucket&&/^[a-f0-9]{64}$/.test(environment.PC_BACKUP_ENCRYPTION_KEY??''));
+    storageScopeId=createHash('sha256').update(JSON.stringify({account:environment.R2_ACCOUNT_ID,bucket:config.bucket})).digest('hex');
+    archiveKeyId=createHash('sha256').update(Buffer.from(environment.PC_BACKUP_ENCRYPTION_KEY,'hex')).digest('hex');
+  }
+  const recheck=()=>{if(binding) {
+    need(JSON.stringify(activePcSnapshotHost(config,{read,assertRoot,now}))===JSON.stringify(binding));
+    need(read(config.environmentFile,16384).equals(storageEnvironment));
+  }};
   const receipt=JSON.parse(read(config.producerReceiptFile,16384).toString('utf8'));
   need(receipt.version===1 && receipt.sourceId===config.sourceId && receipt.databaseSystemIdentifier===config.databaseSystemIdentifier && receipt.imageRoot===config.imageRoot && receipt.independentRecoveryCopyChecked===true);
+  if(binding)need(receipt.recoveryKeyFingerprint===archiveKeyId);
   for(const name of ['verifiedAt','restoreVerifiedAt']) {
     const time=Date.parse(receipt[name]);need(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)$/.test(receipt[name]??'')&&Number.isFinite(time)&&time<=now()&&now()-time<35*60_000);
   }
@@ -99,6 +112,15 @@ export async function transferSnapshot(config,{client,now=Date.now,apply=false,r
     const snapshot={format:'tuat-local-db-images-v1',sourceId:config.sourceId,generation:binding?.generation??config.generation,databaseSystemIdentifier:config.databaseSystemIdentifier,
       imageRoot:config.imageRoot,archiveKey:key,archiveSha256:local.sha256,archiveBytes:entry.size,capturedAt,restoreVerifiedAt,
       offsiteVerifiedAt:new Date(finished).toISOString(),independentRecoveryCopyChecked:true};
+    if(binding) {
+      // Preserve each verified generation before replacing the current pointer.
+      // An unknown PUT intent is never promoted merely because a key exists.
+      const history=await open(resolve(config.stateDirectory,`${stamp}.offsite-verified.json`),'wx',0o600);
+      try {await history.writeFile(JSON.stringify({version:1,state:'verified',storageScopeId,archiveKeyId,objectEtag:head.ETag,
+        localArchiveFile:config.archiveFile,...snapshot},null,2)+'\n');await history.sync();} finally {await history.close();}
+      if(process.platform!=='win32') {const directory=await open(config.stateDirectory,'r');try {await directory.sync();}finally{await directory.close();}}
+      recheck();
+    }
     const target=resolve(config.stateDirectory,'local-snapshot.json'),temporary=resolve(config.stateDirectory,`.verified-${randomUUID()}.json`);
     const verifiedFile=await open(temporary,'wx',0o600);
     try {await verifiedFile.writeFile(JSON.stringify(snapshot,null,2)+'\n');await verifiedFile.sync();} finally {await verifiedFile.close();}

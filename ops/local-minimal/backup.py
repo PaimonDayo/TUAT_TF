@@ -1187,6 +1187,8 @@ def produce_locked(config, commands):
                    'verifiedAt': verified_at, 'restoreVerifiedAt': stamp(),
                    'databaseSystemIdentifier': manifest['databaseSystemIdentifier'], 'imageRoot': str(Path(config['imageRoot']).resolve()),
                    'independentRecoveryCopyChecked': bool(recovery_path)}
+        if periodic.installation_profile(config)['name'] == periodic.PC_PROFILE:
+            receipt['recoveryKeyFingerprint'] = fingerprint
         if not config.get('periodic'): atomic_json(config['receiptFile'], receipt)
         return {'ok': True, 'sourceId': config['sourceId'], 'archive': archive.name,
                 'receipt': receipt, 'verified': checks, 'writersResumedBeforeVerification': True,
