@@ -762,14 +762,24 @@ class CaptureWindow:
 
 
 def assert_database_quiet(config, commands):
-    value = commands.sql(config, """SELECT count(*) FROM pg_stat_activity WHERE datname=current_database()
+    pc = periodic.installation_profile(config)['name'] == periodic.PC_PROFILE
+    idle_client = "application_name NOT IN ('postgrest','GoTrue')"
+    vault_schema = ''
+    if pc:
+        # Actual pinned PostgREST 14.12 identifies its idle pool with this name.
+        # A matching name alone cannot admit another database role or a transaction.
+        idle_client = "NOT ((usename='authenticator' AND application_name='PostgREST 14.12') OR (usename='supabase_auth_admin' AND application_name='GoTrue'))"
+        # PC snapshots also restore and fingerprint the existing Vault secrets/key.
+        # Only the extension's own namespace is admitted, never any schema named vault.
+        vault_schema = "AND NOT (nspname='vault' AND EXISTS (SELECT 1 FROM pg_extension e WHERE e.extname='supabase_vault' AND e.extnamespace=pg_namespace.oid))"
+    value = commands.sql(config, f"""SELECT count(*) FROM pg_stat_activity WHERE datname=current_database()
 AND pid<>pg_backend_pid() AND (backend_type='client backend' AND
- (state IS DISTINCT FROM 'idle' OR application_name NOT IN ('postgrest','GoTrue')) OR xact_start IS NOT NULL);
+ (state IS DISTINCT FROM 'idle' OR {idle_client}) OR xact_start IS NOT NULL);
 SELECT count(*) FROM pg_prepared_xacts;
 SELECT CASE WHEN to_regclass('cron.job') IS NULL THEN 0 ELSE 1 END;
 SELECT count(*) FROM pg_subscription;
 SELECT count(*) FROM pg_namespace WHERE nspname !~ '^pg_' AND nspname NOT IN
- ('information_schema','auth','public','storage','pc_ops','extensions');
+ ('information_schema','auth','public','storage','pc_ops','extensions') {vault_schema};
 SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
  WHERE n.nspname IN ('auth','public','storage','pc_ops','extensions') AND c.relkind IN ('f','m');
 """).decode().splitlines()
