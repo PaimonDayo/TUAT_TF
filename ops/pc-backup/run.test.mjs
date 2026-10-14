@@ -172,6 +172,33 @@ test('stop protects immediately and drains boundedly, retaining lock for noncoop
   finish(dump);await flush();assert.equal(f.calls.upload,0);assert.equal(f.status().backup,null);
   assert.equal((await life.stop()).drained,false);assert.equal(f.calls.release,0);
 });
+test('combined snapshot observer drains an in-flight identity read before aborting its controller',async()=>{
+  const f=fixture(),localConfig={...config,localSnapshotReceiptFile:resolve('synthetic-offsite/local-snapshot.json'),localImageRoot:resolve('synthetic-private-images')};
+  let finish,signal,uncertain=false;
+  const life=await startBackupSupervisor({...f.options,config:localConfig,readSnapshot:()=>({})});await flush();
+  f.adapters.probe=options=>new Promise((done,reject)=>{
+    signal=options.signal;
+    const abort=()=>{uncertain=true;reject(Error('synthetic read aborted'));};
+    signal.addEventListener('abort',abort,{once:true});
+    finish=()=>{signal.removeEventListener('abort',abort);done(structuredClone(config.target));};
+  });
+  f.adapters.isDrained=()=>!uncertain;
+  await f.pulse();assert.equal(typeof finish,'function');
+  const stopping=life.stop();await flush();
+  assert.equal(f.status().heartbeat.maintenance,true);assert.equal(f.ready(life.identity),false);
+  assert.equal(signal.aborted,false);
+  finish();assert.equal((await stopping).drained,true);assert.equal(signal.aborted,true);
+  assert.equal(f.calls.release,1);assert.equal(f.calls.dump,0);assert.equal(f.calls.upload,0);
+});
+test('combined observer read exceeding the drain deadline still retains its owner lock',async()=>{
+  const f=fixture(),localConfig={...config,localSnapshotReceiptFile:resolve('synthetic-offsite/local-snapshot.json'),localImageRoot:resolve('synthetic-private-images')};
+  const life=await startBackupSupervisor({...f.options,config:localConfig,readSnapshot:()=>({}),drainMilliseconds:1});await flush();
+  let finish,signal;
+  f.adapters.probe=options=>new Promise(done=>{signal=options.signal;finish=()=>done(structuredClone(config.target));});
+  await f.pulse();const stopped=await life.stop();
+  assert.equal(stopped.drained,false);assert.equal(signal.aborted,true);assert.equal(f.calls.release,0);
+  finish();await flush();assert.equal((await life.stop()).drained,false);assert.equal(f.calls.release,0);
+});
 test('incomplete encryption/recovery pair rejected before upload',()=>{
   assert.throws(()=>encryptedPair({dump:Buffer.from('invalid'),recovery,instanceId,key:env.PC_BACKUP_ENCRYPTION_KEY,stamp:'synthetic'}));
   assert.throws(()=>encryptedPair({dump,recovery:{version:2},instanceId,key:env.PC_BACKUP_ENCRYPTION_KEY,stamp:'synthetic'}));

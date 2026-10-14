@@ -189,11 +189,16 @@ export async function startBackupSupervisor({configFile,config:providedConfig,en
     stop() {
       if(stopPromise) return stopPromise;
       stopPromise=(async()=>{
-      stopped=true;clearTimer(timer);controller.abort();status.heartbeat.healthy=false;status.heartbeat.maintenance=true;
+      stopped=true;clearTimer(timer);status.heartbeat.healthy=false;status.heartbeat.maintenance=true;
+      // Combined mode only observes source identity. Let its bounded read finish
+      // before aborting, so an ordinary stop does not manufacture an uncertain
+      // Docker command. Backup writers still abort immediately.
+      if(!config.localSnapshotReceiptFile)controller.abort();
       try {status.heartbeat.checkedAt=instant();publish();} catch {failed('stop-status-unverified');}
       let timeout;
       const finished=await Promise.race([Promise.allSettled([backupBusy,probeBusy]).then(()=>true),new Promise(done=>{timeout=setTimeout(()=>done(false),drainMilliseconds);})]);
       const drained=finished&&adapters.isDrained?.()!==false;
+      controller.abort();
       clearTimeout(timeout);try {adapters.close?.();} catch {failed('stop-adapter-unverified');return {drained:false};}
       if(drained) {try {owner.release();} catch {failed('stop-ownership-unverified');return {drained:false};}}
       else failed('stop-retains-owner-lock');
