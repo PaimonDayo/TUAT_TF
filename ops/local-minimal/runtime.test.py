@@ -5,6 +5,10 @@ import hashlib
 import hmac
 import json
 import stat
+import shutil
+import subprocess
+import sys
+import tempfile
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -111,6 +115,19 @@ class FakeCommands:
 
 
 class RuntimeBehaviour(unittest.TestCase):
+    def test_entrypoints_preserve_sealed_release_without_python_cache(self):
+        # The installed service uses -I without -B. Its first import must not
+        # add root-owned files and invalidate the full release inventory.
+        for entry in ('runtime.py', 'backup.py'):
+            with self.subTest(entry=entry), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                for name in (entry, 'periodic.py'):
+                    shutil.copyfile(Path(__file__).with_name(name), root/name)
+                result = subprocess.run([sys.executable, '-I', str(root/entry), '--help'],
+                                        capture_output=True, timeout=10)
+                self.assertEqual(result.returncode, 0)
+                self.assertEqual(sorted(path.name for path in root.iterdir()), sorted((entry, 'periodic.py')))
+
     def test_changed_vault_key_blocks_startup_even_with_same_database_identity(self):
         c=pc_config(); original=b'c'*64+b'\n'
         manifest={'dbVaultKeySha256':runtime.digest(original)}

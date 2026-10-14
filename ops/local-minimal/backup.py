@@ -19,9 +19,12 @@ import secrets
 import signal
 import stat
 import subprocess
+import sys
 import tarfile
 import tempfile
 import time
+# Root services must never add bytecode to the immutable release inventory.
+sys.dont_write_bytecode = True
 _periodic_spec = importlib.util.spec_from_file_location('tuat_periodic', Path(__file__).with_name('periodic.py'))
 periodic = importlib.util.module_from_spec(_periodic_spec); _periodic_spec.loader.exec_module(periodic)
 
