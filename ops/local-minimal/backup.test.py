@@ -1,5 +1,6 @@
 """Behaviour/fault tests; no service or database commands execute."""
 import importlib.util
+import hashlib
 import copy
 import io
 import json
@@ -839,6 +840,84 @@ class LinuxLifetimeEvidence(unittest.TestCase):
                 backup.verify_kernel_jobs_lock(root,os.getpid())
                 backup.fcntl.flock(stream,backup.fcntl.LOCK_UN)
                 with self.assertRaisesRegex(backup.BackupFailure,'FLOCK'): backup.verify_kernel_jobs_lock(root,os.getpid())
+
+
+class BoundedCaptureWrite(unittest.TestCase):
+    def test_large_child_output_is_drained_before_expensive_capacity_revalidation(self):
+        commands=backup.LocalCommands()
+        commands.periodic_attempt=SimpleNamespace(config={},deadline=lambda:None)
+        expected=b'x'*(4*1024**2+37)
+        with tempfile.TemporaryFile() as output, \
+             patch.object(backup.periodic,'policy',return_value={'maxArchiveBytes':8*1024**2}), \
+             patch.object(backup.periodic,'capacity') as capacity:
+            commands.run([sys.executable,'-I','-c','import sys;sys.stdout.buffer.write(b"x"*(4*1024**2+37))'],output=output)
+            output.seek(0);self.assertEqual(output.read(),expected)
+            self.assertEqual(capacity.call_count,2)
+
+    def test_small_tar_writes_preserve_every_byte_without_rehashing_each_header(self):
+        stream=io.BytesIO();config={'periodic':{'maxArchiveBytes':3*1024**2}}
+        with patch.object(backup.periodic,'policy',return_value=config['periodic']),patch.object(backup.periodic,'capacity') as check:
+            bundle=backup.BoundedBundle(stream,config)
+            for _ in range(4096):bundle.write(b'x'*512)
+            self.assertEqual(stream.getvalue(),b'x'*(2*1024**2))
+            self.assertGreaterEqual(check.call_count,2)
+            self.assertLessEqual(check.call_count,3)
+
+    def test_new_capacity_hold_and_archive_limit_stop_before_dispatching_bytes(self):
+        stream=io.BytesIO();config={'periodic':{'maxArchiveBytes':2*1024**2}}
+        with patch.object(backup.periodic,'policy',return_value=config['periodic']), \
+             patch.object(backup.periodic,'capacity',side_effect=[{},backup.periodic.Hold('storage-capacity')]):
+            bundle=backup.BoundedBundle(stream,config);bundle.write(b'x'*512)
+            with self.assertRaisesRegex(backup.periodic.Hold,'storage-capacity'):bundle.write(b'y'*1024**2)
+            self.assertEqual(stream.getvalue(),b'x'*512)
+        with patch.object(backup.periodic,'policy',return_value=config['periodic']),patch.object(backup.periodic,'capacity') as check:
+            bundle=backup.BoundedBundle(io.BytesIO(),config)
+            with self.assertRaisesRegex(backup.BackupFailure,'byte bound'):bundle.write(b'x'*(3*1024**2))
+            check.assert_not_called()
+
+
+class FingerprintStream(unittest.TestCase):
+    marker=b'tuat-copy-'+b'a'*32+b':'
+
+    def fingerprint(self, directory, tables, payload):
+        class Commands:
+            calls=0
+            def sql(self,_config,statement,output):
+                self.calls+=1
+                output.write(payload)
+        commands=Commands()
+        with patch.object(backup.secrets,'token_hex',return_value='a'*32):
+            result=backup.table_fingerprints({'stageRoot':directory},commands,tables,'to_jsonb(t)::text')
+        self.assertEqual(commands.calls,1)
+        return result
+
+    def test_same_copy_bytes_hashes_and_counts_in_one_bounded_stream(self):
+        rows=b'{"id":1,"text":"line\\nnext\\tvalue tuat-copy-'+b'a'*32+b':END"}\n'+b'{"id":2,"text":null}\n'
+        payload=self.marker+b'public.first\n'+self.marker+b'ROWS:2\n'+rows+self.marker+b'public.empty\n'+self.marker+b'ROWS:0\n'+self.marker+b'END\n'
+        with tempfile.TemporaryDirectory() as directory:
+            actual=self.fingerprint(directory,['public.first','public.empty'],payload)
+            self.assertEqual(actual,{'public.first':{'sha256':hashlib.sha256(rows).hexdigest(),'rows':2,'bytes':len(rows)},
+                                     'public.empty':{'sha256':hashlib.sha256(b'').hexdigest(),'rows':0,'bytes':0}})
+            self.assertEqual(list(Path(directory).iterdir()),[])
+
+    def test_truncation_reordering_extra_output_and_invalid_rows_cannot_verify(self):
+        start=self.marker+b'public.first\n'+self.marker+b'ROWS:1\n';end=self.marker+b'END\n';row=b'{"id":1}\n'
+        payloads=[start+row,start+row+end+end,start+row+end+row,
+                  self.marker+b'public.wrong\n'+row+end,start+b'COPY 1\n'+end,
+                  start+b'{"id":1}'+end,end,start.replace(b'ROWS:1',b'ROWS:2')+row+end,
+                  start+row+self.marker+b'ROWS:1\n'+end]
+        with tempfile.TemporaryDirectory() as directory:
+            for payload in payloads:
+                with self.subTest(payload=payload),self.assertRaises(backup.BackupFailure):
+                    self.fingerprint(directory,['public.first'],payload)
+
+    def test_untrusted_table_identifier_is_refused_before_database_access(self):
+        class Commands:
+            def sql(self,*_args):raise AssertionError('Untrusted identifier reached SQL')
+        with tempfile.TemporaryDirectory() as directory:
+            for name in ('public.x;SELECT 1','other.public.x','public."quoted"'):
+                with self.assertRaisesRegex(backup.BackupFailure,'table name'):
+                    backup.table_fingerprints({'stageRoot':directory},Commands(),[name],'to_jsonb(t)::text')
 
 
 if __name__ == '__main__': unittest.main()

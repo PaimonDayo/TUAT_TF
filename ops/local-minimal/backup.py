@@ -452,6 +452,7 @@ class LocalCommands:
             if data:
                 if len(data) > 8*1024**2: fail('Command input bound exceeded')
                 stdin.write(data); stdin.seek(0)
+            if output is not None and attempt: periodic.capacity(attempt.config, 0)
             proc = subprocess.Popen(args, stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
             streams = selectors.DefaultSelector()
             streams.register(proc.stdout, selectors.EVENT_READ, 'out')
@@ -469,12 +470,12 @@ class LocalCommands:
                             fail('Local command output bound exceeded')
                         if label == 'out':
                             if output is not None:
-                                if attempt: periodic.capacity(attempt.config, 0)
                                 output.write(block)
                             else: captured.extend(block)
                 self.last_returncode=proc.wait(timeout=max(0.1, timeout-(time.monotonic()-start)))
                 if self.last_returncode not in allowed:
                     fail('Local backup command failed (private child output suppressed)')
+                if output is not None and attempt: periodic.capacity(attempt.config, 0)
                 return bytes(captured)
             finally:
                 streams.close()
@@ -800,23 +801,56 @@ UNION SELECT 'note-images/'||path FROM public.note_article_images ORDER BY 1;"""
     return sorted({safe_image(row) for row in rows})
 
 
-def database_fingerprint(config, commands):
-    order = 'to_jsonb(t)::text' + (' COLLATE "C"' if periodic.installation_profile(config)['name'] == periodic.PC_PROFILE else '')
-    tables = commands.sql(config, """SELECT n.nspname||'.'||c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-WHERE c.relkind IN ('r','p') AND n.nspname IN ('auth','public','storage','pc_ops','extensions') ORDER BY 1;""").decode().splitlines()
-    result = {}
-    # COPY one row at a time, ordered deterministically, so full DB data never accumulates in RAM/logs.
+def table_fingerprints(config, commands, tables, order):
+    # One streamed connection avoids a Docker/psql startup for every table while
+    # retaining the exact ordered COPY bytes, row counts, and per-table hashes.
+    marker = ('tuat-copy-' + secrets.token_hex(16) + ':').encode()
+    statements = ['BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;']
     for table in tables:
         parts = table.split('.')
         if len(parts) != 2 or not all(IDENT.fullmatch(part) for part in parts):
             fail('Unexpected source table name')
-        with tempfile.TemporaryFile(dir=config['stageRoot']) as output:
-            commands.sql(config, f'COPY (SELECT to_jsonb(t)::text FROM {table} t ORDER BY {order}) TO STDOUT;', output)
-            output.seek(0)
-            digest, size = hash_stream(output)
-            output.seek(0)
-            count = sum(1 for _ in output)
-        result[table] = {'sha256': digest, 'rows': count, 'bytes': size}
+        statements += ['\\echo ' + marker.decode() + table,
+                       f"SELECT '{marker.decode()}ROWS:'||count(*)::text FROM {table};",
+                       f'COPY (SELECT to_jsonb(t)::text FROM {table} t ORDER BY {order}) TO STDOUT;']
+    statements += ['\\echo ' + marker.decode() + 'END', 'COMMIT;']
+    result = {}; current = None; index = 0; ended = False
+    with tempfile.TemporaryFile(dir=config['stageRoot']) as output:
+        commands.sql(config, '\n'.join(statements), output)
+        output.seek(0)
+        for line in output:
+            if line.startswith(marker):
+                if ended: fail('Fingerprint stream has data after completion')
+                if line.startswith(marker+b'ROWS:'):
+                    if current is None or expected_count is not None or count or not re.fullmatch(marker+b'ROWS:[0-9]+\n',line):
+                        fail('Fingerprint stream row count framing changed')
+                    expected_count=int(line[len(marker)+5:]);continue
+                if current is not None:
+                    if expected_count != count: fail('Fingerprint stream row count differs from database')
+                    result[current] = {'sha256': digest.hexdigest(), 'rows': count, 'bytes': size}
+                if line == marker + b'END\n':
+                    if index != len(tables): fail('Fingerprint stream omits a source table')
+                    current = None; ended = True
+                else:
+                    if index >= len(tables) or line != marker + tables[index].encode() + b'\n':
+                        fail('Fingerprint stream table order changed')
+                    current = tables[index]; index += 1
+                    digest = hashlib.sha256(); size = 0; count = 0; expected_count = None
+            else:
+                # A JSON object COPY row cannot be a framing line, including
+                # embedded newlines or marker text escaped inside field values.
+                if current is None or ended or expected_count is None or not line.startswith(b'{') or not line.endswith(b'\n'):
+                    fail('Fingerprint stream row framing changed')
+                digest.update(line); size += len(line); count += 1
+        if not ended or len(result) != len(tables): fail('Fingerprint stream is incomplete')
+    return result
+
+
+def database_fingerprint(config, commands):
+    order = 'to_jsonb(t)::text' + (' COLLATE "C"' if periodic.installation_profile(config)['name'] == periodic.PC_PROFILE else '')
+    tables = commands.sql(config, """SELECT n.nspname||'.'||c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+WHERE c.relkind IN ('r','p') AND n.nspname IN ('auth','public','storage','pc_ops','extensions') ORDER BY 1;""").decode().splitlines()
+    result = table_fingerprints(config, commands, tables, order)
     security = commands.sql(config, """SELECT jsonb_build_object(
 'roles',(SELECT jsonb_agg(jsonb_build_array(rolname,rolsuper,rolinherit,rolcreaterole,rolcreatedb,rolcanlogin,rolreplication,rolbypassrls,rolconfig) ORDER BY rolname) FROM pg_roles WHERE rolname !~ '^pg_'),
 'membership',(SELECT jsonb_agg(jsonb_build_array(pg_get_userbyid(roleid),pg_get_userbyid(member),admin_option,inherit_option,set_option) ORDER BY roleid::regrole::text,member::regrole::text) FROM pg_auth_members),
@@ -838,12 +872,18 @@ WHERE c.relkind IN ('r','p') AND n.nspname IN ('auth','public','storage','pc_ops
 class BoundedBundle:
     def __init__(self, stream, config, attempt=None):
         self.stream, self.config, self.size, self.attempt = stream, config, 0, attempt
+        self.next_capacity_check = 0
     def write(self, data):
         if self.attempt: self.attempt.deadline()
         self.size += len(data)
         limit = periodic.policy(self.config)['maxArchiveBytes'] if self.config.get('periodic') else MAX_BYTES
         if self.size > limit: fail('Capture archive byte bound exceeded')
-        if self.config.get('periodic'): periodic.capacity(self.config, 0)
+        if self.config.get('periodic') and self.size >= self.next_capacity_check:
+            # Admission reserves five full archives plus the configured free-space
+            # floor. Re-read all sealed inputs at most one MiB apart, rather than
+            # rehashing the full release manifest for every 512-byte tar header.
+            periodic.capacity(self.config, 0)
+            self.next_capacity_check = self.size + 1024**2
         return self.stream.write(data)
     def tell(self): return self.stream.tell()
     def flush(self): return self.stream.flush()
@@ -918,6 +958,7 @@ def capture_bundle(config, commands, stage):
     with bundle.open('rb') as stream:
         os.fsync(stream.fileno())
     sync_directory(stage)
+    if config.get('periodic'): periodic.capacity(config, 0)
     if bundle.stat().st_size > MAX_BYTES or before != database_fingerprint(config, commands) or \
        images != image_inventory(config['imageRoot'], owner) or journal != journal_snapshot(config['jobsStateRoot'], jobs_owner(config)):
         fail('Capture changed or exceeded bound')
