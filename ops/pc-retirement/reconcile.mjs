@@ -64,9 +64,10 @@ function scalar(value) {
 function equality(value) {
   const text=scalar(value);
   if (text===undefined || /[\x00-\x1f\x7f]/.test(text)) throw new ReadFailure('target_key_invalid');
-  // URL encoding alone does not escape PostgREST's filter grammar. Quote every
-  // text scalar and escape quote/backslash before URLSearchParams encodes it.
-  return `eq.${typeof value==='string'?`"${text.replace(/\\/g,'\\\\').replace(/"/g,'\\"')}"`:text}`;
+  // Top-level eq consumes the remaining value literally, including quotes.
+  // URLSearchParams keeps punctuation inside this one parameter; the reader
+  // separately refuses logical filters, duplicate keys and other operators.
+  return `eq.${text}`;
 }
 function schema(doc, table) { return doc?.definitions?.[table]?.properties; }
 function schemaProblem(group, docs) {
@@ -178,7 +179,7 @@ function allowedRead(side,path,count) {
   if (![tables.get(table),naturalKeys[table]].filter(Boolean).some(columns=>same([...columns].sort(),[...filters].sort()))) return false;
   // A single equality scalar only: no logical filters, embeddings, modifier,
   // unescaped quote/backslash or PostgREST grammar expansion can be dispatched.
-  return filters.every(name=>/^eq\.(?:"(?:[^"\\\x00-\x1f\x7f]|\\["\\])*"|(?:true|false|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?))$/.test(params.get(name)));
+  return filters.every(name=>/^eq\.[^\x00-\x1f\x7f]*$/.test(params.get(name)));
 }
 export function createReadOnlyReader({ cloud,pc,expected,fetchImpl=globalThis.fetch,synthetic=false,maxRequests=832,maxBytes=16*1024*1024 }) {
   if (!expected || cloud?.url !== expected.cloudOrigin || pc?.url !== expected.pcOrigin || cloud.url===pc.url ||

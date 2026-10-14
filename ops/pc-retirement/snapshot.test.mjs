@@ -63,7 +63,7 @@ test('owner-private synthetic files contain ciphertext only and authenticate act
           if(request.pathname==='/rest/v1/')return Response.json({definitions});
           if(request.hostname==='cloud.example.test')return request.searchParams.get('select')==='id'
             ?Response.json([{id:1}],{headers:{'content-range':'0-0/1'}}):Response.json([row]);
-          assert.equal(request.pathname,'/rest/v1/profiles');assert.equal(request.searchParams.get('id'),'eq."p"');
+          assert.equal(request.pathname,'/rest/v1/profiles');assert.equal(request.searchParams.get('id'),'eq.p');
           return Response.json([{id:'p',name:syntheticMarker}]);
         }});
       assert.equal(executed.authenticatedReadback,true);

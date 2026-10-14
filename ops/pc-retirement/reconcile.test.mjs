@@ -126,6 +126,17 @@ test('bounded keyset capture includes retry-held rows and produces only a nonret
   assert(result.snapshot.responses.every(row=>!JSON.stringify(row).includes('synthetic-cloud')));
 });
 
+test('UUID equality reaches the typed API without adding literal quote characters',async()=>{
+  const id='11111111-1111-4111-8111-111111111111',row={id,name:'A',count:1};
+  const {reader}=fakeReader({queue:[change(1,{pk:{id},row_data:row})],targetHandler:url=>{
+    if(url.searchParams.get('id')!==`eq.${id}`)return Response.json({code:'22P02'},{status:400});
+    return Response.json([row]);
+  }});
+  const result=await captureReadOnly(reader);
+  assert.equal(result.report.counts.pc_matches_final_change,1);assert.equal(result.report.counts.unknown,0);
+  assert.equal(result.report.classifications[0].acknowledgementAllowed,false);
+});
+
 test('PC read errors and concurrent queue/target changes become unknown, never missing or ready',async()=>{
   for(const options of [{targetFailure:true},{queueDrift:true},{targetDrift:true}]){
     const {reader}=fakeReader(options),result=await captureReadOnly(reader);
@@ -140,12 +151,12 @@ test('read scope/budgets and missing ownership proof fail before unsafe dispatch
   for(const path of ['/rest/v1/rpc/replay_ob_family_operations','/auth/v1/admin/users','/rest/v1/google_drive_connections',
     '/rest/v1/profiles?select=*&limit=2',
     '/rest/v1/profiles?select=*,roles(*)&limit=2&id=eq.%22p%22',
-    '/rest/v1/profiles?select=*&limit=2&id=eq.p',
+    '/rest/v1/profiles?select=*&limit=2&id=neq.p',
     '/rest/v1/profiles?select=*&limit=2&id=eq.%22p%22&id=eq.%22other%22',
     '/rest/v1/profiles?select=*&limit=2&id=eq.%22p%22&or=(id.eq.other)',
-    '/rest/v1/profiles?select=*&limit=2&id=eq.%22p%22,other.eq.anything',
-    '/rest/v1/profiles?select=*&limit=2&id=eq.%22unterminated',
-    '/rest/v1/profiles?select=*&limit=2&id=eq.%22bad%5Cq%22',
+    '/rest/v1/profiles?select=*&limit=2&id=in.(p,other)',
+    '/rest/v1/profiles?select=*&limit=2&id=like.*',
+    '/rest/v1/profiles?select=*&limit=2&id=eq.bad%00value',
     '/rest/v1/profiles?select=*&limit=3&id=eq.%22p%22',
     '/rest/v1/profiles?select=*&limit=2&id=eq.%22p%22#private',
     '/rest/v1/profiles/../failover_changes',
@@ -164,17 +175,17 @@ test('read scope/budgets and missing ownership proof fail before unsafe dispatch
   assert.throws(()=>createReadOnlyReader({cloud:{url:proof.cloudOrigin,key:'synthetic'},pc:{url:proof.pcOrigin,key:'synthetic'},expected:proof,synthetic:true}),/Synthetic injected/);
 });
 
-test('PK and natural-key filters escape PostgREST grammar and keep one scalar per key',async()=>{
+test('PK and natural-key filters retain punctuation literally inside one encoded scalar per key',async()=>{
   const key='comma,(parentheses).colon:"quote"\\slash&or=(id.eq.other)';
-  const quoted=`eq."${key.replace(/\\/g,'\\\\').replace(/"/g,'\\"')}"`;
+  const literal=`eq.${key}`;
   const primary=fakeReader({queue:[change(1,{pk:{id:key},row_data:{id:key,name:'A',count:1}})],
-    targetHandler:url=>{assert.equal(url.searchParams.get('id'),quoted);assert.deepEqual([...url.searchParams.keys()],['select','limit','id']);
+    targetHandler:url=>{assert.equal(url.searchParams.get('id'),literal);assert.deepEqual([...url.searchParams.keys()],['select','limit','id']);
       return Response.json([{id:key,name:'A',count:1}]);}});
   assert.equal((await captureReadOnly(primary.reader)).report.counts.pc_matches_final_change,1);
   const natural=fakeReader({queue:[change(1,{table_name:'practice_records',row_data:{id:'p',user_id:key,recorded_date:'2026-10-11',count:1},changed:['count']})],
     targetHandler:url=>{if(url.searchParams.has('user_id')){
-      assert.equal(url.searchParams.get('user_id'),quoted);
-      assert.equal(url.searchParams.get('recorded_date'),'eq."2026-10-11"');
+      assert.equal(url.searchParams.get('user_id'),literal);
+      assert.equal(url.searchParams.get('recorded_date'),'eq.2026-10-11');
       assert.deepEqual([...url.searchParams.keys()],['select','limit','user_id','recorded_date']);
     } return Response.json([]);}});
   assert.equal((await captureReadOnly(natural.reader)).report.counts.divergence,1);
@@ -200,9 +211,9 @@ test('OB operation capture includes the held sibling and marks sibling read fail
     const {reader,calls}=fakeReader({queue:[change(1,{table_name:'ob_event_operations',pk:{meet_key:row.meet_key,event_name:row.event_name},row_data:row,changed:['data']})],
       targetHandler:url=>{
         const event=url.searchParams.get('event_name');
-        assert.equal(url.searchParams.get('meet_key'),'eq."ob-2026"');
-        if(event==='eq."女子100m"')return failed?Response.json({error:'private sibling failure'},{status:503}):Response.json([{...row,event_name:'女子100m'}]);
-        assert.equal(event,'eq."男子100m"');return Response.json([row]);
+        assert.equal(url.searchParams.get('meet_key'),'eq.ob-2026');
+        if(event==='eq.女子100m')return failed?Response.json({error:'private sibling failure'},{status:503}):Response.json([{...row,event_name:'女子100m'}]);
+        assert.equal(event,'eq.男子100m');return Response.json([row]);
       }});
     const result=await captureReadOnly(reader);
     assert.equal(result.snapshot.targets.length,2);
