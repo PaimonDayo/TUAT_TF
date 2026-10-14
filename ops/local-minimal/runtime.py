@@ -564,13 +564,14 @@ def pc_service_configuration(c, env, db, auth, rest):
                 (u.query == 'search_path=auth' if role == 'supabase_auth_admin' else not u.query) and not u.fragment, 'db-uri')
     expected_auth = {'GOTRUE_API_HOST': '127.0.0.1', 'GOTRUE_API_PORT': '18301', 'GOTRUE_DB_DRIVER': 'postgres', 'GOTRUE_DB_NAMESPACE': 'auth',
         'GOTRUE_JWT_ADMIN_ROLES': 'service_role', 'GOTRUE_JWT_AUD': 'authenticated', 'GOTRUE_JWT_DEFAULT_GROUP_NAME': 'authenticated',
-        'GOTRUE_DISABLE_SIGNUP': 'true', 'GOTRUE_EXTERNAL_GOOGLE_ENABLED': 'true', 'GOTRUE_EXTERNAL_EMAIL_ENABLED': 'false',
+        'GOTRUE_EXTERNAL_GOOGLE_ENABLED': 'true', 'GOTRUE_EXTERNAL_EMAIL_ENABLED': 'false',
         'GOTRUE_EXTERNAL_PHONE_ENABLED': 'false', 'GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED': 'false', 'GOTRUE_SITE_URL': origin.geturl(),
         'API_EXTERNAL_URL': origin.geturl() + '/api/pc-supabase/auth/v1', 'GOTRUE_URI_ALLOW_LIST': origin.geturl() + '/auth/callback',
         'GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI': origin.geturl() + '/api/pc-supabase/auth/v1/callback',
         'GOTRUE_HOOK_BEFORE_USER_CREATED_ENABLED': 'true', 'GOTRUE_HOOK_BEFORE_USER_CREATED_URI': 'pg-functions://postgres/public/hook_restrict_signup_by_email_domain'}
-    require(all(auth.get(k) == v for k, v in expected_auth.items()) and auth.get('GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID') and
-            auth.get('GOTRUE_EXTERNAL_GOOGLE_SECRET'), 'pc-google-preparation')
+    require(all(auth.get(k) == v for k, v in expected_auth.items()) and
+            auth.get('GOTRUE_DISABLE_SIGNUP') in ('true', 'false') and
+            auth.get('GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID') and auth.get('GOTRUE_EXTERNAL_GOOGLE_SECRET'), 'pc-google-auth')
     require(rest.get('PGRST_SERVER_HOST') == '127.0.0.1' and rest.get('PGRST_SERVER_PORT') == '18302' and
             rest.get('PGRST_DB_SCHEMAS') == 'public' and rest.get('PGRST_DB_ANON_ROLE') == 'anon' and
             rest.get('PGRST_JWT_SECRET') == '@/private/local-jwks.json' and
@@ -664,11 +665,11 @@ def pc_configuration_gate(c):
     for path in (host.get('stateDirectory'), jobs.get('stateDirectory')):
         require(isinstance(path, str) and Path(MOUNT) in Path(path).parents and Path(path).stat().st_dev == device, 'pc-supervisor-state-mount')
         existing(path, True, 0, 0o700)
-    require(jobs.get('runtime') == 'shared-pc' and jobs.get('enabled') is False and jobs.get('releaseDirectory') == c['releaseDirectory'] and
+    require(jobs.get('runtime') == 'shared-pc' and type(jobs.get('enabled')) is bool and jobs.get('releaseDirectory') == c['releaseDirectory'] and
             jobs.get('environmentFile') == c['appEnvironmentFile'] and jobs.get('stateDirectory') == c['jobsStateRoot'] and
             jobs.get('appOrigin') == 'http://127.0.0.1:18200' and jobs.get('port') == 18200 and
             jobs.get('releaseCommit') == manifest['sourceCommit'] and jobs.get('releaseId') == manifest['releaseId'] and
-            jobs.get('hostStateDirectory') == host.get('stateDirectory'), 'pc-jobs-preparation')
+            jobs.get('hostStateDirectory') == host.get('stateDirectory'), 'pc-jobs-contract')
     require(backup.get('profile') == periodic.PC_PROFILE and backup.get('sourceId') == c['sourceId'] and type(backup.get('sourceOwnerUid')) is int and backup['sourceOwnerUid'] == uid and
             backup.get('database') == db['POSTGRES_DB'] and
             backup.get('imageRoot') == c['imageRoot'] and backup.get('jobsStateRoot') == c['jobsStateRoot'] and
@@ -818,7 +819,7 @@ def compose_env(c):
                 if periodic.installation_profile(c)['name'] == periodic.PC_PROFILE else private_bytes(c['mixedJwks'], c['appUid'])))}
 
 
-def ports_gate(owned, cmd, profile=None):
+def ports_gate(owned, cmd, profile=None, allow_app=False):
     p = periodic.installation_profile(profile or {})
     text = cmd.run(['ss', '-H', '-ltnp', f"sport = :{p['appPort']} or sport = :{p['authPort']} or sport = :{p['restPort']} or sport = :{p['dbPort']}"])
     for line in text.splitlines():
@@ -827,6 +828,11 @@ def ports_gate(owned, cmd, profile=None):
         port = columns[3].split(':')[-1]
         role = {str(p['dbPort']): 'db', str(p['authPort']): 'auth', str(p['restPort']): 'rest'}.get(port)
         pids = re.findall(r'pid=([0-9]+)', line)
+        if port == str(p['appPort']) and allow_app:
+            require(p['name'] == periodic.PC_PROFILE and pids and
+                    all(re.search(r'(?:^|/)tuat-local-app\.service(?:/|$)', Path('/proc/'+pid+'/cgroup').read_text().strip())
+                        for pid in pids), 'pc-app-port-owner')
+            continue
         require(role in owned and pids, 'runtime-port-busy')
         require(all(owned[role] in Path('/proc/' + pid + '/cgroup').read_text() for pid in pids), 'port-container-owner')
 
@@ -839,8 +845,10 @@ def node_gate(c, env, manifest, cmd):
     if periodic.installation_profile(c)['name'] == periodic.PC_PROFILE:
         host = json.loads(cmd.run([str(node), str(Path(c['releaseDirectory'])/'ops/pc-host/run.mjs'), c['hostConfigPath']]))
         jobs = json.loads(cmd.run([str(node), str(Path(c['releaseDirectory'])/'ops/pc-jobs/run.mjs'), '--check', c['jobsConfig']]))
+        expected_jobs = json_private(c['jobsConfig'])
         require(host.get('prepared') is True and host.get('releaseCommit') == manifest['sourceCommit'] and
-                host.get('releaseId') == manifest['releaseId'] and jobs.get('valid') is True and jobs.get('enabled') is False, 'pc-lifecycle-validation')
+                host.get('releaseId') == manifest['releaseId'] and jobs.get('valid') is True and
+                type(expected_jobs.get('enabled')) is bool and jobs.get('enabled') is expected_jobs['enabled'], 'pc-lifecycle-validation')
         return
     validate = "import {validateLocalCloudAuthPair as v} from './src/lib/supabase/cloud-auth-config.mjs';v(process.env.NEXT_PUBLIC_CLOUD_AUTH_URL,process.env.NEXT_PUBLIC_CLOUD_AUTH_ANON_KEY,process.env.NEXT_PUBLIC_CLOUD_AUTH_MODE);"
     previous = Path.cwd(); os.chdir(c['releaseDirectory'])
@@ -850,6 +858,47 @@ def node_gate(c, env, manifest, cmd):
         cmd.run([str(node), '--input-type=module', '-e', validate], env={**public, 'PATH': '/usr/bin:/bin'})
     finally:
         os.chdir(previous)
+
+
+def pc_running_containers(c, mode, cmd, owned, pause=time.sleep):
+    """Boot starts only already installed, validated containers; checks never start them."""
+    require(periodic.installation_profile(c)['name'] == periodic.PC_PROFILE and
+            mode in ('--app', '--jobs', '--check'), 'pc-service-mode')
+    roles = set(PC_IMAGES)
+    require(set(owned) <= roles, 'pc-container-set')
+    if mode != '--app':
+        require(set(owned) == roles, 'pc-containers-not-running')
+    else:
+        ports_gate(owned, cmd, c)
+    host, db = json_private(c['hostConfigPath']), env_private(c['dbEnvironmentFile'])
+    system = host.get('expectedBackupDatabaseSystemIdentifier')
+    require(isinstance(system, str) and re.fullmatch('[0-9]{10,20}', system), 'pc-db-start-identity')
+    for role in ('db', 'auth', 'rest'):
+        if role not in owned:
+            ident = cmd.obj(['docker', 'inspect', 'tuat-local-'+role, '--format', '{{json .Id}}'])
+            require(isinstance(ident, str) and re.fullmatch('[a-f0-9]{64}', ident), 'pc-installed-container-id')
+            owned = host_gate(c, cmd)
+            if role not in owned:
+                cmd.run(['docker', 'start', ident], timeout=30)
+                owned = host_gate(c, cmd)
+            require(owned.get(role) == ident, 'pc-started-container-identity')
+        if role == 'db':
+            ready = False
+            for attempt in range(80):
+                try:
+                    actual = cmd.run(['docker', 'exec', owned['db'], 'psql', '--host=/tmp', '--port=18304',
+                        '-U', 'supabase_admin', '-d', db['POSTGRES_DB'], '-X', '-qAt', '-v', 'ON_ERROR_STOP=1',
+                        '--command', 'SELECT system_identifier::text FROM pg_control_system();']).strip()
+                except Hold as error:
+                    if str(error) != 'child-failed': raise
+                else:
+                    require(actual == system, 'pc-db-start-identity')
+                    ready = True; break
+                if attempt < 79: pause(0.25)
+            require(ready, 'pc-db-not-ready')
+    require(set(owned) == roles, 'pc-containers-not-running')
+    ports_gate(owned, cmd, c, allow_app=mode != '--app')
+    return owned
 
 
 def wait_primary(env, pause=time.sleep, connection_factory=http.client.HTTPConnection, attempts=60):
@@ -878,10 +927,12 @@ def wait_primary(env, pause=time.sleep, connection_factory=http.client.HTTPConne
 
 def exec_runtime(c, mode, env, jobs, cmd, owned, manifest=None):
     if periodic.installation_profile(c)['name'] == periodic.PC_PROFILE:
-        require(mode == '--app', 'pc-jobs-disabled-preparation')
+        require(mode in ('--app', '--jobs'), 'pc-service-mode')
+        require(mode != '--jobs' or jobs.get('enabled') is True, 'jobs-disabled')
         require(manifest is not None and re.fullmatch('[a-f0-9]{64}', manifest.get('nodeSha256', '')), 'node-version-pin')
-        argv = ['/usr/bin/python3', '-I', str(Path(c['releaseDirectory'])/'ops/pc-host/linux-launch.py'), '--service', 'app',
-                '--config', c['hostConfigPath'], '--node-sha256', manifest['nodeSha256']]
+        argv = ['/usr/bin/python3', '-I', str(Path(c['releaseDirectory'])/'ops/pc-host/linux-launch.py'),
+                '--service', 'app' if mode == '--app' else 'jobs',
+                '--config', c['hostConfigPath'] if mode == '--app' else c['jobsConfig'], '--node-sha256', manifest['nodeSha256']]
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0)); os.umask(0o077)
         os.execve(argv[0], argv, {'PATH': '/usr/bin:/bin', 'HOME': '/nonexistent', 'LANG': 'C.UTF-8'})
         return
@@ -965,7 +1016,7 @@ def main(argv=None):
         node_gate(c, env, manifest, cmd)
         owned = host_gate(c, cmd)
         if periodic.installation_profile(c)['name'] == periodic.PC_PROFILE:
-            require(set(owned) == set(IMAGES), 'pc-containers-not-running')
+            owned = pc_running_containers(c, args.mode, cmd, owned)
         if args.mode == '--check':
             print(json.dumps({'valid': True, 'scope': 'placement', 'jobsEnabled': jobs['enabled']}))
             return 0

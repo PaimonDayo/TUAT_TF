@@ -253,13 +253,22 @@ class RuntimeBehaviour(unittest.TestCase):
             self.assertEqual(run.call_count, 1)
             self.assertEqual(run.call_args.args[0], ['docker', '--host', 'unix:///run/tuat-local/docker.sock', '--config', '/nonexistent', 'info'])
 
-    def test_pc_google_signup_hold_and_local_issuer_cannot_mix_surface_settings(self):
+    def test_pc_google_allowlist_and_local_issuer_cannot_mix_surface_settings(self):
         c = pc_config(); inputs = pc_services(c)
         self.assertEqual(runtime.pc_service_configuration(c, *inputs), 'https://synthetic.example.test')
         for index, field, value in ((0, 'NEXT_PUBLIC_CLOUD_AUTH_URL', 'https://synthetic.supabase.co'), (0, 'NEXT_PUBLIC_CLOUD_AUTH_UNUSED', ''),
-            (0, 'PC_LOCAL_AUTH_URL', 'http://127.0.0.1:18001'), (2, 'GOTRUE_DISABLE_SIGNUP', 'false'), (2, 'GOTRUE_EXTERNAL_GOOGLE_ENABLED', 'false'),
+            (0, 'PC_LOCAL_AUTH_URL', 'http://127.0.0.1:18001'), (2, 'GOTRUE_DISABLE_SIGNUP', 'invalid'), (2, 'GOTRUE_EXTERNAL_GOOGLE_ENABLED', 'false'),
             (2, 'GOTRUE_EXTERNAL_EMAIL_ENABLED', 'true'), (3, 'PGRST_APP_SETTINGS_CLOUD_ISSUER', 'synthetic'), (3, 'PGRST_JWT_SECRET', '@other')):
             changed = [dict(item) for item in inputs]; changed[index][field] = value
+            with self.assertRaises(runtime.Hold, msg=field): runtime.pc_service_configuration(c, *changed)
+
+    def test_pc_signup_can_open_only_with_the_fixed_allowlist_hook_and_google_provider(self):
+        c = pc_config(); inputs = pc_services(c); inputs[2]['GOTRUE_DISABLE_SIGNUP'] = 'false'
+        self.assertEqual(runtime.pc_service_configuration(c, *inputs), 'https://synthetic.example.test')
+        for field, value in (('GOTRUE_HOOK_BEFORE_USER_CREATED_ENABLED', 'false'),
+            ('GOTRUE_HOOK_BEFORE_USER_CREATED_URI', 'pg-functions://postgres/public/other_hook'),
+            ('GOTRUE_EXTERNAL_EMAIL_ENABLED', 'true'), ('GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED', 'true')):
+            changed = [dict(item) for item in inputs]; changed[2][field] = value
             with self.assertRaises(runtime.Hold, msg=field): runtime.pc_service_configuration(c, *changed)
 
     def test_private_daemons_require_same_tracked_installed_hash_and_actual_exact_argv(self):
@@ -347,7 +356,7 @@ class RuntimeBehaviour(unittest.TestCase):
         with self.assertRaisesRegex(runtime.Hold, 'jwt-claims'): runtime.jwt_valid(signed(body), secret, 'anon')
         with self.assertRaisesRegex(runtime.Hold, 'jwt-claims'): runtime.jwt_valid(signed({**body, 'aud': 'other'}), secret, 'anon', allow_absent_audience=True)
 
-    def test_full_pc_configuration_binds_root_supervisors_and_keeps_jobs_disabled(self):
+    def test_full_pc_configuration_binds_root_supervisors_and_explicit_jobs_policy(self):
         c = pc_config(); env, db, auth, rest = pc_services(c); env['PC_APP_RELEASE_ID'] = 'synthetic-release'
         manifest = dict(version=1, nodeVersion='v24.19.0', sourceCommit='a'*40, releaseId='synthetic-release', publicOrigin=env['APP_PUBLIC_ORIGIN'],
             appEnvironmentSha256=runtime.digest(b'synthetic'), nodeSha256='b'*64, files={name:'c'*64 for name in
@@ -406,7 +415,9 @@ class RuntimeBehaviour(unittest.TestCase):
             with self.assertRaisesRegex(runtime.Hold,'backup-contract'): runtime.pc_configuration_gate(c)
             backup['sourceOwnerUid']=65530
             jobs['enabled'] = True
-            with self.assertRaisesRegex(runtime.Hold, 'jobs-preparation'): runtime.pc_configuration_gate(c)
+            self.assertEqual(runtime.pc_configuration_gate(c)[1], jobs)
+            jobs['enabled'] = 1
+            with self.assertRaisesRegex(runtime.Hold, 'jobs-contract'): runtime.pc_configuration_gate(c)
             jobs['enabled'] = False; host['applicationUid'] = 0
             with self.assertRaisesRegex(runtime.Hold, 'host-contract'): runtime.pc_configuration_gate(c)
 
@@ -420,6 +431,77 @@ class RuntimeBehaviour(unittest.TestCase):
                 '--service','app','--config',c['hostConfigPath'],'--node-sha256','a'*64])
             self.assertFalse(any(k.startswith('TUAT_') for k in execute.call_args.args[2]))
             with self.assertRaisesRegex(runtime.Hold, 'jobs-disabled'): runtime.exec_runtime(c, '--jobs', {}, {'enabled':False}, FakeCommands(c), {}, manifest)
+            runtime.exec_runtime(c, '--jobs', {}, {'enabled':True}, FakeCommands(c), {}, manifest)
+            self.assertEqual(execute.call_args.args[1], ['/usr/bin/python3','-I',c['releaseDirectory']+'/ops/pc-host/linux-launch.py',
+                '--service','jobs','--config',c['jobsConfig'],'--node-sha256','a'*64])
+            drop.assert_not_called()
+
+    def test_pc_lifecycle_check_requires_the_exact_enabled_policy_in_the_private_jobs_config(self):
+        c = pc_config(); manifest = {'nodeSha256':'a'*64, 'sourceCommit':'b'*40, 'releaseId':'synthetic'}
+        configured = {'enabled': False}; observed = {'valid': True, 'enabled': False}
+        cmd = FakeCommands(c)
+        def run(args):
+            if args[-1] == '--version': return 'v24.19.0'
+            if args[-1] == c['hostConfigPath']: return json.dumps({'prepared':True, 'releaseCommit':'b'*40, 'releaseId':'synthetic'})
+            return json.dumps(observed)
+        cmd.run = run
+        with patch.object(runtime, 'existing', return_value=Path(c['nodePath'])), patch.object(runtime, 'app_access'), \
+             patch.object(runtime, 'file_digest', return_value='a'*64), patch.object(runtime, 'json_private', return_value=configured):
+            for enabled in (False, True):
+                configured['enabled'] = enabled; observed['enabled'] = enabled
+                runtime.node_gate(c, {}, manifest, cmd)
+                observed['enabled'] = not enabled
+                with self.assertRaisesRegex(runtime.Hold, 'lifecycle-validation'): runtime.node_gate(c, {}, manifest, cmd)
+
+    def test_pc_boot_starts_only_missing_pinned_containers_and_checks_physical_db_before_auth(self):
+        c = pc_config(); ids = {role: letter*64 for role, letter in (('db','d'),('auth','a'),('rest','b'))}
+        active = {'db': ids['db']}; events = []; cmd = MagicMock()
+        def observe(args): return ids[args[2].removeprefix('tuat-local-')]
+        def run(args, **_kwargs):
+            events.append(args)
+            if args[:2] == ['docker','start']:
+                role = next(role for role, ident in ids.items() if ident == args[2]); active[role] = args[2]
+                return args[2]
+            return '1234567890\n'
+        cmd.obj.side_effect = observe; cmd.run.side_effect = run
+        with patch.object(runtime, 'json_private', return_value={'expectedBackupDatabaseSystemIdentifier':'1234567890'}), \
+             patch.object(runtime, 'env_private', return_value={'POSTGRES_DB':'synthetic'}), \
+             patch.object(runtime, 'host_gate', side_effect=lambda *_args:dict(active)), patch.object(runtime, 'ports_gate') as ports:
+            self.assertEqual(runtime.pc_running_containers(c, '--app', cmd, dict(active)), ids)
+            self.assertEqual([args for args in events if args[:2] == ['docker','start']],
+                [['docker','start',ids['auth']],['docker','start',ids['rest']]])
+            self.assertEqual(events[0][:3], ['docker','exec',ids['db']])
+            self.assertEqual(ports.call_count, 2)
+
+    def test_pc_readonly_check_and_jobs_never_start_missing_containers_or_a_busy_listener(self):
+        c = pc_config(); cmd = MagicMock(); owned = {'db':'d'*64}
+        for mode in ('--check','--jobs'):
+            with self.assertRaisesRegex(runtime.Hold, 'containers-not-running'):
+                runtime.pc_running_containers(c, mode, cmd, owned)
+        cmd.run.assert_not_called(); cmd.obj.assert_not_called()
+        with patch.object(runtime, 'ports_gate', side_effect=runtime.Hold('runtime-port-busy')):
+            with self.assertRaisesRegex(runtime.Hold, 'port-busy'): runtime.pc_running_containers(c, '--app', cmd, owned)
+        cmd.run.assert_not_called(); cmd.obj.assert_not_called()
+
+    def test_pc_wrong_physical_db_stops_boot_before_starting_auth_or_rest(self):
+        c = pc_config(); cmd = MagicMock(); cmd.run.return_value = '9999999999\n'
+        with patch.object(runtime, 'json_private', return_value={'expectedBackupDatabaseSystemIdentifier':'1234567890'}), \
+             patch.object(runtime, 'env_private', return_value={'POSTGRES_DB':'synthetic'}), patch.object(runtime, 'ports_gate'):
+            with self.assertRaisesRegex(runtime.Hold, 'db-start-identity'):
+                runtime.pc_running_containers(c, '--app', cmd, {'db':'d'*64})
+        cmd.obj.assert_not_called()
+        self.assertFalse(any(call.args[0][:2] == ['docker','start'] for call in cmd.run.call_args_list))
+
+    def test_pc_jobs_allow_only_the_primary_app_unit_to_own_its_loopback_port(self):
+        cmd = MagicMock(); cmd.run.return_value = 'LISTEN 0 511 127.0.0.1:18200 0.0.0.0:* users:(("node",pid=123,fd=4))'
+        cgroup = SimpleNamespace(read_text=lambda:'0::/system.slice/tuat-local-app.service\n')
+        with patch.object(runtime, 'Path', return_value=cgroup):
+            runtime.ports_gate({}, cmd, pc_config(), allow_app=True)
+            with self.assertRaisesRegex(runtime.Hold, 'runtime-port-busy'): runtime.ports_gate({}, cmd, pc_config())
+            cgroup.read_text = lambda:'0::/system.slice/tuat-pc-readonly-preview.service\n'
+            with self.assertRaisesRegex(runtime.Hold, 'app-port-owner'): runtime.ports_gate({}, cmd, pc_config(), allow_app=True)
+            cmd.run.return_value = cmd.run.return_value.replace('127.0.0.1:18200','0.0.0.0:18200')
+            with self.assertRaisesRegex(runtime.Hold, 'listener-boundary'): runtime.ports_gate({}, cmd, pc_config(), allow_app=True)
 
     def test_explicit_numeric_actor_accepts_legacy_and_current_but_not_privileged_or_coerced_ids(self):
         for uid, gid in ((1000, 1000), (65530, 65530), (65530, 65531)):

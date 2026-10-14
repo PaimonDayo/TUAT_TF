@@ -31,6 +31,19 @@ first-time Google users, returning users and allowlist revocation on the isolate
 candidate before enabling it. Hook configuration follows the
 [official self-hosted hook guide](https://supabase.com/docs/guides/self-hosting/self-hosted-auth-hooks).
 
+The PC placement gate accepts either explicit signup policy while requiring the
+same fixed allowlist hook and Google-only provider settings. Keep the deployed
+preparation set to `true` until those acceptance checks pass. Shared Jobs may be
+enabled only after the old owner is drained and its journal is transferred. Both
+PC services use the existing root lifetime launcher and their own held locks;
+the placement check must agree with the private Jobs configuration's enabled flag.
+After encrypted storage and the private daemons are ready, app startup starts
+only missing, already validated native containers. It checks the physical DB
+identifier before starting Auth/REST and leaves running containers unchanged.
+Placement checks and Jobs startup never start missing containers. An existing
+app listener is accepted for those checks only in `tuat-local-app.service`;
+app startup still refuses a busy app port.
+
 Use one local JWT issuer/public key set for Auth and REST. Remove cloud issuer
 trust from the new instance only. Do not publish HMAC/private signing keys in
 JWKS or copy legacy mixed-JWKS configuration. Local sessions use the separate
