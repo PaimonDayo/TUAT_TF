@@ -809,4 +809,36 @@ class BackupBehaviour(unittest.TestCase):
         self.assertEqual(self.commands.events,[])
 
 
+class LinuxLifetimeEvidence(unittest.TestCase):
+    def metadata(self):
+        return {'version':1, 'service':'jobs', 'pid':os.getpid(),
+            'ownerId':'11111111-1111-4111-8111-111111111111',
+            'startedAt':backup.dt.datetime.now(backup.dt.timezone.utc).isoformat()}
+
+    def test_journal_retains_linux_lifetime_bytes_without_treating_them_as_live_authority(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory); root.chmod(0o700); owner=self.metadata()
+            for name,value in (('lifetime.lock',owner),('runner.lock',{k:owner[k] for k in ('pid','startedAt')})):
+                path=root/name; path.write_text(json.dumps(value)); path.chmod(0o600)
+            rows=backup.journal_snapshot(root)
+            self.assertEqual({row['name']:row['bytes'] for row in rows},
+                {name:(root/name).read_bytes() for name in ('lifetime.lock','runner.lock')})
+            owner['service']='app'; (root/'lifetime.lock').write_text(json.dumps(owner))
+            with self.assertRaisesRegex(backup.BackupFailure,'lifetime'): backup.journal_snapshot(root)
+            owner['service']='jobs'; owner['pid']+=1; (root/'lifetime.lock').write_text(json.dumps(owner))
+            with self.assertRaisesRegex(backup.BackupFailure,'disagree'): backup.journal_snapshot(root)
+
+    @unittest.skipUnless(sys.platform=='linux' and os.getuid()==0, 'Native Jobs are Linux/root only')
+    def test_real_kernel_flock_is_required_even_when_owner_metadata_looks_valid(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory); root.chmod(0o700); path=root/'lifetime.lock'
+            path.write_text(json.dumps(self.metadata())); path.chmod(0o600)
+            with self.assertRaisesRegex(backup.BackupFailure,'FLOCK'): backup.verify_kernel_jobs_lock(root,os.getpid())
+            with path.open('rb') as stream:
+                backup.fcntl.flock(stream,backup.fcntl.LOCK_EX|backup.fcntl.LOCK_NB)
+                backup.verify_kernel_jobs_lock(root,os.getpid())
+                backup.fcntl.flock(stream,backup.fcntl.LOCK_UN)
+                with self.assertRaisesRegex(backup.BackupFailure,'FLOCK'): backup.verify_kernel_jobs_lock(root,os.getpid())
+
+
 if __name__ == '__main__': unittest.main()

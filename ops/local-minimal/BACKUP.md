@@ -183,6 +183,11 @@ Source containers carry `tuat.local.source=<sourceId>` and
 `tuat.local.role=db|auth|rest`. Host mode accepts only fixed
 `tuat-local-jobs.service`, `tuat-local-app.service` and disabled
 `tuat-local-mirror.service`, using verified `systemctl freeze/thaw` states.
+Native Jobs snapshots also retain the launcher's `lifetime.lock` alongside
+the journal, runner and status files. These archived bytes never establish a
+live owner: PC capture additionally verifies the running Jobs PID's actual
+kernel FLOCK on that exact protected inode. A mismatched or unheld lock refuses
+capture; restoring a lock file does not acquire a lock or authorize replay.
 The mirror may be absent only when `systemctl show` explicitly returns
 `LoadState=not-found`, inactive/dead, running freezer, zero MainPID/ControlPID
 and an empty cgroup. A loaded mirror needs the same inactive/process-free

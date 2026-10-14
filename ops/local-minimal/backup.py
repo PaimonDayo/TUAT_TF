@@ -33,7 +33,7 @@ MAX_BYTES = 16 * 1024 ** 3
 MAX_IMAGE = 12 * 1024 ** 2
 MAX_ENTRIES = 100000
 MAX_JOB_STATE = 1024 ** 2
-JOB_STATE_FILES = ('journal.json', 'runner.lock', 'status.json')
+JOB_STATE_FILES = ('journal.json', 'runner.lock', 'status.json', 'lifetime.lock')
 JOB_IDS = ('sheets', 'program', 'cleanup', 'push')
 SCHEMAS = ('auth', 'public', 'storage', 'pc_ops', 'extensions')
 UNITS = ('tuat-local-jobs.service', 'tuat-local-app.service', 'tuat-local-mirror.service')
@@ -257,10 +257,49 @@ def journal_snapshot(directory, owner=None):
             if not isinstance(parsed.get('pid'), int) or parsed['pid'] <= 0 or \
                not isinstance(parsed.get('startedAt'), str):
                 fail('Unknown Jobs runner lock')
+        elif path.name == 'lifetime.lock':
+            if not isinstance(parsed, dict) or set(parsed) != {'version','service','pid','ownerId','startedAt'} or \
+               parsed.get('version') != 1 or parsed.get('service') != 'jobs' or \
+               type(parsed.get('pid')) is not int or parsed['pid'] <= 0 or \
+               not isinstance(parsed.get('ownerId'), str) or \
+               re.fullmatch('[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', parsed['ownerId']) is None:
+                fail('Unknown Jobs lifetime metadata')
+            try:
+                started = dt.datetime.fromisoformat(parsed['startedAt'].replace('Z','+00:00'))
+                if started.tzinfo is None: raise ValueError()
+            except (ValueError, TypeError, KeyError, AttributeError):
+                fail('Unknown Jobs lifetime metadata time')
         rows.append({'name': path.name, 'sha256': hashlib.sha256(value).hexdigest(), 'bytes': value})
+    if 'lifetime.lock' in parsed_files and 'runner.lock' in parsed_files and \
+       parsed_files['lifetime.lock']['pid'] != parsed_files['runner.lock']['pid']:
+        fail('Jobs lifetime and runner metadata disagree')
     if 'status.json' in parsed_files:
         validate_jobs_status(parsed_files['status.json'], parsed_files.get('journal.json'))
     return rows
+
+
+def verify_kernel_jobs_lock(directory, pid):
+    """Archived metadata is not authority; verify this live host's actual held FLOCK."""
+    path = private(Path(directory)/'lifetime.lock', owner=0)
+    value = json.loads(read_private(path,4096,0))
+    if value.get('version') != 1 or value.get('service') != 'jobs' or value.get('pid') != pid:
+        fail('Jobs lifetime owner does not match the live runner')
+    before = path.stat()
+    text = Path('/proc/locks').read_text()
+    if len(text) > 2*1024**2: fail('Kernel lock inventory bound exceeded')
+    for line in text.splitlines():
+        fields = line.split()
+        if len(fields) < 8 or fields[1:5] != ['FLOCK','ADVISORY','WRITE',str(pid)] or fields[6:8] != ['0','EOF']:
+            continue
+        device = re.fullmatch('([a-fA-F0-9]+):([a-fA-F0-9]+):([0-9]+)', fields[5])
+        if device and (int(device[1],16),int(device[2],16),int(device[3])) == \
+           (os.major(before.st_dev),os.minor(before.st_dev),before.st_ino):
+            after = path.stat()
+            if (before.st_dev,before.st_ino,before.st_mtime_ns,before.st_ctime_ns) != \
+               (after.st_dev,after.st_ino,after.st_mtime_ns,after.st_ctime_ns):
+                fail('Jobs lifetime inode changed during verification')
+            return
+    fail('Live Jobs kernel FLOCK is not held')
 
 
 def finite_number(value):
@@ -503,6 +542,8 @@ class LocalCommands:
             started=dt.datetime.fromisoformat(owner.get('startedAt','').replace('Z','+00:00'))
         if not 0<=(started-born).total_seconds()<300:
             fail('Jobs lock process identity/start time cannot be proven')
+        if self.profile['name'] == periodic.PC_PROFILE and config['writerMode'] == 'surface-systemd':
+            verify_kernel_jobs_lock(config['jobsStateRoot'], pid)
 
     def transition(self, kind, name, freeze):
         if kind == 'container':
