@@ -7,10 +7,11 @@ function forwardedHeaders(input) {
 
 // One loopback entry for a fixed Tunnel. No endpoint discovery or standby replay.
 export function createGateway({ publicOrigin, appPort, maxBodyBytes = 8 * 1024 * 1024,
-  requestTimeoutMs = 330_000, drainTimeoutMs = 335_000 }) {
+  requestTimeoutMs = 330_000, drainTimeoutMs = 335_000, readOnly = false }) {
   const origin = new URL(publicOrigin);
   if (origin.protocol !== 'https:' || origin.origin !== publicOrigin) throw Error('Fixed HTTPS origin required');
   if (!Number.isInteger(appPort) || appPort < 1024 || appPort > 65535) throw Error('Dedicated app port required');
+  if (typeof readOnly !== 'boolean') throw Error('Explicit gateway write policy required');
   if (!Number.isSafeInteger(maxBodyBytes) || maxBodyBytes < 1 || !Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs < 1 || !Number.isSafeInteger(drainTimeoutMs) || drainTimeoutMs < 1) throw Error('Bounded request limits required');
   let stopping = false;
   const active = new Set();
@@ -26,6 +27,15 @@ export function createGateway({ publicOrigin, appPort, maxBodyBytes = 8 * 1024 *
     const length = req.headers['content-length'];
     if (length !== undefined && (!/^\d+$/.test(length) || Number(length) > maxBodyBytes)) return reply(413);
     if (!req.url?.startsWith('/') || req.url.startsWith('//')) return reply(400);
+    if (readOnly) {
+      const target = new URL(req.url, publicOrigin);
+      const authPost = req.method === 'POST' &&
+        (target.pathname === '/api/pc-supabase/auth/v1/logout' ||
+         (target.pathname === '/api/pc-supabase/auth/v1/token' &&
+          target.searchParams.getAll('grant_type').length === 1 &&
+          ['pkce', 'refresh_token'].includes(target.searchParams.get('grant_type'))));
+      if ((modifying && !authPost) || target.pathname.startsWith('/api/cron/')) return reply(503);
+    }
     // Validate complete bounded writes before dispatching them to the application.
     // RSC responses remain streamed; request buffering is limited to this cap.
     const chunks = [];

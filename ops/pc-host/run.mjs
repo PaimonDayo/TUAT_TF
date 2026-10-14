@@ -68,7 +68,7 @@ export async function run(configFile, execute = false, { startBackup = startBack
       await pause(250);
     }
     if (!healthy || stopped) throw Error('Pinned application did not start');
-    gateway = createGateway({ publicOrigin: config.publicOrigin, appPort: config.appPort });
+    gateway = createGateway({ publicOrigin: config.publicOrigin, appPort: config.appPort, readOnly: config.gatewayReadOnly ?? false });
     await new Promise((done, reject) => { gateway.server.once('error', reject); gateway.server.listen(config.gatewayPort, '127.0.0.1', done); });
     writeReceipt(config.stateDirectory, 'runtime-status.json', runtimeRecord(true));
     console.log(JSON.stringify({ running: true, loopbackOnly: true, releaseId: config.releaseId }));

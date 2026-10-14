@@ -28,6 +28,21 @@ test('foreign and missing Origin writes rejected before app dispatch', async () 
     assert.equal(f.records.length, 0);
   } finally { await f.close(); }
 });
+test('readonly validation blocks business and cron writes while preserving exact-origin Google session operations', async () => {
+  const f = await fixture(undefined, { readOnly: true }); try {
+    for (const [path,method] of [['/api/records/save','POST'],['/api/pc-supabase/rest/v1/profiles','PATCH'],
+      ['/api/pc-supabase/auth/v1/token?grant_type=password','POST'],['/api/pc-supabase/auth/v1/token?grant_type=pkce&grant_type=password','POST'],
+      ['/api/cron/cleanup-stories','GET']]) {
+      assert.equal((await fetch(f.url+path,{method,headers:{origin:'https://pc.example.test'},...(method==='GET'?{}:{body:'{}'})})).status,503);
+    }
+    assert.equal(f.records.length,0);
+    assert.equal((await fetch(f.url+'/api/pc-supabase/auth/v1/token?grant_type=pkce',{method:'POST',headers:{origin:'https://foreign.example.test'},body:'{}'})).status,403);
+    for (const path of ['/api/pc-supabase/auth/v1/token?grant_type=pkce','/api/pc-supabase/auth/v1/token?grant_type=refresh_token','/api/pc-supabase/auth/v1/logout']) {
+      assert.equal((await fetch(f.url+path,{method:'POST',headers:{origin:'https://pc.example.test'},body:'{}'})).status,200);
+    }
+    assert.equal((await fetch(f.url+'/home')).status,200); assert.equal(f.records.length,4);
+  } finally { await f.close(); }
+});
 test('body cap applied and accepted write sent only once', async () => {
   const f = await fixture(undefined, { maxBodyBytes: 4 }); try {
     assert.equal((await fetch(f.url, { method: 'POST', headers: { origin: 'https://pc.example.test' }, body: 'oversize' })).status, 413);

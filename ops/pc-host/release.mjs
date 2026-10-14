@@ -30,6 +30,7 @@ export function applicationLaunch(config,args,{platform=process.platform,ownerUi
 }
 export function validateHostConfig(config, env) {
   if (config.version !== 1 || typeof config.enabled !== 'boolean') throw Error('Explicit host configuration required');
+  if (Object.hasOwn(config, 'gatewayReadOnly') && typeof config.gatewayReadOnly !== 'boolean') throw Error('Explicit gateway write policy required');
   validateBackupOwnerConfig(config, env);
   for (const key of ['releaseDirectory', 'environmentFile', 'stateDirectory']) if (!isAbsolute(config[key] ?? '')) throw Error(`Absolute ${key} required`);
   const outsideRelease = path => { const delta = relative(config.releaseDirectory, path); return delta === '..' || delta.startsWith(`..${sep}`) || isAbsolute(delta); };

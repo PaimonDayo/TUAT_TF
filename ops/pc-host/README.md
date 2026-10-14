@@ -14,6 +14,10 @@ Cloudflare固定Tunnel → loopback gateway → Next一つ → 現行PC DB。
 Jobsは同じNextへ接続するshared-pcモードを使用し、旧journalの履歴を保持する。
 Googleログイン、Push購読、PWA/旧タブのorigin変更は切替前に確認する。
 
+本番切替前の公開検証では、Root所有host設定の`gatewayReadOnly: true`を使う。
+通常の保存・削除・cron入口を拒否し、同じOriginのGoogle PKCE交換・更新・logoutだけを通す。
+この設定は公開入口だけに適用し、定期処理は従来どおりprivate app portへ接続する。
+
 ## 準備と起動
 
 Linuxで管理主体をrootとして起動する場合は、`applicationUid`、`applicationGid`
