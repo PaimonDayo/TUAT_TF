@@ -109,6 +109,43 @@ class PeriodicActor(unittest.TestCase):
                 with self.assertRaisesRegex(periodic.Hold, 'metadata-owner'): periodic.bind_storage(config)
 
 
+class PrivateDockerMounts(unittest.TestCase):
+    def fixture(self):
+        root='/var/lib/tuat-local'
+        runtime={'dockerRoot':root+'/docker','containerdRoot':root+'/containerd'}
+        base=f'1 0 254:0 / {root} rw,nosuid,nodev - ext4 /dev/mapper/tuat-local-data rw\n'
+        bind=f'2 1 254:0 /docker {root}/docker rw,nosuid,nodev shared:12 - ext4 /dev/mapper/tuat-local-data rw\n'
+        layers=root+'/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/'
+        overlay=f'3 2 0:175 / {root}/docker/rootfs/overlayfs/'+('a'*64)+f' rw,relatime - overlay overlay rw,lowerdir={layers}1/fs:{layers}2/fs,upperdir={layers}3/fs,workdir={layers}3/work\n'
+        return runtime,base,bind,overlay
+
+    def test_live_private_engine_mounts_keep_encrypted_backing_layers(self):
+        runtime,base,bind,overlay=self.fixture()
+        periodic.verify_mount_inventory(base.encode())
+        periodic.verify_mount_inventory((base+bind+overlay).encode(),runtime)
+        with self.assertRaisesRegex(periodic.Hold,'nested-mount'):
+            periodic.verify_mount_inventory((base+bind+overlay).encode())
+
+    def test_unrelated_mounts_and_plaintext_or_aliased_layers_are_refused(self):
+        runtime,base,bind,overlay=self.fixture()
+        attacks=[
+            base+bind+overlay.replace('/snapshots/1/fs','/snapshots/../outside/fs'),
+            base+bind+overlay.replace('lowerdir=/var/lib/tuat-local/containerd','lowerdir=/tmp/plaintext'),
+            base+bind+overlay.replace('workdir=/var/lib/tuat-local/containerd','workdir=/tmp/plaintext'),
+            base+bind.replace('254:0','8:1')+overlay,
+            base+bind.replace('/dev/mapper/tuat-local-data','/dev/plaintext')+overlay,
+            base+bind.replace('/docker /var','/other /var')+overlay,
+            base+bind.replace('rw,nosuid,nodev','rw')+overlay,
+            base+bind+overlay+overlay,
+            base+bind+overlay+'4 1 8:1 / /var/lib/tuat-local/images rw - ext4 /dev/plaintext rw\n',
+            base+bind+overlay+'4 1 8:1 / /var/lib/tuat-local/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/1/fs rw - ext4 /dev/plaintext rw\n',
+            base+bind+overlay.replace('/rootfs/overlayfs/','/unrecognized/'),
+        ]
+        for raw in attacks:
+            with self.subTest(raw=raw),self.assertRaisesRegex(periodic.Hold,'nested-mount'):
+                periodic.verify_mount_inventory(raw.encode(),runtime)
+
+
 class PeriodicOffsite(unittest.TestCase):
     def fixture(self, directory, unknown=False):
         root = Path(directory); backup = root/'backup'; state = root/'offsite'; backup.mkdir(); state.mkdir()

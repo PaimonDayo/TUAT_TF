@@ -288,6 +288,49 @@ def verify_self(config, commands, prior=None, resume=False):
     need(prior is None or prior == identity, 'periodic-controller-identity-changed')
     return identity
 
+def verify_mount_inventory(raw, runtime=None):
+    """Capture paths cannot hide another filesystem. The private Docker engine
+    also has its own same-device bind and overlay views, outside capture paths.
+    Admit only those exact observed shapes with all backing layers encrypted.
+    """
+    need(len(raw) <= 8*1024**2, 'periodic-mount-inventory-bound')
+    rows=[]
+    def unescape(value):
+        for a,b in ((r'\040',' '),(r'\011','\t'),(r'\012','\n'),(r'\134','\\')):
+            value=value.replace(a,b)
+        return value
+    for line in raw.decode().splitlines():
+        fields=line.split(' ')
+        need(len(fields)>=10 and ' - ' in line, 'periodic-mount-inventory')
+        split=fields.index('-')
+        need(split>=6 and len(fields)==split+4, 'periodic-mount-inventory')
+        rows.append({'target':Path(unescape(fields[4])), 'device':fields[2], 'root':unescape(fields[3]),
+                     'options':fields[5].split(','), 'fs':fields[split+1], 'source':unescape(fields[split+2]),
+                     'super':unescape(fields[split+3])})
+    roots=[row for row in rows if row['target']==MOUNT]
+    need(len(roots)==1, 'periodic-nested-mount')
+    base=roots[0]
+    nested=[row for row in rows if MOUNT in row['target'].parents]
+    if not nested:return
+    need(runtime is not None and runtime.get('dockerRoot')==str(MOUNT/'docker') and
+         runtime.get('containerdRoot')==str(MOUNT/'containerd'), 'periodic-nested-mount')
+    docker=Path(runtime['dockerRoot']);layers=runtime['containerdRoot']+'/io.containerd.snapshotter.v1.overlayfs/snapshots/'
+    need(len({row['target'] for row in nested})==len(nested), 'periodic-nested-mount')
+    for row in nested:
+        if row['target']==docker:
+            need(row['device']==base['device'] and row['root']=='/docker' and row['fs']==base['fs']=='ext4' and
+                 row['source']==base['source'] and {'rw','nosuid','nodev'}.issubset(row['options']), 'periodic-nested-mount')
+            continue
+        need(re.fullmatch(re.escape(str(docker))+r'/rootfs/overlayfs/[a-f0-9]{64}',str(row['target'])) and
+             row['fs']=='overlay' and row['source']=='overlay' and row['root']=='/', 'periodic-nested-mount')
+        options=dict(part.split('=',1) if '=' in part else (part,'') for part in row['super'].split(','))
+        need(set(options)=={'rw','lowerdir','upperdir','workdir'} and options['rw']=='', 'periodic-nested-mount')
+        lower=options['lowerdir'].split(':')
+        need(lower and all(re.fullmatch(re.escape(layers)+r'[0-9]+/fs',path) for path in lower) and
+             re.fullmatch(re.escape(layers)+r'[0-9]+/fs',options['upperdir']) and
+             options['workdir']==str(Path(options['upperdir']).parent/'work'), 'periodic-nested-mount')
+
+
 def bind_storage(config):
     """Bind every private capture path to the SAME runtime-verified mount, not any shared device.
     Called after the actual storage-only gate and during capacity/output checks. Recovery copy
@@ -298,15 +341,11 @@ def bind_storage(config):
     need(stat.S_ISDIR(m.st_mode) and m.st_uid == 0 and not m.st_mode & 0o022 and
          MOUNT.resolve() == MOUNT and m.st_dev != Path('/').stat().st_dev, 'periodic-encrypted-mount')
     raw = Path('/proc/self/mountinfo').read_bytes()
-    need(len(raw) <= 8*1024**2, 'periodic-mount-inventory-bound')
-    points=[]
-    for row in raw.decode().splitlines():
-        fields=row.split(' ')
-        need(len(fields)>=10 and ' - ' in row, 'periodic-mount-inventory')
-        target=fields[4]
-        for a,b in ((r'\040',' '),(r'\011','\t'),(r'\012','\n'),(r'\134','\\')):target=target.replace(a,b)
-        points.append(Path(target))
-    need(points.count(MOUNT)==1 and not any(MOUNT in p.parents for p in points), 'periodic-nested-mount')
+    runtime=None
+    if installation_profile(config)['name']==PC_PROFILE:
+        runtime=read_json(seal(config)['runtimeConfigPath'])
+        need(runtime.get('sourceId')==config['sourceId'], 'periodic-profile-binding')
+    verify_mount_inventory(raw,runtime)
     p=policy(config)
     paths=[(config[k], k in ('imageRoot','jobsStateRoot','backupRoot','stageRoot'))
            for k in ('imageRoot','jobsStateRoot','backupRoot','stageRoot','runtimeKey','receiptFile')]
