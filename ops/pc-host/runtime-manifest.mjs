@@ -32,7 +32,7 @@ export function hostGitPath() {
 export function hostGitEnvironment() {
   // Git proof must not read a developer profile, injected GIT_* overrides or
   // a system config. Production preflight separately validates local metadata.
-  const env = { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: process.platform === 'win32' ? 'NUL' : '/dev/null', LC_ALL: 'C' };
+  const env = { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: process.platform === 'win32' ? 'NUL' : '/dev/null', GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C' };
   if (process.platform === 'win32') {
     env.SystemRoot = process.env.SystemRoot;
     env.WINDIR = process.env.SystemRoot;

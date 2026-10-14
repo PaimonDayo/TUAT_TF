@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { resolve, join, relative, isAbsolute } from 'node:path';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync, existsSync, chmodSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync, existsSync, chmodSync, readFileSync, statSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { validateHostConfig, writeReceipt, verifyPrepared, sourceProof, environmentHash, buildHash, privateDirectory,applicationLaunch } from './release.mjs';
@@ -92,6 +92,18 @@ test('the legacy-receipt CLI reports rebuild without echoing configuration or cr
   assert.equal(result.stderr.trim(), 'PC host receipt requires a rebuild; no host was started.');
 });
 
+test('source verification does not rewrite a sealed Git index when file timestamps change', t => {
+  const f = releaseFixture(t), root = f.config.releaseDirectory;
+  const index = join(root, '.git/index'), source = join(root, 'runtime-entry.mjs');
+  const before = readFileSync(index), metadata = statSync(index, { bigint: true }), touched = statSync(source);
+  utimesSync(source, touched.atime, new Date(touched.mtimeMs + 5_000));
+  assert.equal(sourceProof(root, f.config.releaseCommit).commit, f.config.releaseCommit);
+  assert.deepEqual(readFileSync(index), before);
+  const after = statSync(index, { bigint: true });
+  assert.equal(after.ino, metadata.ino);
+  assert.equal(after.mtimeNs, metadata.mtimeNs);
+});
+
 test('prepared receipt rejects changed transitive JavaScript and native dependency bytes', async t => {
   for (const name of ['index.js', 'addon.node']) await t.test(name, child => {
     const f = releaseFixture(child);
@@ -138,7 +150,7 @@ test('Git proof ignores ambient includes, external helpers and metadata override
   writeFileSync(included, `[core]\nfsmonitor = ${command}\nignoreStat = true\n[filter "reviewProbe"]\nclean = ${command}\nrequired = true\n`);
   writeFileSync(externalConfig, `[include]\npath = ${JSON.stringify(included.replaceAll('\\', '/'))}\n`);
   const overrides = {
-    GIT_CONFIG_GLOBAL: externalConfig, GIT_CONFIG_SYSTEM: externalConfig, GIT_CONFIG_NOSYSTEM: '0',
+    GIT_CONFIG_GLOBAL: externalConfig, GIT_CONFIG_SYSTEM: externalConfig, GIT_CONFIG_NOSYSTEM: '0', GIT_OPTIONAL_LOCKS: '1',
     GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.fsmonitor', GIT_CONFIG_VALUE_0: JSON.parse(command),
     HOME: f.config.stateDirectory, XDG_CONFIG_HOME: f.config.stateDirectory,
     SUPABASE_SERVICE_ROLE_KEY: 'SYNTHETIC_MUST_NOT_REACH_GIT',
@@ -149,6 +161,7 @@ test('Git proof ignores ambient includes, external helpers and metadata override
     Object.assign(process.env, overrides);
     const childEnvironment = hostGitEnvironment();
     assert.equal(childEnvironment.GIT_CONFIG_NOSYSTEM, '1');
+    assert.equal(childEnvironment.GIT_OPTIONAL_LOCKS, '0');
     assert.equal(childEnvironment.GIT_CONFIG_GLOBAL, process.platform === 'win32' ? 'NUL' : '/dev/null');
     assert.equal(childEnvironment.SUPABASE_SERVICE_ROLE_KEY, undefined);
     assert.equal(childEnvironment.GIT_CONFIG_COUNT, undefined);
