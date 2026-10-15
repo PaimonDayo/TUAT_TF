@@ -105,8 +105,33 @@ def properties(commands):
         raw = raw.decode()
     need(len(raw) <= 16384, 'systemd-bound')
     pairs = [line.split('=', 1) for line in raw.splitlines() if '=' in line]
-    need(len({key for key, _ in pairs}) == len(pairs), 'systemd-duplicates')
-    return dict(pairs)
+    props = {}
+    for key, value in pairs:
+        # systemctl emits one ExecStartPre= line per command on systemd 255.
+        # Preserve every entry; the exact two-command contract is checked below.
+        need(key not in props or key == 'ExecStartPre', 'systemd-duplicates')
+        props[key] = props[key] + ' ' + value if key in props else value
+    return props
+
+
+def structured_property(commands, name, signature):
+    # systemctl renders structured properties as [unprintable], or omits empty
+    # vectors, on systemd 255. Read their typed D-Bus representation instead.
+    raw = commands.run(['/usr/bin/busctl', '--json=short', 'get-property', 'org.freedesktop.systemd1',
+        '/org/freedesktop/systemd1/unit/tuat_2dlocal_2dtunnel_2eservice', 'org.freedesktop.systemd1.Service', name])
+    need(len(raw) <= 8192, 'credential-metadata-bound')
+    value = json.loads(raw)
+    need(isinstance(value, dict) and value.get('type') == signature and isinstance(value.get('data'), list), 'credential-metadata')
+    return value['data']
+
+
+def credential_sources(commands):
+    # LoadCredential contains names/source paths, never credential file contents.
+    rows = structured_property(commands, 'LoadCredential', 'a(ss)')
+    need(len(rows) == 2 and all(isinstance(row, list) and len(row) == 2 and
+         all(isinstance(item, str) for item in row) for row in rows) and
+         len({row[0] for row in rows}) == len(rows), 'credential-metadata')
+    return dict(rows)
 
 
 def process_identity(pid, group, value):
@@ -163,13 +188,17 @@ def observe(context, commands, listed):
                  re.fullmatch('[a-f0-9]{32}', props.get('InvocationID', '')) and
                  re.fullmatch('[1-9][0-9]*', props.get('ExecMainStartTimestampMonotonic', '')) and
                  props.get('ControlGroup') == '/system.slice/' + UNIT, 'active-state')
+        sources = None
         if enabled:
             need(props.get('FragmentPath') == str(FRAGMENT) and props.get('DropInPaths') == '' and
                  props.get('User') == '65532' and props.get('Group') == '65532' and
                  props.get('NoNewPrivileges') == 'yes' and props.get('CapabilityBoundingSet') == '' and
-                 props.get('AmbientCapabilities') == '' and props.get('EnvironmentFiles') == '' and
+                 props.get('AmbientCapabilities') == '' and
                  props.get('Environment') == 'HOME=/nonexistent PATH=/usr/bin:/bin', 'unit-contract')
-            contract = {'Type': 'exec', 'LoadCredential': 'token:' + str(TOKEN) + ' config:' + str(CONFIG),
+            sources = credential_sources(commands)
+            need(sources == {'token':str(TOKEN), 'config':str(CONFIG)}, 'unit-credentials')
+            need(structured_property(commands, 'EnvironmentFiles', 'a(sb)') == [], 'unit-environment-files')
+            contract = {'Type': 'exec',
                         'ProtectSystem': 'strict', 'ProtectHome': 'yes', 'PrivateTmp': 'yes', 'PrivateDevices': 'yes',
                         'InaccessiblePaths': str(MOUNT), 'StandardOutput': 'null', 'StandardError': 'null',
                         'KillMode': 'control-group', 'Restart': 'on-failure'}
@@ -189,7 +218,11 @@ def observe(context, commands, listed):
         # Re-observe after /proc and listener checks so restart/PID reuse cannot
         # combine properties from one invocation with another process.
         need(properties(commands) == props, 'unit-replaced')
-        return {'policy': value, 'unit': props if enabled else {key: props.get(key) for key in STATE_FIELDS}, 'processBirth': birth}
+        if enabled:
+            need(credential_sources(commands) == sources, 'credentials-replaced')
+            need(structured_property(commands, 'EnvironmentFiles', 'a(sb)') == [], 'unit-environment-files')
+        return {'policy': value, 'unit': props if enabled else {key: props.get(key) for key in STATE_FIELDS}, 'processBirth': birth,
+                **({'credentialSources': sources} if enabled else {})}
     except Hold:
         raise
     except Exception:

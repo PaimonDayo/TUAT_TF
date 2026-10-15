@@ -57,6 +57,9 @@ class TransportLifecycle(unittest.TestCase):
             ExecStartPre='{ argv[]=/usr/bin/findmnt --noheadings --mountpoint /var/lib/tuat-local --source /dev/mapper/tuat-local-data --types ext4 ; } '
                          '{ argv[]=/usr/bin/python3 -I /opt/tuat-local-runtime/transport.py --preflight ; }')
         self.events = []
+        self.multiline_pre = False
+        self.credential_metadata = {'type':'a(ss)', 'data':[['token',str(transport.TOKEN)],['config',str(transport.CONFIG)]]}
+        self.environment_metadata = {'type':'a(sb)', 'data':[]}
         self.listener = 'LISTEN 0 4096 127.0.0.1:18305 0.0.0.0:* users:(("cloudflared",pid=2024,fd=3))\n'
         self.commands = SimpleNamespace(run=self.command)
         self.process = transport.PROC/'2024'; self.process.mkdir(parents=True)
@@ -79,7 +82,11 @@ class TransportLifecycle(unittest.TestCase):
     def command(self, args):
         self.events.append(args)
         if args[:2] == ['systemctl', 'show']:
-            return '\n'.join(key+'='+value for key, value in self.props.items()).encode()
+            text = '\n'.join(key+'='+value for key, value in self.props.items())
+            if self.multiline_pre: text = text.replace('} { argv[]=', '}\nExecStartPre={ argv[]=')
+            return text.encode()
+        if args[:3] == ['/usr/bin/busctl','--json=short','get-property']:
+            return json.dumps(self.environment_metadata if args[-1] == 'EnvironmentFiles' else self.credential_metadata).encode()
         if args == ['ss', '-H', '-ltnp', 'sport = :18305']:
             return self.listener.encode()
         raise AssertionError('Unexpected synthetic command')
@@ -99,11 +106,50 @@ class TransportLifecycle(unittest.TestCase):
         before = self.observe()
         self.assertEqual(before['processBirth'], '12345')
         self.assertEqual(before, self.observe())
-        self.assertTrue(all(row[:2] in (['systemctl','show'], ['ss','-H']) for row in self.events))
+        self.assertTrue(all(row[:2] in (['systemctl','show'], ['ss','-H'], ['/usr/bin/busctl','--json=short']) for row in self.events))
         self.inactive(); self.events.clear()
         with patch.object(transport, 'process_identity', side_effect=AssertionError('Inactive process read')):
             self.assertIsNone(self.observe()['processBirth'])
-        self.assertTrue(all(row[:2] == ['systemctl','show'] for row in self.events))
+        self.assertTrue(all(row[:2] in (['systemctl','show'], ['/usr/bin/busctl','--json=short']) for row in self.events))
+
+    def test_systemd255_execstartpre_vectors_and_structured_credentials_are_verified(self):
+        self.multiline_pre = True
+        self.props['LoadCredential'] = '[unprintable]'
+        del self.props['EnvironmentFiles']
+        self.inactive()
+        before = self.observe()
+        self.assertEqual(before['credentialSources'],{'token':str(transport.TOKEN),'config':str(transport.CONFIG)})
+        self.credential_metadata['data'].reverse()
+        self.assertEqual(self.observe(),before)
+        # ExecStartPre is the sole vector field allowed to repeat. Every
+        # command still has to match the two approved preflights exactly.
+        self.props['ExecStartPre'] += ' { argv[]=/bin/sh ; }'
+        with self.assertRaisesRegex(transport.Hold,'unit-preflight'): self.observe()
+
+    def test_structured_credential_metadata_rejects_wrong_type_duplicate_names_and_paths(self):
+        valid = self.credential_metadata.copy()
+        for changed in ({'type':'a(say)','data':valid['data']}, {'type':'a(ss)','data':[]}, {'type':'a(ss)','data':[['token',str(transport.TOKEN)]]},
+                        {'type':'a(ss)','data':[['token',str(transport.TOKEN)],['token',str(transport.TOKEN)]]},
+                        {'type':'a(ss)','data':[['token','/unapproved'],['config',str(transport.CONFIG)]]},
+                        {'type':'a(ss)','data':[['token',[1,2]],['config',str(transport.CONFIG)]]}):
+            self.credential_metadata = changed
+            with self.subTest(changed=changed), self.assertRaises(transport.Hold): self.observe()
+        self.credential_metadata = valid
+        original = self.commands.run; calls = [0]
+        def changed_after_observation(args):
+            if args[0] == '/usr/bin/busctl':
+                calls[0] += 1
+                if calls[0] == 2: self.credential_metadata = {'type':'a(ss)','data':[['token','/unapproved'],['config',str(transport.CONFIG)]]}
+            return original(args)
+        self.commands.run = changed_after_observation
+        with self.assertRaisesRegex(transport.Hold,'credentials-replaced'): self.observe()
+
+    def test_missing_human_environmentfiles_requires_typed_empty_dbus_vector(self):
+        del self.props['EnvironmentFiles']
+        self.observe()
+        for changed in ({'type':'as','data':[]}, {'type':'a(sb)','data':[['/unapproved.env',False]]}):
+            self.environment_metadata = changed
+            with self.subTest(changed=changed), self.assertRaises(transport.Hold): self.observe()
 
     def test_absent_and_disabled_preserve_compatibility_and_never_admit_a_live_transport(self):
         for value in (None, {'version':1, 'sourceId':'synthetic-source', 'enabled':False}):
@@ -155,7 +201,7 @@ class TransportLifecycle(unittest.TestCase):
         for key, value in (('DropInPaths','/unsafe.conf'), ('User','root'), ('NoNewPrivileges','no'),
                            ('CapabilityBoundingSet','cap_net_raw'), ('Environment','TUNNEL_TOKEN=synthetic-secret'),
                            ('ExecStart',baseline['ExecStart'].replace('--token-file','--token')),
-                           ('ExecStartPre',''), ('LoadCredential',''), ('StandardError','journal'),
+                           ('ExecStartPre',''), ('StandardError','journal'),
                            ('ProtectSystem','no'), ('PrivateDevices','no'), ('ControlPID','2'), ('FreezerState','frozen')):
             with self.subTest(key=key):
                 self.props = {**baseline,key:value}
