@@ -566,3 +566,11 @@ Cloudflare公式の現時点の料金条件も読取り確認: Workers VPCはope
 - Windows旧処理の停止helperは稼働runner.lockを読取り退避しようとしてholdしたため、active lockは存在metadataだけに修正し、lock消失を自然drainの条件にした。owner承認のUACでadmin読取り検査を実行したが、その旧lock読取り失敗以外の本番変更0。修正後はInspect→plan hash review→Jobs graceful drain→task disableの限定adminwrapperを再起動依頼中。Windows UAC応答待ち。旧backend/Jobsはまだ維持。
 - 続報: 新Tunnelの実資格情報はroot0:0/0440＋専用UID65532だけread許可のPOSIX ACLで、token/configのhashは完全一致。サービスのUID/GID/全cap0/NNP/cgroup/loopback/ready200も実証。読取検査が所有権0400だけを想定していたため、実ACLの厳密検証へ修正中。各診断後は新unitだけ停止し原本raw接続を維持。
 - 続報: 二回目のWindows管理者起動は取消エラーで、PID=null/新run不存在を確認。PowerShellの非終端エラー後のrequested=true出力は起動成功として扱わない。旧Jobs config/task/旧backendに変更0。所有者へ現在PC操作可否を確認中。管理者なしで許可済configの停止・自然drainだけを進める限定手順も独立準備し、OSタスク/プロセスの権限迂回はしない。
+
+### 旧Jobsの安全な停止と候補起動順の修正（2026-10-15）
+
+- 旧Windows Jobsは既存configのenabledだけをfalseへ変更し、進行中処理の自然終了・runner.lock解放・journalのrunning 0と安定性を確認した。元のactivation日時・全履歴を保持。OSタスクは有効のままで、設定によって次回起動も処理を開始しない。新Jobsは無効・停止中。
+- 旧Backendタスクは現利用者に既存の継承FullControlがあることを実TaskScheduler ACLで確認。権限追加なしで対象タスクだけを停止する計画を準備したが、まだ停止していない。
+- d1cf2d0のLinuxビルド・smoke・sealed inventoryは成功。readonly切替の起動検査で、inactiveなTunnel unitがsystemdのinventoryから自動解放され、host-transport-unverifiedとなる実症状を確認。候補アプリは停止し、旧本番は稼働している。DB/Auth/画像の最終移行は未実施。
+- 再起動手順を、専用daemon・storage検査→enabled Tunnelの起動・実process/credential/ready検査→app起動の順へ修正。Tunnelの未登録拒否・厳密検証は維持する。bootstrap 17件・transport 15件が成功。OS再起動試験の証明にはしない。
+- 復旧helperはd1設定を再配置した段階で、実証済みprospective transportとLinux releaseのコードhashが改行形式により異なることを検知し停止。原本のraw Tunnelを維持、Jobs/timer停止、旧本番維持。改行以外の同一性を確認してから、既知状態に限定して継続する。

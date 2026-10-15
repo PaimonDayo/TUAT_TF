@@ -4,6 +4,7 @@ import argparse
 import fcntl
 import hashlib
 import http.client
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -13,6 +14,7 @@ import stat
 import subprocess
 import sys
 import time
+from types import SimpleNamespace
 
 sys.dont_write_bytecode = True
 MOUNT = '/var/lib/tuat-local'
@@ -135,6 +137,52 @@ def service(name, command=run):
     return result
 
 
+def transport_module(config):
+    source = Path(config['releaseDirectory'])/'ops/local-minimal/transport.py'
+    info = source.lstat()
+    need(not source.is_symlink() and source.resolve() == source and stat.S_ISREG(info.st_mode) and
+         info.st_uid == 0 and info.st_nlink == 1 and not info.st_mode & 0o022, 'transport-source-file')
+    manifest = json.loads(private_file(config['releaseManifest'], maximum=64*1024**2))
+    pin = manifest.get('files', {}).get('ops/local-minimal/transport.py')
+    commit = manifest.get('sourceCommit', '')
+    need(re.fullmatch('[a-f0-9]{40}', commit) and commit.startswith(Path(config['releaseDirectory']).name) and
+         hashlib.sha256(source.read_bytes()).hexdigest() == pin, 'transport-source-seal')
+    spec = importlib.util.spec_from_file_location('tuat_boot_transport', source)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    need(hashlib.sha256(source.read_bytes()).hexdigest() == pin, 'transport-source-changed')
+    return module
+
+
+def transport_ready(config, command=run):
+    module = transport_module(config)
+    commands = SimpleNamespace(run=lambda args:command(args)[1])
+    for attempt in range(120):
+        try:
+            observed = module.observe(config, commands, True)
+        except module.Hold as error:
+            if str(error) != 'transport-metrics-boundary':
+                raise
+        else:
+            need(observed.get('policy', {}).get('enabled') is True and
+                 observed.get('unit', {}).get('ActiveState') == 'active', 'transport-not-active')
+            connection = http.client.HTTPConnection('127.0.0.1', 18305, timeout=1)
+            try:
+                connection.request('GET', '/ready')
+                response = connection.getresponse()
+                need(len(response.read(4097)) <= 4096, 'transport-ready-bound')
+                if response.status == 200:
+                    need(module.observe(config, commands, True) == observed, 'transport-identity-changed')
+                    return
+            except (OSError, http.client.HTTPException):
+                pass
+            finally:
+                connection.close()
+        if attempt < 119:
+            time.sleep(0.25)
+    raise Held('transport-not-ready')
+
+
 def start_installed(config, policy, command=run):
     need(policy == {'version': 1, 'enabled': True, 'automaticBackups': False} or
          policy == {'version': 1, 'enabled': True, 'automaticBackups': True}, 'boot-policy')
@@ -156,16 +204,20 @@ def start_installed(config, policy, command=run):
              hashlib.sha256(item.read_bytes()).hexdigest() == seals.get(field), 'daemon-static-seal')
     tunnel_path = Path(MOUNT + '/private/tunnel.json')
     tunnel = json.loads(private_file(str(tunnel_path))) if tunnel_path.exists() else None
-    if tunnel and tunnel.get('enabled') is True:
-        # Load the installed unit before runtime's complete host inventory check.
-        command(['/usr/bin/python3', '-I', '-B', '/opt/tuat-local-runtime/transport.py', '--preflight'])
-        service('tuat-local-tunnel.service', command)
     for name in UNITS[:2]:
         state = service(name, command)
         if state['ActiveState'] == 'inactive':
             command(['/usr/bin/systemctl', 'start', name], timeout=120)
         need(service(name, command)['ActiveState'] == 'active', 'start-not-observed')
     command(['/usr/bin/python3', '-I', '-B', str(runtime), '--storage-only', CONFIG])
+    if tunnel and tunnel.get('enabled') is True:
+        command(['/usr/bin/python3', '-I', '-B', '/opt/tuat-local-runtime/transport.py', '--preflight'])
+        state = service('tuat-local-tunnel.service', command)
+        if state['ActiveState'] == 'inactive':
+            command(['/usr/bin/systemctl', 'start', 'tuat-local-tunnel.service'])
+        # Inactive unreferenced units can be garbage-collected immediately.
+        # Keep this validated transport active before app's complete inventory.
+        transport_ready(config, command)
     app = service(UNITS[2], command)
     if app['ActiveState'] == 'inactive':
         command(['/usr/bin/systemctl', 'start', UNITS[2]], timeout=120)
@@ -195,11 +247,6 @@ def start_installed(config, policy, command=run):
         state = service('tuat-local-jobs.service', command)
         if state['ActiveState'] == 'inactive':
             command(['/usr/bin/systemctl', 'start', 'tuat-local-jobs.service'], timeout=120)
-    if tunnel:
-        if tunnel.get('enabled') is True:
-            state = service('tuat-local-tunnel.service', command)
-            if state['ActiveState'] == 'inactive':
-                command(['/usr/bin/systemctl', 'start', 'tuat-local-tunnel.service'])
     if policy['automaticBackups']:
         command(['/usr/bin/systemctl', 'start', 'tuat-local-backup.timer'])
 

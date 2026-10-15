@@ -1,11 +1,13 @@
 import importlib.util
 import hashlib
 import json
+import os
 from pathlib import Path
 import posixpath
 import shutil
 import stat
 import subprocess
+import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch, Mock
@@ -109,9 +111,10 @@ class DiskBootTests(unittest.TestCase):
 
 class SyntheticStart:
     """Fixed deployment metadata and service observations; no host paths are read."""
-    def __init__(self, jobs=False, timer=False, tunnel=True):
+    def __init__(self, jobs=False, timer=False, tunnel=True, tunnel_enabled=True):
         self.events, self.running = [], set()
         self.jobs, self.tunnel, self.timer = jobs, tunnel, timer
+        self.tunnel_enabled = tunnel_enabled
         self.version = 'a'*40
         self.release = '/var/lib/tuat-local/releases/'+'b'*40
         self.runtime = self.release+'/ops/local-minimal/runtime.py'
@@ -122,6 +125,9 @@ class SyntheticStart:
             'daemonSeal':{field:hashlib.sha256(path.encode()).hexdigest() for field,path in self.paths.items()}}
         self.policy = {'version':1, 'enabled':True, 'automaticBackups':timer}
         self.fail_storage = False
+        self.fail_transport = False
+        self.change_transport = False
+        self.observe_calls = 0
 
     def path(self, value):
         fixture = self
@@ -146,7 +152,7 @@ class SyntheticStart:
     def private(self, path):
         if path == self.config['jobsConfig']: return json.dumps({'enabled':self.jobs}).encode()
         if path == self.config['hostConfigPath']: return json.dumps({'releaseCommit':self.version}).encode()
-        if path == boot.MOUNT+'/private/tunnel.json': return b'{"enabled":true}'
+        if path == boot.MOUNT+'/private/tunnel.json': return json.dumps({'enabled':self.tunnel_enabled}).encode()
         raise AssertionError('Unexpected private input')
 
     def command(self, args, **_kwargs):
@@ -156,7 +162,14 @@ class SyntheticStart:
                 DropInPaths='',ControlPID='0',ActiveState='active' if name in self.running else 'inactive',
                 SubState='running' if name in self.running else 'dead').items())
         if args[:2] == ['/usr/bin/systemctl','start']:
-            name = args[2]; self.events.append('start:'+name); self.running.add(name)
+            name = args[2]
+            # An inactive, unreferenced Tunnel is garbage-collected by systemd.
+            # A prior show/preflight cannot keep it in app's host inventory.
+            if name == boot.UNITS[2] and self.tunnel and self.tunnel_enabled:
+                if 'tuat-local-tunnel.service' not in self.running:
+                    raise boot.Held('host-transport-unverified')
+                assert 'transport-ready' in self.events
+            self.events.append('start:'+name); self.running.add(name)
             return 0, ''
         if args == ['/usr/bin/python3','-I','-B','/opt/tuat-local-runtime/transport.py','--preflight']:
             self.events.append('transport-preflight'); return 0, ''
@@ -173,36 +186,55 @@ class SyntheticStart:
         raise AssertionError('Unexpected command')
 
     def connection(self, host, port, **_kwargs):
-        assert host == '127.0.0.1' and port == 18201
+        assert host == '127.0.0.1' and port in (18201,18305)
         def request(method, path):
+            if port == 18305:
+                assert method == 'GET' and path == '/ready'
+                assert 'tuat-local-tunnel.service' in self.running
+                self.events.append('transport-ready')
+                return
             assert method == 'GET' and path == '/api/version'
             assert boot.UNITS[2] in self.running
             self.events.append('version-ready')
         # Startup checks a pinned process/version, without treating the fresh
         # boot's missing backup receipt as a failed application start.
         return SimpleNamespace(request=request, close=lambda:None,
-            getresponse=lambda:SimpleNamespace(status=200,read=lambda _bound:json.dumps({'version':self.version}).encode()))
+            getresponse=lambda:SimpleNamespace(status=200,read=lambda _bound:b'' if port == 18305 else json.dumps({'version':self.version}).encode()))
+
+    def transport(self, *_args):
+        fixture = self
+        def observe(*_args):
+            fixture.events.append('transport-observe')
+            fixture.observe_calls += 1
+            assert 'storage-only' in fixture.events
+            assert set(boot.UNITS[:2]) <= fixture.running
+            if fixture.fail_transport: raise boot.Held('synthetic-transport-identity')
+            return {'policy':{'enabled':True}, 'unit':{'ActiveState':'active'},
+                    'processBirth':'12346' if fixture.change_transport and fixture.observe_calls > 1 else '12345'}
+        return SimpleNamespace(observe=observe, Hold=boot.Held)
 
     def start(self):
         with patch.object(boot,'Path',side_effect=self.path), patch.object(boot,'private_file',side_effect=self.private), \
-             patch.object(boot.http.client,'HTTPConnection',side_effect=self.connection):
+             patch.object(boot.http.client,'HTTPConnection',side_effect=self.connection), \
+             patch.object(boot,'transport_module',side_effect=self.transport,create=True):
             boot.start_installed(self.config,self.policy,self.command)
 
 
 class InstalledStartTests(unittest.TestCase):
-    def test_cold_boot_checks_static_seals_primes_transport_and_starts_daemons_before_runtime_gate(self):
+    def test_cold_boot_keeps_enabled_transport_active_and_verified_before_app_inventory(self):
         for jobs, timer in ((False,False),(True,True)):
             with self.subTest(jobs=jobs,timer=timer):
                 fixture = SyntheticStart(jobs,timer); fixture.start()
                 start = lambda name:fixture.events.index('start:'+name)
-                self.assertLess(fixture.events.index('transport-preflight'),fixture.events.index('show:tuat-local-tunnel.service'))
-                self.assertLess(fixture.events.index('show:tuat-local-tunnel.service'),start(boot.UNITS[2]))
                 self.assertLess(start(boot.UNITS[0]),start(boot.UNITS[1]))
                 self.assertLess(start(boot.UNITS[1]),fixture.events.index('storage-only'))
-                self.assertLess(fixture.events.index('storage-only'),start(boot.UNITS[2]))
+                self.assertLess(fixture.events.index('storage-only'),fixture.events.index('transport-preflight'))
+                self.assertLess(fixture.events.index('transport-preflight'),start('tuat-local-tunnel.service'))
+                self.assertLess(start('tuat-local-tunnel.service'),fixture.events.index('transport-observe'))
+                self.assertLess(fixture.events.index('transport-observe'),fixture.events.index('transport-ready'))
+                self.assertLess(fixture.events.index('transport-ready'),start(boot.UNITS[2]))
                 self.assertLess(start(boot.UNITS[2]),fixture.events.index('version-ready'))
                 self.assertLess(fixture.events.index('version-ready'),fixture.events.index('runtime-check'))
-                self.assertLess(fixture.events.index('runtime-check'),start('tuat-local-tunnel.service'))
                 self.assertEqual('tuat-local-jobs.service' in fixture.running,jobs)
                 self.assertEqual('tuat-local-backup.timer' in fixture.running,timer)
                 if jobs: self.assertLess(fixture.events.index('runtime-check'),start('tuat-local-jobs.service'))
@@ -220,10 +252,49 @@ class InstalledStartTests(unittest.TestCase):
         self.assertFalse(any(event.startswith('stop:') for event in fixture.events))
 
     def test_absent_transport_and_disabled_jobs_add_no_service_requirement(self):
-        fixture = SyntheticStart(tunnel=False); fixture.start()
-        self.assertEqual(fixture.running,set(boot.UNITS))
-        self.assertNotIn('transport-preflight',fixture.events)
-        self.assertFalse(any('tunnel' in event or 'jobs' in event or '.timer' in event for event in fixture.events))
+        for present in (False,True):
+            with self.subTest(policyPresent=present):
+                fixture = SyntheticStart(tunnel=present,tunnel_enabled=False); fixture.start()
+                self.assertEqual(fixture.running,set(boot.UNITS))
+                self.assertNotIn('transport-preflight',fixture.events)
+                self.assertFalse(any('tunnel' in event or 'transport-' in event or 'jobs' in event or '.timer' in event for event in fixture.events))
+
+    def test_unverified_transport_blocks_app_jobs_and_timer_without_stopping_daemons(self):
+        fixture = SyntheticStart(jobs=True,timer=True)
+        fixture.fail_transport = True
+        with self.assertRaisesRegex(boot.Held,'synthetic-transport-identity'): fixture.start()
+        self.assertEqual(fixture.running,set(boot.UNITS[:2])|{'tuat-local-tunnel.service'})
+        self.assertFalse(any(event.startswith('stop:') for event in fixture.events))
+
+    def test_already_active_transport_is_verified_without_restart(self):
+        fixture = SyntheticStart()
+        fixture.running.add('tuat-local-tunnel.service')
+        fixture.start()
+        self.assertNotIn('start:tuat-local-tunnel.service',fixture.events)
+        self.assertLess(fixture.events.index('transport-ready'),fixture.events.index('start:'+boot.UNITS[2]))
+
+    def test_transport_replacement_while_ready_blocks_app_start(self):
+        fixture = SyntheticStart()
+        fixture.change_transport = True
+        with self.assertRaisesRegex(boot.Held,'transport-identity-changed'): fixture.start()
+        self.assertNotIn(boot.UNITS[2],fixture.running)
+
+    @unittest.skipUnless(os.name == 'posix' and os.getuid() == 0, 'Linux root source metadata')
+    def test_transport_module_is_pinned_before_import(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            release = Path(temporary)/('a'*7)
+            source = release/'ops/local-minimal/transport.py'
+            source.parent.mkdir(parents=True)
+            source.write_text('class Hold(Exception): pass\n')
+            source.chmod(0o644)
+            manifest = Path(temporary)/'release.json'
+            manifest.write_text(json.dumps({'sourceCommit':'a'*40,'files':{
+                'ops/local-minimal/transport.py':hashlib.sha256(source.read_bytes()).hexdigest()}}))
+            manifest.chmod(0o600)
+            config = {'releaseDirectory':str(release),'releaseManifest':str(manifest)}
+            self.assertTrue(issubclass(boot.transport_module(config).Hold,Exception))
+            source.write_text('raise AssertionError("must not execute")\n')
+            with self.assertRaisesRegex(boot.Held,'transport-source-seal'): boot.transport_module(config)
 
     def test_windows_key_buffer_is_zeroed_only_after_delayed_pipe_write_callback(self):
         node = '/opt/node-v24.19.0-linux-x64/bin/node'
