@@ -561,10 +561,35 @@ class LocalCommands:
         path = Path(config['jobsStateRoot']) / 'runner.lock'
         if not path.exists():
             return
-        owner = json.loads(read_private(path,4096,jobs_owner(config)))
+        owner_bytes = read_private(path,4096,jobs_owner(config))
+        owner = json.loads(owner_bytes)
         pid = owner.get('pid')
         if not isinstance(pid,int) or isinstance(pid,bool) or pid<=0:
             fail('Unknown Jobs lock owner')
+        if config['writerMode'] == 'surface-systemd' and self.profile['name'] == periodic.PC_PROFILE:
+            started = dt.datetime.fromisoformat(owner.get('startedAt','').replace('Z','+00:00'))
+            if started.tzinfo is None:
+                fail('Jobs runner metadata time is not zoned')
+            def identity():
+                state = unit_state(self.unit(UNITS[0]))
+                group = Path('/proc',str(pid),'cgroup').read_text().splitlines()
+                if state['ActiveState'] != 'active' or state['MainPID'] != str(pid) or state['ControlPID'] != '0' or \
+                   state['ControlGroup'] != '/system.slice/' + UNITS[0] or group != ['0::' + state['ControlGroup']]:
+                    fail('Jobs lock owner is outside the approved systemd cgroup')
+                boot = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+                proc = Path('/proc',str(pid),'stat').read_text()
+                ticks = int(proc.rsplit(')',1)[1].split()[19])
+                if not re.fullmatch('[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}',boot) or \
+                   not proc.startswith(str(pid) + ' (') or ticks <= 0:
+                    fail('Jobs lock process identity cannot be proven')
+                return {'bootId':boot,'birthTicks':ticks,'unit':state}
+            # UTC boot-time estimates change during WSL clock correction. The
+            # live PID-owned FLOCK, unit and stable kernel birth identify this owner.
+            before = identity()
+            verify_kernel_jobs_lock(config['jobsStateRoot'], pid)
+            if identity() != before or read_private(path,4096,jobs_owner(config)) != owner_bytes:
+                fail('Jobs lock process identity changed during verification')
+            return
         if config['writerMode']=='docker-fixture':
             # This concrete fixture runs the labelled direct Node scheduler as PID 1, no init wrapper.
             if pid!=1 or not jobs_info or not jobs_info['State']['Running'] or jobs_info['HostConfig'].get('Init') or \
@@ -583,8 +608,6 @@ class LocalCommands:
             started=dt.datetime.fromisoformat(owner.get('startedAt','').replace('Z','+00:00'))
         if not 0<=(started-born).total_seconds()<300:
             fail('Jobs lock process identity/start time cannot be proven')
-        if self.profile['name'] == periodic.PC_PROFILE and config['writerMode'] == 'surface-systemd':
-            verify_kernel_jobs_lock(config['jobsStateRoot'], pid)
 
     def transition(self, kind, name, freeze):
         if kind == 'container':

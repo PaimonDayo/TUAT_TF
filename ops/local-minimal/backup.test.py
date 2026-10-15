@@ -987,6 +987,67 @@ class LinuxLifetimeEvidence(unittest.TestCase):
                 backup.fcntl.flock(stream,backup.fcntl.LOCK_UN)
                 with self.assertRaisesRegex(backup.BackupFailure,'FLOCK'): backup.verify_kernel_jobs_lock(root,os.getpid())
 
+    def native_lock(self, root):
+        root.chmod(0o700);owner=self.metadata()
+        owner['startedAt']=(backup.dt.datetime.now(backup.dt.timezone.utc)-backup.dt.timedelta(seconds=538)).isoformat()
+        for name,value in (('lifetime.lock',owner),('runner.lock',{k:owner[k] for k in ('pid','startedAt')})):
+            path=root/name;path.write_text(json.dumps(value));path.chmod(0o600)
+        config={'profile':'pc-private','writerMode':'surface-systemd','jobsStateRoot':str(root)}
+        unit={'LoadState':'loaded','ActiveState':'active','SubState':'running','FreezerState':'running',
+            'MainPID':str(os.getpid()),'ControlPID':'0','ControlGroup':'/system.slice/'+backup.UNITS[0],
+            'InvocationID':'a'*32,'ExecMainStartTimestampMonotonic':'100000000'}
+        return config,backup.LocalCommands(config),unit
+
+    @unittest.skipUnless(sys.platform=='linux' and os.getuid()==0, 'Native Jobs are Linux/root only')
+    def test_native_live_jobs_flock_survives_wall_clock_correction_without_reading_btime(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);config,commands,unit=self.native_lock(root);read=Path.read_text
+            def observed(path,*args,**kwargs):
+                if path==Path('/proc',str(os.getpid()),'cgroup'):return '0::'+unit['ControlGroup']+'\n'
+                if path==Path('/proc/stat'):raise AssertionError('Native ownership must not reconstruct UTC birth')
+                return read(path,*args,**kwargs)
+            with (root/'lifetime.lock').open('rb') as stream,patch.object(commands,'unit',return_value=unit),patch.object(Path,'read_text',observed):
+                backup.fcntl.flock(stream,backup.fcntl.LOCK_EX|backup.fcntl.LOCK_NB)
+                commands.verify_jobs_lock(config)
+                backup.fcntl.flock(stream,backup.fcntl.LOCK_UN)
+                with self.assertRaisesRegex(backup.BackupFailure,'FLOCK'):commands.verify_jobs_lock(config)
+
+    @unittest.skipUnless(sys.platform=='linux' and os.getuid()==0, 'Native Jobs are Linux/root only')
+    def test_native_jobs_rejects_boot_ticks_pid_unit_or_runner_change_around_live_flock(self):
+        for fault in ('boot','ticks','pid','unit','cgroup','runner'):
+            with self.subTest(fault=fault),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory);config,commands,unit=self.native_lock(root);read=Path.read_text;counts={}
+                def observed(path,*args,**kwargs):
+                    counts[path]=counts.get(path,0)+1;value=read(path,*args,**kwargs)
+                    if path==Path('/proc',str(os.getpid()),'cgroup'):
+                        return '0::'+('/system.slice/different.service' if fault=='cgroup' and counts[path]>1 else unit['ControlGroup'])+'\n'
+                    if fault=='boot' and path==Path('/proc/sys/kernel/random/boot_id') and counts[path]>1:return '11111111-1111-4111-8111-111111111111'
+                    if path==Path('/proc',str(os.getpid()),'stat') and counts[path]>1:
+                        if fault=='ticks':
+                            head,tail=value.rsplit(')',1);fields=tail.split();fields[19]=str(int(fields[19])+1);return head+') '+' '.join(fields)
+                        if fault=='pid':return str(os.getpid()+1)+value[value.index(' ('):]
+                    return value
+                units=[unit,{**unit,'MainPID':str(os.getpid()+1)}] if fault=='unit' else [unit,unit]
+                verify=backup.verify_kernel_jobs_lock
+                def checked_lock(*args):
+                    verify(*args)
+                    if fault=='runner':
+                        path=root/'runner.lock';owner=json.loads(read(path));owner['startedAt']=backup.stamp();path.write_text(json.dumps(owner))
+                with (root/'lifetime.lock').open('rb') as stream,patch.object(commands,'unit',side_effect=units),patch.object(Path,'read_text',observed),patch.object(backup,'verify_kernel_jobs_lock',checked_lock):
+                    backup.fcntl.flock(stream,backup.fcntl.LOCK_EX|backup.fcntl.LOCK_NB)
+                    with self.assertRaises(backup.BackupFailure):commands.verify_jobs_lock(config)
+
+    @unittest.skipUnless(sys.platform=='linux' and os.getuid()==0, 'Host Jobs are Linux/root only')
+    def test_legacy_systemd_jobs_keeps_strict_utc_birth_guard(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);config,commands,unit=self.native_lock(root);config['profile']='surface';commands=backup.LocalCommands(config);read=Path.read_text
+            def observed(path,*args,**kwargs):
+                if path==Path('/proc',str(os.getpid()),'cgroup'):return '0::'+unit['ControlGroup']+'\n'
+                if path==Path('/proc/stat'):return 'btime '+str(int(backup.dt.datetime.now(backup.dt.timezone.utc).timestamp())+538)+'\n'
+                return read(path,*args,**kwargs)
+            with patch.object(commands,'unit',return_value=unit),patch.object(Path,'read_text',observed):
+                with self.assertRaisesRegex(backup.BackupFailure,'start time cannot be proven'):commands.verify_jobs_lock(config)
+
 
 class BoundedCaptureWrite(unittest.TestCase):
     def test_large_child_output_is_drained_before_expensive_capacity_revalidation(self):
