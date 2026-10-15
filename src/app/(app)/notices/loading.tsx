@@ -1,2 +1,2 @@
-import { FeedSkeleton } from "@/components/ui/page-skeletons";
-export default function Loading() { return <FeedSkeleton />; }
+import { NoticesSkeleton } from "@/components/ui/page-skeletons";
+export default function Loading() { return <NoticesSkeleton />; }

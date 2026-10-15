@@ -18,7 +18,7 @@ import { gradeShort } from "@/lib/constants";
 import { permissionsOf } from "@/lib/permissions";
 import { RECORD_SOURCE_COOKIE, recordSourceEnabled } from "@/lib/record-source-display";
 import type { PracticeRecord } from "@/types";
-import { Skeleton } from "@/components/ui/skeleton";
+import { ActivitySkeleton, TrainingChartSkeleton } from "@/components/ui/page-skeletons";
 
 export default async function MyPage({
   searchParams,
@@ -87,7 +87,7 @@ export default async function MyPage({
 
         {/* 練習量の推移（日/週/月・横スライド） */}
         {profile.blocks.includes("middle_long") && (
-          <Suspense fallback={<Skeleton className="h-[172px] w-full rounded-card" />}>
+          <Suspense fallback={<TrainingChartSkeleton />}>
             <MyTraining userId={userId} />
           </Suspense>
         )}
@@ -180,25 +180,6 @@ async function MyActivity({
     return <EmptyState title="まだ投稿はありません" className="min-h-24 py-4" />;
   }
   return <ActivityFeed activity={activity} currentUser={currentUser} showRecordSource={showRecordSource} />;
-}
-
-function ActivitySkeleton() {
-  return (
-    <div className="space-y-3 animate-pulse">
-      {[0, 1].map((i) => (
-        <div key={i} className="rounded-card bg-card border border-separator p-4 space-y-3">
-          <div className="flex items-center gap-2.5">
-            <div className="h-10 w-10 rounded-full bg-separator" />
-            <div className="flex-1 space-y-1.5">
-              <div className="h-3.5 w-28 rounded bg-separator" />
-              <div className="h-2.5 w-20 rounded bg-bg" />
-            </div>
-          </div>
-          <div className="h-2.5 w-full rounded-full bg-separator" />
-        </div>
-      ))}
-    </div>
-  );
 }
 
 /** 区切り線リスト内の1行リンク（カード枠は親のCardが持つ） */

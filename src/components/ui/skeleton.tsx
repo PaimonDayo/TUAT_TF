@@ -8,7 +8,7 @@ export function Skeleton({
   return (
     <div
       aria-hidden="true"
-      className={cn("motion-safe:animate-pulse rounded-md bg-separator", className)}
+      className={cn("skeleton relative overflow-hidden rounded-md bg-separator", className)}
       {...props}
     />
   );

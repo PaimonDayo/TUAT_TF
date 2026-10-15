@@ -15,7 +15,7 @@ import { PbManager } from "@/components/features/PbManager";
 import type { CompetitionEvent } from "@/lib/competition-goals";
 import { TrainingChart } from "@/components/features/TrainingChart";
 import { FavoriteButton } from "@/components/features/FavoriteButton";
-import { ListSkeleton } from "@/components/ui/page-skeletons";
+import { MemberSkeleton, TrainingChartSkeleton } from "@/components/ui/page-skeletons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NoteList } from "@/components/features/NotesView";
 import { getCurrentProfile } from "@/lib/supabase/auth";
@@ -40,7 +40,7 @@ export default function MemberPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  return <Suspense fallback={<ListSkeleton />}><MemberContent params={params} /></Suspense>;
+  return <Suspense fallback={<MemberSkeleton />}><MemberContent params={params} /></Suspense>;
 }
 
 async function MemberContent({
@@ -117,7 +117,7 @@ async function MemberContent({
         <Suspense fallback={
           <div role="status" aria-label="部員の記録を読み込み中" className="space-y-5">
             <span className="sr-only">部員の記録を読み込み中</span>
-            {profile.blocks.includes("middle_long") && <Skeleton className="h-[172px] w-full rounded-card" />}
+            {profile.blocks.includes("middle_long") && <TrainingChartSkeleton />}
             <Skeleton className="h-20 w-full rounded-card" />
             <Skeleton className="h-40 w-full rounded-card" />
           </div>
