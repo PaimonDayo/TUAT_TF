@@ -554,3 +554,15 @@ Cloudflare公式の現時点の料金条件も読取り確認: Workers VPCはope
 - Cloud managed sourceでは変更権限のない4表を明示した専用freezeを実装。全104表catalog、100表のowner ALWAYS/nonowner通常trigger、managed migration/vector除外を照合し、実cloud dry-run→rollback→state不存在を確認。SQL editorでの実適用・旧本番freezeはまだ0。
 - 旧Vercelは最終反映時に読取りを新originへ案内し全更新を拒否、旧REST relayは明示retired設定で全経路を503とする境界を追加。通常native動作・未退役Workerは維持。新transportは実binaryのcanonical /usr/bin/cloudflaredをpin。各対象試験・全Vitest168files1513件・tsc/対象eslint成功。
 - 最新コードの配置、source最終停止とデータ/Auth/画像/Jobs引継ぎ、通常操作/本人スマホ確認、本番切替・公開SHA一致は継続中。準備成功を切替済みとは扱わない。
+
+### 最新master取込み後の最終配置（2026-10-15 続き）
+
+- origin/masterが35b0a92（管理者の期間別sheet設定）へ進んだため、今回の39ローカルcommitをrebaseし保持。HEAD da274081b6e1145fd84596c8b8e45b65ec1e34c7。作業ブランチ未push。最終Linux build/smoke/fullinventory38727files28linksと暗号化設定照合成功、da27408を12:23:37Zに閲覧専用稼働へ入替え。旧本番/旧Jobs維持、新Jobs/timer無効。全Vitest173files1589、tsc/環境検査/対象eslint/diff成功。sandbox一時cacheのEPERMで全test importが失敗した実行は成功扱いせず、通常実行で再検証。
+- named Tunnel常用配置の実systemd showがExecStartPre反復行とLoadCredential複合型を返したため、スカラー重複拒否を保ちながら反復値を処理し、typed D-Busのcredential/environmentfilesを厳密確認へ修正。実inactive contract成功。旧7f中間配置と096原本を保全しdaのhelper/unitを配置。
+- 実Tunnel起動で217/USERを検出。main起動前の失敗を固定し旧raw接続を維持、新unitだけ停止。UID/GID65532が未登録と判明し、元account4ファイルを暗号化保全して専用tuat-tunnel（nologin/homeなし/補助groupなし）を登録。既知失敗からの一度の再開ではmainまで起動したがlive credential metadataの想定不一致でholdし、新unitだけ停止済み。旧接続維持。credentialの実metadataを限定診断して解消中。
+- 旧cloud差分を再capture（e25fb43e、private/failover-reconciliation-6a066669...）。17queue/7groups、全endpoint/owner/crypto一致、PC lastSeenがqueue以降、UPDATE5/INSERT2/DELETE0、unknown0。queue ack/再送0。
+- 旧source実DBのfinal-freezeを67921ba9...世代でdry-runし全ROLLBACK、state不存在を確認。cloud専用freezeもdryrun済み、最終RR Auth27＋全104tables/100guards/managed4の証明付きexport SQL/verifierを準備。まだ旧/cloudの永続freeze/最終export/merge/swapは未実施。
+- 旧REST relayの現在versions/deploymentsとconfigをprivate/legacy-relay-retirement-add33fc4...に保全し、retired設定のdry-run成功。まだprovider変更0。旧DataAPIは有効のまま。
+- Windows旧処理の停止helperは稼働runner.lockを読取り退避しようとしてholdしたため、active lockは存在metadataだけに修正し、lock消失を自然drainの条件にした。owner承認のUACでadmin読取り検査を実行したが、その旧lock読取り失敗以外の本番変更0。修正後はInspect→plan hash review→Jobs graceful drain→task disableの限定adminwrapperを再起動依頼中。Windows UAC応答待ち。旧backend/Jobsはまだ維持。
+- 続報: 新Tunnelの実資格情報はroot0:0/0440＋専用UID65532だけread許可のPOSIX ACLで、token/configのhashは完全一致。サービスのUID/GID/全cap0/NNP/cgroup/loopback/ready200も実証。読取検査が所有権0400だけを想定していたため、実ACLの厳密検証へ修正中。各診断後は新unitだけ停止し原本raw接続を維持。
+- 続報: 二回目のWindows管理者起動は取消エラーで、PID=null/新run不存在を確認。PowerShellの非終端エラー後のrequested=true出力は起動成功として扱わない。旧Jobs config/task/旧backendに変更0。所有者へ現在PC操作可否を確認中。管理者なしで許可済configの停止・自然drainだけを進める限定手順も独立準備し、OSタスク/プロセスの権限迂回はしない。

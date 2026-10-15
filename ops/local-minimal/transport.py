@@ -5,12 +5,14 @@ Private /var/lib/tuat-local/private/tunnel.json is the only opt-in. The token an
 cloudflared configuration are root-only encrypted files, copied by systemd's
 LoadCredential. Neither their bytes nor child output are diagnostics.
 """
+import errno
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import stat
+import struct
 import sys
 
 sys.dont_write_bytecode = True
@@ -134,6 +136,22 @@ def credential_sources(commands):
     return dict(rows)
 
 
+def credential_access(path, info):
+    try:
+        acl = os.getxattr(path, 'system.posix_acl_access', follow_symlinks=False)
+    except OSError as error:
+        need(error.errno == errno.ENODATA, 'live-credential-acl')
+        acl = None
+    if info.st_uid == 65532 and stat.S_IMODE(info.st_mode) == 0o400:
+        return acl is None
+    # systemd 255 keeps root:root 0440 credentials and grants only the service
+    # UID read access through this exact POSIX ACL. The group itself has none.
+    expected = struct.pack('<I', 2) + b''.join(struct.pack('<HHI', tag, permissions, identity)
+        for tag, permissions, identity in ((1, 4, 0xffffffff), (2, 4, 65532),
+                                          (4, 0, 0xffffffff), (16, 4, 0xffffffff), (32, 0, 0xffffffff)))
+    return info.st_uid == 0 and info.st_gid == 0 and stat.S_IMODE(info.st_mode) == 0o440 and acl == expected
+
+
 def process_identity(pid, group, value):
     process = PROC / pid
     before = (process/'stat').read_text().rsplit(')', 1)[1].split()[19]
@@ -160,8 +178,8 @@ def process_identity(pid, group, value):
         # credential itself must be a regular private file, never a symlink.
         path = process / 'root' / CREDENTIALS.lstrip('/') / name
         info = path.lstat()
-        need(stat.S_ISREG(info.st_mode) and info.st_uid == 65532 and stat.S_IMODE(info.st_mode) == 0o400 and
-             0 < info.st_size <= 65536 and sha(path) == value[name + 'Sha256'], 'live-credential-pin')
+        need(stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and 0 < info.st_size <= 65536 and
+             credential_access(path, info) and sha(path) == value[name + 'Sha256'], 'live-credential-pin')
     need((process/'stat').read_text().rsplit(')', 1)[1].split()[19] == before, 'process-replaced')
     return before
 

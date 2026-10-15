@@ -1,5 +1,6 @@
 """Linux synthetic transport lifecycle tests; no manager/process/private input reads."""
 from contextlib import ExitStack
+import errno
 import importlib.util
 import io
 import json
@@ -13,6 +14,7 @@ from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('transport', Path(__file__).with_name('transport.py'))
 transport = importlib.util.module_from_spec(spec); spec.loader.exec_module(transport)
+SYSTEMD_ACL = bytes.fromhex('02000000 01000400ffffffff 02000400fcff0000 04000000ffffffff 10000400ffffffff 20000000ffffffff')
 
 
 @unittest.skipUnless(os.name == 'posix' and os.geteuid() == 0, 'Linux root metadata fixture')
@@ -223,6 +225,48 @@ class TransportLifecycle(unittest.TestCase):
         credential = self.process/'root'/transport.CREDENTIALS.lstrip('/')/'token'
         credential.chmod(0o600); credential.write_bytes(b'other-synthetic-token'); credential.chmod(0o400)
         with self.assertRaisesRegex(transport.Hold,'live-credential-pin'): self.observe()
+
+    def test_systemd_root_owned_credentials_require_the_exact_service_uid_acl(self):
+        credentials = self.process/'root'/transport.CREDENTIALS.lstrip('/')
+        for name in ('token', 'config'):
+            path = credentials/name
+            os.chown(path, 0, 0)
+            os.setxattr(path, 'system.posix_acl_access', SYSTEMD_ACL)
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o440)
+        before = self.observe()
+        self.assertEqual(before['processBirth'], '12345')
+        self.assertEqual(self.observe(), before)
+        path = credentials/'token'
+        # Each is a valid Linux ACL, including permissions hidden by the mask.
+        # No other UID/group or additional entry may be admitted.
+        variants = [SYSTEMD_ACL[:16]+(65531).to_bytes(4, 'little')+SYSTEMD_ACL[20:],
+                    SYSTEMD_ACL[:14]+b'\x06\x00'+SYSTEMD_ACL[16:],
+                    SYSTEMD_ACL[:22]+b'\x04\x00'+SYSTEMD_ACL[24:],
+                    SYSTEMD_ACL[:30]+b'\x06\x00'+SYSTEMD_ACL[32:],
+                    SYSTEMD_ACL[:38]+b'\x04\x00'+SYSTEMD_ACL[40:],
+                    SYSTEMD_ACL[:28]+bytes.fromhex('0800040001000000')+SYSTEMD_ACL[28:]]
+        for changed in variants:
+            with self.subTest(acl=changed.hex()):
+                os.setxattr(path, 'system.posix_acl_access', changed)
+                with self.assertRaisesRegex(transport.Hold, 'live-credential-pin'): self.observe()
+        os.setxattr(path, 'system.posix_acl_access', SYSTEMD_ACL)
+        os.chown(path, 0, 1)
+        with self.assertRaisesRegex(transport.Hold, 'live-credential-pin'): self.observe()
+        os.chown(path, 0, 0)
+        os.removexattr(path, 'system.posix_acl_access')
+        path.chmod(0o440)
+        with self.assertRaisesRegex(transport.Hold, 'live-credential-pin'): self.observe()
+
+    def test_service_owned_credential_acl_errors_and_additional_links_are_refused(self):
+        path = self.process/'root'/transport.CREDENTIALS.lstrip('/')/'token'
+        self.observe()  # Existing service-owned 0400 files have no extended ACL.
+        with patch.object(os, 'getxattr', return_value=SYSTEMD_ACL):
+            with self.assertRaisesRegex(transport.Hold, 'live-credential-pin'): self.observe()
+        with patch.object(os, 'getxattr', side_effect=OSError(errno.EACCES, 'private detail')):
+            with self.assertRaisesRegex(transport.Hold, 'live-credential-acl') as error: self.observe()
+            self.assertNotIn('private detail', str(error.exception))
+        os.link(path, path.with_name('extra-link'))
+        with self.assertRaisesRegex(transport.Hold, 'live-credential-pin'): self.observe()
 
     def test_pid_reuse_and_invocation_change_during_observation_are_refused(self):
         original = Path.read_text; calls = [0]
