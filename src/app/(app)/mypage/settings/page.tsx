@@ -81,6 +81,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <div className="space-y-2 p-3">
             <SystemSyncStatus />
             <Card className="divide-y divide-separator/70 overflow-hidden">
+              <Link data-ui-row href="/admin/sheets" prefetch={false} className="flex items-center gap-3 px-4 py-3 active:bg-bg">
+                <SlidersHorizontal size={19} className="shrink-0 text-muted2" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[14px] font-medium">スプレッドシート連携</span>
+                  <span className="block text-micro text-muted">部員ごとのシート・入力方法・表示項目</span>
+                </span>
+                <ChevronRight size={18} className="shrink-0 text-muted" />
+              </Link>
               <Link data-ui-row href="/admin/services" prefetch={false} className="flex items-center gap-3 px-4 py-3 active:bg-bg">
                 <Activity size={19} className="shrink-0 text-muted2" />
                 <span className="min-w-0 flex-1">
