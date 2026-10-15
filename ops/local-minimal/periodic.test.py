@@ -16,6 +16,26 @@ periodic = importlib.util.module_from_spec(spec); spec.loader.exec_module(period
 
 
 class PeriodicActor(unittest.TestCase):
+    def test_imported_transport_bytes_are_required_in_the_existing_controller_seal(self):
+        config = {'sourceId':'synthetic-source'}
+        base = Path(periodic.__file__).resolve().parent
+        p = {'controlSeal':'/synthetic/seal.json', 'configPath':'/synthetic/backup.json'}
+        sources = {name:{'path':str(base/name), 'sha256':'a'*64} for name in
+            ('backup.py','backup-codec.mjs','runtime.py','periodic.py','transport.py')}
+        value = dict(version=1, sourceId=config['sourceId'], sourceCommit='b'*40, configSha256='a'*64, sources=sources,
+            fragment='/synthetic/'+periodic.UNIT, fragmentSha256='a'*64, timer='/synthetic/'+periodic.TIMER,
+            timerSha256='a'*64, nodePath='/opt/node-v24.19.0-linux-x64/bin/node', nodeSha256='a'*64,
+            runtimeConfigPath='/synthetic/runtime.json', runtimeConfigSha256='a'*64,
+            execStart='/usr/bin/python3 -I '+str(base/'backup.py')+' --config '+p['configPath']+' --execute')
+        values = {p['controlSeal']:value, p['configPath']:config, value['runtimeConfigPath']:{'profile':'surface'}}
+        with patch.object(periodic,'policy',return_value=p), patch.object(periodic,'read_json',side_effect=lambda path:values[str(path)]), \
+             patch.object(periodic,'immutable',side_effect=lambda path,*_args:Path(path)), patch.object(periodic,'digest',return_value='a'*64):
+            self.assertEqual(periodic.seal(config),value)
+            record = sources.pop('transport.py')
+            with self.assertRaisesRegex(periodic.Hold,'source-set'): periodic.seal(config)
+            sources['transport.py'] = {**record, 'sha256':'c'*64}
+            with self.assertRaisesRegex(periodic.Hold,'code-pin'): periodic.seal(config)
+
     def test_private_profile_requires_matching_sealed_runtime_and_no_default_socket_fallback(self):
         config = {'sourceId': 'synthetic', 'profile': 'pc-private'}
         with patch.object(periodic, 'seal', return_value={'runtimeConfigPath': '/synthetic/runtime'}), \

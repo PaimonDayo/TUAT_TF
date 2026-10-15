@@ -27,6 +27,8 @@ import time
 sys.dont_write_bytecode = True
 _periodic_spec = importlib.util.spec_from_file_location('tuat_periodic', Path(__file__).with_name('periodic.py'))
 periodic = importlib.util.module_from_spec(_periodic_spec); _periodic_spec.loader.exec_module(periodic)
+_transport_spec = importlib.util.spec_from_file_location('tuat_transport', Path(__file__).with_name('transport.py'))
+transport = importlib.util.module_from_spec(_transport_spec); _transport_spec.loader.exec_module(transport)
 
 DB_IMAGE = 'supabase/postgres:17.6.1.136'
 SOURCE_LABEL = 'tuat.local.source'
@@ -607,6 +609,13 @@ class CaptureWindow:
         self.before, self.changed, self.preserved_units = [], [], {}
         self.host_units = None
         self.daemons = {}
+        self.transport = None
+
+    def observe_transport(self):
+        try:
+            return transport.observe(self.config, self.commands, transport.UNIT in self.host_units)
+        except transport.Hold:
+            fail('Host transport identity unverified')
 
     def observe(self, kind, name):
         return container_state(self.commands.inspect(name)) if kind == 'container' else unit_state(self.commands.unit(name))
@@ -618,7 +627,7 @@ class CaptureWindow:
             columns = line.split()
             controller = columns[0] == periodic.UNIT if columns else False
             p = periodic.installation_profile(self.config)
-            allowed = UNITS + PRESERVED_TRIAL_UNITS + ((periodic.UNIT,) if self.config.get('periodic') else ()) + (periodic.PC_DAEMONS if p['name'] == periodic.PC_PROFILE else ())
+            allowed = UNITS + PRESERVED_TRIAL_UNITS + ((periodic.UNIT,) if self.config.get('periodic') else ()) + (periodic.PC_DAEMONS + (transport.UNIT,) if p['name'] == periodic.PC_PROFILE else ())
             if len(columns) < 4 or columns[0] not in allowed or columns[0] in names or columns[1] != 'loaded':
                 fail('Unaccounted host writer/unit')
             if controller:
@@ -666,6 +675,7 @@ class CaptureWindow:
             # Preserve only the five exact old trial names, with no live process.
             # An absent mirror is disabled; it does not require a new stub unit.
             self.host_units = self.host_inventory()
+            self.transport = self.observe_transport()
             if periodic.installation_profile(config)['name'] == periodic.PC_PROFILE:
                 if not set(periodic.PC_DAEMONS).issubset(self.host_units): fail('Private source daemon inventory missing')
                 for name in periodic.PC_DAEMONS:
@@ -701,6 +711,7 @@ class CaptureWindow:
         atomic_json(self.checkpoint, {'version': 1, 'sourceId': self.config['sourceId'],
                     'phase': phase, 'writers': self.before,
                     'changed': [{'kind': row['kind'], 'name': row['name']} for row in self.changed],
+                    **({'transport': self.transport} if self.transport is not None else {}),
                     **({'controller': self.commands.periodic_attempt.identity} if hasattr(self.commands,'periodic_attempt') else {})})
 
     def verify_frozen(self):
@@ -716,6 +727,8 @@ class CaptureWindow:
     def verify_preserved_units(self):
         if self.host_units is not None and self.host_inventory() != self.host_units:
             fail('Host unit inventory changed during capture')
+        if self.host_units is not None and self.observe_transport() != self.transport:
+            fail('Host transport identity changed during capture')
         for name, state in self.preserved_units.items():
             if inactive_unit_state(self.commands.unit(name), missing_allowed=name == UNITS[2]) != state:
                 fail('Preserved host unit state changed during capture')

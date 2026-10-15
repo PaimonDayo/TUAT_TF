@@ -131,7 +131,7 @@ export async function transferSnapshot(config,{client,now=Date.now,apply=false,r
   } finally {await archive.close();}
 }
 
-if(process.argv[1]&&pathToFileURL(resolve(process.argv[1])).href===import.meta.url) {
+async function offsiteMain() {
   let client;
   try {
     const [file,flag]=process.argv.slice(2);need(file&&(!flag||flag==='--apply')&&process.argv.length<=4);
@@ -141,7 +141,19 @@ if(process.argv[1]&&pathToFileURL(resolve(process.argv[1])).href===import.meta.u
       need(/^[a-f0-9]{32}$/.test(env.R2_ACCOUNT_ID??'')&&env.R2_ACCESS_KEY_ID&&env.R2_SECRET_ACCESS_KEY);
       client=new S3Client({region:'auto',endpoint:`https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,credentials:{accessKeyId:env.R2_ACCESS_KEY_ID,secretAccessKey:env.R2_SECRET_ACCESS_KEY},maxAttempts:1,requestChecksumCalculation:'WHEN_REQUIRED',responseChecksumValidation:'WHEN_REQUIRED'});
     }
-    console.log(JSON.stringify(await transferSnapshot(config,{client,apply:flag==='--apply'})));
+    const result=await transferSnapshot(config,{client,apply:flag==='--apply'});
+    if(result.verified===true&&config.profile==='pc-private') {
+      // Cleanup is a separate known/held outcome. A failure here cannot reverse
+      // the canonical verified backup or change the producer's exact ACK.
+      try {
+        const {runSnapshotCleanup}=await import('./cleanup-runner.mjs');
+        await runSnapshotCleanup(config,{client,onHeld:()=>console.error('Snapshot retention is held; inspect its private outcome and checkpoint.')});
+      } catch {console.error('Snapshot retention is held; the canonical backup remains verified.');}
+    }
+    console.log(JSON.stringify(result));
   } catch {console.error('Off-PC snapshot was not accepted; retain the prior receipt and inspect the private intent.');process.exitCode=1;}
   finally {client?.destroy();}
 }
+// Complete module evaluation before the optional cleanup module imports the
+// shared host verifier from this module; top-level await would form a cycle.
+if(process.argv[1]&&pathToFileURL(resolve(process.argv[1])).href===import.meta.url)void offsiteMain();

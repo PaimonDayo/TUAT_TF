@@ -16,6 +16,7 @@ from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('backup', Path(__file__).with_name('backup.py'))
 backup = importlib.util.module_from_spec(spec); spec.loader.exec_module(backup)
+backup.transport.POLICY = Path('/nonexistent-tuat-synthetic/tunnel.json')
 
 
 class FixtureCommands:
@@ -797,6 +798,36 @@ class BackupBehaviour(unittest.TestCase):
         self.assertFalse(any(name in backup.periodic.PC_DAEMONS for name, _ in self.commands.events))
         self.commands.units[backup.periodic.PC_DAEMONS[0]]['MainPID'] = '999'
         with self.assertRaisesRegex(backup.BackupFailure, 'daemon identity'): window.verify_preserved_units()
+
+    def test_transport_is_preserved_through_capture_and_resume_and_never_frozen(self):
+        self.host(); self.config['profile'] = 'pc-private'
+        for index, name in enumerate(backup.periodic.PC_DAEMONS):
+            self.commands.units[name] = {**self.commands.units[backup.UNITS[0]], 'MainPID':str(900+index),
+                'ControlGroup':'/system.slice/'+name, 'InvocationID':('a' if index == 0 else 'b')*32}
+        name = backup.transport.UNIT
+        self.commands.units[name] = {**self.commands.units[backup.UNITS[0]], 'MainPID':'902',
+            'ControlGroup':'/system.slice/'+name, 'InvocationID':'c'*32}
+        identity = {'unit':self.commands.units[name].copy(), 'processBirth':'12345', 'execStart':'fixed token-file argv'}
+        with patch.object(backup.transport,'observe',side_effect=lambda *_args:copy.deepcopy(identity)):
+            window = self.window(); window.enter(); window.verify_frozen(); window.restore()
+            self.assertEqual(json.loads(window.checkpoint.read_text())['transport'],identity)
+            self.assertFalse(any(unit == name for unit, _ in self.commands.events))
+            # A replacement keeps the same unit name but changes PID/birth or
+            # loaded execution identity. Resume still rescues original writers.
+            for field in ('processBirth','execStart'):
+                with self.subTest(field=field):
+                    original = copy.deepcopy(identity)
+                    window = self.window(); window.enter(); identity[field] = 'replacement'
+                    with self.assertRaisesRegex(backup.BackupFailure,'transport identity changed'): window.verify_frozen()
+                    with self.assertRaisesRegex(backup.BackupFailure,'not restored'): window.restore()
+                    self.assertEqual(self.commands.units[backup.UNITS[0]]['FreezerState'],'running')
+                    self.assertEqual(self.commands.units[backup.UNITS[1]]['FreezerState'],'running')
+                    self.assertFalse(any(unit == name for unit, _ in self.commands.events))
+                    identity.clear(); identity.update(original)
+        self.commands.events.clear()
+        with patch.object(backup.transport,'observe',side_effect=backup.transport.Hold('bad pin')):
+            with self.assertRaisesRegex(backup.BackupFailure,'transport identity unverified'): self.window().enter()
+        self.assertEqual(self.commands.events,[])
 
     def test_unknown_schema_cannot_escape_full_dump_comparison(self):
         class Sql:

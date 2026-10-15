@@ -17,6 +17,7 @@ from unittest.mock import MagicMock, patch
 
 spec = importlib.util.spec_from_file_location('runtime', Path(__file__).with_name('runtime.py'))
 runtime = importlib.util.module_from_spec(spec); spec.loader.exec_module(runtime)
+runtime.transport.POLICY = Path('/nonexistent-tuat-synthetic/tunnel.json')
 
 
 def config(uid=65530, gid=65530):
@@ -115,18 +116,35 @@ class FakeCommands:
 
 
 class RuntimeBehaviour(unittest.TestCase):
+    def test_transport_is_a_validated_pc_unit_and_never_an_unchecked_name_exception(self):
+        c = pc_config(); cmd = FakeCommands(c); original = cmd.run
+        def listed(args, **kwargs):
+            if args[:2] == ['systemctl','list-units']:
+                return runtime.transport.UNIT+' loaded inactive dead synthetic'
+            return original(args, **kwargs)
+        cmd.run = listed
+        with patch.object(runtime, 'pc_db_hba'), patch.object(runtime,'pc_db_vault'), patch.object(runtime, 'json_private', return_value={}), \
+             patch.object(runtime,'pc_node_backup',return_value={'target':{'containerId':'db','configSha256':'synthetic'}}), \
+             patch.object(runtime, 'compose_env', return_value={f'TUAT_{role.upper()}_HASH':'synthetic' for role in runtime.IMAGES}), \
+             patch.object(runtime.transport, 'observe', return_value={'unit':'verified'}) as observe:
+            self.assertEqual(runtime.host_gate(c,cmd), dict(db='db',auth='auth',rest='rest'))
+            observe.assert_called_once_with(c,cmd,True)
+            observe.side_effect = runtime.transport.Hold('unverified')
+            with self.assertRaisesRegex(runtime.Hold,'host-transport-unverified'): runtime.host_gate(c,cmd)
+            with self.assertRaisesRegex(runtime.Hold,'unknown-host-unit'): runtime.host_gate(config(),cmd)
+
     def test_entrypoints_preserve_sealed_release_without_python_cache(self):
         # The installed service uses -I without -B. Its first import must not
         # add root-owned files and invalidate the full release inventory.
         for entry in ('runtime.py', 'backup.py'):
             with self.subTest(entry=entry), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
-                for name in (entry, 'periodic.py'):
+                for name in (entry, 'periodic.py', 'transport.py'):
                     shutil.copyfile(Path(__file__).with_name(name), root/name)
                 result = subprocess.run([sys.executable, '-I', str(root/entry), '--help'],
                                         capture_output=True, timeout=10)
                 self.assertEqual(result.returncode, 0)
-                self.assertEqual(sorted(path.name for path in root.iterdir()), sorted((entry, 'periodic.py')))
+                self.assertEqual(sorted(path.name for path in root.iterdir()), sorted((entry, 'periodic.py', 'transport.py')))
 
     def test_changed_vault_key_blocks_startup_even_with_same_database_identity(self):
         c=pc_config(); original=b'c'*64+b'\n'

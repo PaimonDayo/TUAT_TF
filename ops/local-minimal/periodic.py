@@ -114,14 +114,16 @@ def seal(config):
          bool(re.fullmatch('[a-f0-9]{40}', value['sourceCommit'])), 'periodic-source-pin')
     need(digest(immutable(p['configPath'], True)) == value['configSha256'] and
          read_json(p['configPath']) == config, 'periodic-config-pin')
-    required = {'backup.py', 'backup-codec.mjs', 'runtime.py', 'periodic.py'}
-    if pc: required |= {'offsite.mjs', 'pc-backup/config.mjs', 'pc-backup/status.mjs', 'pc-backup/application-status.mjs'}
+    required = {'backup.py', 'backup-codec.mjs', 'runtime.py', 'periodic.py', 'transport.py'}
+    if pc: required |= {'offsite.mjs', 'cleanup-runner.mjs', 'snapshot-cleanup.mjs', 'snapshot-retention.mjs',
+                        'pc-backup/config.mjs', 'pc-backup/status.mjs', 'pc-backup/application-status.mjs', 'pc-backup/retention.mjs'}
     need(isinstance(value['sources'], dict) and set(value['sources']) == required, 'periodic-source-set')
     base = Path(__file__).resolve().parent
     actual = {'backup.py': base / 'backup.py', 'backup-codec.mjs': base / 'backup-codec.mjs',
-              'runtime.py': base / 'runtime.py', 'periodic.py': base / 'periodic.py'}
+              'runtime.py': base / 'runtime.py', 'periodic.py': base / 'periodic.py', 'transport.py': base / 'transport.py'}
     if pc:
-        actual.update({'offsite.mjs': base/'offsite.mjs', **{name:base.parent/name for name in required if name.startswith('pc-backup/')}})
+        actual.update({name:base/name for name in required if name.endswith('.mjs') and '/' not in name})
+        actual.update({name:base.parent/name for name in required if name.startswith('pc-backup/')})
     for name, record in value['sources'].items():
         need(isinstance(record, dict) and set(record) == {'path', 'sha256'} and
              Path(record['path']) == actual[name] and digest(immutable(record['path'])) == record['sha256'], 'periodic-code-pin')

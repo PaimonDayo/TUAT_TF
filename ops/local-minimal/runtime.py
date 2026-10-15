@@ -21,6 +21,8 @@ import http.client
 sys.dont_write_bytecode = True
 _periodic_spec = importlib.util.spec_from_file_location('tuat_periodic', Path(__file__).with_name('periodic.py'))
 periodic = importlib.util.module_from_spec(_periodic_spec); _periodic_spec.loader.exec_module(periodic)
+_transport_spec = importlib.util.spec_from_file_location('tuat_transport', Path(__file__).with_name('transport.py'))
+transport = importlib.util.module_from_spec(_transport_spec); _transport_spec.loader.exec_module(transport)
 
 IMAGES = {
     'db': ('supabase/postgres:17.6.1.136', 'sha256:f371b5f3f2ac0a05703f33d6e6134515fb2498cab708fb948a0aeb7481467c00'),
@@ -739,8 +741,12 @@ def host_gate(c, cmd):
     names = [line.split()[0] for line in lines.splitlines() if line.strip()]
     profile = periodic.installation_profile(c)
     images, repo_digests = image_contract(c)
-    allowed = UNITS + ((periodic.UNIT,) if c.get('backupConfigPath') else ()) + (periodic.PC_DAEMONS if profile['name'] == periodic.PC_PROFILE else ())
+    allowed = UNITS + ((periodic.UNIT,) if c.get('backupConfigPath') else ()) + (periodic.PC_DAEMONS + (transport.UNIT,) if profile['name'] == periodic.PC_PROFILE else ())
     require(len(set(names)) == len(names) and all(name in allowed for name in names), 'unknown-host-unit')
+    try:
+        transport.observe(c, cmd, transport.UNIT in names)
+    except transport.Hold:
+        raise Hold('host-transport-unverified') from None
     if periodic.UNIT in names:
         p = existing(c['backupConfigPath'], mode=0o600)
         require(p.stat().st_dev == Path(MOUNT).stat().st_dev, 'backup-config-device')

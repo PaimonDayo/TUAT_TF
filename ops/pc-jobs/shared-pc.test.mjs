@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { validateConfig, run } from './run.mjs';
 import { loopbackRoot, backendReady, sharedPcReady } from './shared-pc.mjs';
@@ -35,6 +35,31 @@ const records = (at = now, c = config) => {
   };
 };
 const reader = data => file => JSON.stringify(data[file.split(/[\\/]/).at(-1)]);
+
+test('check reports the configured enabled flag without dispatch, locks, or journal recovery', async t => {
+  const directory = mkdtempSync(join(process.cwd(), '.tmp-shared-jobs-check-'));
+  try {
+    const c = { ...config, releaseDirectory:directory, stateDirectory:directory, environmentFile:join(directory,'synthetic.env') };
+    mkdirSync(join(directory,'.next')); writeFileSync(join(directory,'.next','BUILD_ID'),'synthetic');
+    writeFileSync(c.environmentFile,Object.entries(env).map(([key,value])=>`${key}=${value}`).join('\n'));
+    const configFile = join(directory,'jobs.json');
+    const journal = JSON.stringify({ preserved:'pending journal evidence', jobs:{program:{status:'uncertain'}} });
+    writeFileSync(join(directory,'journal.json'),journal);
+    writeFileSync(join(directory,'runner.lock'),'preserved owner');
+    const names = readdirSync(directory).sort(), output=[];
+    t.mock.method(console,'log',value=>output.push(JSON.parse(value)));
+    const forbidden = () => { throw Error('Check must not execute, probe, acquire or recover a writer'); };
+    for (const enabled of [false,true]) {
+      writeFileSync(configFile,JSON.stringify({...c,enabled}));
+      await run(configFile,false,{spawnProcess:forbidden,fetchRequest:forbidden,pause:forbidden});
+      assert.equal(output.at(-1).valid,true);
+      assert.equal(output.at(-1).enabled,enabled);
+      assert.equal(readFileSync(join(directory,'journal.json'),'utf8'),journal);
+      assert.equal(readFileSync(join(directory,'runner.lock'),'utf8'),'preserved owner');
+      assert.deepEqual(readdirSync(directory).sort(),[...names,'jobs.json'].sort());
+    }
+  } finally { assert(directory.startsWith(process.cwd())); rmSync(directory,{recursive:true,force:true}); }
+});
 
 test('shared Jobs bind the native database name as well as its system identifier before probes', async () => {
   const native = { ...config, expectedBackupDatabaseName: 'tuat_pc_candidate' };

@@ -54,7 +54,7 @@ export async function run(configFile, execute = false, {
     if (manifest.commit !== config.releaseCommit || manifest.database !== 'pc-loopback') throw Error('Release manifest mismatch');
   }
   if (!existsSync(resolve(config.releaseDirectory, '.next/BUILD_ID'))) throw Error('Build the pinned release before activation');
-  if (!execute) { console.log(JSON.stringify({ valid: true, jobs: JOBS.map(j => j.id), enabled: false })); return; }
+  if (!execute) { console.log(JSON.stringify({ valid: true, jobs: JOBS.map(j => j.id), enabled: config.enabled })); return; }
   if (!config.enabled) throw Error('Scheduler is disabled');
   const journal = resolve(config.stateDirectory, 'journal.json');
   // Exclusive owner record. Linux recovery requires the root service's kernel lock;

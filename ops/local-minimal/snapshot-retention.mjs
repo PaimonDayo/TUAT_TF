@@ -44,7 +44,12 @@ const reference=record=>({archiveKey:record.archiveKey,objectEtag:record.objectE
  * inventory, verify ciphertext/retained recovery, and bind a fresh deletion scope.
  * Unknown files, unmatched objects and PUT intents are never eligible receipts.
  */
-export function planSnapshotRetention({identity:rawIdentity,snapshots,protectedSnapshot:rawProtected,planNonce,now}={}) {
+export function verifiedSnapshotReceipt(raw,identity,now) {
+  const record=flat(raw,fields);
+  return valid(record,identity,now)?record:null;
+}
+
+export function planSnapshotRetention({identity:rawIdentity,snapshots,protectedSnapshot:rawProtected,planNonce,now,availability}={}) {
   const identity=flat(rawIdentity,['sourceId','storageScopeId','archiveKeyId','databaseSystemIdentifier','generation','startedAt']);
   if(!identity||!uuid(identity.sourceId)||!uuid(identity.generation)||!hash(identity.storageScopeId)||!hash(identity.archiveKeyId)
     ||!/^\d{10,20}$/.test(identity.databaseSystemIdentifier??'')||!Number.isFinite(utc(identity.startedAt))
@@ -59,10 +64,27 @@ export function planSnapshotRetention({identity:rawIdentity,snapshots,protectedS
     ||utc(protectedSnapshot.capturedAt)<utc(identity.startedAt)||now-utc(protectedSnapshot.capturedAt)>=FRESH)return refusal('protected_snapshot_unverified');
   if(records.filter(r=>r.archiveKey===protectedSnapshot.archiveKey&&digest(r)===digest(protectedSnapshot)).length!==1)return refusal('protected_snapshot_missing_or_changed');
   records.sort((a,b)=>utc(b.capturedAt)-utc(a.capturedAt));
-  const local=select(records,RETENTION_POLICY.localLatest,protectedSnapshot.archiveKey,now),remote=select(records,RETENTION_POLICY.remoteLatest,protectedSnapshot.archiveKey,now);
+  const available={local:records,remote:records};
+  if(availability!==undefined) {
+    if(!availability||typeof availability!=='object'||![Object.prototype,null].includes(Object.getPrototypeOf(availability))
+      ||Object.getOwnPropertySymbols(availability).length||Object.keys(availability).sort().join(',')!=='local,remote')return refusal('availability_unverified');
+    const locations=Object.getOwnPropertyDescriptors(availability);
+    const known=new Set(records.map(r=>r.archiveKey));
+    for(const location of ['local','remote']) {
+      if(!Object.hasOwn(locations[location]??{},'value'))return refusal('availability_unverified');
+      const rawKeys=locations[location].value;
+      if(!Array.isArray(rawKeys)||rawKeys.length>records.length||Object.getOwnPropertySymbols(rawKeys).length)return refusal('availability_unverified');
+      const slots=Object.getOwnPropertyDescriptors(rawKeys),keys=[];
+      for(let i=0;i<rawKeys.length;i++){if(!Object.hasOwn(slots[i]??{},'value')||typeof slots[i].value!=='string')return refusal('availability_unverified');keys.push(slots[i].value);}
+      if(Object.keys(rawKeys).length!==keys.length||keys.some(key=>!known.has(key))||new Set(keys).size!==keys.length
+        ||!keys.includes(protectedSnapshot.archiveKey))return refusal('availability_unverified');
+      const set=new Set(keys);available[location]=records.filter(r=>set.has(r.archiveKey));
+    }
+  }
+  const local=select(available.local,RETENTION_POLICY.localLatest,protectedSnapshot.archiveKey,now),remote=select(available.remote,RETENTION_POLICY.remoteLatest,protectedSnapshot.archiveKey,now);
   const result={version:1,dryRun:true,planningAllowed:true,deletionAuthorized:false,
     binding:{...identity,planNonce,plannedAt:new Date(now).toISOString()},inventoryDigest:digest(records),
-    local:{keep:records.filter(r=>local.has(r.archiveKey)).map(reference),removalCandidates:records.filter(r=>!local.has(r.archiveKey)).map(reference)},
-    remote:{keep:records.filter(r=>remote.has(r.archiveKey)).map(reference),removalCandidates:records.filter(r=>!remote.has(r.archiveKey)).map(reference)}};
+    local:{keep:available.local.filter(r=>local.has(r.archiveKey)).map(reference),removalCandidates:available.local.filter(r=>!local.has(r.archiveKey)).map(reference)},
+    remote:{keep:available.remote.filter(r=>remote.has(r.archiveKey)).map(reference),removalCandidates:available.remote.filter(r=>!remote.has(r.archiveKey)).map(reference)}};
   return {...result,planDigest:digest(result)};
 }
