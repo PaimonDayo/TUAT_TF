@@ -37,11 +37,11 @@ export async function run(configFile, execute = false, { startBackup = startBack
   privateDirectory(config.stateDirectory);
   // Recovery only under the managed wrapper's held OS mutex and proven dead owner.
   const lock = acquireRunnerLock(config.stateDirectory);
-  let child, gateway, backup, backupRecord, backupStopping, stopped = false, healthy = false, drained = true, unexpectedExit = false;
+  let child, gateway, backup, backupRecord, backupStopping, stopped = false, healthy = false, drained = true, unexpectedExit = false, failure;
   let stopResolve;
   const stopping = new Promise(done => { stopResolve = done; });
   const runtimeRecord = running => ({ version: 1, running, releaseCommit: config.releaseCommit, releaseId: config.releaseId,
-    startedAt: backupRecord?.identity.startedAt, checkedAt: new Date().toISOString(), backup: backupRecord });
+    startedAt: backupRecord?.identity.startedAt, checkedAt: new Date().toISOString(), backup: backupRecord, ...(failure ? { failure } : {}) });
   const stop = () => {
     stopped = true;
     // Protect writes immediately; draining already-dispatched requests still follows.
@@ -53,7 +53,11 @@ export async function run(configFile, execute = false, { startBackup = startBack
   let poll, exited;
   try {
     backup = await startBackup({ configFile: config.backupConfigFile, expectedInstanceId: config.expectedBackupInstanceId, expectedDatabaseSystemIdentifier: config.expectedBackupDatabaseSystemIdentifier, expectedDatabaseName: config.expectedBackupDatabaseName ?? 'postgres',
-      onFatal: () => { unexpectedExit = true; stop(); } });
+      onFatal: event => {
+        const reason = ['clock-unverified', 'ownership-unverified', 'status-publish-unverified'].includes(event?.reason) ? event.reason : 'unspecified';
+        failure ??= { source: 'backup-supervisor', reason };
+        unexpectedExit = true; stop();
+      } });
     const boundBackupEnv = backupChildEnvironment(config, backup);
     backupRecord = backupRuntimeRecord(config, backup);
     if (stopped) { stop(); throw Error('Host stopped before application start'); }
@@ -61,7 +65,19 @@ export async function run(configFile, execute = false, { startBackup = startBack
     if(process.platform==='linux'&&config.applicationHome)childEnv.HOME=config.applicationHome;
     for (const key of ['PATH','Path','SystemRoot','WINDIR','TEMP','TMP','USERPROFILE']) if (process.env[key]) childEnv[key] = process.env[key];
     child = spawn(launch.command,launch.args, { cwd: config.releaseDirectory, env: childEnv, windowsHide: true, stdio: ['ignore','ignore','ignore','ipc'] });
-    exited = new Promise(done => { child.once('exit', code => { if (!stopped) unexpectedExit = true; stop(); done(code); }); child.once('error', () => { unexpectedExit = true; stop(); done(-1); }); });
+    exited = new Promise(done => {
+      child.once('exit', (code, signal) => {
+        if (!stopped) {
+          failure ??= { source: 'application', exitCode: Number.isInteger(code) ? code : null, signal: /^SIG[A-Z0-9]{1,16}$/.test(signal ?? '') ? signal : null };
+          unexpectedExit = true;
+        }
+        stop(); done(code);
+      });
+      child.once('error', error => {
+        failure ??= { source: 'application-start', code: ['ENOENT', 'EACCES', 'EAGAIN', 'ENOMEM'].includes(error?.code) ? error.code : 'unspecified' };
+        unexpectedExit = true; stop(); done(-1);
+      });
+    });
     const deadline = Date.now() + 60_000;
     while (!stopped && Date.now() < deadline) {
       if (await probeRelease(config)) { healthy = true; break; }

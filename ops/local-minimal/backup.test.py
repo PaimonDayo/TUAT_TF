@@ -380,7 +380,7 @@ class BackupBehaviour(unittest.TestCase):
                 self.assertEqual(json.loads((receipt.parent/'capture-state.json').read_bytes())['phase'], 'resumed')
         self.assertFalse(any(event[0] == 'verification' for event in self.commands.events))
 
-    def test_confirmed_retired_image_is_preserved_but_untracked_orphan_refuses_capture(self):
+    def test_confirmed_retired_and_unregistered_complete_images_are_both_preserved(self):
         self.journal('failed')
         root = Path(self.config['imageRoot'])
         directory = root/'avatars'/'member-1'
@@ -402,8 +402,11 @@ class BackupBehaviour(unittest.TestCase):
             self.assertEqual((restored/'images'/'avatars'/'member-1'/'retired.webp').read_bytes(), image.read_bytes())
             self.assertEqual(len(manifest['images']), 1)
             unknown = self.root/'unknown-capture'; unknown.mkdir(mode=0o700)
-            with self.assertRaisesRegex(backup.BackupFailure, 'Unreferenced image'):
-                backup.capture_bundle(self.config, CaptureCommands(False), unknown)
+            extra_bundle, extra_manifest = backup.capture_bundle(self.config, CaptureCommands(False), unknown)
+            extra_restored = self.root/'unregistered-restored'; extra_restored.mkdir(mode=0o700)
+            backup.verified_extract(extra_bundle, extra_restored, self.config['sourceId'])
+            self.assertEqual(extra_manifest['images'], manifest['images'])
+            self.assertEqual((extra_restored/'images/avatars/member-1/retired.webp').read_bytes(), image.read_bytes())
 
     def retained_images_fixture(self):
         """New synthetic bytes only; root runs this temp fixture, never real R2 files."""
@@ -447,6 +450,13 @@ class BackupBehaviour(unittest.TestCase):
 
     def test_retained_baseline_bytes_are_in_full_archive_and_restored_inventory(self):
         config,images = self.retained_images_fixture()
+        # A normal successful upload may not have its DB row yet. Preserve it
+        # beside every historical pin rather than inventing a reference/retirement.
+        draft = Path(config['imageRoot'])/'tweet-images/11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222.webp'
+        draft.parent.mkdir(parents=True,mode=0o700)
+        for parent in (draft.parent,draft.parent.parent): parent.chmod(0o700); os.chown(parent,65530,65530)
+        draft.write_bytes(b'complete caller-owned upload before DB save'); draft.chmod(0o600); os.chown(draft,65530,65530)
+        images[draft.relative_to(config['imageRoot']).as_posix()] = (draft,draft.read_bytes())
         class CaptureCommands:
             def sql(self,_config,_statement): return b''
             def docker(self,*args,output=None): output.write(b'PGDMP synthetic dump' if args[2]=='pg_dump' else b'-- synthetic roles')
@@ -462,8 +472,14 @@ class BackupBehaviour(unittest.TestCase):
              patch.object(backup.periodic,'bind_storage'), patch.object(backup.periodic.os,'statvfs',return_value=SimpleNamespace(f_bavail=1048576,f_frsize=4096,f_favail=10000)), \
              patch.object(Path,'read_text',autospec=True,side_effect=lambda path: 'MemAvailable: 65536 kB\n' if str(path)=='/proc/meminfo' else self.fail('Unexpected memory observation')):
             bundle,manifest = backup.capture_bundle(config,CaptureCommands(),Path(config['stageRoot']))
+        cipher,authenticated = self.root/'roundtrip.enc',self.root/'authenticated.tar'
+        codec = str(Path(backup.__file__).with_name('backup-codec.mjs'))
+        for mode,source,target in (('encrypt',bundle,cipher),('decrypt',cipher,authenticated)):
+            subprocess.run(['node',codec,mode,str(source),str(target),config['runtimeKey']],check=True,capture_output=True,timeout=20)
+        self.assertTrue(cipher.read_bytes().startswith(b'TUATPC01'))
+        self.assertEqual(authenticated.read_bytes(),bundle.read_bytes())
         restored = self.root/'restored-baseline'; restored.mkdir(mode=0o700)
-        self.assertEqual(backup.verified_extract(bundle,restored,config['sourceId']),manifest)
+        self.assertEqual(backup.verified_extract(authenticated,restored,config['sourceId']),manifest)
         self.assertEqual(manifest['retainedUnreferencedImages'],config['retainedUnreferencedImages'])
         self.assertEqual(backup.image_inventory(restored/'images'),manifest['images'])
         self.assertEqual((restored/'vault-root.key').read_bytes(), b'c'*64+b'\n')
@@ -504,9 +520,8 @@ class BackupBehaviour(unittest.TestCase):
             if fault=='owner': self.assertEqual((target/'images/avatars').stat().st_uid,65530)
             if fault=='mode': self.assertEqual((target/'images/avatars').stat().st_mode & 0o777,0o500)
 
-    def test_retained_baseline_missing_changed_extra_or_default_holds_files_and_old_receipt(self):
+    def test_retained_baseline_missing_or_changed_holds_files_and_old_receipt(self):
         config,images = self.retained_images_fixture(); key = next(iter(config['retainedUnreferencedImages'])); path,data = images[key]
-        extra = path.parent/'unapproved-new-upload.webp'
         receipt = Path(config['receiptFile']); receipt.write_bytes(b'old verified receipt'); receipt.chmod(0o600)
         class NoDump:
             def sql(self,_config,_statement): return b''
@@ -514,22 +529,19 @@ class BackupBehaviour(unittest.TestCase):
         with patch.object(backup.periodic,'pc_database'), patch.object(backup,'assert_database_quiet'), \
              patch.object(backup,'image_references',return_value=['avatars/member-1/live.webp']), \
              patch.object(backup,'database_fingerprint',return_value={'synthetic':'stable'}):
-            for fault in ('missing','hash-changed','size-changed','extra-upload','default-empty','now-referenced'):
+            for fault in ('missing','hash-changed','size-changed'):
                 with self.subTest(fault=fault):
                     current = copy.deepcopy(config)
                     if fault=='missing': path.unlink()
                     if fault=='hash-changed': path.write_bytes(b'X'*len(data))
                     if fault=='size-changed': path.write_bytes(data+b'new bytes')
-                    if fault=='extra-upload': extra.write_bytes(b'new unsaved upload'); extra.chmod(0o600); os.chown(extra,65530,65530)
-                    if fault=='default-empty': current.pop('retainedUnreferencedImages')
                     before = {p.name:p.read_bytes() for p in path.parent.iterdir()}
                     stage = Path(config['stageRoot'])/fault; stage.mkdir(mode=0o700)
-                    refs = ['avatars/member-1/live.webp'] + ([key] if fault=='now-referenced' else [])
+                    refs = ['avatars/member-1/live.webp']
                     with patch.object(backup,'image_references',return_value=refs), self.assertRaises(backup.BackupFailure):
                         backup.capture_bundle(current,NoDump(),stage)
                     self.assertEqual({p.name:p.read_bytes() for p in path.parent.iterdir()},before)
                     self.assertEqual(receipt.read_bytes(),b'old verified receipt'); self.assertEqual(list(stage.iterdir()),[])
-                    if extra.exists(): extra.unlink()
                     path.write_bytes(data); path.chmod(0o600); os.chown(path,65530,65530)
 
     def test_retained_baseline_cannot_bypass_before_after_image_change_check(self):
@@ -551,6 +563,59 @@ class BackupBehaviour(unittest.TestCase):
                 backup.capture_bundle(config,ChangingDump(),Path(config['stageRoot']))
         self.assertEqual(path.read_bytes(),data+b'interrupted actor edit')
         self.assertEqual(receipt.read_bytes(),b'old verified receipt')
+
+    def test_initial_capture_recognizes_only_owned_upload_write_and_publication_windows(self):
+        config,images = self.retained_images_fixture()
+        parent = next(iter(images.values()))[0].parent
+        temporary = parent/'.upload-33333333-3333-4333-8333-333333333333.tmp'
+        final = parent/'new-upload.webp'
+        class NoDump:
+            def sql(self,*_args): return b''
+            def docker(self,*_args,**_kwargs): raise AssertionError('Transient reached DB dump')
+        with patch.object(backup.periodic,'pc_database'), patch.object(backup,'assert_database_quiet'):
+            for state in ('opened-empty','mid-write','linked'):
+                with self.subTest(state=state):
+                    temporary.write_bytes(b'' if state=='opened-empty' else b'owned upload bytes')
+                    temporary.chmod(0o600); os.chown(temporary,65530,65530)
+                    if state=='linked': os.link(temporary,final)
+                    refs = ['avatars/member-1/live.webp'] + (['avatars/member-1/new-upload.webp'] if state=='linked' else [])
+                    with patch.object(backup,'image_references',return_value=refs), self.assertRaises(backup.UploadInProgress):
+                        backup.capture_bundle(config,NoDump(),Path(config['stageRoot']))
+                    self.assertEqual(list(Path(config['stageRoot']).iterdir()),[])
+                    self.assertEqual(temporary.read_bytes(),b'' if state=='opened-empty' else b'owned upload bytes')
+                    if final.exists(): final.unlink()
+                    temporary.unlink()
+
+    def test_upload_transient_never_conceals_missing_ref_retained_damage_or_unsafe_sibling(self):
+        config,images = self.retained_images_fixture()
+        pinned,data = next(iter(images.values())); parent = pinned.parent
+        temporary = parent/'.upload-33333333-3333-4333-8333-333333333333.tmp'
+        temporary.write_bytes(b'partial'); temporary.chmod(0o600); os.chown(temporary,65530,65530)
+        bad = parent/'bad'
+        with patch.object(backup.periodic,'pc_database'), patch.object(backup,'assert_database_quiet'), \
+             patch.object(backup,'image_references',return_value=['avatars/member-1/live.webp']):
+            for fault in ('missing-ref','retained-hash','wrong-owner','wrong-mode','bad-temp-name','symlink','third-link','external-link'):
+                with self.subTest(fault=fault):
+                    if fault=='retained-hash': pinned.write_bytes(b'X'*len(data))
+                    if fault=='wrong-owner': os.chown(temporary,0,0)
+                    if fault=='wrong-mode': temporary.chmod(0o640)
+                    if fault=='bad-temp-name':
+                        bad = parent/'.upload-not-a-uuid.tmp'; bad.write_bytes(b'invalid'); bad.chmod(0o600); os.chown(bad,65530,65530)
+                    if fault=='symlink': bad=parent/'alias.webp'; bad.symlink_to(pinned)
+                    if fault=='third-link':
+                        bad=parent/'linked.webp'; os.link(temporary,bad); os.link(temporary,parent/'third.webp')
+                    if fault=='external-link':
+                        bad=parent.parent/'other'; bad.mkdir(mode=0o700); os.chown(bad,65530,65530); os.link(temporary,bad/'linked.webp')
+                    refs=['avatars/member-1/missing.webp'] if fault=='missing-ref' else ['avatars/member-1/live.webp']
+                    with patch.object(backup,'image_references',return_value=refs), self.assertRaises(backup.BackupFailure) as held:
+                        backup.capture_bundle(config,SimpleNamespace(sql=lambda *_args:b''),Path(config['stageRoot']))
+                    self.assertNotIsInstance(held.exception,backup.UploadInProgress)
+                    self.assertEqual(list(Path(config['stageRoot']).iterdir()),[])
+                    if fault=='external-link': (bad/'linked.webp').unlink(); bad.rmdir()
+                    elif bad.exists() or bad.is_symlink(): bad.unlink()
+                    if (parent/'third.webp').exists(): (parent/'third.webp').unlink()
+                    pinned.write_bytes(data); pinned.chmod(0o600); os.chown(pinned,65530,65530)
+                    temporary.chmod(0o600); os.chown(temporary,65530,65530)
 
     def test_captured_status_is_manifest_hashed_restored_and_capture_change_refused(self):
         self.scheduler_state()
@@ -683,6 +748,56 @@ class BackupBehaviour(unittest.TestCase):
                  patch.object(backup.periodic,'Attempt',Attempt), patch.object(backup,'produce_locked',captured):
                 self.assertIs(backup.produce(config,self.commands),result)
             self.assertEqual(events,['admitted','capture-cleaned','local-publication']+(['offsite'] if pc else []))
+
+    def test_periodic_upload_defer_follows_exact_resume_and_plaintext_cleanup_without_publication(self):
+        config = self.periodic_producer_fixture(False)
+        parent=Path(config['imageRoot'])/'avatars/member-1'; parent.mkdir(parents=True,mode=0o700)
+        parent.parent.chmod(0o700)
+        temporary=parent/'.upload-33333333-3333-4333-8333-333333333333.tmp'
+        temporary.write_bytes(b'partly received image'); temporary.chmod(0o600)
+        old=Path(config['receiptFile']); old.write_bytes(b'previous verified receipt'); old.chmod(0o600)
+        events=[]; original=copy.deepcopy(self.commands.states); test=self
+        self.commands.sql=lambda *_args:b''
+        class Attempt:
+            def __init__(self,_config,commands,*_args):
+                self.identity={'synthetic':'controller'}; commands.periodic_attempt=self
+            def defer_upload(self,stage):
+                test.assertFalse(Path(stage).exists()); test.assertEqual(test.commands.states,original)
+                test.assertEqual(json.loads((old.parent/'capture-state.json').read_bytes())['phase'],'resumed')
+                test.assertEqual(list(Path(config['stageRoot']).iterdir()),[])
+                events.append('deferred-after-cleanup')
+            def check(self,**_kwargs): pass
+            def hold(self): events.append('held')
+            def finish(self,*_args): raise AssertionError('Deferred upload published a receipt')
+            def transfer_offsite(self,*_args): raise AssertionError('Deferred upload invoked provider')
+        with patch.object(backup.periodic,'placement',return_value=backup.periodic.installation_profile(config)), \
+             patch.object(backup.periodic,'Attempt',Attempt), patch.object(backup,'assert_database_quiet'), \
+             patch.object(backup,'image_references',return_value=[]):
+            result=backup.produce(config,self.commands)
+        self.assertEqual(result,{'ok':False,'deferred':True,'reason':'image-upload-in-progress','retryNextTimer':True})
+        self.assertEqual(events,['deferred-after-cleanup'])
+        self.assertEqual(old.read_bytes(),b'previous verified receipt')
+        self.assertEqual(temporary.read_bytes(),b'partly received image')
+        self.assertFalse(list(old.parent.glob('snapshot-*.tar.enc')))
+        self.assertFalse(any(event[0]=='verification' for event in self.commands.events))
+
+    def test_upload_postdump_unknown_or_unverified_resume_still_holds(self):
+        config=self.periodic_producer_fixture(False); events=[]
+        class Attempt:
+            def __init__(self,_config,commands,*_args): self.identity={'synthetic':'controller'}; commands.periodic_attempt=self
+            def check(self,**_kwargs): pass
+            def hold(self): events.append('held')
+            def defer_upload(self,*_args): raise AssertionError('Unsafe failure was deferred')
+        def captured(_config,commands,stage):
+            if fault=='unknown': raise backup.BackupFailure('Unknown capture result')
+            if fault=='postdump': commands.capture_dump_started=True
+            raise backup.UploadInProgress()
+        for fault in ('unknown','postdump','resume-failed'):
+            self.commands.fail_resume='fixture-app' if fault=='resume-failed' else None
+            with self.subTest(fault=fault), patch.object(backup.periodic,'placement',return_value=backup.periodic.installation_profile(config)), \
+                 patch.object(backup.periodic,'Attempt',Attempt), patch.object(backup,'capture_bundle',captured), self.assertRaises(backup.BackupFailure):
+                backup.produce(config,self.commands)
+            self.assertEqual(events.pop(),'held')
 
     def test_pc_offsite_ack_lost_after_publication_holds_without_rollback_or_resend(self):
         config = self.periodic_producer_fixture()

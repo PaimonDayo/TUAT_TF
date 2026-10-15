@@ -427,7 +427,17 @@ class Attempt:
         if self.path.exists():
             prior = read_json(self.path)
             need(prior.get('version') == 1 and prior.get('sourceId') == config['sourceId'] and
-                 prior.get('phase') in ('verified','refused') and finite(prior.get('finishedAt')), 'periodic-prior-unknown-hold')
+                 prior.get('phase') in ('verified','refused','deferred') and finite(prior.get('finishedAt')), 'periodic-prior-unknown-hold')
+            if prior['phase'] == 'deferred':
+                checkpoint = read_json(Path(config['backupRoot'])/'capture-state.json')
+                cleaned = Path(prior.get('cleanedStage', ''))
+                need(prior.get('reason') == 'image-upload-in-progress' and prior.get('beforeDatabaseDump') is True and
+                     prior.get('writersResumed') is True and prior.get('plaintextStageRemoved') is True and
+                     prior.get('offsiteInvoked') is False and checkpoint.get('phase') == 'resumed' and
+                     checkpoint.get('sourceId') == config['sourceId'] and checkpoint.get('controller') == prior.get('identity') and
+                     cleaned.parent == Path(config['stageRoot']) and cleaned.name.startswith('capture-') and
+                     not cleaned.exists() and not cleaned.is_symlink() and
+                     prior.get('unchangedPublication') == self.upload_publication_state(), 'periodic-prior-upload-defer-unverified')
             if prior['phase'] == 'verified':
                 receipt = Path(config['receiptFile'])
                 need(receipt.exists() and prior.get('receiptHash') == self.hash(receipt), 'periodic-prior-publication-unknown')
@@ -440,6 +450,7 @@ class Attempt:
                     need(prior.get('offsiteReceiptPath') == node_receipt and
                          prior.get('offsiteReceiptHash') == self.hash(immutable(node_receipt, True)), 'periodic-prior-offsite-publication-unknown')
         self.resources = capacity(config)
+        self.upload_baseline = self.upload_publication_state()
         self.began = time.monotonic()
         self.published = False
         receipt = Path(config['receiptFile'])
@@ -448,6 +459,46 @@ class Attempt:
                       'previousReceiptHash': self.hash(receipt) if receipt.exists() else None}
         self.write(self.path, self.value)  # Durable before CaptureWindow.enter / any freeze.
         commands.periodic_attempt = self
+
+    def upload_publication_state(self):
+        """Local evidence only; no provider request or success publication."""
+        paths = [self.config['receiptFile'], self.config['jobsReceiptFile']]
+        offsite = None
+        if installation_profile(self.config)['name'] == PC_PROFILE:
+            _, offsite, _ = pc_offsite_inputs(self.config, seal(self.config))
+            paths.append(str(Path(offsite['stateDirectory'])/'local-snapshot.json'))
+        receipts = {str(path): self.hash(path) if Path(path).exists() else None for path in paths}
+        def inventory(root, selected):
+            rows = []
+            for path in sorted(Path(root).iterdir()):
+                if not selected(path.name): continue
+                info = path.lstat()
+                need(path.resolve() == path and stat.S_ISREG(info.st_mode) and info.st_nlink == 1,
+                     'periodic-upload-publication-inventory')
+                rows.append([path.name, info.st_dev, info.st_ino, info.st_uid, info.st_mode,
+                             info.st_size, info.st_mtime_ns, info.st_ctime_ns])
+                need(len(rows) <= 10000, 'periodic-upload-publication-bound')
+            # Keep the deferred journal within the existing metadata bound even
+            # at the admitted archive limit; every inode/size/time is still bound.
+            return {'count':len(rows), 'sha256':hashlib.sha256(json.dumps(rows,separators=(',', ':')).encode()).hexdigest()}
+        archives = inventory(self.config['backupRoot'], lambda name: name.startswith('snapshot-') and name.endswith('.tar.enc'))
+        invocations = inventory(offsite['stateDirectory'], lambda name: name.startswith('producer-')) if offsite else None
+        return {'receipts': receipts, 'archives': archives, 'offsiteInvocations': invocations}
+
+    def defer_upload(self, cleaned_stage):
+        self.check()
+        cleaned_stage = Path(cleaned_stage)
+        checkpoint = read_json(Path(self.config['backupRoot'])/'capture-state.json')
+        need(self.value.get('phase') == 'started' and not self.published and not getattr(self, '_offsite_attempted', False) and
+             getattr(self.commands, 'capture_dump_started', True) is False and checkpoint.get('phase') == 'resumed' and
+             cleaned_stage.parent == Path(self.config['stageRoot']) and cleaned_stage.name.startswith('capture-') and
+             not cleaned_stage.exists() and not cleaned_stage.is_symlink() and
+             checkpoint.get('sourceId') == self.config['sourceId'] and checkpoint.get('controller') == self.identity and
+             self.upload_publication_state() == self.upload_baseline, 'periodic-upload-defer-unverified')
+        self.value.update(phase='deferred', finishedAt=time.time(), reason='image-upload-in-progress',
+                          beforeDatabaseDump=True, writersResumed=True, plaintextStageRemoved=True,
+                          cleanedStage=str(cleaned_stage), offsiteInvoked=False, unchangedPublication=self.upload_baseline)
+        self.write(self.path, self.value)
 
     def check(self, resume=False):
         verify_self(self.config, self.commands, self.identity, resume)

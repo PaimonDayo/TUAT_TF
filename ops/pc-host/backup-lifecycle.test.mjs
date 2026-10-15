@@ -33,7 +33,7 @@ async function fixture(t) {
   writeFileSync(join(release, '.gitignore'), '/node_modules/\n/.next/\n');
   writeFileSync(join(release, 'package-lock.json'), '{"lockfileVersion":3,"packages":{}}\n');
   writeFileSync(join(release, 'source.txt'), 'synthetic host lifecycle fixture\n');
-  const entry = `const http=require('node:http'),fs=require('node:fs');const port=Number(process.argv[process.argv.indexOf('--port')+1]);const names=['PC_APP_BACKUP_STATUS_PATH','PC_APP_BACKUP_INSTANCE_ID','PC_APP_BACKUP_GENERATION','PC_APP_BACKUP_STARTED_AT','PC_APP_BACKUP_DATABASE_SYSTEM_IDENTIFIER'];fs.writeFileSync(process.env.SYNTHETIC_CAPTURE_FILE,JSON.stringify(Object.fromEntries(names.map(k=>[k,process.env[k]]))));const server=http.createServer((req,res)=>{res.setHeader('content-type','application/json');res.end(JSON.stringify({version:process.env.VERCEL_GIT_COMMIT_SHA,releaseId:process.env.PC_APP_RELEASE_ID}));});server.listen(port,'127.0.0.1');process.on('SIGTERM',()=>server.close(()=>process.exit(0)));`;
+  const entry = `const http=require('node:http'),fs=require('node:fs');const port=Number(process.argv[process.argv.indexOf('--port')+1]);const names=['PC_APP_BACKUP_STATUS_PATH','PC_APP_BACKUP_INSTANCE_ID','PC_APP_BACKUP_GENERATION','PC_APP_BACKUP_STARTED_AT','PC_APP_BACKUP_DATABASE_SYSTEM_IDENTIFIER'];fs.writeFileSync(process.env.SYNTHETIC_CAPTURE_FILE,JSON.stringify(Object.fromEntries(names.map(k=>[k,process.env[k]]))));const server=http.createServer((req,res)=>{res.setHeader('content-type','application/json');if(req.url==='/synthetic-exit'){res.end('{}');setTimeout(()=>process.exit(42),10);return;}res.end(JSON.stringify({version:process.env.VERCEL_GIT_COMMIT_SHA,releaseId:process.env.PC_APP_RELEASE_ID}));});server.listen(port,'127.0.0.1');process.on('SIGTERM',()=>server.close(()=>process.exit(0)));`;
   writeFileSync(join(release, 'node_modules/next/dist/bin/next'), entry);
   const git = args => execFileSync(hostGitPath(), ['-C', release, '-c', `core.hooksPath=${join(release, 'hooks')}`, '-c', 'commit.gpgsign=false', '-c', 'core.autocrlf=false', ...args], { encoding: 'utf8', windowsHide: true }).trim();
   git(['init', '--quiet']); git(['add', '--', '.gitignore', 'package-lock.json', 'source.txt']);
@@ -100,9 +100,27 @@ test('fatal backup ownership uncertainty stops new dispatch and reports an incom
   } });
   const rejection = assert.rejects(running, /unexpectedly or drain failed/);
   try { await waitUntil(() => existsSync(f.capture) && existsSync(join(f.config.stateDirectory, 'runtime-status.json'))); }
-  finally { onFatal?.(); await rejection; }
+  finally { onFatal?.({ reason: 'ownership-unverified', sensitiveDetail: 'must-not-be-recorded' }); await rejection; }
   assert.equal(stopped, 1);
   const status = JSON.parse(readFileSync(join(f.config.stateDirectory, 'runtime-status.json')));
   assert.equal(status.running, false); assert.equal(status.drained, false);
+  assert.deepEqual(status.failure, { source: 'backup-supervisor', reason: 'ownership-unverified' });
+  assert.equal(JSON.stringify(status).includes('must-not-be-recorded'), false);
   assert.equal((await fetch(`http://127.0.0.1:${f.config.gatewayPort}/api/version`).catch(() => null)), null);
+});
+
+test('unexpected application exit preserves its code without claiming a backup-owner failure', async t => {
+  const f = await fixture(t);
+  const running = run(f.configFile, true, { startBackup: async () => ({
+    identity: { instanceId: f.config.expectedBackupInstanceId, generation: randomUUID(), startedAt: new Date().toISOString() },
+    statusPath: join(f.backupPrivate, 'backup-lifecycle.json'), stop: async () => ({ drained: true }),
+  }) });
+  const rejection = assert.rejects(running, /unexpectedly or drain failed/);
+  await waitUntil(() => existsSync(join(f.config.stateDirectory, 'runtime-status.json')) && JSON.parse(readFileSync(join(f.config.stateDirectory, 'runtime-status.json'))).running === true);
+  await fetch(`http://127.0.0.1:${f.config.appPort}/synthetic-exit`);
+  await rejection;
+  const status = JSON.parse(readFileSync(join(f.config.stateDirectory, 'runtime-status.json')));
+  assert.equal(status.running, false); assert.equal(status.drained, true);
+  assert.deepEqual(status.failure, { source: 'application', exitCode: 42, signal: null });
+  assert.equal(existsSync(join(f.config.stateDirectory, 'runner.lock')), false);
 });

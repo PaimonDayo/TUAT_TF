@@ -169,13 +169,14 @@ class PrivateDockerMounts(unittest.TestCase):
 class PeriodicOffsite(unittest.TestCase):
     def fixture(self, directory, unknown=False):
         root = Path(directory); backup = root/'backup'; state = root/'offsite'; backup.mkdir(); state.mkdir()
+        stage=root/'stage'; stage.mkdir()
         cfg = {'profile': 'pc-private', 'sourceId': '11111111-1111-4111-8111-111111111111', 'database': 'fixture',
                'backupRoot': str(backup), 'receiptFile': str(backup/'receipt.json'), 'jobsReceiptFile': str(root/'jobs.json'),
-               'imageRoot': '/var/lib/tuat-local/images', 'periodic': {'enabled': True, 'maxCycleSeconds': 600}}
+               'stageRoot':str(stage), 'imageRoot': '/var/lib/tuat-local/images', 'periodic': {'enabled': True, 'maxCycleSeconds': 600}}
         cfg['periodic'].update({key:bounds[0] for key, bounds in periodic.LIMITS.items() if key != 'maxCycleSeconds'})
         cfg['periodic'].update(controlSeal=str(root/'seal.json'), configPath=str(root/'config.json'), allowUntil='2099-01-01T00:00:00+00:00')
         cfg['periodic']['maxTotalArchiveBytes'] += 36
-        archive = backup/'one.enc'; archive.write_bytes(b'TUATPC01'+b'synthetic-encrypted-only'*2)
+        archive = backup/'snapshot-1111111111111111.tar.enc'; archive.write_bytes(b'TUATPC01'+b'synthetic-encrypted-only'*2)
         hashed = lambda path: hashlib.sha256(Path(path).read_bytes()).hexdigest()
         now = dt.datetime.now(dt.timezone.utc)
         capture = now-dt.timedelta(seconds=2); restore = now-dt.timedelta(seconds=1)
@@ -238,7 +239,7 @@ class PeriodicOffsite(unittest.TestCase):
             self.assertEqual(args[:2], ['/opt/node-v24.19.0-linux-x64/bin/node', '/sealed/offsite.mjs'])
             self.assertEqual(args[-1], '--apply'); self.assertEqual(kwargs, {'timeout': 120})
             invocation = json.loads(Path(args[2]).read_text())
-            self.assertEqual(invocation, {**f.template, 'archiveFile': str(Path(f.config['backupRoot'])/'one.enc')})
+            self.assertEqual(invocation, {**f.template, 'archiveFile': str(Path(f.config['backupRoot'])/'snapshot-1111111111111111.tar.enc')})
             with self.assertRaisesRegex(periodic.Hold, 'not-sendable'): f.attempt.transfer_offsite(f.result)
             self.assertEqual(len(f.dispatch), 1)
 
@@ -259,6 +260,69 @@ class PeriodicOffsite(unittest.TestCase):
             with patch.object(periodic, 'sender_inventory', side_effect=periodic.Hold('periodic-offsite-sender-inventory')):
                 with self.assertRaisesRegex(periodic.Hold, 'sender-inventory'): f.attempt.transfer_offsite(f.result)
             f.attempt.hold(); self.assertEqual(f.dispatch, [])
+
+    def upload_ready(self, f):
+        f.commands.capture_dump_started=False
+        f.write(Path(f.config['backupRoot'])/'capture-state.json',
+                {'phase':'resumed','sourceId':f.config['sourceId'],'controller':f.attempt.identity})
+        return Path(f.config['stageRoot'])/'capture-cleaned'
+
+    def test_clean_upload_defer_allows_next_timer_attempt_and_one_verified_offsite_send(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
+            f=self.fixture(directory); cleaned=self.upload_ready(f)
+            before=f.attempt.upload_publication_state()
+            f.attempt.defer_upload(cleaned)
+            self.assertEqual(f.attempt.value['phase'],'deferred')
+            self.assertEqual(f.dispatch,[]); self.assertEqual(f.attempt.upload_publication_state(),before)
+            # The user's upload may finish normally. The next capture is a NEW
+            # attempt, never a replay of a dump/send with an unknown result.
+            next_attempt=periodic.Attempt(f.config,f.commands,f.write,f.hashed,f.write)
+            self.assertNotEqual(next_attempt.value['attemptId'],f.attempt.value['attemptId'])
+            next_attempt.finish(f.result); next_attempt.transfer_offsite(f.result)
+            self.assertEqual(next_attempt.value['phase'],'verified'); self.assertEqual(len(f.dispatch),1)
+
+    def test_upload_deferral_refuses_dump_resume_plaintext_archive_receipt_or_provider_effects(self):
+        for fault in ('dump','phase','published','offsite','resume','controller','stage','receipt','jobs','node','archive','invocation'):
+            with self.subTest(fault=fault),tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
+                f=self.fixture(directory); cleaned=self.upload_ready(f)
+                if fault=='dump': f.commands.capture_dump_started=True
+                if fault=='phase': f.attempt.value['phase']='local-verified'
+                if fault=='published': f.attempt.published=True
+                if fault=='offsite': f.attempt._offsite_attempted=True
+                if fault=='resume': f.write(Path(f.config['backupRoot'])/'capture-state.json',{'phase':'resume-unverified'})
+                if fault=='controller': f.write(Path(f.config['backupRoot'])/'capture-state.json',{'phase':'resumed','sourceId':f.config['sourceId'],'controller':{'other':True}})
+                if fault=='stage': cleaned.mkdir(); (cleaned/'database.dump').write_bytes(b'PGDMP partial dump')
+                if fault=='receipt': Path(f.config['receiptFile']).write_bytes(b'changed')
+                if fault=='jobs': Path(f.config['jobsReceiptFile']).write_bytes(b'changed')
+                if fault=='node': f.target.write_bytes(b'changed')
+                if fault=='archive': (Path(f.config['backupRoot'])/f.result['archive']).write_bytes(b'changed')
+                if fault=='invocation': (f.target.parent/'producer-unknown.json').write_bytes(b'{}')
+                with self.assertRaisesRegex(periodic.Hold,'upload-defer-unverified'): f.attempt.defer_upload(cleaned)
+                f.attempt.hold()
+                self.assertEqual(f.attempt.value['phase'],'started' if fault=='published' else 'unknown-hold')
+                self.assertEqual(f.dispatch,[])
+
+    def test_next_attempt_revalidates_every_deferred_claim_and_unchanged_publication(self):
+        for fault in ('reason','predump','resumed','stage','provider','checkpoint','identity','receipt','jobs','node','archive','invocation'):
+            with self.subTest(fault=fault),tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
+                f=self.fixture(directory); cleaned=self.upload_ready(f); f.attempt.defer_upload(cleaned)
+                journal=json.loads(f.attempt.path.read_text())
+                if fault=='reason': journal['reason']='unknown'
+                if fault=='predump': journal['beforeDatabaseDump']=False
+                if fault=='resumed': journal['writersResumed']=False
+                if fault=='stage': cleaned.mkdir()
+                if fault=='provider': journal['offsiteInvoked']=True
+                if fault=='identity': journal['identity']={'other':True}
+                if fault=='checkpoint': f.write(Path(f.config['backupRoot'])/'capture-state.json',{'phase':'resume-unverified'})
+                if fault=='receipt': Path(f.config['receiptFile']).write_bytes(b'changed')
+                if fault=='jobs': Path(f.config['jobsReceiptFile']).write_bytes(b'changed')
+                if fault=='node': f.target.write_bytes(b'changed')
+                if fault=='archive': (Path(f.config['backupRoot'])/f.result['archive']).write_bytes(b'changed')
+                if fault=='invocation': (f.target.parent/'producer-unknown.json').write_bytes(b'{}')
+                f.write(f.attempt.path,journal)
+                with self.assertRaisesRegex(periodic.Hold,'prior-upload-defer-unverified'):
+                    periodic.Attempt(f.config,f.commands,f.write,f.hashed,f.write)
+                self.assertEqual(f.dispatch,[])
 
 
 if __name__ == '__main__': unittest.main()

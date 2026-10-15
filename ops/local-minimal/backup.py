@@ -48,10 +48,21 @@ PRESERVED_TRIAL_UNITS = ('tuat-surface-trial-adapter.service', 'tuat-surface-tri
 IDENT = re.compile(r'^[a-z_][a-z_0-9]{0,62}$')
 AVATAR = re.compile(r'^avatars/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+\.(?:webp|jpe?g)$', re.I)
 IMAGE = re.compile(r'^(?:tweet-images|note-images)/[0-9a-f-]{36}/[0-9a-f-]{36}\.webp$', re.I)
+UPLOAD_UUID = r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}'
+UPLOAD = re.compile(r'^(?:avatars/[A-Za-z0-9_-]+|(?:tweet-images|note-images)/' + UPLOAD_UUID +
+                    r')/\.upload-' + UPLOAD_UUID + r'\.tmp$', re.I)
 
 
 class BackupFailure(RuntimeError):
     pass
+
+
+class UploadInProgress(BackupFailure):
+    """Only initial capture inventory may request a fully resumed, pre-dump defer."""
+    def __init__(self):
+        super().__init__('Image upload in progress; no snapshot published')
+        self.resumed = False
+        self.stage = None
 
 
 def fail(message):
@@ -199,7 +210,7 @@ def safe_image(key):
 
 
 def retained_unreferenced_images(config):
-    """Only an explicit sealed PC config can approve existing orphan bytes."""
+    """Sealed historical byte pins remain required beside newly captured uploads."""
     value = config.get('retainedUnreferencedImages', {})
     if not isinstance(value, dict) or len(value) > MAX_ENTRIES:
         fail('Invalid retained image baseline')
@@ -219,27 +230,51 @@ def retained_unreferenced_images(config):
     return result
 
 
-def image_inventory(root, owner=None):
+def image_inventory(root, owner=None, uploads=None):
     root = private(root, True, owner)
-    rows = []
+    rows, entries, temporary, links = [], [], [], {}
     for parent, directories, files in os.walk(root, followlinks=False):
         for name in directories:
             private(Path(parent) / name, True, owner)
         for name in files:
-            path = private(Path(parent) / name, owner=owner)
-            key = safe_image(path.relative_to(root).as_posix())
-            before = path.stat()
-            if not 0 < before.st_size <= MAX_IMAGE or stat.S_IMODE(before.st_mode) != 0o600:
+            path = Path(parent) / name; before = path.lstat()
+            if path.resolve() != path or not stat.S_ISREG(before.st_mode) or \
+               before.st_uid != (os.getuid() if owner is None else owner) or \
+               stat.S_IMODE(before.st_mode) != 0o600 or before.st_nlink not in (1, 2):
+                fail('Private image owner, mode and links required')
+            key = path.relative_to(root).as_posix()
+            transient = UPLOAD.fullmatch(key) is not None
+            if not transient:
+                safe_image(key)
+            if not (0 if transient else 1) <= before.st_size <= MAX_IMAGE:
                 fail('Image bounds invalid')
-            digest = file_hash(path)
-            after = path.stat()
-            if (before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns) != \
-               (after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns):
-                fail('Image changed during capture')
+            entries.append((path, key, before, transient))
+            links.setdefault((before.st_dev, before.st_ino), []).append((path, transient))
+            if transient:
+                temporary.append((path, before))
+            if len(entries) > MAX_ENTRIES:
+                fail('Image inventory bound exceeded')
+    # link(temp, final) then unlink(temp) is the application's publication pair.
+    # Recognize only those two owned names in the same directory, never an alias
+    # elsewhere or a general hardlink exception. Validate every sibling first.
+    for path, key, before, transient in entries:
+        if before.st_nlink == 2:
+            peers = links[(before.st_dev, before.st_ino)]
+            if len(peers) != 2 or sum(t for _p, t in peers) != 1 or \
+               any(p.parent != path.parent for p, _t in peers) or before.st_size == 0:
+                fail('Unrecognized image hardlink')
+        digest = None if transient else file_hash(path)
+        after = path.lstat()
+        fields = ('st_dev', 'st_ino', 'st_uid', 'st_mode', 'st_nlink', 'st_size', 'st_mtime_ns', 'st_ctime_ns')
+        if any(getattr(before, field) != getattr(after, field) for field in fields):
+            fail('Image changed during capture')
+        if not transient:
             rows.append({'key': key, 'bytes': before.st_size, 'sha256': digest,
                          'mtimeNs': before.st_mtime_ns, 'mode': 0o600})
-            if len(rows) > MAX_ENTRIES:
-                fail('Image inventory bound exceeded')
+    if temporary:
+        if uploads is None:
+            fail('Image upload in progress outside initial capture')
+        uploads.extend(str(path) for path, _info in temporary)
     return sorted(rows, key=lambda row: row['key'])
 
 
@@ -908,7 +943,8 @@ def capture_bundle(config, commands, stage):
     assert_database_quiet(config, commands)
     owner = config.get('sourceOwnerUid', os.getuid())
     journal = journal_snapshot(config['jobsStateRoot'], jobs_owner(config))
-    images = image_inventory(config['imageRoot'], owner)
+    uploads = []
+    images = image_inventory(config['imageRoot'], owner, uploads)
     refs = image_references(config, commands)
     keys = {row['key'] for row in images}
     cleanup = commands.sql(config, "SELECT 'note-images/'||path FROM public.note_image_cleanup ORDER BY 1;").decode().splitlines()
@@ -920,13 +956,15 @@ def capture_bundle(config, commands, stage):
     cleanup.update(safe_image(row) for row in retired)
     if not set(refs).issubset(keys):
         fail('Image unlink-before-DB-delete gap or missing referenced image')
-    unreferenced = keys - (set(refs) | cleanup)
-    if unreferenced != set(retained):
-        fail('Unreferenced image/upload interrupted before DB save; no success receipt')
+    # A completed upload can legitimately precede its DB registration. Preserve
+    # every validated object in the existing manifest/tar, including those bytes.
     by_key = {row['key']: row for row in images}
-    if any(by_key[key]['sha256'] != row['sha256'] or by_key[key]['bytes'] != row['bytes'] for key, row in retained.items()):
+    if any(key not in by_key or by_key[key]['sha256'] != row['sha256'] or by_key[key]['bytes'] != row['bytes'] for key, row in retained.items()):
         fail('Retained unreferenced image bytes changed; no success receipt')
+    if uploads:
+        raise UploadInProgress()
     before = database_fingerprint(config, commands)
+    commands.capture_dump_started = True  # Before the first possible dump side effect.
     for name, argv in (
         ('database.dump', ['pg_dump', '-U', database_admin(config), '-d', config['database'], '--format=custom']),
         ('roles.sql', ['pg_dumpall', '-U', database_admin(config), '--roles-only', '--no-role-passwords']),
@@ -1159,21 +1197,28 @@ def produce_locked(config, commands):
     stage = Path(tempfile.mkdtemp(prefix='capture-', dir=config['stageRoot']))
     window = CaptureWindow(config, commands, checkpoint)
     entered = False
+    commands.capture_dump_started = False
     try:
-        entered = True
         try:
-            window.enter()
-            window.verify_frozen()
-            bundle, manifest = capture_bundle(config, commands, stage)
-            window.verify_frozen()
-        finally:
-            if entered and window.before:
-                commands.periodic_resuming = True
-                try:
-                    with periodic.defer_signals():
-                        window.restore() # Deadline/SIGTERM cannot interrupt exact resume.
-                finally:
-                    commands.periodic_resuming = False
+            entered = True
+            try:
+                window.enter()
+                window.verify_frozen()
+                bundle, manifest = capture_bundle(config, commands, stage)
+                window.verify_frozen()
+            finally:
+                if entered and window.before:
+                    commands.periodic_resuming = True
+                    try:
+                        with periodic.defer_signals():
+                            window.restore() # Deadline/SIGTERM cannot interrupt exact resume.
+                    finally:
+                        commands.periodic_resuming = False
+        except UploadInProgress as error:
+            if commands.capture_dump_started or not window.before or list(stage.iterdir()):
+                fail('Upload deferral is not a clean pre-dump outcome')
+            error.resumed = True; error.stage = str(stage)
+            raise  # Outer cleanup must finish before the producer can admit defer.
         archive = backup / ('snapshot-' + token + '.tar.enc')
         codec = str(Path(__file__).with_name('backup-codec.mjs'))
         fingerprint = hashlib.sha256(read_private(config['runtimeKey'],32)).hexdigest()
@@ -1238,7 +1283,14 @@ def produce(config, commands=None):
                 def publish_jobs(path, value):
                     atomic_jobs_json(path, value, periodic.actor(config)[1])
                 attempt = periodic.Attempt(config, commands, atomic_json, file_hash, publish_jobs)
-            result = produce_locked(config, commands)
+            try:
+                result = produce_locked(config, commands)
+            except UploadInProgress as error:
+                if attempt is None or commands.capture_dump_started or error.resumed is not True or \
+                   error.stage is None or Path(error.stage).parent != Path(config['stageRoot']) or Path(error.stage).exists():
+                    raise
+                attempt.defer_upload(error.stage)
+                return {'ok': False, 'deferred': True, 'reason': 'image-upload-in-progress', 'retryNextTimer': True}
             if attempt:
                 attempt.finish(result)
                 if selected['name'] == periodic.PC_PROFILE:
@@ -1265,6 +1317,9 @@ def main():
         validate_config(config)
         if args.execute:
             result = produce(config)
+            if result.get('deferred') is True:
+                print(json.dumps(result))
+                return 0
             print(json.dumps({'ok': True, 'periodic': config.get('periodic') is not None,
                               'verifiedTables': result['verified']['databaseTables'], 'verifiedImages': result['verified']['images']}))
         else:
