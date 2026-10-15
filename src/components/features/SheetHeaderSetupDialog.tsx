@@ -2,8 +2,9 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { Check, Eye, ListChecks } from "lucide-react";
+import { Close as DialogClose } from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
-import { FormModal, FormModalFooter } from "@/components/ui/form-modal";
+import { FormDraftGuard, FormModal, FormModalFooter } from "@/components/ui/form-modal";
 import {
   buildSheetRecordFields,
   defaultSelectedSheetColumns,
@@ -32,6 +33,9 @@ export function SheetHeaderSetupDialog({
   busy,
   error,
   inputMethod,
+  context,
+  recovery,
+  locked = false,
   onCancel,
   onConfirm,
 }: {
@@ -42,6 +46,9 @@ export function SheetHeaderSetupDialog({
   busy: boolean;
   error?: string | null;
   inputMethod?: ReactNode;
+  context?: ReactNode;
+  recovery?: ReactNode;
+  locked?: boolean;
   onCancel: () => void;
   onConfirm: (fields: RecordFieldDef[], signature: string) => void;
 }) {
@@ -54,10 +61,19 @@ export function SheetHeaderSetupDialog({
     [data, isMiddleLong],
   );
   const memoColumn = data.memoCandidates[0] ?? null;
-  const existingByColumn = useMemo(
-    () => new Map(initialFields.filter((field) => field.sourceColumn !== undefined).map((field) => [field.sourceColumn!, field])),
-    [initialFields],
-  );
+  const existingByColumn = useMemo(() => {
+    const normalize = (value: string) => value.normalize("NFC").trim();
+    return new Map(initialFields.flatMap((field) => {
+      if (field.sourceColumn === undefined) return [];
+      const header = normalize(field.sourceHeader ?? field.label);
+      const original = data.columns.find((column) => column.index === field.sourceColumn && normalize(column.label) === header);
+      const matches = data.columns.filter((column) => normalize(column.label) === header);
+      const column = original ?? (matches.length === 1 ? matches[0] : undefined);
+      return column ? [[column.index, field] as const] : [];
+    }));
+  }, [initialFields, data.columns]);
+  const changedHeaders = initialFields.some((field) => field.sourceColumn !== undefined && !field.hidden
+    && ![...existingByColumn.values()].includes(field));
   const hasExplicitSheetConfig = initialFields.some((field) =>
     field.sourceColumn !== undefined && typeof field.showInTimeline === "boolean",
   );
@@ -75,6 +91,8 @@ export function SheetHeaderSetupDialog({
     selectable.map((column) => [column.index, existingByColumn.get(column.index)?.type ?? inferSheetFieldType(column.label)]),
   ));
   const [message, setMessage] = useState<string | null>(null);
+  const draft = JSON.stringify([selected, timelineSelected, types]);
+  const [initialDraft] = useState(draft);
   const limit = timelineFieldLimit(isMiddleLong);
 
   function toggleInput(column: number) {
@@ -113,13 +131,17 @@ export function SheetHeaderSetupDialog({
   }
 
   return (
-    <FormModal open={open} onOpenChange={(next) => !next && onCancel()} title="練習記録フォーム・タイムライン表示" autoFocus={false}>
+    <FormModal open={open} onOpenChange={(next) => !next && !busy && !locked && onCancel()} title="練習記録フォーム・タイムライン表示" autoFocus={false}>
+      <FormDraftGuard dirty={draft !== initialDraft} busy={busy || locked} onSave={confirm} />
+      {context}
       {error && <p role="alert" className="m-4 rounded-lg bg-danger/10 p-3 text-caption text-danger">{error}</p>}
-      <div className="space-y-4 pb-5">
+      {recovery}
+      <fieldset disabled={busy || locked} className="min-w-0 space-y-4 pb-5">
         {inputMethod}
         <div className="rounded-xl bg-accent/8 px-3 py-2.5 text-caption leading-relaxed">
           「{data.sheetName}」の見出しから作成します。日付・曜日は自動で判別し、スプレッドシートにない項目は表示しません。
         </div>
+        {changedHeaders && <p className="text-caption text-muted2">シートの見出しが変わっています。現在の入力・表示項目を確認してください。</p>}
 
         {isMiddleLong && fixed.length > 0 && <section data-ui-panel className="rounded-card border border-separator bg-card p-3">
           <div className="mb-2 flex items-center gap-2"><Check size={17} className="text-accent" /><h3 className="text-[14px] font-semibold">標準項目</h3></div>
@@ -166,10 +188,10 @@ export function SheetHeaderSetupDialog({
 
         {message && <p role="alert" className="rounded-xl bg-amber-50 px-3 py-2 text-center text-caption font-semibold text-amber-800">{message}</p>}
         <FormModalFooter>
-          <Button variant="outline" size="lg" onClick={onCancel} disabled={busy}>戻る</Button>
-          <Button size="lg" onClick={confirm} disabled={busy}>{busy ? "保存中…" : "保存する"}</Button>
+          <DialogClose asChild><Button variant="outline" size="lg" disabled={busy || locked}>戻る</Button></DialogClose>
+          <Button size="lg" onClick={confirm} disabled={busy || locked}>{busy ? "保存中…" : "保存する"}</Button>
         </FormModalFooter>
-      </div>
+      </fieldset>
     </FormModal>
   );
 }

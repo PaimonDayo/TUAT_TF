@@ -19,7 +19,13 @@ import {
 import type { AuthorMini } from "@/types";
 
 /** メンバー名簿。中長/短・学年・名前で絞り込みでき、学年ごとに区切って表示する */
-export function MemberDirectory({ members }: { members: AuthorMini[] }) {
+export function MemberDirectory({
+  members,
+  memberHrefPrefix = "/members",
+}: {
+  members: AuthorMini[];
+  memberHrefPrefix?: string;
+}) {
   const [block, setBlock] = useState("all");
   const [grades, setGrades] = useState<string[]>([]);
   const [query, setQuery] = useState("");
@@ -40,15 +46,21 @@ export function MemberDirectory({ members }: { members: AuthorMini[] }) {
     );
   }, [members, block, grades, query]);
 
-  // 学年ごとにグループ化（GRADE_OPTIONS 順。学年未設定は末尾）
+  // 学年ごとにグループ化（GRADE_OPTIONS 順。その他・学年未設定は末尾）
   const groups = useMemo(() => {
     const out: { key: string; label: string; list: AuthorMini[] }[] = [];
     for (const g of GRADE_OPTIONS) {
       const list = filtered.filter((m) => m.grade === g.value);
       if (list.length > 0) out.push({ key: g.value, label: g.short, list });
     }
-    const noGrade = filtered.filter((m) => !m.grade);
-    if (noGrade.length > 0) out.push({ key: "none", label: "学年未設定", list: noGrade });
+    const otherGrades = filtered.filter((m) => !GRADE_OPTIONS.some((g) => g.value === m.grade));
+    if (otherGrades.length > 0) {
+      out.push({
+        key: "none",
+        label: otherGrades.some((m) => m.grade) ? "その他・学年未設定" : "学年未設定",
+        list: otherGrades,
+      });
+    }
     return out;
   }, [filtered]);
 
@@ -87,7 +99,7 @@ export function MemberDirectory({ members }: { members: AuthorMini[] }) {
                 </p>
                 <div className="space-y-2">
                   {group.list.map((m) => (
-                    <Link data-ui-row key={m.id} href={`/members/${m.id}`} prefetch={false}>
+                    <Link data-ui-row key={m.id} href={`${memberHrefPrefix}/${m.id}`} prefetch={false}>
                       <Card className="p-3 flex items-center gap-3 active:bg-bg">
                         <Avatar
                           name={m.display_name || "?"}
