@@ -166,6 +166,39 @@ test('backwards UTC clock closes instead of freshening old timestamps',async()=>
   const f=fixture();const life=await startBackupSupervisor(f.options);await flush();f.advance(-1);await f.pulse();
   assert.equal(f.ready(life.identity),false);await life.stop();
 });
+function combinedClockFixture() {
+  const f=fixture(),notices=[],signals=[],localConfig={...config,localSnapshotReceiptFile:resolve('synthetic-offsite/local-snapshot.json'),localImageRoot:resolve('synthetic-private-images')};
+  const startedAt='2026-10-11T00:30:00.000Z';
+  const snapshot={format:'tuat-local-db-images-v1',sourceId:instanceId,generation,databaseSystemIdentifier:config.target.databaseSystemIdentifier,imageRoot:localConfig.localImageRoot,
+    independentRecoveryCopyChecked:true,archiveKey:`ops/pc-backend/${instanceId}/backups/2026-10-11T00-30-00-000Z.local.tar.enc`,archiveSha256:'a'.repeat(64),archiveBytes:100,
+    capturedAt:startedAt,restoreVerifiedAt:startedAt,offsiteVerifiedAt:startedAt};
+  f.adapters.probe=async({signal})=>{signals.push(signal);f.calls.probe++;return structuredClone(config.target);};
+  return {...f,notices,signals,snapshot,options:{...f.options,config:localConfig,readSnapshot:()=>structuredClone(snapshot),onFatal:event=>notices.push(event)}};
+}
+test('combined clock rollback holds writes using actual UTC; recovery requires catch-up, fresh receipt and exact target',async()=>{
+  const f=combinedClockFixture(),life=await startBackupSupervisor(f.options);await flush();assert.equal(f.ready(life.identity),true);
+  f.advance(1000);await f.pulse();const highWater=f.status().heartbeat.checkedAt;
+  f.advance(-1);await f.pulse();assert.equal(f.ready(life.identity),false);assert.equal(f.status().heartbeat.healthy,false);assert.equal(f.status().target.healthy,false);assert.equal(f.status().backup,null);
+  assert.equal(Date.parse(f.status().heartbeat.checkedAt),Date.parse(highWater)-1);assert.deepEqual(f.notices,[]);assert.equal(f.calls.release,0);assert.equal(f.signals.some(s=>s.aborted),false);
+  await f.pulse();assert.equal(f.ready(life.identity),false);
+  f.advance(1);f.snapshot.offsiteVerifiedAt='2026-10-11T00:30:02.000Z';await f.pulse();assert.equal(f.ready(life.identity),false);
+  f.snapshot.offsiteVerifiedAt=f.snapshot.capturedAt;f.adapters.probe=async()=>({...config.target,containerId:'9'.repeat(64)});await f.pulse();assert.equal(f.ready(life.identity),false);
+  f.adapters.probe=async()=>structuredClone(config.target);await f.pulse();assert.equal(f.ready(life.identity),true);assert.deepEqual(f.notices,[]);
+  assert.equal(f.calls.dump,0);assert.equal(f.calls.upload,0);assert.equal((await life.stop()).drained,true);assert.equal(f.calls.release,1);
+});
+test('combined observer can stop and release its owner during a clock hold',async()=>{
+  const f=combinedClockFixture(),life=await startBackupSupervisor(f.options);await flush();f.advance(-1);await f.pulse();
+  assert.equal((await life.stop()).drained,true);assert.equal(f.calls.release,1);assert.equal(f.status().heartbeat.healthy,false);assert.equal(f.status().heartbeat.maintenance,true);assert.deepEqual(f.notices,[]);
+});
+test('combined clock hold never weakens nonfinite clock, ownership or status-publication failures',async()=>{
+  for(const type of ['clock','ownership','publish']) {
+    const f=combinedClockFixture();let nonfinite=false,publishFails=false;const save=f.options.save,now=f.options.now;
+    const life=await startBackupSupervisor({...f.options,now:()=>nonfinite?NaN:now(),save:(...args)=>{if(publishFails)throw Error('synthetic disk failure');save(...args);}});await flush();
+    f.advance(-1);await f.pulse();assert.deepEqual(f.notices,[]);
+    if(type==='clock')nonfinite=true;if(type==='ownership')f.loseLock();if(type==='publish')publishFails=true;
+    await f.pulse();assert.equal(f.notices.length,1);assert.equal(f.notices[0].reason,`${type==='clock'?'clock':type==='ownership'?'ownership':'status-publish'}-unverified`);assert.equal(f.signals.every(s=>s.aborted),true);await life.stop();
+  }
+});
 test('stop protects immediately and drains boundedly, retaining lock for noncooperative in-flight operation',async()=>{
   let finish;const f=fixture({dump:()=>new Promise(done=>{finish=done;})});const life=await startBackupSupervisor({...f.options,drainMilliseconds:1});await flush();
   const stopped=await life.stop();assert.equal(stopped.drained,false);assert.equal(f.status().heartbeat.maintenance,true);assert.equal(f.calls.release,0);

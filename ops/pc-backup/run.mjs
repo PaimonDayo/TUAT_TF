@@ -33,7 +33,7 @@ export async function startBackupSupervisor({configFile,config:providedConfig,en
   const privateStatusPath=resolve(config.stateDirectory,STATUS_FILE),
     statusPath=resolve(config.applicationStatusDirectory??config.stateDirectory,STATUS_FILE),owner=lock(config.stateDirectory,identity);
   const adapters=providedAdapters??createAdapters(config,env),controller=new AbortController();
-  let stopped=false,clock=started,backupBusy=null,probeBusy=null,lastAttempt=null,fatal=false,timer,stopPromise,fatalNotified=false;
+  let stopped=false,clock=started,clockHeld=false,backupBusy=null,probeBusy=null,lastAttempt=null,fatal=false,timer,stopPromise,fatalNotified=false;
   const status={version:STATUS_VERSION,...identity,heartbeat:{checkedAt:identity.startedAt,healthy:true,maintenance:false},
     target:{...config.target,checkedAt:identity.startedAt,healthy:false},backup:null};
   const scope={
@@ -62,12 +62,25 @@ export async function startBackupSupervisor({configFile,config:providedConfig,en
     fatal=true;status.heartbeat.healthy=false;controller.abort();
     if(!fatalNotified) {fatalNotified=true;try {Promise.resolve(onFatal({reason})).catch(()=>failed('fatal-owner-callback-failed'));} catch {failed('fatal-owner-callback-failed');}}
   };
-  const instant=()=>{const value=now();if(!Number.isFinite(value)||value<clock) {notifyFatal('clock-unverified');throw Error('Lifecycle clock moved backwards');}clock=value;return new Date(value).toISOString();};
-  const publish=()=>{try {
+  const sampleClock=()=>{
+    const value=now();
+    if(!Number.isFinite(value)||(!config.localSnapshotReceiptFile&&value<clock)) {notifyFatal('clock-unverified');throw Error('Lifecycle clock moved backwards');}
+    const backwards=value<clock;
+    // A receipt observer can retain reads while UTC catches its high-water mark.
+    // Never move that mark backwards or attest a healthy heartbeat during the hold.
+    if(backwards)clockHeld=true;else clock=value;
+    return {value,backwards};
+  };
+  const instant=()=>{const {value,backwards}=sampleClock();if(backwards){publish();throw Error('Lifecycle clock is held');}return new Date(value).toISOString();};
+  const publish=({recoverClockAfterProbe=false}={})=>{try {
     if(config.localSnapshotReceiptFile) {
+      const {value,backwards}=sampleClock();
       let snapshot;
       try {snapshot=readSnapshot(config.localSnapshotReceiptFile);}catch{}
-      if(localSnapshotReady({backup:{localSnapshot:snapshot}},expected,config.localImageRoot,now())) {
+      const snapshotReady=localSnapshotReady({backup:{localSnapshot:snapshot}},expected,config.localImageRoot,value);
+      if(clockHeld&&recoverClockAfterProbe&&!backwards&&!stopped&&!fatal&&status.target.healthy&&snapshotReady)clockHeld=false;
+      if(clockHeld){status.heartbeat={...status.heartbeat,checkedAt:new Date(value).toISOString(),healthy:false};status.target.healthy=false;}
+      if(snapshotReady&&!clockHeld) {
         status.backup={generation,verifiedAt:snapshot.offsiteVerifiedAt,key:snapshot.archiveKey,sha256:snapshot.archiveSha256,bytes:snapshot.archiveBytes,
           databaseSystemIdentifier:config.target.databaseSystemIdentifier,localSnapshot:snapshot};
       } else status.backup=null;
@@ -86,10 +99,10 @@ export async function startBackupSupervisor({configFile,config:providedConfig,en
         for(const key of backupTargetFields(config)) if(target?.[key]!==config.target[key]) throw Error('Probe target mismatch');
         status.target={...config.target,checkedAt:instant(),healthy:true};
         status.heartbeat={checkedAt:instant(),healthy:!fatal,maintenance:false};
-        publish();return true;
+        publish({recoverClockAfterProbe:true});return !clockHeld;
       } catch {
         status.target.healthy=false;status.heartbeat.healthy=false;
-        if(!stopped) {try {status.heartbeat.checkedAt=instant();publish();} catch {fatal=true;}}
+        if(!stopped) {try {status.heartbeat.checkedAt=instant();publish();} catch {if(!clockHeld)fatal=true;}}
         failed('target-or-ownership-unverified');return false;
       }
     }).finally(()=>{probeBusy=null;});
@@ -168,8 +181,8 @@ export async function startBackupSupervisor({configFile,config:providedConfig,en
           bytes:pair.bytes.length,recoveryBytes:pair.recoveryBytes.length,databaseSystemIdentifier:config.target.databaseSystemIdentifier};
         fatal=false;status.heartbeat={checkedAt:instant(),healthy:true,maintenance:false};publish();failed('pair-verified');
       } catch {
-        if(!['upload','capacity'].includes(stage)) {fatal=true;status.heartbeat.healthy=false;}
-        if(!stopped) {try {status.heartbeat.checkedAt=instant();publish();} catch {fatal=true;}}
+        if(!['upload','capacity'].includes(stage)&&!clockHeld) {fatal=true;status.heartbeat.healthy=false;}
+        if(!stopped) {try {status.heartbeat.checkedAt=instant();publish();} catch {if(!clockHeld)fatal=true;}}
         failed(stage==='upload'?'pair-upload-unverified':'pair-not-verified');
       }
     }).finally(()=>{backupBusy=null;});
@@ -181,7 +194,7 @@ export async function startBackupSupervisor({configFile,config:providedConfig,en
       assertActive();
       if(!await probeTarget()) return;
       if(lastAttempt===null||now()-lastAttempt>=BACKUP_INTERVAL_MS) void backup();
-    } catch {fatal=true;status.heartbeat.healthy=false;try {publish();} catch {/* Stale status expires; never refresh an uncertain owner. */}failed('lifecycle-unverified');}
+    } catch {if(!clockHeld)fatal=true;status.heartbeat.healthy=false;try {publish();} catch {/* Stale status expires; never refresh an uncertain owner. */}failed('lifecycle-unverified');}
   };
   try {publish();timer=setTimer(()=>{void tick();},HEARTBEAT_INTERVAL_MS);void backup();}
   catch(error) {controller.abort();adapters.close?.();owner.release();throw error;}
