@@ -32,6 +32,19 @@ async function endpoint(env) {
 }
 export function createRelay(fetchUpstream = fetch) { return {
   async fetch(request, env) {
+    // Retirement is an explicit Worker environment setting. A master/app
+    // deployment alone does not enable it; never advertise cloud replay here.
+    if (env.PC_BACKEND_RETIRED === 'true') {
+      const headers = new Headers({ 'cache-control': 'private, no-store', 'content-type': 'application/json; charset=utf-8',
+        'retry-after': '60', 'vary': 'Origin', 'x-content-type-options': 'nosniff' });
+      const origin = request.headers.get('origin');
+      if (env.APP_ORIGIN && origin === env.APP_ORIGIN) {
+        headers.set('access-control-allow-origin', origin);
+        headers.set('access-control-expose-headers', 'retry-after');
+      }
+      return new Response(JSON.stringify({ error: 'アプリのURLが変わりました。新しいURLを開いてください。',
+        url: 'https://tuat-pc-app.track-app.workers.dev' }), { status: 503, headers });
+    }
     if (new URL(request.url).pathname === '/jobs-health') return jobsHealth(request, env);
     const headers = new Headers({ 'cache-control': 'private, no-store', 'vary': 'Origin', 'x-content-type-options': 'nosniff' });
     const reply = (status, error) => {

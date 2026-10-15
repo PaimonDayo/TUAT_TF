@@ -1,0 +1,556 @@
+# PCへの認証・画像集約の切替前準備（2026-10-12）
+
+## 開始
+
+所有者指示: 「画像も認証もPCに集約する方向で進めて。バックアップはPC外に残して、本番切替の前まで準備して」。前のクラウドAuth/R2画像維持は最終固定条件から外す。Surfaceの停止指示は継続し、このWindows PCの独立候補と合成環境で進める。本番切替、実データ移行、本番migration、公開設定変更、旧サービス停止、pushは行わない。
+
+目的は、同じPCでアプリ・通常DB・認証・画像・定期処理を扱い、PC外には暗号化バックアップを保持すること。Googleログイン/Drive/Pushは必要な外部連携として残る。最新origin/masterは8949a6a、直前候補は1bfa442。rootの既存未コミット/未追跡、旧候補/独立配置、WSL本番DB/依存/Jobs journalを保全する。
+
+受入条件は、同一の検証済み本人ID・権限を保持し、ログイン/更新/取消→本人データCRUD→画像保存/参照/削除をPC内の認証/REST/非公開ファイルで通すこと。認証の一時失敗でcookieを消さず、結果不明の保存/外部送信を再送しない。クラウド認証やR2画像へ自動fallbackしない。DB/Auth/画像/保留履歴と別保管の復旧鍵・設定を復元できること、PC外保存はローカル復元だけで受入済みとしないこと。
+
+既存のfeat/local-minimal-20261010（937c375）にはローカル画像・Auth/RESTのloopbackルーティング・画像付き暗号復元がある。必要な実装だけを再利用し、古いUI/業務変更やクラウドAuth維持の前提を無条件に取り込まない。専用account/最終ACL・固定公開入口/Google callback・実端末/再起動・実別媒体復旧は実構成の切替前条件として残す。取得失敗・未確認を成功や0件へ読み替えない。
+
+## 今回の到達点
+
+ローカル候補は `feat/pc-local-auth-images-20261012`、最終commitは `896fa2142b7c6ba7fb587326c50370c096a3b65f`。実装本体はe2df2f7、最後にLinux npmの正常なnested `.bin`リンクを、そのnested installation内に限定して許可する配置検査を追加した。外部参照・別installationへのリンク・依存の変更は引き続き拒否する。終了時の最新origin/masterは8949a6aで開始時と一致。rootの既存変更を戻さず、master統合・push・本番切替は行っていない。
+
+- Auth/RESTはPC内のGoTrue/PostgRESTへ同一originから送る。クラウドAuth・画像R2の設定が混ざる構成は拒否し、ローカルissuer用の別cookieと検証済み本人IDを用いる。一時429/通信失敗で有効なcookieを消さず、クラウドへfallbackしない。Googleの既存/初回/拒否ユーザーと取消の実試験は残る。private GoTrue templateは準備中のsignup/Googleを無効にし、許可済みの新規Googleユーザーを受け入れる際には既存allowlist hookとsignup有効化の両方が必要と明記した。
+- 画像はrelease/public外の非公開ファイル。完全なbytesを原子的に公開し、既存ファイルを上書きせず、links/容量/署名期限を検査する。既存のavatar署名7日・private cache最大6日を維持。root消失など取得失敗は503とし、実ファイル欠落の404と区別する。offline importerは既定dryRunでpaths/hashes/参照を保持し、元データを削除しない。
+- ローカルPushは明示opt-in、service_roleのみのclaim/complete、本人端末のテスト、結果不明/古いclaimの再送拒否を追加。新時刻の2件の冪等migrationは既定無効で本番未適用。既存のshared-PC Jobs/journalへ接続する構成とし、実VAPID/購読/端末通知は未確認。
+- DB/Auth/画像/Jobsをまとめた暗号化snapshotと、backup専用のR2資格情報での明示転送を準備。転送は既定dryRun、immutable PUT、全ciphertext readback、結果不明intent保持、bucket全体の容量検査、durable receiptを使用する。source UUID/起動generation/DB system identifier/image root/独立復旧鍵を照合し、旧DB-only証拠では新構成の書込みを許可しない。旧本番のbackup namespace・運用を保持する。
+
+## 確認した証拠と範囲
+
+Windows・Linuxで全Vitest **162ファイル/1,518テスト**が成功。Node24.19.0/直接依存37件のcheck:environment、tsc、対象eslint、diff checkも成功。運用試験は129件中128成功/1件platform skip、Python snapshotは31成功、Linuxのimport/codec/offsiteは14成功。配置修正はLinux19成功/2件platform skip、Windows20成功/1件platform skipで確認した。
+
+実GoTrue/PostgREST＋新規専用DBの暗号化復元証拠はgeneration `32fdc07b275a42ccbce791e286460670`（`ops/pc-host/backup-review/.private/<generation>/result.json`）。208件のcandidate migration、100テーブル/195合成行、UUID、8区分の実効権限・schema・function・trigger等が復元後に一致。本人read/edit、他人拒否、refresh、無効署名拒否、Push opt-in/本人端末/claim一回/backup read-onlyを確認し、受入操作をrollbackして同一性を再確認した。資源はこの試験の正確なlabel/IDだけをcleanupし、外部provider/R2呼出し・公開portsは0。件数は実運用・実端末の証明ではない。
+
+途中の失敗証拠は保存した。旧検証の不十分なcleanupは別の終了追記で正確な資源の不存在を確認済み。今回の途中失敗は、NULL既定ACLと同じ明示ACLの差、追加Push fixtureの必須created_byと管理JWT文脈を特定して修正し、最終証拠を新generationで作った。実効ACLをacldefaultで正規化し、DBの権限自体は広げていない。
+
+Linux候補はWSLの独立一時領域 `/tmp/tuat-pc-local-e2df2f7-20261012` に配置。専用Linux Node/lockfileから依存を構築し、releaseId=`pc-local-linux-20261012-r2`、build hash=`948577975aa5f97fa1fa8b9a0f64f09b04d63ba33161d23ac05de0e41412eeae`でbuild成功。configは無効のまま。built Next＋loopback gatewayを一時起動し、version/commit/releaseId、ログイン画面、JS asset、非公開Auth管理API/未署名画像の拒否、実2×2 WebPのGET/HEAD/最大6日private cache、実行後receipt一致を確認し、所有するNextだけを正常終了した。実Google/実ユーザー・実画像・PC外復旧・OS起動の試験ではない。Linux用ソース/依存/build/Node/合成証拠を保護された `.contingency/pc-local-auth-images-tests-20261012/linux-artifact-private` へ退避し、実env/秘密/画像は含めない。
+
+## 出発前の認証操作
+
+Linux退避archiveは288,120,669 bytes、SHA256=`90da4654b291c048508cdc87e28315a57e355cb52b20d0e76a12ce882bf47cf6`。対象はLinux release/Node/合成receiptだけで、private envや実画像を除外する。この合成buildをそのまま本番へ起動せず、実配置・env・秘密・originの受入後に新しい固定build/receiptを作る。
+
+所有者がCloudflare・Google Cloudへログイン。Google CloudのTUAT TFプロジェクト表示を確認し、既存private OAuthファイルのID/secret設定の存在も確認した。秘密は表示・Git保存していない。GoogleのOAuth一覧は読み込みエラーがあり、設定確認成功や0件とは扱わない。
+
+保存済みクラウド設定のservice keyはAuth admin APIの1件readとidentity詳細readが成功。個人データは表示・保存せず、更新・ユーザーexport/importはしていない。現在の本番issuerとの照合・完全なAuth snapshotの受入にはしていない。Supabase資格情報の再入力を先に求める必要はなかった。
+
+既存Wrangler OAuthでWorkersは確認できたが、VPC一覧は認証エラーになったため、所有者が既存4scope＋connectivity:adminだけの再認可を明示承認。ご本人のAuthorize後、scope/refresh tokenの保存とVPC一覧取得exit0を確認した。Tunnel/VPC/Worker作成、公開設定変更、課金変更はしていない。認可後の案内ページは別originとしてbrowser auto-reviewに拒否されたが、CLIの成功証拠で目的を満たし、案内ページを迂回して開かなかった。
+
+Windowsの専用TUAT_PC_App作成とProgram Files/ProgramDataの保護配置は、具体的な変更への承認不足としてauto-reviewが実行前に拒否した。所有者はメリットの説明を求め、作成への明示承認はしていない。将来Linuxノートと揃えるためLinux側の構成を先行し、Windows account/ACL/サービス/タスクは未変更。Linuxの最終実行主体・配置はまだ実運用へ適用していない。
+
+## 切替前に残る条件
+
+本番切替前準備全体を完了とは報告しない。現行アプリ/Cloud Auth/R2/DB/Jobs/backupは維持する。
+
+1. 実際の正本Auth/Google identities、PCデータ、画像、VAPID/購読、保留履歴をprivate snapshotとdryRunで照合し、新規の隔離DBへの移行を受け入れる。既存のcloud user mirrorだけを完全なAuth正本と扱わない。
+2. named Tunnel/VPC/固定worker originの具体的な接続設定、Google callback/Drive設定を整え、独立したorigin/session/DBで実Google・主要な通常操作・画像・権限・端末PWA/Pushを一連で確認する。
+3. snapshot producerの実source/writer/schema inventoryを満たす。現行vendor DBのcron/Vault/net等は保守的producerでは拒否されるため、cloneでのcurationか捕捉/復旧範囲の拡張が必要。検証を通すために本番schema・Jobsを停止/削除しない。captureとoffsiteの定期接続、容量・保持期間・削除方針も実値で受け入れる。
+4. 実PC外ciphertextの完全readbackと、そのコピーからDB/Auth/画像/journalを復元する。復号鍵・Auth/画像署名・VAPID/運用private設定は別のPC外保管を確認する。今回のmock R2/local restoreで物理的な別媒体復旧を受入済みにしない。
+5. Linuxで最終配置・最小権限・起動/再起動・旧origin/旧tab・rollbackを確認し、唯一のwriter/Jobsを確定する。条件達成まで旧backend/backupを退役させず、Surfaceは停止したままにする。
+
+## 継続: 実source照合と最小DB clone
+
+前turnはコード・Linux build/HTTP・認可状態を進めたためprogress。goal継続指示に従い再開。実タスクTUAT PC Backend Temporary/JobsはRunningでD:\TUAT_TFを参照し、fresh heartbeat/backupあり。Ubuntuの本番DBはcompose project=tuat-contingency/service=db、既知の/opt配置を照合してread-onlyで確認。DB system identifierは7686488340612984867、profiles/Auth各74、Auth identities74、public tables61。cronは実際には無く、14の非system schemaにVault/net等がある。Vault秘密は2、net queue0/履歴4、foreign/materialized table0。schemaを拒否している問題はcron必須という推測ではなく、このvendor schema範囲として再現・特定した。本番metadata読み取りだけで、停止や更新は0。
+
+クラウド全74のgetUser詳細とPCを照合し、全本人IDが一致、duplicate email/検証済みMFA/anonymousは0。Cloud identityはGoogle74＋email6、PCはGoogle71＋email3。PCでprovider identity9欠落/6相違。移行元にPC shadow Authだけを使わないことを実証した。Admin APIはpassword hash等を提供しないため、完全なAuth SQL snapshot用のSupabase DB接続情報かbackupを追加確認中。private入力先 `.contingency/pc-auth-source-private-20261012/cloud-db.json` は本人＋SYSTEMの保護ACLで作成、password空、実secret表示0。個別ID/email/identityの値は表示・退避せず、summaryだけ保存した。
+
+実PC catalog上のcore table/functionからpg_net/Vault extensionへの直接依存は0。PL/pgSQL本文の実行依存まで0と断定せず、別の完全復元済み合成targetだけを整理するprototypeを追加した。source/rollbackを保ち、整理前後の全core行/UUID/8区分の権限・定義が一致することを確認。旧cloud Pushを無効にし、整理後も実GoTrue/PostgRESTでログイン・refresh・本人更新・他人拒否・無効署名拒否が成功。実Python producerがquiet/schemaを受け入れ、100tables/10security componentsをfingerprintした。最初のschema証拠7a0bab6723f744cdb42ffb6f1059c323、整理後native証拠7549f5effb494f47ad6938f7c6bf1506はともにsuccess/cleanup=true。旧失敗/証拠は保持した。
+
+このprototypeは合成clone専用で、実PC/Auth/画像の移行や本番cleanupを実施済みとは扱わない。実source/writer inventory・captureからarchiveの完全復元・PC外copy/鍵の独立保管・定期接続/保持方針の確認は残る。現在のLinux build退避は896fa21までのもので、追加prototypeのcommit/build受入は別に記録する。
+
+最終prototype証拠112220a49bfc4a3a8a1ff24ac04cb4bcはsuccess/cleanup=true。cron無しの2回目整理でも全core行/権限・定義が不変、最小化後のnative Auth/RESTとproducer schema検査成功、元source不変、旧cloud Push無効を確認。driverの運用unitは9成功、diff check成功。これは最終配置や実producer全周期の証明ではなく、backup不整合を避ける隔離コピーの方法を具体化した到達点。
+
+## 継続: 本番反映までの依頼
+
+2026-10-12、所有者の「本番反映までできるか」を本番切替まで進める依頼として受け取った。これ以降は受入条件を満たした構成の公開・移行を作業範囲に含む。上の未承認という記述は当時の範囲であり、この追加指示が優先する。Surface停止、既存変更保全、具体的なVercel設定変更の承認条件は維持する。切替前のsnapshot/dryRun、実認証・主要操作、PC外復旧、単一writer/Jobsの条件を未確認のまま切り替えない。
+
+候補は1fa04e2までcleanでcommit済み。本番Authの完全保全に必要なprivate DB入力はpassword未入力。チャットに秘密を貼らず、保護済みローカルファイルか完全Authバックアップで受け取るよう確認した。依存しない画像・バックアップ・入口の準備を並行して進める。
+
+実画像のread-only照合はgeneration 8ac8e97a-ca87-499a-bcd3-78ff18ecc3bb。R2画像68件/13,138,457 bytes、DBのR2参照63件、欠落0、外部avatar2件、未参照tweet画像5件。bucket全体は400件/663,459,504 bytes。取得前後の参照とimage ETag/sizeが不変、GET IfMatchと全bytes SHA256をprivate manifestへ記録した。自治体とGoogle配信の外部avatar2件は既存参照先だけを読み、非公開WebPへ変換。計70画像/13,207,301 bytes/参照65件がLinuxの独立領域へのdryRun・import・hash/mode検査・同一snapshot再実行（copied=0）を通過。avatar書換えはprivate計画のみで未適用、未参照5件は削除しなかった。捕捉中の本番freezeをしておらず、DB/Jobsと同一時点の切替snapshotとしては受け入れない。
+
+Cloudflare VPC一覧は正しく0件を確認。既存workers.devサブドメインから固定origin候補を https://tuat-pc-app.track-app.workers.dev と決定。dashboardの固定Tunnel「tuat-pc-app」作成フォームまで準備したが、永続的な資格情報作成はブラウザ安全ルールの実行時確認が必要なため回答待ち。作成・connector起動・VPC設定・Worker公開は0。これは本番反映への包括的な依頼が無効という意味ではなく、具体的なcredential作成時に限る確認である。
+
+既存R2の暗号化DB/recovery組は全量readback・hash・GCM復号・対応関係検証が成功した。しかし実データのcold restoreではpublic関数の依存するpc_ops schemaがarchiveに無く失敗した（証拠a9c12a4473b354d04496c1161a639a7b、cleanup=true）。目的はこの欠落を解消し、UUID/認証/権限/既存の復旧設定を保全して復元すること。候補のlegacy backup filterにpc_ops/extensionsを追加し、正確な本番container ID/system identifierを照合したread-only captureで新しい5schema snapshotを作成した。現行の定期ownerコードは未変更であり、修正済み運用反映とは報告しない。
+
+修正後の実PC copyの証拠ecd1ae621b88f4cdd1c8a9eac16529a9はsuccess/cleanup=true。103tables/51,171rows、profiles/Auth users各74、PC Auth identities74、UUIDとpassword bytes、5区分のcore権限・policy・constraint・function・trigger、Vault復旧値2件が再dump/別DB復元後に一致。公式PGの新規専用container内でtemplate0 DBを作り、標準extensionだけを初期化、network=none/public ports=0、dump/Vault plaintextは専用RAM・読取専用mountに置いて終了時に除去した。画像やJobsとの協調snapshot、クラウドAuth正本80identity、cluster全roles、別PC/実Googleの証明ではない。
+
+途中のWindows/WSL stdin EOF/EPIPE、tmpfsへのDocker cp、vendor初期functionの重複、初期background接続、extension-owned schema初期化の失敗はprivate証拠に残した。各専用containerはlabel/immutable ID/正確な名前・mountを照合してcleanup=true、本番停止・DB更新は0。最終検証はLinux内で、秘密を引数にせず公式file入力から復元した。legacy backup unit3件とdiff checkは成功。
+
+修正後のsource e98cfcc2-b4c1-4f6b-b093-471859f132b3のencrypted DB/recovery計4,229,026 bytesを、既存非公開R2の別namespaceへ追加保存した。全bucket容量を再確認し、durable intent、IfNoneMatch、retryなしのPUT、HEAD＋全ciphertext GET/hashを確認。旧namespace/backup/pointer/課金設定は変更0。これは既存legacy backup資格情報を使った追加copyで、独立した新backup owner、PC外の復号鍵保管、combined DB/Auth/画像/journal backupの定期受入を満たしたとはしない。
+
+終了時もSupabase DB passwordは未入力。Tunnel作成確認とPC外の秘密/鍵の保管先は回答待ち。本番切替、master統合、pushは未実施。独立DB/originでの完全Auth移行、Google/主要操作、PC外copyからの全体復旧、単一writer/Jobs、起動と旧originの拒否・rollbackを満たしてから切り替える。
+
+バックアップ修正と受入記録を897e831へcommit後、origin/masterが292b3ca（大会参加者・独立出場の更新）に進んだことを確認。旧候補はcodex/pc-pre-rebase-20261012に保全し、未pushの13commitを最新masterへ載せ直した。src/types/database.tsの3衝突は大会table/RPCと画像・Sheets再送防止の独立追加をすべて保持して解消。新候補HEAD=f37632dd2707e5117df578ea4901ca9266105779、clean、最新masterを含む。Node24.19.0/直接依存37件、tsc、対象eslint、全Vitest166files/1,548testsが成功。旧208migrationの合成証拠や896fa21のLinux buildを、この載せ直し後のschema/実行成果物の証拠へ読み替えない。公開直前に最新candidateでDB受入と固定buildを更新する。
+
+現行backendはheartbeat=2026-10-12T05:53:06.329Z、healthy=true、maintenance=false、backup=05:47:49.425Zを確認。root全体diff checkで別文書docs/PLAIN-REACTIONS-2026-10-01.mdの既存EOF空行を検出したが、担当外を変更せず、候補の担当差分checkは成功した。現行のWindows account/タスク/サービス/DB/公開入口は変更せず、コードの通常定期backup ownerへの適用はまだ行っていない。
+
+## 継続: 完全Authの取得・固定Tunnel・復旧鍵の別保管準備
+
+所有者が「DBパスワード→わからない、2→作成していい、3→スマホ」と回答。DBパスワードは変更せず、ログイン済みのSupabase SQL Editorからread-onlyの認証exportを取得した。27のAuth実テーブルと構造catalogの28packet、CSV 4,721,030 bytes。Downloads上のファイルを本人＋SYSTEM限定ACLへ保護してprivate保存先へ移し、元Downloads plaintextの不存在を確認。全packetのbyte数/hash、XML/JSON、全列、行数・本人/identity関係を検証。generation=117ddc4d-d887-45c9-b724-7e3a7d9b9389、capture=2026-10-12T11:31:06.84143Z、27tables/11,791rows、74users/80identities、元のpassword hash保有6人を完全保持。秘密・実データはツール出力やGitへ出していない。Cloud DB passwordの再設定は不要だった。
+
+実PCのread-only比較では本人74のID一致、PC identities74とprovider identity9欠落、cloud hash6/PC hash3、hash相違9を確認。provider IDの相違は今回の直接SQL比較では0（前の相違6はidentity詳細の比較）。PGは双方17.6。Cloud Auth migration82件/最終20260831180000、PC77件/最終20260625000000。index/viewの列を含む初回の64列差は実テーブル不足と混同せず、実テーブルに絞ると4新規表とone_time_tokens.expires_at等、31列が不足。既存PC shadowだけを正本にしない。
+
+所有者の具体的な作成承認後、Cloudflare named Tunnel tuat-pc-app（d3ab0680-c461-4546-b9fe-a10d917f59c6）を作成。承認済みconnectivity:adminでVPC HTTP service tuat-pc-app（01a12fd7-b1a2-7c91-93fc-cfab216aa6aa）を作成・再取得し、127.0.0.1:18201、同じTunnel ID、HTTPのみを確認。候補のignored wrangler.local.jsonへ固定origin https://tuat-pc-app.track-app.workers.dev と単一PC_APP bindingを入れ、check-config成功。Worker公開・connector起動・アプリ切替は未実施。
+
+Tunnel tokenをブラウザclipboardから暗号化してツール出力経由で渡す案は、暗号化後でも資格情報由来データが実行ログへ出るためauto-reviewに実行前拒否された。迂回せず、保護済みcloudflared-token.txtへ本人が直接貼り付ける方法へ変更し、操作方法を案内。まだ空のためconnector受入は未完了。Windows専用account/サービス/タスクの変更はしていない。
+
+同じcloud Auth世代に対応する公式GoTrue2.197.0を検証専用に取得し、digest=sha256:1736a63078f5922b198c4cbe50f80ab9a2d3b54fe8b7b6cfb2e9dc5dbbc12c6bで固定。実PC5schema snapshotの新規RAM内隔離コピーでnative migrationと完全Auth移行を試した初回はauth.factor_type所有権不足（42501）で失敗し、generation2a193ff2b5f60ccd6608d842388a4124/cleanup=true。本番には変更0。Cloud SQL EditorでAuth enum9件のowner=supabase_auth_adminを確認し、次の隔離コピーだけを同じ所有者へ正規化した。
+
+修正後の実Auth移行・再dump・別DB復元はgeneration=e360e9f41cc59bbe90c17b178f982d8c、success/cleanup=true。27Auth tablesの全行hashが取得元と一致し、74users/80identities/password hash6件を保持。PCの既存データ・core権限を変更せず、再復元で107tables/44,546rowsと5区分securityが一致、Vault2件も保持。network=none/public ports=0。Google/実端末/最新live状態/DB・画像・Jobsの協調snapshotの証明ではない。初回failureを上書きせず、prototypeだけの受入結果を本番適用と扱わない。
+
+所有者が復旧鍵の保管先をiPhoneの「パスワード」と指定。新しい独立鍵で完全Auth CSV、旧backup key、アプリ/Google OAuth等4ファイルを暗号化した復旧packageを作成し、ローカル復号を検証（fce422f1-caff-40b1-b839-f0a849e2f57d、6,301,722 bytes）。R2への初回実行は具体的payloadの承認不足としてauto-reviewが実行前に拒否した。内容・保存先・新しい鍵を送らないことを具体的に説明し、所有者が「この暗号化パッケージをR2へ保存してよい」と明示承認してから実行。既存非公開R2の独立prefixへimmutable PUT、全bucket容量検査、HEAD/full GET/cipher hash/GCM復号/完全Authと4設定のpayload検証が成功（2026-10-12T13:47:17.013Z）。旧backup/pointer/課金/既存データは変更0。これは協調した最終cutover snapshotではなく、既存backup資格情報での追加保全copyである。
+
+新しい復号鍵はR2/packageへ含めず、保護済みrecovery-key-for-iphone.txtだけを本人へ案内。所有者はファイルの開き方を求めたため、Win+Rから正確なpathを開く手順を案内した。iPhoneでの保存・再表示・全文一致は未確認で、custodyConfirmed=falseを維持する。鍵やtokenの値はチャットへ求めない。直近の現行backendはheartbeat=2026-10-12T13:30:36.940Z、healthy=true、maintenance=false、backup=13:27:59.866Z。Surface停止を維持し、本番切替・master統合・pushは未実施。
+
+続けて実Authコピーを非公開GoTrue2.197.0から全74user分読み、80provider identity関係と本人IDを確認。最初のnative読取試験2a7a8b38f1ab130d27136a91f4020913は不正署名の拒否を401に固定したassertで失敗し、cleanup=true。401/403の認証拒否を正しく扱う検証へ修正し、新generation6b61bf067ced3f16fce63ab4180b34a9で成功/cleanup=true。実際の不正署名拒否は403、全user/identity関係一致、native読取前後の全行/5securityの不変、別DBへのcold roundtrip一致も確認。107tables/44,546rows、Vault2保持、外部provider0/公開ports0。password/Googleでの実ログイン、refresh、実ユーザーの通常操作、Cloudflareの実公開経路はこのread-onlyの受入に含めない。
+
+所有者がPC操作可能と回答したため、鍵ファイルとcloudflared-token.txtをWin+Rで開く手順をそれぞれ案内。Tunnelはコピーしたinstall commandの貼り付け・保存だけを依頼し、Windowsサービスインストールコマンドの実行は依頼していない。iPhone鍵保管とtoken保存の完了はまだ申告されていない。
+
+候補の合成受入もGoTrue2.197.0へ更新。origin/masterは292b3caのままを再取得し、candidateは同masterを含むことを確認。新証拠6a6ed76a1f374039b8f1a05b240148e2はsuccess=true/cleanup=true/commandOutcomeUnknown=false、最新209migration、112tables/200合成rows、native login/refresh/本人read/edit/他人拒否/不正署名拒否、8区分metadata一致、最小化後の同じ操作、producer schema、backup read-only/Push/Sheets未知結果の再送拒否が成功。旧evidenceは不変。Linux CLIへ未対応flagを渡した試みとLinux専用でないdriverの試みは起動条件で止まり、資源作成0。提供済みrunReview APIをWindows Nodeから呼んだ正式driverは成功し、呼出しwrapperの古いstatus判定だけで終了コード1になった。正式result.jsonのsuccess/cleanupを別に確認し、wrapperをsuccess判定へ修正。これをDB試験の失敗や再実行の理由にしなかった。
+
+check:environment（Node24.19/直接依存37）、tsc、対象eslint、Node運用unit9件、diff checkが成功。全Vitest初回はsandbox一時cacheのrename EPERMで全suiteが開始前に止まったため、同じ候補・同じテストを通常権限で再実行し166files/1,548tests成功。buildはまだ公開直前ではないため実施せず、旧Linux buildを新candidateの成果物へ読み替えない。GoTrue pinと説明の2ファイルのみを候補へローカルcommitし、push/master統合/本番反映はしていない。
+
+所有者の「鍵fileをtoken fileへ入れるのか」という確認には、鍵fileの64文字はiPhoneへ、token fileにはCloudflareが表示するコマンドを貼ると区別して案内。pathや復号鍵をtoken fileへ書くよう依頼していない。公開経路・実Google/主要操作・最終協調snapshot/鍵custody・単一writer/Jobs・起動/旧origin/rollbackの受入を継続条件として保持する。
+
+終了時の候補HEAD=dac85277f93419ae112fe777588cd8f678a96f75、clean。所有者がCloudflareの場所を求めたため、作成wizardを保全したまま、既知のTunnel一覧を別tabで画面に開き、既存tuat-pc-app→overviewをread-onlyで選択。Inactive/replica0、接続コマンドのCopyボタンを確認し、直接の設定画面URLとコピー位置を案内。新しいTunnel/route/credentialの作成やRotate tokenはしていない。tokenの値は表示せず、コピー内容のチャット貼付も求めていない。
+
+## 継続: 鍵保管確認・固定入口の実通信受入（2026-10-13）
+
+所有者の「やったよ」後、保護済みtoken fileを秘密非表示で検証。貼付コマンドは実行せず、account/Tunnelの一致を確認してtoken-only fileを用意した。既存cloudflared 2026.8.3をLinux numeric UID65532・capabilitiesなし・no-new-privileges・token-file入力で一時起動し、named TunnelのQUIC接続/readyを確認。Windows account/service/taskの変更は0、起動永続化と再起動試験は未完了。
+
+独立Worker tuat-pc-appを固定originへ公開し、単一PC_APP VPC bindingを確認。version=546ef9f8-101e-4d65-a5e8-e4f21972cb34。127.0.0.1:18201には実データへアクセスしない所有する合成probeだけを配置した。旧Vercel/通常DB/Auth/画像/他Workersを変更せず、これは実アプリ本番切替ではない。
+
+初回Python標準clientのGETはCloudflare1010で拒否された。セキュリティ設定を緩和せず、明示的なTUAT-TF-Transport-Check/1.0 User-Agentによる別受入で成功。path/query/host/cookie/POST Origin/body/302/別々のSet-Cookie保持、欠落・外部Originのdispatch前拒否、中断書込みのdispatch1回と503を確認。public-vpc-transport-result-v2.jsonに保存。実Google/通常操作/RSC/実端末の証明へ読み替えない。
+
+所有者が「保存して全文の一致も確認した」と返信。private key-custodyにphoneSaved/phoneReopenedAndCompared=trueと本人申告の確認元を記録。実iPhoneでの復号試験まで成功したとは扱わない。新しい鍵はR2へ送っていない。
+
+継続時にprobeの正確なPID/command/UID/directory所有権を照合してclosed markerを設定し、固定公開経路が空bodyの503へ戻ることを確認。probeのportは予約保持、実アプリは未公開。所有者の「進めて」に従い最新masterを取得すると8566ce4へ進んでいたため、旧候補dac8527をcodex/pc-pre-rebase-20261013へ保全して載せ直しを開始。rootの既存変更は保持し、単一担当で準備を続ける。
+
+載せ直しは14commitとも衝突なく成功し、候補HEAD=2c88a85c922d53eb1214fd2bacedaf2d229642d8、latest master=8566ce4を含む。専用bundleから新しいLinux準備root /tmp/tuat-pc-candidate-20261013-2c88a85 へ配置。Node24.19.0の同じ検証済みbinary、候補専用node_modules/cache/homeを用意し、setpriv UID65532/capabilitiesなし/no-new-privilegesでnpm ciを実行。初回はuser/global configに同じ空fileを指定したnpmの二重読込エラーで導入前に終了。診断を保存し、別々の空configへ直して成功。既存本番node_modulesやWSLサービスを変更していない。
+
+同UIDのLinuxでcheck:environment/tsc/全Vitestが成功（167files/1,534tests）。新版の大会権限migrationを含む210migrationの正式DB/Auth/最小化/cold restore受入も11a3007c4cd74dbaa880eddac2a1184aでsuccess/cleanup=true/commandOutcomeUnknown=false。これらは合成データの一連の受入で、Google/実ユーザーの操作には未確認が残る。
+
+取得済み実画像70objects/13,207,301bytesを新候補の専用images rootへ配置。全source byte/hashを照合し、UID65532で既存importerのdryRun後にapply、所有権とprivate modeを保持。DB referencesは未更新、最終freezeされたsnapshotではない。旧R2/画像源を削除していない。
+
+ログイン済みGoogle Consoleで既存「陸上部アプリ」clientと3つのredirect URIを確認。新固定入口の /api/pc-supabase/auth/v1/callback を4番目へ未保存で入力し、private確認画像を保存。認証の送信先追加はブラウザ操作の安全規則のaction-time confirmation対象のため、具体的URLの追加/保存を所有者へ確認中。既存URI・client secret・scopeは変更0、保存クリックは未実施。回答待ちでもPC側の準備を継続する。
+
+実アプリ候補DBの次工程用に、既存の検証driverへ「復元検証を終えたroundtrip bytesを独立鍵で暗号化して保持する」工程だけを追加したprivate派生driverを用意。source e98cfcc2と完全cloud Auth世代117ddc4dからgeneration7889417c20feb338ea06db4192ab350eを作成し成功/cleanup=true。全74本人/80identity/元password hash6、27Auth全表、既存PCデータ/core権限、107tables/44,546rowsの別DB復元一致を確認し、candidate.database.dump.enc=4,001,692bytes/candidate.recovery.json.enc=841bytesをprivate保存。新しい独立鍵で保存後のfull readback/復号/hash対応を確認。R2へ未転送、runtime設定や画像との協調snapshotではなく、最新live正本でもないためbackup admission=falseを維持する。専用RAM DB/Auth容器はすべて回収し、本番変更0。候補のlistener起動/Google実ログイン/主要操作/最終backup/本番切替/master統合/pushは未実施。Google callback追加の具体的確認は継続して回答待ち。
+
+所有者は確認欄で一度「保存は保留する」と返信した後、最新メッセージで「保存していい」と明示承認。これを優先し、clientと既存3URI/追加1URIを画面で再確認して保存を1回実行した。Googleは「保存できませんでした／操作に失敗しました」（追跡番号c7918087895587885）を返したため、成功として記録しない。エラーダイアログを閉じて再読込しても保存確定の証拠は得られず、既知client URLの別tabはErrorページ、認証情報一覧の正規経路でもAPIキー/OAuth client/service accountすべて読込失敗。これを0件や削除と扱わない。同じ保存を盲目的に再送せず、元の入力案を保持し、private screenshotに読込エラーを保存。許可不足やauto-review拒否ではなくGoogle ConsoleのUI上の保存・読込エラーが今回の障害。通常ブラウザでの保存確認を所有者へ案内する。既存secretの変更/無効化、scope変更、本番切替は0。
+
+所有者が「できたと思うよ」と返信した後、同じ既存clientの画面で「OAuth クライアントを保存しました」の成功通知を確認し、private screenshot google-callback-saved-20261013.jpgへ保存。変更案が既存3URI保持＋新PC callback1件であることは保存直前に照合済み。保存エラー段階と分け、Google設定の保存は確認できたと報告する。新PC Auth/アプリの実ログインはこの通知だけで成立せず、引き続き未検証。秘密の変更や本番切替は行っていない。
+
+## 継続: 実候補DBの保持とLinux起動経路の確認
+
+前のgoal turnはGoogle保存成功通知という受入証拠が進んだprogress。本継続では最新候補2c88a85のclean状態と配置コードを確認し、暗号化候補artifact7889417cから、別の専用Docker volume・厳密なowner/generation/immutable ID照合・network none/public port0の保持DBを新規作成した。生成前のCRLF照合とSQL文字列構文の2不備は構文検査段階で修正し、この失敗時には資源を作成していない。
+
+新generation5b458553f8b26cdc9d6fd345340e4e2bはcandidateDbPrepared=true。新DB名tuat_pc_candidate、107tables/44,546rows、74Auth users/80identities、27Auth全表のcanonical hashが完全取得元と一致。別volumeの保持DBとして稼働、公開listener0/network noneを実inspectで確認。機密SQL/dumpを置いたRAM import mount内のファイルは成功後に除去し、空mount directoryだけを保持した。正確な容器/volume/system IDと意図・段階をprivate receiptへ保存。失敗時には本番を変更せず所有資源を照合して復旧する設計で、未知結果を同じ作成の再送へ変換しない。このDBは準備用のcapture時点コピーであり、最新本番正本や最終移行済みDBではない。
+
+Linuxで実hostを起動する前提として、現在のpc-backup supervisor/adaptersはwsl.exeのhash/WSL dispatchとpostgres DB名・compose labelsを固定していることをコードから確認。Linux native producerの存在だけでは、Linux hostがbackup supervisorを起動できる証明にならない。保持した独立DBとLinux runtimeに合う実行/資格情報/保存保護の経路を整える必要がある。これを迂回するために架空backup成功を作らず、アプリを保護なしで公開しない。実Google/通常操作/最終combined backup/専用配置/起動・復旧・本番切替は継続中。現行DB/Auth/Jobs/公開入口とrootの既存変更は保持した。
+
+継続時にcandidateがclean/2c88a85、origin/master=8566ce4のままであることを再取得して確認。前turnは独立DBの保持というprogress。Linuxのbackup adapterへexecutionMode=linuxを追加し、WSL設定との混在を拒否、絶対Docker binary/hashと明示Unix socketだけへdispatchするようにした。native targetは正確なcontainer ID/image/mount/DB名/system IDに加えtuat.owner/generationを検査してscopeへ含める。既存Windows/Compose経路は保持し、未知コマンド結果は両経路で再dispatchを拒否する。dumpは欠落のあったpc_ops/extensionsを含む5schemaへ修正。この変更はcandidateだけで、現行legacy ownerへ適用していない。
+
+native adapterの実read-only probeを保持候補DBへ実行し、container/volume/system IDを照合して成功。prototype probeのconfigにある未使用のexample instance IDはbackup admissionに使わず、次のnative captureでは新しい実source用UUIDを発行してdisabled planへ保存した。候補107tableをnative経路でdumpし、TOCが全107tableを含むことを確認、新独立鍵でAES-GCM暗号化して保存後のfull readback/decrypt一致を確認した。native-candidate.dump.enc=4,001,640bytes。plaintext RAM一時fileは除去。R2未送信、画像/Jobs/configとのcombined snapshotではないためbackup admission=falseのまま。実Googleやアプリ起動の受入へ読み替えない。
+
+native modeの安全境界（WSL混在/不正DB名/所有label不足/改変binary/未知コマンドの再実行拒否）を受入テストへ追加。check:environment/tsc/対象eslint/diff checkが成功、backup Node全105tests、全Vitest167files/1,534testsが成功。native対応のコード・テスト・説明5filesを1459148898b67b1d5825eaf5d6f1f1870dc05c4bへローカルcommit、candidate clean。master統合/push/build/公開はまだ行っていない。Linuxへ配置済みの2c88a85は、この新commitの実行成果物として扱わず、次工程で更新する。専用backup credential・combined snapshot/復元・host/app/connectorの秘密隔離と実Auth/通常操作・Jobs・起動/切替の受入を継続する。
+
+## 継続: 候補の実Auth/RESTをloopback起動
+
+前goal turnはLinux native adapterと実captureのprogress。本継続で候補1459148のclean状態、保持DBのexact ID/system ID/volumeを再確認。認証・REST用のprivate driverを作り、起動前のport確認で18001/18002を別のPython検証プロセスが保持していることを検出した。最初のdriverは資源作成・秘密生成・DB停止の前に終了。既存listenerを止めず、候補だけの18301/18302へ変更し、同じ前提を再確認して進めた。
+
+保持DBのimmutable ID・所有label・専用volume・自動restartなしを確認した上で、この候補容器だけを停止。同じvolume/system IDで別名の新候補DBを起動し、専用bridgeへ所属、18301/18302だけを127.0.0.1へbindした。DBの5432や管理画面はhostへ公開しない。旧候補は停止状態で保持し、現行supabase-db/Windows backend/Jobsは変更0。
+
+新しいAuth/REST専用password・JWT・画像署名・Server Action鍵を保護済み /opt/tuat-pc-candidate-20261013-5b458553 配下へ準備。既存Google client/secretは正確な承認済みclientへ照合し、新origin/callbackを設定したがGoogle/new signupはまだdisabled。公式GoTrue2.197.0とPostgREST14.12をpinned digest、read-only rootfs/capabilitiesなし/no-new-privilegesで起動。numeric UIDはAuth65529/REST65528と分け、Windows/Linux accountを作成していない。サービスは専用DBのnetwork namespace内に限定し、host入口はloopbackだけ。
+
+health成功、native Authで74usersの本人ID集合が完全取得元と一致、native RESTで74profilesを読み取れた。追加検証で不正署名はAuth403/REST401と拒否し、native backup adapterの新target ID/mount/system ID一致も確認。backup planはdisabled、supervisor未起動。正確な新容器・network・Auth/REST IDsと旧候補rollback IDをcandidate-runtime-current.private.jsonへ記録し、古いnetwork-none容器のreceiptを新状態へ読み替えない。
+
+新runtime設定一式とDB passwordsを独立iPhone保管鍵でruntime-recovery.encへ暗号化し、保存後のreadback/decrypt一致を確認。新しいruntime鍵はまだPC外へ未保存で、完全backup admissionを満たしていない。公開Workerは合成probeを閉じた503状態のまま、アプリ/実Google/通常操作/画像rendering/Pushは未確認。次工程ではapp・connector・backupの別actorによる秘密隔離、Linux起動と最新release配置、combined snapshot/復旧・Jobs/実端末・最終切替の受入を進める。
+
+## 継続: 実アプリのLinux buildと秘密領域の隔離
+
+前turnは専用Auth/RESTの実起動というprogress。候補1459148のclean状態から、管理主体とアプリのUIDを分けるためbuild/Nextの起動にpinned setprivを組み込んだ。App UID/GID65530、補助privileged group/capability除去/no-new-privilegesを実Linux子で確認し、IPCの停止も成功。最初のprivate検証スクリプトの改行文字列は構文不備で子が開始前に終了したため診断を保存し、String.fromCharCodeへ直して成功。検証の構文失敗を製品の権限分離成功に読み替えていない。
+
+専用 /opt/tuat-pc-app-candidate-20261013 にroot所有Node24.19.0、別UIDの依存/home/cacheと実画像70件を用意した。最初の固定b9b1c41 buildは専用UIDにpasswd home情報がなく、子envにもHOMEが渡らないためuv_os_homedir ENOENTでコンパイル前に失敗。actor所有700のapplicationHomeを固定してbuild/Nextへ渡し、root homeを引き継がないよう修正した。
+
+同時に実access可否検証で、UID65530だけではWindows側 .env.local/backend config/Tunnel token-only fileを読めることを確認（値は一切読まず、3件のaccess可否のみ）。この状態を秘密隔離済みと扱わず、root管理のprivate mount namespaceで/mntと存在する旧backend directoryを子だけから隠してからsetprivへ落とす実装を追加。unshare/mount/setprivとroot-owned private sandbox scriptをhash固定、actor-owned home/script改変を拒否する。実Linuxで3つの既存秘密markerが隠れ、UID65530/capability0/noNewPrivs1/IPC保持/owned child停止が成功し、親のWindows mountと秘密markerの存在も保持された。既存本番mount・account・taskには変更0。
+
+最終的なhost修正6filesを同じ未公開local commitへまとめ、HEAD=96fab3dd99664beaebe9e12d262475e0204647c3。Node host testsは24pass/Windows側の内部npm link項目1skip、tsc/対象eslint/diff check、全Vitest167files/1,534tests成功。skip項目のLinux依存link/実行manifestは実Linuxbuildの正式receiptで別途照合している。b9の失敗した配置は専用依存を保持して96fab3dへ更新し、namespace隔離＋専用home＋UID65530 compilerで実build成功。releaseId=pc-local-96fab3d、prepared receiptは同SHA/環境/Node/依存/public/.nextへ束縛。production buildや公開完了とは扱わず、disabled=true（config.enabled=false）、applicationStarted=false、本番変更0。旧artifactを新SHAへ読み替えず、build-result-v2.jsonに保存した。
+
+次工程はreleaseのimmutable配置と保護された状態の実アプリ起動、backup statusの別actor読取り経路、必要な移行・画像参照/既存Google設定の保全、combined snapshot/PC外復元、実Google/主要操作/PWA/Push/Jobsと最終切替。Worker公開経路の実アプリ接続はまだ行わず、Google providerもdisabledを維持。master統合/push/本番反映は未実施。
+
+## 継続: 実アプリ起動・Googleログインと閲覧保護の修正
+
+受入条件は、独立候補の固定buildが専用UIDで稼働し、実Googleログイン後も本人IDとDB権限を保ち、バックアップ未確定時には閲覧を残して更新を拒否すること。失敗した起動・build・公開試験の証拠は保全し、本番サービスを停止しない。候補の変更は本番への変更と扱わない。
+
+実画像70件のhash確認後、候補profilesの外部avatar参照2件だけをPC内の対応pathへ正規化。全74profiles snapshot、変更対象plan、transaction dryRun/ROLLBACK、変更後全IDと他fieldの一致を確認し、旧本番DBと画像sourceは不変。
+
+96fab3dの実Next起動でversion/login200とバックアップ未確定PATCH503・profiles hash不変を確認。しかしprivate起動補助が存在しないlock.assertOwnedを20秒後に呼び、親と所有子が終了した。製品runnerの不具合とは扱わず、補助を修正。両PID不存在を確認し、古いlock/記録を消さず新stateへprepared receiptを保持して再起動。ブラウザlocalhostのログイン画面表示も確認。
+
+候補アプリを公開入口へ接続する操作は、部内情報の経路公開についてauto-reviewが拒否。その後、所有者が具体的検証URLへの接続を明示承認。所有するclosed probeのPID/command/UIDを照合してだけ停止し、private namespace/UID65530の専用gatewayを起動。全modifying requestsを入口で拒否し、HTTPSのログイン画面を確認。既存Vercel本番は維持。
+
+候補Authだけで保存確認済みGoogle callbackを有効化し、署名鍵/DB password/本人IDを保持、旧候補Authを停止状態でrollback保持。signup disabledとGoogle client/redirectを実settings/authorizeで照合。新設定は独立iPhone鍵で暗号化しreadback/decrypt確認、まだ新設定のPC外保存は未完。実大学Googleアカウント選択後/homeへ戻れたが、digest3676132606の大会情報取得エラーを再現。get_competition_meet/get_competition_meet_backendは実候補に存在するSTABLE純読取り関数であり、SQLの本人/承認判定と権限を確認。バックアップ保護の純読取りregistryに2関数が欠けていたため追加し、通常更新・余分/不正引数の拒否を維持する受入テストを追加。tsc/対象eslint/check:environment/diff check、全Vitest167files/1,535tests成功。最初のsandbox VitestはTemp rename EPERMでtest開始前に失敗し、許可された再実行で全体確認した。修正版の実build/ブラウザ/home再確認は次工程。master統合/push/本番切替は未実施。
+
+## 継続: 実Googleの本人保持・候補DB受入・画像表示・backup actor分離
+
+大会の純読取り修正をe6e26d932d07c0ca95d88413a0c0cd8f68ac27c6へlocal commit。候補の親/子PIDと開始時刻・UID・親子関係を照合してだけ正常停止し、新stateへ同SHAのnamespace隔離buildを準備、immutable配置で再起動。最初の再配置guardは/proc/stat全体を比較してCPU時間の変化まで誤検出したため、開始時刻field22に限定して修正。このguard失敗時に資源変更は行っていない。既存本番は維持。
+
+ブラウザで大学Googleアカウントの/home復帰、ホーム・マイページ・予定の表示を確認。native Auth管理readで元の本人UUIDと全74Auth IDs・80identity・74profilesが一致し、本人last_sign_inが取得元より新しいことを確認。real-google-owner-login-proof.jsonへ同releaseの実ログイン証拠を保存。画像はまだ全fallbackだったため、短命member診断（email claimも含める）で権限RPCはtrue、画像ファイル読取り可能、avatar retirement RPCがPGRST202となることを確認。これは実ログイン証拠の代用ではなく切り分けだけ。
+
+候補DBのhistory/schemaの有無を確認し、6既存migration（画像退役・Sheets送信attempt・Google作成attempt・backup拒否・local Push・OB運営権限）をplan/SHA固定。107対象表の全行count/hash、native5schema暗号化dumpと独立鍵でのreadback/decryptを先行。全SQLを同transactionでdryRun/ROLLBACKして107表の一致を確認した後、1回だけ候補へ適用。適用後も既存107表の全行/ID一致。local Push policyはfalseのまま、OB operator guardとavatar read functionを確認。元本番DBには未適用。ブラウザ再読込で表示中69画像がPCのAPIから正常loadし、予定画面もエラーなく表示。画像URL署名・秘密・個人内容は報告へ転記していない。
+
+承認済み検証入口のprivate補助gatewayを、業務更新503・token refresh/logoutだけ許可・外部OriginのAuth POST403へ更新。所有gateway PID/starttime/UID/argvを照合して正常交換し、通常更新を開放しない。独立snapshot/backup admissionはfalseで維持。
+
+backup publisherのroot private state/credentialの700/600を保ち、root-owned別reader directory（750/group専用actor）へ既知health metadataだけをatomic640で出す実装を追加。writer directory・symlink/所有者違い・秘密/不明field・サイズ超過を拒否し、publish失敗はhostへfatal通知して停止。実Linux UID65530でmetadata read成功、file/directory write不可、private state/credential read不可、writable reader directory拒否を確認した。合成fixtureのhealthはfalse/backup nullであり、本番backup approvalを作っていない。またnative候補DB名をhostが固定してchildへ渡すよう修正し、固定postgresだけに依存した判定を解除、異なるDB名は依然拒否する。既存Windows経路のdefault postgresは保持。
+
+Node backup tests108pass、変更後のtarget/owner/status65pass、host tests77pass/1Windows npm link skip、tsc/対象eslint/diff check、全Vitest167files/1,536tests成功。最初のhost広域testはsandboxのlocalhost EACCES/Temp Git EPERM等で失敗し、許可された合成fixture再実行で通過した。サービス障害と扱わず、本番依存やWindowsアカウントを変更していない。
+
+外部設定は既存Vercel projectからreadonlyで保護fileへ取得したが、Google Driveのsensitive値は[SENSITIVE]として返るため、秘密を復旧できたとは扱わない。既存local-app.envの専用Google暗号化鍵でcandidateの既存Drive connection1件をPC内だけでauthenticated decrypt確認、ciphertextは不変。既存backend/push.envの秘密楕円鍵から導いた公開鍵が現行Vercel公開鍵と一致し、元Push鍵を保全できた。新鍵生成/購読変更/通知/Sheets/DB更新0。
+
+本人の既存Google refresh tokenを同じGoogle公式OAuth窓口へ送ってclientを検証する操作はauto-reviewに拒否され、具体的承認を所有者へ提示して回答待ち。拒否された送信は実行せず、代替として上記PC内のみの鍵確認とprivate保全を完了。Google Drive callback追加・外部refresh・実端末Push・combined snapshot/PC外readback/cold restore・Jobs一元化・再起動/別network・最終fresh capture/切替は未完。稼働中の候補releaseはe6e26d9、今回のbackup actor分離修正は次の固定buildへの準備であり、現行候補へ反映済みとはしない。master統合/push/本番切替は0。
+
+## 継続: Linux専用起動・暗号化候補領域・定期処理の引継ぎ（2026-10-13）
+
+検証URLへの具体的接続承認を継続。既存公開候補のApp/gateway PID・開始時刻・UID65530を照合し、local App/gateway/HTTPS入口の /api/version が同じe6e26d9で200、業務PATCHが503を確認。新しい起動・backup source修正をこの稼働releaseへ適用済みとは扱わない。Node24 check:environment、tsc、全Vitest167files/1536tests成功。production master8566ce4はfetch後も候補の基準と同じで、master統合/push/切替0。
+
+既存TUAT PC Jobsをreadonlyで特定した。Taskはrainb/S4U/Highest/Running、root task.ps1から現backend/pc-jobs-production.json、sync-obの固定release/env、backend/pc-jobs-stateを使用。sandbox照会失敗を不存在扱いせず、許可済readonly再照会で確認。最新3結果はsuccess、running/uncertainは0だが停止・drain証拠とはしない。過去failed4/回復履歴4を残し、旧Task有効のまま候補の定期dispatchを開始しない。具体的env値/journal行は出力していない。
+
+Jobsもhost/backupと同じnative DB名へbindし、backup CLIはnative時だけ明示的private Unix socketを許可、ambient context/DOCKER_HOSTへfallbackしない。metadata readerは全root-owned ancestorについて専用primary gid/otherのPOSIX traversalを検証。fresh実Linux fixtureでUID/GID65530の5階層traverse/read可・write不可・rootprivate read不可、root0700/同gid701のpublisher拒否を確認。health=false/backup=nullなのでbackup admissionではない。Windows事前attempt記録のEPERM後にdriverが継続した点も、実WSL実行1回/再送0と分けてprivate記録した。
+
+Ubuntu公式cryptsetup-bin2.7.0/libcryptsetup12更新を導入、restartは行わず。新規32GiB sparse file /var/lib/tuat-local-data-20261013.luks だけをwx・inode/owner/size/loop backing確認後にLUKS2/ext4へ初期化し、mapper tuat-local-dataから /var/lib/tuat-local へ実mount。旧ディスク/volume/DBをformatしていない。新しい32byte解除鍵はWindows CurrentUser DPAPI blobと独立iPhone鍵の暗号化copyへ保存。保存済みblobのUnprotect、独立copy復号、encrypted mount内root600 keyとの一致、実LUKS headerのtest-passphrase成功を確認した。mapperのclose/reopen・coldboot証明ではない。mount rw/nosuid/nodev、各ディレクトリのowner/mode・key fsyncも実読戻しで確認。ciphertext保存Windows側はowner+SYSTEMだけの有効ACLを継承している。
+
+専用tuat-local-containerd/docker units・/etc/tuat-local configを準備して起動。unitはstaticでboot enable無し、container/apps/Jobsの起動0、私用データcopy0。Docker公式multiple-daemon設定に沿いbridge none/iptables等の管理off、socket/root/state/namespacesを独立させた。containerd2.3.5のv4でprivate grpc/ttrpcを両方明示、CRI/NRI/optを無効化し、source imports=[]。config dumpのdefault imports表示と、公式LoadConfigが実際に個別fileのImportsだけresolveすることを区別した。actual DockerRootDirとcontainerd PIDの開いたmetadata DBがLUKS device内であることを確認。既存default Docker/containerdのPID/開始時刻/rootは前後一致し、既存本番の設定/停止/再起動は行っていない。全データ内容の同一性をこのdaemon証拠で代替しない。
+
+Docker29の現sourceはcontainerd overlayfsで、classic overlay2とはAPI image.Idの意味が異なるため、空のprivate engineだけを同じcontainerd image storeへ調整。defaultとprivate containerdは不変。公式Postgres17.6.1.136/GoTrue2.197.0/PostgREST14.12を既存cacheから404104192byte exportし、encrypted private engineへload。各roleの実image.Idと独立RepoDigestを両方照合、3件とも保持。manifest pinから別のOCI config IDを導出したとは扱わない。Docker起動後のdata-rootはdaemonによりroot:root0710となるため、app65530（補助group無し）がtraverseできない実境界として扱い、mode700を指定しただけで維持済みと報告しない。
+
+固定Node /opt/node-v24.19.0-linux-x64/bin/node を新規root-owned immutable pathへ配置。既存検証Node24.19.0と同SHAのreadback/versionを確認し、既存App/Jobsの使用pathは変えていない。Linux lifetime launcherはapp/jobs別root private stateの実FLOCKをexec継承し、stale recoveryにはfd/inode/同PIDのkernel FLOCKと正しいserviceを確認。旧env markerだけはLinuxで無効、Windows既存経路は保全。realLinux fixture9件とWindows対象38件・ESLint成功。既存journal/unknown/failed/historyを変更せず、候補Jobs有効化0。
+
+前記external-keys-preserved.envは現物の4物理行と全キーの一致を確認し、改行不備という引継ぎ仮説を棄却（修正不要）。original VAPID/Drive token暗号化鍵を保全、provider refresh/活性化/通知/Sheets変更0。既存Google refreshの公式endpoint送信は引き続き具体的承認待ち。既存disk swap4GiBとboot解除は未検証でstorage admission=false、最新候補DB・画像・設定・Jobsのcombined snapshot/offsite readback/cold restoreも未完。実PC profileのコード検証を進めているが、service準備や合成testだけで本番切替条件を満たしたとはしない。
+
+仕上げの限定reviewで、PC actual-container gateのtmpfs/extra mount拒否不足、同cluster内backup DB名とapp DB名の非結合を確認。現在実候補の誤設定を観測した報告とは分け、PCprofileのみ修正と拒否テストを追加中。Surface既定Auth2.196 pinもprofile-specificへ戻し、PC2.197 pinを維持。PC専用HBAはroot:1010640/親0750のreadonlybindとsource同SHA、loopback SCRAM/local socket trustを固定。静的HBAを実LUKS領域へ新規配置しUID65530の読取拒否を確認。DB起動・実SCRAM通信はまだ未検証。
+
+data0の実Docker actor fixtureで、専用daemonのUMask0077がpublic imageのvirtual rootを700へ作り、非root65529のexecがpermission deniedになることを再現した。docker runはcreate後start失敗でIDを出したため、自動再送せずintentの名前/label・実immutable ID・停止状態を照合してmetadataを読み、所有fixtureだけを削除。専用2unitのUMaskだけ0022へ変更し、private data/keysの権限を保ちながら公開image snapshot virtual rootを755へ補正。enclosingcontainerd rootは700。専用daemonのみ交換、default daemon PID/開始時刻は不変。fresh v2で65529/read-only/capsなし/no-new-privileges/network-noneのsleep起動成功、HostConfig.Tmpfs exact options・Mounts=[]という実API表現を確認し、所有fixtureを終了・削除。実DB/Auth/app受入とは扱わない。
+
+追加後のNode関連235件は234pass/1Windows内部npm symlink skip、全Vitest167files/1536tests、対象ESLint/diff check成功。Python PC profileの最終DB名/tmpfs結合は現在仕上げ中。ここまでで本番切替・old Jobs停止・Vercel変更・provider refresh/通知/Sheets書込は0。
+
+最終sourceでPC限定tmpfs・全mount検査、backup DB名のruntime/producer両結合を実装。root再実行のFakeCommands runtime18/periodic5/backup35、合計58件はすべて成功。別のvalid DB名はSQL・dump・stage書込み前に拒否。Surface旧Auth2.196とPC2.197を明示profileで分離。新しいGoogle Drive検証の具体的承認質問も再提示、未回答のまま送信は行っていない。
+
+sourceを0e394c2d21c604da1a89d020108abedb168bd0feへlocal commit（担当25files、Co-Authored-By Codex）。初回git addはsandboxの.git index.lock書込拒否、許可済local stagingで成功。秘密/private証拠/既存root作業変更は含めない。candidate worktree clean。稼働公開Appはe6e26d9のまま、最終にPID/starttime/UIDとlocal/public version200・業務PATCH503を再確認。今後の受入は新固定release配置、swap/起動・解除経路、実nativeDBrestore/roles/SCRAM、完全DB/画像/設定/Jobs snapshotとPC外readback/cold restore、host generation/receipt結合、旧Jobs停止後のsingle dispatch、通常書込・実端末/PWA/Push/Google Drive。master統合/push/本番切替は未実施、goal継続。
+
+## 継続: 最新masterの再統合・暗号化DBの実接続準備（2026-10-13）
+
+前段の「fetch後も基準と同じ」という記録を訂正する。次の照合でorigin/masterは3ae1f5c（merge-base8566ce4）へ進んでおり、2件の大会修正が候補に未収録だった。clean候補の旧HEADをcodex退避branchへ保持し、19commitを最新origin/masterへ載せ直した。新HEAD9a5a0ca3020e5843c93556ae28e81b9095174e30、競合0、range-diffの差分はすべて同一、worktree clean。root既存作業・稼働Appには変更0、master統合/pushなし。既報のtmpfs/全mount拒否とbackup DB名結合の2P2は担当外read-only reviewでもclose確認済み。
+
+WSLの実読取りでmemory total約15.6GiB/available約12.4GiB、/dev/sdcのdisk swap4GiB/used0を確認。個人DB/Authの新暗号領域へのcopyは保留し、現在swap停止と次回用.wslconfig swap=0の具体的承認を所有者へ提示した。WSL/本番serviceの再起動は計画しない。Google refresh tokenの公式endpoint送信も既存の具体的承認待ちのまま、再送0。
+
+新private daemonと空LUKS PGDATAだけを使うinitdb・root-owned HBA・実loopback SCRAMのfoundation helperをprivateに準備。入力は公開synthetic credentialのみ、source個人データ/外部provider呼出し0、networknone/ports0/memory-swap=memory。限定事前reviewでcreate結果不明時のcleanup成功誤記を発見し、dispatch前のattempt登録・exact名前/世代/immutable ID/config確認・削除後absence・未確認holdへ修正した。initdbを無条件再送する設計にしない。
+
+修正helperを新empty PGDATAで1回実行。UID100:101/read-only root/capsなし、root HBA5rules/error0、実loopback TCP SCRAMの正password成功・誤password拒否・password無し拒否を確認。公開synthetic roleは削除、所有2containerのimmutable IDを照合して停止/削除しabsence確認。初期化済み空DB/HBAは暗号mount内へ保持、個人行copy0、privateエンジンのcontainers0、default daemon不変。known success proofと別に事前reviewの残failure-path（create unknownかつ名前未出現をcleanup成功にしない、nativeTmpfs Mountsの共有path拒否）もhelperへ追加修正し、成功を再作成するためのinitdb再送はしていない。
+
+載せ直し後tsc成功。全Vitest初回はsandbox Temp renameのEPERMでtest開始0、通常許可環境で再実行し168files/1547tests成功。14:13JSTのactual候補probeではlocalApp/gateway/HTTPSがe6e26d9で一致200、業務PATCH503、所有PID/birth/UID65530を確認。9a5a0caの新コードを稼働公開済みとは扱わない。
+
+新candidate領域だけのclose/reopenを準備し、helperへ120秒monotonic全体budget・各command残budget timeout・全変更dispatch前のfsync済phase intent・結果不明holdを追加。初回実行は変更前preflight/operation0でsource byte照合に失敗し、mapper/service変更0。原因はWindows rebase checkoutのCRLFで、4実設定は固定commit9a5a0caのraw Linux blobと完全一致だった。旧証拠を残して別intentのv2を実行し、LUKSの実unmount/mapper close→DPAPIからstdinの鍵でopen/remount、初期化空PGDATA/HBA全byte/mode/owner一致、3imagecache pin保持、private2daemons復旧、default本番daemonのPID/birth不変を確認。OS/WSL再起動・boot enable・部員データcopyは0、storage admissionに必要なswapとboot経路・最新source完全復元は引き続き未確認。
+
+既存未参照5画像をrootsealed backup configのexact path/bytes/SHA baselineとして保全し、未知の未保存uploadを許可しない変更を担当3filesへ準備。rootの初回Linux39合成testでは、2つの新archiveテストがfixtureのperiodic-disabled gateへ先に到達したためエラーとなり、修正担当へfixture修正を戻した。既存容量gateや実source条件を緩めない。
+
+combined snapshotのhost接続について限定source調査。既存offsite入口のR2 immutable PUT/HEAD/fullGETとNode snapshot shapeは再利用できる。一方、実PCのtuat.local.source/role/config-sha256と旧Node native labelsの違い、PC socket/port/roleの固定、capture時刻と稼働host generationの前後binding、sealed oneshotからoffsiteへの接続は残る。実PCprofileだけのNode target修正を並行準備し、既存artifactに新generationを書き足すようなadmissionは行わない。
+
+39testのfixture容量前提を整えた後、nested image restoreの本体不備を再現した。mkdir(parents=True,mode700)はintermediate directoryを755で作るため、実image_inventoryのprivate境界に適合しない。各parentを一段ずつ700で作成・既存owner/symlink/mode違いは修復せず拒否するよう本体を修正。fixtureのchmodで隠さず、全階層700と不正既存directoryの拒否/外部marker不変を同じfullarchive試験で確認。最新backup39/runtime18/periodic5、計62合成test成功。既存70画像/5未参照の実baseline配置やactualcombinedarchiveは未実施、削除0。Windows対象設定へはまだ書かず、[wsl2]swap=0のdraftだけをprivateに準備。Microsoft公式wsl-configのglobal/次回WSL起動設定との性質も確認し、承認なしのswap停止・再起動はしない。
+
+Node backupの明示pc-private profileを追加し、private Unix socket、DB本体・画像root、実source/role/config-sha256 labelsとID/image/SYSid/DB名を固定。fake旧labelsとの併存を拒否し、supervisorとadapterのtarget fingerprintを統一。PCだけpostgres /tmp:18304へ固定、disabledのcommand dispatch0、combined snapshot以外のDB-only pipelineを使わない。既存Windows・native legacy経路を維持。profile sourceは実daemon/runtimeへ未配置。
+
+offsiteとNode/TSの取得時刻を結合。producer verifiedAtをcapturedAtとして保持し、capture/restore/offsiteは同じ起動後・順序通り・未来なし・35分以内を必須化。PC offsiteはrootprivate hostConfig/runtime-status/Nodebackup configのsource/SYSid/DB名/画像root/receipt/status path/release/全targetを照合してactive generationをderiveし、PUT前・全readback後・publish直前に再照合する。設定へ新generationを書き足して旧archiveをadmitしない。legacy DB-keyにlocalSnapshotを添えた場合もbadcaptureを拒否する。同一時刻は許可するが、古いcapture・世代交換は拒否してunknown intent/旧receiptを保持。既存standalone non-PC senderは維持。
+
+全担当freeze後、Rootの最終check:environment Node24.19.0/直接依存37、tsc、全Vitest168files/1548tests、関連Nodebackup+offsite135tests（skip0）、14files対象ESLint警告0、diff check成功。編集中の最初のbroader Node実行では旧positive2fixtureのcapturedAt不足で失敗し、fixture更新後の上記最終135testにて成功。合成Rootactor/read注入と実サービスの証明は分ける。新コード17filesだけを0b44dbd4b760f8364d1cca9a5be879105fc75c08へlocal commit、Co-Authored-By Codex、候補worktree clean。root既存作業/秘密/private proofはcommit無し。master統合/push/Production deploy0。
+
+終了時も承認済みreadonly公開候補はe6e26d9、業務PATCH503を維持。新private領域の実初期化/SCRAM/鍵によるclose-reopenは確認済みだが、swap承認、個人データ完全restore/curation、全DB/Auth/画像/設定/Jobsのfresh snapshotとPC外copyからの冷間復旧、runtime/controller sealとoffsiteの実配線、旧Jobs drain後の単一dispatch、startup/再起動/実端末・通常CRUD・Google Drive/Push、最終切替は未完了。Google公式endpointへの既存refresh送信は具体的承認不足としてauto-review拒否後の回答待ち、送信0。swap停止/Windows.wslconfig配置も回答待ち、変更0。goalは継続し、完了や本番反映を報告しない。
+
+## 継続: 切替へ必要な一周期の接続に限定（2026-10-13）
+
+前turnはprogress（実暗号FSのclose/reopen・合成restore拒否修正・17file commit）。現候補0b44dbd clean、fresh fetch master3aeも同じ基準を確認。swap/Google公式refreshの具体的承認は未回答で維持し、質問を繰り返して同意と見なさない。所有者から本番切替までの異常な長期化を指摘され、通常とは言いにくいこと、必要な確認に加え起動制御/検証部品を作り込みすぎ実移行を後回しにした問題を説明した。ここから周辺改善は増やさず、必要な latest data→完全restore/offsite→single Jobs→通常/実機操作→切替の一連に限定する。
+
+直近codeのcritical不足は、既存producer/冷間verifyとoffsite sender/Node readinessが別CLIのままで、定期ownerから一回の連続処理へ未接続の点。担当を既存periodic2files/runtime2files/Root backup.pyへ分離し、rootprivate Nodebackup/offsite configをexisting manifest/sealへ結ぶ最小接続だけを進める。新daemon、定期owner、再試行、frameworkは追加しない。captureのresume完了後だけnetworkを実行し、unknown intent/旧receipt/履歴を保持。実data/source/serviceは変更せず、実cloneはswap承認後の段階として保持する。
+
+Root producerにPC専用のfinish→transfer_offsite一回の呼出しを追加。ローカル検証/後片付け終了前に送信しない順序、Surface側の既存順序、Node receiptがcommit済みでACKだけ失われた場合のhold・rollback/再送なしを合成試験で確認。WSLのbackup.test.pyは41test成功。例外の汎用文言も「旧receipt保持」を断定せずpublication要確認へ変更。ここまで実サービス/DB/provider送信・本番切替は0。
+
+担当freeze後、runtime.offsiteConfigPathだけを追加し、既存host.backupConfigFileからNode configをderive、Node/offsite/同じR2 env/host/release manifestを既存rootprivate sealへ結合。DBの実container ID/config label・source/role/SYS/DB名/画像root/receipt pathsを照合する。PC periodicのlocal finishはlocal-verified/publishedFalse、durable offsite-started後に同じarchiveでsenderを一回だけ呼び、canonical Node receiptの厳密確認後に周期verifiedへ進む。dispatch前crashや結果不明は次の自動admissionをhold。Node atomic publication後のACK lossでは新receiptが既にcommit済みの場合があり、そのreceiptを自動復元/削除/再送しない。Surface既定経路は維持。限定read-only reviewでもmaterial blockerなし。
+
+最終Root検証はLinux -I -Bでruntime20/periodic9/backup41、計70test(skip0)、check:environment Node24.19/直接依存37、tsc、全Vitest168files/1548test、diff check成功。新daemonや別定期owner・再送frameworkを追加せず、担当7filesだけをafd41d3へlocal commit（Co-Authored-By Codex）。root既存作業/秘密/proofはcommitせず、master統合・push・deploy・本番切替0。実個人data clone・full offsite cold restore・Jobs drain/通常操作/実機受入は未完了。swapとGoogle公式refresh送信は具体的承認待ちのまま、質問の再送なし/操作0。本turnは限定コード接続を完了したprogressとして継続し、目標全体の完了は報告しない。
+
+## 継続: 現在の復旧鍵・コード保全と最新通常データ取得（2026-10-13）
+
+前turnはprogress（定期ownerからoffsiteへの限定接続・70Linux合成test・7file local commit）。本turnは周辺機能を増やさず、実データ移行/PC外復旧へ必要な保全を進める。fresh fetch後もorigin/master3ae1f5c/候補afd41d3でancestor一致・clean。詳細規則の認証/PC/完了条件と本番運用を再確認。swap停止/次回Windows設定とGoogle公式refresh送信の具体的承認は未回答のまま、変更/送信0。
+
+15:06JSTのactualreadonly候補はapp/gateway/publicのe6e26d9一致200、PID/birth/UID一致、業務PATCH503。afd41d3を公開済みとはしない。保護済みWindows保存先ACLはSYSTEM/rainbのみで継承なし。現LUKS UUID/既存key SHAの一致を実読取りで確認し、候補afd41d3のGit archive約12.4MB、現在のWindows5設定/descriptor2/暗号鍵copyとstorage proof/候補Linux4設定/host/engine2設定/engine2unit、計19fileを既存iPhone masterで暗号化した約16.6MBの復旧package cb2f811c-dc7a-4dfd-81e1-f74f2f38a060をローカル作成。phone custody2flags・全file bytes/SHA・nested LUKSkey32bytes・元VAPID pair一致をRAM復号で確認。masterそのものはpackageへ含めず、個人DB行・新LUKS個人data copyなし。coordinatedCutoverSnapshot=false。
+
+新packageの既存privateR2追加保存を実行申請したが、auto-reviewが「約16.6MBの別payloadの候補設定/復旧情報/鍵関連データには具体的送信承認が必要、古い6.3MB承認を流用不可」としてCreateProcessを拒否。helperは起動せずPUT/新offsite intent0。回避/他経路送信はせず、内容・暗号化/復号鍵別保管・既存削除なしを提示するasync承認質問を一度だけ送った。packetを変更して古い承認へ合わせたり、送信済みと報告しない。
+
+現行本番PCのexact immutable container4a9ef7dc/imagef371/compose labels/SYS7686488340612984867を読取り再確認。プロフィール74/Auth shadow74/identity shadow74、public69tableで、shadowAuthを完全cloudAuthと扱わない。GetScheduledTaskInfoのsandbox CIM取得は拒否されたが、通常許可環境のread-onlyでTUAT PC JobsのLastTaskResult267009を確認、停止/再起動0。最新5schema(public/auth/storage/pc_ops/extensions)のread-only snapshot eb6ae831-5a56-4efa-b04d-f762d9b1483fを取得し、database/recovery pairを暗号化・全RAM readback確認（DBcipher4,292,929bytes）。新LUKSへdata restoreはしていない。
+
+旧候補のprivate保存fingerprintと現行coreをrepeatable-read/read-onlyで比較。80tables/33510rows、missingSourceTable0、19tablesが更新されていた（コメント763→796、練習4576→4596、つぶやき389→397等）。Auth列は比較対象外と明示。この現在の通常データが次の移行元であり、旧候補をそのまま切り替えない。新空clusterへ必要なsource global roles16定義/password hashes/membership等もread-only pg_dumpallで暗号化保全（6,966bytes、authenticated readback）し、平文credential fileを残さない。これら別時刻のpreparation captureを一体の最終snapshot/完全restore済みとは呼ばない。
+
+本turnは実sourceの暗号化保全と差分発見、新復旧packageの実local準備というprogress。candidate codeはclean、public切替/master統合/push/DBwrite/Jobs変更/Google refresh/スワップ変更0。残る正本data→新encryptedruntimeへの完全restore、全Auth/画像/設定/Jobsのfresh coordinated copy→PC外readbackからのcold restore、単一Jobs引継ぎ、通常/実機操作・起動/回線/rollback確認、本番切替を維持。swap/Google送信と新R2packageの具体的承認が未回答であり、完了や本番反映は報告しない。
+
+## 継続: 最新Linux版の実build・隔離起動と承認待ち（2026-10-13）
+
+前turnはprogress（最新5schema/16globalrolesの暗号化保全・19coretable差分発見・19file復旧package準備）。未回答のOS変更/Google送信/R2別payload送信を実行しないまま、残る独立作業のLinux実releaseを準備する。既存Root checkoutの大量変更は保全し、clean候補afd41d3だけからGit bundleを作成。最初のRoot全status/compile-name検索は出力が過大だったため以後はowned worktree/直接helper filenameへ限定。秘密を報告・公開Gitへ追加しない。
+
+actual encrypted mount UUID4df11dbe/mapperとrw,nosuid,nodev、空き約28GBを照合。/var/lib/tuat-local/releases/afd41d3のfresh directoryへbundleからLinux Git checkoutと既存候補のLinux node_modulesを別copyし、package-lock exact bytesとcheck:environment(Node24.19/37直接依存)一致を確認。元候補・D:\TUAT_TF\node_modulesを変更しない。既存host builderをUID65530/capsなし/mount sandbox、外側独立net namespaceで実行する。新private build configはdisabled、backup config未設置を明示するpreparationだけ。源画像/DB行はcopyせず、app envへ既存Push/Google復号keyを保全、新private image root/確定SHA/releaseIdを設定。将来source namespaceは実暗号FS UUID、expectedSYSは既存空foundationの実記録、DB名postgresで固定したが、実runtimeを配置済み/書込み可能とは呼ばない。
+
+初回buildはwebpack compile成功後、Git対象外next-env.d.tsの新規作成にEACCESで終了。WSL exec handle99810のexit1を確認し、private logからerrnoと新release内の対象pathだけを抽出。deps/source問題として作り直さず、旧builderPIDと同session/group全membersのabsence、Gitignore対象/生成file未存在、保存済み失敗原因を確認して、生成fileだけUID65530 writableへ新設。新state-next-env/独立intentで一度再buildし、handle78111 exit0/全owned group absenceを確認。Root sourceをactor writableにしない。全成果物をroot:65530・dirs750/files640(実行file750)へsealし、既存verifyPreparedのsource/runtime/deps/build/env hashes一致を確認した。default本番Docker/containerdのPID/start fieldsもbefore/after不変。
+
+15:44JSTにLinux build afd41d3/pc-local-afd41d3成功。15:49JSTには独立net namespaceの唯一lo interfaceだけをupし、新artifactからNextをUID65530/CapEff0/CapBnd0/NNP1で一時起動。実HTTPで/api/versionの同SHA/releaseId、/login200とGoogle文言、compiledJS200、匿名/home307を確認。実ユーザー認証・通常保存・外部Google/Push/Sheets通信なし。既存graceful IPCでowned child drain/absence確認、verifyPrepared再一致。private smoke-result.jsonを保持するが、本番通常操作/Google実loginの代用にはしない。
+
+既存runtime.release_inventoryを新artifact全体へ実適用。38,672files/28linksが同じencrypteddevice/root owner/非actor書換え・内側link・4GB上限/actor read条件を満たし、full installed-inventory.jsonをrootprivateへ保存した。pipeline配置・fullRuntimeConfigured・boot enable・個人data restoreは未完了。role/input/codeのpartial proofをsource data/Jobs/PC外完全復元の証明に流用しない。
+
+15:54JST終了確認: 既存app/gateway/publicはe6e26d9一致200、ownedPID/birth/UID一致、業務PATCH503。新Linux版を公開していない。/proc/swapsは/dev/sdc4GiB/used0で未変更、cb2f811c復旧packageのoffsite intent無し（送信申請自体がCreateProcessで拒否されたためPUT0）、Google refresh送信も未承認/0、owned branch clean afd41d3、master/push0。
+
+本turnは実Linux build/隔離startup/全artifact検証のprogress。blocked auditは、限定接続turn→最新source保全turn→本Linux準備turnの連続3turnで同じ「必要な所有者承認が未回答」を照合した。独立に進められたコード接続/保全/build/起動準備は完了し、次の個人data restoreにはswap承認、PC外鍵復旧には新R2payload承認、既存Drive接続の実検証にはGoogle公式token送信承認が必要。これらを回避する別送信・OS変更・条件を弱めたadmissionは行わない。残る完全restore/各サービスとsingle Jobs接続/通常・実機/boot・回線・rollback/本番切替を維持したまま、impasseのthresholdを満たしたためgoalをblockedへ更新する。新owner回答で再開し、完了とは報告しない。
+
+## 所有者の3点承認後の再開・実データ復元（2026-10-13）
+
+所有者がWSLの現スワップ停止/次回設定、Google公式token窓口への既存token送信、約16.6MBの復旧packageのR2保存と、必要確認後の本番切替までを明示承認。以前の同件の承認待ちは解消した。Windows .wslconfigを新設しswap=0を一致確認。/dev/sdcのswapoffを実施し/proc/swaps空、defaultおよびprivate Docker/containerdのPID/start不変。WSL/本番サービスを再起動していない。
+
+復旧package cb2f811cを既存非公開R2へimmutable保存、16,555,942bytesのHEAD/GET、SHA一致、全19fileの認証復号とLUKS鍵32bytesを検証した。iPhone保管済みmaster keyはR2へ送信していない。これは最終一体snapshotではない。
+
+Google公式 https://oauth2.googleapis.com/token に既存owner connectionを一度送信しinvalid_grantの確定応答。Auth用clientでの結果であり、Drive tokenの失効と断定しない。Drive専用TUAT Track Drive projectをUIで発見したがConsoleはproject-invalid。既存private envのDrive client ID/secretは全てSENSITIVEの伏字で利用不可。既存DriveクライアントJSONを保護済みローカル入力fileに保存する操作を所有者に依頼した。自動再送、接続tokenの書換え、Sheets書込、通知送信はない。
+
+新しい本番PC5schema snapshot source-25a64104と16global rolesをread-only取得・暗号化保全。クラウドAuthをrepeatable-read/read-only SQLで再取得（CSV downloadに予想外の長時間待ち）。27table/12,090rows、74users/80identities/6password hashes、全payload lengths/MD5/column coverageを検証し、新LUKS privateへ保持した。
+
+新private daemonの候補DBへ実復元。initdbのbootstrap postgresとsource supabase_adminの差を既知の失敗状態/空target確認後に解消。既存sourceと同じ管理者identityへrenameし、既存postgresは元の制限付きflagsを保持。Vault 0.3.1が独立のsupabase_vault preloadとvault.getkey_scriptを必要とすることを実source設定および公式資料で確認し、専用root:101/640鍵をencrypted deviceへ保存、readonly bindで公式scriptに渡す。旧DB/daemonを変更せず、候補の既知の失敗だけをreconcileし、未知結果を再送しない。全Auth27tableが完全一致、通常80tablesの行/ID不変、Vault2件の値一致を確認。
+
+最新R2画像69objects/13,205,801bytesをread-onlyで新encrypted privateへcopy。required64/missing0、参照と全objectのbefore/after一致。旧reviewとID/元URL/hashが一致する外部avatar2件を既存review bytesから追加し、最終71画像を65530:65530・dirs700/files600で配置・全hash再一致。既存未参照5件を明示baselineに保持。snapshot/dryRun後に候補6migrationsを適用し107既存tableの行/ID不変。avatar2件だけをraw private pathへ変換し、他profile fieldsと他tableの全行不変を確認。元R2画像・既存本番に変更なし。
+
+実独立cold restoreで113tables/71images/Vault2件を確認。初回は2event表のJSON hash順序がlocaleに依存する差を検出したため、fingerprintをCOLLATE C、PC初期化をC.UTF-8で固定して再検証。全行・security sections・画像bytes/path/mtime・Vault復号が一致、exact temporary verifierの撤去も確認。combined snapshot admission、offsite一体復元、Jobs引継ぎ、実機/本番切替の証明としては扱わない。
+
+新encrypted DBへ隔離localhost Auth/RESTを一時接続して74users/80identities/74profilesを全件照合。匿名member取得401、偽造Auth署名403/REST401。最初のhealth probeは匿名OpenAPIの拒否を失敗と扱ったため、既知失敗/owned runtime撤去後に認証付きprofile GETをhealthに使用し、匿名拒否は別に維持した。全一時runtime撤去確認、公開入口は変更なし。候補コードにはVault key seal/readonly bind、PC backupのsource admin、Vault key同梱/復号fingerprint、locale固定を反映。合成運用試験と実cold restoreを区別して保持する。
+
+この終了時点で既存本番、公開preview、旧Jobsは継続。新app/bootstrap/periodic/offsite/単一Jobsの本運用設定、最新sourceの最終整合capture、通常保存と実Google/Drive・実機/起動/回線/rollback、一体PC外復元、本番切替は未完了。3点の再承認は不要。新しいDrive設定の受け取り待ちと並行して独立準備を続ける。
+
+## 再開turnの到達点: PC外実データ復旧と無効設定（2026-10-13 23:32 JST）
+
+候補へ9288b40（Vault復旧/起動/権限/locale）、9e21376（ローカルJobsの内部認証付きOpenAPI確認）をlocal commit。Node24のJobs関連55合成試験、Python runtime21/backup41/periodic9試験を確認。native RESTは匿名OpenAPIも401になることを実再現し、Root既存server credentialによるOpenAPI200・schema presence、member匿名401、署名偽造Auth403/REST401を同時確認。新しい時刻契約capturedAtが不足していたfixtureも修正し、条件を弱めない。Windows既定Node18はparseEnv非対応のため検証に使わず固定Linux24へ戻した。master/push0。
+
+9e21376をRoot owned encrypted releaseへ実Linux build（UID65530/外部net隔離/旧deps保持）。既存S4U Jobsから実Cron/GAS secretsをreadonly保全し、最新app/Jobs/Node backup/offsiteのdisabled planをencrypted privateへ作成して各契約を検証した。Phone masterをR2送信入力へ混ぜず、Node offsite envはPhone masterと異なる既存の確認済みarchive keyを使用する。容量予約は既存コードのMIN_MAX_PAIR_BYTES以上へ修正。disabled PC adapterは実probe自体を拒否するため、無効planからSupervisorを起動した証明にしない。実targetは既にrestore/全行比較/native Auth/RESTで確認した新private DB。最終envは既存GAS設定と未取得Drive設定を含めるため最終build/manifest/boot sealは未完了。
+
+検証入口のold temporary app/gatewayが失われていたことを発見。旧app exit未記録、OOM記録無し、default/private daemonsのPID/startは不変。既存本番tuat-tf.vercel.appは200/cda17c1、検証URLだけ503。Root専用transient systemd unitで同じe6e26d9・同じreadonly gatewayへ復旧。旧dead owner2464029のrunner.lockは削除/偽mutex claimせず保持し、元のprepared proofを照合するfresh stateへ分離。unit active、Next/Gateway/publicのe6一致200、業務書込503・外部OriginのAuth403を確認。これは起動/OS再起動を検証した本番Supervisorではない。最終host gate前にこの明示的preview unitをexact停止する必要がある。
+
+新encrypted DB/71画像/Vault鍵/実GASとDB・Auth・バックアップ設定/コードをPhone keyで暗号化した復旧checkpoint 20d29a1eを追加保全。39,733,089bytes/90files、既存非公開R2へimmutable PUT→HEAD/全GET/SHA一致→認証復号/全90file hash/Phone master未包含を確認。旧16.6MB packageも維持。jobs journal無し・finalOperationalPackage falseを宣言し、本番移行のadmission receiptにはしない。
+
+そのR2読戻しcipherからDB/roles/Vault鍵/71画像だけをfresh encrypted検証領域へ展開し、独立DBへ実cold restore。初回検証用manifestをJSで再serializeした際のmtimeNs丸め（70画像、内容/hash/path差無し）を検出し、元の整数文字列をそのまま保持する別fresh領域で再検証。113tablesの全行・security、71画像bytes/path/mtime、Vault2件復号が一致、exact verifier撤去も確認。PC外に保存した実データからの回復は確認したが、Jobs/起動/通常保存を含む最終一体構成の回復と区別する。Agent取得のWindows Downloads認証CSVは元SHAと一致するものをencrypted privateへ移し、同一の一時file1本だけを削除。
+
+必要な追加入力はDrive専用既存OAuthクライアントJSON（client_id/client_secret）。Google ConsoleのTUAT Track Drive/tuat-track-drive-2026はproject-invalidで、既存private控えは伏字のため取得できない。保護済みD:\TUAT_TF\.contingency\pc-auth-source-private-20261012\google-drive-oauth-client.json（SYSTEM/ownerのみ）へ本人保存を質問中、未回答。3点の既承認を再質問しない。新App/Native servicesのfinal配置・最終env build/boot seal、fresh最終同期/単一Jobs引継ぎ/cloud readonly、本人Google/Drive・通常CRUD・新規/取消権限・実機Push/PWA・再起動/回線/rollbackと、本番切替は未実施。旧本番・旧Jobsを止めず、goalを完了と報告しない。
+
+## Drive連携の優先度整理と最新本番への追従（2026-10-14）
+
+所有者はDrive連携の用途説明後、「その機能はずっと使ってない」と回答。本turnでは、この未使用の予定表発行機能の確認を後回しにし、Drive資格情報の取得待ちをPC移行の前提から外す。機能・既存OAuth client/secret・google_drive_connectionsの削除や無効化は行わない。Driveの発行/再連携は新PC構成で未確認として保持し、利用可能と報告しない。Googleログイン用Authの受入は別に維持する。
+
+実Google ConsoleでTUAT Track Driveのtrack-app Drive連携を開けた。既存client secretはmaskedで、画面に再表示/再download不可と明記。新secret追加、旧secret無効化、Drive callback変更、token再送は行っていない。現在のPC移行では所有者に新たなDrive鍵保存操作を依頼しない。
+
+fresh fetchでorigin/masterがcda17c1（OB六レーンリレー機能）まで更新されたことを確認。候補9e21376をローカルbackup ref pc-precutover-before-master-20261014へ保全し、clean候補の23commitを最新masterへrebase。新HEAD e3ad20b38095d3a3a54100fb66948d4aa2e24e94。range-diffで23差分すべて同一、競合無し、diff check/cleanを確認。rootの他作業は保全、master統合/push無し。
+
+最新HEADを新しいencrypted release /var/lib/tuat-local/releases/e3ad20bへ実Linux build。既存GAS/Cron/Pushと鍵を保持したapplication.envを用い、Drive鍵無しを確認。固定Node24.19、UID65530、外部net隔離、root所有artifactとprepared hashを照合し、default daemon PID/start不変。環境確認37依存一致、tsc、取り込んだsourceのeslint、Linux運用71testおよびJobs55test成功。全VitestはWindows sandboxの一時領域renameで初回169filesのimportが失敗。workspace内TEMPで再実行し167files/1552test成功、画像4件とsynthetic loopback Push1件が権限制限で失敗した。該当2filesだけ通常許可環境で再実行し13testすべて成功。重複分を除き169files/1557testを確認。これら合成試験を実機Pushや本番の通常保存の証拠にしない。
+
+最新buildに対応するhost/Jobs/Node backup/offsiteの新disabled planを /var/lib/tuat-local/private/runtime-preparation-e3ad20b に作成。各既存契約を検証、buildのapp envとのbytes一致を確認し、環境変更による再build不要。Drive受入後回しを新resultへ明記し、古い時点のreceiptを書き換えない。fullRuntimeConfigured=false、timersInstalled=false、oldJobsStopped=false、providerRequests=0、productionChanged=false。実ビジネスサーバー・Native services・定期ownerの最終配置/boot seal/起動、最新DB/schemaとAuth/画像の最終同期、一体journal引継ぎ、主要CRUD/Googleログイン/権限/実機PWAとPush/再起動/差戻しの受入と本番切替は残る。既存本番・旧Jobsは維持する。
+## Drive予定表発行の廃止着手（2026-10-14）
+
+所有者の「この機能使いにくいから廃止で良さそう」を、Google Drive接続と予定表新規発行の廃止指示として扱う。使いにくさそのものの実機再現は未実施。対象画面/関連hookのmount時Drive status/creation receipt取得と発行・repair入口、OAuth connect/callback/statusとcreate APIをコードで確認した。受入条件は、Drive発行UIとmount時Drive通信がなくなること、旧APIが410を返して認証/DB/Google送信を行わないこと、CSV/共有URLの予定読込み・既存予定編集/権限とGAS記録/大会同期が保持されること。保存済みconnection/creation journal/予定/Google側鍵は削除・無効化せず、既存backupにも保全する。失敗時は候補コードをGit上の直前e3ad20bへ戻すことで復旧でき、DB変更や本番切替を伴わない。既存本番へ単独公開せず、PC移行候補へまとめる。
+## Drive予定表発行の廃止実装・確認終了（2026-10-14）
+
+候補9db26bde6677a713439cfa9d99764332c80319b1へ廃止を実装してlocal commit（Codex co-author）。接続/発行/作成状態確認/repair UI・mount時Drive通信・不要venue取得・曜日設定を削除。Google OAuth接続/callback/status/予定表発行の旧4API・7methodsは、認証/DB/Google処理なしで410・no-store・案内文を返す。旧タブ/直接APIからも再発行しない。未使用のDrive provider/暗号state/新規作成journal adapterコードと専用試験を除去し、関連backup試験は残るGAS/R2境界の検証を維持。予定CSVテンプレート/既存編集/共有URLやCSVのpreview/apply/undo、記録・大会GAS同期、Googleログイン用の経路は保持。DB tables/既存connection・journal・予定・Google側鍵を変更/削除しない。
+
+Next同梱Route Handler/Client ComponentガイドとUI/文言対象節を確認。受入の意味を変えず、新regression試験で旧7methodsの410/no-provider、hook mountのno-Driveと選択CSVの登録/内容保持、実コンポーネントSSRのCSV/URL操作維持とDrive controls無しを確認。初回full testではテスト用Responseを同じobjectで使い回したため、GAS成功確認1件がbody-consumedで失敗。各dispatchで新Responseを返すfixtureへ修正後、最終全Vitest167files/1505tests成功。tsc/check:environment/対象eslint/diff check成功。Windows sandbox TEMPのrename制限による未起動は合格に数えず、全体/必要な再試験は通常許可環境で確認した。UI testはVitest対象の.test.tsとして実行・成功を確認し、未対象.test.tsxを実施済みと扱わない。
+
+最新commitを /var/lib/tuat-local/releases/9db26bd へ実Linux build。非特権65530・外部net隔離・固定Node24/locked dependencies・root sealed artifact/prepared hash照合成功。独立net namespaceのloのみで一時Nextを起動し、/api/versionの9db26bd/releaseId、login200/Google文言、built JS200、匿名/home307と旧Drive7操作410/no-store/no-redirectを実HTTP確認。owned childをgraceful停止してabsence/prepared再一致確認。実Googleログイン・部員CRUD・実端末の代用ではない。最新host/Jobs/Node backup/offsiteのdisabled plansを encrypted private/runtime-preparation-9db26bd に作成し、contractsとbuild env bytes一致を確認。新resultはgoogleDriveFeatureRetired=true、fullRuntimeConfigured=false、oldJobsStopped=false、productionChanged=false。
+
+既存Vercel本番/readonly検証入口は更新せず、master統合/push/deploy0。Driveは後回しから廃止へ更新され、鍵待ち/Drive callbackや発行の受入は切替条件にしない。新Auth/REST/単一定期ownerの最終配置、最新schema/通常data/Auth/画像とjournalの最終整合、一体backup admission、主要通常操作/Googleログイン・権限/実機PWA・Push/起動・回線・差戻しと本番切替は引き続き残る。移行全体を完了とは報告しない。
+## Native最終起動への接続: DB実体・常駐起動・Jobsロック（2026-10-14）
+
+前goal turnはDrive廃止・167files/1505tests・実Linux build/独立HTTP検証を完了したprogress。本turnも同じ全体目標（主要操作/運用確認後の本番切替）を維持する。fresh fetchでorigin/master cda17c1の全更新を含むことを確認し、既存root変更を保全。旧本番/api/version=cda17c1、閲覧用preview=e6e26d9/pc-local-e6e26d9が実GETで継続していることを確認した。
+
+暗号化候補を実読取り確認し、SYS7696014892776206346、74users/80identities/74profiles、113tables、他client接続0、swap無しを確認。候補DBのみの起動定義でimage文字列がdigestのまま厳密な最終タグと一致しなかった。最初のpreflightはDocker psの短縮IDを完全IDと比較して変更前に停止。元CIDの稼働とintent不存在を確認し、--no-truncへ修正した既知の原因だけを解消して実施。全DB dump/global roles/DB env/HBA/Vault keyと113table全行・roles/Vaultのfingerprintをencrypted private/native-db-tag-bf41668d-0664-4186-9d6c-37db9024bb42へ退避。正確な候補だけを停止・同一PGDATA/イメージID/設定/鍵で固定tagへ再作成し、全113table全行・全roles・Vault/SYSの前後一致を確認。新CID02d4760e1f91f2532a43b9fa0a26c2bc32a659a09d1d7b40c985a0aa0ba30d04をdb-runtime.jsonへatomic記録し、停止済み旧候補のmetadataだけを撤去。volume/DBデータ/元本番/旧Jobsは削除・変更していない。default docker/containerdのPID/start不変。
+
+同じprivate daemonに最終tag/専用UID/read-only rootfs/cap drop/NNPと現実のauth/rest env hash/JWKを使うtuat-local-auth（ed115d8a...）/tuat-local-rest（5a5c4a0b...）を停止状態で実準備。Google client728と承認済みcallback・固定allowlist hookを保持しsignupはtrue（登録停止）のまま。起動/外部provider通信0、既存previewの18301/2には触れない。native-services-prepared.jsonをroot-privateへ保存。
+
+最終起動コードで準備専用の禁止が残ることを確認。74c05e0で、固定Google-only/allowlist hookを維持した明示signup policy、private Jobs enabledとの完全一致確認、既存Root lifetime launcherでのJobs起動を接続。Native app起動は既存・全metadata検証済みの停止containerだけを固定完全CIDで起動し、DBの実SYSを確認してからAuth/RESTへ進む。再作成/取得/勝手なreplayを追加せず、check/Jobsモードで不足containerを起動しない。起動済みcontainerをrestartしない。Jobs/配置確認のapp portはtuat-local-app.service cgroup内だけ許可し、旧previewやLAN listenerは拒否。実際のsignup/Jobs有効化は行っていない。
+
+さらに既存Linux launcherが生成するlifetime.lockをbackupが不明fileとして拒否する接続不整合を修正。3c5397bでraw metadataをjournal/runner/statusと併せて保全、shapeとrunner PID整合を確認し、native live captureでは同じinodeの実/proc/locks FLOCK所有者まで検証。メタデータだけをactive authorityにせず、復元fileだけでreplayを許可しない。実Linux一時fileによる未lock→held→unheldの確認と、不正service/PID不整合の拒否を追加した。最終runtime27/backup43/periodic9、計79tests成功（skip0）。環境確認/tsc/diff check、全Vitest167files/1505testsも成功。最後の追加差分はPython運用codeのみで、TS/app codeは前確認から不変。local commitのみ、Co-Authored-By Codex、master統合/push0。
+
+74c05e0を一度Linux build後、backup修正を含む最終3c5397bを別fresh encrypted releaseへ実build。UID65530/外部net隔離/固定Node24とdeps lock/root sealを確認。3c5397bの独立lo-only一時起動でversion/releaseId・login/JS200・匿名home307・Drive旧7操作410を実HTTP確認し、owned childをgraceful停止してabsence/prepared再一致を確認。full installed inventory38,673files/28linksがencrypted device/root owner/actor read-onlyを満たす。秘密を含まないcompose/HBAのGit template2filesだけを配置契約通りroot所有644へ合わせ、実DB用HBA/keyのroot:101/640は維持。最新disabled plansをprivate/runtime-preparation-3c5397bへ作成し、新CID02d4を含むNode targetとhost/Jobs契約を検証、build envとのbytes一致を確認。古いCIDを含む過去のdisabled plans/receiptを書き換えない。
+
+Cloudflare公式の現時点の料金条件も読取り確認: Workers VPCはopen beta中無料でWorkers本体のcompute/requests料金条件は別、永続無料の保証とは扱わない（https://developers.cloudflare.com/workers-vpc/platform/pricing/）。R2 Standard無料枠は10GB-month/100万Class A/1000万Class B、Infrequent Accessは対象外（https://developers.cloudflare.com/r2/pricing/）。実accountの課金plan・定期archiveの保管世代/容量/長期継続性は別に確認が必要であり、請求設定を変更していない。
+
+終了時点: 新Auth/RESTは停止、旧Windows Jobs/本番/閲覧previewは継続。新service/timer常駐配置・boot sealと実起動・初回一体backup admission、最新source/schema/Auth/画像/journalの整合captureと単一Jobsへの実引継ぎ、旧cloud書込み/書戻し廃止、通常CRUD/Googleログイン・新規/取消権限/実機PWA・Push/起動・回線・差戻し、本番切替が残る。ソフトの起動対応・候補containerの実整合・build検証をOS再起動や本人操作の証明にしない。fullRuntimeConfigured=falseを維持し、全目標完了/本番切替済みと報告しない。Drive鍵入力は不要。
+### Drive発行機能の廃止・最新候補の無効配置確認（2026-10-14）
+
+- 所有者の「この機能使いにくいから廃止で良さそう」に従い、Driveによる予定表自動発行・接続・修復UIを撤去。手動CSV・共有URL取込み、既存GASの記録・大会同期を維持。既存Google設定や保存データは削除しない。Drive OAuth JSONの取得は不要。
+- 作業候補6776b4ec06d50984ab346d34e8a50293dd9ccda5をLinuxでビルドし、外部通信できないネットワーク名前空間でログイン画面・静的ファイル・匿名アクセス拒否・旧Drive APIの7メソッドすべて410/no-storeを確認。検証子プロセス終了まで確認。実Googleログイン・通常更新・スマホ確認の証明とはしない。
+- 全38,673ファイルと28リンクの配置検証成功。検証のPython importが生成したroot専有キャッシュ2件だけを特定して除去し、以後は-B付きで再検証した。
+- installation-6776b4eへ常駐・Jobs・一体バックアップ設定を無効状態で配置。公開ゲートのgatewayReadOnly=trueを明示。設定・成果物・鍵・認証コンテナ設定・制御シールの静的検証成功。サービス・Jobs・タイマーは開始しておらず、本番・公開入口は未変更。
+- Windows backup-lifecycleテストの前回セッション50253は今回取得できず、完走結果未回収として扱う。別途の成功を推定しない。
+- 本番切替は未完了。実稼働起動、バックアップ一連の復元確認、最新データと実行履歴の移行、通常操作・実機確認などは引き続き必要。
+
+### 専用常駐アプリへの検証入口移行と実Googleログイン（2026-10-14）
+
+- 前回ターンは無効配置の更新と検証で進捗あり。今回も本番切替を全体目標のまま継続。
+- 起動処理のPython importが成果物内へroot専有キャッシュを生成する問題を一時ディレクトリの実プロセスで再現。runtime.py/backup.pyで生成を止め、27054f9へ修正。runtime28・backup43・periodic9成功。
+- 旧検証プロセスのMainPID/cgroup・旧候補3コンテナの完全ID/ラベルを照合し、旧検証のみ停止。専用暗号化DBを使うtuat-local-app.serviceと専用Auth/RESTを実際に起動。旧コンテナは削除せず保存。公開ゲートで業務更新503・異Origin認証403を実確認。旧本番は変更せず、旧Jobsも維持。
+- Cloudflare実公開経路から27054f9を確認し、ブラウザで大学Googleアカウントの既存ログインを実行。PCの新Authを経由して/homeへ戻り、予定・練習記録・ノートの閲覧成功。スマホ実機、一般CRUD、新規ユーザー許否の証明とはしない。証拠PNGは非公開.contingency配下。ブラウザ検証タブ14を継続用に保持。
+- 初回一体バックアップはperiodic-nested-mountで凍結前に終了（attempt/captureなし）。実マウントから、専用Dockerの同一暗号化デバイスbindと暗号化containerd内のoverlay backing pathsだけを認めるようc280c4bへ修正。別ディスク/平文lower/workdir/不明mount拒否をテスト、実マウントの読取り検証成功。periodic11・backup43成功。
+- c280c4bを隔離ビルド・全38,673ファイル/28リンク検証後、検証アプリを切替。旧27054f9 ownerのdrained=trueとrunner.lock解除を確認。現在の検証版はc280c4b、gatewayReadOnly=true。Jobsとバックアップtimerは未開始。更新後もブラウザのログインとホーム閲覧を維持できた。
+- 次の一体バックアップはDB静止判定で終了。capture-stateはresumed、periodic-attemptはunknown-hold（d87abbfb1b468a56e9bf72a9c0c69d30）。自動再送していない。読取り観測ではPostgRESTの実接続名がPostgREST 14.12でidle/transactionなし、追加スキーマはsupabase_vault拡張に所属するvaultのみ。他prepared/cron/subscription/unsupported tableは0。
+- cc25d38でPCに限り実バージョンの接続名をDBロール込みで認識し、拡張所属を照合したVaultスキーマを許可。backup43/runtime28成功、実DBに対する静止判定の読取り確認成功。cc25d38はまだ公開しておらずLinuxビルドを開始。再実行前に前回capture復帰・出力/転送未作成の証拠を確認してunknown-hold原本を保全する必要がある。
+- Windowsのbackup-lifecycleを新たに実行し、今回のログで3/3完走成功を確認。前回の欠落セッション結果を流用していない。
+- 本番切替未完了。一体バックアップの保存・復元完走、保持容量、最新データ/Auth/画像/Jobs履歴移行、書込み一元化、正常操作・実機・再起動/復旧の確認を残す。目標を縮小したり完了扱いにはしない。
+
+### 一体バックアップの実捕捉・完全受信・別DB復元（2026-10-14）
+
+- 前回のダンプ前失敗d87abbfb...はcontroller invocationの実ログと全writerの同一PID/cgroup/開始時刻・非凍結を照合。保存/転送なしを確認し、unknown-hold原本をinstallation-c280c4b/reviewed-pre-dump-failure-*へ保全。成功へ書き換えず新試行を許可した。
+- cc25d38を隔離ビルド・全成果物検証後に閲覧専用で起動。次の捕捉16205b...は全行比較で停止、全writer復帰済み、暗号化/転送なし。原本をinstallation-cc25d38/reviewed-capture-failure-*へ保全。
+- 大きな監査表の旧比較基準が386行/4,079,616byteで、実表399行（最新変更時刻10/11、当日追記0）と差異。重い容量/シール確認をstdout受信中に繰り返していた。1接続のフレーム付きCOPY、同一transactionのDB自身のcount(*)、全行SHA/byte/件数照合へ修正。終端・順序・件数欠落は拒否。容量確認は出力受信前後、tarは1MiBごとと終了時へ集約し、最大サイズ・初期予約・毎回の締切は維持。srcデータの検証を省略していない。
+- 実DBの全113表について、完全に受信した旧COPYと新方式のhash/件数/byte/権限項目がすべて一致。旧6.283秒、新0.796秒。以前の不完全な比較基準への一致を成功条件にはしていない。修正932df66。backup49/runtime28/periodic11成功（全88）。
+- 932df66を閲覧専用で実起動し捕捉。17,674,276byteの暗号化snapshot-631a7050f078a281.tar.encが生成され、local receiptとJobs向けreceiptも作成された。外部転送前に停止（7f6f26006a529eb6340140b7f62ebc6b、unknown-hold）。offsite-stateは空で送信開始なし。
+- 生成済み暗号化ファイルを独立保管の復号鍵で認証復号し、network-noneの別DBへ全113表/71画像を実復元。全データ/RLS等のsecurity fingerprintとVault値の比較、画像bytes/path/mtimeも成功。一時DBはラベルを照合して回収。元DBの再捕捉/書込み/外部転送はしていない。証拠はinstallation-932df66/authenticated-restore-investigation-*/result.json、plaintextは暗号化マウント内のprivateのみ。
+- 停止原因はsender-inventoryでapp-read-execute。起動時のGit statusが.git/indexをroot:root/0600へ更新し、完全成果物台帳とずれることを特定。ファイルtimestampだけ変えた実Gitテストで再現し、hostGitEnvironmentのGIT_OPTIONAL_LOCKS=0固定で読み取り専用化。コード変更の拒否は維持。Linux21成功/Windows専用2skip、Windows22成功/Linux専用1skip、対象eslint/diff check成功。修正10dc527はLinuxビルド中。
+- local receipt/reader receipt/暗号化ファイルのSHAを照合し、全writer復帰と別DB復元成功・送信未開始を確認。unknown-hold原本、local receipt、reader receipt、暗号化ファイルはinstallation-932df66/reviewed-local-verified-offsite-not-started-*へ保全。active backupRootはbackup.lockだけ。失敗を成功に変更せず、次の新捕捉を準備。
+- 現在の検証URLは932df66、更新拒否を維持。10dc527は未接続。本番・旧定期処理・本番書込み先は変更していない。バックアップtimer/新Jobsは未開始。外部保存を含む常駐バックアップの一連成功、本番切替はまだ未完了。
+
+### 10dc527の実稼働確認・R2対象範囲の承認待ち（2026-10-14）
+
+- 10dc527を隔離ビルド・38,673ファイル/28リンク検証後に閲覧専用で起動。旧932df66 ownerのdrained=trueとlock解除を確認。Jobs/timerは未開始、旧本番は未変更。
+- 稼働後のperiodic.sender_inventoryを外部送信せず実行し、全成果物の一致を確認。.git/indexはgid65530/mode0640で元の台帳SHAと一致。Gitによる起動時の書換えを実環境で解消できた。
+- 最新版でsystemctl start tuat-local-backup.serviceを行う操作は自動承認レビューに拒否された。理由は、既承認の暗号化復旧パッケージ保存と、DB全体（認証データを含む）/画像/Jobs履歴のR2バックアップでは対象範囲が異なり、後者の承認が明確でないため。回避経路や間接実行による送信はしていない。
+- 所有者へ、既存の非公開Cloudflare R2にDB全体/画像/定期処理履歴を暗号化して保存する具体的範囲（現在約17.7MB、運用時15分ごと、復号鍵は送らず初回読戻し/別DB復元も行う）をrequest_user_input_asyncで確認中。回答未着。認証なしで送信可とは扱わない。
+- 拒否後にバックアップunitはinactive/dead/MainPID0、backupRootはbackup.lockのみと実確認。外部保存を含む一体サイクルは未成功のまま。
+- 送信しない範囲で、ブラウザの既存大学Googleセッションを維持し、ホーム/マイページ/ノート一覧/予定の読込みを実確認。マイページのPC側プロフィール画像も画面で確認。更新操作は未確認で、スマホ実機の代用とはしない。タブ14（予定）を継続用に保持。
+- Windowsの現行TUAT PC Backend Temporaryはrainb/S4U/Limited、TUAT PC Jobsはrainb/S4U/HighestでRunning。TUAT_PC_AppアカウントとC:\Program Files\TUAT-TF/C:\ProgramData\TUAT-TFは存在せず、準備済みと扱わない。既存タスクを変更・停止していない。
+- 目標は本番切替まで維持する。今回のR2承認待ちだけで全作業を完了/blockedにしない（同一ブロッカー3ターンの条件未達、他の移行/検証作業も残存）。
+
+### R2送信を停止したままの認証・最新データ・Jobs移行確認（2026-10-14）
+
+- 前回ターンは実稼働修正/復元で進捗あり。R2バックアップ対象範囲の追加承認は回答未着。systemctl startによる送信を再試行せず、回避経路も使っていない。目標は全本番移行のまま維持。
+- 実専用DBのsupabase_auth_adminとして、読み取り専用transactionでhookを呼び、大学メール・大文字/前後空白の正規化を許可し、無関係メール/偽の大学suffix/nullを403で拒否。anon/authenticatedからのhook直接実行も不可。既存の外部メール許可リストは空のため、その経路はこの読取試験だけで検証済みとはしなかった。
+- 続いて専用DBの単一transactionで架空メールを許可リストへ追加し、hook許可と既存session判定の許可を確認。同transactionでその架空メールだけを除き、hook403とsession拒否を確認。ROLLBACK後、許可リスト全体のhash・Auth user件数が元と一致、試験メール不存在。実ユーザー新規作成/外部送信0。
+- 現行候補はGOTRUE_DISABLE_SIGNUP=true（Google既存ログインは実確認済み）。本番前に新規大学/許可済みGoogle登録を維持する必要があるため、Googleのみ・before-create-hookを保持したauth-google-signup-final.proposed.envを暗号化privateに準備し、runtime.pc_service_configurationで検証。現在のauth.env/コンテナ/公開設定は未変更。最終Auth移行と安全条件成立後にのみ適用する案であり、新規登録の実OAuth成功を意味しない。
+- 本番DB SYS7686488340612984867/CID4a9e...と候補SYS7696014892776206346/CID02d...を照合し、各々RR READ ONLYでpublic全表の件数・全行内容hashを比較。本番69表/候補72表。候補のみの3表はconfirmed_image_retirements/google_sheet_creation_attempts/sheet_push_attempts。共通69表では13表に差分（attendances/comments/competition_goals/competition_meet_events/likes/notifications/practice_records/profiles/push_subscriptions/sheet_member_sync_state/sheet_sync_runs/sheet_sync_state/tweets）。本番更新が継続する中の時点比較であり、最終切替snapshotやAuth/画像比較ではない。profiles等の画像正規化による意図した変換とも区別して最終取込みが必要。
+- 例: profiles74→74、attendances1939対1916、comments801対796、likes19483対19101、practice_records4620対4603、tweets401対399。件数だけではなく全行内容hashも比較した。source書込み0/レコード内容の出力0/外部送信0。比較原本はinstallation-10dc527/production-public-comparison-*.json。
+- 既存Windows Jobs journalを変更せず観測。activationは2026-09-27T06:32:55.1620921Zでconfigとjournalが一致。観測時sheets/program/cleanupはsuccess、in-flight0、sheetWritesBlocked=false、過去sheetFailures4を保持。これは最終drainの証明ではない。
+- 新しいJobsの準備時刻をそのまま使うと移行journalのactivationと食い違うため、元activationを保持したjobs-final-handoff.proposed.json（enabled=false）を暗号化領域で準備・validateSharedPc成功。active Jobs configを置換せず、新Jobs開始/旧Jobs停止/実journal移行は0。最終drainと所有者確認後のjournal移行が必要。
+- 所有者PID48008について、最初のCIM時刻比較はConvertFrom-Jsonの日時変換で誤った9時間差を出した。原本は保全し、raw ISO文字列で再比較したv2では誕生時刻差0.050306秒で一致。現権限ではcommand line/pathを取得できないためFullOwnerIdentityVerified=falseを維持。null項目を一致扱いにしない。最終停止をPIDだけで判断しない。
+- 本番・既存定期処理・候補の公開更新拒否を維持。本番切替、R2常駐サイクル成功、最終データ/Auth/画像/Jobs移行、更新・実機等の受入は未完了。追加承認待ちを理由に完了扱いにしない。
+
+### 一体バックアップの保持準備と容量確認（2026-10-14）
+
+- 前回ターンは認証・通常データ比較・Jobs移行案で進捗あり。R2バックアップ範囲の追加承認は引き続き未回答。拒否された保存開始操作を再試行せず、外部送信を伴わない保持準備を実施。
+- 既存非公開R2へLISTを1回だけ実行し、395オブジェクト/750,561,118byte、現候補sourceIdのbackup prefixは0件、combined形式も0件を確認。DB/画像/履歴のPUT=0、ciphertext GET=0、DELETE=0。全キー一覧原本は暗号化private内に保持し、ユーザー報告は件数/サイズのみ。
+- 旧保持処理はdump/recoveryペア用で、combinedの.local.tar.encを対象にしない。実combinedオブジェクトが0件のため初期報告のevery()=trueは実物の証明に使わず、別の明示的な合成形式probeと回帰テストで旧処理が新形式を触らないことを確認。合成probeはアップロードしていない。
+- 現捕捉17,674,276byteを固定するとローカル8GB上限は452世代/約4.7日、実測bucket baselineを差し引いたremote 8GB境界は約4.27日。増加/手数料の保証ではない。既存の保持方針（local最新24/remote最新96+30JST日）の保守的最大55/127世代は現在サイズでlocal約972MB/remote約2.245GB、実測bucket合計との単純合算は約2.995GB。実際のreclaimが未接続のまま長期運用へ入れない。
+- 18882a2e736c5393d040a4a23da58f974e54e458でPC offsite senderにimmutableなcapture時刻別verified履歴を追加。完全GET/hash照合後、current receipt差替え前にfsync。account/bucket scope・archive-key id・ETag/hash/size・local archive path・source/SYS/generationを保持。鍵値は記録しない。producerの独立復旧鍵fingerprintとenvのarchive-key idが一致しなければprovider呼出し前に拒否。history保存失敗や途中scope変更はcurrent receiptを維持し、未知のPUTを再送しない。
+- snapshot-retention.mjsは検証済みmetadataだけの保持候補計算。freshな同世代protected snapshotの一致を必須とし、scope/key違い、未確認/未来/古すぎるprotected、重複、予期しないpath、metadata accessor等は候補生成を拒否。常にdryRun/deletionAuthorized=false。ファイル/実オブジェクトのrevalidationや削除transportは未接続で、保持運用完了とはしない。
+- 合成のみでLinuxのoffsite13+保持8+旧保持6+既存pair保持16=43件を確認後、追加の鍵scope拒否を含むoffsite/保持22件が成功。Windows22件も成功。Python backup49/periodic11成功、対象eslint/diff check成功。実R2送信や削除の受入ではない。
+- 作業ブランチは18882a2でclean、未push/未デプロイ。現在の検証版は10dc527のまま。本番・既存Jobs・更新拒否を維持。R2保存対象の承認、実サイクル保存/読戻し/復元、保持reclaim実装/検証、最終データ/Auth/画像/Jobs取り込み、通常更新・実機等の確認と本番切替は残る。
+
+### 所有者承認後の一体R2保存・実読戻し・独立復元成功（2026-10-14）
+
+- 所有者の「承認します」を、直前に提示したDB全体（認証データを含む）・画像・定期処理履歴の暗号化R2バックアップ（運用時15分ごと、復号鍵を送らず初回読戻し/別DB復元）の明示承認として受領。前回の自動承認拒否を迂回せず、この新しい承認後に実行。
+- 現行検証10dc527のtuat-local-backup.serviceを新規実行しexit0。元writerを復帰した後、独立鍵でのローカル復元、R2条件付きPUT/HEAD/完全GET/hash、canonical receiptとperiodic-attempt verifiedまで完走。113表/71画像。バックアップtimerと新Jobsは未開始で、旧本番は維持。
+- 公開済みreceiptのhashとattemptを照合して、同じR2オブジェクトだけを別途HEAD/IfMatch GETし、17,674,276byteの完全取得とSHA一致を確認。取得したbytesを暗号化privateに保存し、独立復旧鍵による認証復号・network-noneの別DB復元で全113表/71画像とsecurity/Vaultを再検証成功。元DBへの書込みなし。証拠はinstallation-10dc527/remote-cold-restore-56a7d0ef-8cee-4ef4-92bf-a45a02edd220/{download-result,restore-result}.json。
+- 今回の履歴は候補の現在データ/新Jobs空状態の復旧証明であり、最新本番データや旧Jobs履歴の最終移行済みとは扱わない。本番切替・書込み一元化・保持reclaim・最新Auth/画像/Jobs移行・通常更新/実機等の残条件は維持する。既存R2データの削除は承認に含めず実行0。
+
+### 最新Auth・通常データ・画像の移行リハーサル（2026-10-14）
+
+- 同じR2範囲について所有者から追加の明示回答「この内容のR2バックアップを承認する」を受領。初回保存/復元成功の記録と矛盾なし。既存R2削除へ拡張しない。
+- ログイン済みSupabase SQL EditorでRR READ ONLYの全Auth exportを実施。27表+構造catalogの28packet、4,898,860byte。所有者のDownload待ちにより操作の返却まで長時間を要した。取得CSVは全ハッシュ一致後に暗号化ディスクのroot専用privateへ移し、自作Downloads一時ファイルを回収。generation e66c602d-c6f7-4465-8b10-34582d0a5fa9、capture 2026-10-14T04:11:24.717552Z、27表/12,265行、74users/80identities/元password hash6件。全packet/列/関係/byte/hashを検証。最終fence後の同時snapshotではない。
+- 05:42UTCの実本番SYS7686488340612984867を再照合し、public/auth/storage/pc_ops/extensionsを読み取り専用dumpして暗号化保持。source-916b65dc-b280-4f7a-b31b-b87555f6d448、4,343,981byte。通常データを本番へ書き込まず、cloud Authが含まれるとも扱わない。
+- 上記通常データと最新cloud Authをnetwork-noneのRAM内使い捨てDBで統合し、GoTrue2.197.0の実admin読取り74users/80identity関係、無効署名403を確認。再dump→2番目の空DBへ復元し、107表/46,366行と5種security fingerprint、元ID/password/Vault2件を保持。cleanup成功。原本はprivate/fresh-restore-96f3f83f370ef6d30d85defd30e63ad6/result.json。現行候補DB・本番への反映0、実新規Googleログインや最終移行の証明ではない。
+- 現行画像R2を再取得。68objects/13,138,457byte、参照63、欠落0、取得前後の参照/ETag一覧一致。外部公開avatar2件を既存制限付き取得/画像正規化で追加準備し、計70objects/必要65。private/images-b1d0a887-8c2e-4cd4-ac98-21380d1a0251にmanifest/hashとDB変換計画を保全。現在候補の71画像からの差分と削除を最終取り込み時に明示確認する必要がある。まだDB/画像配置は変更していない。
+- 認証取得タブを閉じる操作は、未保存編集を失うおそれがあるとして自動承認レビューが拒否。閉じる操作は実行されず、タブ15を継続用に保持。SQL原本はローカルにも保持済み。検証アプリのタブ14も保持。
+- origin/masterはfetchしてcda17c1、候補へ未取込みのcommit0、候補worktree clean。rootの既存多数変更を保全。18882a2を隔離/非rootビルドし、画面/静的ファイル/匿名拒否/旧Drive API410/子プロセスdrain、全38,675ファイル28リンクの所有者/hash検証成功。無効配置の設定/鍵/制御シール静的検証成功。
+- 18882a2の閲覧専用起動を開始。成功済みバックアップ一式を消さず、verified attempt/local/Jobs/offsite receiptとarchive hash、resumedを前提に切替前後の不変を確認する手順にした。新Jobs/backup timerは未開始。本番切替は引き続き未完了。
+
+### 検証サービス更新時の所有者残留と復旧確認（2026-10-14、継続中）
+
+- 18882a2の閲覧専用更新はdrain-current-ownerで停止し、自動rollback後もサービス起動確認できず。実状態はtuat-local-app.service failed/MainPID0、設定は直前10dc527へ復元済み、backup inactive成功、18882a2アプリ未開始。旧本番には変更0。
+- private診断で、元バックアップ監視owner PID1249495のlockが残留。元PID不在、サービスcgroup空、runner.lock不存在、一体attempt verified/local/Jobs/offsite receipt hash一致、capture resumed、DB静止を--checkで実確認。元監視はcombined receiptの消費とinspect/SELECTによるID照合のみで、通常dump/uploadはしない構成。
+- 所有者lock原本をprivateへ保全移動して直前閲覧専用サービスを起動する復旧操作は、自動承認レビューが「ロック状態を変更し排他に影響するため明示承認が必要」として拒否。操作は実行されておらず、迂回しない。具体的な原本保全移動＋直前版復旧を所有者へrequest_user_input_asyncで確認中。
+- この障害の受入条件: 停止時の進行中の読み取りprobeが正常終了する余地を残し、成功後だけ監視ownerを解放すること。未完了/結果不明/timeoutの操作ではlockを保持し、更新拒否を即時維持すること。実現象は停止後owner残留を再現済み。原因候補はstopが先にAbortControllerをabortし、読取probeもcommandUncertainとして残す競合で、まず遅延probeの回帰試験で検証する。コード変更で現物の未確認lockを自動解除する方針は採らない。
+- 遅延したidentity probeを停止途中に置く回帰試験を追加し、現行でsignal.aborted=trueとなる失敗を再現。combined snapshot監視では新規処理を止めmaintenanceを即時公開し、既存readを最大10秒待ってからcontroller.abortへ変更。通常バックアップwriterは従来どおり即時abort。deadline超過/command uncertaintyではowner保持を維持する試験も成功。WindowsとLinuxのrun+adapter関連66件ずつ成功、対象eslint/diff check成功。現物ロック解除の代用にはしていない。
+- 18882a2はビルド/隔離smoke/全成果物/無効設定検証まで成功したが、実起動はしていない。現状のBOOT/unitは直前10dc527へ復元済み、検証アプリserviceはfailed/MainPID0で復旧承認待ち。本番Vercel/旧PCデータ/旧Jobsは今回変更していない。次の実起動対象には停止競合修正commitを含める必要がある。
+
+### 停止競合修正5053448の全体検証・隔離ビルド（2026-10-14）
+
+- 前回はR2実保存/読戻し/別DB復元・最新データ統合リハーサル・停止競合修正で進捗あり。本ターン開始時に候補worktree clean/HEAD5053448bdbcffa3d22f7083447dc46f4493e1287、検証app failed/MainPID0、Jobs/backup inactive/MainPID0を再確認。所有者lockの保全移動と旧検証版復旧は回答未着のため未実行。拒否を迂回していない。
+- check:environmentはNode24.19.0/直接依存37件一致、tsc成功。全Vitestは最初sandboxのTemp renameで実行不可、workspace一時領域へ変更後は画像rename/合成loopback Pushの5件だけ制約で失敗。通常権限で専用一時領域を用いて再実行し167files/1505testsすべて成功。アプリコードをテスト都合で緩和していない。
+- 運用統合254testsはsandboxの一時Git初期化/junction/loopback拒否があり、通常権限の専用一時領域で再実行して252pass/0fail/2明示skip（Linux専用・outside-Git専用）。本番サービス/DB/所有者lockを試験対象にはしていない。
+- 5053448を暗号化領域で非root/外部通信隔離ビルドし、隔離起動で版照合・ログイン画面/静的ファイル/匿名拒否/Drive旧API410/子プロセス終了成功。全38,675ファイル/28リンクの所有者/hash検証成功。runtime-preparation-5053448へアプリ/Jobs/backupのenabled=false設定を準備し契約検証成功。systemd/BOOT/公開入口/既存lockは変更なし。停止競合修正版の実サービス運用確認はまだしていない。
+- 本番切替と目標は維持。復旧承認後は古い監視lock原本を保全して検証サービスを復旧し、停止修正の実確認、現世代バックアップ、保持reclaim、最新データ/Auth/画像/Jobs履歴の最終取込みと書込み一元化・通常操作/実機等を進める。今回の試験成功だけで本番完了とはしない。
+
+### 復旧承認待ちの再確認とgoal blocked（2026-10-14）
+
+- 前回ターンは全Vitest/運用統合/型検査/修正版5053448の隔離ビルド・成果物・無効設定検証で進捗あり。今回は所有者回答未着で、同じ古いバックアップ監視lockの明示承認待ちが連続3 goalターン継続した。
+- HEAD5053448/worktree cleanを確認。--checkのみで元PID1249495不在、service cgroup空、一体attempt verified、DB静止、lockChanged=falseを再確認。既存所有者lockの保全移動・サービス復旧は未実行で、自動承認拒否を迂回していない。
+- 本番切替は未完了。実環境の復旧と停止修正の運用確認が先行し、そこから現世代バックアップ・保持reclaim・最新データ/Auth/画像/Jobs引継ぎ・書込み一元化・通常操作/実機等を続ける必要がある。既存本番は直前確認で200/cda17c1、候補appはfailedであり、公開済みとは扱わない。
+- 承認待ちの確認項目は、/var/lib/tuat-local/backup-state/backup-owner.lockを削除せずprivateへ原本保全移動し、直前の閲覧専用検証サービスを復旧する操作。新たな確認項目を重複作成せず既存の回答を待つ。同じ安全審査拒否のまま実運用手順を進められないため、goalをblockedへ変更する。complete/pausedとはしない。
+
+### 復旧承認後の実サービス復旧と停止修正の運用確認（2026-10-14）
+
+- 所有者の「承認します」を、直前の監視owner lock原本保全移動と直前閲覧専用版の復旧への明示承認として受領。--checkで元PID不在/cgroup空/DB静止/一体attempt verifiedを再確認し、lockを削除せずinstallation-10dc527/reviewed-dead-observer-7be9a422-8ff3-4f66-8a63-64b06eb9d8c2へ原本保全移動。旧検証10dc527を起動しMainPID2016655/active/runningを確認。本番・旧Jobsは変更なし。
+- 5053448を無効配置して鍵/成果物/制御シール検証成功。旧監視の正常読取直後に旧ownerを終了し、drained=true/lock解放を確認して新5053448を閲覧専用で実起動。backup原本/receipt群のhash不変を確認。現在のnative候補は5053448、Jobs/timerは未開始。
+- 新5053448世代の一体バックアップがexit0（113表/71画像）。新producerの復旧鍵fingerprint照合とimmutable verified historyを含むR2保存/全GET/hash/receipt公開まで成功。
+- その後、検証アプリだけを通常のsystemctl stop/startで実試験。drained=true、runner.lockとbackup-owner.lockの正常解放、新generationで再起動、成功済みbackup/receipt原本不変、業務PATCH503を実確認。ロックを手で外す試験ではない。証拠はinstallation-5053448/restart-proof-*/result.json。
+- 正常再起動後の現世代で一体バックアップを再実行しexit0。継続バックアップの前世代検証済みreceiptからの移行も完走。タイマーはまだ開始しない。
+- 本番切替前の旧クラウド書戻し待ち照合を開始。実本番SYS7686488340612984867/DB CID4a9...、REST/dbネットワークalias、Envoy api-gwの127.0.0.1:8000公開、CDSのrest:3000、RESTのdb:5432/postgres接続を読み取りで相互照合した。準備資料のEnvoyサービス名/ターゲット名は現物ではapi-gw/restであり、その実物に沿ってガードした。queue/DB変更はしていない。
+- runReviewedCaptureを暗号化ディスク内outside-Gitのprivate先へ、既存phone custody確認済み鍵で暗号化snapshot/比較レポートを保存する形で開始。queue上限200、全行/PK/スキーマ/前後安定性を確認し、結果不明を0件にしない。現在は実行中で結果未回収。再送・acknowledgement・削除は一切していない。
+- goalの旧blocked表示は復旧前の承認待ちによるもの。承認を受け復旧作業は再開済み。goal APIにはresume操作がないため、新goalで置換したり完了にはしない。本番切替未完了で、保持reclaim/最新データ/Auth/画像/Jobs移行・書込み一元化・正常操作等を引き続き進める。
+- 5053448の実保持dryRunも完了。2件のimmutable verified履歴を、ローカルとR2の全暗号化bytes（各35,348,552byte）・ETag/hash/sizeで照合。現source3オブジェクトのうち旧10dc527の履歴未管理1件は触らず、現在keep2/削除候補0、全bucket454件/924,822,462byteで8GB境界内。PUT/DELETE0、cleanup未接続。証拠installation-5053448/actual-retention-dryrun-*.json。
+- 旧クラウド読み取りは標準fetchのTCP接続timeoutが再現。TLS/宛先/権限を変えずNode標準HTTPSのIPv4・接続1本・GET限定で成功。17queue/17groups、queue/schema前後安定、暗号化snapshot/比較pairの実読戻し認証成功。captureId5c344dc8-f804-4559-b8ae-e8ee0bb58cbe、private/failover-reconciliation-35265a97-e249-4a60-a398-f51145bb7e88。更新/ack0。
+- 不明17件の理由は全件push_subscriptionsが旧比較対応表から漏れていたため。個人値/PKは出さず表/理由だけで特定。実DDLのid PKとendpoint UNIQUE、現行型を確認し、読み取り比較対象へ追加する。endpointの自然キー照合も必要で、別UUIDで同endpointがある場合を単純な不存在へ変換しない。queueや本番の書込み・通知再送は許可しない。変更前の実再現は上記17unknown、受入は通知購読の完全比較と不明/競合保持、既存ID/通知鍵/queueを不変にすること。
+- a86646bでpush_subscriptions(id)とendpoint自然キーを読み取り比較に追加。元実症状を回帰試験でunknown→比較可能へ変えることを確認。Windows/Linux各17試験（16pass/明示skip1）、outside-Git実ファイル試験はLinux別実行3/3pass、対象eslint/diff成功。local commitのみ。
+- a86646bの実比較を再取得し17queue→7購読グループへ整理できたが、全対象PC GETがHTTP400/22P02。未取得を不存在へ変換せず全7をunknown保持。UUIDを含む全text scalarへeq."value"を付けていた比較用URL生成が原因候補。PostgREST公式の未解決issue1943とv14.12 QueryParamsソースも確認し、通常eqは引用符を値に含める仕様であることを照合（https://github.com/PostgREST/postgrest/issues/1943 、https://raw.githubusercontent.com/PostgREST/postgrest/v14.12/src/PostgREST/ApiRequest/QueryParams.hs）。アプリの更新APIではなく読み取り比較だけの問題。修正の受入はUUID/文字列をリテラルのまま検索でき、and/or等のクエリ追加をURLSearchParamsと列/パラメーター集合検証で拒否し、実PC HTTP400が解消し、queue更新0を維持すること。
+- 通常eqへ引用符を足すバグをdc716b5で修正。UUID回帰試験は修正前に失敗し、修正後Windows17pass/明示skip1、Linux outside-Git実ファイルを含め18/18pass、対象eslint/diff成功。文字列の句読点/引用符/&or=はURLSearchParams内の一つの値として保持し、重複PK・and/orパラメーター・別演算子・制御文字は拒否する。アプリ公開/実DB/queue更新は0。
+- dc716b5実比較で17queue/7groups、全GET200、unknown0/schema_mismatch0、7件はnatural_key_alternative_requires_review。queue/schema前後安定、暗号化pair読戻し認証成功。captureId4d7ab3d4-4770-4d6f-8f3b-3a24256369f2、private/failover-reconciliation-6c1c6e07-620a-4f8d-a8da-27998ca6562c。
+- その暗号化snapshot内で追加の端末同一性/新旧を照合。7/7がendpoint・user_id・p256dh・authすべて完全一致、PC last_seen_atがcloud側以上かつ最終queue作成時刻以降。異なるのは購読レコード内部UUID（7/7）。最終操作はUPDATE5/INSERT2、DELETE0。17の待ち変更が指す通知購読はPC側の新しい購読として存在している。明細の非公開ID対応/時刻/一致flagは同private/push-identity-review-*.jsonへ保全し、出力は一致件数だけ。queueはackせず原本維持。
+- この根拠は通知購読の同一端末・同一所有者・同一暗号鍵の保持を示し、同じ旧UUIDでの過去replay/trigger/journal成功を証明するものではない。正本PCの既存UUIDを保持して最新snapshotへ含め、古いcloud UUIDで上書きしない。mirror終了時の元queueは復旧snapshotとして保全し、実反映済みのsuccessへ書き換えたり通知を再送しない。
+
+### Windows起動用鍵コピーの検証とS4U確認タスクの管理者待ち（2026-10-14）
+
+- 既存CurrentUser DPAPIと独立phone-keyで復元したLUKS鍵が一致することを確認し、同じ鍵のLocalMachine DPAPIコピーをwindows-bootstrap-20261014へ作成。本人/SYSTEMのみ・継承停止のDACLを検証し、暗号化コピーを読み戻して一致、実LUKSヘッダーでcryptsetup --test-passphrase成功。mapper/mount/サービス変更0。keyFingerprintだけをprivate準備証拠へ保持し、rawkeyは標準入力/RAMのみ・finallyで消去。鍵の変更・公開・R2送信0。
+- Windows PowerShell 5子プロセスへのPS7モジュール検索パス継承でGet-Acl autoload失敗を診断し、その子だけ公式Windows Modulesへ固定。その後Set-Aclが不要なSACL SeSecurityPrivilegeを要求することも診断。監査ACLは変えず、既存採用済みicaclsで本人/SYSTEMのDACLだけを設定して解決。失敗時には鍵ファイル未作成を毎回確認し、held記録を保全して既知状態だけ再開した。証拠private/linux-storage-20261013/windows-bootstrap-20261014/preparation-result.json。
+- S4U実文脈ではまだ未確認。本人S4U/Limited・トリガーなし・実行上限2分の新規確認タスクTUAT Local Bootstrap Verification用に、builtinのみのmjsとLUKS読取checkerを同privateへhash一致で配置。実行内容はMachine DPAPI復号と既存LUKS key testだけ。サービス開始・再マウント・本番データ変更はしない。
+- 通常のツール権限でタスク登録を試したがWindows OSがAccess denied。初回のScheduledTasksコマンドはErrorActionPreferenceだけでは停止せず後続の失敗後にも登録trueを出したが、実Get-ScheduledTaskの不存在・verification-intent不存在・現プロセス非管理者を別途確認し、成功とは扱わない。既存タスク変更0/新規タスク0/検証実行0。
+- 登録PS1を修正し、全Register/Get/Startへ明示-ErrorAction Stopと登録されたPrincipal/Action/起動時刻の実証を加えた。private登録スクリプトへコピー・hash/構文検証済み。失敗した空のtask.xmlや計画は保全。まだ管理者再実行なし。
+- 所有者へ「今PCでWindows管理者確認を承認できるか」をrequest_user_input_asyncで確認中。回答未着。これは自動承認レビュー拒否ではなくWindows OSの実権限不足。ツールのrequire_escalatedだけではWindows管理者にはならない。UACを勝手に承認したり、別ユーザーでのcredential保存/権限付与へ迂回しない。
+- 起動の残条件: 同S4U文脈の実検証、既存LUKSを対象にした安全なmount/start bootstrapの配置、専用Docker/appとTunnelの自動起動。現Cloudflare named tunnelはstart-named-tunnel.py由来のUID65532の通常プロセス（/tmpのprivate token/config）で、tuat系systemd一覧には存在しない。永続自動起動済みと扱わない。新Tunnel unitを追加する場合はbackup.host_inventoryがtuat-*全unitをホワイトリスト照合するため、未検証unitを名前だけ回避したり追加でバックアップを壊さないよう、明示したtransportの検証と一緒に統合する必要がある。
+- 復旧後に既存ブラウザ14を実reloadし、Googleログイン済みの予定閲覧を維持できた。更新/スマホ実機/OS再起動の証明にはしない。証拠PNGはprivate/native-readonly-restored-20261014.png。継続タブ14と未保存SQLの15を保持。
+- 現在の稼働候補は5053448/閲覧専用、新Jobs/backup timer未開始。作業コードのHEADはdc716b5（後半2commitは読取り比較のみ、未デプロイ/未push）。旧本番・旧Jobsは維持。保持cleanup実装/接続、起動、最終データ/Auth/画像/Jobs引継ぎ、書込み一元化と主要操作/実機等の受入、本番切替は未完了。
+
+### 本人S4U文脈での暗号化ディスク鍵検証（2026-10-15）
+
+- 所有者が「今ならできる」と回答し、Windows UACの「はい」を実際に承認。最初のサンドボックス内Start-ProcessはOSアクセス拒否で起動せず、require_escalatedから同じ限定登録helperを起動して実行。管理者helper PID52236。既存タスク・サービスは変更していない。
+- 新規 TUAT Local Bootstrap Verification は本人S4U / Limited、実TaskScheduler結果0、状態Ready。Export-ScheduledTaskのXMLでTrigger要素0を確認（@($null).Countによる見かけの1件を実トリガーとは扱わない）。自動繰返しなし。
+- s4u-verification-result.json は2026-10-15T10:30:14.255Z / valid=true。実タスク文脈からLocalMachine DPAPIを復号し、既存32GiB LUKSヘッダーの鍵適合検査成功。mapping/mount/services/productionChangedすべてfalse。rawkey出力0。
+- これはバックグラウンド文脈の鍵利用を実証するもので、OS再起動・自動mount・本番自動復旧を実証したものではない。既存本番・候補閲覧専用・旧Jobsを維持。永続bootstrap/Tunnel、保持cleanup、最新データ等引継ぎと主要操作確認、本番切替は引き続き未完了。
+
+### 最終切替の継続指示と運用の仕上げ（2026-10-15）
+
+- 所有者が「最終切り替えまで終わらせること」と再指示。公開までの承認範囲を維持し、起動・transport・保持整理・最終source freeze/merge/swap・通常操作の実受入まで継続する。スマホは本人1台でログイン/表示/保存再読込/Push受信を確認する説明に「いいですよ」と回答。まだ実機合格とは扱わない。
+- 受入: 旧本番/旧Jobs維持で準備し、既存ディスクのみ安全に開くbootstrap、Tunnelの永続起動とbackup capture中の非writer transport検証、bounded backup保持、旧/cloud両writer停止後の最新Auth/DB/画像/Jobs引継ぎ、一書込み/一定期処理、元DB保持rollback、実主要操作と本人スマホ確認後に切り替える。未知結果・未知lock・秘密・原本を保全し、未知書込み/削除を自動再送しない。
+- 並行独立担当でtransport unit/検証、combined retention reclaim、freeze SQL/最終merge driverを整備。rootはWindows/Linux bootstrap、配置・本番操作を一本で担当。起動レビューでdaemon起動前のstorage gate依存、未load transport inventory、stdin非同期送信前の鍵zero、Jobs --checkのenabled常時falseを発見し修正。実現していない起動/切替を完了とは扱わない。
+- 新bootstrapは既存32GiB backing/UUID/mapper/mount identityだけを扱いformat/unmount/旧サービス停止なし。未知loop・mount先の既存ファイル・設定pin違いは拒否。daemon static seal→private2daemon→storagegate→app→version→runtimecheck→Jobs/tunnel/timerの順、--watchでWSLを保持。ownerS4U専用wrapperはLocalMachine DPAPI/stdinとDACL owner/SYSTEM限定を検証し、鍵はpipe完了後zero。既存mount読取り実行でopened=false/mounted=false、関連13試験とWindows実ACL合成試験成功。まだWindows起動タスクへ常用配置していない。
+- R2 DeleteObject IfMatchを新規64byte random probe専用objectで実測し、条件不一致でも保護されないことを確認。probeを片付け、既存バックアップDELETE0。新backupのIfNoneMatch immutable keyと既存producer FLOCKに束縛し、receipt/HEAD/内容hash/現保護復元点を再確認する限定整理へ。未知・legacy・他scopeを除外し、provider非atomic条件をコードに明示。未知DELETEは再送しない。
+- 所有者が自動整理を具体承認: 新構成の復元確認済backupだけ、local直近24/R2直近96＋JST過去30日の日別1＋現復旧点保護、両archive削除完了後の対応完了管理記録も整理。既存画像・別recovery package・結果不明を除外。最新実dryrunは2026-10-15T11:11:14Z、histories3/sourceobjects4/unmatched1、local/remotekeep3、削除候補0、bucket458objects/957812317bytes、書込み/削除0。まだpolicy有効化なし。
+- 5053448で1回の実combined cycleを再実行し完了: captured2026-10-15T11:06:24.212Z、offsiteVerified11:06:55.868Z、17674276bytes、currentgenerationfc4a4d5b-7241-4981-b7fc-e228568b42ca、service exit0。旧本番/旧Jobs変更0。
+- クラウド管理画面の既存sessionを確認。実readonly SQLでcloud SYS7642734024280108049/74users80identities/auth27を再確認。prefreezeAuth exportをCSV取得し、encrypted privateへ移動/全文hash一致後Downloadsの所有exportだけ除去。auth-61bc26d5-a246-4cf8-9be6-72d2af526de2、captured2026-10-15T11:14:41.277128+00:00、5055383bytes、27tables12681rows、74/80/passwordhash6、全packet長/hash/columns/ID関係成功。freeze後のfinalexportではない。
+- ブラウザ初回typeTextの長文入力がautoindent/suggestで中断されたため実行せず、pasteへ変更してcopy全文一致3956charsを確認後readonly実行。CSV downloadの短いAPI timeout指定でも実際のツール応答は約413sec掛かった。未完了を無条件再送せず、取得場所と実ファイルを照合して保護した。
+- 旧DBの新prefreeze保全source-add24ad5-978f-49fc-9a1e-4fa1d33a000b、2026-10-15T11:24:22〜24Z、4413934encryptedbytes、public/auth/storage/pc_ops/extensions、SYS7686488340612984867、暗号化readback/pair一致。まだfreeze/最終切替/実source変更なし。
+- check:environment Node24.19/37deps一致、tsc成功、全Vitest167files1505成功。追加運用試験/コードレビュー/一括buildと候補配置、最終引継ぎ・実操作は継続中。
+
+### 起動・保持整理と切替境界の実証（2026-10-15 続き）
+
+- 096bbd2を暗号化領域へLinux実build・全inventory照合後に配置し、閲覧専用で実稼働を確認。旧本番の変更0。実combined backupをdry-run/apply各1回実行し、暗号化R2読戻し・独立復元・保持整理が成功。所有者承認済policyはapply、削除候補/実削除とも0。定期timerと新Jobsはまだ無効。
+- Windows起動時のTUAT Local Runtimeを本人S4U/Limitedで登録し、実バックグラウンド実行で鍵・mount identity・アプリ起動確認が成功。watch継続。OS再起動/電源断からの復旧は未試験。
+- Cloud managed sourceでは変更権限のない4表を明示した専用freezeを実装。全104表catalog、100表のowner ALWAYS/nonowner通常trigger、managed migration/vector除外を照合し、実cloud dry-run→rollback→state不存在を確認。SQL editorでの実適用・旧本番freezeはまだ0。
+- 旧Vercelは最終反映時に読取りを新originへ案内し全更新を拒否、旧REST relayは明示retired設定で全経路を503とする境界を追加。通常native動作・未退役Workerは維持。新transportは実binaryのcanonical /usr/bin/cloudflaredをpin。各対象試験・全Vitest168files1513件・tsc/対象eslint成功。
+- 最新コードの配置、source最終停止とデータ/Auth/画像/Jobs引継ぎ、通常操作/本人スマホ確認、本番切替・公開SHA一致は継続中。準備成功を切替済みとは扱わない。

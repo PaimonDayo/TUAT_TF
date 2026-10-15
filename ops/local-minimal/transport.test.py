@@ -22,6 +22,7 @@ class TransportLifecycle(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name); self.root.chmod(0o700)
         self.stack = ExitStack(); self.addCleanup(self.stack.close)
+        self.installed_binary = transport.BINARY
         for name, path in {'MOUNT': self.root, 'POLICY': self.root/'private/tunnel.json',
                            'TOKEN': self.root/'private/tunnel.token', 'CONFIG': self.root/'private/tunnel.yml',
                            'BINARY': self.root/'cloudflared', 'FRAGMENT': self.root/'tunnel.service',
@@ -90,6 +91,11 @@ class TransportLifecycle(unittest.TestCase):
         self.props.update(ActiveState='inactive', SubState='dead', MainPID='0', ControlGroup='', InvocationID='', ExecMainStartTimestampMonotonic='0')
 
     def test_active_exact_identity_and_initial_inactive_are_accepted_without_mutation(self):
+        self.assertEqual(self.installed_binary, Path('/usr/bin/cloudflared'))
+        with patch.object(transport, 'BINARY', self.installed_binary):
+            expected = 'ExecStart=' + ' '.join(transport.argv()).replace(transport.CREDENTIALS, '%d')
+        unit = Path(__file__).with_name('pc')/transport.UNIT
+        self.assertEqual([line for line in unit.read_text().splitlines() if line.startswith('ExecStart=')], [expected])
         before = self.observe()
         self.assertEqual(before['processBirth'], '12345')
         self.assertEqual(before, self.observe())
