@@ -2,13 +2,12 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchRolesByProfileIds } from "@/lib/supabase/auth";
 import { permissionsOf } from "@/lib/permissions";
 import { MEMBER_PREVIEW_COOKIE } from "@/lib/member-preview";
 import { recordFieldsFromJson, recordFieldsToJson } from "@/lib/profile-normalize";
 import { OCTOBER_SHEET_ID, needsSheetSetupConfirmation, parseSheetTransition } from "@/lib/sheet-period";
-import { fetchPublicMember } from "@/lib/sheet-public-csv";
+import { fetchPublicMember, fetchPublicSheetMembers } from "@/lib/sheet-public-csv";
 import {
   buildSheetRecordFields, isFixedSheetColumn, memoHeaderCandidates,
   relevantSheetHeaderSignature, timelineFieldLimit, type SheetHeaderColumn,
@@ -22,7 +21,7 @@ const reply = (body: unknown, status = 200) => NextResponse.json(body, { status,
 type Context = { params: Promise<{ id: string }> };
 type Client = Awaited<ReturnType<typeof createClient>>;
 type Target = Pick<Database["public"]["Tables"]["profiles"]["Row"],
-  "id" | "blocks" | "sheet_name" | "record_fields" | "record_fields_version" | "sheet_header_signature" | "sheet_transition">;
+  "id" | "blocks" | "sheet_name" | "record_fields" | "record_fields_version" | "sheet_header_signature" | "sheet_transition" | "record_source">;
 
 class RequestError extends Error {
   constructor(readonly status: number, message: string) { super(message); }
@@ -41,26 +40,27 @@ async function authorize(): Promise<Client | Response> {
 
 async function readTarget(client: Client, id: string): Promise<Target> {
   const { data, error } = await client.from("profiles")
-    .select("id,blocks,sheet_name,record_fields,record_fields_version,sheet_header_signature,sheet_transition")
+    .select("id,blocks,sheet_name,record_fields,record_fields_version,sheet_header_signature,sheet_transition,record_source")
     .eq("id", id).maybeSingle();
   if (error) throw new Error("設定を取得できませんでした");
   if (!data) throw new RequestError(404, "部員が見つかりません");
-  const transition = parseSheetTransition(data.sheet_transition);
-  if (!transition || needsSheetSetupConfirmation(transition) || transition.mode === "off" || !data.sheet_name?.trim()) {
-    throw new RequestError(409, "本人の設定画面でスプレッドシート連携を確認してください");
-  }
   return data;
 }
 
-function revision(target: Target): string {
-  return createHash("sha256").update(JSON.stringify([
-    target.id, target.blocks, target.sheet_name, target.record_fields,
-    target.record_fields_version, target.sheet_header_signature, target.sheet_transition,
-  ])).digest("hex");
+function expectedState(target: Target): Json {
+  return {
+    id: target.id, blocks: target.blocks, sheet_name: target.sheet_name, record_fields: target.record_fields,
+    record_fields_version: target.record_fields_version, sheet_header_signature: target.sheet_header_signature,
+    sheet_transition: target.sheet_transition, record_source: target.record_source,
+  };
 }
 
-async function readHeader(target: Target) {
-  const member = await fetchPublicMember(target.sheet_name!, { spreadsheetId: OCTOBER_SHEET_ID });
+function revision(target: Target): string {
+  return createHash("sha256").update(JSON.stringify(expectedState(target))).digest("hex");
+}
+
+async function readHeader(target: Target, sheetName: string) {
+  const member = await fetchPublicMember(sheetName, { spreadsheetId: OCTOBER_SHEET_ID });
   const columns = member.columns ?? member.header.map((label, index) => ({ index, label }));
   if (!columns.some((column) => column.label.replace(/\s/g, "") === "日付")) {
     throw new RequestError(502, "シートの日付列を確認できませんでした");
@@ -110,13 +110,28 @@ function validateFields(input: unknown, columns: SheetHeaderColumn[], isMiddleLo
   return canonical;
 }
 
-export async function GET(_request: Request, context: Context) {
+export async function GET(request: Request, context: Context) {
   try {
     const access = await authorize();
     if (access instanceof Response) return access;
     const { id } = await context.params;
     const target = await readTarget(access, id);
-    const header = await readHeader(target);
+    const params = new URL(request.url).searchParams;
+    const view = params.get("view");
+    if (view === "settings") return reply({
+      revision: revision(target), fields: recordFieldsFromJson(target.record_fields), sheetName: target.sheet_name,
+      mode: parseSheetTransition(target.sheet_transition)?.mode ?? null, signature: target.sheet_header_signature,
+      isMiddleLong: target.blocks.includes("middle_long"),
+    });
+    if (view === "members") return reply({ members: await fetchPublicSheetMembers(OCTOBER_SHEET_ID) });
+    const selectedName = params.get("sheetName");
+    if (selectedName === null) {
+      const transition = parseSheetTransition(target.sheet_transition);
+      if (!transition || needsSheetSetupConfirmation(transition) || transition.mode === "off" || !target.sheet_name?.trim()) {
+        throw new RequestError(409, "連携シートと入力方法を確認してください");
+      }
+    } else if (!selectedName.trim()) throw new RequestError(400, "連携シートを選択してください");
+    const header = await readHeader(target, selectedName ?? target.sheet_name!);
     return reply({ revision: revision(target), fields: recordFieldsFromJson(target.record_fields), header, isMiddleLong: target.blocks.includes("middle_long") });
   } catch (error) {
     if (error instanceof RequestError) return reply({ error: error.message }, error.status);
@@ -135,31 +150,34 @@ export async function POST(request: Request, context: Context) {
     const { id } = await context.params;
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object" || typeof body.revision !== "string" || !/^[a-f0-9]{64}$/.test(body.revision)
-      || typeof body.signature !== "string" || !Array.isArray(body.fields)) {
+      || !["sheet", "app_only", "off"].includes(body.mode)) {
       return reply({ error: "表示項目を確認してください" }, 400);
     }
     const before = await readTarget(access, id);
     if (revision(before) !== body.revision) return reply({ error: "設定が変更されています。再読み込みしてください" }, 409);
-    const header = await readHeader(before);
-    const isMiddleLong = before.blocks.includes("middle_long");
-    const fields = validateFields(body.fields, header.columns, isMiddleLong);
-    const signature = relevantSheetHeaderSignature(header.columns, fields, isMiddleLong);
-    if (signature !== body.signature) return reply({ error: "シートの見出しが変わりました。再読み込みしてください" }, 409);
-
-    const admin = createAdminClient();
-    let update = admin.from("profiles").update({
-      record_fields: recordFieldsToJson(fields), sheet_header_signature: signature, sheet_history_imported_at: null,
-    }).eq("id", id).eq("record_fields_version", before.record_fields_version).eq("sheet_name", before.sheet_name!);
-    update = before.sheet_header_signature === null
-      ? update.is("sheet_header_signature", null) : update.eq("sheet_header_signature", before.sheet_header_signature);
-    update = before.sheet_transition === null
-      ? update.is("sheet_transition", null) : update.eq("sheet_transition", JSON.stringify(before.sheet_transition));
-    update = isMiddleLong ? update.contains("blocks", ["middle_long"]) : update.not("blocks", "cs", "{middle_long}");
+    let fields: RecordFieldDef[] = [];
+    let signature = "";
+    let sheetName = "";
+    if (body.mode !== "off") {
+      if (typeof body.sheetName !== "string" || !body.sheetName.trim() || typeof body.signature !== "string" || !Array.isArray(body.fields)) {
+        return reply({ error: "連携シートと表示項目を確認してください" }, 400);
+      }
+      const header = await readHeader(before, body.sheetName);
+      const isMiddleLong = before.blocks.includes("middle_long");
+      fields = validateFields(body.fields, header.columns, isMiddleLong);
+      signature = relevantSheetHeaderSignature(header.columns, fields, isMiddleLong);
+      if (signature !== body.signature) return reply({ error: "シートの見出しが変わりました。再読み込みしてください" }, 409);
+      sheetName = header.sheetName;
+    }
     saving = true;
-    const { data, error } = await update.select("id,record_fields_version");
+    const { data, error } = await access.rpc("admin_save_member_sheet_setup", {
+      p_profile_id: id, p_expected: expectedState(before), p_sheet_name: sheetName,
+      p_fields: recordFieldsToJson(fields), p_signature: signature, p_mode: body.mode,
+    });
+    if (error?.code === "PT409") return reply({ error: "設定が変更されています。再読み込みしてください" }, 409);
+    if (error?.code === "P0002") return reply({ error: "部員が見つかりません" }, 404);
     if (error?.code === "PT503") return reply({ error: "PC停止中は変更できません。復帰後にお試しください", unchanged: true }, 503);
     if (error || data === null) return reply({ error: "保存結果を確認できません。再読み込みしてください", uncertain: true }, 503);
-    if (data.length === 0) return reply({ error: "設定が変更されています。再読み込みしてください" }, 409);
     if (data.length !== 1 || data[0].id !== id || !Number.isInteger(data[0].record_fields_version)) {
       return reply({ error: "保存結果を確認できません。再読み込みしてください", uncertain: true }, 503);
     }

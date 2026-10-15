@@ -15,7 +15,7 @@ type SettingsRow = Pick<
 
 const currentFields = [{ key: "memo", label: "現在の感想", type: "text", showInTimeline: false, sourceColumn: 4 }];
 const legacyFields = [{ key: "old", label: "旧項目", type: "number", showInTimeline: true, sourceColumn: 2 }];
-const metadataKeys = ["avatar_url", "blocks", "display_name", "grade", "id", "status"];
+const metadataKeys = ["avatar_url", "blocks", "display_name", "grade", "id", "link_status", "status"];
 const loadError = "部員のスプレッドシート設定を取得できませんでした";
 
 function role(overrides: Partial<AppRole> = {}): AppRole {
@@ -34,6 +34,18 @@ function member(index = 0, overrides: Partial<SettingsRow> = {}): SettingsRow {
     avatar_url: "https://example.test/avatar.png", blocks: ["short"], grade: "B2", status: "active",
     sheet_name: "現在のシート", record_source: "sheet", record_fields: currentFields,
     sheet_transition: null, ...overrides,
+  };
+}
+
+function listMember(index = 0, overrides: Partial<SettingsRow> = {}) {
+  const row = member(index, overrides);
+  const config = row.sheet_transition && typeof row.sheet_transition === "object" && !Array.isArray(row.sheet_transition)
+    ? row.sheet_transition : null;
+  return {
+    ...row,
+    transition_version: config?.version ?? null,
+    transition_mode: config?.mode ?? null,
+    transition_confirmed_at: config?.confirmed_at ?? null,
   };
 }
 
@@ -81,7 +93,7 @@ describe("member sheet settings", () => {
       role({ can_manage_members: true }),
       role({ id: "system", name: "システム担当", can_manage_system: true }),
     ] });
-    query.range.mockResolvedValue({ data: [member()], error: null });
+    query.range.mockResolvedValue({ data: [listMember()], error: null });
     query.maybeSingle.mockResolvedValue({ data: member(), error: null });
     expect(await getMemberSheetSettings()).toHaveLength(1);
     expect(await getMemberSheetSettingsById("member-0000")).toMatchObject({ id: "member-0000" });
@@ -94,25 +106,27 @@ describe("member sheet settings", () => {
     expect(mocks.createClient).not.toHaveBeenCalled();
   });
 
-  it("requests and returns only metadata for the member directory", async () => {
+  it("requests only metadata and current status scalars for the directory without returning raw settings", async () => {
     query.range.mockResolvedValue({ data: [{
-      ...member(0, { sheet_transition: transition(), blocks: ["middle_long", "unknown"], status: "graduated" }),
+      ...listMember(0, { sheet_transition: transition(), blocks: ["middle_long", "unknown"], status: "graduated" }),
       email: "private@example.test", record_body: "記録本文",
     }], error: null });
 
     const result = await getMemberSheetSettings();
     expect(result[0]).toEqual({
       id: "member-0000", display_name: "部員0", avatar_url: "https://example.test/avatar.png",
-      blocks: ["middle_long"], grade: "B2", status: "graduated",
+      blocks: ["middle_long"], grade: "B2", status: "graduated", link_status: "linked",
     });
     expect(from).toHaveBeenCalledExactlyOnceWith("profiles");
-    expect(query.select).toHaveBeenCalledExactlyOnceWith("id, display_name, avatar_url, blocks, grade, status");
+    expect(query.select).toHaveBeenCalledExactlyOnceWith(
+      "id, display_name, avatar_url, blocks, grade, status, sheet_name, transition_version:sheet_transition->>version, transition_mode:sheet_transition->>mode, transition_confirmed_at:sheet_transition->>confirmed_at",
+    );
     expect(Object.keys(result[0]).sort()).toEqual(metadataKeys);
     expect(JSON.stringify(result)).not.toMatch(/現在の|旧シート|旧項目|private|記録本文|legacy/);
   });
 
   it("loads all members across more than two pages in a stable id order", async () => {
-    const rows = Array.from({ length: 1001 }, (_, index) => member(index));
+    const rows = Array.from({ length: 1001 }, (_, index) => listMember(index));
     query.range.mockImplementation(async (start: number, end: number) => ({
       data: rows.slice(start, end + 1), error: null,
     }));
@@ -130,7 +144,7 @@ describe("member sheet settings", () => {
 
   it("rejects a later page failure instead of returning a partial list", async () => {
     query.range
-      .mockResolvedValueOnce({ data: Array.from({ length: 500 }, (_, index) => member(index)), error: null })
+      .mockResolvedValueOnce({ data: Array.from({ length: 500 }, (_, index) => listMember(index)), error: null })
       .mockResolvedValueOnce({ data: null, error: { message: "connection lost" } });
     await expect(getMemberSheetSettings()).rejects.toThrow(loadError);
     expect(query.range.mock.calls).toEqual([[0, 499], [500, 999]]);
@@ -158,11 +172,11 @@ describe("member sheet settings", () => {
     expect(result?.periods).toEqual([
       {
         id: "october", label: "2026年10月1日以降", sheet_name: "現在のシート",
-        mode: "sheet", fields: currentFields, editable: true,
+        mode: "sheet", link_status: "linked", fields: currentFields, editable: true,
       },
       {
         id: "legacy", label: "2026年9月30日以前（連携終了）", sheet_name: "旧シート",
-        mode: "app_only", fields: legacyFields, editable: false,
+        mode: "app_only", link_status: "ended", fields: legacyFields, editable: false,
       },
     ]);
     expect(query.select).toHaveBeenCalledExactlyOnceWith(
@@ -171,7 +185,7 @@ describe("member sheet settings", () => {
     expect(query.eq).toHaveBeenCalledExactlyOnceWith("id", "member-0000");
     expect(Object.keys(result!).sort()).toEqual([...metadataKeys, "periods"].sort());
     for (const period of result!.periods) {
-      expect(Object.keys(period).sort()).toEqual(["editable", "fields", "id", "label", "mode", "sheet_name"]);
+      expect(Object.keys(period).sort()).toEqual(["editable", "fields", "id", "label", "link_status", "mode", "sheet_name"]);
     }
     expect(JSON.stringify(result)).not.toMatch(/sheet_header_signature|旧見出しの内部情報|sheet_transition|record_source|private|記録本文/);
   });
@@ -186,11 +200,11 @@ describe("member sheet settings", () => {
     expect((await getMemberSheetSettingsById("member-0000"))?.periods).toEqual([
       {
         id: "october", label: "2026年10月1日以降", sheet_name: null,
-        mode: null, fields: [], editable: false,
+        mode: null, link_status: "unset", fields: [], editable: false,
       },
       {
         id: "legacy", label: "2026年9月30日以前（連携終了）", sheet_name: "移行前シート",
-        mode, fields: legacyFields, editable: false,
+        mode, link_status: "ended", fields: legacyFields, editable: false,
       },
     ]);
   });
@@ -255,5 +269,23 @@ describe("member sheet settings", () => {
     expect(result?.periods[0].fields).toEqual(currentFields);
     expect(result?.periods[1]).toMatchObject({ mode: "sheet", fields: legacyFields, editable: false });
     expect(JSON.stringify(result)).not.toContain("非表示の生JSON");
+  });
+
+  it.each([
+    { name: "両方から入力", settings: { sheet_transition: transition() }, expected: "linked" },
+    { name: "アプリからのみ入力", settings: { sheet_transition: transition({ mode: "app_only" }) }, expected: "linked" },
+    { name: "連携なし", settings: { sheet_transition: transition({ mode: "off" }), sheet_name: null }, expected: "off" },
+    { name: "未移行", settings: { sheet_transition: null }, expected: "unset" },
+    { name: "シート未選択", settings: { sheet_transition: transition(), sheet_name: null }, expected: "unset" },
+    { name: "再確認前", settings: { sheet_transition: transition({ confirmed_at: "2026-09-30T00:41:02Z" }) }, expected: "needs_confirmation" },
+  ])("uses the same current-period link status for the list and detail: $name", async ({ settings, expected }) => {
+    query.range.mockResolvedValue({ data: [listMember(0, settings)], error: null });
+    query.maybeSingle.mockResolvedValue({ data: member(0, settings), error: null });
+    const list = await getMemberSheetSettings();
+    const detail = await getMemberSheetSettingsById("member-0000");
+    expect(list[0].link_status).toBe(expected);
+    expect(detail?.link_status).toBe(expected);
+    expect(detail?.periods[0].link_status).toBe(expected);
+    expect(detail?.periods[1].link_status).toBe("ended");
   });
 });

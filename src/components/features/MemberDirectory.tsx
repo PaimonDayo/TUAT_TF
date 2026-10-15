@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronRight, Search } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/common/Avatar";
 import { BlockPills } from "@/components/common/BlockPill";
 import { SegmentedControl } from "@/components/ui/segmented";
@@ -22,9 +23,11 @@ import type { AuthorMini } from "@/types";
 export function MemberDirectory({
   members,
   memberHrefPrefix = "/members",
+  memberBadges,
 }: {
   members: AuthorMini[];
   memberHrefPrefix?: string;
+  memberBadges?: Record<string, string>;
 }) {
   const [block, setBlock] = useState("all");
   const [grades, setGrades] = useState<string[]>([]);
@@ -113,6 +116,7 @@ export function MemberDirectory({
                               {m.display_name || "名前未設定"}
                             </span>
                             <BlockPills blocks={m.blocks} />
+                            {memberBadges?.[m.id] && <Badge className="bg-bg text-muted2">{memberBadges[m.id]}</Badge>}
                           </div>
                           {gradeShort(m.grade) && (
                             <span className="text-micro">{gradeShort(m.grade)}</span>

@@ -5,22 +5,22 @@ import { buildSheetRecordFields, relevantSheetHeaderSignature } from "@/lib/shee
 import { recordFieldsToJson } from "@/lib/profile-normalize";
 import { OCTOBER_SHEET_ID } from "@/lib/sheet-period";
 
-const mocks = vi.hoisted(() => ({ client: vi.fn(), roles: vi.fn(), admin: vi.fn(), member: vi.fn(), preview: false }));
+const mocks = vi.hoisted(() => ({ client: vi.fn(), roles: vi.fn(), admin: vi.fn(), member: vi.fn(), members: vi.fn(), preview: false }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: mocks.client }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.admin }));
 vi.mock("@/lib/supabase/auth", () => ({ fetchRolesByProfileIds: mocks.roles }));
-vi.mock("@/lib/sheet-public-csv", () => ({ fetchPublicMember: mocks.member }));
+vi.mock("@/lib/sheet-public-csv", () => ({ fetchPublicMember: mocks.member, fetchPublicSheetMembers: mocks.members }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => mocks.preview ? { value: "1" } : undefined }) }));
 import { GET, POST } from "./route";
 
 type Target = Pick<Database["public"]["Tables"]["profiles"]["Row"],
-  "id" | "blocks" | "sheet_name" | "record_fields" | "record_fields_version" | "sheet_header_signature" | "sheet_transition">;
+  "id" | "blocks" | "sheet_name" | "record_fields" | "record_fields_version" | "sheet_header_signature" | "sheet_transition" | "record_source">;
 type Draft = { revision: string; fields: RecordFieldDef[]; isMiddleLong: boolean; header: { signature: string; columns: typeof columns; sheetName: string; memoCandidates: number[] } };
 const columns = ["日付", "メニュー", "目的・意識すること", "考えたこと", "コメント", "追加項目"]
   .map((label, index) => ({ index, label }));
 const context = () => ({ params: Promise.resolve({ id: "target" }) });
 const url = "https://app.example.invalid/api/admin/sheets/target";
-const getRequest = () => new Request(url);
+const getRequest = (query = "") => new Request(url + query);
 const postRequest = (body: unknown, origin = "https://app.example.invalid") => new Request(url, {
   method: "POST", headers: { origin, "Content-Type": "application/json" }, body: JSON.stringify(body),
 });
@@ -41,15 +41,15 @@ function selectedFields(selectedColumns = [1, 2, 3, 4], timelineColumns = [1, 4]
 let target: Target;
 const user = vi.fn(), read = { select: vi.fn(), eq: vi.fn(), maybeSingle: vi.fn() };
 const from = vi.fn();
-const write = { update: vi.fn(), eq: vi.fn(), is: vi.fn(), contains: vi.fn(), not: vi.fn(), select: vi.fn() };
-const adminFrom = vi.fn();
+const rpc = vi.fn();
 async function draft(): Promise<Draft> {
   const response = await GET(getRequest(), context());
   expect(response.status).toBe(200);
   return response.json();
 }
 function saveBody(state: Draft, fields = selectedFields()) {
-  return { revision: state.revision, fields, signature: relevantSheetHeaderSignature(state.header.columns, fields, target.blocks.includes("middle_long")) };
+  return { revision: state.revision, mode: "sheet", sheetName: state.header.sheetName, fields,
+    signature: relevantSheetHeaderSignature(state.header.columns, fields, target.blocks.includes("middle_long")) };
 }
 
 beforeEach(() => {
@@ -57,7 +57,7 @@ beforeEach(() => {
   const fields = selectedFields();
   target = {
     id: "target", blocks: ["short"], sheet_name: "B1 synthetic", record_fields: recordFieldsToJson(fields),
-    record_fields_version: 3, sheet_header_signature: relevantSheetHeaderSignature(columns, fields, false),
+    record_fields_version: 3, record_source: "sheet", sheet_header_signature: relevantSheetHeaderSignature(columns, fields, false),
     sheet_transition: { version: "2026-10", mode: "sheet", confirmed_at: "2026-10-15T00:00:00Z",
       legacy: { sheet_name: "old synthetic", record_fields: [], sheet_header_signature: null, record_source: "sheet" } },
   };
@@ -65,12 +65,11 @@ beforeEach(() => {
   read.select.mockReturnValue(read); read.eq.mockReturnValue(read);
   read.maybeSingle.mockImplementation(async () => ({ data: target, error: null }));
   from.mockReturnValue(read);
-  mocks.client.mockResolvedValue({ auth: { getUser: user }, from });
+  mocks.client.mockResolvedValue({ auth: { getUser: user }, from, rpc });
   mocks.roles.mockResolvedValue(new Map([["manager", [role({ can_manage_members: true }), role({ can_manage_system: true })]]]));
   mocks.member.mockResolvedValue({ name: "B1 synthetic", columns, header: columns.map((column) => column.label), records: [{ memo: "private synthetic record" }] });
-  for (const method of [write.update, write.eq, write.is, write.contains, write.not]) method.mockReturnValue(write);
-  write.select.mockResolvedValue({ data: [{ id: "target", record_fields_version: 4 }], error: null });
-  adminFrom.mockReturnValue(write); mocks.admin.mockReturnValue({ from: adminFrom });
+  mocks.members.mockResolvedValue([{ name: "B1 synthetic", gid: "1" }, { name: "B2 selected", gid: "2" }]);
+  rpc.mockResolvedValue({ data: [{ id: "target", record_fields_version: 4 }], error: null });
 });
 
 describe("system administrator member sheet settings API", () => {
@@ -120,14 +119,15 @@ describe("system administrator member sheet settings API", () => {
     expect(mocks.client).not.toHaveBeenCalled(); expect(mocks.admin).not.toHaveBeenCalled();
   });
 
-  it.each(["off", "missing", "old confirmation", "no sheet"])("rejects %s settings without accessing the sheet", async (kind) => {
+  it.each(["off", "missing", "old confirmation", "no sheet"])("can read %s settings without Google while keeping the default editor restricted", async (kind) => {
     if (kind === "off") target.sheet_transition = { ...target.sheet_transition as object, mode: "off" };
     if (kind === "missing") target.sheet_transition = null;
     if (kind === "old confirmation") target.sheet_transition = { ...target.sheet_transition as object, confirmed_at: "2026-09-01T00:00:00Z" };
     if (kind === "no sheet") target.sheet_name = null;
     expect((await GET(getRequest(), context())).status).toBe(409);
-    const response = await POST(postRequest({ revision: "0".repeat(64), fields: [], signature: "[]" }), context());
-    expect(response.status).toBe(409);
+    const response = await GET(getRequest("?view=settings"), context());
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ sheetName: target.sheet_name, fields: selectedFields(), signature: target.sheet_header_signature });
     expect(mocks.member).not.toHaveBeenCalled(); expect(mocks.admin).not.toHaveBeenCalled();
   });
 
@@ -155,33 +155,123 @@ describe("system administrator member sheet settings API", () => {
     expect(latest.revision).not.toBe(initial.revision);
   });
 
-  it("allows a system-only role to save another member's app-only configuration with every CAS guard", async () => {
+  it("reads saved settings without any Google request even when the old sheet is unavailable", async () => {
+    target.sheet_transition = null; target.sheet_name = null; target.sheet_header_signature = null;
+    target.record_source = "app"; target.record_fields = [{ key: "custom", label: "本人の独自項目", type: "text" }];
+    mocks.member.mockRejectedValue(new Error("Google unavailable")); mocks.members.mockRejectedValue(new Error("Google unavailable"));
+    const response = await GET(getRequest("?view=settings"), context());
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ fields: target.record_fields, mode: null, sheetName: null, signature: null, isMiddleLong: false });
+    expect(mocks.member).not.toHaveBeenCalled(); expect(mocks.members).not.toHaveBeenCalled();
+  });
+
+  it("lists sheets only from the October workbook after authorizing and reading the target", async () => {
+    const response = await GET(getRequest("?view=members&spreadsheetId=untrusted"), context());
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ members: [{ name: "B1 synthetic", gid: "1" }, { name: "B2 selected", gid: "2" }] });
+    expect(mocks.members).toHaveBeenCalledExactlyOnceWith(OCTOBER_SHEET_ID);
+    expect(mocks.member).not.toHaveBeenCalled();
+  });
+
+  it.each(["off", "unconfigured"])("can inspect a selected sheet while the member is %s", async (kind) => {
+    target.sheet_transition = kind === "off" ? { ...target.sheet_transition as object, mode: "off" } : null;
+    mocks.member.mockResolvedValue({ name: "B2 selected", columns });
+    const response = await GET(getRequest("?sheetName=B2%20selected"), context());
+    expect(response.status).toBe(200);
+    expect((await response.json()).header.sheetName).toBe("B2 selected");
+    expect(mocks.member).toHaveBeenCalledExactlyOnceWith("B2 selected", { spreadsheetId: OCTOBER_SHEET_ID });
+  });
+
+  it("distinguishes a missing target and a failed target read for the settings and sheet-list views", async () => {
+    for (const view of ["settings", "members"]) {
+      read.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
+      expect((await GET(getRequest(`?view=${view}`), context())).status).toBe(404);
+      read.maybeSingle.mockResolvedValueOnce({ data: null, error: new Error("unavailable") });
+      expect((await GET(getRequest(`?view=${view}`), context())).status).toBe(503);
+    }
+    expect(mocks.member).not.toHaveBeenCalled(); expect(mocks.members).not.toHaveBeenCalled();
+  });
+
+  it("does not treat a failed external sheet list as an empty list", async () => {
+    mocks.members.mockRejectedValue(new Error("metadata unavailable"));
+    const response = await GET(getRequest("?view=members"), context());
+    expect(response.status).toBe(503);
+    expect((await response.json()).members).toBeUndefined();
+  });
+
+  it("saves another member's selected sheet and app-only mode through the authenticated atomic RPC", async () => {
     mocks.roles.mockResolvedValue(new Map([["manager", [role({ can_manage_system: true })]]]));
     target.sheet_transition = { ...target.sheet_transition as object, mode: "app_only" };
     const state = await draft();
     const fields = selectedFields([1, 4, 5], [4, 5]);
-    const response = await POST(postRequest(saveBody(state, fields)), context());
+    mocks.member.mockResolvedValueOnce({ name: "B2 selected", columns });
+    const expected = structuredClone(target);
+    const response = await POST(postRequest({ ...saveBody(state, fields), sheetName: "B2 selected", mode: "app_only" }), context());
     expect(response.status).toBe(200); expect(await response.json()).toEqual({ ok: true, version: 4 });
-    expect(write.update).toHaveBeenCalledExactlyOnceWith({
-      record_fields: recordFieldsToJson(fields), sheet_header_signature: relevantSheetHeaderSignature(columns, fields, false), sheet_history_imported_at: null,
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("admin_save_member_sheet_setup", {
+      p_profile_id: "target", p_expected: expected, p_sheet_name: "B2 selected", p_mode: "app_only",
+      p_fields: recordFieldsToJson(fields), p_signature: relevantSheetHeaderSignature(columns, fields, false),
     });
-    expect(write.eq.mock.calls).toEqual([
-      ["id", "target"], ["record_fields_version", 3], ["sheet_name", "B1 synthetic"],
-      ["sheet_header_signature", target.sheet_header_signature], ["sheet_transition", JSON.stringify(target.sheet_transition)],
-    ]);
-    expect(write.not).toHaveBeenCalledWith("blocks", "cs", "{middle_long}");
-    expect(write.select).toHaveBeenCalledWith("id,record_fields_version");
     expect(mocks.member).toHaveBeenCalledTimes(2);
+    expect(mocks.member).toHaveBeenLastCalledWith("B2 selected", { spreadsheetId: OCTOBER_SHEET_ID });
+    expect(mocks.admin).not.toHaveBeenCalled();
   });
 
-  it("uses an is-null guard when the previous header signature was not set", async () => {
+  it("passes a null header signature unchanged in the expected state", async () => {
     target.sheet_header_signature = null;
     const state = await draft();
     expect((await POST(postRequest(saveBody(state)), context())).status).toBe(200);
-    expect(write.is).toHaveBeenCalledWith("sheet_header_signature", null);
+    expect(rpc).toHaveBeenCalledWith("admin_save_member_sheet_setup", expect.objectContaining({ p_expected: expect.objectContaining({ sheet_header_signature: null }) }));
   });
 
-  it.each(["fields", "version", "sheet", "mode", "blocks", "signature"])("rejects a changed %s revision before creating a service client", async (kind) => {
+  it("submits the untouched pre-transition settings as the basis for the initial legacy snapshot", async () => {
+    target.sheet_transition = null; target.record_source = "app";
+    target.sheet_name = "B1 legacy"; target.sheet_header_signature = "legacy signature";
+    target.record_fields = [{ key: "old_custom", label: "元の独自項目", type: "number" }];
+    const expected = structuredClone(target);
+    const response = await GET(getRequest("?view=settings"), context());
+    const state = await response.json();
+    mocks.member.mockResolvedValue({ name: "B2 selected", columns });
+    const fields = selectedFields();
+    const save = await POST(postRequest({ revision: state.revision, mode: "sheet", sheetName: "B2 selected", fields,
+      signature: relevantSheetHeaderSignature(columns, fields, false), expected: { sheet_name: "untrusted" } }), context());
+    expect(save.status).toBe(200);
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("admin_save_member_sheet_setup", expect.objectContaining({
+      p_expected: expected, p_sheet_name: "B2 selected", p_mode: "sheet", p_fields: recordFieldsToJson(fields),
+    }));
+  });
+
+  it("disables linkage without a Google request or replacing the member's saved sheet and fields", async () => {
+    const stateResponse = await GET(getRequest("?view=settings"), context());
+    const state = await stateResponse.json();
+    mocks.member.mockRejectedValue(new Error("Google unavailable"));
+    const response = await POST(postRequest({ revision: state.revision, mode: "off", sheetName: "untrusted replacement", fields: ["invalid"], signature: "untrusted" }), context());
+    expect(response.status).toBe(200);
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("admin_save_member_sheet_setup", {
+      p_profile_id: "target", p_expected: target, p_mode: "off", p_sheet_name: "", p_fields: [], p_signature: "",
+    });
+    expect(mocks.member).not.toHaveBeenCalled(); expect(mocks.members).not.toHaveBeenCalled();
+  });
+
+  it("requires mode and complete non-off setup inputs before calling the RPC", async () => {
+    const state = await draft();
+    const input = saveBody(state);
+    expect((await POST(postRequest({ ...input, mode: undefined }), context())).status).toBe(400);
+    expect((await POST(postRequest({ ...input, sheetName: undefined }), context())).status).toBe(400);
+    expect((await POST(postRequest({ ...input, fields: undefined }), context())).status).toBe(400);
+    expect((await POST(postRequest({ ...input, signature: undefined }), context())).status).toBe(400);
+    expect(rpc).not.toHaveBeenCalled(); expect(mocks.member).toHaveBeenCalledTimes(1);
+  });
+
+  it("never saves an unknown selected sheet when the public lookup rejects it", async () => {
+    const state = await draft();
+    mocks.member.mockRejectedValue(new Error("selected sheet not found"));
+    const response = await POST(postRequest({ ...saveBody(state), sheetName: "arbitrary" }), context());
+    expect(response.status).toBe(503); expect((await response.json()).uncertain).toBeUndefined();
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it.each(["fields", "version", "sheet", "mode", "blocks", "signature", "record source"])("rejects a changed %s revision before writing", async (kind) => {
     const state = await draft();
     if (kind === "fields") target.record_fields = [];
     if (kind === "version") target.record_fields_version++;
@@ -189,8 +279,10 @@ describe("system administrator member sheet settings API", () => {
     if (kind === "mode") target.sheet_transition = { ...target.sheet_transition as object, mode: "app_only" };
     if (kind === "blocks") target.blocks = ["middle_long"];
     if (kind === "signature") target.sheet_header_signature = "changed";
+    if (kind === "record source") target.record_source = "app";
     expect((await POST(postRequest(saveBody(state)), context())).status).toBe(409);
     expect(mocks.admin).not.toHaveBeenCalled(); expect(mocks.member).toHaveBeenCalledTimes(1);
+    expect(rpc).not.toHaveBeenCalled();
   });
 
   it.each(["missing source", "invented key", "hidden timeline", "duplicate column", "extra property"])("rejects %s fields without writing", async (kind) => {
@@ -227,8 +319,7 @@ describe("system administrator member sheet settings API", () => {
     expect((await POST(postRequest(saveBody(state, tooMany)), context())).status).toBe(400);
     expect(mocks.admin).not.toHaveBeenCalled();
     expect((await POST(postRequest(saveBody(state, fields)), context())).status).toBe(200);
-    expect(write.contains).toHaveBeenCalledWith("blocks", ["middle_long"]);
-    expect(write.not).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith("admin_save_member_sheet_setup", expect.objectContaining({ p_expected: expect.objectContaining({ blocks: ["middle_long"] }) }));
   });
 
   it("rejects changed source headers or a changed signature after refetching the sheet", async () => {
@@ -239,38 +330,48 @@ describe("system administrator member sheet settings API", () => {
     expect(mocks.admin).not.toHaveBeenCalled();
   });
 
-  it("reports a race after validation as 409 when the atomic update changes zero rows", async () => {
+  it("reports an RPC atomic compare conflict as 409 without resending", async () => {
     const state = await draft();
-    write.select.mockResolvedValue({ data: [], error: null });
+    rpc.mockResolvedValue({ data: null, error: { code: "PT409" } });
     const response = await POST(postRequest(saveBody(state)), context());
     expect(response.status).toBe(409); expect((await response.json()).uncertain).toBeUndefined();
-    expect(write.update).toHaveBeenCalledTimes(1); expect(write.select).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 
-  it.each(["network error", "null response", "wrong row", "multiple rows"])("reports %s after starting the write as uncertain without resending", async (kind) => {
+  it("reports a target removed before the locked RPC read as missing", async () => {
     const state = await draft();
-    if (kind === "network error") write.select.mockRejectedValue(new Error("connection lost"));
-    if (kind === "null response") write.select.mockResolvedValue({ data: null, error: null });
-    if (kind === "wrong row") write.select.mockResolvedValue({ data: [{ id: "other", record_fields_version: 4 }], error: null });
-    if (kind === "multiple rows") write.select.mockResolvedValue({ data: [{ id: "target", record_fields_version: 4 }, { id: "other", record_fields_version: 4 }], error: null });
+    rpc.mockResolvedValue({ data: null, error: { code: "P0002" } });
+    const response = await POST(postRequest(saveBody(state)), context());
+    expect(response.status).toBe(404); expect((await response.json()).uncertain).toBeUndefined();
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["network error", "RPC error", "null response", "zero rows", "wrong row", "multiple rows"])("reports %s after starting the write as uncertain without resending", async (kind) => {
+    const state = await draft();
+    if (kind === "network error") rpc.mockRejectedValue(new Error("connection lost"));
+    if (kind === "RPC error") rpc.mockResolvedValue({ data: null, error: { code: "08006" } });
+    if (kind === "null response") rpc.mockResolvedValue({ data: null, error: null });
+    if (kind === "zero rows") rpc.mockResolvedValue({ data: [], error: null });
+    if (kind === "wrong row") rpc.mockResolvedValue({ data: [{ id: "other", record_fields_version: 4 }], error: null });
+    if (kind === "multiple rows") rpc.mockResolvedValue({ data: [{ id: "target", record_fields_version: 4 }, { id: "other", record_fields_version: 4 }], error: null });
     const response = await POST(postRequest(saveBody(state)), context());
     expect(response.status).toBe(503); expect((await response.json()).uncertain).toBe(true);
-    expect(write.update).toHaveBeenCalledTimes(1); expect(write.select).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 
   it("distinguishes a known failover write refusal from an uncertain result", async () => {
     const state = await draft();
-    write.select.mockResolvedValue({ data: null, error: { code: "PT503" } });
+    rpc.mockResolvedValue({ data: null, error: { code: "PT503" } });
     const response = await POST(postRequest(saveBody(state)), context());
     expect(response.status).toBe(503); expect(await response.json()).toMatchObject({ unchanged: true });
-    expect(write.update).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 
   it("allows a read to reconcile an applied write whose response was lost without resending it", async () => {
     const state = await draft();
     const fields = selectedFields([1, 4, 5], [4, 5]);
     const input = saveBody(state, fields);
-    write.select.mockImplementationOnce(async () => {
+    rpc.mockImplementationOnce(async () => {
       target.record_fields = recordFieldsToJson(fields);
       target.sheet_header_signature = input.signature;
       target.record_fields_version++;
@@ -278,10 +379,13 @@ describe("system administrator member sheet settings API", () => {
     });
     const response = await POST(postRequest(input), context());
     expect(response.status).toBe(503); expect((await response.json()).uncertain).toBe(true);
-    const saved = await draft();
+    mocks.member.mockRejectedValue(new Error("Google unavailable after save"));
+    const savedResponse = await GET(getRequest("?view=settings"), context());
+    expect(savedResponse.status).toBe(200);
+    const saved = await savedResponse.json();
     expect(saved.fields).toEqual(input.fields);
-    expect(saved.header.signature).toBe(input.signature);
+    expect(saved.signature).toBe(input.signature);
     expect(saved.revision).not.toBe(state.revision);
-    expect(write.update).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 });

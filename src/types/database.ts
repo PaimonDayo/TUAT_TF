@@ -2193,6 +2193,10 @@ export type Database = {
       apply_competition_sheet_edits: {Args:{p_request_id:string;p_context:Json;p_changes:Json;p_dry_run:boolean};Returns:Json}
       replay_competition_meet_changes: {Args:{p_rows:Json};Returns:Json}
       login_access_allowed: { Args: never; Returns: boolean }
+      admin_save_member_sheet_setup: {
+        Args: { p_profile_id: string; p_expected: Json; p_sheet_name: string; p_fields: Json; p_signature: string; p_mode: string }
+        Returns: { id: string; record_fields_version: number }[]
+      }
       save_october_sheet_setup: {
         Args: { p_sheet_name: string; p_fields: Json; p_signature: string; p_mode: string }
         Returns: undefined
