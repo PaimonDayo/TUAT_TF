@@ -22,7 +22,6 @@ export type SyncResult = {
   unchangedMembers: string[];
   /** 部員ごとの失敗（1人の不調で他の部員の同期を止めないための部分失敗設計） */
   failedMembers: { member: string; reason: string }[];
-  sheetReplies: number;
   dryRun: boolean;
   sheetWritesSkipped?: boolean;
   /** A sheet write may have committed without a complete acknowledgement. */

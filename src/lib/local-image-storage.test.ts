@@ -59,6 +59,22 @@ it("rejects public/release placement and traversal before publishing bytes", asy
   vi.stubEnv("LOCAL_IMAGE_STORAGE_ROOT", root);
   await expect(uploadLocalImage("avatars/member-1/../avatar.webp", bytes)).rejects.toMatchObject({ code: "PATH" });
 });
+it("limits tiny object counts and per-folder usage before publication", async () => {
+  vi.stubEnv("LOCAL_IMAGE_MAX_FOLDER_OBJECTS", "1");
+  await uploadLocalImage("avatars/member-1/one.webp", bytes);
+  await expect(uploadLocalImage("avatars/member-1/two.webp", bytes)).rejects.toMatchObject({ code: "CAPACITY" });
+  await uploadLocalImage("avatars/member-2/one.webp", bytes);
+  vi.stubEnv("LOCAL_IMAGE_MAX_OBJECTS", "2");
+  await expect(uploadLocalImage("avatars/member-3/one.webp", bytes)).rejects.toMatchObject({ code: "CAPACITY" });
+  expect(await localImageInventory()).toEqual({ bytes: 2 * bytes.length, objects: 2 });
+});
+it("retains existing images when an owner folder reaches its byte limit", async () => {
+  vi.stubEnv("LOCAL_IMAGE_MAX_FOLDER_BYTES", String(bytes.length));
+  await uploadLocalImage("avatars/member-1/one.webp", bytes);
+  await expect(uploadLocalImage("avatars/member-1/two.webp", bytes)).rejects.toMatchObject({ code: "CAPACITY" });
+  await uploadLocalImage("avatars/member-2/one.webp", bytes);
+  expect(await readFile(join(root,"avatars/member-1/one.webp"))).toEqual(bytes);
+});
 it("reports a lost storage root as unavailable rather than a missing photograph", async () => {
   await uploadImage(client,"avatars",path,bytes);const url=await signedImageUrl(client,"avatars",path,60);
   await rm(root,{recursive:true,force:true});

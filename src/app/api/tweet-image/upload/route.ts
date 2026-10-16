@@ -4,10 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { loginAccessResponse } from "@/lib/supabase/login-access";
 import { ImageUploadError,logImageFailure,readImageUpload,uploadImage,removeImages } from "@/lib/image-storage";
 import { isSafeTweetImagePath,TWEET_IMAGE_BUCKET,TWEET_IMAGE_MAX_UPLOAD_BYTES } from "@/lib/tweet-image";
+import { admitImageUpload } from "@/lib/image-upload-admission";
 
 export const runtime="nodejs";
 
 export async function POST(request: Request) {
+  let release: (() => void) | undefined;
   try {
     const supabase=await createClient();
     const { data: { user },error: authError }=await supabase.auth.getUser();
@@ -22,6 +24,7 @@ export async function POST(request: Request) {
     if(Number(request.headers.get("content-length")??0)>TWEET_IMAGE_MAX_UPLOAD_BYTES) {
       return NextResponse.json({ error: "画像の容量が大きすぎます" },{ status: 413 });
     }
+    release=admitImageUpload(user.id);
     let input: Buffer;
     try { input=await readImageUpload(request,TWEET_IMAGE_MAX_UPLOAD_BYTES); }
     catch(error) {
@@ -47,10 +50,11 @@ export async function POST(request: Request) {
       logImageFailure("tweet-image-upload");
       return NextResponse.json({ error: "画像をアップロードできませんでした" },{ status: 503 });
     }
-  } catch {
+  } catch(error) {
+    if(error instanceof ImageUploadError) return NextResponse.json({ error: error.message },{ status: error.status,headers: { "Cache-Control": "private, no-store" } });
     logImageFailure("tweet-image-upload");
     return NextResponse.json({ error: "画像をアップロードできませんでした" },{ status: 503,headers: { "Cache-Control": "private, no-store" } });
-  }
+  } finally { release?.(); }
 }
 
 // Only unused drafts owned by the caller can be removed through this endpoint.

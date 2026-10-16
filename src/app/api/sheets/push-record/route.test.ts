@@ -10,8 +10,6 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => state.admin })
 vi.mock("@/lib/pc-backup-status", async original => ({ ...await original<typeof import("@/lib/pc-backup-status")>(), pcAppWriteProtectionResponse: async () => null }));
 vi.mock("@/lib/sheet-sync/gas-client", () => ({ gasPost: state.gas, fetchMemberRaw: async (name: string) => ({ name,
   header: ["日付", "感想"], records: state.memberRecords }), fetchAllRaw: state.fetch }));
-vi.mock("@/lib/sheet-sync/reply-deletions", () => ({ flushReplyDeletions: async () => [] }));
-vi.mock("@/lib/sheet-sync/replies", () => ({ reconcileSheetReplies: async () => ({ synced: 0, failedMembers: [] }) }));
 import { POST } from "./route";
 import { runSheetSync } from "@/lib/sheet-sync/run";
 import { processPendingClears } from "@/lib/sheet-sync/clear";

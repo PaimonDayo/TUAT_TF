@@ -1,12 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FileSpreadsheet } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import {
-  sheetRepliesWithoutAppDuplicates,
-  sortRepliesInWrittenOrder,
-} from "@/lib/sheet-replies";
 import { Avatar } from "@/components/common/Avatar";
 import { CommentLikeButton } from "@/components/cards/CommentLikeButton";
 import { Linkify } from "@/components/common/Linkify";
@@ -18,25 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useSystemGlass } from "@/components/layout/glass/system-glass-state";
 import type { CommentAuthor, CommentWithAuthor, TargetType } from "@/types";
 
-type AppReply = CommentWithAuthor & { kind: "app" };
-type SheetReply = {
-  kind: "sheet";
-  id: string;
-  content: string;
-  reply_index: number;
-  synced_at: string;
-};
-type DisplayReply = AppReply | SheetReply;
 type CommentLike = { liked: boolean; count: number };
-
-function sortRepliesFromLeftToRight(replies: DisplayReply[]): DisplayReply[] {
-  return sortRepliesInWrittenOrder(replies, (reply) => ({
-    id: reply.id,
-    createdAt: reply.kind === "app" ? reply.created_at : null,
-    sheetReplyIndex:
-      reply.kind === "sheet" ? reply.reply_index : reply.sheet_reply_index ?? null,
-  }));
-}
 
 export function CommentSection({
   targetType,
@@ -50,7 +27,7 @@ export function CommentSection({
   onCountChange: (count: number) => void;
 }) {
   const newUi = useSystemGlass();
-  const [comments, setComments] = useState<DisplayReply[]>([]);
+  const [comments, setComments] = useState<CommentWithAuthor[]>([]);
   // コメントごとのいいね。件数と自分の状態を1回のRPCでまとめて読む。
   const [likeState, setLikeState] = useState<Record<string, CommentLike>>({});
   const [loading, setLoading] = useState(true);
@@ -73,57 +50,28 @@ export function CommentSection({
         .eq("target_id", targetId)
         .order("created_at", { ascending: true });
 
-      const sheetResult = targetType === "record"
-        ? await supabase
-            .from("sheet_record_replies")
-            .select("id, content, reply_index, synced_at")
-            .eq("record_id", targetId)
-            .order("reply_index", { ascending: true })
-        : { data: [], error: null };
-
       if (!active) return;
-      if (commentsResult.error || sheetResult.error) {
+      if (commentsResult.error) {
         setError("コメントを読み込めませんでした");
         setLoading(false);
         return;
       }
 
-      const appRows: AppReply[] = (commentsResult.data ?? []).flatMap((row) => {
+      const rows: CommentWithAuthor[] = (commentsResult.data ?? []).flatMap((row) => {
         if (row.target_type !== "record" && row.target_type !== "tweet") return [];
         return [{
           ...row,
           target_type: row.target_type as TargetType,
-          kind: "app" as const,
         }];
       });
-      const exportedAppTexts = appRows.map((row) => {
-        const authorName = row.author.display_name.trim();
-        return authorName ? `${row.content}　${authorName}` : row.content;
-      });
-      const exportedAppIndexes = appRows.flatMap((row) =>
-        row.sheet_reply_index != null ? [row.sheet_reply_index] : [],
-      );
-      const sheetRows: SheetReply[] = sheetRepliesWithoutAppDuplicates(
-        (sheetResult.data ?? []).map((row) => ({
-          row,
-          replyIndex: row.reply_index,
-          content: row.content,
-        })),
-        exportedAppTexts,
-        exportedAppIndexes,
-      ).map(({ row }) => ({
-        ...row,
-        kind: "sheet" as const,
-      }));
-      const rows = sortRepliesFromLeftToRight([...appRows, ...sheetRows]);
       setComments(rows);
       onCountChange(rows.length);
       setLoading(false);
 
       // いいねはコメント本文より後でよいので、表示を待たせない。
-      if (appRows.length > 0) {
+      if (rows.length > 0) {
         const { data: likeRows } = await supabase.rpc("get_comment_like_state", {
-          comment_ids: appRows.map((row) => row.id),
+          comment_ids: rows.map((row) => row.id),
         });
         if (!active) return;
         const next: Record<string, CommentLike> = {};
@@ -157,7 +105,7 @@ export function CommentSection({
         target_id: targetId,
         content,
       })
-      .select("id, user_id, target_type, target_id, content, sheet_reply_index, created_at, updated_at")
+      .select("id, user_id, target_type, target_id, content, created_at, updated_at")
       .single();
 
     if (insertError || !data) {
@@ -166,41 +114,16 @@ export function CommentSection({
       return;
     }
 
-    const added: AppReply = {
+    const added: CommentWithAuthor = {
       ...data,
       target_type: targetType,
       author: currentUser,
-      kind: "app",
     };
     setComments((items) => {
-      const next = sortRepliesFromLeftToRight([...items, added]);
+      const next = [...items, added];
       onCountChange(next.length);
       return next;
     });
-    // 記録へのコメントは、作者がシート連携していればスプシのリプライ列にも書く（失敗しても投稿は成立）
-    if (targetType === "record") {
-      void fetch("/api/sheets/reply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recordId: targetId, commentId: data.id, text: content }),
-      })
-        .then(async (response) => {
-          if (!response.ok) return;
-          const result = await response.json().catch(() => null);
-          const replyIndex = Number(result?.replyIndex);
-          if (!Number.isInteger(replyIndex) || replyIndex < 0) return;
-          setComments((items) =>
-            sortRepliesFromLeftToRight(
-              items.map((item) =>
-                item.kind === "app" && item.id === data.id
-                  ? { ...item, sheet_reply_index: replyIndex }
-                  : item,
-              ),
-            ),
-          );
-        })
-        .catch(() => {});
-    }
     setText("");
     setSaving(false);
     requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: newUi && window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "nearest" }));
@@ -235,7 +158,7 @@ export function CommentSection({
 
     setComments((items) =>
       items.map((item) =>
-        item.kind === "app" && item.id === comment.id ? { ...item, ...data } : item,
+        item.id === comment.id ? { ...item, ...data } : item,
       ),
     );
     setEditingId(null);
@@ -243,21 +166,20 @@ export function CommentSection({
     setSaving(false);
   }
 
-  async function remove(comment: DisplayReply) {
-    if (!currentUser.canModerateComments && (comment.kind !== "app" || comment.user_id !== currentUser.id)) return false;
+  async function remove(comment: CommentWithAuthor) {
+    if (!currentUser.canModerateComments && comment.user_id !== currentUser.id) return false;
     setError("");
     try {
-      const response = await fetch("/api/comments/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: comment.id, kind: comment.kind }) });
+      const response = await fetch("/api/comments/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: comment.id, kind: "app" }) });
       const result = await response.json();
-      if (!response.ok || !result.ok) { setError("コメントを削除できませんでした"); return false; }
+      if (!response.ok || !result.ok) { setError("コメントを削除できませんでした。画面を再読み込みして状態を確認してください"); return false; }
       setComments((items) => {
         const next = items.filter((item) => item.id !== comment.id);
         onCountChange(next.length);
         return next;
       });
-      if (result.pending) setError("アプリから削除しました。スプレッドシート側の削除は、次回の連携時に自動でもう一度試します");
       return true;
-    } catch { setError("削除結果を確認できませんでした。再試行してください"); return false; }
+    } catch { setError("削除結果を確認できませんでした。画面を再読み込みして確認してください"); return false; }
   }
 
   return (
@@ -284,25 +206,6 @@ export function CommentSection({
           <EmptyState title="まだコメントはありません" className="min-h-20 py-4" />
         ) : (
           comments.map((comment) => {
-            if (comment.kind === "sheet") {
-              return (
-                <div key={comment.id} className="flex gap-2.5">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-success/10 text-success">
-                    <FileSpreadsheet size={16} aria-hidden="true" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex min-h-7 items-center justify-between gap-2">
-                      <p className="text-[13px] font-semibold">スプレッドシートからの返信</p>
-                      {currentUser.canModerateComments && <ActionMenu onDelete={() => remove(comment)} deleteTitle="返信を削除しますか？" deleteDescription="スプレッドシートの返信も削除します。元に戻せません。" triggerLabel="返信のメニュー" />}
-                    </div>
-                    <p className="text-[14px] whitespace-pre-wrap break-words">
-                      <Linkify text={comment.content} />
-                    </p>
-                  </div>
-                </div>
-              );
-            }
-
             const editing = editingId === comment.id;
             const edited = new Date(comment.updated_at).getTime() > new Date(comment.created_at).getTime() + 1000;
 
@@ -323,7 +226,7 @@ export function CommentSection({
                         onEdit={comment.user_id === currentUser.id ? () => beginEdit(comment) : undefined}
                         onDelete={() => remove(comment)}
                         deleteTitle="コメントを削除しますか？"
-                        deleteDescription="スプレッドシートに書き込み済みの返信も削除します。元に戻せません。"
+                        deleteDescription="元に戻せません。"
                         triggerLabel="コメントのメニュー"
                         className="-mr-1"
                       />

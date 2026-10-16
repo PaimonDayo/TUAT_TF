@@ -65,8 +65,7 @@ function doPost(e) {
     if (body.action === 'writeCells') return createJsonResponse(writeCellsRecord(body));
     if (body.action === 'clearIfExisting') return createJsonResponse(clearIfExistingRecord(body));
     if (body.action === 'writeMiddleLongMenu') return createJsonResponse(writeMiddleLongMenuRecord(body));
-    if (body.action === 'deleteReply') return createJsonResponse(deleteReplyRecord(body));
-    if (body.action === 'writeReply') return createJsonResponse(writeReplyRecord(body));
+    if (body.action === 'deleteReply' || body.action === 'writeReply') return createJsonResponse({ error: 'Sheet reply synchronization is disabled' });
     return createJsonResponse({ error: 'unknown action' });
   } catch (err) {
     return createJsonResponse({ error: err.toString() });
@@ -125,15 +124,12 @@ function readMemberSheet(sheet) {
   const name = sheet.getName();
   const range = sheet.getDataRange();
   const values = range.getDisplayValues();
-  const notes = range.getNotes();
   const hIdx = findGenericHeaderIndex(values);
   if (hIdx === -1) return null;
   const header = values[hIdx].map(c => c.toString().trim());
-  const commentCol = getCommentColumn(header);
   const records = [];
   for (let rowOffset = 0; rowOffset < values.length - hIdx - 1; rowOffset++) {
     const row = values[hIdx + 1 + rowOffset];
-    const noteRow = notes[hIdx + 1 + rowOffset] || [];
     const dateRaw = row[0] ? row[0].toString().trim() : '';
     if (!dateRaw || !/^\d{1,2}\/\d{1,2}/.test(dateRaw)) continue;
     const cells = {};
@@ -142,22 +138,7 @@ function readMemberSheet(sheet) {
       if (!key) continue;
       if (cells[key] === undefined) cells[key] = row[c] != null ? row[c].toString() : '';
     }
-    const replies = [];
-    if (commentCol !== -1) {
-      for (let c = commentCol + 1; c < row.length; c++) {
-        if ((header[c] || '').toString().trim()) continue;
-        const text = (row[c] || '').toString().trim();
-        if (!text) continue;
-        const note = (noteRow[c] || '').toString().trim();
-        const marker = note.match(/^TUAT_APP_COMMENT:([A-Za-z0-9_-]+)$/);
-        replies.push({
-          replyIndex: c,
-          content: text,
-          source: marker ? 'app' : 'sheet',
-        });
-      }
-    }
-    records.push({ date: parseSheetDate(dateRaw), cells: cells, replies: replies });
+    records.push({ date: parseSheetDate(dateRaw), cells: cells });
   }
   return { name: name, gid: sheet.getSheetId().toString(), header: header.filter(Boolean), records: records };
 }
@@ -208,11 +189,15 @@ function writeCellsRecord(data) {
   } finally { lock.releaseLock(); }
 }
 
+function literalSheetValue(value) {
+  return typeof value === 'string' && value !== '' ? "'" + value : value;
+}
+
 function writeCellsRecordUnlocked(data) {
   const memberName = data.memberName;
   const date = data.date;
   const cells = data.cells || {};
-  if (!memberName || !date) throw new Error('memberName と date は必須です。');
+  if (!memberName || !validClearDate(date) || typeof cells !== 'object' || Array.isArray(cells)) throw new Error('memberName、正しい date、cells は必須です。');
 
   const sheet = findMemberSheet(memberName);
   if (!sheet) throw new Error('シート「' + memberName + '」が見つかりません。');
@@ -221,22 +206,38 @@ function writeCellsRecordUnlocked(data) {
   const hIdx = findGenericHeaderIndex(values);
   if (hIdx === -1) throw new Error('見出し行（日付）が見つかりません。');
 
-  const colOf = {};
+  const colOf = Object.create(null);
   const headerRow = values[hIdx];
   for (let c = 0; c < headerRow.length; c++) {
     const norm = normalizeHeaderCell(headerRow[c]);
-    if (norm && colOf[norm] === undefined) colOf[norm] = c;
+    if (norm) (colOf[norm] || (colOf[norm] = [])).push(c);
   }
-
-  let rowIdx = findRecordRow(values, hIdx, date);
+  if (!colOf['日付'] || colOf['日付'].length !== 1) throw new Error('日付の列が曖昧です。');
+  const dateColumn = colOf['日付'][0];
+  const rows = [];
+  for (let i = hIdx + 1; i < values.length; i++) {
+    const raw = values[i][dateColumn];
+    if (raw !== '' && raw !== null && raw !== undefined && parseSheetDate(raw) === date) rows.push(i);
+  }
+  if (rows.length > 1) throw new Error('同じ日付の行が複数あります。');
+  if (!rows.length && colOf['曜日'] && colOf['曜日'].length > 1) throw new Error('曜日の列が曖昧です。');
+  // Validate every destination/value before even creating a missing date row.
+  const requested = new Set();
+  Object.keys(cells).forEach(function (h) {
+    const header = normalizeHeaderCell(h);
+    if (requested.has(header) || (colOf[header] && colOf[header].length > 1)) throw new Error('送信先の見出しが曖昧です。');
+    requested.add(header);
+    if (typeof cells[h] !== 'string' && !(typeof cells[h] === 'number' && Number.isFinite(cells[h]))) throw new Error('セルの値が不正です。');
+  });
+  const rowIdx = rows.length ? rows[0] : -1;
   let sheetRowNum;
   if (rowIdx === -1) {
     const insertAfter = sheet.getLastRow();
     sheet.insertRowAfter(insertAfter);
     sheetRowNum = insertAfter + 1;
     const targetDate = new Date(date);
-    sheet.getRange(sheetRowNum, 1).setValue((targetDate.getMonth() + 1) + '/' + targetDate.getDate());
-    sheet.getRange(sheetRowNum, 2).setValue(['日', '月', '火', '水', '木', '金', '土'][targetDate.getDay()]);
+    sheet.getRange(sheetRowNum, dateColumn + 1).setValue((targetDate.getUTCMonth() + 1) + '/' + targetDate.getUTCDate());
+    if (colOf['曜日'] && colOf['曜日'].length === 1) sheet.getRange(sheetRowNum, colOf['曜日'][0] + 1).setValue(['日', '月', '火', '水', '木', '金', '土'][targetDate.getUTCDay()]);
   } else {
     sheetRowNum = rowIdx + 1;
   }
@@ -250,19 +251,20 @@ function writeCellsRecordUnlocked(data) {
   headerRow.forEach(function (h, col) {
     if (/実際の距離|実距離|走行距離|総距離/.test(normalizeHeaderCell(h))
       && formulas.some(function (row, index) {
-        return Boolean(row[col] && values[index] && values[index][0] != null
-          && /^\d{4}-\d{2}-\d{2}$/.test(parseSheetDate(values[index][0])));
+        return Boolean(row[col] && values[index] && values[index][dateColumn] != null
+          && /^\d{4}-\d{2}-\d{2}$/.test(parseSheetDate(values[index][dateColumn])));
       })) {
       calculatedDistanceColumns.add(col);
     }
   });
   Object.keys(cells).forEach(function (h) {
     const header = normalizeHeaderCell(h);
-    const col = colOf[header];
-    if (col === undefined) {
+    const columns = colOf[header];
+    if (!columns) {
       unmapped.push(h);
       return;
     }
+    const col = columns[0];
     const cell = sheet.getRange(sheetRowNum, col + 1);
     if (header === '日付' || header === '曜日' || header.indexOf('週合計') !== -1
       || calculatedDistanceColumns.has(col)
@@ -270,7 +272,9 @@ function writeCellsRecordUnlocked(data) {
       protectedHeaders.push(h);
       return;
     }
-    cell.setValue(cells[h]);
+    // Sheets consumes the leading apostrophe as a literal marker. Keep actual
+    // numbers numeric, and preserve strings (including numeric/formula text).
+    cell.setValue(literalSheetValue(cells[h]));
   });
 
   return {
@@ -383,7 +387,7 @@ function clearIfExistingRecord(data) {
 // ── 中長距離の月別メニュー（E:H = メニュー・ペース・補足・補強）──────────
 function writeMiddleLongMenuRecord(data) {
   const date = (data.date || '').toString().trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('date は yyyy-MM-dd 形式で必須です。');
+  if (!validClearDate(date)) throw new Error('date は正しい yyyy-MM-dd 形式で必須です。');
 
   const month = Number(date.slice(5, 7));
   const sheetName = month + '月メニュー';
@@ -394,21 +398,28 @@ function writeMiddleLongMenuRecord(data) {
   if (!lock.tryLock(5000)) throw new Error('別の保存処理中です。少し待って再試行してください。');
   try {
     const values = sheet.getDataRange().getValues();
+    const menuHeaders = [['曜日'], ['時間', '時刻', '集合時間'], ['場所'], ['メニュー'], ['ペース'], ['備考', '補足']];
+    const hIdx = values.slice(0, 15).findIndex(function (row) {
+      return row.length === 8 && menuHeaders.every(function (labels, index) { return labels.indexOf(normalizeHeaderCell(row[index + 1] || '')) !== -1; });
+    });
+    if (hIdx < 0) throw new Error('月別メニューの列を確認できません。');
     const targetMonthDay = date.slice(5);
-    let rowIdx = -1;
-    for (let i = 0; i < values.length; i++) {
+    const rows = [];
+    for (let i = hIdx + 1; i < values.length; i++) {
       const raw = values[i][0];
       if (!raw) continue;
       const parsed = parseSheetDate(raw);
       if (parsed === date || parsed.slice(5) === targetMonthDay) {
-        rowIdx = i;
-        break;
+        rows.push(i);
       }
     }
-    if (rowIdx === -1) throw new Error(date + ' の行が「' + sheetName + '」に見つかりません。');
+    if (rows.length > 1) throw new Error('同じ日付のメニュー行が複数あります。');
+    if (!rows.length) throw new Error(date + ' の行が「' + sheetName + '」に見つかりません。');
+    const rowIdx = rows[0];
+    if (values[rowIdx].length !== 8) throw new Error('月別メニューの列数が一致しません。');
 
     const cells = [data.content, data.pace, data.remark, data.supplement].map(function(value) {
-      return value == null ? '' : value.toString().trim();
+      return literalSheetValue(value == null ? '' : value.toString().trim());
     });
     sheet.getRange(rowIdx + 1, 5, 1, 4).setValues([cells]);
     SpreadsheetApp.flush();

@@ -5,6 +5,7 @@ import { Check, Copy, ExternalLink } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { APP_NAME, APP_MONO } from "@/lib/app";
+import { safeLoginNext } from "@/lib/login-next";
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
@@ -31,8 +32,7 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     const supabase = createClient();
-    const next =
-      new URLSearchParams(window.location.search).get("next") ?? "/home";
+    const next = safeLoginNext(new URLSearchParams(window.location.search).get("next"));
 
     const { error: signInError } = await supabase.auth.signInWithOAuth({
       provider: "google",

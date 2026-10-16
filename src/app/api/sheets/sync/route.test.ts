@@ -41,7 +41,7 @@ beforeEach(() => {
   state.user = { id: "administrator" };
   state.canManage = true;
   state.receiptError = null; state.confirmReceipt = true;
-  state.sync.mockReset().mockResolvedValue({ inserted: 0, updated: 0, pushed: 0, sheetReplies: 0,
+  state.sync.mockReset().mockResolvedValue({ inserted: 0, updated: 0, pushed: 0,
     unchangedMembers: [], failedMembers: [], conflicts: [], skippedMembers: [] });
   vi.stubEnv("SHEET_SYNC_SECRET", "synthetic-sync");
   vi.stubEnv("SHEET_SYNC_ENABLED", "true");

@@ -29,14 +29,17 @@ function config() {
   const root = process.env.LOCAL_IMAGE_STORAGE_ROOT;
   const secret = process.env.LOCAL_IMAGE_SIGNING_KEY;
   const limit = Number(process.env.LOCAL_IMAGE_MAX_STORAGE_BYTES ?? 8_000_000_000);
+  const maxObjects = Number(process.env.LOCAL_IMAGE_MAX_OBJECTS ?? 25_000);
+  const maxFolderObjects = Number(process.env.LOCAL_IMAGE_MAX_FOLDER_OBJECTS ?? 2_000);
+  const maxFolderBytes = Number(process.env.LOCAL_IMAGE_MAX_FOLDER_BYTES ?? 512 * 1024 * 1024);
   if (!root || !isAbsolute(root) || root !== resolve(root) || root === parse(root).root || !secret || Buffer.byteLength(secret) < 32 ||
-      !Number.isSafeInteger(limit) || limit <= 0) throw new LocalImageStorageError("CONFIG");
+      ![limit,maxObjects,maxFolderObjects,maxFolderBytes].every(value => Number.isSafeInteger(value) && value > 0)) throw new LocalImageStorageError("CONFIG");
   // Keep data outside the app, including public and every configured Next distDir.
   const fromApp = relative(process.cwd(), root);
   if (!fromApp || (!fromApp.startsWith(`..${sep}`) && fromApp !== ".." && !isAbsolute(fromApp))) {
     throw new LocalImageStorageError("CONFIG");
   }
-  return { root, secret, limit };
+  return { root, secret, limit, maxObjects, maxFolderObjects, maxFolderBytes };
 }
 
 function safeKey(key: string) {
@@ -118,9 +121,11 @@ async function syncDirectory(path: string) {
   try { await handle.sync(); } finally { await handle.close(); }
 }
 
-async function inventory(root: string) {
+async function inventory(root: string, folder?: string) {
   let bytes = 0;
   let objects = 0;
+  let folderBytes = 0;
+  let folderObjects = 0;
   async function walk(path: string, depth: number) {
     for (const entry of await readdir(path, { withFileTypes: true })) {
       const child = join(path, entry.name);
@@ -132,11 +137,15 @@ async function inventory(root: string) {
       } else if (info.isFile() && info.nlink === 1) {
         bytes += info.size;
         objects++;
+        if(folder && relative(root,child).split(sep).slice(0,2).join("/")===folder) {
+          folderBytes += info.size;
+          folderObjects++;
+        }
       } else throw new LocalImageStorageError("UNAVAILABLE");
     }
   }
   await walk(root, 0);
-  return { bytes, objects };
+  return { bytes, objects, folderBytes, folderObjects };
 }
 
 // There is one Next process. Serialize its capacity checks and filesystem mutations.
@@ -159,20 +168,25 @@ export async function localImageInventory() {
   try {
     const { root } = config();
     await storageRoot(root, process.env.IMAGE_STORAGE_READ_ONLY !== "true");
-    return await inventory(root);
+    const { bytes, objects } = await inventory(root);
+    return { bytes, objects };
   } catch (error) { sanitizedFailure(error); }
 }
 
 export async function uploadLocalImage(key: string, bytes: Buffer) {
   try {
     safeKey(key);
-    const { root, limit } = config();
+    const { root, limit, maxObjects, maxFolderObjects, maxFolderBytes } = config();
     writable();
     if (process.env.LOCAL_IMAGE_UPLOADS_PAUSED === "true") throw new LocalImageStorageError("PAUSED", "画像の保存を一時停止しています");
     if (!bytes.length || bytes.length > MAX_IMAGE_BYTES) throw new LocalImageStorageError("CAPACITY", "画像の容量が大きすぎます");
     await mutate(root, async () => {
       const target = await imagePath(root, key, true);
-      if ((await inventory(root)).bytes + bytes.length > limit) throw new LocalImageStorageError("CAPACITY", "画像の保存容量が上限に達しました");
+      const usage = await inventory(root,key.split("/").slice(0,2).join("/"));
+      if (usage.bytes + bytes.length > limit || usage.objects >= maxObjects ||
+          usage.folderBytes + bytes.length > maxFolderBytes || usage.folderObjects >= maxFolderObjects) {
+        throw new LocalImageStorageError("CAPACITY", "画像の保存容量が上限に達しました");
+      }
       const temporary = join(parse(target).dir, `.upload-${randomUUID()}.tmp`);
       const handle = await open(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0), 0o600);
       try {

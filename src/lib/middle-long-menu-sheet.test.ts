@@ -52,6 +52,20 @@ function schedule(menus: PracticeMenu[]): ScheduleWithMenus {
 }
 
 describe("parseMiddleLongMenuCsv", () => {
+  it("accepts the current eight-column export with editable A/H labels and two title rows", () => {
+    const csv = ["synthetic title,,,,,,,", "synthetic instructions,,,,,,,", ",,,,,,,", "2,曜日,時間,場所,メニュー,ペース,補足,列 8",
+      ...Array.from({ length: 31 }, (_, index) => `10/${index + 1},木,17:00,synthetic,menu,,,`)].join("\n");
+    const rows = parseMiddleLongMenuCsv(csv, 10);
+    expect(rows).toHaveLength(31); expect(rows[0].monthDay).toBe("10-01"); expect(rows[30].monthDay).toBe("10-31");
+  });
+  it("rejects changed columns, wrong-month rows and truncated date rows while allowing a verified empty month", () => {
+    const header = "日付,曜日,時間,場所,メニュー,ペース,備考,補強";
+    for (const csv of ["名前,内容\nsynthetic,menu", header.replace("日付,曜日", "曜日,日付") + "\n木,10/1,17:00,場所,menu,,,",
+      header + "\n9/1,火,17:00,場所,menu,,,", header + "\n10/1,木,17:00", header + "\n10/40,木,17:00,場所,menu,,,"]) {
+      expect(() => parseMiddleLongMenuCsv(csv, 10)).toThrow();
+    }
+    expect(parseMiddleLongMenuCsv(header + "\n10/1,木,,,,,,", 10)).toEqual([]);
+  });
   it("reads the old app A:H monthly menu layout", () => {
     const csv = [
       "7月メニュー,,,,,,,,",
@@ -124,6 +138,12 @@ describe("applyMiddleLongMenuSnapshot", () => {
       { rows: [], loadedMonths: [] },
     );
     expect(failed).toBe(original);
+  });
+
+  it("never applies rows from a month whose fetch/structure was not confirmed", () => {
+    const original = schedule([menu()]);
+    expect(applyMiddleLongMenuSnapshot([original], { loadedMonths: [], rows: [{ exactDate: null, monthDay: "10-24", sourceMonth: 10,
+      time: "", location: "", content: "unconfirmed", pace: "", remark: "", supplement: "" }] })[0]).toBe(original);
   });
 
   it("preserves existing place and time when the sheet leaves them blank", () => {

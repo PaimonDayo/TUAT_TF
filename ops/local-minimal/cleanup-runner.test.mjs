@@ -67,7 +67,8 @@ function runnerFixture(mode) {
       const identity={...scope,generation};const lock=await callbacks.assertExclusiveLifecycleWriter({identity,prefix:`ops/pc-backend/${sourceId}/backups/`});assert.equal(lock.exclusive,true);
       const proof=await callbacks.verifyRetainedRecovery({identity,snapshot:{archiveKey,archiveSha256,capturedAt:captured,restoreVerifiedAt:restored}});assert.equal(proof.verified,true);
       if(faults.dryRun)throw Error('Private secret must never be included in outcome');
-      return {previewDigest:'d'.repeat(64),plan:{local:{removalCandidates:[{}]},remote:{removalCandidates:[]}},metadataCandidates:[]};},
+      return {previewDigest:'d'.repeat(64),plan:{local:{removalCandidates:faults.empty||faults.only?[]:[{}]},
+        remote:{removalCandidates:faults.only==='remote'?[{}]:[]}},metadataCandidates:faults.only==='metadata'?[{}]:[]};},
     async apply(cfg,preview,callbacks){events.push('apply');assert.equal(callbacks.maxOperations,8);if(faults.apply)throw Error('Unknown delete result');return {completed:1,remaining:0};},
     async writeOutcome(cfg,value){assert.equal(cfg,config);if(faults.write)throw Error('Private disk failed');outcomes.push(value);},onHeld(){events.push('held');}};
   return {options,policy,files,events,outcomes,faults,scope,parentConfig};
@@ -77,6 +78,26 @@ test('policy absence is opt-out and a present policy defaults to review only',as
   const absent=runnerFixture();absent.files.delete(SNAPSHOT_CLEANUP_POLICY);assert.equal((await runSnapshotCleanup(config,absent.options)).state,'disabled');assert.deepEqual(absent.events,[]);
   const f=runnerFixture(),result=await runSnapshotCleanup(config,f.options);assert.equal(result.state,'dry-run');assert.deepEqual(f.events,['dry-run']);assert.equal(f.outcomes.length,1);
   const apply=runnerFixture('apply');assert.equal((await runSnapshotCleanup(config,apply.options)).state,'applied');assert.deepEqual(apply.events,['dry-run','apply']);
+});
+
+test('zero candidates retain preview safety proofs but never enter apply or create a deletion intent',async()=>{
+  const f=runnerFixture('apply');f.faults.empty=true;
+  f.options.apply=async()=>assert.fail('empty cleanup must not re-read archives or enter deletion apply');
+  const outcome=await runSnapshotCleanup(config,f.options);
+  assert.equal(outcome.state,'dry-run');assert.equal(outcome.reasonCode,'no-removal-candidates');
+  assert.deepEqual(outcome.counts,{local:0,remote:0,metadata:0});assert.deepEqual(f.events,['dry-run']);
+  assert.equal(f.outcomes.length,1);
+  const changed=runnerFixture('apply');changed.faults.empty=true;changed.faults.owner=true;
+  assert.equal((await runSnapshotCleanup(config,changed.options)).state,'held');assert(!changed.events.includes('apply'));
+});
+
+test('remote-only and metadata-only removal plans still enter the guarded apply path',async()=>{
+  for(const only of ['remote','metadata']) {
+    const f=runnerFixture('apply');f.faults.only=only;
+    const outcome=await runSnapshotCleanup(config,f.options);
+    assert.equal(outcome.state,'applied');assert.deepEqual(f.events,['dry-run','apply']);
+    assert.equal(outcome.counts[only],1);assert.equal(outcome.counts.local,0);
+  }
 });
 
 test('wrong policy scope, changed producer owner or mismatched independent key is held without losing backup ACK',async()=>{

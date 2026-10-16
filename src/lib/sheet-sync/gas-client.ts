@@ -23,13 +23,16 @@ export class GasWriteResultUnknownError extends Error {
 }
 
 export async function gasPost<T>(body: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
+  if (body.action === "writeReply" || body.action === "deleteReply") {
+    throw new Error("返信のスプレッドシート連携は終了しました。コメントはアプリ内で管理してください。");
+  }
   const mutation = body.action !== "fetchMember";
   if (mutation) await assertPcAppWriteAllowed();
   const { url, secret } = gasConfig();
   try {
   const res = await fetchGasResponse(url, JSON.stringify({ ...body, secret }), signal);
   const result = await readGasJson<T>(res);
-  if (["writeCells", "writeReply", "deleteReply", "writeMiddleLongMenu"].includes(String(body.action))
+  if (["writeCells", "writeMiddleLongMenu"].includes(String(body.action))
     && (result as { success?: boolean }).success !== true) {
     throw new Error("スプレッドシートへの書き込み完了を確認できませんでした。送信結果を確認するまで再送を保留してください。");
   }
@@ -53,26 +56,6 @@ export async function readGasJson<T>(res: Response): Promise<T> {
   if (json.error) throw new Error(`GASエラー: ${json.error}`);
   return json;
 }
-
-/** アプリのコメントを、その人のスプシ当日行の右側（列名なし列）にリプライとして書く */
-export async function writeSheetReply(
-  memberName: string,
-  date: string,
-  text: string,
-  sourceId?: string,
-  spreadsheetId?: string,
-): Promise<number | null> {
-  const result = await gasPost<{ success?: boolean; col?: number }>({
-    action: "writeReply",
-    spreadsheetId,
-    memberName,
-    date,
-    text,
-    sourceId,
-  });
-  return result.success && Number.isInteger(result.col) ? Number(result.col) - 1 : null;
-}
-
 
 export type MiddleLongMenuSheetWrite = {
   content: string;

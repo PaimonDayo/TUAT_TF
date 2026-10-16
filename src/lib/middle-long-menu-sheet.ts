@@ -4,6 +4,7 @@ import type {
   MiddleLongSheetMenuRow,
 } from "@/lib/middle-long-menu-data";
 import { OCTOBER_SHEET_ID } from "@/lib/sheet-period";
+import { fetchPublicSheetText } from "@/lib/sheet-public-csv";
 
 const BASE_URL = "https://docs.google.com/spreadsheets/d";
 const MENU_SHEET_NAME = /^(\d{1,2})月メニュー$/;
@@ -80,10 +81,24 @@ export function parseMiddleLongMenuCsv(csv: string, sourceMonth: number): Middle
   const parsed = Papa.parse<string[]>(csv, { skipEmptyLines: false });
   const fatal = parsed.errors.find((error) => error.type === "Quotes");
   if (fatal) throw new Error(`メニューのCSVを読み取れませんでした: ${fatal.message}`);
-  return parsed.data.flatMap((rawRow) => {
+  // The current export uses "2" / "列 8" for A/H. B:G identify its
+  // physical A:H layout without depending on editable title text or A/H labels.
+  const columns = [["曜日"], ["時間", "時刻", "集合時間"], ["場所"], ["メニュー"], ["ペース"], ["備考", "補足"]];
+  const headerIndex = parsed.data.slice(0, 15).findIndex(row => row.length === 8
+    && columns.every((labels, index) => labels.includes((row[index + 1] ?? "").replace(/\s/g, ""))));
+  if (headerIndex < 0) {
+    throw new Error("月別メニューの見出しが一致しません。前回のメニューを保持します");
+  }
+  return parsed.data.slice(headerIndex + 1).flatMap((rawRow) => {
     const row = rawRow.map((cell) => String(cell ?? ""));
     const date = parseDateCell(row[0] ?? "");
-    if (!date) return [];
+    if (!date) {
+      if (row.every(cell => !cell.trim()) || /^(?:合計|月間合計|週間合計|小計|平均)$/.test((row[0] ?? "").trim())) return [];
+      throw new Error("月別メニューの日付を確認できません。前回のメニューを保持します");
+    }
+    if (row.length !== 8 || Number(date.monthDay.slice(0, 2)) !== sourceMonth) {
+      throw new Error("月別メニューの月または列が一致しません。前回のメニューを保持します");
+    }
     const time = (row[2] ?? "").trim();
     const location = (row[3] ?? "").trim();
     const content = (row[4] ?? "").replace(/\\n/g, "\n").trim();
@@ -95,16 +110,6 @@ export function parseMiddleLongMenuCsv(csv: string, sourceMonth: number): Middle
   });
 }
 
-async function fetchWithTimeout(url: string, revalidateSeconds: number): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  try {
-    return await fetch(url, { next: { revalidate: revalidateSeconds }, redirect: "follow", signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 async function fetchMenuTabs(id: string): Promise<SheetTab[]> {
   if (metadataCache?.spreadsheetId === id && metadataCache.expiresAt > Date.now()) {
     return metadataCache.tabs;
@@ -112,9 +117,9 @@ async function fetchMenuTabs(id: string): Promise<SheetTab[]> {
   const pending = pendingMetadata.get(id);
   if (pending) return pending;
   const request = (async () => {
-    const response = await fetchWithTimeout(`${BASE_URL}/${encodeURIComponent(id)}/htmlview`, META_CACHE_MS / 1000);
+    const { response, text: html } = await fetchPublicSheetText(`${BASE_URL}/${encodeURIComponent(id)}/htmlview`, FETCH_TIMEOUT_MS, 4 * 1024 ** 2, { next: { revalidate: META_CACHE_MS / 1000 } });
     if (!response.ok) throw new Error(`メニューのシート一覧を取得できませんでした (${response.status})`);
-    const tabs = parseMenuTabs(await response.text());
+    const tabs = parseMenuTabs(html);
     if (tabs.length === 0) throw new Error("公開ブックの月別メニューを取得できませんでした");
     metadataCache = { spreadsheetId: id, expiresAt: Date.now() + META_CACHE_MS, tabs };
     return tabs;
@@ -130,12 +135,11 @@ async function fetchMenuRows(id: string, tab: SheetTab): Promise<MiddleLongSheet
   const pending = pendingRows.get(cacheKey);
   if (pending) return pending;
   const request = (async () => {
-    const response = await fetchWithTimeout(
+    const { response, text: csv } = await fetchPublicSheetText(
       `${BASE_URL}/${encodeURIComponent(id)}/export?format=csv&gid=${encodeURIComponent(tab.gid)}`,
-      ROWS_CACHE_MS / 1000,
+      FETCH_TIMEOUT_MS, 12 * 1024 ** 2, { next: { revalidate: ROWS_CACHE_MS / 1000 } },
     );
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const csv = await response.text();
     if (/^\s*(?:<!doctype|<html)/i.test(csv)) throw new Error("HTML response");
     const rows = parseMiddleLongMenuCsv(csv, tab.month);
     rowsCache.set(cacheKey, { expiresAt: Date.now() + ROWS_CACHE_MS, rows });

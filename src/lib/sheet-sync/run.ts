@@ -1,6 +1,5 @@
-import { OCTOBER_SHEET_ID, OCTOBER_START, legacySyncOpen, parseSheetTransition, periodContains } from "@/lib/sheet-period";
+import { OCTOBER_SHEET_ID, legacySyncOpen, parseSheetTransition, periodContains } from "@/lib/sheet-period";
 
-import { flushReplyDeletions } from "./reply-deletions";
 // 毎時同期の本体。上のモジュールを順に呼ぶ進行役。
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -8,12 +7,11 @@ import type { RecordFieldDef } from "@/types";
 import { relevantSheetHeaderSignature, relocatedSheetFields } from "@/lib/sheet-field-config";
 import { sheetContentSignature } from "@/lib/sheet-public-csv";
 import type { SyncOptions, SyncResult } from "./types";
-import { SHEET_HISTORY_START, todayJST, sheetPullCutoff, sheetPullThrough, sheetReplyCutoff } from "./dates";
+import { SHEET_HISTORY_START, todayJST, sheetPullCutoff, sheetPullThrough } from "./dates";
 import { resolveFieldMap, appToCellsFull } from "./field-map";
 import type { DbRecord } from "./field-map";
 import { fetchAllRaw } from "./gas-client";
 import { sheetRecordsWithoutPendingPushes, computeMemberPull } from "./pull";
-import { reconcileSheetReplies } from "./replies";
 import { fetchAllPages } from "@/lib/fetch-all-pages";
 import { type PendingClear } from "./clear";
 import { clearIfExistingWithReceipt, listActivePushReceipts, pushProfileSnapshot, resolvePendingClear, writeCellsTargetSlot, writeCellsWithReceipt,
@@ -43,7 +41,6 @@ async function runSheetSyncBatch(
     skippedMembers: [],
     unchangedMembers: [],
     failedMembers: [],
-    sheetReplies: 0,
     dryRun,
     sheetWritesUncertain: false,
   };
@@ -131,7 +128,6 @@ async function runSheetSyncBatch(
       // A prefilled future row becomes eligible when the JST date changes,
       // even if nobody has edited the CSV since the previous pull.
       eligibleThrough,
-      replySourceVersion: 2,
       recordMappingVersion: 4,
     })),
   ]));
@@ -186,8 +182,6 @@ async function runSheetSyncBatch(
   const resolvedClears: { queued: PendingClear; expectedProfile: PushProfileSnapshot; targetSlot: string }[] = [];
   const historyImportCandidates = new Set<string>();
   const historyImportFailures = new Set<string>();
-  const confirmedProfileIds = new Set<string>();
-
   // Clear requests obtain actual GAS metadata and date-row confirmation. They
   // must remain runnable when published CSV is empty, stale, or unavailable.
   for (const profile of linked) for (const date of clearsByUser.get(profile.id) ?? []) {
@@ -228,9 +222,7 @@ async function runSheetSyncBatch(
         continue;
       }
       profileFields = relocated;
-    }
-    confirmedProfileIds.add(profile.id);
-    const map = resolveFieldMap(member, profileFields);
+    }    const map = resolveFieldMap(member, profileFields);
     const target: WriteCellsTarget = { sheetName, fields: profileFields, spreadsheetId, columns };
     const expectedProfile = profile.expectedProfile;
     const appByDate = byUser.get(profile.id)!;
@@ -311,24 +303,6 @@ async function runSheetSyncBatch(
     result.inserted = inserts.length;
     result.updated = updates.length;
     result.pushed = scheduledPushes.length;
-    try {
-      const replySync = await reconcileSheetReplies(
-        admin,
-        processedProfiles.filter(profile => !profile.appOnly && confirmedProfileIds.has(profile.id)).map((profile) => ({ id: profile.id, sheet_name: profile.sheet_name })),
-        members,
-        period === "october" ? [sheetReplyCutoff(today), OCTOBER_START].sort().at(-1)! : sheetReplyCutoff(today),
-        period === "legacy" ? (today < OCTOBER_START ? today : "2026-09-30") : today,
-        true,
-        spreadsheetId,
-      );
-      result.sheetReplies = replySync.synced;
-      result.failedMembers.push(...replySync.failedMembers);
-    } catch (error) {
-      result.failedMembers.push({
-        member: "(スプレッドシートの返信)",
-        reason: error instanceof Error ? error.message : "返信の状態を確認できませんでした",
-      });
-    }
     return result;
   }
 
@@ -396,25 +370,6 @@ async function runSheetSyncBatch(
         reason: `履歴取込の完了を保存できませんでした: ${error.message}`,
       });
     }
-  }
-
-  if (!options.skipSheetWrites) try {
-    const replySync = await reconcileSheetReplies(
-      admin,
-      processedProfiles.filter(profile => !profile.appOnly && confirmedProfileIds.has(profile.id)).map((profile) => ({ id: profile.id, sheet_name: profile.sheet_name })),
-      members,
-      period === "october" ? [sheetReplyCutoff(today), OCTOBER_START].sort().at(-1)! : sheetReplyCutoff(today),
-      period === "legacy" ? (today < OCTOBER_START ? today : "2026-09-30") : today,
-      false,
-      spreadsheetId,
-    );
-    result.sheetReplies = replySync.synced;
-    result.failedMembers.push(...replySync.failedMembers);
-  } catch (error) {
-    result.failedMembers.push({
-      member: "(スプレッドシートの返信)",
-      reason: error instanceof Error ? error.message : "返信を書き込めませんでした",
-    });
   }
 
   for (const { queued, expectedProfile, targetSlot } of options.skipSheetWrites ? [] : resolvedClears) {
@@ -508,21 +463,16 @@ export async function runSheetSync(admin: SupabaseClient, options: SyncOptions =
       appOnly: transition?.mode === "app_only", expectedProfile });
     if (transition && profile.sheet_name) groups.october.push({ ...profile, appOnly: transition.mode === "app_only", expectedProfile });
   }
-  const total: SyncResult = { inserted: 0, updated: 0, pushed: 0, sheetReplies: 0, conflicts: [], skippedMembers: [],
+  const total: SyncResult = { inserted: 0, updated: 0, pushed: 0, conflicts: [], skippedMembers: [],
     unchangedMembers: [], failedMembers: [], dryRun: !!options.dryRun, sheetWritesUncertain: false,
     ...(options.skipSheetWrites ? { sheetWritesSkipped: true } : {}) };
-  if (!options.dryRun && !options.skipSheetWrites) {
-    const failures = await flushReplyDeletions(admin);
-    total.failedMembers.push(...failures);
-    if (failures.length) total.sheetWritesUncertain = true;
-  }
   for (const period of ["legacy", "october"] as const) {
     if (!groups[period].length) continue;
     const sheetWriteState = { attempted: false };
     try {
       const result = await runSheetSyncBatch(admin, { dryRun: options.dryRun, skipSheetWrites: options.skipSheetWrites, includeToday: options.includeToday }, groups[period], period, sheetWriteState, activeReceipts);
       if (result.sheetWritesUncertain) total.sheetWritesUncertain = true;
-      for (const key of ["inserted", "updated", "pushed", "sheetReplies"] as const) total[key] += result[key];
+      for (const key of ["inserted", "updated", "pushed"] as const) total[key] += result[key];
       for (const key of ["conflicts", "skippedMembers", "unchangedMembers", "failedMembers"] as const) total[key].push(...result[key] as never[]);
     } catch (error) {
       if (sheetWriteState.attempted) total.sheetWritesUncertain = true;

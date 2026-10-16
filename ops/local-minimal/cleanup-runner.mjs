@@ -89,9 +89,13 @@ export async function runSnapshotCleanup(config,{client,now=Date.now,read=readPr
       }};
     const preview=await dryRun(config,options);
     const counts={local:preview.plan.local.removalCandidates.length,remote:preview.plan.remote.removalCandidates.length,metadata:preview.metadataCandidates.length};
-    const result=policy.mode==='apply'?await apply(config,preview,options):null;
+    const empty=Object.values(counts).every(count=>count===0);
+    // dryRun already verified the retained archives. With no deletion there is
+    // no apply intent to authorize or second archive readback to perform.
+    assertOwner();
+    const result=policy.mode==='apply'&&!empty?await apply(config,preview,options):null;
     outcome={version:1,state:result?'applied':'dry-run',checkedAt:new Date(now()).toISOString(),previewDigest:preview.previewDigest,counts,
-      ...(result?{completed:result.completed,remaining:result.remaining}:{}),reasonCode:result?'known-results':'review-only'};
+      ...(result?{completed:result.completed,remaining:result.remaining}:{}),reasonCode:result?'known-results':empty?'no-removal-candidates':'review-only'};
   } catch {
     outcome={version:1,state:'held',checkedAt:new Date(now()).toISOString(),reasonCode:'retention-proof-unavailable'};onHeld();
   }

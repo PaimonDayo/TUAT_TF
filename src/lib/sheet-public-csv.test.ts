@@ -1,11 +1,41 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  commentColumn,
   parseMemberCsv,
   parsePublicSheetDate,
   parseSheetMetadataHtml,
   sheetContentSignature,
+  fetchPublicSheetText,
+  fetchPublicMemberSnapshot,
 } from "./sheet-public-csv";
+
+afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
+
+describe("bounded public sheet bodies", () => {
+  it("keeps the deadline active after headers, even if a body ignores abort", async () => {
+    vi.useFakeTimers();
+    let cancelled = false;
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(new ReadableStream({ cancel() { cancelled = true; } })));
+    vi.stubGlobal("fetch", fetchMock);
+    const read = fetchPublicMemberSnapshot("B1 synthetic", { timeoutMs: 50, spreadsheetId: "synthetic", members: [{ name: "B1 synthetic", gid: "1" }] });
+    const rejected = expect(read).rejects.toThrow("タイムアウト");
+    await vi.advanceTimersByTimeAsync(51); await rejected;
+    expect(cancelled).toBe(true);
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ cache: "no-store", signal: expect.any(AbortSignal) });
+  });
+  it("refuses declared and streamed oversized bodies without trusting Content-Length", async () => {
+    for (const headers of [{ "content-length": "5" }, { "content-length": "1" }, {}] as Record<string, string>[]) {
+      vi.stubGlobal("fetch", vi.fn(async () => new Response("12345", { headers })));
+      await expect(fetchPublicSheetText("https://docs.google.com/synthetic", 100, 4, { cache: "no-store" })).rejects.toThrow("容量");
+    }
+  });
+  it("decodes split UTF-8 and preserves explicit Next cache settings", async () => {
+    const bytes = new TextEncoder().encode("日付,感想");
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(new ReadableStream({ start(c) { c.enqueue(bytes.slice(0, 1)); c.enqueue(bytes.slice(1)); c.close(); } })));
+    vi.stubGlobal("fetch", fetchMock);
+    expect((await fetchPublicSheetText("https://docs.google.com/synthetic", 100, 100, { next: { revalidate: 60 } })).text).toBe("日付,感想");
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ next: { revalidate: 60 } });
+  });
+});
 
 describe("sheetContentSignature", () => {
   it("is stable for identical CSV and changes with the body", () => {
@@ -42,7 +72,7 @@ describe("parsePublicSheetDate", () => {
 });
 
 describe("parseMemberCsv", () => {
-  it("preserves displayed cells and imports blank-header reply columns", () => {
+  it("preserves record cells and never imports blank-header reply columns", () => {
     const csv = [
       "タイトル,,,,",
       "日付,感想,,,状態",
@@ -56,27 +86,13 @@ describe("parseMemberCsv", () => {
     expect(member.records[0]).toMatchObject({
       date: "2026-07-22",
       cells: { 日付: "7/22", 感想: "改行を含む\\n感想", 状態: "良好" },
-      replies: [
-        { replyIndex: 2, content: "スプシ返信", source: "sheet" },
-        { replyIndex: 3, content: "追加返信", source: "sheet" },
-      ],
     });
+    expect(member.records[0]).not.toHaveProperty("replies");
   });
 
   it("fails instead of treating a sheet without a date header as empty", () => {
     expect(() => parseMemberCsv({ name: "B2駒井", gid: "123" }, "名前,値\nA,1", 2026)).toThrow(
       "見出し行（日付）が見つかりません",
     );
-  });
-});
-
-
-describe("commentColumn", () => {
-  it("prefers exact 感想 over a 状態 column that appears earlier", () => {
-    expect(commentColumn(["日付", "状態", "練習の感想", "感想"])).toBe(3);
-  });
-
-  it("does not use partial or legacy headers", () => {
-    expect(commentColumn(["日付", "状態", "今日の感想", "コメント"])).toBe(-1);
   });
 });

@@ -4,10 +4,8 @@ import { OCTOBER_SHEET_ID } from "@/lib/sheet-period";
 import { relevantSheetHeaderSignature } from "@/lib/sheet-field-config";
 import { fetchPublicMemberSnapshot } from "@/lib/sheet-public-csv";
 
-const state = vi.hoisted(() => ({ profiles: [] as Record<string, unknown>[], records: [] as Record<string, unknown>[], clears: [] as Record<string, unknown>[], syncStates: [] as Record<string, unknown>[], selects: [] as { table: string; columns: string }[], writes: [] as { table: string; op: string; value: unknown }[], fetch: vi.fn(), gas: vi.fn(), replies: vi.fn(), flush: vi.fn(), zeroAck: false, editBeforePullWrite: null as { id: string; patch: Record<string, unknown> } | null, editBeforeRecordsRead: null as { id: string; patch: Record<string, unknown> } | null }));
-vi.mock("./reply-deletions", () => ({ flushReplyDeletions: state.flush }));
+const state = vi.hoisted(() => ({ profiles: [] as Record<string, unknown>[], records: [] as Record<string, unknown>[], clears: [] as Record<string, unknown>[], syncStates: [] as Record<string, unknown>[], selects: [] as { table: string; columns: string }[], writes: [] as { table: string; op: string; value: unknown }[], fetch: vi.fn(), gas: vi.fn(), zeroAck: false, editBeforePullWrite: null as { id: string; patch: Record<string, unknown> } | null, editBeforeRecordsRead: null as { id: string; patch: Record<string, unknown> } | null }));
 vi.mock("./gas-client", () => ({ fetchAllRaw: state.fetch, gasPost: state.gas }));
-vi.mock("./replies", () => ({ reconcileSheetReplies: state.replies }));
 import { runSheetSync } from "./run";
 import { CLEAR_CONTRACT_VERSION } from "./push-receipt";
 
@@ -23,6 +21,7 @@ function gasAcknowledgement(body: Record<string, unknown>) {
 
 const fixtureAttempts = new Map<string, Record<string, unknown>>();
 const admin = { async rpc(name: string, args: Record<string, unknown>) {
+  if (name === "replace_sheet_record_replies") throw new Error("Retired reply import must not run");
   // Scripted RPC transport for period/import checks. Durable barriers and real
   // SQL locking are covered by the separate receipt/API and PostgreSQL fixtures.
   if (name === "sheet_push_begin") {
@@ -37,6 +36,7 @@ const admin = { async rpc(name: string, args: Record<string, unknown>) {
   if (record && matched) Object.assign(record, { pending_sheet_push: false, synced_at: new Date().toISOString() });
   return { data: { outcome: "completed", marker_status: matched ? "applied" : "superseded" }, error: null };
 }, from(table: string) {
+  if (["comments", "sheet_record_replies", "sheet_reply_deletions"].includes(table)) throw new Error("Retired reply sync must not read or change history");
   let op = "select";
   let selectedColumns = "";
   let updateValue: Record<string, unknown> | null = null;
@@ -107,11 +107,7 @@ function keepSuccessfulImports() {
 beforeEach(() => {
   vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-02T03:00:00Z"));
   state.writes = []; state.records = []; state.profiles = []; state.clears = []; state.syncStates = []; state.selects = []; state.zeroAck = false; state.editBeforePullWrite = null; state.editBeforeRecordsRead = null;
-  fixtureAttempts.clear(); vi.stubEnv("SHEET_SYNC_GAS_URL", "https://gas.example.test/synthetic/exec");
-  state.flush.mockReset().mockResolvedValue([]);
-  state.gas.mockReset().mockImplementation(async body => gasAcknowledgement(body));
-  state.replies.mockReset().mockResolvedValue({ synced: 0, failedMembers: [] });
-  state.fetch.mockReset().mockImplementation(async (inputs: { name: string }[], spreadsheetId?: string) => ({
+  fixtureAttempts.clear(); vi.stubEnv("SHEET_SYNC_GAS_URL", "https://gas.example.test/synthetic/exec");  state.gas.mockReset().mockImplementation(async body => gasAcknowledgement(body));  state.fetch.mockReset().mockImplementation(async (inputs: { name: string }[], spreadsheetId?: string) => ({
     members: inputs.map(input => ({ name: input.name, header: ["日付", "感想"], records: [
       { date: "2026-09-30", cells: { 感想: "旧" } }, { date: "2026-10-01", cells: { 感想: spreadsheetId ? "新" : "旧の10月" } },
     ] })), signatures: new Map(), failedMembers: [], unchangedMembers: [],
@@ -119,6 +115,19 @@ beforeEach(() => {
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 describe("period-aware scheduled synchronization", () => {
+  it.each([false, true])("ignores sheet replies and preserves legacy deletion history with dryRun=%s", async dryRun => {
+    state.profiles = [profile("sheet")];
+    state.fetch.mockImplementation(async (inputs: { name: string }[]) => ({
+      members: inputs.map(input => ({ name: input.name, header: ["日付", "感想"], records: [
+        { date: "2026-10-01", cells: { 感想: "record content" }, replies: [{ replyIndex: 3, content: "historical sheet reply", source: "sheet" }] },
+      ] })), signatures: new Map(), failedMembers: [], unchangedMembers: [],
+    }));
+    const result = await runSheetSync(admin, { dryRun });
+    expect(result.failedMembers).toEqual([]);
+    expect(result).not.toHaveProperty("sheetReplies");
+    expect(state.selects.every(({ table }) => !["comments", "sheet_record_replies", "sheet_reply_deletions"].includes(table))).toBe(true);
+    expect(state.gas).not.toHaveBeenCalled();
+  });
   it("fills initial history in its original dates, including legacy rows, and publishes only the latest eligible day", async () => {
     vi.setSystemTime(new Date("2026-10-06T15:00:00.000Z")); // 10/7 00:00 JST
     state.profiles = [profile("sheet")];
@@ -303,7 +312,7 @@ describe("period-aware scheduled synchronization", () => {
     ]);
   });
 
-  it("keeps today's pending app pushes, queued clears, and reply reconciliation active during a prior-day cron pull", async () => {
+  it("keeps today's pending app pushes, queued clears, active during a prior-day cron pull", async () => {
     vi.setSystemTime(new Date("2026-10-07T15:00:00.000Z"));
     state.profiles = [profile("sheet"), { ...profile("sheet", "second"), sheet_name: "B2 test" }];
     state.records = [{ id: "today-app", user_id: "regular", recorded_date: "2026-10-08", memo: "app entry", from_sheet: false, pending_sheet_push: true }];
@@ -312,9 +321,7 @@ describe("period-aware scheduled synchronization", () => {
     const result = await runSheetSync(admin, { includeToday: false });
     expect(result).toMatchObject({ inserted: 2, updated: 0, pushed: 2 });
     expect(state.gas).toHaveBeenCalledWith(expect.objectContaining({ memberName: "B1 test", date: "2026-10-08", cells: { 感想: "app entry" } }));
-    expect(state.gas).toHaveBeenCalledWith(expect.objectContaining({ action: "clearIfExisting", memberName: "B2 test", date: "2026-10-08", clearColumns: [{ index: 1, header: "感想" }] }));
-    expect(state.replies.mock.calls.at(-1)?.[4]).toBe("2026-10-08");
-    expect(state.writes.filter(write => write.table === "practice_records" && write.op === "insert").flatMap(write => write.value as Record<string, unknown>[]).map(row => row.recorded_date)).toEqual(["2026-10-07", "2026-10-07"]);
+    expect(state.gas).toHaveBeenCalledWith(expect.objectContaining({ action: "clearIfExisting", memberName: "B2 test", date: "2026-10-08", clearColumns: [{ index: 1, header: "感想" }] }));    expect(state.writes.filter(write => write.table === "practice_records" && write.op === "insert").flatMap(write => write.value as Record<string, unknown>[]).map(row => row.recorded_date)).toEqual(["2026-10-07", "2026-10-07"]);
   });
 
   it("timestamps only new imports at their batch time and keeps a changed sheet post in its original position", async () => {
@@ -366,9 +373,7 @@ describe("period-aware scheduled synchronization", () => {
     expect(result.failedMembers).toHaveLength(1);
     expect(result.inserted).toBe(1); // Only the old period remains compatible.
     expect(result.sheetWritesUncertain).toBe(false);
-    expect(state.gas).not.toHaveBeenCalled();
-    expect(state.replies.mock.calls.at(-1)?.[1]).toEqual([]);
-  });
+    expect(state.gas).not.toHaveBeenCalled();  });
   it("keeps a complete spreadsheet read failure distinct from an uncertain sheet write", async () => {
     state.profiles = [profile("sheet")];
     state.fetch.mockRejectedValue(new Error("CSV unavailable"));
@@ -384,17 +389,13 @@ describe("period-aware scheduled synchronization", () => {
     expect(result.inserted).toBe(2);
     const inserts = state.writes.filter(w => w.table === "practice_records" && w.op === "insert").flatMap(w => w.value as { recorded_date: string; memo: string }[]);
     expect(inserts.map(row => [row.recorded_date, row.memo])).toEqual([["2026-09-30", "旧"], ["2026-10-01", "新"]]);
-    expect(state.fetch.mock.calls.map(call => [call[0][0].name, call[1]])).toEqual([["B1 old", undefined], ["B1 test", OCTOBER_SHEET_ID]]);
-    expect(state.replies.mock.calls.map(call => call[6])).toEqual([undefined, OCTOBER_SHEET_ID]);
-  });
-  it("blocks imports and replies for app-only input but still sends pending records", async () => {
+    expect(state.fetch.mock.calls.map(call => [call[0][0].name, call[1]])).toEqual([["B1 old", undefined], ["B1 test", OCTOBER_SHEET_ID]]);  });
+  it("blocks imports for app-only input but still sends pending records", async () => {
     state.profiles = [profile("app_only")];
     state.records = [{ id: "r", user_id: "regular", recorded_date: "2026-10-01", memo: "アプリ", pending_sheet_push: true, updated_at: "2026-10-01T12:00:00Z" }];
     const result = await runSheetSync(admin);
     expect(result.inserted).toBe(0); expect(result.updated).toBe(0); expect(result.pushed).toBe(1);
-    expect(state.gas).toHaveBeenCalledWith(expect.objectContaining({ spreadsheetId: OCTOBER_SHEET_ID, date: "2026-10-01", cells: { 感想: "アプリ" } }));
-    expect(state.replies.mock.calls.every(call => call[1].length === 0)).toBe(true);
-  });
+    expect(state.gas).toHaveBeenCalledWith(expect.objectContaining({ spreadsheetId: OCTOBER_SHEET_ID, date: "2026-10-01", cells: { 感想: "アプリ" } }));  });
   it("retains pending input when the sheet omits an item or a concurrent edit prevents acknowledgement", async () => {
     state.profiles = [profile("app_only")];
     state.records = [{ id: "r", user_id: "regular", recorded_date: "2026-10-01", memo: "保存済みの入力", pending_sheet_push: true }];
@@ -414,9 +415,7 @@ describe("period-aware scheduled synchronization", () => {
     state.records = [{ id: "r", user_id: "regular", recorded_date: "2026-10-01", pending_sheet_push: true }];
     const result = await runSheetSync(admin);
     expect(result.inserted).toBe(0); expect(result.pushed).toBe(0);
-    expect(state.fetch).not.toHaveBeenCalled(); expect(state.gas).not.toHaveBeenCalled();
-    expect(state.replies).not.toHaveBeenCalled();
-  });
+    expect(state.fetch).not.toHaveBeenCalled(); expect(state.gas).not.toHaveBeenCalled();  });
   it.each(["empty", "failed"])("confirms queued clears from actual GAS despite %s published CSV", async csv => {
     state.profiles = [profile("sheet")]; state.clears = [{ user_id: "regular", recorded_date: "2026-10-02" }];
     if (csv === "failed") state.fetch.mockRejectedValue(new Error("synthetic CSV unavailable"));
@@ -453,7 +452,7 @@ describe("period-aware scheduled synchronization", () => {
     expect(state.gas).toHaveBeenCalledWith(expect.objectContaining({ action: "writeCells", memberName: "B1 test" }));
     expect(state.gas.mock.calls.filter(([body]) => body.action === "clearIfExisting" || body.action === "fetchMember")).toHaveLength(0);
   });
-  it("continues imports while holding pending sends and replies after an uncertain write", async () => {
+  it("continues imports while holding pending sends after an uncertain write", async () => {
     state.profiles = [profile("sheet")];
     state.records = [{ id: "r", user_id: "regular", recorded_date: "2026-10-01", memo: "未送信の入力", pending_sheet_push: true }];
     state.clears = [{ user_id: "regular", recorded_date: "2026-10-02" }];
@@ -461,10 +460,7 @@ describe("period-aware scheduled synchronization", () => {
     expect(result.sheetWritesSkipped).toBe(true);
     expect(result.inserted).toBe(1); // September import still proceeds.
     expect(result.pushed).toBe(0);
-    expect(state.gas).not.toHaveBeenCalled();
-    expect(state.replies).not.toHaveBeenCalled();
-    expect(state.flush).not.toHaveBeenCalled();
-    expect(state.writes.some(w => w.table === "sheet_pending_clears" && w.op === "delete")).toBe(false);
+    expect(state.gas).not.toHaveBeenCalled();    expect(state.writes.some(w => w.table === "sheet_pending_clears" && w.op === "delete")).toBe(false);
     expect(state.writes.some(w => w.table === "practice_records" && w.op === "update")).toBe(false);
     expect(state.records[0].pending_sheet_push).toBe(true);
   });

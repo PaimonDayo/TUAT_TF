@@ -16,7 +16,7 @@ export class ImageNotFoundError extends Error {
 }
 
 export class ImageUploadError extends Error {
-  constructor(public readonly status: 400 | 408 | 413, message: string) { super(message); this.name = "ImageUploadError"; }
+  constructor(public readonly status: 400 | 408 | 413 | 429, message: string) { super(message); this.name = "ImageUploadError"; }
 }
 
 /** Diagnostics contain a fixed operation name only, never provider exceptions or image paths. */

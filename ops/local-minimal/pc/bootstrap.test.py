@@ -109,6 +109,105 @@ class DiskBootTests(unittest.TestCase):
         command.assert_not_called()
 
 
+class WatchAndNamespaceTests(unittest.TestCase):
+    def test_mounts_use_systemd_namespace_and_do_not_reenter_when_already_shared(self):
+        target = SimpleNamespace(st_dev=1, st_ino=2)
+        other = SimpleNamespace(st_dev=1, st_ino=3)
+        for same in (False, True):
+            with self.subTest(same=same), patch.object(boot, 'Path') as path, \
+                 patch.object(boot.os, 'open', return_value=99) as opened, \
+                 patch.object(boot.os, 'fstat', return_value=target), \
+                 patch.object(boot.os, 'stat', side_effect=[target if same else other, target]), \
+                 patch.object(boot.os, 'setns', create=True) as setns, patch.object(boot.os, 'close') as close:
+                path.return_value.read_text.return_value = 'systemd\n'
+                boot.enter_system_mount_namespace()
+                opened.assert_called_once_with('/proc/1/ns/mnt', os.O_RDONLY | os.O_CLOEXEC)
+                self.assertEqual(setns.call_count, 0 if same else 1)
+                if not same: setns.assert_called_once_with(99, 0)
+                close.assert_called_once_with(99)
+
+    def test_namespace_failure_never_continues_with_a_caller_only_mount(self):
+        with patch.object(boot, 'Path') as path, patch.object(boot.os, 'open', return_value=99), \
+             patch.object(boot.os, 'fstat', return_value=SimpleNamespace(st_dev=1, st_ino=2)), \
+             patch.object(boot.os, 'stat', return_value=SimpleNamespace(st_dev=1, st_ino=3)), \
+             patch.object(boot.os, 'setns', create=True), patch.object(boot.os, 'close') as close:
+            path.return_value.read_text.return_value = 'systemd\n'
+            with self.assertRaisesRegex(boot.Held, 'mount-namespace-unverified'): boot.enter_system_mount_namespace()
+            close.assert_called_once_with(99)
+
+    def test_watch_survives_temporary_stop_failed_start_and_changed_unit_without_restarts(self):
+        states = ['active', 'deactivating', 'inactive', 'failed', 'activating', 'unverified', 'active']
+        reports, commands = [], []
+        def command(args):
+            commands.append(args)
+            self.assertEqual(args[:3], ['/usr/bin/systemctl', 'show', boot.UNITS[2]])
+            return 0, '\n'.join(f'{k}={v}' for k,v in dict(LoadState='loaded',ControlPID='0',DropInPaths='',
+                FragmentPath='/unknown' if states[0]=='unverified' else '/etc/systemd/system/'+boot.UNITS[2],
+                ActiveState=states[0],SubState='running').items())
+        def pause(seconds):
+            self.assertEqual(seconds,30);states.pop(0)
+            if not states: raise KeyboardInterrupt()
+        with patch.object(boot,'mounted',return_value=True), patch.object(boot,'mapping',return_value='/dev/loop9'):
+            with self.assertRaises(KeyboardInterrupt): boot.watch_runtime({},command,pause,reports.append)
+        self.assertEqual([r['runtimeState'] for r in reports], ['active','deactivating','inactive','failed','activating','unverified','active'])
+        self.assertEqual([r['valid'] for r in reports], [True,False,False,False,False,False,True])
+        self.assertTrue(all(r['watching'] and r['storageOwned'] for r in reports))
+        self.assertEqual(len(commands),7)
+
+    def test_watch_never_accepts_lost_storage_and_status_failure_does_not_end_session(self):
+        with patch.object(boot,'mounted',return_value=False):
+            with self.assertRaisesRegex(boot.Held,'storage-no-longer-owned'): boot.watch_runtime({},Mock(),Mock(),Mock())
+        with patch.object(boot,'mounted',return_value=True), patch.object(boot,'mapping',return_value='/dev/loop9'), \
+             patch.object(boot,'service',return_value={'ActiveState':'inactive'}):
+            pause=Mock(side_effect=KeyboardInterrupt())
+            with self.assertRaises(KeyboardInterrupt): boot.watch_runtime({},Mock(),pause,Mock(side_effect=OSError('disk full')))
+            pause.assert_called_once_with(30)
+
+    @unittest.skipUnless(os.name == 'posix' and os.getuid() == 0, 'root-private RAM status')
+    def test_watch_status_is_one_atomic_bounded_private_file_and_never_follows_a_link(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path=Path(temporary)/'watch.json'
+            with patch.object(boot,'WATCH_STATUS',str(path)):
+                for state in ('active','inactive','failed'):
+                    boot.write_watch_status({'valid':state=='active','runtimeState':state,'watching':True})
+                    self.assertEqual(stat.S_IMODE(path.stat().st_mode),0o600)
+                    self.assertLess(path.stat().st_size,4096)
+                    self.assertEqual(json.loads(path.read_bytes())['runtimeState'],state)
+                self.assertEqual(list(Path(temporary).iterdir()),[path])
+                original=path.read_bytes();link=Path(temporary)/'link';link.symlink_to(path)
+                with patch.object(boot,'WATCH_STATUS',str(link)):
+                    with self.assertRaisesRegex(boot.Held,'watch-status-link'): boot.write_watch_status({})
+                self.assertEqual(path.read_bytes(),original)
+
+    def backup_state(self, active=True, **changes):
+        return dict(LoadState='loaded',Type='oneshot',ActiveState='activating' if active else 'inactive',
+            SubState='start' if active else 'dead',FreezerState='running',MainPID='123' if active else '0',
+            ControlPID='0',ControlGroup='/system.slice/tuat-local-backup.service' if active else '',
+            InvocationID='a'*32,FragmentPath='/etc/systemd/system/tuat-local-backup.service',DropInPaths='',**changes)
+
+    def test_existing_backup_is_only_observed_and_startup_resumes_when_that_invocation_finishes(self):
+        values=iter([self.backup_state(),self.backup_state(),self.backup_state(False)])
+        def command(args,**kwargs):
+            self.assertEqual(args[:3],['/usr/bin/systemctl','show','tuat-local-backup.service'])
+            self.assertEqual(kwargs,{'timeout':5})
+            return 0,'\n'.join(f'{k}={v}' for k,v in next(values).items())
+        pause=Mock();boot.wait_backup_idle({'backupConfigPath':'/protected/backup.json'},command,pause,lambda:0)
+        self.assertEqual(pause.call_count,2)
+
+    def test_failed_replaced_unknown_or_overdue_backup_is_held_without_retry_or_reset(self):
+        failed=self.backup_state(False);failed['ActiveState']='failed'
+        changed=self.backup_state();changed['InvocationID']='b'*32
+        unknown=self.backup_state();unknown['FragmentPath']='/unknown'
+        for rows,clock,reason in (([failed],lambda:0,'backup-not-idle'),
+                                  ([self.backup_state(),changed],lambda:0,'backup-owner-changed'),
+                                  ([unknown],lambda:0,'backup-controller-unverified'),
+                                  ([self.backup_state()],Mock(side_effect=[0,301]),'backup-wait-deadline')):
+            with self.subTest(reason=reason):
+                command=Mock(side_effect=[(0,'\n'.join(f'{k}={v}' for k,v in row.items())) for row in rows])
+                with self.assertRaisesRegex(boot.Held,reason): boot.wait_backup_idle({'backupConfigPath':'/protected/backup.json'},command,Mock(),clock)
+                self.assertTrue(all(call.args[0][1]=='show' for call in command.call_args_list))
+
+
 class SyntheticStart:
     """Fixed deployment metadata and service observations; no host paths are read."""
     def __init__(self, jobs=False, timer=False, tunnel=True, tunnel_enabled=True):
@@ -122,12 +221,14 @@ class SyntheticStart:
                       'containerdUnit':'/etc/systemd/system/tuat-local-containerd.service',
                       'dockerUnit':'/etc/systemd/system/tuat-local-docker.service'}
         self.config = {'releaseDirectory':self.release, 'jobsConfig':'/synthetic/jobs.json', 'hostConfigPath':'/synthetic/host.json',
+            'backupConfigPath':'/synthetic/backup.json',
             'daemonSeal':{field:hashlib.sha256(path.encode()).hexdigest() for field,path in self.paths.items()}}
         self.policy = {'version':1, 'enabled':True, 'automaticBackups':timer}
         self.fail_storage = False
         self.fail_transport = False
         self.change_transport = False
         self.observe_calls = 0
+        self.backup_observations = []
 
     def path(self, value):
         fixture = self
@@ -158,6 +259,10 @@ class SyntheticStart:
     def command(self, args, **_kwargs):
         if args[:2] == ['/usr/bin/systemctl','show']:
             name = args[2]; self.events.append('show:'+name)
+            if name == 'tuat-local-backup.service':
+                state = WatchAndNamespaceTests().backup_state(False)
+                if self.backup_observations: state = self.backup_observations.pop(0)
+                return 0, '\n'.join(f'{key}={value}' for key,value in state.items())
             return 0, '\n'.join('='.join(pair) for pair in dict(LoadState='loaded',FragmentPath='/etc/systemd/system/'+name,
                 DropInPaths='',ControlPID='0',ActiveState='active' if name in self.running else 'inactive',
                 SubState='running' if name in self.running else 'dead').items())
@@ -272,6 +377,16 @@ class InstalledStartTests(unittest.TestCase):
         fixture.start()
         self.assertNotIn('start:tuat-local-tunnel.service',fixture.events)
         self.assertLess(fixture.events.index('transport-ready'),fixture.events.index('start:'+boot.UNITS[2]))
+
+    def test_existing_backup_finishes_before_app_start_and_full_check_without_an_extra_start(self):
+        fixture = SyntheticStart(jobs=True,timer=True)
+        fixture.backup_observations = [WatchAndNamespaceTests().backup_state(), WatchAndNamespaceTests().backup_state(False)]
+        with patch.object(boot.time,'sleep'):
+            fixture.start()
+        self.assertLess(fixture.events.index('show:tuat-local-backup.service'),fixture.events.index('start:'+boot.UNITS[2]))
+        self.assertEqual(fixture.events.count('start:'+boot.UNITS[2]),1)
+        self.assertFalse(any(event=='start:tuat-local-backup.service' for event in fixture.events))
+        self.assertIn('runtime-check',fixture.events)
 
     def test_transport_replacement_while_ready_blocks_app_start(self):
         fixture = SyntheticStart()

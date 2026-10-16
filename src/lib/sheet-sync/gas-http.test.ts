@@ -31,7 +31,7 @@ describe("GAS write receipts", () => {
     const request = setup().mockResolvedValueOnce(redirect()).mockRejectedValueOnce(new TypeError("fetch failed"))
       .mockResolvedValueOnce(new Response("unavailable", { status: 502 }))
       .mockResolvedValueOnce(new Response("unavailable", { status: 503 }));
-    await expect(gasPost({ action: "writeReply", text: "synthetic" })).rejects.toMatchObject(unknownWrite);
+    await expect(gasPost({ action: "writeCells", cells: { synthetic: "saved" } })).rejects.toMatchObject(unknownWrite);
     expect(request).toHaveBeenCalledTimes(4);
     expect(request.mock.calls.filter((call) => call[1].method === "POST")).toHaveLength(1);
   });

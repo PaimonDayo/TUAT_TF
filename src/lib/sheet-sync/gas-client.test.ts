@@ -3,6 +3,12 @@ import { gasPost, readGasJson, fetchAllRaw } from "./gas-client";
 import { sheetContentSignature } from "@/lib/sheet-public-csv";
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 describe("GAS response validation", () => {
+  it.each(["writeReply", "deleteReply"])("rejects retired %s before configuration or network access", async action => {
+    vi.stubEnv("SHEET_SYNC_GAS_URL", "");
+    const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+    await expect(gasPost({ action })).rejects.toThrow("連携は終了");
+    expect(fetch).not.toHaveBeenCalled();
+  });
   it("reports HTTP and HTML without leaking the response body or diagnosing an unproven configuration issue", async () => {
     await expect(readGasJson(new Response("<html>private-token</html>", { status: 503 })))
       .rejects.toThrow("HTTP 503・HTML");

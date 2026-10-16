@@ -6,6 +6,7 @@ import { pcAvailable } from "@/lib/pc-backend";
 import { loginAccessStatus } from "@/lib/supabase/login-access";
 import { getAppPublicOrigin } from "@/lib/app-public-origin";
 import { getPcAppRuntime } from "@/lib/pc-app-runtime";
+import { safeLoginNext } from "@/lib/login-next";
 
 /**
  * Google OAuth コールバック。
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const origin = getAppPublicOrigin(request.nextUrl.href);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/home";
+  const next = safeLoginNext(searchParams.get("next"));
 
   if (!code) {
     return NextResponse.redirect(`${origin}/login?error=missing_code`);

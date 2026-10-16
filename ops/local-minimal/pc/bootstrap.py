@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Open the existing PC disk and start the installed runtime. Never provisions storage."""
 import argparse
+import datetime as dt
 import fcntl
 import hashlib
 import http.client
@@ -13,6 +14,7 @@ import resource
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 from types import SimpleNamespace
 
@@ -21,6 +23,7 @@ MOUNT = '/var/lib/tuat-local'
 MAPPER = 'tuat-local-data'
 CONFIG = '/etc/tuat-local/runtime.json'
 BOOT_POLICY = '/etc/tuat-local/boot.json'
+WATCH_STATUS = '/run/tuat-local-bootstrap-watch.json'
 UNITS = ('tuat-local-containerd.service', 'tuat-local-docker.service', 'tuat-local-app.service')
 
 
@@ -126,15 +129,101 @@ def open_existing(config, key, apply, command=run):
     return {'opened': before_mapping is None, 'mounted': True}
 
 
-def service(name, command=run):
+def service(name, command=run, watching=False):
     text = command(['/usr/bin/systemctl', 'show', name,
                     '--property=LoadState,ActiveState,SubState,FragmentPath,DropInPaths,ControlPID'])[1]
     result = dict(line.split('=', 1) for line in text.splitlines() if '=' in line)
     need(result.get('LoadState') == 'loaded' and
          result.get('FragmentPath') == '/etc/systemd/system/' + name and
-         result.get('DropInPaths') == '' and result.get('ControlPID') == '0' and
-         result.get('ActiveState') in ('active', 'inactive'), 'service-state')
+         result.get('DropInPaths') == '' and
+         (re.fullmatch('[0-9]+', result.get('ControlPID', '')) if watching else result.get('ControlPID') == '0') and
+         result.get('ActiveState') in (('active', 'inactive', 'failed', 'activating', 'deactivating', 'reloading', 'maintenance')
+                                      if watching else ('active', 'inactive')), 'service-state')
     return result
+
+
+def enter_system_mount_namespace():
+    """Mount where systemd evaluates ConditionPathIsMountPoint, before reading a key."""
+    need(Path('/proc/1/comm').read_text().strip() == 'systemd', 'system-manager')
+    descriptor = os.open('/proc/1/ns/mnt', os.O_RDONLY | os.O_CLOEXEC)
+    try:
+        target = os.fstat(descriptor)
+        identity = lambda value: (value.st_dev, value.st_ino)
+        if identity(os.stat('/proc/self/ns/mnt')) != identity(target):
+            need(callable(getattr(os, 'setns', None)), 'mount-namespace-unavailable')
+            os.setns(descriptor, 0)
+        need(identity(os.stat('/proc/self/ns/mnt')) == identity(target), 'mount-namespace-unverified')
+    finally:
+        os.close(descriptor)
+
+
+def wait_backup_idle(config, command=run, pause=time.sleep, clock=time.monotonic):
+    """Observe one existing producer to completion, without dispatch, reset or replay."""
+    if not config.get('backupConfigPath'):
+        return
+    name = 'tuat-local-backup.service'
+    owner, deadline = None, clock() + 300
+    while True:
+        text = command(['/usr/bin/systemctl', 'show', name,
+            '--property=LoadState,Type,ActiveState,SubState,FreezerState,MainPID,ControlPID,ControlGroup,InvocationID,FragmentPath,DropInPaths'], timeout=5)[1]
+        state = dict(line.split('=', 1) for line in text.splitlines() if '=' in line)
+        need(state.get('LoadState') == 'loaded' and state.get('Type') == 'oneshot' and
+             state.get('FragmentPath') == '/etc/systemd/system/' + name and state.get('DropInPaths') == '' and
+             state.get('FreezerState') == 'running' and state.get('ControlPID') == '0', 'backup-controller-unverified')
+        if state.get('ActiveState') == 'inactive':
+            need(state.get('SubState') == 'dead' and state.get('MainPID') == '0' and state.get('ControlGroup') == '', 'backup-not-idle')
+            return
+        need(state.get('ActiveState') == 'activating' and state.get('SubState') == 'start' and
+             re.fullmatch('[1-9][0-9]*', state.get('MainPID', '')) and
+             re.fullmatch('[a-f0-9]{32}', state.get('InvocationID', '')) and
+             state.get('ControlGroup') == '/system.slice/' + name, 'backup-not-idle')
+        current = (state['MainPID'], state['InvocationID'])
+        need(owner is None or owner == current, 'backup-owner-changed')
+        owner = current
+        need(clock() < deadline, 'backup-wait-deadline')
+        pause(2)
+
+
+def write_watch_status(value):
+    """One bounded root-private RAM file; Windows only consumes the first stdout line."""
+    path = Path(WATCH_STATUS)
+    parent = path.parent.lstat()
+    need(not path.parent.is_symlink() and stat.S_ISDIR(parent.st_mode) and
+         parent.st_uid == 0 and not parent.st_mode & 0o022, 'watch-status-directory')
+    need(not path.is_symlink(), 'watch-status-link')
+    if path.exists():
+        private_file(str(path), 4096)
+    data = (json.dumps({'version': 1, 'checkedAt': dt.datetime.now(dt.timezone.utc).isoformat(), **value}) + '\n').encode()
+    need(len(data) <= 4096, 'watch-status-bound')
+    descriptor, temporary = tempfile.mkstemp(prefix='.tuat-local-bootstrap-watch-', dir=path.parent)
+    try:
+        with os.fdopen(descriptor, 'wb') as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def watch_runtime(config, command=run, pause=time.sleep, report=write_watch_status):
+    while True:
+        # Storage ownership is mandatory; application health is an observation,
+        # never an instruction to exit WSL, start a service or replay a request.
+        need(mounted(config, command) and mapping(config, command) is not None, 'storage-no-longer-owned')
+        try:
+            state = service(UNITS[2], command, watching=True)['ActiveState']
+        except (Held, OSError, subprocess.SubprocessError):
+            state = 'unverified'
+        try:
+            report({'valid': state == 'active', 'watching': True, 'storageOwned': True,
+                    'runtimeActive': state == 'active', 'runtimeState': state})
+        except (Held, OSError):
+            # A stale checkedAt exposes a reporting failure. Keep the storage
+            # session alive even if its optional RAM status cannot be replaced.
+            pass
+        pause(30)
 
 
 def transport_module(config):
@@ -218,6 +307,7 @@ def start_installed(config, policy, command=run):
         # Inactive unreferenced units can be garbage-collected immediately.
         # Keep this validated transport active before app's complete inventory.
         transport_ready(config, command)
+    wait_backup_idle(config, command)
     app = service(UNITS[2], command)
     if app['ActiveState'] == 'inactive':
         command(['/usr/bin/systemctl', 'start', UNITS[2]], timeout=120)
@@ -240,6 +330,7 @@ def start_installed(config, policy, command=run):
         finally:
             connection.close()
     need(ready, 'app-not-ready')
+    wait_backup_idle(config, command)
     command(['/usr/bin/python3', '-I', '-B', str(runtime), '--check', CONFIG], timeout=120)
     # Jobs remain disabled until their preserved journal and the final backup are accepted.
     jobs = json.loads(private_file(config['jobsConfig']))
@@ -261,6 +352,7 @@ def main():
     try:
         need(sys.platform == 'linux' and os.getuid() == 0 and (args.start or not args.watch), 'entrypoint')
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+        enter_system_mount_namespace()
         need(not Path('/proc/swaps').read_text().splitlines()[1:], 'swap-enabled')
         config = json.loads(private_file(CONFIG))
         if args.start:
@@ -281,11 +373,8 @@ def main():
         if args.start:
             start_installed(config, policy)
         print(json.dumps({'valid': True, **result, 'runtimeStarted': args.start}), flush=True)
-        while args.watch:
-            time.sleep(30)
-            need(mounted(config) and mapping(config) is not None, 'storage-no-longer-owned')
-            # Keep WSL alive without repeating failed mutations or replaying jobs.
-            need(service(UNITS[2])['ActiveState'] == 'active', 'runtime-no-longer-active')
+        if args.watch:
+            watch_runtime(config)
         return 0
     except Exception:
         print('{"valid":false,"automaticRetry":false}', flush=True)

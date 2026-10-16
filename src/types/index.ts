@@ -267,7 +267,6 @@ export interface Comment {
   target_type: TargetType;
   target_id: string;
   content: string;
-  sheet_reply_index?: number | null;
   created_at: string;
   updated_at: string;
 }

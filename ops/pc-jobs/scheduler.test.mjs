@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { JOBS, slotAt, initialState, recoverState, dueJobs, successfulPayload, tick } from './scheduler.mjs';
+import { JOBS, slotAt, initialState, validateState, recoverState, dueJobs, successfulPayload, tick } from './scheduler.mjs';
 import { executeLocalJob, validateConfig } from './run.mjs';
 
 
@@ -10,14 +10,70 @@ const at = Date.parse('2026-09-25T15:05:00Z');
 const payload = job => job.id === 'sheets' ? { ok: true, failedMembers: [] } : job.id === 'cleanup' ? { deleted: 0 } : { ok: true, results: [] };
 const success = async job => ({ ok: true, status: 200, value: payload(job) });
 
-test('local Push is opt-in, journaled before dispatch and uncertainty is never replayed',async()=>{
+test('local Push is opt-in and an uncertain slot is not replayed; a later slot selects new pending items',async()=>{
   const state=initialState(at),events=[];
   assert.equal(dueJobs(state,at).some(job=>job.id==='push'),false);
   await tick({state,now:at,localPushEnabled:true,ready:async()=>true,save:async value=>events.push(['save',value.jobs.push?.status]),execute:async job=>{
     if(job.id!=='push')return success(job);events.push(['dispatch']);throw Error('Synthetic lost response');
   }});
   assert.equal(state.jobs.push.status,'uncertain');assert(events.findIndex(value=>value[0]==='save'&&value[1]==='running')<events.findIndex(value=>value[0]==='dispatch'));
-  assert.equal(dueJobs(state,at+60000,true).some(job=>job.id==='push'),false);
+  assert.equal(dueJobs(state,at,true).some(job=>job.id==='push'),false);
+  assert.equal(dueJobs(state,at+60000,true).some(job=>job.id==='push'),true);
+});
+
+test('later push cycles retain every failed or interrupted outcome across restart without replaying its slot',async()=>{
+  const state=initialState(at),calls=[],saved=[];
+  state.jobs.push={slot:at,status:'failed',startedAt:at,finishedAt:at+1,httpStatus:500,evidence:{untouched:'old failure'}};
+  const old=structuredClone(state.jobs.push);
+  const execute=async job=>{calls.push([job.id,job]);return job.id==='push'
+    ?{ok:true,status:200,value:{ok:true,sent:1,dropped:0,failed:0,uncertain:0}}:success(job);};
+  const args={state,localPushEnabled:true,ready:async()=>true,save:async value=>saved.push(structuredClone(value)),execute};
+  await tick({...args,now:at});assert(!calls.some(([id])=>id==='push'));
+  await tick({...args,now:at+60000});
+  assert.deepEqual(state.pushFailures,[old]);assert.equal(state.jobs.push.status,'success');
+  const pending=saved.find(value=>value.jobs.push.slot===at+60000&&value.jobs.push.status==='running');
+  assert.deepEqual(pending.pushFailures,[old]);
+  const restarted=recoverState(structuredClone(state));
+  restarted.jobs.push={slot:at+120000,status:'running',startedAt:at+120000,evidence:'lost process'};
+  recoverState(restarted);const interrupted=structuredClone(restarted.jobs.push);
+  assert(!dueJobs(restarted,at+120000,true).some(job=>job.id==='push'));
+  await tick({...args,state:restarted,now:at+180000});
+  assert.deepEqual(restarted.pushFailures,[old,interrupted]);
+  assert.equal(calls.filter(([id])=>id==='push').length,2);
+  assert(calls.filter(([id])=>id==='push').every(([,job])=>!('body' in job)&&!('retry' in job)));
+  assert.deepEqual(validateState(recoverState(structuredClone(restarted))),restarted);
+});
+
+test('running push and invalid historical outcomes hold; failed journal save sends nothing',async()=>{
+  const state=initialState(at);state.jobs.push={slot:at,status:'running'};
+  assert(!dueJobs(state,at+60000,true).some(job=>job.id==='push'));
+  state.jobs.push.status='failed';state.jobs.program={slot:at,status:'success'};
+  await assert.rejects(tick({state,now:at+60000,localPushEnabled:true,ready:async()=>true,
+    save:async()=>{throw Error('synthetic disk full');},execute:async()=>assert.fail('must persist before dispatch')}));
+  const valid={version:1,activateAt:at,jobs:{push:{slot:at+60000,status:'success'}},pushFailures:[{slot:at,status:'uncertain'}]};
+  for(const mutate of [s=>s.pushFailures.push({...s.pushFailures[0]}),s=>s.pushFailures[0].status='running',
+    s=>s.pushFailures[0].slot=at+60000,s=>s.pushFailures[0].finishedAt='unknown']) {
+    const invalid=structuredClone(valid);mutate(invalid);assert.throws(()=>validateState(invalid));
+  }
+});
+
+test('consecutive push outages back off only future pending cycles, preserve evidence and reset after success',async()=>{
+  const state=initialState(at);let now=at,calls=0;
+  const args={state,localPushEnabled:true,ready:async()=>true,save:async()=>{},execute:async job=>{
+    if(job.id!=='push')return success(job);calls++;return {ok:false,status:503,value:{}};
+  }};
+  for(const minutes of [1,2,4,8,15,15]) {
+    await tick({...args,now});
+    assert.equal(state.jobs.push.pendingBackoffMinutes,minutes);
+    assert(!dueJobs(state,now+minutes*60000-1,true).some(job=>job.id==='push'));
+    now+=minutes*60000;
+    assert(dueJobs(state,now,true).some(job=>job.id==='push'));
+  }
+  assert.equal(calls,6);assert.equal(state.pushFailures.length,5);
+  await tick({...args,now,execute:async job=>job.id==='push'?{ok:true,status:200,value:{ok:true,sent:0,dropped:0,failed:0,uncertain:0}}:success(job)});
+  assert.equal(state.jobs.push.pendingBackoffMinutes,undefined);
+  assert.equal(state.pushFailures.length,6);
+  assert(dueJobs(state,now+60000,true).some(job=>job.id==='push'));
 });
 test('approved schedules keep JST midnight, five-minute program and daily cleanup', () => {
   assert.deepEqual(JOBS.map(j=>j.id), ['sheets','program','cleanup','push']);

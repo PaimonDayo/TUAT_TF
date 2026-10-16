@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ImageNotFoundError,ImageUploadError,logImageFailure,readImageUpload,signedImageUrl,uploadImage } from "@/lib/image-storage";
 import { cleanupNoteImages } from "@/lib/note-image-cleanup";
 import { TWEET_IMAGE_MAX_UPLOAD_BYTES } from "@/lib/tweet-image";
+import { admitImageUpload } from "@/lib/image-upload-admission";
 export const runtime="nodejs";
 export async function GET(request: Request) {
   try {
@@ -51,6 +52,7 @@ export async function GET(request: Request) {
   }
 }
 export async function POST(request: Request) {
+  let release: (() => void) | undefined;
   try {
     const sb=await createClient();
     const {
@@ -59,7 +61,7 @@ export async function POST(request: Request) {
     if(authError&&authError.status!==401&&authError.name!=="AuthSessionMissingError") throw authError;
     if(!user)
       return NextResponse.json({ error: "ログインが必要です" },{ status: 401 });
-    const articleId=new URL(request.url).searchParams.get("articleId");
+    const articleId=new URL(request.url).searchParams.get("articleId")?.toLowerCase();
     if(!articleId)
       return NextResponse.json(
         { error: "記事が見つかりません" },
@@ -96,6 +98,20 @@ export async function POST(request: Request) {
         { error: "画像の容量が大きすぎます" },
         { status: 413 },
       );
+    const uploadId=new URL(request.url).searchParams.get("uploadId")?.toLowerCase();
+    if(!uploadId||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uploadId)) {
+      return NextResponse.json({ error: "画像の識別情報が不正です" },{ status: 400 });
+    }
+    release=admitImageUpload(user.id,`note:${articleId}`);
+    const path=`${articleId}/${uploadId}.webp`;
+    const existing=await sb.from("note_article_images").select("id,path").eq("path",path).maybeSingle();
+    if(existing.error) return NextResponse.json({ error: "画像を確認できませんでした" },{ status: 503 });
+    if(existing.data) return NextResponse.json(existing.data,{ headers: { "Cache-Control": "no-store" } });
+    // Refuse a seventh image before buffering/conversion/publication. The article
+    // admission also covers collaborators; the DB trigger remains authoritative.
+    const capacity=await sb.from("note_article_images").select("id",{ count: "exact",head: true }).eq("article_id",articleId);
+    if(capacity.error||capacity.count===null||capacity.count===undefined) return NextResponse.json({ error: "画像の枚数を確認できませんでした" },{ status: 503 });
+    if(capacity.count>=6) return NextResponse.json({ error: "1記事につき6枚まで追加できます" },{ status: 409 });
     let input: Buffer;
     try { input=await readImageUpload(request,TWEET_IMAGE_MAX_UPLOAD_BYTES); }
     catch(error) {
@@ -120,32 +136,6 @@ export async function POST(request: Request) {
         { error: "画像の容量が大きすぎます" },
         { status: 413 },
       );
-    const uploadId=new URL(request.url).searchParams.get("uploadId");
-    if(
-      !uploadId||
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        uploadId,
-      )
-    )
-      return NextResponse.json(
-        { error: "画像の識別情報が不正です" },
-        { status: 400 },
-      );
-    const path=`${articleId}/${uploadId}.webp`;
-    const existing=await sb
-      .from("note_article_images")
-      .select("id,path")
-      .eq("path",path)
-      .maybeSingle();
-    if(existing.error)
-      return NextResponse.json(
-        { error: "画像を確認できませんでした" },
-        { status: 503 },
-      );
-    if(existing.data)
-      return NextResponse.json(existing.data,{
-        headers: { "Cache-Control": "no-store" },
-      });
     try {
       await uploadImage(sb,"note-images",path,output);
     } catch {
@@ -182,10 +172,11 @@ export async function POST(request: Request) {
     return NextResponse.json(result.data,{
       headers: { "Cache-Control": "no-store" },
     });
-  } catch {
+  } catch(error) {
+    if(error instanceof ImageUploadError) return NextResponse.json({ error: error.message },{ status: error.status,headers: { "Cache-Control": "private, no-store" } });
     logImageFailure("note-image-upload");
     return NextResponse.json({ error: "画像を保存できませんでした。時間をおいてお試しください" },{ status: 503,headers: { "Cache-Control": "private, no-store" } });
-  }
+  } finally { release?.(); }
 }
 export async function DELETE(request: Request) {
   try {

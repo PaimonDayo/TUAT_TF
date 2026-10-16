@@ -1,14 +1,13 @@
 import { OCTOBER_SHEET_ID } from "@/lib/sheet-period";
 import Papa from "papaparse";
 import { createHash } from "node:crypto";
-import type { RawSheetReply } from "@/lib/sheet-replies";
 
 export type RawMember = {
   name: string;
   gid?: string;
   columns?: { index: number; label: string }[];
   header: string[];
-  records: { date: string; cells: Record<string, string>; values?: string[]; replies?: RawSheetReply[] }[];
+  records: { date: string; cells: Record<string, string>; values?: string[] }[];
 };
 
 export type SheetMember = { name: string; gid: string };
@@ -95,10 +94,6 @@ export function parsePublicSheetDate(raw: string, defaultYear = currentYearJst()
 
 const normalizeHeader = (value: string) => value.replace(/\s+/g, "").trim();
 
-export function commentColumn(header: string[]): number {
-  return header.map(normalizeHeader).findIndex((cell) => cell === "感想");
-}
-
 /** 1タブ分の公開CSVを、従来のGAS readMemberSheetと同じ形へ変換する。 */
 export function parseMemberCsv(member: SheetMember, csv: string, defaultYear = currentYearJst(), startMonth?: number): RawMember {
   const parsed = Papa.parse<string[]>(csv, { skipEmptyLines: false });
@@ -112,7 +107,6 @@ export function parseMemberCsv(member: SheetMember, csv: string, defaultYear = c
 
   const fullHeader = rows[headerIndex].map((cell) => cell.trim());
   const dateColumn = fullHeader.findIndex((cell) => normalizeHeader(cell) === "日付");
-  const replyStart = commentColumn(fullHeader);
   const records: RawMember["records"] = [];
 
   for (const row of rows.slice(headerIndex + 1)) {
@@ -126,15 +120,7 @@ export function parseMemberCsv(member: SheetMember, csv: string, defaultYear = c
       const key = fullHeader[column];
       if (key && cells[key] === undefined) cells[key] = row[column] ?? "";
     }
-    const replies: RawSheetReply[] = [];
-    if (replyStart !== -1) {
-      for (let column = replyStart + 1; column < row.length; column++) {
-        if ((fullHeader[column] ?? "").trim()) continue;
-        const content = (row[column] ?? "").trim();
-        if (content) replies.push({ replyIndex: column, content, source: "sheet" });
-      }
-    }
-    records.push({ date, cells, values: row, replies });
+    records.push({ date, cells, values: row });
   }
 
   return {
@@ -146,13 +132,34 @@ export function parseMemberCsv(member: SheetMember, csv: string, defaultYear = c
   };
 }
 
-async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
+/** One deadline covers headers and bounded body bytes; retain each caller's cache policy. */
+export async function fetchPublicSheetText(url: string, timeoutMs: number, maxBytes: number, init: RequestInit) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => { controller.abort(); reject(new Error("公開シートの取得がタイムアウトしました")); }, timeoutMs);
+  });
   try {
-    return await fetch(url, { cache: "no-store", redirect: "follow", signal: controller.signal });
+    const response = await Promise.race([fetch(url, { ...init, redirect: "follow", signal: controller.signal }), deadline]);
+    reader = response.body?.getReader();
+    if (!response.ok) return { response, text: "" };
+    if (Number(response.headers.get("content-length") ?? 0) > maxBytes) throw new Error("公開シートの容量が上限を超えています");
+    const decoder = new TextDecoder(), chunks: string[] = [];
+    let bytes = 0;
+    if (reader) for (;;) {
+      const { done, value } = await Promise.race([reader.read(), deadline]);
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > maxBytes) throw new Error("公開シートの容量が上限を超えています");
+      chunks.push(decoder.decode(value, { stream: true }));
+    }
+    chunks.push(decoder.decode());
+    return { response, text: chunks.join("") };
   } finally {
     clearTimeout(timer);
+    // A failed or interrupted stream may never settle its cancellation promise.
+    void reader?.cancel().catch(() => undefined);
   }
 }
 
@@ -161,9 +168,8 @@ export async function fetchPublicSheetMembers(targetSpreadsheetId?: string): Pro
   if (metadataCache?.spreadsheetId === id && metadataCache.expiresAt > Date.now()) {
     return metadataCache.members;
   }
-  const response = await fetchWithTimeout(`${BASE_URL}/${encodeURIComponent(id)}/htmlview`, 10_000);
+  const { response, text: html } = await fetchPublicSheetText(`${BASE_URL}/${encodeURIComponent(id)}/htmlview`, 10_000, 4 * 1024 ** 2, { cache: "no-store" });
   if (!response.ok) throw new Error(`シート一覧を取得できませんでした (${response.status})`);
-  const html = await response.text();
   const members = parseSheetMetadataHtml(html);
   if (members.length === 0) {
     throw new Error("公開シートから部員タブを取得できませんでした。スプレッドシートIDと公開状態を確認してください");
@@ -205,10 +211,9 @@ export async function fetchPublicMemberSnapshot(
   if (!member) throw new Error(`部員シート「${memberName}」が見つかりません`);
   const id = opts.spreadsheetId ?? spreadsheetId();
   const url = `${BASE_URL}/${encodeURIComponent(id)}/export?format=csv&gid=${encodeURIComponent(member.gid)}&t=${Date.now()}`;
-  const response = await fetchWithTimeout(url, opts.timeoutMs ?? 10_000);
+  const { response, text: csv } = await fetchPublicSheetText(url, opts.timeoutMs ?? 10_000, 16 * 1024 ** 2, { cache: "no-store" });
   if (!response.ok) throw new Error(`CSVを取得できませんでした (${response.status})`);
   const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
-  const csv = await response.text();
   const startsAsHtml = /^\s*(?:<!doctype|<html)/i.test(csv);
   if (contentType.includes("text/html") || startsAsHtml) {
     throw new Error("CSVではなくHTMLが返されました。公開状態を確認してください");

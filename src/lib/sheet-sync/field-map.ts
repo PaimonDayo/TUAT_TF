@@ -79,6 +79,27 @@ export type FieldMap = {
 
 export type HeaderCandidate = { raw: string; n: string; column: number };
 
+function uniqueHeader(candidates: HeaderCandidate[]): HeaderCandidate | undefined {
+  if (candidates.length > 1) throw new Error("同じ項目に複数のシート列が一致します。列の対応を確認してください。");
+  return candidates[0];
+}
+
+function configuredHeader(headers: HeaderCandidate[], usedColumns: Set<number>, field?: RecordFieldDef): HeaderCandidate | undefined {
+  if (!field) return undefined;
+  const unused = (candidate: HeaderCandidate | undefined) => {
+    if (candidate && usedColumns.has(candidate.column)) throw new Error("複数の項目が同じシート列を指定しています。列の対応を確認してください。");
+    return candidate;
+  };
+  // A physical column is authoritative only while its saved header still matches.
+  if (field.sourceColumn != null) {
+    const explicit = uniqueHeader(headers.filter(candidate => candidate.column === field.sourceColumn
+      && (!field.sourceHeader || norm(field.sourceHeader) === candidate.n)));
+    if (explicit) return unused(explicit);
+  }
+  const named = field.sourceHeader ? uniqueHeader(headers.filter(candidate => norm(field.sourceHeader!) === candidate.n)) : undefined;
+  return unused(named ?? uniqueHeader(headers.filter(candidate => norm(field.label) === candidate.n)));
+}
+
 export function resolveFieldMap(
   member: Pick<RawMember, "header" | "columns">,
   fields: RecordFieldDef[],
@@ -100,14 +121,8 @@ export function resolveFieldMap(
   for (const item of BUILTINS) {
     const configured = fields.find((field) => field.key === item.key);
     if (configured?.hidden) continue;
-    const hit = headers.find((candidate) => !usedColumns.has(candidate.column)
-      && (item.key !== "memo" || candidate.n === "感想"
-        || (candidate.n === "コメント" && norm(configured?.sourceHeader ?? "") === "コメント"))
-      && (
-      (configured?.sourceColumn === candidate.column && norm(configured.sourceHeader ?? candidate.raw) === candidate.n) ||
-      (configured?.sourceHeader && norm(configured.sourceHeader) === candidate.n) ||
-      (configured?.label && norm(configured.label) === candidate.n)
-    ));
+    const hit = configuredHeader(headers.filter((candidate) => item.key !== "memo" || candidate.n === "感想"
+        || (candidate.n === "コメント" && norm(configured?.sourceHeader ?? "") === "コメント")), usedColumns, configured);
     if (!hit) continue;
     builtin.set(item.key, { header: hit.raw, column: hit.column, numeric: item.numeric, integer: item.integer });
     usedColumns.add(hit.column);
@@ -119,9 +134,9 @@ export function resolveFieldMap(
     const available = headers.filter((candidate) => !usedColumns.has(candidate.column) && !customSourceColumns.has(candidate.column));
     let hit: HeaderCandidate | undefined;
     if (item.key === "memo") {
-      hit = available.find((candidate) => candidate.n === "感想");
+      hit = uniqueHeader(available.filter((candidate) => candidate.n === "感想"));
     } else {
-      hit = available.find((candidate) => item.keywords.some((keyword) => candidate.n.includes(norm(keyword))));
+      hit = uniqueHeader(available.filter((candidate) => item.keywords.some((keyword) => candidate.n.includes(norm(keyword)))));
     }
     if (!hit) continue;
     builtin.set(item.key, { header: hit.raw, column: hit.column, numeric: item.numeric, integer: item.integer });
@@ -130,11 +145,8 @@ export function resolveFieldMap(
 
   const custom: FieldMap["custom"] = new Map();
   for (const field of customRecordFields(fields)) {
-    const hit = headers.find((candidate) => !usedColumns.has(candidate.column) && (
-      (field.sourceColumn === candidate.column && norm(field.sourceHeader ?? candidate.raw) === candidate.n) ||
-      (field.sourceHeader && norm(field.sourceHeader) === candidate.n) ||
-      norm(field.label) === candidate.n
-    ));
+    if (field.hidden) continue;
+    const hit = configuredHeader(headers, usedColumns, field);
     if (!hit) continue;
     custom.set(field.key, { header: hit.raw, column: hit.column, type: field.type });
     usedColumns.add(hit.column);

@@ -293,6 +293,7 @@ def journal_snapshot(directory, owner=None):
                not finite_number(parsed.get('activateAt')) or not isinstance(parsed.get('jobs'), dict):
                 fail('Unknown Jobs journal format')
             validate_job_records(parsed['jobs'])
+            validate_push_failures(parsed)
         elif path.name == 'runner.lock':
             if not isinstance(parsed.get('pid'), int) or parsed['pid'] <= 0 or \
                not isinstance(parsed.get('startedAt'), str):
@@ -346,7 +347,7 @@ def finite_number(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
-def validate_job_records(jobs):
+def validate_job_records(jobs, historical_push=False):
     if not isinstance(jobs, dict):
         fail('Unknown Jobs status jobs')
     for ident, record in jobs.items():
@@ -359,7 +360,7 @@ def validate_job_records(jobs):
         # recoverState only changes running -> uncertain; it adds no terminal time.
         # That interrupted current request must not pass as historical drained work,
         # even when status.json was never written. Leave all bytes/holds unchanged.
-        if record['status'] == 'uncertain' and not finite_number(record.get('finishedAt')):
+        if record['status'] == 'uncertain' and not finite_number(record.get('finishedAt')) and not (historical_push and ident == 'push'):
             fail('Current Jobs outcome lacks terminal dispatch evidence; no fresh receipt')
         if 'startedAt' in record and 'finishedAt' in record and record['finishedAt'] < record['startedAt']:
             fail('Unknown Jobs status dispatch interval')
@@ -369,6 +370,27 @@ def validate_job_records(jobs):
         if any(name in record and not isinstance(record[name], bool)
                for name in ('sheetWritesSkipped', 'sheetWritesUncertain')):
             fail('Unknown Jobs status sheet hold')
+        if ident == 'push' and 'pendingBackoffMinutes' in record and \
+           (type(record['pendingBackoffMinutes']) is not int or record['pendingBackoffMinutes'] not in (1, 2, 4, 8, 15)):
+            fail('Unknown push pending-cycle backoff')
+
+
+def validate_push_failures(journal):
+    """New pending push cycles do not erase or resolve earlier request outcomes."""
+    if 'pushFailures' not in journal:
+        return  # Older journals and archives remain valid without this field.
+    history = journal['pushFailures']
+    if not isinstance(history, list):
+        fail('Unknown push failure history')
+    current = journal.get('jobs', {}).get('push', {})
+    previous = -math.inf
+    for record in history:
+        if not isinstance(record, dict) or record.get('status') not in ('failed', 'uncertain') or \
+           not finite_number(record.get('slot')) or not finite_number(current.get('slot')) or \
+           not previous < record['slot'] < current['slot']:
+            fail('Unknown push failure history order')
+        validate_job_records({'push': record}, historical_push=True)
+        previous = record['slot']
 
 
 def validate_jobs_status(status, journal):
@@ -389,6 +411,7 @@ def validate_jobs_status(status, journal):
         fail('Jobs status time is in the future')
     for jobs in (journal.get('jobs'), status['jobs']):
         validate_job_records(jobs)
+    validate_push_failures(journal)
     for ident, record in status['jobs'].items():
         current = journal['jobs'].get(ident)
         if current is None or record['slot'] > current['slot'] or \

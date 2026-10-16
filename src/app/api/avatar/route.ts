@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { loginAccessResponse } from "@/lib/supabase/login-access";
 import { ImageUploadError, logImageFailure, readImageUpload, uploadImage } from "@/lib/image-storage";
 import { AVATAR_BUCKET, AVATAR_MAX_PIXELS, AVATAR_OUTPUT_SIZE } from "@/lib/avatar-image";
+import { admitImageUpload } from "@/lib/image-upload-admission";
 
 export const runtime = "nodejs";
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
@@ -53,6 +54,7 @@ async function changeAvatar(
 }
 
 export async function POST(request: Request) {
+  let release: (() => void) | undefined;
   try {
     const auth = await authenticatedClient();
     if (auth.response) return auth.response;
@@ -61,15 +63,14 @@ export async function POST(request: Request) {
     if (!ACCEPTED_TYPES.has(contentType)) {
       return NextResponse.json({ error: "対応していない画像形式です" }, { status: 415, headers: NO_STORE });
     }
+    release = admitImageUpload(user.id);
+    const profile = await currentAvatar(supabase,user.id);
+    if (!profile) return NextResponse.json({ error: "プロフィールが見つかりません" }, { status: 404, headers: NO_STORE });
     const input = await readImageUpload(request, MAX_UPLOAD_BYTES);
-    const [profile, output] = await Promise.all([
-      currentAvatar(supabase, user.id),
-      sharp(input, { limitInputPixels: AVATAR_MAX_PIXELS })
+    const output = await sharp(input, { limitInputPixels: AVATAR_MAX_PIXELS })
         .resize(AVATAR_OUTPUT_SIZE, AVATAR_OUTPUT_SIZE, { fit: "cover" })
         .webp({ quality: 82 }).toBuffer()
-        .catch(() => { throw new ImageUploadError(400, "画像を読み込めませんでした"); }),
-    ]);
-    if (!profile) return NextResponse.json({ error: "プロフィールが見つかりません" }, { status: 404, headers: NO_STORE });
+        .catch(() => { throw new ImageUploadError(400, "画像を読み込めませんでした"); });
 
     const uploadedPath = `${user.id}/${crypto.randomUUID()}.webp`;
     await uploadImage(supabase, AVATAR_BUCKET, uploadedPath, output);
@@ -85,7 +86,7 @@ export async function POST(request: Request) {
     if (error instanceof ImageUploadError) return NextResponse.json({ error: error.message }, { status: error.status, headers: NO_STORE });
     logImageFailure("avatar-save");
     return unavailable();
-  }
+  } finally { release?.(); }
 }
 
 export async function DELETE() {

@@ -56,6 +56,7 @@ export function applyMiddleLongMenuSnapshot(
     if (schedule.schedule_type !== "practice") return schedule;
     if (schedule.target_blocks.length > 0 && !schedule.target_blocks.includes("middle_long")) return schedule;
     const month = Number(schedule.schedule_date.slice(5, 7));
+    if (!loadedMonths.has(month)) return schedule;
     const monthDay = schedule.schedule_date.slice(5);
     const candidates = snapshot.rows.filter(
       (row) =>
@@ -66,7 +67,6 @@ export function applyMiddleLongMenuSnapshot(
     );
     const row = candidates.find((candidate) => candidate.sourceMonth === month) ?? candidates[0];
 
-    if (!row && !loadedMonths.has(month)) return schedule;
     const menus = (schedule.menus ?? []).filter((menu) => !isMiddleLongBlockMenu(menu));
     const current = row ? sheetMenu(schedule, row) : null;
     return {

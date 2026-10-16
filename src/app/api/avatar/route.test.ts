@@ -4,6 +4,7 @@ const state = vi.hoisted(() => ({
   avatar: "verified-member/old.webp" as string | null,
   user: { id: "verified-member" } as { id: string } | null,
   readError: false,
+  initialReadError: false,
   readCount: 0,
   updateFailure: "" as "" | "after-commit" | "before-commit" | "throw-after-commit",
   concurrentAvatar: undefined as string | null | undefined,
@@ -28,6 +29,7 @@ vi.mock("@/lib/supabase/server", () => ({
         maybeSingle: async () => {
           if (!values) {
             state.readCount++;
+            if(state.initialReadError) return { data: null,error: { code: "08006" } };
             if (state.readError && state.readCount > 1) return { data: null, error: { code: "08006", message: "private lookup failure" } };
             return { data: { avatar_url: state.avatar }, error: null };
           }
@@ -61,6 +63,7 @@ beforeEach(() => {
   state.avatar = "verified-member/old.webp";
   state.user = { id: "verified-member" };
   state.readError = false;
+  state.initialReadError = false;
   state.readCount = 0;
   state.updateCount = 0;
   state.updateFailure = "";
@@ -72,6 +75,13 @@ beforeEach(() => {
 });
 
 describe("avatar save result reconciliation", () => {
+  it("does not consume or convert an image when its profile lookup fails", async () => {
+    state.initialReadError=true;
+    const input=request();
+    expect((await POST(input)).status).toBe(503);
+    expect(input.bodyUsed).toBe(false);
+    expect(state.upload).not.toHaveBeenCalled();
+  });
   it("preserves and reports an avatar saved before its database response was lost", async () => {
     state.updateFailure = "after-commit";
     const response = await POST(request());

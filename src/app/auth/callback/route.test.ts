@@ -29,6 +29,12 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("PC app first-login identity", () => {
+  it("keeps the completed OAuth login on the public application origin", async () => {
+    for (const next of ["@other.invalid/", "//other.invalid/", "/\\other.invalid/"]) {
+      const response = await GET(new NextRequest(`http://127.0.0.1:18182/auth/callback?code=synthetic&next=${encodeURIComponent(next)}`));
+      expect(response.headers.get("location")).toBe(`${origin}/home`);
+    }
+  });
   it("checks allowlist before immediately provisioning the verified user's same UUID", async () => {
     mocks.lookup.mockResolvedValueOnce({ data: { user: null }, error: { status: 404, code: "user_not_found" } });
     const response = await GET(request());

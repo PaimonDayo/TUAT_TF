@@ -3,6 +3,23 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 
+test('retired public reply actions cannot write or delete sheet cells', () => {
+  const ctx = vm.createContext({});
+  vm.runInContext(readFileSync(new URL('../../gas/sync-clasp/Code.js', import.meta.url), 'utf8'), ctx);
+  ctx.verifySyncSecret = () => {}; ctx.getSpreadsheetId = () => 'synthetic'; ctx.createJsonResponse = value => value;
+  ctx.writeReplyRecord = ctx.deleteReplyRecord = () => assert.fail('retired handler dispatched');
+  for (const action of ['writeReply', 'deleteReply']) assert.equal(ctx.doPost({ postData: { contents: JSON.stringify({ action }) } }).error, 'Sheet reply synchronization is disabled');
+});
+
+test('legacy raw reads return record fields without fetching or returning reply notes', () => {
+  const ctx = vm.createContext({});
+  vm.runInContext(readFileSync(new URL('../../gas/sync-clasp/Code.js', import.meta.url), 'utf8'), ctx);
+  const member = ctx.readMemberSheet({ getName: () => 'synthetic', getSheetId: () => 1,
+    getDataRange: () => ({ getDisplayValues: () => [['日付', '感想', ''], ['10/1', 'record', 'historical reply']] }) });
+  assert.equal(member.records.length, 1); assert.equal(member.records[0].cells.感想, 'record');
+  assert.equal('replies' in member.records[0], false);
+});
+
 function setup() {
   const values = [['date', 'memo', '', ''], ['2026-09-28', 'record', '', '']];
   const notes = ['', '', '', ''];

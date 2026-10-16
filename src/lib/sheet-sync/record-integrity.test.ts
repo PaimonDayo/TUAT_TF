@@ -10,11 +10,9 @@ const state = vi.hoisted(() => ({
   lostInsertResponse: false,
   applyBeforeLostResponse: true,
   rejectedProfile: null as string | null,
-  fetch: vi.fn(), gas: vi.fn(), replies: vi.fn(), flush: vi.fn(),
+  fetch: vi.fn(), gas: vi.fn(),
 }));
 vi.mock("./gas-client", () => ({ fetchAllRaw: state.fetch, gasPost: state.gas }));
-vi.mock("./replies", () => ({ reconcileSheetReplies: state.replies }));
-vi.mock("./reply-deletions", () => ({ flushReplyDeletions: state.flush }));
 import { runSheetSync } from "./run";
 
 function linkedProfile(id = "member") {
@@ -82,10 +80,7 @@ beforeEach(() => {
   vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-09T15:00:00Z"));
   state.profiles = [linkedProfile()]; state.records = []; state.clears = []; state.writes = [];
   state.readError = null; state.lostInsertResponse = false; state.applyBeforeLostResponse = true; state.rejectedProfile = null;
-  state.gas.mockReset().mockResolvedValue({ success: true });
-  state.replies.mockReset().mockResolvedValue({ synced: 0, failedMembers: [] });
-  state.flush.mockReset().mockResolvedValue([]);
-  state.fetch.mockReset().mockImplementation(async (profiles: { name: string }[]) => ({
+  state.gas.mockReset().mockResolvedValue({ success: true });  state.fetch.mockReset().mockImplementation(async (profiles: { name: string }[]) => ({
     members: profiles.map(profile => ({ name: profile.name, header: ["日付", "感想"], records: [{ date: "2026-10-08", cells: { 感想: "sheet content" } }] })),
     signatures: new Map(profiles.map(profile => [profile.name, "synthetic-signature"])), unchangedMembers: [], failedMembers: [],
   }));

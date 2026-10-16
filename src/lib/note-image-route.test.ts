@@ -22,7 +22,9 @@ vi.mock("sharp", () => ({ default: () => {
 } }));
 import { GET, POST, DELETE } from "@/app/api/note-image/route";
 import { ImageNotFoundError } from "./image-storage";
+const capacity: { count: number | null; error: unknown } = { count: 0,error: null };
 const query = {
+  then: (resolve: (value: typeof capacity) => unknown) => Promise.resolve(resolve(capacity)),
   select: vi.fn(),
   eq: vi.fn(),
   maybeSingle: vi.fn(),
@@ -33,6 +35,7 @@ const query = {
 const rpc = vi.fn();
 beforeEach(() => {
   vi.clearAllMocks();
+  capacity.count=0; capacity.error=null;
   query.select.mockReturnValue(query);
   query.eq.mockReturnValue(query);
   query.delete.mockReturnValue(query);
@@ -47,6 +50,40 @@ beforeEach(() => {
   mocks.upload.mockResolvedValue(undefined);
 });
 describe("private note images", () => {
+  it("canonicalizes UUID aliases before article admission and immutable storage", async () => {
+    const article="aaaaaaaa-1111-4111-8111-111111111111", upload="bbbbbbbb-2222-4222-8222-222222222222";
+    const image={ id: "image",path: `${article}/${upload}.webp` };
+    query.maybeSingle.mockResolvedValueOnce({ data: { note_id: "note" },error: null })
+      .mockResolvedValueOnce({ data: null,error: null });
+    query.single.mockResolvedValue({ data: image,error: null });
+    rpc.mockResolvedValue({ data: true,error: null });
+    const request=new Request(`https://app.example/api/note-image?articleId=${article.toUpperCase()}&uploadId=${upload.toUpperCase()}`,{ method: "POST",headers: { "Content-Type": "image/webp" },body: "synthetic" });
+    expect((await POST(request)).status).toBe(200);
+    expect(mocks.upload.mock.calls[0][2]).toBe(image.path);
+    expect(query.eq).toHaveBeenCalledWith("id",article);
+    expect(query.eq).toHaveBeenCalledWith("article_id",article);
+  });
+  it("refuses a seventh image without consuming or publishing its body", async () => {
+    query.maybeSingle.mockResolvedValueOnce({ data: { note_id: "note" },error: null })
+      .mockResolvedValueOnce({ data: null,error: null });
+    rpc.mockResolvedValue({ data: true,error: null });
+    capacity.count=6;
+    const request=new Request("https://app.example/api/note-image?articleId=11111111-1111-4111-8111-111111111111&uploadId=22222222-2222-4222-8222-222222222222",{ method: "POST",headers: { "Content-Type": "image/webp" },body: "synthetic" });
+    expect((await POST(request)).status).toBe(409);
+    expect(request.bodyUsed).toBe(false);
+    expect(mocks.upload).not.toHaveBeenCalled();
+    expect(query.insert).not.toHaveBeenCalled();
+  });
+  it("does not treat an unknown image count as an empty article", async () => {
+    query.maybeSingle.mockResolvedValueOnce({ data: { note_id: "note" },error: null })
+      .mockResolvedValueOnce({ data: null,error: null });
+    rpc.mockResolvedValue({ data: true,error: null });
+    capacity.count=null;
+    const request=new Request("https://app.example/api/note-image?articleId=11111111-1111-4111-8111-111111111111&uploadId=22222222-2222-4222-8222-222222222222",{ method: "POST",headers: { "Content-Type": "image/webp" },body: "synthetic" });
+    expect((await POST(request)).status).toBe(503);
+    expect(request.bodyUsed).toBe(false);
+    expect(mocks.upload).not.toHaveBeenCalled();
+  });
   it("rejects anonymous reads, uploads and deletion before touching storage", async () => {
     mocks.create.mockResolvedValue({
       auth: { getUser: async () => ({ data: { user: null } }) },

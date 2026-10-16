@@ -295,6 +295,37 @@ class BackupBehaviour(unittest.TestCase):
                 self.assertEqual({row['name']: row['bytes'] for row in rows}, before)
                 self.assertEqual(before, {name: (root/name).read_bytes() for name in before})
 
+    def test_push_failure_history_and_older_journals_restore_without_resolving_or_replaying_old_outcomes(self):
+        journal, status = self.scheduler_state()
+        root = Path(self.config['jobsStateRoot'])
+        journal['pushFailures'] = [
+            {'slot': 1735689600000, 'status': 'failed', 'startedAt': 1735689600000,
+             'finishedAt': 1735689600100, 'httpStatus': 500, 'evidence': {'retained': 'old failure'}},
+            {'slot': 1735689660000, 'status': 'uncertain', 'startedAt': 1735689660000,
+             'evidence': 'interrupted old request, never replayed'}]
+        with self.assertRaisesRegex(backup.BackupFailure, 'terminal dispatch evidence'):
+            backup.validate_job_records({'sheets': {'slot': 1, 'status': 'uncertain'}}, historical_push=True)
+        journal['jobs']['push'] = {'slot': 1735776000000, 'status': 'success', 'finishedAt': 1735776001000}
+        status['jobs'] = copy.deepcopy(journal['jobs'])
+        for name, value in (('journal.json', journal), ('status.json', status)):
+            (root/name).write_bytes(json.dumps(value).encode())
+        before = {name: (root/name).read_bytes() for name in ('journal.json', 'status.json')}
+        captured = backup.journal_snapshot(root)
+        self.assertEqual({row['name']:row['bytes'] for row in captured}, before)
+        restored = Path(tempfile.mkdtemp(dir=self.temp.name)); restored.chmod(0o700)
+        for row in captured:
+            (restored/row['name']).write_bytes(row['bytes']); (restored/row['name']).chmod(0o600)
+        self.assertEqual(backup.journal_snapshot(restored), captured)
+        for mutate in (lambda j:j['pushFailures'].append(copy.deepcopy(j['pushFailures'][0])),
+                       lambda j:j['pushFailures'][0].update(status='running'),
+                       lambda j:j['pushFailures'][0].update(slot=j['jobs']['push']['slot']),
+                       lambda j:j['pushFailures'][0].update(httpStatus=True)):
+            invalid=copy.deepcopy(journal);mutate(invalid)
+            (root/'journal.json').write_bytes(json.dumps(invalid).encode())
+            with self.assertRaises(backup.BackupFailure): backup.journal_snapshot(root)
+        self.scheduler_state()  # Legacy journals have no pushFailures field.
+        self.assertEqual(len(backup.journal_snapshot(root)),2)
+
     def test_status_running_unknown_malformed_or_contradictory_refuses_without_repair(self):
         journal, baseline = self.scheduler_state()
         root = Path(self.config['jobsStateRoot']); path = root/'status.json'
