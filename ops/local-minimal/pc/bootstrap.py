@@ -136,7 +136,8 @@ def service(name, command=run, watching=False):
     need(result.get('LoadState') == 'loaded' and
          result.get('FragmentPath') == '/etc/systemd/system/' + name and
          result.get('DropInPaths') == '' and
-         (re.fullmatch('[0-9]+', result.get('ControlPID', '')) if watching else result.get('ControlPID') == '0') and
+         (name == 'tuat-local-backup.timer' or
+          (re.fullmatch('[0-9]+', result.get('ControlPID', '')) if watching else result.get('ControlPID') == '0')) and
          result.get('ActiveState') in (('active', 'inactive', 'failed', 'activating', 'deactivating', 'reloading', 'maintenance')
                                       if watching else ('active', 'inactive')), 'service-state')
     return result
@@ -272,6 +273,65 @@ def transport_ready(config, command=run):
     raise Held('transport-not-ready')
 
 
+def jobs_proof_module(config):
+    """Reuse the installed backup's read-only live owner proof, with sealed inputs."""
+    release = Path(config['releaseDirectory'])
+    manifest = json.loads(private_file(config['releaseManifest'], maximum=64*1024**2))
+    commit = manifest.get('sourceCommit', '')
+    need(re.fullmatch('[a-f0-9]{40}', commit) and commit.startswith(release.name), 'jobs-proof-release')
+    sources = []
+    for name in ('backup.py', 'periodic.py', 'transport.py'):
+        path = release/'ops/local-minimal'/name
+        info = path.lstat()
+        pin = manifest.get('files', {}).get('ops/local-minimal/' + name)
+        need(not path.is_symlink() and path.resolve() == path and stat.S_ISREG(info.st_mode) and
+             info.st_uid == 0 and info.st_nlink == 1 and not info.st_mode & 0o022 and
+             hashlib.sha256(path.read_bytes()).hexdigest() == pin, 'jobs-proof-source')
+        sources.append((path, pin))
+    spec = importlib.util.spec_from_file_location('tuat_boot_jobs_proof', sources[0][0])
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    need(all(hashlib.sha256(path.read_bytes()).hexdigest() == pin for path, pin in sources), 'jobs-proof-source-changed')
+    return module
+
+
+def wait_jobs_ready(config, pause=time.sleep, clock=time.monotonic):
+    module = jobs_proof_module(config)
+    backup = json.loads(private_file(config['backupConfigPath']))
+    need(backup.get('profile') == 'pc-private' and backup.get('writerMode') == 'surface-systemd' and
+         backup.get('sourceId') == config['sourceId'] and backup.get('jobsStateRoot') == config['jobsStateRoot'], 'jobs-proof-configuration')
+    commands = module.LocalCommands(config)
+    owner, deadline = None, clock() + 120
+    while True:
+        state = module.unit_state(commands.unit('tuat-local-jobs.service'))
+        need(state['ActiveState'] == 'active' and state['SubState'] == 'running' and state['FreezerState'] == 'running' and
+             re.fullmatch('[1-9][0-9]*', state['MainPID']) and
+             state['ControlPID'] == '0' and state['ControlGroup'] == '/system.slice/tuat-local-jobs.service', 'jobs-not-running')
+        current = (state['MainPID'], state['InvocationID'], state['ExecMainStartTimestampMonotonic'])
+        need(owner is None or owner == current, 'jobs-owner-changed')
+        owner = current
+        paths = [Path(config['jobsStateRoot'])/name for name in ('lifetime.lock', 'runner.lock')]
+        def matching_records():
+            try:
+                records = [json.loads(private_file(str(path), 4096)) for path in paths]
+                return all(type(record.get('pid')) is int and str(record['pid']) == state['MainPID'] for record in records)
+            except (Held, OSError, ValueError):
+                return False
+        argv = Path('/proc', state['MainPID'], 'cmdline').read_bytes().split(b'\0')
+        expected = [b'/opt/node-v24.19.0-linux-x64/bin/node',
+                    (config['releaseDirectory']+'/ops/pc-jobs/run.mjs').encode(), b'--run', config['jobsConfig'].encode(), b'']
+        # Old metadata can remain while the same service PID completes Python
+        # preflight and Node safely claims its locks. Observe; never edit/replay.
+        if argv == expected and matching_records():
+            # verify_jobs_lock permits an absent runner; require both files first.
+            commands.verify_jobs_lock(backup)
+            need(matching_records(), 'jobs-lock-owner-changed')
+            need(module.unit_state(commands.unit('tuat-local-jobs.service')) == state, 'jobs-owner-changed')
+            return
+        need(clock() < deadline, 'jobs-readiness-deadline')
+        pause(0.25)
+
+
 def start_installed(config, policy, command=run):
     need(policy == {'version': 1, 'enabled': True, 'automaticBackups': False} or
          policy == {'version': 1, 'enabled': True, 'automaticBackups': True}, 'boot-policy')
@@ -293,6 +353,15 @@ def start_installed(config, policy, command=run):
              hashlib.sha256(item.read_bytes()).hexdigest() == seals.get(field), 'daemon-static-seal')
     tunnel_path = Path(MOUNT + '/private/tunnel.json')
     tunnel = json.loads(private_file(str(tunnel_path))) if tunnel_path.exists() else None
+    jobs = json.loads(private_file(config['jobsConfig']))
+    if jobs.get('enabled') is True:
+        # Type=simple becomes active during Python's preflight. An already
+        # enabled timer must not race that preflight's periodic.inactive gate.
+        service('tuat-local-jobs.service', command)  # Failed/unknown is never retried.
+        timer = service('tuat-local-backup.timer', command)
+        if timer['ActiveState'] == 'active':
+            command(['/usr/bin/systemctl', 'stop', 'tuat-local-backup.timer'])
+            need(service('tuat-local-backup.timer', command)['ActiveState'] == 'inactive', 'backup-timer-not-paused')
     for name in UNITS[:2]:
         state = service(name, command)
         if state['ActiveState'] == 'inactive':
@@ -333,11 +402,11 @@ def start_installed(config, policy, command=run):
     wait_backup_idle(config, command)
     command(['/usr/bin/python3', '-I', '-B', str(runtime), '--check', CONFIG], timeout=120)
     # Jobs remain disabled until their preserved journal and the final backup are accepted.
-    jobs = json.loads(private_file(config['jobsConfig']))
     if jobs.get('enabled') is True:
         state = service('tuat-local-jobs.service', command)
         if state['ActiveState'] == 'inactive':
             command(['/usr/bin/systemctl', 'start', 'tuat-local-jobs.service'], timeout=120)
+        wait_jobs_ready(config)
     if policy['automaticBackups']:
         command(['/usr/bin/systemctl', 'start', 'tuat-local-backup.timer'])
 

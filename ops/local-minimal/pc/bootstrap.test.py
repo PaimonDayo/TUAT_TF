@@ -208,6 +208,85 @@ class WatchAndNamespaceTests(unittest.TestCase):
                 self.assertTrue(all(call.args[0][1]=='show' for call in command.call_args_list))
 
 
+class JobsReadyTests(unittest.TestCase):
+    def fixture(self):
+        config={'releaseDirectory':'/release','releaseManifest':'/manifest','sourceId':'synthetic',
+                'jobsStateRoot':'/jobs','jobsConfig':'/jobs.json','backupConfigPath':'/backup.json'}
+        backup={'profile':'pc-private','writerMode':'surface-systemd','sourceId':'synthetic','jobsStateRoot':'/jobs'}
+        state={'ActiveState':'active','SubState':'running','FreezerState':'running','MainPID':'123',
+               'ControlPID':'0','ControlGroup':'/system.slice/tuat-local-jobs.service',
+               'InvocationID':'a'*32,'ExecMainStartTimestampMonotonic':'1000'}
+        ready=[False]
+        commands=SimpleNamespace(unit=Mock(side_effect=lambda _name:state.copy()),verify_jobs_lock=Mock())
+        module=SimpleNamespace(LocalCommands=Mock(return_value=commands),unit_state=lambda value:value)
+        argv=b'/opt/node-v24.19.0-linux-x64/bin/node\0/release/ops/pc-jobs/run.mjs\0--run\0/jobs.json\0'
+        def path(*parts):
+            name='/'.join(str(part).strip('/') for part in parts)
+            value=Mock();value.__truediv__=Mock(side_effect=lambda child:path(name,child))
+            value.__str__=Mock(return_value='/'+name)
+            value.exists.side_effect=lambda:ready[0]
+            value.read_bytes.return_value=argv
+            return value
+        def private(name,*_args):
+            if name!='/backup.json' and not ready[0]: raise FileNotFoundError()
+            return json.dumps(backup if name=='/backup.json' else {'pid':123}).encode()
+        return config,state,ready,commands,module,path,private
+
+    def test_active_python_preflight_is_not_ready_until_both_locks_and_actual_node_are_proven(self):
+        config,state,ready,commands,module,path,private=self.fixture()
+        pauses=[]
+        def pause(seconds):pauses.append(seconds);ready[0]=True
+        with patch.object(boot,'jobs_proof_module',return_value=module),patch.object(boot,'Path',side_effect=path), \
+             patch.object(boot,'private_file',side_effect=private):
+            boot.wait_jobs_ready(config,pause,lambda:0)
+        self.assertEqual(pauses,[0.25])
+        commands.verify_jobs_lock.assert_called_once()
+        self.assertEqual(commands.unit.call_count,3)
+
+    def test_failed_changed_owner_or_deadline_holds_without_start_stop_reset_or_retry(self):
+        for fault in ('failed','changed','deadline','kernel-lock'):
+            with self.subTest(fault=fault):
+                config,state,ready,commands,module,path,private=self.fixture()
+                if fault=='failed':state['ActiveState']='failed'
+                if fault=='kernel-lock':ready[0]=True;commands.verify_jobs_lock.side_effect=boot.Held('synthetic-flock-unowned')
+                def pause(_seconds):state['InvocationID']='b'*32
+                clock=Mock(side_effect=[0,121]) if fault=='deadline' else lambda:0
+                with patch.object(boot,'jobs_proof_module',return_value=module),patch.object(boot,'Path',side_effect=path), \
+                     patch.object(boot,'private_file',side_effect=private):
+                    with self.assertRaises(boot.Held):boot.wait_jobs_ready(config,pause,clock)
+                self.assertLessEqual(commands.verify_jobs_lock.call_count,1)
+
+    def test_old_lifetime_and_runner_are_only_observed_through_python_and_node_handoff(self):
+        config,state,ready,commands,module,path,private=self.fixture()
+        phase=[0];pauses=[]
+        def paths(*parts):
+            value=path(*parts)
+            value.read_bytes.side_effect=lambda:(b'/usr/bin/python3\0runtime.py\0--jobs\0' if phase[0]==0 else
+                b'/opt/node-v24.19.0-linux-x64/bin/node\0/release/ops/pc-jobs/run.mjs\0--run\0/jobs.json\0')
+            return value
+        def read(name,*args):
+            if name=='/backup.json':return private(name,*args)
+            return json.dumps({'pid':123 if phase[0]>=2 else 99}).encode()
+        def pause(seconds):pauses.append(seconds);phase[0]+=1
+        with patch.object(boot,'jobs_proof_module',return_value=module),patch.object(boot,'Path',side_effect=paths), \
+             patch.object(boot,'private_file',side_effect=read):boot.wait_jobs_ready(config,pause,lambda:0)
+        self.assertEqual(pauses,[0.25,0.25]);commands.verify_jobs_lock.assert_called_once()
+
+    @unittest.skipUnless(os.name=='posix' and os.getuid()==0,'root-owned sealed proof sources')
+    def test_jobs_proof_dependencies_are_pinned_before_import(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            release=Path(temporary)/('a'*7);base=release/'ops/local-minimal';base.mkdir(parents=True)
+            files={}
+            for name in ('backup.py','periodic.py','transport.py'):
+                path=base/name;path.write_text('TOKEN=True\n');path.chmod(0o644)
+                files['ops/local-minimal/'+name]=hashlib.sha256(path.read_bytes()).hexdigest()
+            manifest=Path(temporary)/'manifest.json';manifest.write_text(json.dumps({'sourceCommit':'a'*40,'files':files}));manifest.chmod(0o600)
+            config={'releaseDirectory':str(release),'releaseManifest':str(manifest)}
+            self.assertTrue(boot.jobs_proof_module(config).TOKEN)
+            (base/'periodic.py').write_text('raise AssertionError("must not import")\n')
+            with self.assertRaisesRegex(boot.Held,'jobs-proof-source'):boot.jobs_proof_module(config)
+
+
 class SyntheticStart:
     """Fixed deployment metadata and service observations; no host paths are read."""
     def __init__(self, jobs=False, timer=False, tunnel=True, tunnel_enabled=True):
@@ -222,6 +301,7 @@ class SyntheticStart:
                       'dockerUnit':'/etc/systemd/system/tuat-local-docker.service'}
         self.config = {'releaseDirectory':self.release, 'jobsConfig':'/synthetic/jobs.json', 'hostConfigPath':'/synthetic/host.json',
             'backupConfigPath':'/synthetic/backup.json',
+            'jobsStateRoot':'/synthetic/jobs',
             'daemonSeal':{field:hashlib.sha256(path.encode()).hexdigest() for field,path in self.paths.items()}}
         self.policy = {'version':1, 'enabled':True, 'automaticBackups':timer}
         self.fail_storage = False
@@ -229,6 +309,7 @@ class SyntheticStart:
         self.change_transport = False
         self.observe_calls = 0
         self.backup_observations = []
+        self.fail_jobs_ready = False
 
     def path(self, value):
         fixture = self
@@ -241,6 +322,7 @@ class SyntheticStart:
             def is_symlink(self): return False
             def resolve(self): return self
             def exists(self):
+                if self.name.startswith(fixture.config['jobsStateRoot']+'/'): return False
                 assert self.name == boot.MOUNT+'/private/tunnel.json'
                 return fixture.tunnel
             def stat(self): return self.lstat()
@@ -263,9 +345,11 @@ class SyntheticStart:
                 state = WatchAndNamespaceTests().backup_state(False)
                 if self.backup_observations: state = self.backup_observations.pop(0)
                 return 0, '\n'.join(f'{key}={value}' for key,value in state.items())
-            return 0, '\n'.join('='.join(pair) for pair in dict(LoadState='loaded',FragmentPath='/etc/systemd/system/'+name,
+            values=dict(LoadState='loaded',FragmentPath='/etc/systemd/system/'+name,
                 DropInPaths='',ControlPID='0',ActiveState='active' if name in self.running else 'inactive',
-                SubState='running' if name in self.running else 'dead').items())
+                SubState='running' if name in self.running else 'dead')
+            if name=='tuat-local-backup.timer':values.pop('ControlPID')  # Timers have no service PID fields.
+            return 0, '\n'.join('='.join(pair) for pair in values.items())
         if args[:2] == ['/usr/bin/systemctl','start']:
             name = args[2]
             # An inactive, unreferenced Tunnel is garbage-collected by systemd.
@@ -276,6 +360,9 @@ class SyntheticStart:
                 assert 'transport-ready' in self.events
             self.events.append('start:'+name); self.running.add(name)
             return 0, ''
+        if args[:2] == ['/usr/bin/systemctl','stop']:
+            self.assert_timer(args[2])
+            self.events.append('stop:'+args[2]); self.running.remove(args[2]); return 0,''
         if args == ['/usr/bin/python3','-I','-B','/opt/tuat-local-runtime/transport.py','--preflight']:
             self.events.append('transport-preflight'); return 0, ''
         if args == ['/usr/bin/python3','-I','-B',self.runtime,'--storage-only',boot.CONFIG]:
@@ -289,6 +376,14 @@ class SyntheticStart:
             assert set(boot.UNITS) <= self.running
             self.events.append('runtime-check'); return 0, '{"valid":true}'
         raise AssertionError('Unexpected command')
+
+    def assert_timer(self,name):
+        assert name=='tuat-local-backup.timer'
+
+    def jobs_ready(self,*_args):
+        self.events.append('jobs-owner-ready')
+        assert 'tuat-local-jobs.service' in self.running
+        if self.fail_jobs_ready: raise boot.Held('synthetic-jobs-not-ready')
 
     def connection(self, host, port, **_kwargs):
         assert host == '127.0.0.1' and port in (18201,18305)
@@ -321,6 +416,7 @@ class SyntheticStart:
     def start(self):
         with patch.object(boot,'Path',side_effect=self.path), patch.object(boot,'private_file',side_effect=self.private), \
              patch.object(boot.http.client,'HTTPConnection',side_effect=self.connection), \
+             patch.object(boot,'wait_jobs_ready',side_effect=self.jobs_ready), \
              patch.object(boot,'transport_module',side_effect=self.transport,create=True):
             boot.start_installed(self.config,self.policy,self.command)
 
@@ -344,6 +440,22 @@ class InstalledStartTests(unittest.TestCase):
                 self.assertEqual('tuat-local-backup.timer' in fixture.running,timer)
                 if jobs: self.assertLess(fixture.events.index('runtime-check'),start('tuat-local-jobs.service'))
                 if timer: self.assertLess(start('tuat-local-tunnel.service'),start('tuat-local-backup.timer'))
+                if jobs and timer: self.assertLess(fixture.events.index('jobs-owner-ready'),start('tuat-local-backup.timer'))
+
+    def test_active_timer_is_paused_before_jobs_preflight_and_resumed_only_after_owner_readiness(self):
+        fixture=SyntheticStart(jobs=True,timer=True);fixture.running.add('tuat-local-backup.timer')
+        fixture.start()
+        self.assertLess(fixture.events.index('stop:tuat-local-backup.timer'),fixture.events.index('start:tuat-local-jobs.service'))
+        self.assertLess(fixture.events.index('jobs-owner-ready'),fixture.events.index('start:tuat-local-backup.timer'))
+        self.assertEqual(fixture.events.count('start:tuat-local-jobs.service'),1)
+        self.assertEqual(fixture.events.count('stop:tuat-local-backup.timer'),1)
+
+    def test_unready_jobs_never_resume_timer_or_repeat_start(self):
+        fixture=SyntheticStart(jobs=True,timer=True);fixture.running.add('tuat-local-backup.timer');fixture.fail_jobs_ready=True
+        with self.assertRaisesRegex(boot.Held,'synthetic-jobs-not-ready'):fixture.start()
+        self.assertNotIn('tuat-local-backup.timer',fixture.running)
+        self.assertEqual(fixture.events.count('start:tuat-local-jobs.service'),1)
+        self.assertNotIn('start:tuat-local-backup.timer',fixture.events)
 
     def test_changed_daemon_unit_pin_starts_nothing(self):
         fixture = SyntheticStart(); fixture.config['daemonSeal']['dockerUnit'] = '0'*64
