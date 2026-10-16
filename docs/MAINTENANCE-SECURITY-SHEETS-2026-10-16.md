@@ -167,3 +167,13 @@ Node24環境確認、tsc、対象eslint、全Vitest177ファイル1,653件、GAS
 実PCのDB実体を照合したうえで、別名の新規DBへスキーマだけをコピーし、合成ユーザーで新migrationを同一transaction内で2回適用した。本人と管理者の削除、他人からの拒否、record/tweetが同じUUIDの場合の件数・いいねの分離、旧権限の廃止、旧履歴の完全保持を確認した。全操作をROLLBACKし、作成した空の検証DBだけを削除した。本番migrationのsnapshot・dryRun・適用とアプリ/GAS/常駐loaderの反映は、この記録時点では未実施である。
 
 Vercel検証用projectの自動deploy停止は具体案として所有者へ確認中。課金設定・旧Supabase撤去・バックアップの完全性検査の削減は実施しない。スマホでのPWA・通知受信、OS再起動、実利用量と請求額は別の未確認事項として残す。
+
+## 本番反映とDNSの追加修正
+
+初回改善はcommit `1bb10a6` をmasterへ統合し、本番PC、GAS v24、常駐loaderへ反映した。返信限定migrationは対象4表の暗号化snapshot・読戻し・transaction内dryRunの後に適用し、既存データの保持を確認した。新generationでR2への保存・読戻し・別DB復元を2回確認し、Jobsと15分backup timerを再開した。新しいPush枠は成功し、過去のfailed記録は履歴として保持している。
+
+反映後の実スプシdryRunでは、58人を対象に50件の `fetch failed` が残った。アプリと同じmount namespace・UID・権限で再現し、`/mnt`を隠す処理がWSLのDNS設定へのsymlinkを切ることを確認した。親namespaceのGoogle疎通だけでは、このアプリ内の疎通を確認できていなかった。
+
+追加修正の受入条件は、アプリが名前解決して既存の公開CSVを読めること、Windows側のファイル隔離と非管理者実行を保持すること、DNS設定1ファイルだけを読取り専用で渡すこと、非対応の設定では起動を拒否することとする。合成した専用mount/network namespaceで名前解決・書込拒否・他ファイルの不可視性・親namespace不変を検査し、実PCでもスプシ書込みを明示的に無効にしたdryRunを確認する。失敗済み同期枠・返信queue・通知履歴は書き換えず、結果不明の送信は再実行しない。この追加障害は初回反映後に実経路で判明したため、独立した修正として検証・反映する。
+
+DNSの合成Linux試験は7条件で成功した。WSL resolverの内容とloopback DNS応答、読取り専用mount、Windows側/旧構成ファイルの不可視性、UID65530・capabilitiesなし、既存IPC FD3の保持とresolver FD9の閉鎖、通常Linux resolverの維持、非対応symlinkの起動拒否、親namespace不変を確認した。既存アプリ検証もNode24環境確認・tsc・全Vitest177ファイル1,653件を通過した。追加修正の実PC配置と外部DNS・実スプシdryRunは、このソース確定時点では未実施である。
